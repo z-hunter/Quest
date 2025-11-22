@@ -9,32 +9,47 @@ class Player extends Entity {
         this.animator = new Animator(this);
         this.setSprite('assets/hero.png');
 
-        // Assuming 32x48 frames (adjust based on actual image)
-        const W = 32;
-        const H = 48;
+        // --- MANUAL ADJUSTMENT ---
+        const W = 176;    // Frame Width
+        const H = 192;    // Frame Height
+        const offX = 0;   // Horizontal Offset (shift right)
+        const offY = 0;   // Vertical Offset (shift down, e.g. to skip text)
+        // -------------------------
 
         // Row 1: Down
         this.animator.addAnimation('WALK_DOWN', [
-            { x: 0, y: 0, w: W, h: H }, { x: W, y: 0, w: W, h: H }, { x: W * 2, y: 0, w: W, h: H }, { x: W * 3, y: 0, w: W, h: H }
+            { x: offX, y: offY, w: W, h: H },
+            { x: offX + W, y: offY, w: W, h: H },
+            { x: offX + W * 2, y: offY, w: W, h: H },
+            { x: offX + W * 3, y: offY, w: W, h: H }
         ]);
         // Row 2: Up
         this.animator.addAnimation('WALK_UP', [
-            { x: 0, y: H, w: W, h: H }, { x: W, y: H, w: W, h: H }, { x: W * 2, y: H, w: W, h: H }, { x: W * 3, y: H, w: W, h: H }
+            { x: offX, y: offY + H, w: W, h: H },
+            { x: offX + W, y: offY + H, w: W, h: H },
+            { x: offX + W * 2, y: offY + H, w: W, h: H },
+            { x: offX + W * 3, y: offY + H, w: W, h: H }
         ]);
         // Row 3: Right
         this.animator.addAnimation('WALK_RIGHT', [
-            { x: 0, y: H * 2, w: W, h: H }, { x: W, y: H * 2, w: W, h: H }, { x: W * 2, y: H * 2, w: W, h: H }, { x: W * 3, y: H * 2, w: W, h: H }
+            { x: offX, y: offY + H * 2, w: W, h: H },
+            { x: offX + W, y: offY + H * 2, w: W, h: H },
+            { x: offX + W * 2, y: offY + H * 2, w: W, h: H },
+            { x: offX + W * 3, y: offY + H * 2, w: W, h: H }
         ]);
         // Row 4: Idle
         this.animator.addAnimation('IDLE', [
-            { x: 0, y: H * 3, w: W, h: H }, { x: W, y: H * 3, w: W, h: H }, { x: W * 2, y: H * 3, w: W, h: H }, { x: W * 3, y: H * 3, w: W, h: H }
+            { x: offX, y: offY + H * 3, w: W, h: H },
+            { x: offX + W, y: offY + H * 3, w: W, h: H },
+            { x: offX + W * 2, y: offY + H * 3, w: W, h: H },
+            { x: offX + W * 3, y: offY + H * 3, w: W, h: H }
         ]);
 
         this.animator.play('IDLE');
 
-        // Adjust size to match sprite
-        this.width = W;
-        this.height = H;
+        // Set display size (scale down)
+        this.width = 30;
+        this.height = 50;
     }
 
     moveTo(x, y) {
@@ -92,15 +107,5 @@ class Player extends Entity {
                 }
             }
         }
-    }
-
-    render(ctx) {
-        // Draw player body
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
-
-        // Draw baseline/feet
-        ctx.fillStyle = '#ff00ff';
-        ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
     }
 }

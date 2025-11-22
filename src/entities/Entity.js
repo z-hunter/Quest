@@ -21,11 +21,21 @@ class Entity {
         this.spriteName = filename;
         this.image = new Image();
         this.image.src = filename;
+        console.log(`[Entity] Loading sprite: ${filename}`);
+
         this.image.onload = () => {
+            console.log(`[Entity] Loaded sprite: ${filename} (${this.image.naturalWidth}x${this.image.naturalHeight})`);
             // Auto-set size if not manually set? 
             // For now, let's update width/height based on scale
-            this.width = this.image.naturalWidth * this.scale;
-            this.height = this.image.naturalHeight * this.scale;
+            // Only if NOT using animator (animator sets its own size)
+            if (!this.animator) {
+                this.width = this.image.naturalWidth * this.scale;
+                this.height = this.image.naturalHeight * this.scale;
+            }
+        };
+
+        this.image.onerror = (e) => {
+            console.error(`[Entity] Failed to load sprite: ${filename}`, e);
         };
     }
 
