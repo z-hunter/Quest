@@ -26,6 +26,13 @@ class SceneEditor {
         this.propScale = document.getElementById('prop-scale');
         this.propLayer = document.getElementById('prop-layer');
 
+        // Scaling Inputs
+        this.scaleEnabled = document.getElementById('scale-enabled');
+        this.scaleMin = document.getElementById('scale-min');
+        this.scaleMax = document.getElementById('scale-max');
+        this.scaleHorizon = document.getElementById('scale-horizon');
+        this.scaleFront = document.getElementById('scale-front');
+
         this.setupListeners();
         this.setupUI();
     }
@@ -124,6 +131,23 @@ class SceneEditor {
                 this.selectedObject.setSprite(this.propImage.value);
             }
         };
+
+        // Scaling Config Updates
+        const updateScaling = () => {
+            if (this.game.sceneManager.currentScene) {
+                const s = this.game.sceneManager.currentScene.scaling;
+                s.enabled = this.scaleEnabled.checked;
+                s.min = parseFloat(this.scaleMin.value) || 0.5;
+                s.max = parseFloat(this.scaleMax.value) || 1.0;
+                s.horizon = parseInt(this.scaleHorizon.value) || 150;
+                s.front = parseInt(this.scaleFront.value) || 300;
+            }
+        };
+
+        [this.scaleEnabled, this.scaleMin, this.scaleMax, this.scaleHorizon, this.scaleFront].forEach(el => {
+            el.onchange = updateScaling;
+            el.oninput = updateScaling;
+        });
     }
 
     toggle() {
@@ -145,6 +169,15 @@ class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
         if (scene) {
             this.titleInput.value = scene.name;
+
+            // Sync Scaling
+            if (scene.scaling) {
+                this.scaleEnabled.checked = scene.scaling.enabled;
+                this.scaleMin.value = scene.scaling.min;
+                this.scaleMax.value = scene.scaling.max;
+                this.scaleHorizon.value = scene.scaling.horizon;
+                this.scaleFront.value = scene.scaling.front;
+            }
         }
     }
 

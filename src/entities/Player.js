@@ -13,7 +13,7 @@ class Player extends Entity {
         const W = 176;    // Frame Width
         const H = 192;    // Frame Height
         const offX = 0;   // Horizontal Offset (shift right)
-        const offY = 0;   // Vertical Offset (shift down, e.g. to skip text)
+        const offY = 20;   // Vertical Offset (shift down, e.g. to skip text)
         // -------------------------
 
         // Row 1: Down
@@ -37,22 +37,22 @@ class Player extends Entity {
             { x: offX + W * 2, y: offY + H * 2, w: W, h: H },
             { x: offX + W * 3, y: offY + H * 2, w: W, h: H }
         ]);
-        // Row 4: Idle
+        // Row 4: Idle - REPLACED with Row 1 (Down) Frame 0 for consistency
         this.animator.addAnimation('IDLE', [
-            { x: offX, y: offY + H * 3, w: W, h: H },
-            { x: offX + W, y: offY + H * 3, w: W, h: H },
-            { x: offX + W * 2, y: offY + H * 3, w: W, h: H },
-            { x: offX + W * 3, y: offY + H * 3, w: W, h: H }
+            { x: offX, y: offY, w: W, h: H }
         ]);
 
         this.animator.play('IDLE');
 
         // Set display size (scale down)
+        this.baseWidth = 30;
+        this.baseHeight = 50;
         this.width = 30;
         this.height = 50;
     }
 
     moveTo(x, y) {
+        console.log(`[Player] Moving to: ${x}, ${y}`);
         this.target = { x, y };
     }
 

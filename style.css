@@ -5,27 +5,31 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     margin: 0;
-    overflow: hidden;
+    overflow: auto;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 #game-container {
     position: relative;
-    width: 640px;
-    /* 2x scale of 320px */
-    height: 440px;
-    /* 2x scale of 200px + UI space */
+    width: 840px;
+    /* 420 * 2 */
+    height: 640px;
+    /* 300 * 2 + 40px UI */
     background-color: #111;
     border: 2px solid #555;
     image-rendering: pixelated;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
 }
 
 canvas {
     display: block;
     width: 100%;
-    height: 400px;
-    /* Aspect ratio preserved */
+    height: 600px;
+    /* 300 * 2 */
     background-color: #000;
 }
 
@@ -39,6 +43,7 @@ canvas {
     border-top: 2px solid #fff;
     display: flex;
     flex-direction: column;
+    z-index: 10;
 }
 
 #status-bar {
@@ -178,4 +183,34 @@ input[type="file"] {
 .entity-item.selected {
     background-color: #0f0;
     color: #000;
+}
+
+/* CRT Overlay Fallback */
+.crt-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 100;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%,
+            rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg,
+            rgba(255, 0, 0, 0.06),
+            rgba(0, 255, 0, 0.02),
+            rgba(0, 0, 255, 0.06));
+    background-size: 100% 2px, 3px 100%;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.crt-overlay::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: radial-gradient(circle, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.4) 100%);
+    z-index: 2;
 }

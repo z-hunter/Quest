@@ -5,7 +5,13 @@ class Scene {
         this.background = null; // Image object
         this.entities = [];
         this.walkbox = []; // Array of polygons
-        this.scaling = { min: 0.5, max: 1.0 };
+        this.scaling = {
+            enabled: true,
+            min: 0.5,
+            max: 1.0,
+            horizon: 150, // Y coordinate for min scale
+            front: 300    // Y coordinate for max scale
+        };
     }
 
     addEntity(entity) {
@@ -25,6 +31,23 @@ class Scene {
 
     findEntity(name) {
         return this.entities.find(e => e.name.toUpperCase() === name.toUpperCase());
+    }
+
+    getScaling(y) {
+        if (!this.scaling.enabled) return 1.0;
+
+        // Define horizon and front line from config
+        const horizonY = this.scaling.horizon;
+        const frontY = this.scaling.front;
+
+        // Clamp Y
+        const clampedY = Math.max(horizonY, Math.min(y, frontY));
+
+        // Normalize Y (0.0 at horizon, 1.0 at front)
+        const t = (clampedY - horizonY) / (frontY - horizonY);
+
+        // Lerp scale
+        return this.scaling.min + t * (this.scaling.max - this.scaling.min);
     }
 
     isWalkable(x, y) {
@@ -66,7 +89,7 @@ class Scene {
         } else {
             // Debug background
             ctx.fillStyle = '#333';
-            ctx.fillRect(0, 0, 320, 200);
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         }
 
         // 3. Sort Entities by Layer then Y (Depth Sorting)
@@ -126,6 +149,7 @@ class Scene {
             id: this.id,
             name: this.name,
             walkbox: this.walkbox,
+            scaling: this.scaling,
             entities: savedEntities
         };
     }

@@ -1,7 +1,18 @@
 class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
-        this.ctx = this.canvas.getContext('2d');
+        // Main canvas is now WebGL (handled by CRTFilter), so we don't get 2d context here directly if we want to be strict,
+        // BUT CRTFilter expects to take control of the canvas.
+
+        // Create an offscreen buffer for the game to draw onto
+        this.bufferCanvas = document.createElement('canvas');
+        this.bufferCanvas.width = 420;
+        this.bufferCanvas.height = 300;
+        this.ctx = this.bufferCanvas.getContext('2d');
+
+        // Initialize CRT Filter on the main canvas
+        this.crtFilter = new CRTFilter(this.canvas);
+
         this.lastTime = 0;
         this.isRunning = false;
         this.inventory = []; // Player inventory
@@ -67,11 +78,17 @@ class Game {
     loop(timestamp) {
         if (!this.isRunning) return;
 
-        const deltaTime = timestamp - this.lastTime;
-        this.lastTime = timestamp;
+        try {
+            const deltaTime = timestamp - this.lastTime;
+            this.lastTime = timestamp;
 
-        this.update(deltaTime);
-        this.render();
+            this.update(deltaTime);
+            this.render();
+        } catch (e) {
+            console.error("Game Loop Error:", e);
+            this.stop();
+            return;
+        }
 
         requestAnimationFrame(this.loop.bind(this));
     }
@@ -81,17 +98,58 @@ class Game {
     }
 
     render() {
-        // Clear screen
+        // 1. Render Game to Buffer
+        // Clear buffer
         this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
         this.sceneManager.render(this.ctx);
         this.editor.render(this.ctx);
 
-        // Debug text
+        // Debug text on buffer
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '10px monospace';
         this.ctx.fillText('Sierra Engine v0.1', 10, 10);
+
+        // 2. Render Buffer to Screen via CRT Filter
+        if (this.crtFilter) {
+            try {
+                this.crtFilter.render(this.bufferCanvas);
+            } catch (e) {
+                console.warn("CRT Filter failed (likely SecurityError), disabling and falling back to 2D canvas:", e);
+                this.disableCRT();
+            }
+        }
+    }
+
+    disableCRT() {
+        this.crtFilter = null;
+
+        // Replace WebGL canvas with 2D buffer canvas
+        const container = document.getElementById('game-container');
+        if (this.canvas && this.canvas.parentNode === container) {
+            container.removeChild(this.canvas);
+        }
+
+        // Style the buffer canvas to look like the game canvas
+        this.bufferCanvas.id = 'game-canvas';
+        this.bufferCanvas.style.width = '100%';
+        this.bufferCanvas.style.height = '100%';
+        this.bufferCanvas.style.imageRendering = 'pixelated'; // Ensure crisp pixels
+
+        container.appendChild(this.bufferCanvas);
+
+        // Update reference
+        this.canvas = this.bufferCanvas;
+
+        // Re-bind input
+        this.input.updateCanvas(this.canvas);
+
+        // Inject CSS CRT Overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'crt-overlay';
+        container.appendChild(overlay);
+        console.log("CSS CRT Overlay activated");
     }
 
     onMouseClick(x, y) {

@@ -15,6 +15,9 @@ class Entity {
         this.image = null;
         this.scale = 1.0;
         this.layer = 0; // Manual sorting offset
+
+        this.baseWidth = this.width;
+        this.baseHeight = this.height;
     }
 
     setSprite(filename) {
@@ -29,8 +32,10 @@ class Entity {
             // For now, let's update width/height based on scale
             // Only if NOT using animator (animator sets its own size)
             if (!this.animator) {
-                this.width = this.image.naturalWidth * this.scale;
-                this.height = this.image.naturalHeight * this.scale;
+                this.baseWidth = this.image.naturalWidth;
+                this.baseHeight = this.image.naturalHeight;
+                this.width = this.baseWidth * this.scale;
+                this.height = this.baseHeight * this.scale;
             }
         };
 
@@ -40,6 +45,20 @@ class Entity {
     }
 
     update(deltaTime, isWalkable) {
+        // Dynamic Depth Scaling
+        // We need access to the scene to get scaling factor. 
+        // Since we don't have direct ref to scene, we rely on Game passing it or global?
+        // Actually, SceneManager calls update. Let's assume we can access it via a global or passed param?
+        // For now, let's check if window.game exists (hacky but works for this architecture)
+        if (window.game && window.game.sceneManager.currentScene) {
+            const scene = window.game.sceneManager.currentScene;
+            const depthScale = scene.getScaling(this.y);
+
+            this.scale = depthScale;
+            this.width = this.baseWidth * this.scale;
+            this.height = this.baseHeight * this.scale;
+        }
+
         if (this.animator) {
             this.animator.update(deltaTime);
         }

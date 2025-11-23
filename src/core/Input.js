@@ -17,10 +17,15 @@ class Input {
             this.mouse.y = (e.clientY - rect.top) * scaleY;
             this.mouse.clicked = true;
 
+            console.log(`[Input] Click: ${this.mouse.x}, ${this.mouse.y}`);
             this.game.onMouseClick(this.mouse.x, this.mouse.y);
         });
 
         // Prevent context menu on right click
         this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+    }
+    updateCanvas(newCanvas) {
+        this.canvas = newCanvas;
+        this.setupListeners();
     }
 }
