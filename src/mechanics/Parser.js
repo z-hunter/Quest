@@ -36,13 +36,13 @@ class Parser {
             case 'EXAMINE':
             case 'X': // Common shortcut
                 if (!noun) {
-                    console.log(`You are in ${scene.name}.`);
+                    this.game.showMessage(`You are in ${scene.name}.`);
                 } else {
                     const entity = scene.findEntity(noun);
                     if (entity) {
-                        console.log(entity.description);
+                        this.game.showMessage(entity.description);
                     } else {
-                        console.log(`You don't see any ${noun} here.`);
+                        this.game.showMessage(`You don't see any ${noun} here.`);
                     }
                 }
                 break;
@@ -50,19 +50,19 @@ class Parser {
             case 'GET':
             case 'PICKUP':
                 if (!noun) {
-                    console.log('Take what?');
+                    this.game.showMessage('Take what?');
                 } else {
                     const entity = scene.findEntity(noun);
                     if (entity) {
                         if (entity.isTakeable) {
                             scene.removeEntity(entity);
                             this.game.inventory.push(entity);
-                            console.log(`You picked up the ${entity.name}.`);
+                            this.game.showMessage(`You picked up the ${entity.name}.`);
                         } else {
-                            console.log('You cannot take that.');
+                            this.game.showMessage('You cannot take that.');
                         }
                     } else {
-                        console.log(`You don't see any ${noun} here.`);
+                        this.game.showMessage(`You don't see any ${noun} here.`);
                     }
                 }
                 break;
@@ -70,20 +70,20 @@ class Parser {
             case 'INVENTORY':
             case 'I':
                 if (this.game.inventory.length === 0) {
-                    console.log("You are not carrying anything.");
+                    this.game.showMessage("You are not carrying anything.");
                 } else {
                     const items = this.game.inventory.map(e => e.name).join(', ');
-                    console.log(`You are carrying: ${items}`);
+                    this.game.showMessage(`You are carrying: ${items}`);
                 }
                 break;
             case 'USE':
                 if (!noun) {
-                    console.log('Use what?');
+                    this.game.showMessage('Use what?');
                 } else {
                     // Parse "USE X ON Y"
                     const parts = noun.split(' ON ');
                     if (parts.length !== 2) {
-                        console.log('Use what on what? (Format: USE ITEM ON TARGET)');
+                        this.game.showMessage('Use what on what? (Format: USE ITEM ON TARGET)');
                     } else {
                         const itemName = parts[0].trim();
                         const targetName = parts[1].trim();
@@ -91,7 +91,7 @@ class Parser {
                         // Check if player has the item
                         const item = this.game.inventory.find(i => i.name.toUpperCase() === itemName);
                         if (!item) {
-                            console.log(`You don't have the ${itemName}.`);
+                            this.game.showMessage(`You don't have the ${itemName}.`);
                         } else {
                             // Check if target is in the scene
                             const target = scene.findEntity(targetName);
@@ -100,17 +100,17 @@ class Parser {
                                 if (target.interactions && target.interactions[item.name.toUpperCase()]) {
                                     target.interactions[item.name.toUpperCase()]();
                                 } else {
-                                    console.log(`Using the ${itemName} on the ${targetName} does nothing.`);
+                                    this.game.showMessage(`Using the ${itemName} on the ${targetName} does nothing.`);
                                 }
                             } else {
-                                console.log(`You don't see any ${targetName} here.`);
+                                this.game.showMessage(`You don't see any ${targetName} here.`);
                             }
                         }
                     }
                 }
                 break;
             default:
-                console.log("I don't understand.");
+                this.game.showMessage("I don't understand.");
         }
     }
 }

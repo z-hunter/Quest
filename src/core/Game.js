@@ -25,6 +25,11 @@ class Game {
         this.sceneManager = new SceneManager(this);
         this.editor = new SceneEditor(this);
 
+        // Message System
+        this.messageBox = document.getElementById('message-box');
+        this.messageText = document.getElementById('message-text');
+        this.isMessageActive = false;
+
         this.initTestScene();
 
         console.log('Game initialized');
@@ -45,8 +50,8 @@ class Game {
         // Interaction Logic
         pillar.interactions = {
             'KEY': () => {
-                console.log("You insert the key into a hidden slot in the pillar.");
-                console.log("CLICK! A secret compartment opens!");
+                this.showMessage("You insert the key into a hidden slot in the pillar.");
+                this.showMessage("CLICK! A secret compartment opens!");
                 pillar.description = "The pillar is open, revealing a secret compartment.";
             }
         };
@@ -153,6 +158,12 @@ class Game {
     }
 
     onMouseClick(x, y) {
+        // If message is active, dismiss it
+        if (this.isMessageActive) {
+            this.dismissMessage();
+            return;
+        }
+
         // If editor consumes the click, don't pass to game
         if (this.editor.onClick(x, y)) return;
 
@@ -161,5 +172,30 @@ class Game {
         if (this.sceneManager.currentScene) {
             this.sceneManager.currentScene.onClick(x, y);
         }
+    }
+
+    showMessage(text) {
+        this.messageText.textContent = text;
+        this.messageBox.classList.remove('hidden');
+        this.isMessageActive = true;
+
+        // Pause game loop logic (optional, but good for reading)
+        // We won't stop the loop entirely (so animations might still play or pause depending on preference)
+        // For Sierra style, usually everything pauses.
+    }
+
+    dismissMessage() {
+        this.messageBox.classList.add('hidden');
+        this.isMessageActive = false;
+
+        // Refocus input
+        if (this.parser && this.parser.inputField) {
+            this.parser.inputField.focus();
+        }
+    }
+
+    update(deltaTime) {
+        if (this.isMessageActive) return; // Pause updates while message is open
+        this.sceneManager.update(deltaTime);
     }
 }
