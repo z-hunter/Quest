@@ -1,21 +1,43 @@
-class CRTFilter {
-    constructor(canvas) {
+export class CRTFilter {
+    canvas: HTMLCanvasElement;
+    gl: WebGLRenderingContext | null;
+    program: WebGLProgram | null;
+    texture: WebGLTexture | null;
+    buffer: WebGLBuffer | null;
+    positionLocation: number;
+    texCoordLocation: number;
+    resolutionLocation: WebGLUniformLocation | null;
+    timeLocation: WebGLUniformLocation | null;
+
+    constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-        this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') as WebGLRenderingContext;
 
         if (!this.gl) {
             console.error("WebGL not supported");
+            this.program = null;
+            this.texture = null;
+            this.buffer = null;
+            this.positionLocation = 0;
+            this.texCoordLocation = 0;
+            this.resolutionLocation = null;
+            this.timeLocation = null;
             return;
         }
 
         this.program = null;
         this.texture = null;
         this.buffer = null;
+        this.positionLocation = 0;
+        this.texCoordLocation = 0;
+        this.resolutionLocation = null;
+        this.timeLocation = null;
 
         this.init();
     }
 
-    init() {
+    init(): void {
+        if (!this.gl) return;
         const gl = this.gl;
 
         // Vertex Shader
@@ -81,6 +103,7 @@ class CRTFilter {
         `;
 
         this.program = this.createProgram(gl, vsSource, fsSource);
+        if (!this.program) return;
 
         // Look up locations
         this.positionLocation = gl.getAttribLocation(this.program, "a_position");
@@ -109,8 +132,9 @@ class CRTFilter {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     }
 
-    createShader(gl, type, source) {
+    createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
         const shader = gl.createShader(type);
+        if (!shader) return null;
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
@@ -121,10 +145,14 @@ class CRTFilter {
         return shader;
     }
 
-    createProgram(gl, vsSource, fsSource) {
+    createProgram(gl: WebGLRenderingContext, vsSource: string, fsSource: string): WebGLProgram | null {
         const vs = this.createShader(gl, gl.VERTEX_SHADER, vsSource);
         const fs = this.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        if (!vs || !fs) return null;
+
         const program = gl.createProgram();
+        if (!program) return null;
+
         gl.attachShader(program, vs);
         gl.attachShader(program, fs);
         gl.linkProgram(program);
@@ -135,8 +163,8 @@ class CRTFilter {
         return program;
     }
 
-    render(sourceCanvas) {
-        if (!this.gl || !this.program) return;
+    render(sourceCanvas: HTMLCanvasElement): void {
+        if (!this.gl || !this.program || !this.buffer || !this.texture) return;
 
         const gl = this.gl;
 
@@ -154,8 +182,12 @@ class CRTFilter {
         gl.enableVertexAttribArray(this.texCoordLocation);
         gl.vertexAttribPointer(this.texCoordLocation, 2, gl.FLOAT, false, 16, 8);
 
-        gl.uniform2f(this.resolutionLocation, this.canvas.width, this.canvas.height);
-        gl.uniform1f(this.timeLocation, performance.now() / 1000);
+        if (this.resolutionLocation) {
+            gl.uniform2f(this.resolutionLocation, this.canvas.width, this.canvas.height);
+        }
+        if (this.timeLocation) {
+            gl.uniform1f(this.timeLocation, performance.now() / 1000);
+        }
 
         // Upload texture
         gl.bindTexture(gl.TEXTURE_2D, this.texture);

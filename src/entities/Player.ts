@@ -1,5 +1,11 @@
-class Player extends Entity {
-    constructor(x, y) {
+import { Entity } from './Entity';
+import { Animator } from '../core/Animator';
+
+export class Player extends Entity {
+    speed: number;
+    target: { x: number, y: number } | null;
+
+    constructor(x: number, y: number) {
         super(x, y, 10, 25, 'Player'); // Player size
         this.color = '#00ffff'; // Cyan
         this.speed = 0.1; // Pixels per ms
@@ -7,6 +13,7 @@ class Player extends Entity {
 
         // Setup Animation
         this.animator = new Animator(this);
+        // We assume assets are served from root (e.g. public/assets)
         this.setSprite('assets/hero.png');
 
         // --- MANUAL ADJUSTMENT ---
@@ -51,12 +58,12 @@ class Player extends Entity {
         this.height = 50;
     }
 
-    moveTo(x, y) {
+    moveTo(x: number, y: number): void {
         console.log(`[Player] Moving to: ${x}, ${y}`);
         this.target = { x, y };
     }
 
-    update(deltaTime, isWalkable) {
+    update(deltaTime: number, isWalkable?: (x: number, y: number) => boolean): void {
         super.update(deltaTime); // Update animator
 
         if (this.target) {
@@ -68,7 +75,7 @@ class Player extends Entity {
                 this.x = this.target.x;
                 this.y = this.target.y;
                 this.target = null;
-                this.animator.play('IDLE');
+                if (this.animator) this.animator.play('IDLE');
             } else {
                 const moveX = (dx / distance) * this.speed * deltaTime;
                 const moveY = (dy / distance) * this.speed * deltaTime;
@@ -77,21 +84,23 @@ class Player extends Entity {
                 const nextY = this.y + moveY;
 
                 // Animation Logic
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    // Horizontal
-                    if (dx > 0) {
-                        this.animator.play('WALK_RIGHT');
-                        this.flipX = false;
+                if (this.animator) {
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        // Horizontal
+                        if (dx > 0) {
+                            this.animator.play('WALK_RIGHT');
+                            this.flipX = false;
+                        } else {
+                            this.animator.play('WALK_RIGHT'); // Reuse Right for Left
+                            this.flipX = true;
+                        }
                     } else {
-                        this.animator.play('WALK_RIGHT'); // Reuse Right for Left
-                        this.flipX = true;
-                    }
-                } else {
-                    // Vertical
-                    if (dy > 0) {
-                        this.animator.play('WALK_DOWN');
-                    } else {
-                        this.animator.play('WALK_UP');
+                        // Vertical
+                        if (dy > 0) {
+                            this.animator.play('WALK_DOWN');
+                        } else {
+                            this.animator.play('WALK_UP');
+                        }
                     }
                 }
 
@@ -103,7 +112,7 @@ class Player extends Entity {
                     // Hit an obstacle
                     console.log("Hit wall/hole!");
                     this.target = null; // Stop moving
-                    this.animator.play('IDLE');
+                    if (this.animator) this.animator.play('IDLE');
                 }
             }
         }

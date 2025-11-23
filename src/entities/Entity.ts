@@ -1,12 +1,46 @@
-class Entity {
-    constructor(x, y, width, height, name) {
+import { Animator } from '../core/Animator';
+
+export interface EntityData {
+    type: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    spriteName: string | null;
+    color: string;
+    scale: number;
+    layer: number;
+}
+
+export class Entity {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    name: string;
+    description: string;
+    interactions: Record<string, () => void>;
+    isTakeable: boolean;
+    color: string;
+    visible: boolean;
+    spriteName: string | null;
+    image: HTMLImageElement | null;
+    scale: number;
+    layer: number;
+    baseWidth: number;
+    baseHeight: number;
+    animator: Animator | null;
+    flipX: boolean;
+
+    constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         this.x = x;
         this.y = y;
-        this.width = width || 30;
-        this.height = height || 30;
-        this.name = name || 'Entity';
+        this.width = width;
+        this.height = height;
+        this.name = name;
         this.description = "You see nothing special.";
-        this.interactions = {}; // e.g., { 'TAKE': () => ... }
+        this.interactions = {};
         this.isTakeable = false;
 
         this.color = '#ff0000'; // Debug color
@@ -14,28 +48,29 @@ class Entity {
         this.spriteName = null;
         this.image = null;
         this.scale = 1.0;
-        this.layer = 0; // Manual sorting offset
+        this.layer = 0;
 
         this.baseWidth = this.width;
         this.baseHeight = this.height;
+        this.animator = null;
+        this.flipX = false;
     }
 
-    setSprite(filename) {
+    setSprite(filename: string): void {
         this.spriteName = filename;
         this.image = new Image();
-        this.image.src = filename;
+        this.image.src = filename; // Vite might need import, but for now keeping as string path
         console.log(`[Entity] Loading sprite: ${filename}`);
 
         this.image.onload = () => {
-            console.log(`[Entity] Loaded sprite: ${filename} (${this.image.naturalWidth}x${this.image.naturalHeight})`);
-            // Auto-set size if not manually set? 
-            // For now, let's update width/height based on scale
-            // Only if NOT using animator (animator sets its own size)
-            if (!this.animator) {
-                this.baseWidth = this.image.naturalWidth;
-                this.baseHeight = this.image.naturalHeight;
-                this.width = this.baseWidth * this.scale;
-                this.height = this.baseHeight * this.scale;
+            if (this.image) {
+                console.log(`[Entity] Loaded sprite: ${filename} (${this.image.naturalWidth}x${this.image.naturalHeight})`);
+                if (!this.animator) {
+                    this.baseWidth = this.image.naturalWidth;
+                    this.baseHeight = this.image.naturalHeight;
+                    this.width = this.baseWidth * this.scale;
+                    this.height = this.baseHeight * this.scale;
+                }
             }
         };
 
@@ -44,13 +79,12 @@ class Entity {
         };
     }
 
-    update(deltaTime, isWalkable) {
+    update(deltaTime: number): void {
         // Dynamic Depth Scaling
-        // We need access to the scene to get scaling factor. 
-        // Since we don't have direct ref to scene, we rely on Game passing it or global?
-        // Actually, SceneManager calls update. Let's assume we can access it via a global or passed param?
-        // For now, let's check if window.game exists (hacky but works for this architecture)
-        if (window.game && window.game.sceneManager.currentScene) {
+        // Accessing global game for now as per original architecture
+        // @ts-ignore
+        if (window.game && window.game.sceneManager && window.game.sceneManager.currentScene) {
+            // @ts-ignore
             const scene = window.game.sceneManager.currentScene;
             const depthScale = scene.getScaling(this.y);
 
@@ -64,14 +98,12 @@ class Entity {
         }
     }
 
-    render(ctx) {
+    render(ctx: CanvasRenderingContext2D): void {
         if (!this.visible) return;
 
         if (this.animator && this.animator.getCurrentFrame()) {
-            // Render using Animator
             const frame = this.animator.getCurrentFrame();
-            if (this.image && this.image.complete) {
-                // Flip horizontally if needed (for Left/Right reuse)
+            if (frame && this.image && this.image.complete) {
                 if (this.flipX) {
                     ctx.save();
                     ctx.scale(-1, 1);
@@ -91,15 +123,12 @@ class Entity {
                     );
                 }
             } else {
-                // Image not loaded yet? Fallback to rect
                 ctx.fillStyle = this.color;
                 ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
             }
         } else if (this.image && this.image.complete && this.image.naturalWidth !== 0) {
-            // Render static sprite
             ctx.drawImage(this.image, this.x - this.width / 2, this.y - this.height, this.width, this.height);
         } else {
-            // Render debug rect
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
 
@@ -108,7 +137,7 @@ class Entity {
         }
     }
 
-    toJSON() {
+    toJSON(): EntityData {
         return {
             type: 'Entity',
             name: this.name,
@@ -123,7 +152,7 @@ class Entity {
         };
     }
 
-    static fromJSON(data) {
+    static fromJSON(data: EntityData): Entity {
         const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
         entity.color = data.color || '#ff0000';
         entity.scale = data.scale || 1.0;

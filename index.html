@@ -1,111 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sierra Style Adventure</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body>
-    <div id="game-container">
-        <canvas id="game-canvas" width="420" height="300"></canvas>
-        <div id="ui-layer">
-            <div id="status-bar">
-                <span id="score-display">Score: 0 of 100</span>
-                <span id="scene-title-display">Title</span>
-            </div>
-            <div id="command-line">
-                <span class="prompt">&gt;</span>
-                <input type="text" id="parser-input" autocomplete="off" autofocus>
-            </div>
-        </div>
-
-        <!-- Message Box -->
-        <div id="message-box" class="hidden">
-            <p id="message-text"></p>
-            <div class="message-footer">Click to continue</div>
-        </div>
-    </div>
-
-    <!-- Hierarchy Panel (Left) -->
-    <div id="hierarchy-panel" class="hidden">
-        <div class="editor-header">
-            <h3>SCENE HIERARCHY</h3>
-        </div>
-        <div id="entity-list">
-            <!-- List items will be injected here -->
-        </div>
-    </div>
-
-    <!-- Editor Panel (Right) -->
-    <div id="editor-panel" class="hidden">
-        <div class="editor-header">
-            <h3>DEV MODE (F1)</h3>
-            <button id="btn-close-editor">X</button>
-        </div>
-
-        <div class="editor-section">
-            <label>Scene Title:</label>
-            <input type="text" id="editor-scene-title">
-        </div>
-
-        <div class="editor-section">
-            <h4>Scaling</h4>
-            <label><input type="checkbox" id="scale-enabled"> Enabled</label><br>
-            <label>Min: <input type="number" id="scale-min" step="0.1" style="width: 50px"></label>
-            <label>Max: <input type="number" id="scale-max" step="0.1" style="width: 50px"></label><br>
-            <label>Horizon Y: <input type="number" id="scale-horizon" style="width: 50px"></label>
-            <label>Front Y: <input type="number" id="scale-front" style="width: 50px"></label>
-        </div>
-
-        <div class="editor-section">
-            <h4>Walkbox</h4>
-            <label><input type="checkbox" id="chk-draw-mode"> Draw Mode</label>
-            <button id="btn-clear-walkbox">Clear Walkbox</button>
-            <div class="help-text">Check to draw. Enter to finish.</div>
-        </div>
-
-        <div class="editor-section">
-            <h4>Sprites</h4>
-            <input type="text" id="sprite-name-input" placeholder="image.png">
-            <button id="btn-add-sprite">Add Sprite</button>
-
-            <div id="sprite-properties" class="hidden"
-                style="margin-top: 10px; border-top: 1px dashed #555; padding-top: 5px;">
-                <h5>Selected Sprite</h5>
-                <label>Img: <input type="text" id="prop-image" style="width: 100px; margin-bottom: 5px;"></label><br>
-                <label>X: <input type="number" id="prop-x" style="width: 50px"></label>
-                <label>Y: <input type="number" id="prop-y" style="width: 50px"></label><br>
-                <label>Scale: <input type="number" id="prop-scale" step="0.1" style="width: 50px"></label>
-                <label>Layer: <input type="number" id="prop-layer" style="width: 50px"></label>
-            </div>
-        </div>
-
-        <div class="editor-section">
-            <h4>File</h4>
-            <button id="btn-save-json">Save JSON</button>
-            <label class="file-upload">
-                Load JSON
-                <input type="file" id="file-load-json" accept=".json">
-            </label>
-        </div>
-    </div>
-
-    <!-- Load scripts in dependency order -->
-    <script src="src/utils/Geometry.js"></script>
-    <script src="src/entities/Entity.js"></script>
-    <script src="src/entities/Player.js"></script>
-    <script src="src/scene/Scene.js"></script>
-    <script src="src/scene/SceneManager.js"></script>
-    <script src="src/core/Input.js"></script>
-    <script src="src/core/Animator.js"></script>
-    <script src="src/mechanics/Parser.js"></script>
-    <script src="src/tools/SceneEditor.js"></script>
-    <script src="src/graphics/CRTFilter.js"></script>
-    <script src="src/core/Game.js"></script>
-    <script src="src/main.js"></script>
-</body>
-
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>temp_vite</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

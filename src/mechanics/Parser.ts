@@ -1,23 +1,35 @@
-class Parser {
-    constructor(game) {
+export class Parser {
+    game: any;
+    inputField: HTMLInputElement | null;
+
+    constructor(game: any) {
         this.game = game;
-        this.inputField = document.getElementById('parser-input');
-        this.setupListener();
+        this.inputField = null;
+        // We delay listener setup because DOM might not be ready if React hasn't rendered yet
+        // Game.ts will call setup or we try to find it lazily
     }
 
-    setupListener() {
-        this.inputField.addEventListener('keydown', (e) => {
+    setupListener(): void {
+        this.inputField = document.getElementById('parser-input') as HTMLInputElement;
+        if (!this.inputField) {
+            console.warn("Parser input field not found");
+            return;
+        }
+
+        this.inputField.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter') {
-                const command = this.inputField.value.trim().toUpperCase();
-                if (command) {
-                    this.parse(command);
-                    this.inputField.value = '';
+                if (this.inputField) {
+                    const command = this.inputField.value.trim().toUpperCase();
+                    if (command) {
+                        this.parse(command);
+                        this.inputField.value = '';
+                    }
                 }
             }
         });
     }
 
-    parse(input) {
+    parse(input: string): void {
         console.log(`Command: ${input}`);
         const words = input.split(' ');
         const verb = words[0];
@@ -26,7 +38,7 @@ class Parser {
         this.execute(verb, noun);
     }
 
-    execute(verb, noun) {
+    execute(verb: string, noun: string): void {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
 
@@ -72,7 +84,7 @@ class Parser {
                 if (this.game.inventory.length === 0) {
                     this.game.showMessage("You are not carrying anything.");
                 } else {
-                    const items = this.game.inventory.map(e => e.name).join(', ');
+                    const items = this.game.inventory.map((e: any) => e.name).join(', ');
                     this.game.showMessage(`You are carrying: ${items}`);
                 }
                 break;
@@ -89,7 +101,7 @@ class Parser {
                         const targetName = parts[1].trim();
 
                         // Check if player has the item
-                        const item = this.game.inventory.find(i => i.name.toUpperCase() === itemName);
+                        const item = this.game.inventory.find((i: any) => i.name.toUpperCase() === itemName);
                         if (!item) {
                             this.game.showMessage(`You don't have the ${itemName}.`);
                         } else {

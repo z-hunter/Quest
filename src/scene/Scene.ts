@@ -1,5 +1,33 @@
-class Scene {
-    constructor(id, name) {
+import { Entity } from '../entities/Entity';
+import type { EntityData } from '../entities/Entity';
+import { Geometry } from '../utils/Geometry';
+
+export interface SceneScaling {
+    enabled: boolean;
+    min: number;
+    max: number;
+    horizon: number;
+    front: number;
+}
+
+export interface SceneData {
+    id: string;
+    name: string;
+    walkbox: { x: number, y: number }[][];
+    scaling: SceneScaling;
+    entities: EntityData[];
+}
+
+export class Scene {
+    id: string;
+    name: string;
+    background: HTMLImageElement | null;
+    entities: Entity[];
+    walkbox: { x: number, y: number }[][];
+    scaling: SceneScaling;
+    player: Entity | null; // Using Entity for now, will be Player
+
+    constructor(id: string, name: string) {
         this.id = id;
         this.name = name;
         this.background = null; // Image object
@@ -12,9 +40,10 @@ class Scene {
             horizon: 150, // Y coordinate for min scale
             front: 300    // Y coordinate for max scale
         };
+        this.player = null;
     }
 
-    addEntity(entity) {
+    addEntity(entity: Entity): void {
         this.entities.push(entity);
         // If this entity is the player, store a reference
         if (entity.constructor.name === 'Player') {
@@ -22,18 +51,18 @@ class Scene {
         }
     }
 
-    removeEntity(entity) {
+    removeEntity(entity: Entity): void {
         const index = this.entities.indexOf(entity);
         if (index > -1) {
             this.entities.splice(index, 1);
         }
     }
 
-    findEntity(name) {
+    findEntity(name: string): Entity | undefined {
         return this.entities.find(e => e.name.toUpperCase() === name.toUpperCase());
     }
 
-    getScaling(y) {
+    getScaling(y: number): number {
         if (!this.scaling.enabled) return 1.0;
 
         // Define horizon and front line from config
@@ -50,8 +79,8 @@ class Scene {
         return this.scaling.min + t * (this.scaling.max - this.scaling.min);
     }
 
-    isWalkable(x, y) {
-        // If no walkbox, everything is walkable (or nothing? let's say everything for now)
+    isWalkable(x: number, y: number): boolean {
+        // If no walkbox, everything is walkable
         if (!this.walkbox || this.walkbox.length === 0) return true;
 
         let inclusionCount = 0;
@@ -65,24 +94,29 @@ class Scene {
         return inclusionCount % 2 !== 0;
     }
 
-    onClick(x, y) {
+    onClick(x: number, y: number): void {
         if (this.player) {
             if (this.isWalkable(x, y)) {
-                this.player.moveTo(x, y);
+                // @ts-ignore - Player has moveTo, Entity base might not (yet)
+                if (typeof this.player.moveTo === 'function') {
+                    // @ts-ignore
+                    this.player.moveTo(x, y);
+                }
             } else {
                 console.log("Cannot walk there!");
             }
         }
     }
 
-    update(deltaTime) {
+    update(deltaTime: number): void {
         this.entities.forEach(entity => {
             // Pass isWalkable callback to entity update (for Player collision)
+            // @ts-ignore - Entity update signature might need adjustment or Player override
             entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
         });
     }
 
-    render(ctx) {
+    render(ctx: CanvasRenderingContext2D): void {
         // 1. Draw Background
         if (this.background) {
             ctx.drawImage(this.background, 0, 0);
@@ -104,12 +138,13 @@ class Scene {
         this.entities.forEach(entity => entity.render(ctx));
 
         // 5. Debug: Draw Walkbox (Only if Editor is enabled)
+        // @ts-ignore
         if (window.game && window.game.editor && window.game.editor.enabled) {
             this.renderWalkbox(ctx);
         }
     }
 
-    renderWalkbox(ctx) {
+    renderWalkbox(ctx: CanvasRenderingContext2D): void {
         if (!this.walkbox || this.walkbox.length === 0) return;
 
         ctx.save();
@@ -138,9 +173,8 @@ class Scene {
         ctx.restore();
     }
 
-    toJSON() {
-        // Filter out Player from saved entities, we'll re-add them manually or handle separately
-        // because Player persists across scenes usually.
+    toJSON(): SceneData {
+        // Filter out Player from saved entities
         const savedEntities = this.entities
             .filter(e => e.constructor.name !== 'Player')
             .map(e => e.toJSON());

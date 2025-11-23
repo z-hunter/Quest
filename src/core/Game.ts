@@ -1,14 +1,37 @@
-class Game {
-    constructor() {
-        this.canvas = document.getElementById('game-canvas');
-        // Main canvas is now WebGL (handled by CRTFilter), so we don't get 2d context here directly if we want to be strict,
-        // BUT CRTFilter expects to take control of the canvas.
+import { CRTFilter } from '../graphics/CRTFilter';
+import { Input } from './Input';
+import { Parser } from '../mechanics/Parser';
+import { SceneManager } from '../scene/SceneManager';
+import { SceneEditor } from '../tools/SceneEditor';
+import { Scene } from '../scene/Scene';
+import { Player } from '../entities/Player';
+import { Entity } from '../entities/Entity';
+
+export class Game {
+    canvas: HTMLCanvasElement;
+    bufferCanvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    crtFilter: CRTFilter | null;
+    lastTime: number;
+    isRunning: boolean;
+    inventory: Entity[];
+    input: Input;
+    parser: Parser;
+    sceneManager: SceneManager;
+    editor: SceneEditor;
+
+    // Callbacks for React
+    onSceneChange?: (sceneName: string) => void;
+    onMessage?: (text: string) => void;
+
+    constructor(canvas: HTMLCanvasElement) {
+        this.canvas = canvas;
 
         // Create an offscreen buffer for the game to draw onto
         this.bufferCanvas = document.createElement('canvas');
         this.bufferCanvas.width = 420;
         this.bufferCanvas.height = 300;
-        this.ctx = this.bufferCanvas.getContext('2d');
+        this.ctx = this.bufferCanvas.getContext('2d') as CanvasRenderingContext2D;
 
         // Initialize CRT Filter on the main canvas
         this.crtFilter = new CRTFilter(this.canvas);
@@ -25,17 +48,16 @@ class Game {
         this.sceneManager = new SceneManager(this);
         this.editor = new SceneEditor(this);
 
-        // Message System
-        this.messageBox = document.getElementById('message-box');
-        this.messageText = document.getElementById('message-text');
-        this.isMessageActive = false;
+        // Expose game instance globally for legacy compatibility (Entity.ts uses it)
+        // @ts-ignore
+        window.game = this;
 
         this.initTestScene();
 
         console.log('Game initialized');
     }
 
-    initTestScene() {
+    initTestScene(): void {
         const testScene = new Scene('test_room', 'Test Room');
 
         // Add player
@@ -69,18 +91,18 @@ class Game {
         this.sceneManager.switchTo('test_room');
     }
 
-    start() {
+    start(): void {
         if (this.isRunning) return;
         this.isRunning = true;
         this.lastTime = performance.now();
         requestAnimationFrame(this.loop.bind(this));
     }
 
-    stop() {
+    stop(): void {
         this.isRunning = false;
     }
 
-    loop(timestamp) {
+    loop(timestamp: number): void {
         if (!this.isRunning) return;
 
         try {
@@ -98,11 +120,11 @@ class Game {
         requestAnimationFrame(this.loop.bind(this));
     }
 
-    update(deltaTime) {
+    update(deltaTime: number): void {
         this.sceneManager.update(deltaTime);
     }
 
-    render() {
+    render(): void {
         // 1. Render Game to Buffer
         // Clear buffer
         this.ctx.fillStyle = '#000';
@@ -127,43 +149,19 @@ class Game {
         }
     }
 
-    disableCRT() {
+    disableCRT(): void {
         this.crtFilter = null;
 
-        // Replace WebGL canvas with 2D buffer canvas
-        const container = document.getElementById('game-container');
-        if (this.canvas && this.canvas.parentNode === container) {
-            container.removeChild(this.canvas);
+        // In React, we might want to just render the buffer canvas directly or copy it
+        // For now, let's just copy buffer to main canvas using 2D context
+        const ctx = this.canvas.getContext('2d');
+        if (ctx) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(this.bufferCanvas, 0, 0, this.canvas.width, this.canvas.height);
         }
-
-        // Style the buffer canvas to look like the game canvas
-        this.bufferCanvas.id = 'game-canvas';
-        this.bufferCanvas.style.width = '100%';
-        this.bufferCanvas.style.height = '100%';
-        this.bufferCanvas.style.imageRendering = 'pixelated'; // Ensure crisp pixels
-
-        container.appendChild(this.bufferCanvas);
-
-        // Update reference
-        this.canvas = this.bufferCanvas;
-
-        // Re-bind input
-        this.input.updateCanvas(this.canvas);
-
-        // Inject CSS CRT Overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'crt-overlay';
-        container.appendChild(overlay);
-        console.log("CSS CRT Overlay activated");
     }
 
-    onMouseClick(x, y) {
-        // If message is active, dismiss it
-        if (this.isMessageActive) {
-            this.dismissMessage();
-            return;
-        }
-
+    onMouseClick(x: number, y: number): void {
         // If editor consumes the click, don't pass to game
         if (this.editor.onClick(x, y)) return;
 
@@ -174,28 +172,18 @@ class Game {
         }
     }
 
-    showMessage(text) {
-        this.messageText.textContent = text;
-        this.messageBox.classList.remove('hidden');
-        this.isMessageActive = true;
-
-        // Pause game loop logic (optional, but good for reading)
-        // We won't stop the loop entirely (so animations might still play or pause depending on preference)
-        // For Sierra style, usually everything pauses.
-    }
-
-    dismissMessage() {
-        this.messageBox.classList.add('hidden');
-        this.isMessageActive = false;
-
-        // Refocus input
-        if (this.parser && this.parser.inputField) {
-            this.parser.inputField.focus();
+    showMessage(text: string): void {
+        console.log(`[MESSAGE] ${text}`);
+        if (this.onMessage) {
+            this.onMessage(text);
+        } else {
+            // Fallback if no UI hooked up
+            alert(text);
         }
     }
 
-    update(deltaTime) {
-        if (this.isMessageActive) return; // Pause updates while message is open
-        this.sceneManager.update(deltaTime);
+    bindUI(): void {
+        this.parser.setupListener();
+        this.editor.initUI();
     }
 }

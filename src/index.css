@@ -1,0 +1,263 @@
+body {
+  background-color: #000;
+  color: #fff;
+  font-family: 'Courier New', Courier, monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  overflow: auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+#game-container {
+  position: relative;
+  width: 840px;
+  /* 420 * 2 */
+  height: 640px;
+  /* 300 * 2 + 40px UI */
+  background-color: #111;
+  border: 2px solid #555;
+  image-rendering: pixelated;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 600px;
+  /* 300 * 2 */
+  background-color: #000;
+}
+
+#ui-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background-color: #000;
+  border-top: 2px solid #fff;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+#status-bar {
+  background-color: #fff;
+  color: #000;
+  padding: 2px 5px;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+}
+
+#command-line {
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  flex-grow: 1;
+}
+
+.prompt {
+  margin-right: 5px;
+  font-weight: bold;
+}
+
+#parser-input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 16px;
+  flex-grow: 1;
+  outline: none;
+  text-transform: uppercase;
+}
+
+/* Editor Styles */
+#editor-panel {
+  position: absolute;
+  top: 0;
+  right: -270px;
+  /* Move outside to the right */
+  width: 250px;
+  background-color: rgba(0, 0, 0, 0.9);
+  border: 1px solid #0f0;
+  padding: 10px;
+  color: #0f0;
+  font-family: monospace;
+  z-index: 1000;
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5);
+}
+
+#hierarchy-panel {
+  position: absolute;
+  top: 0;
+  left: -220px;
+  /* Move outside to the left */
+  width: 200px;
+  background-color: rgba(0, 0, 0, 0.9);
+  border: 1px solid #0f0;
+  padding: 10px;
+  color: #0f0;
+  font-family: monospace;
+  z-index: 1000;
+  box-shadow: -5px 5px 10px rgba(0, 0, 0, 0.5);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #0f0;
+  margin-bottom: 10px;
+}
+
+.editor-section {
+  margin-bottom: 15px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 10px;
+}
+
+.editor-section h4 {
+  margin: 0 0 5px 0;
+  color: #fff;
+}
+
+button {
+  background: #000;
+  border: 1px solid #0f0;
+  color: #0f0;
+  cursor: pointer;
+  padding: 2px 5px;
+  font-family: monospace;
+}
+
+button:hover {
+  background: #0f0;
+  color: #000;
+}
+
+input[type="text"],
+input[type="number"] {
+  background: #222;
+  border: 1px solid #555;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+.file-upload {
+  display: inline-block;
+  border: 1px solid #0f0;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+/* Hierarchy List */
+#entity-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.entity-item {
+  padding: 2px 5px;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
+}
+
+.entity-item:hover {
+  background-color: #222;
+  border-bottom: 1px solid #0f0;
+}
+
+.entity-item.selected {
+  background-color: #0f0;
+  color: #000;
+}
+
+/* CRT Overlay Fallback */
+.crt-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 100;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%,
+      rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg,
+      rgba(255, 0, 0, 0.06),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.06));
+  background-size: 100% 2px, 3px 100%;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.crt-overlay::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.4) 100%);
+  z-index: 2;
+}
+
+/* Message Box */
+#message-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  background-color: #fff;
+  color: #000;
+  border: 4px double #000;
+  padding: 15px;
+  z-index: 200;
+  /* Above everything including CRT overlay */
+  text-align: center;
+  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.5);
+  image-rendering: pixelated;
+}
+
+#message-text {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1.4;
+}
+
+.message-footer {
+  font-size: 12px;
+  color: #555;
+  text-transform: uppercase;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}

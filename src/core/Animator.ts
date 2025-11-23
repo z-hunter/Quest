@@ -1,5 +1,27 @@
-class Animator {
-    constructor(entity) {
+import { Entity } from '../entities/Entity';
+
+export interface AnimationFrame {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export interface AnimationDef {
+    frames: AnimationFrame[];
+    loop: boolean;
+}
+
+export class Animator {
+    entity: Entity;
+    animations: Record<string, AnimationDef>;
+    currentAnimation: string | null;
+    currentFrame: number;
+    frameTimer: number;
+    frameDuration: number;
+    isPlaying: boolean;
+
+    constructor(entity: Entity) {
         this.entity = entity;
         this.animations = {};
         this.currentAnimation = null;
@@ -9,14 +31,14 @@ class Animator {
         this.isPlaying = false;
     }
 
-    addAnimation(name, frames, loop = true) {
+    addAnimation(name: string, frames: AnimationFrame[], loop: boolean = true): void {
         this.animations[name] = {
-            frames: frames, // Array of {x, y, w, h} or indices if using grid
+            frames: frames,
             loop: loop
         };
     }
 
-    play(name) {
+    play(name: string): void {
         if (this.currentAnimation === name && this.isPlaying) return;
 
         if (this.animations[name]) {
@@ -27,12 +49,12 @@ class Animator {
         }
     }
 
-    stop() {
+    stop(): void {
         this.isPlaying = false;
         this.currentFrame = 0;
     }
 
-    update(deltaTime) {
+    update(deltaTime: number): void {
         if (!this.isPlaying || !this.currentAnimation) return;
 
         this.frameTimer += deltaTime;
@@ -52,7 +74,7 @@ class Animator {
         }
     }
 
-    getCurrentFrame() {
+    getCurrentFrame(): AnimationFrame | null {
         if (!this.currentAnimation) return null;
         return this.animations[this.currentAnimation].frames[this.currentFrame];
     }

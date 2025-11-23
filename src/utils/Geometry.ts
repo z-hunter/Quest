@@ -1,5 +1,5 @@
-class Geometry {
-    static isPointInPolygon(point, polygon) {
+export class Geometry {
+    static isPointInPolygon(point: { x: number, y: number }, polygon: { x: number, y: number }[]): boolean {
         let inside = false;
         for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
             const xi = polygon[i].x, yi = polygon[i].y;
