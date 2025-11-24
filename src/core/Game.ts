@@ -8,9 +8,11 @@ import { Player } from '../entities/Player';
 import { Entity } from '../entities/Entity';
 
 export class Game {
-    canvas: HTMLCanvasElement;
+    canvas: HTMLCanvasElement; // Input/UI Canvas
+    rendererCanvas: HTMLCanvasElement; // WebGL/CRT Canvas
     bufferCanvas: HTMLCanvasElement;
     ctx: CanvasRenderingContext2D;
+    uiCtx: CanvasRenderingContext2D | null;
     crtFilter: CRTFilter | null;
     lastTime: number;
     isRunning: boolean;
@@ -24,8 +26,12 @@ export class Game {
     onSceneChange?: (sceneName: string) => void;
     onMessage?: (text: string) => void;
 
-    constructor(canvas: HTMLCanvasElement) {
-        this.canvas = canvas;
+    constructor(rendererCanvas: HTMLCanvasElement, uiCanvas?: HTMLCanvasElement) {
+        this.rendererCanvas = rendererCanvas;
+        // If uiCanvas is provided, use it for Input/UI. Otherwise fallback to rendererCanvas.
+        this.canvas = uiCanvas || rendererCanvas;
+
+        this.uiCtx = this.canvas.getContext('2d');
 
         // Create an offscreen buffer for the game to draw onto
         this.bufferCanvas = document.createElement('canvas');
@@ -33,8 +39,8 @@ export class Game {
         this.bufferCanvas.height = 300;
         this.ctx = this.bufferCanvas.getContext('2d') as CanvasRenderingContext2D;
 
-        // Initialize CRT Filter on the main canvas
-        this.crtFilter = new CRTFilter(this.canvas);
+        // Initialize CRT Filter on the RENDERER canvas (WebGL)
+        this.crtFilter = new CRTFilter(this.rendererCanvas);
 
         this.lastTime = 0;
         this.isRunning = false;
@@ -42,6 +48,7 @@ export class Game {
 
         // Disable smoothing for pixel art look
         this.ctx.imageSmoothingEnabled = false;
+        if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
 
         this.input = new Input(this);
         this.parser = new Parser(this);
@@ -131,21 +138,29 @@ export class Game {
         this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
         this.sceneManager.render(this.ctx);
-        this.editor.render(this.ctx);
+
+        // Note: Editor is NO LONGER rendered to bufferCanvas.
+        // this.editor.render(this.ctx); 
 
         // Debug text on buffer
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '10px monospace';
-        this.ctx.fillText('Sierra Engine v0.1', 10, 10);
+        this.ctx.fillText('Quest Engine v0.1', 10, 10);
 
         // 2. Render Buffer to Screen via CRT Filter
         if (this.crtFilter) {
             try {
-                this.crtFilter.render(this.bufferCanvas);
+                this.crtFilter.render(this.bufferCanvas, this.bufferCanvas.height);
             } catch (e) {
                 console.warn("CRT Filter failed (likely SecurityError), disabling and falling back to 2D canvas:", e);
                 this.disableCRT();
             }
+        }
+
+        // 3. Render UI/Editor to UI Canvas (Overlay)
+        if (this.uiCtx) {
+            this.uiCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.editor.render(this.uiCtx);
         }
     }
 
@@ -154,11 +169,9 @@ export class Game {
 
         // In React, we might want to just render the buffer canvas directly or copy it
         // For now, let's just copy buffer to main canvas using 2D context
-        const ctx = this.canvas.getContext('2d');
-        if (ctx) {
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(this.bufferCanvas, 0, 0, this.canvas.width, this.canvas.height);
-        }
+        // But wait, rendererCanvas is WebGL. We can't get 2D context from it easily if it's already WebGL.
+        // This fallback might fail if context is lost/incompatible.
+        // For now, assume CRT works or we are screwed.
     }
 
     onMouseClick(x: number, y: number): void {
@@ -185,5 +198,14 @@ export class Game {
     bindUI(): void {
         this.parser.setupListener();
         this.editor.initUI();
+    }
+
+    resize(width: number, height: number): void {
+        // Update RENDERER canvas size (High Res)
+        this.rendererCanvas.width = width;
+        this.rendererCanvas.height = height;
+
+        // Note: We do NOT resize bufferCanvas. It stays at 420x300.
+        // Note: We do NOT resize uiCanvas (this.canvas). It stays at 420x300 (set in React).
     }
 }

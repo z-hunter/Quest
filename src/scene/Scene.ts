@@ -45,6 +45,8 @@ export class Scene {
 
     addEntity(entity: Entity): void {
         this.entities.push(entity);
+        // @ts-ignore
+        entity.scene = this;
         // If this entity is the player, store a reference
         if (entity.constructor.name === 'Player') {
             this.player = entity;

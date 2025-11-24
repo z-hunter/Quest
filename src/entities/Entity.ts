@@ -32,6 +32,7 @@ export class Entity {
     baseHeight: number;
     animator: Animator | null;
     flipX: boolean;
+    scene: any; // Reference to the scene this entity belongs to
 
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         this.x = x;
@@ -54,6 +55,7 @@ export class Entity {
         this.baseHeight = this.height;
         this.animator = null;
         this.flipX = false;
+        this.scene = null;
     }
 
     setSprite(filename: string): void {
@@ -81,13 +83,16 @@ export class Entity {
 
     update(deltaTime: number): void {
         // Dynamic Depth Scaling
-        // Accessing global game for now as per original architecture
-        // @ts-ignore
-        if (window.game && window.game.sceneManager && window.game.sceneManager.currentScene) {
+        if (this.scene) {
+            const depthScale = this.scene.getScaling(this.y);
+            this.scale = depthScale;
+            this.width = this.baseWidth * this.scale;
+            this.height = this.baseHeight * this.scale;
+        } else if (window.game && window.game.sceneManager && window.game.sceneManager.currentScene) {
+            // Fallback to global if scene not set (legacy support)
             // @ts-ignore
             const scene = window.game.sceneManager.currentScene;
             const depthScale = scene.getScaling(this.y);
-
             this.scale = depthScale;
             this.width = this.baseWidth * this.scale;
             this.height = this.baseHeight * this.scale;

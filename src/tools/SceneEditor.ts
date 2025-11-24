@@ -540,5 +540,36 @@ export class SceneEditor {
             }
             ctx.restore();
         }
+
+        // Draw Scaling Lines (Horizon and Front)
+        const scene = this.game.sceneManager.currentScene;
+        if (scene && scene.scaling && scene.scaling.enabled) {
+            ctx.save();
+            ctx.font = '10px monospace';
+
+            // Horizon Line (Min Scale)
+            const horizonY = scene.scaling.horizon;
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan, semi-transparent
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, horizonY);
+            ctx.lineTo(this.game.canvas.width, horizonY);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+            ctx.fillText(`Horizon`, 5, horizonY - 2);
+
+            // Front Line (Max Scale)
+            const frontY = scene.scaling.front;
+            ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)'; // Magenta, semi-transparent
+            ctx.beginPath();
+            ctx.moveTo(0, frontY);
+            ctx.lineTo(this.game.canvas.width, frontY);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
+            ctx.fillText(`Front`, 5, frontY - 2);
+
+            ctx.restore();
+        }
     }
 }

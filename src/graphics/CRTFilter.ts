@@ -8,6 +8,7 @@ export class CRTFilter {
     texCoordLocation: number;
     resolutionLocation: WebGLUniformLocation | null;
     timeLocation: WebGLUniformLocation | null;
+    scanlineCountLocation: WebGLUniformLocation | null;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -22,6 +23,7 @@ export class CRTFilter {
             this.texCoordLocation = 0;
             this.resolutionLocation = null;
             this.timeLocation = null;
+            this.scanlineCountLocation = null;
             return;
         }
 
@@ -32,6 +34,7 @@ export class CRTFilter {
         this.texCoordLocation = 0;
         this.resolutionLocation = null;
         this.timeLocation = null;
+        this.scanlineCountLocation = null;
 
         this.init();
     }
@@ -57,6 +60,7 @@ export class CRTFilter {
             uniform sampler2D u_image;
             uniform vec2 u_resolution;
             uniform float u_time;
+            uniform float u_scanlineCount;
             varying vec2 v_texCoord;
 
             // Curvature
@@ -87,7 +91,8 @@ export class CRTFilter {
                 vec3 color = vec3(r, g, b);
 
                 // Scanlines
-                float scanline = sin(curvedUV.y * u_resolution.y * 2.0 * 3.14159) * 0.04;
+                // Use u_scanlineCount instead of u_resolution.y to decouple from screen size
+                float scanline = sin(curvedUV.y * u_scanlineCount * 3.14159 * 2.0) * 0.04;
                 color -= scanline;
 
                 // Vignette
@@ -110,6 +115,7 @@ export class CRTFilter {
         this.texCoordLocation = gl.getAttribLocation(this.program, "a_texCoord");
         this.resolutionLocation = gl.getUniformLocation(this.program, "u_resolution");
         this.timeLocation = gl.getUniformLocation(this.program, "u_time");
+        this.scanlineCountLocation = gl.getUniformLocation(this.program, "u_scanlineCount");
 
         // Create buffer for a quad (2 triangles)
         this.buffer = gl.createBuffer();
@@ -163,7 +169,7 @@ export class CRTFilter {
         return program;
     }
 
-    render(sourceCanvas: HTMLCanvasElement): void {
+    render(sourceCanvas: HTMLCanvasElement, scanlineCount: number = 300): void {
         if (!this.gl || !this.program || !this.buffer || !this.texture) return;
 
         const gl = this.gl;
@@ -187,6 +193,9 @@ export class CRTFilter {
         }
         if (this.timeLocation) {
             gl.uniform1f(this.timeLocation, performance.now() / 1000);
+        }
+        if (this.scanlineCountLocation) {
+            gl.uniform1f(this.scanlineCountLocation, scanlineCount);
         }
 
         // Upload texture
