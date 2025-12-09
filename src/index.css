@@ -80,34 +80,127 @@ canvas {
 }
 
 /* Editor Styles */
-#editor-panel {
-  position: absolute;
+/* Editor Overlay - Full Screen Wrapper */
+#editor-wrapper {
+  position: fixed;
   top: 0;
-  right: -270px;
-  /* Move outside to the right */
-  width: 250px;
-  background-color: rgba(0, 0, 0, 0.9);
-  border: 1px solid #0f0;
-  padding: 10px;
-  color: #0f0;
-  font-family: monospace;
-  z-index: 1000;
-  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5);
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Let clicks pass through to game when hidden */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 100;
 }
 
-#hierarchy-panel {
-  position: absolute;
-  top: 0;
-  left: -220px;
-  /* Move outside to the left */
-  width: 200px;
-  background-color: rgba(0, 0, 0, 0.9);
-  border: 1px solid #0f0;
+#editor-wrapper.hidden {
+  display: none;
+}
+
+/* Enable pointer events for children when visible */
+#editor-wrapper:not(.hidden)>* {
+  pointer-events: auto;
+}
+
+.editor-main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
   padding: 10px;
-  color: #0f0;
+  gap: 10px;
+}
+
+/* Left Panel - Hierarchy */
+#hierarchy-panel {
+  width: 200px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #00ff00;
+  color: #00ff00;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+/* Right Panel - Properties */
+#editor-panel {
+  width: 250px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #00ff00;
+  color: #00ff00;
+  padding: 10px;
+  overflow-y: auto;
+  pointer-events: auto;
+  margin-left: auto;
+  /* Push to right */
+}
+
+/* Bottom Bar - F-Keys */
+#editor-bottom-bar {
+  background: #000;
+  color: #00ff00;
+  display: flex;
+  justify-content: space-around;
+  padding: 5px;
+  border-top: 2px solid #00ff00;
   font-family: monospace;
-  z-index: 1000;
-  box-shadow: -5px 5px 10px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.f-key-btn {
+  background: transparent;
+  width: auto;
+  border: none;
+  color: #00ff00;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.f-key-btn:hover {
+  background: #00ff00;
+  color: #000;
+}
+
+.f-num {
+  font-weight: bold;
+  margin-right: 5px;
+}
+
+/* Hierarchy List */
+#entity-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Entity List Items */
+.entity-item {
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+.entity-item:hover {
+  background: rgba(0, 255, 0, 0.2);
+}
+
+.entity-item.selected {
+  background: #00ff00;
+  color: #000;
+}
+
+/* Scene Prop Item */
+.scene-prop-item {
+  padding: 2px 5px;
+  cursor: pointer;
+  border-bottom: 1px dashed #00ff00;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.scene-prop-item.selected {
+  background: #00ff00;
+  color: #000;
 }
 
 .hidden {

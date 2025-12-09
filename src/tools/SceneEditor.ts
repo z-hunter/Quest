@@ -1,4 +1,6 @@
 import { Entity } from '../entities/Entity';
+import { Actor } from '../entities/Actor';
+import { Player } from '../entities/Player';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 
@@ -31,12 +33,19 @@ export class SceneEditor {
     scaleHorizon: HTMLInputElement | null;
     scaleFront: HTMLInputElement | null;
 
+    // Sections
+    sectionSceneProps: HTMLElement | null;
+    sectionEntityProps: HTMLElement | null;
+    scenePropertiesItem: HTMLElement | null;
+    editorWrapper: HTMLElement | null;
+
     constructor(game: any) {
         this.game = game;
         this.enabled = false;
         this.panel = null;
         this.hierarchyPanel = null;
         this.entityList = null;
+        this.editorWrapper = null;
 
         this.currentPolygon = [];
         this.selectedObject = null;
@@ -60,24 +69,29 @@ export class SceneEditor {
         this.scaleMax = null;
         this.scaleHorizon = null;
         this.scaleFront = null;
+
+        this.sectionSceneProps = null;
+        this.sectionEntityProps = null;
+        this.scenePropertiesItem = null;
     }
 
     initUI(): void {
         console.log('[SceneEditor] Initializing UI...');
+        this.editorWrapper = document.getElementById('editor-wrapper');
         this.panel = document.getElementById('editor-panel');
         this.hierarchyPanel = document.getElementById('hierarchy-panel');
         this.entityList = document.getElementById('entity-list');
-
-        // Force initial hidden state (decoupled from React)
-        if (this.panel) this.panel.classList.add('hidden');
-        if (this.hierarchyPanel) this.hierarchyPanel.classList.add('hidden');
 
         this.titleInput = document.getElementById('editor-scene-title') as HTMLInputElement;
         this.spriteInput = document.getElementById('sprite-name-input') as HTMLInputElement;
         this.fileInput = document.getElementById('file-load-json') as HTMLInputElement;
         this.chkDrawMode = document.getElementById('chk-draw-mode') as HTMLInputElement;
 
-        this.propPanel = document.getElementById('sprite-properties');
+        this.propPanel = document.getElementById('editor-panel'); // Reused, though sectionEntityProps is specific
+        this.sectionSceneProps = document.getElementById('section-scene-props');
+        this.sectionEntityProps = document.getElementById('section-entity-props');
+        this.scenePropertiesItem = document.getElementById('scene-properties-item');
+
         this.propImage = document.getElementById('prop-image') as HTMLInputElement;
         this.propX = document.getElementById('prop-x') as HTMLInputElement;
         this.propY = document.getElementById('prop-y') as HTMLInputElement;
@@ -98,18 +112,68 @@ export class SceneEditor {
     setupListeners(): void {
         // Toggle Key
         window.addEventListener('keydown', (e) => {
-            if (e.key === 'F1' || e.key === '`' || e.key === 'Backquote') {
-                console.log('[SceneEditor] Toggle Key Pressed');
+            // Prevent default for F-keys and Editor keys when editor is open
+            if (this.enabled) {
+                if (['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(e.key.toLowerCase())) {
+                    // e.preventDefault(); // Be careful not to block typing in inputs
+                }
+            }
+
+            if (e.key === 'F1') {
                 e.preventDefault();
                 this.toggle();
+                return;
             }
 
             if (!this.enabled) return;
 
-            if (e.key === 'Enter' && !e.ctrlKey) {
-                this.finishPolygon();
-            } else if (e.key === 'Delete' && this.selectedObject) {
-                this.deleteSelectedObject();
+            // Ignore shortcuts if user is typing in an input
+            if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            switch (e.key.toLowerCase()) {
+                case 'f2': e.preventDefault(); this.saveScene(); break;
+                case 'f3': e.preventDefault(); if (this.fileInput) this.fileInput.click(); break;
+                case 'f4': e.preventDefault(); this.newScene(); break;
+
+                // Creation Hotkeys
+                case 's': this.startCreating('Static'); break;
+                case 'a': this.startCreating('Actor'); break;
+                case 'w': this.startCreating('Walkbox'); break;
+                case 't': this.startCreating('Triggerbox'); break;
+
+                // Camera Hotkeys
+                case '+': case '=':
+                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 1.1;
+                    break;
+                case '-':
+                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 0.9;
+                    break;
+                case '*':
+                    // Reset Camera Position
+                    if (this.game.sceneManager.currentScene) {
+                        const s = this.game.sceneManager.currentScene;
+                        if (s.player) {
+                            s.camera.x = s.player.x - 320;
+                            s.camera.y = s.player.y - 200;
+                        } else {
+                            s.camera.x = 0; s.camera.y = 0;
+                        }
+                    }
+                    break;
+                case '/':
+                    // Reset Zoom
+                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom = 1.0;
+                    break;
+
+                case 'delete':
+                    if (this.selectedObject) this.deleteSelectedObject();
+                    break;
+
+                case 'enter':
+                    if (!e.ctrlKey) this.finishPolygon();
+                    break;
             }
         });
 
@@ -119,10 +183,51 @@ export class SceneEditor {
         this.game.canvas.addEventListener('mouseup', () => this.onMouseUp());
     }
 
+    startCreating(type: string): void {
+        if (!this.game.sceneManager.currentScene) return;
+        const scene = this.game.sceneManager.currentScene;
+
+        if (type === 'Static' || type === 'Actor') {
+            const name = prompt(`Enter name for ${type}:`, type + '_' + Math.floor(Math.random() * 1000));
+            if (!name) return;
+
+            const ent = new Entity(160, 100, 30, 30, name);
+            ent.color = type === 'Actor' ? '#0000ff' : '#00ff00';
+
+            scene.addEntity(ent);
+            this.selectObject(ent);
+            this.drawMode = false;
+        } else if (type === 'Walkbox') {
+            this.drawMode = true;
+            if (this.chkDrawMode) this.chkDrawMode.checked = true;
+            this.selectObject(null);
+            console.log("Draw Mode: Walkbox");
+        } else if (type === 'Triggerbox') {
+            console.log("Draw Mode: Triggerbox (Not fully implemented yet)");
+        }
+    }
+
     setupUI(): void {
         // Close Button
         const closeBtn = document.getElementById('btn-close-editor');
         if (closeBtn) closeBtn.onclick = () => this.toggle();
+
+        // Scene Properties Click
+        if (this.scenePropertiesItem) {
+            this.scenePropertiesItem.onclick = () => {
+                this.selectObject('SCENE');
+            };
+        }
+
+        // F-Key Buttons
+        const btnSave = document.getElementById('btn-f2-save');
+        if (btnSave) btnSave.onclick = () => this.saveScene();
+
+        const btnLoad = document.getElementById('btn-f3-load');
+        if (btnLoad && this.fileInput) btnLoad.onclick = () => this.fileInput!.click();
+
+        const btnNew = document.getElementById('btn-f4-new');
+        if (btnNew) btnNew.onclick = () => this.newScene();
 
         // Draw Mode Toggle
         if (this.chkDrawMode) {
@@ -166,7 +271,7 @@ export class SceneEditor {
             };
         }
 
-        // Save JSON
+        // Save JSON (Duplicate button in File section)
         const saveBtn = document.getElementById('btn-save-json');
         if (saveBtn) saveBtn.onclick = () => this.saveScene();
 
@@ -204,7 +309,7 @@ export class SceneEditor {
 
         if (this.propImage) {
             this.propImage.onchange = () => {
-                if (this.selectedObject && !Array.isArray(this.selectedObject)) {
+                if (this.selectedObject && typeof this.selectedObject !== 'string' && !Array.isArray(this.selectedObject)) {
                     this.selectedObject.setSprite(this.propImage!.value);
                 }
             };
@@ -232,16 +337,16 @@ export class SceneEditor {
 
     toggle(): void {
         this.enabled = !this.enabled;
-        if (this.enabled) {
-            if (this.panel) this.panel.classList.remove('hidden');
-            if (this.hierarchyPanel) this.hierarchyPanel.classList.remove('hidden');
-            this.syncUI();
-            this.refreshHierarchy();
-        } else {
-            if (this.panel) this.panel.classList.add('hidden');
-            if (this.hierarchyPanel) this.hierarchyPanel.classList.add('hidden');
-            this.selectedObject = null;
-            if (this.propPanel) this.propPanel.classList.add('hidden');
+        if (this.editorWrapper) {
+            if (this.enabled) {
+                this.editorWrapper.classList.remove('hidden');
+                this.syncUI();
+                this.refreshHierarchy();
+                this.selectObject('SCENE');
+            } else {
+                this.editorWrapper.classList.add('hidden');
+                this.selectedObject = null;
+            }
         }
     }
 
@@ -266,6 +371,15 @@ export class SceneEditor {
         this.entityList.innerHTML = '';
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
+
+        // Highlight Scene Properties Item?
+        if (this.scenePropertiesItem) {
+            if (this.selectedObject === 'SCENE') {
+                this.scenePropertiesItem.classList.add('selected');
+            } else {
+                this.scenePropertiesItem.classList.remove('selected');
+            }
+        }
 
         // 1. List Walkboxes
         if (scene.walkbox) {
@@ -313,27 +427,57 @@ export class SceneEditor {
         if (!this.enabled) return;
         if (this.drawMode) return;
 
-        const pos = this.getMousePos(e);
+        const pos = this.getMousePos(e); // Screen Coords
         const scene = this.game.sceneManager.currentScene;
 
         if (scene) {
-            // 1. Check Entities (Top to Bottom)
+            const camX = scene.camera ? scene.camera.x : 0;
+            const camY = scene.camera ? scene.camera.y : 0;
+            const zoom = scene.camera ? scene.camera.zoom : 1.0;
+
+            // 1. Check Entities
             for (let i = scene.entities.length - 1; i >= 0; i--) {
                 const entity = scene.entities[i];
-                if (pos.x >= entity.x - entity.width / 2 && pos.x <= entity.x + entity.width / 2 &&
-                    pos.y >= entity.y - entity.height && pos.y <= entity.y) {
+                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+                // Entity Screen Rect (With Zoom)
+                // Center: (EntityX - CamX*p) * Zoom, (EntityY - CamY*p) * Zoom
+                // But easier: Transform Mouse to World
+
+                // Mouse is Screen Coord.
+                // ScreenEntityX = (E.x - CamX*p) * Zoom + CanvasOffsetX? (Assuming canvas is 0,0)
+
+                // Let's do Screen Space Check
+                const screenX = (entity.x - camX * p) * zoom;
+                const screenY = (entity.y - camY * p) * zoom; // Assuming y is bottom
+                const screenW = entity.width * zoom;
+                const screenH = entity.height * zoom;
+
+                // Entity pivot is Bottom-Center
+                // Rect: Left = screenX - W/2, Top = screenY - H
+
+                if (pos.x >= screenX - screenW / 2 && pos.x <= screenX + screenW / 2 &&
+                    pos.y >= screenY - screenH && pos.y <= screenY) {
 
                     this.selectObject(entity);
                     this.isDragging = true;
-                    this.dragOffset = { x: pos.x - entity.x, y: pos.y - entity.y };
+                    // Offset in Screen Space
+                    this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
                     e.stopPropagation();
                     return;
                 }
             }
 
-            // 2. Check Walkboxes
+            // 2. Check Walkboxes (World Space, Parallax 1.0)
+            const zoom = scene.camera ? scene.camera.zoom : 1.0;
+            // Mouse (Screen) -> World
+            const worldPos = {
+                x: pos.x / zoom + camX,
+                y: pos.y / zoom + camY
+            };
+
             for (const poly of scene.walkbox) {
-                if (Geometry.isPointInPolygon(pos, poly)) {
+                if (Geometry.isPointInPolygon(worldPos, poly)) {
                     this.selectObject(poly);
                     e.stopPropagation();
                     return;
@@ -351,8 +495,26 @@ export class SceneEditor {
         if (Array.isArray(this.selectedObject)) return; // It's a walkbox
 
         const pos = this.getMousePos(e);
-        this.selectedObject.x = Math.round(pos.x - this.dragOffset.x);
-        this.selectedObject.y = Math.round(pos.y - this.dragOffset.y);
+        const scene = this.game.sceneManager.currentScene;
+        const camX = scene && scene.camera ? scene.camera.x : 0;
+        const camY = scene && scene.camera ? scene.camera.y : 0;
+
+        const entity = this.selectedObject;
+        const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+
+        // targetScreenX (Zoomed) = pos.x - dragOffset
+        // Unzoomed ScreenX = targetScreenX / zoom
+        // WorldX = UnzoomedScreenX + camX * p
+
+        const targetScreenX = pos.x - this.dragOffset.x;
+        const targetScreenY = pos.y - this.dragOffset.y;
+
+        const unzoomedX = targetScreenX / zoom;
+        const unzoomedY = targetScreenY / zoom;
+
+        entity.x = Math.round(unzoomedX + camX * p);
+        entity.y = Math.round(unzoomedY + camY * p);
 
         this.updateUIFromObject();
     }
@@ -363,17 +525,40 @@ export class SceneEditor {
 
     selectObject(obj: any): void {
         this.selectedObject = obj;
-        this.refreshHierarchy();
 
-        if (obj && !Array.isArray(obj)) {
-            // It's an Entity
-            if (this.propPanel) this.propPanel.classList.remove('hidden');
+        // Visibility Toggles
+        if (this.selectedObject === 'SCENE') {
+            if (this.sectionSceneProps) this.sectionSceneProps.classList.remove('hidden');
+            if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
+        } else if (obj && !Array.isArray(obj)) {
+            // Entity
+            if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
+            if (this.sectionEntityProps) this.sectionEntityProps.classList.remove('hidden');
             this.updateUIFromObject();
         } else {
-            // It's a Walkbox or Null
-            if (this.propPanel) this.propPanel.classList.add('hidden');
+            // Walkbox or Null
+            // If Walkbox, maybe show nothing specific or walkbox props?
+            // For now hide entity props, keep scene props hidden?
+            // Default to nothing?
+            if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
+            if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
         }
+
+        this.refreshHierarchy();
     }
+
+    newScene(): void {
+        const newScene = new Scene('new_scene', 'New Scene');
+        // Add default scale
+        newScene.scaling.enabled = true;
+        this.game.sceneManager.addScene(newScene);
+        this.game.sceneManager.switchTo(newScene.id);
+        this.syncUI();
+        this.refreshHierarchy();
+        this.selectObject('SCENE');
+        console.log('New Scene Created');
+    }
+
 
     updateUIFromObject(): void {
         if (!this.selectedObject || Array.isArray(this.selectedObject)) return;
@@ -443,6 +628,16 @@ export class SceneEditor {
             const data = JSON.parse(jsonString);
             const newScene = new Scene(data.id || 'loaded_scene', data.name || 'Untitled');
 
+            // Restore Camera
+            if (data.camera) {
+                newScene.camera = { ...data.camera };
+            }
+
+            // Restore Scaling
+            if (data.scaling) {
+                newScene.scaling = { ...data.scaling };
+            }
+
             // Ensure walkbox coordinates are numbers
             newScene.walkbox = (data.walkbox || []).map((poly: any) =>
                 poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
@@ -450,19 +645,48 @@ export class SceneEditor {
 
             if (data.entities) {
                 data.entities.forEach((entityData: any) => {
-                    const entity = Entity.fromJSON(entityData);
+                    let entity: Entity;
+
+                    if (entityData.type === 'Player') {
+                        entity = new Player(entityData.x, entityData.y);
+                        // Player constructor sets hardcoded size/sprite, might need to override from saved data
+                        // if we want perfect persistence.
+                        // For now we assume Player defaults are good, but we should restore position at least (done in constructor).
+                    } else if (entityData.type === 'Actor') {
+                        entity = new Actor(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
+                    } else {
+                        entity = new Entity(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
+                    }
+
+                    // Restore common properties
+                    entity.color = entityData.color || entity.color;
+                    entity.scale = entityData.scale || entity.scale;
+                    entity.layer = entityData.layer || entity.layer;
+                    entity.parallax = entityData.parallax !== undefined ? entityData.parallax : 1.0;
+                    entity.ignoreScaling = !!entityData.ignoreScaling;
+
+                    if (entityData.spriteName) {
+                        entity.setSprite(entityData.spriteName);
+                    }
+
+                    // Restore Actor specific properties if needed (state, direction)
+                    if (entity instanceof Actor && entityData.type === 'Actor') { // or Player
+                        // If we saved state/direction, restore them here.
+                        // Currently EntityData doesn't strictly track them, but strict serialization would.
+                        // We can cast entityData to have random props for now
+                        if ((entityData as any).state) entity.setState((entityData as any).state);
+                        if ((entityData as any).direction) entity.setDirection((entityData as any).direction);
+                    }
+
                     newScene.addEntity(entity);
                 });
             }
-            // Player is added by Game.ts usually, or we can add a default one
-            // const player = new Player(160, 100);
-            // newScene.addEntity(player);
 
             this.game.sceneManager.addScene(newScene);
             this.game.sceneManager.switchTo(newScene.id);
             this.syncUI();
             this.refreshHierarchy();
-            alert('Scene loaded successfully!');
+            console.log('Scene loaded successfully!');
         } catch (e) {
             console.error('Failed to load scene:', e);
             alert('Error loading JSON');
@@ -473,8 +697,19 @@ export class SceneEditor {
         if (!this.enabled) return false;
         if (!this.drawMode) return false;
 
+        // Convert Screen X/Y to World X/Y for storage
+        const scene = this.game.sceneManager.currentScene;
+        const camX = scene && scene.camera ? scene.camera.x : 0;
+        const camY = scene && scene.camera ? scene.camera.y : 0;
+        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+
+        // Mouse (Screen) -> World
+        // WorldX = ScreenX / Zoom + CamX
+        const worldX = x / zoom + camX;
+        const worldY = y / zoom + camY;
+
         if (!this.currentPolygon) this.currentPolygon = [];
-        this.currentPolygon.push({ x: Math.round(x), y: Math.round(y) });
+        this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
         return true;
     }
 
@@ -493,11 +728,17 @@ export class SceneEditor {
     render(ctx: CanvasRenderingContext2D): void {
         if (!this.enabled) return;
 
-        // Render current polygon
+        const scene = this.game.sceneManager.currentScene;
+        const camX = scene && scene.camera ? scene.camera.x : 0;
+        const camY = scene && scene.camera ? scene.camera.y : 0;
+
+        // Render current polygon (World Space)
         if (this.currentPolygon && this.currentPolygon.length > 0) {
             ctx.save();
+            ctx.scale(scene && scene.camera ? scene.camera.zoom : 1, scene && scene.camera ? scene.camera.zoom : 1);
+            ctx.translate(-camX, -camY); // Apply Camera
             ctx.strokeStyle = '#ffff00';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1); // Keep line width constant
             ctx.beginPath();
             ctx.moveTo(this.currentPolygon[0].x, this.currentPolygon[0].y);
             for (let i = 1; i < this.currentPolygon.length; i++) {
@@ -512,10 +753,15 @@ export class SceneEditor {
         // Highlight selected object
         if (this.selectedObject) {
             ctx.save();
+            const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+            ctx.scale(zoom, zoom);
+
             if (Array.isArray(this.selectedObject)) {
-                // Highlight Walkbox
+                // Highlight Walkbox (World Space)
+                ctx.translate(-camX, -camY); // Apply Camera
+
                 ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3 / zoom;
                 ctx.beginPath();
                 const poly = this.selectedObject;
                 if (poly.length > 0) {
@@ -528,21 +774,37 @@ export class SceneEditor {
                 }
             } else {
                 // Highlight Entity
+                const entity = this.selectedObject;
+                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+                // Move to Entity position in World Space relative to Camera * Parallax
+                // We want to draw at (entity.x, entity.y) but shifted by camera * parallax
+                // Transform: Translate(-camX * p, -camY * p)
+
+                ctx.translate(-camX * p, -camY * p);
+
+                // Draw rect around Entity
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([4, 4]);
+                ctx.lineWidth = 1 / zoom;
+                ctx.setLineDash([4 / zoom, 4 / zoom]);
                 ctx.strokeRect(
-                    this.selectedObject.x - this.selectedObject.width / 2 - 2,
-                    this.selectedObject.y - this.selectedObject.height - 2,
-                    this.selectedObject.width + 4,
-                    this.selectedObject.height + 4
+                    entity.x - 2,
+                    entity.y - entity.height, // Pivot is bottom-center, draw up
+                    entity.width + 4,
+                    entity.height + 4
                 );
+                // Note: Entity x/y is Bottom-Center?
+                // scene.render draws entity.render(ctx) at translated pos.
+                // entity.render typically draws image centered at x? or top-left?
+                // Let's check Entity.ts later. Assuming x is center, y is bottom for now.
+                // Actually, Entity.render typically does: ctx.drawImage(img, this.x - w/2, this.y - h)
+                // So this strokeRect matches that.
             }
             ctx.restore();
         }
 
         // Draw Scaling Lines (Horizon and Front)
-        const scene = this.game.sceneManager.currentScene;
+        // const scene = this.game.sceneManager.currentScene; // Already declared at top
         if (scene && scene.scaling && scene.scaling.enabled) {
             ctx.save();
             ctx.font = '10px monospace';

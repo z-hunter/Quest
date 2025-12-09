@@ -11,6 +11,8 @@ export interface EntityData {
     color: string;
     scale: number;
     layer: number;
+    parallax?: number;
+    ignoreScaling?: boolean;
 }
 
 export class Entity {
@@ -33,6 +35,8 @@ export class Entity {
     animator: Animator | null;
     flipX: boolean;
     scene: any; // Reference to the scene this entity belongs to
+    parallax: number;
+    ignoreScaling: boolean;
 
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         this.x = x;
@@ -50,6 +54,8 @@ export class Entity {
         this.image = null;
         this.scale = 1.0;
         this.layer = 0;
+        this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
+        this.ignoreScaling = false;
 
         this.baseWidth = this.width;
         this.baseHeight = this.height;
@@ -83,19 +89,20 @@ export class Entity {
 
     update(deltaTime: number): void {
         // Dynamic Depth Scaling
-        if (this.scene) {
-            const depthScale = this.scene.getScaling(this.y);
-            this.scale = depthScale;
-            this.width = this.baseWidth * this.scale;
-            this.height = this.baseHeight * this.scale;
-        } else if (window.game && window.game.sceneManager && window.game.sceneManager.currentScene) {
-            // Fallback to global if scene not set (legacy support)
-            // @ts-ignore
-            const scene = window.game.sceneManager.currentScene;
-            const depthScale = scene.getScaling(this.y);
-            this.scale = depthScale;
-            this.width = this.baseWidth * this.scale;
-            this.height = this.baseHeight * this.scale;
+        if (!this.ignoreScaling) {
+            if (this.scene) {
+                const depthScale = this.scene.getScaling(this.y);
+                this.scale = depthScale;
+                this.width = this.baseWidth * this.scale;
+                this.height = this.baseHeight * this.scale;
+            } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
+                // Fallback to global if scene not set (legacy support)
+                const scene = (window as any).game.sceneManager.currentScene;
+                const depthScale = scene.getScaling(this.y);
+                this.scale = depthScale;
+                this.width = this.baseWidth * this.scale;
+                this.height = this.baseHeight * this.scale;
+            }
         }
 
         if (this.animator) {
@@ -144,7 +151,7 @@ export class Entity {
 
     toJSON(): EntityData {
         return {
-            type: 'Entity',
+            type: 'Entity', // Subclasses should override this or we can use constructor.name if safe
             name: this.name,
             x: this.x,
             y: this.y,
@@ -153,15 +160,23 @@ export class Entity {
             spriteName: this.spriteName,
             color: this.color,
             scale: this.scale,
-            layer: this.layer
+            layer: this.layer,
+            parallax: this.parallax,
+            ignoreScaling: this.ignoreScaling
         };
     }
 
     static fromJSON(data: EntityData): Entity {
+        // Note: subclasses like Actor should handle their own instantiation if using this directly,
+        // or the caller should instantiate the right class and then populate.
+        // This default implementation creates a base Entity.
         const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
         entity.color = data.color || '#ff0000';
         entity.scale = data.scale || 1.0;
         entity.layer = data.layer || 0;
+        entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
+        entity.ignoreScaling = !!data.ignoreScaling;
+
         if (data.spriteName) {
             entity.setSprite(data.spriteName);
         }

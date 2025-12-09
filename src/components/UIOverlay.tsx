@@ -65,66 +65,83 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             )}
 
             {/* 
-                Legacy Editor Panels 
-                These need to exist for SceneEditor.ts to find them.
-                We hide them by default (CSS will handle .hidden).
+                Editor Overlay 
+                Wraps the entire editor interface. Controlled by SceneEditor visibility.
             */}
-            <div id="hierarchy-panel">
-                <div className="editor-header">
-                    <h3>SCENE HIERARCHY</h3>
-                </div>
-                <div id="entity-list"></div>
-            </div>
+            <div id="editor-wrapper" className="hidden">
+                <div className="editor-main-area">
+                    {/* Left Panel: Hierarchy */}
+                    <div id="hierarchy-panel">
+                        <div className="editor-header">
+                            <h3>SCENE</h3>
+                        </div>
+                        <div id="scene-properties-item" className="scene-prop-item">Scene Properties</div>
+                        <div id="entity-list"></div>
+                    </div>
 
-            <div id="editor-panel">
-                <div className="editor-header">
-                    <h3>DEV MODE (F1)</h3>
-                    <button id="btn-close-editor">X</button>
-                </div>
+                    {/* Right Panel: Properties */}
+                    <div id="editor-panel">
+                        <div className="editor-header">
+                            <h3>PROPERTIES</h3>
+                            <button id="btn-close-editor">X</button>
+                        </div>
 
-                <div className="editor-section">
-                    <label>Scene Title:</label>
-                    <input type="text" id="editor-scene-title" />
-                </div>
+                        {/* Properties Form (Reusing IDs for SceneEditor binding) */}
+                        <div id="section-scene-props" className="editor-section">
+                            <label>Scene Title:</label>
+                            <input type="text" id="editor-scene-title" />
 
-                <div className="editor-section">
-                    <h4>Scaling</h4>
-                    <label><input type="checkbox" id="scale-enabled" /> Enabled</label><br />
-                    <label>Min: <input type="number" id="scale-min" step="0.1" style={{ width: '50px' }} /></label>
-                    <label>Max: <input type="number" id="scale-max" step="0.1" style={{ width: '50px' }} /></label><br />
-                    <label>Horizon Y: <input type="number" id="scale-horizon" style={{ width: '50px' }} /></label>
-                    <label>Front Y: <input type="number" id="scale-front" style={{ width: '50px' }} /></label>
-                </div>
+                            <h4 style={{ marginTop: '10px' }}>Scaling</h4>
+                            <label><input type="checkbox" id="scale-enabled" /> Enabled</label><br />
+                            <label>Min: <input type="number" id="scale-min" step="0.1" style={{ width: '50px' }} /></label>
+                            <label>Max: <input type="number" id="scale-max" step="0.1" style={{ width: '50px' }} /></label><br />
+                            <label>Horizon Y: <input type="number" id="scale-horizon" style={{ width: '50px' }} /></label>
+                            <label>Front Y: <input type="number" id="scale-front" style={{ width: '50px' }} /></label>
+                        </div>
 
-                <div className="editor-section">
-                    <h4>Walkbox</h4>
-                    <label><input type="checkbox" id="chk-draw-mode" /> Draw Mode</label>
-                    <button id="btn-clear-walkbox">Clear Walkbox</button>
-                    <div className="help-text">Check to draw. Enter to finish.</div>
-                </div>
+                        <div id="section-tools" className="editor-section">
+                            <h4>Tools</h4>
+                            <div className="tool-group">
+                                <h5>Walkbox</h5>
+                                <label><input type="checkbox" id="chk-draw-mode" /> Draw Mode</label>
+                                <button id="btn-clear-walkbox">Clear</button>
+                            </div>
+                            <div className="tool-group" style={{ marginTop: '10px' }}>
+                                <h5>Add Entity</h5>
+                                <input type="text" id="sprite-name-input" placeholder="Name" style={{ width: '100px' }} />
+                                <button id="btn-add-sprite">Add</button>
+                            </div>
+                        </div>
 
-                <div className="editor-section">
-                    <h4>Sprites</h4>
-                    <input type="text" id="sprite-name-input" placeholder="image.png" />
-                    <button id="btn-add-sprite">Add Sprite</button>
+                        {/* Entity Properties (Hidden by default, shown when Entity selected) */}
+                        <div id="section-entity-props" className="editor-section hidden">
+                            <h5>Selected Object</h5>
+                            <label>Img: <input type="text" id="prop-image" style={{ width: '100px', marginBottom: '5px' }} /></label><br />
+                            <label>X: <input type="number" id="prop-x" style={{ width: '50px' }} /></label>
+                            <label>Y: <input type="number" id="prop-y" style={{ width: '50px' }} /></label><br />
+                            <label>Scale: <input type="number" id="prop-scale" step="0.1" style={{ width: '50px' }} /></label>
+                            <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
+                        </div>
 
-                    <div id="sprite-properties" className="hidden" style={{ marginTop: '10px', borderTop: '1px dashed #555', paddingTop: '5px' }}>
-                        <h5>Selected Sprite</h5>
-                        <label>Img: <input type="text" id="prop-image" style={{ width: '100px', marginBottom: '5px' }} /></label><br />
-                        <label>X: <input type="number" id="prop-x" style={{ width: '50px' }} /></label>
-                        <label>Y: <input type="number" id="prop-y" style={{ width: '50px' }} /></label><br />
-                        <label>Scale: <input type="number" id="prop-scale" step="0.1" style={{ width: '50px' }} /></label>
-                        <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
+                        <div className="editor-section">
+                            <h4>File</h4>
+                            <button id="btn-save-json">Save JSON</button>
+                            <label className="file-upload">
+                                Load JSON
+                                <input type="file" id="file-load-json" accept=".json" />
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <div className="editor-section">
-                    <h4>File</h4>
-                    <button id="btn-save-json">Save JSON</button>
-                    <label className="file-upload">
-                        Load JSON
-                        <input type="file" id="file-load-json" accept=".json" />
-                    </label>
+                {/* Bottom Bar: F-Keys */}
+                <div id="editor-bottom-bar">
+                    <button className="f-key-btn" onClick={() => game?.editor?.toggle()}><span className="f-num">F1</span>Game</button>
+                    <button className="f-key-btn" id="btn-f2-save"><span className="f-num">F2</span>Save</button>
+                    <button className="f-key-btn" id="btn-f3-load"><span className="f-num">F3</span>Load</button>
+                    <button className="f-key-btn" id="btn-f4-new"><span className="f-num">F4</span>New</button>
+                    <button className="f-key-btn" id="btn-f5-sprite"><span className="f-num">F5</span>Sprite</button>
+                    <button className="f-key-btn" id="btn-f9-settings"><span className="f-num">F9</span>Settings</button>
                 </div>
             </div>
         </>
