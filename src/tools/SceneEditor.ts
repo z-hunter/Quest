@@ -469,7 +469,6 @@ export class SceneEditor {
             }
 
             // 2. Check Walkboxes (World Space, Parallax 1.0)
-            const zoom = scene.camera ? scene.camera.zoom : 1.0;
             // Mouse (Screen) -> World
             const worldPos = {
                 x: pos.x / zoom + camX,
