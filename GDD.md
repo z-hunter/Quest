@@ -150,6 +150,7 @@ F1 Game     F2 Save     F3 Load     F4 New     F5 Sprite   F9 Settings
 
 # Редактор спрайтов
 
+
 [ ] TBD
 
 ## Меню редактора спрайтов
