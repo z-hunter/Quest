@@ -1,4 +1,5 @@
 import { Animator } from '../core/Animator';
+import { SceneObject } from './SceneObject';
 
 export interface EntityData {
     type: string;
@@ -15,12 +16,12 @@ export interface EntityData {
     ignoreScaling?: boolean;
 }
 
-export class Entity {
+export class Entity extends SceneObject {
     x: number;
     y: number;
     width: number;
     height: number;
-    name: string;
+    // name: string; // Inherited from SceneObject
     description: string;
     interactions: Record<string, () => void>;
     isTakeable: boolean;
@@ -37,13 +38,16 @@ export class Entity {
     scene: any; // Reference to the scene this entity belongs to
     parallax: number;
     ignoreScaling: boolean;
+    // readonly type: string = 'Static'; // Inherited
 
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
+        super(name, 'Static');
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
-        this.name = name;
+        // this.name = name; // Super handles it
+
         this.description = "You see nothing special.";
         this.interactions = {};
         this.isTakeable = false;

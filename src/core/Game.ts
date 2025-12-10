@@ -175,8 +175,12 @@ export class Game {
     }
 
     onMouseClick(x: number, y: number): void {
+        console.log(`[Game] onMouseClick: ${x}, ${y}`);
         // If editor consumes the click, don't pass to game
-        if (this.editor.onClick(x, y)) return;
+        if (this.editor.onClick(x, y)) {
+            console.log(`[Game] Editor consumed click`);
+            return;
+        }
 
         console.log(`Click at ${Math.round(x)}, ${Math.round(y)}`);
         // Forward click to current scene

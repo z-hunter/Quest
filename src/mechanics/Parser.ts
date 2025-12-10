@@ -17,6 +17,10 @@ export class Parser {
         }
 
         this.inputField.addEventListener('keydown', (e: KeyboardEvent) => {
+            // Block command input if Editor is open
+            console.log(`[Parser] KeyDown: ${e.key}. Editor Enabled: ${this.game.editor ? this.game.editor.enabled : 'NoEditor'}`);
+            if (this.game.editor && this.game.editor.enabled) return;
+
             if (e.key === 'Enter') {
                 if (this.inputField) {
                     const command = this.inputField.value.trim().toUpperCase();

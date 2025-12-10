@@ -70,11 +70,33 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             */}
             <div id="editor-wrapper" className="hidden">
                 <div className="editor-main-area">
-                    {/* Left Panel: Hierarchy */}
+                    {/* Left Panel: Hierarchy & Tools */}
                     <div id="hierarchy-panel">
                         <div className="editor-header">
                             <h3>SCENE</h3>
                         </div>
+
+                        {/* Object Management Toolbar */}
+                        <div className="editor-toolbar" style={{ padding: '5px', borderBottom: '1px solid #0f0', marginBottom: '5px' }}>
+                            <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
+                                <select id="add-object-type" style={{ width: '70px', background: '#000', color: '#0f0', border: '1px solid #0f0' }}>
+                                    <option value="Static">Static (S)</option>
+                                    <option value="Actor">Actor (A)</option>
+                                    <option value="Walkbox">Walkbox (W)</option>
+                                    <option value="Triggerbox">Trigger (T)</option>
+                                </select>
+                                <button id="btn-add-object" style={{ flex: 1 }}>Add</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <button id="btn-delete-object" style={{ flex: 1 }}>Del</button>
+                                <button id="btn-save-object" style={{ flex: 1 }}>Save</button>
+                                <label className="file-upload" style={{ flex: 1, textAlign: 'center', background: '#000', color: '#0f0', border: '1px solid #0f0', cursor: 'pointer', padding: '2px' }}>
+                                    Load
+                                    <input type="file" id="file-load-object" accept=".json" />
+                                </label>
+                            </div>
+                        </div>
+
                         <div id="scene-properties-item" className="scene-prop-item">Scene Properties</div>
                         <div id="entity-list"></div>
                     </div>
@@ -86,51 +108,71 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             <button id="btn-close-editor">X</button>
                         </div>
 
-                        {/* Properties Form (Reusing IDs for SceneEditor binding) */}
+                        {/* Scene Properties */}
                         <div id="section-scene-props" className="editor-section">
                             <label>Scene Title:</label>
-                            <input type="text" id="editor-scene-title" />
+                            <input type="text" id="editor-scene-title" style={{ width: '100%' }} />
 
                             <h4 style={{ marginTop: '10px' }}>Scaling</h4>
                             <label><input type="checkbox" id="scale-enabled" /> Enabled</label><br />
-                            <label>Min: <input type="number" id="scale-min" step="0.1" style={{ width: '50px' }} /></label>
-                            <label>Max: <input type="number" id="scale-max" step="0.1" style={{ width: '50px' }} /></label><br />
-                            <label>Horizon Y: <input type="number" id="scale-horizon" style={{ width: '50px' }} /></label>
-                            <label>Front Y: <input type="number" id="scale-front" style={{ width: '50px' }} /></label>
-                        </div>
-
-                        <div id="section-tools" className="editor-section">
-                            <h4>Tools</h4>
-                            <div className="tool-group">
-                                <h5>Walkbox</h5>
-                                <label><input type="checkbox" id="chk-draw-mode" /> Draw Mode</label>
-                                <button id="btn-clear-walkbox">Clear</button>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                <label>Min: <input type="number" id="scale-min" step="0.1" style={{ width: '40px' }} /></label>
+                                <label>Max: <input type="number" id="scale-max" step="0.1" style={{ width: '40px' }} /></label>
+                                <label>Horiz: <input type="number" id="scale-horizon" style={{ width: '40px' }} /></label>
+                                <label>Front: <input type="number" id="scale-front" style={{ width: '40px' }} /></label>
                             </div>
-                            <div className="tool-group" style={{ marginTop: '10px' }}>
-                                <h5>Add Entity</h5>
-                                <input type="text" id="sprite-name-input" placeholder="Name" style={{ width: '100px' }} />
-                                <button id="btn-add-sprite">Add</button>
+
+                            <h4 style={{ marginTop: '10px' }}>Camera</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                <label>Zoom: <span id="camera-zoom-display">1.0</span></label>
+                                <button id="btn-camera-reset">Reset</button>
                             </div>
                         </div>
 
-                        {/* Entity Properties (Hidden by default, shown when Entity selected) */}
+                        {/* Entity Properties */}
                         <div id="section-entity-props" className="editor-section hidden">
-                            <h5>Selected Object</h5>
-                            <label>Img: <input type="text" id="prop-image" style={{ width: '100px', marginBottom: '5px' }} /></label><br />
-                            <label>X: <input type="number" id="prop-x" style={{ width: '50px' }} /></label>
-                            <label>Y: <input type="number" id="prop-y" style={{ width: '50px' }} /></label><br />
-                            <label>Scale: <input type="number" id="prop-scale" step="0.1" style={{ width: '50px' }} /></label>
-                            <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
+                            <h5 id="selected-entity-name">Object</h5>
+
+                            <label>Name:</label>
+                            <input type="text" id="prop-name" style={{ width: '100%' }} />
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: '5px' }}>
+                                <label>X: <input type="number" id="prop-x" style={{ width: '50px' }} /></label>
+                                <label>Y: <input type="number" id="prop-y" style={{ width: '50px' }} /></label>
+                                <label>W: <input type="number" id="prop-width" style={{ width: '50px' }} /></label>
+                                <label>H: <input type="number" id="prop-height" style={{ width: '50px' }} /></label>
+                            </div>
+
+                            <label style={{ marginTop: '5px', display: 'block' }}>Sprite:</label>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <input type="text" id="prop-image" style={{ flex: 1 }} />
+                                <button id="btn-prop-sprite">...</button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: '5px' }}>
+                                <label>Scale: <input type="number" id="prop-scale" step="0.1" style={{ width: '50px' }} /></label>
+                                <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
+                                <label>Parallax: <input type="number" id="prop-parallax" step="0.1" style={{ width: '50px' }} /></label>
+                            </div>
+                            <label><input type="checkbox" id="prop-no-scaling" /> No Y-Scale</label>
                         </div>
 
-                        <div className="editor-section">
-                            <h4>File</h4>
-                            <button id="btn-save-json">Save JSON</button>
-                            <label className="file-upload">
-                                Load JSON
-                                <input type="file" id="file-load-json" accept=".json" />
-                            </label>
+                        {/* Walkbox Properties */}
+                        <div id="section-walkbox-props" className="editor-section hidden">
+                            <h5>Walkbox / Trigger</h5>
+                            <label>Name:</label>
+                            <input type="text" id="prop-walkbox-name" style={{ width: '100%', marginBottom: '5px' }} />
+                            <button id="btn-clear-walkbox" style={{ width: '100%' }}>Redraw</button>
+                            {/* Draw Mode is auto-handled now, hiding checkbox but keeping element for logic refs */}
+                            <label style={{ display: 'none' }}><input type="checkbox" id="chk-draw-mode" /> Draw Mode</label>
                         </div>
+
+                        {/* Tools (Removed, but keeping Save JSON accessible vaguely or moved?) 
+                            GDD says F2 Save, F3 Load. 
+                            Left panel has Object Save/Load.
+                            Let's keep Scene JSON Load/Save hidden or available via F-keys only as per GDD.
+                            Actually GDD says F-keys menu. So we rely on F2/F3.
+                        */}
                     </div>
                 </div>
 

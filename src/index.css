@@ -100,9 +100,10 @@ canvas {
 }
 
 /* Enable pointer events for children when visible */
-#editor-wrapper:not(.hidden)>* {
+/* Enable pointer events for children when visible - REMOVED to prevent blocking main area */
+/* #editor-wrapper:not(.hidden)>* {
   pointer-events: auto;
-}
+} */
 
 .editor-main-area {
   flex: 1;
@@ -110,6 +111,8 @@ canvas {
   overflow: hidden;
   padding: 10px;
   gap: 10px;
+  pointer-events: none;
+  /* Allow clicks to pass through freely */
 }
 
 /* Left Panel - Hierarchy */

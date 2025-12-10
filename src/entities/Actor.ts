@@ -9,6 +9,7 @@ export class Actor extends Entity {
     state: ActorState;
     speed: number;
     target: { x: number, y: number } | null;
+    readonly type: string = 'Actor';
 
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Actor') {
         super(x, y, width, height, name);

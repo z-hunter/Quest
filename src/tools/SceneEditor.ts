@@ -1,6 +1,9 @@
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { Player } from '../entities/Player';
+import { SceneObject } from '../entities/SceneObject';
+import { Walkbox } from '../entities/Walkbox';
+import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 
@@ -11,9 +14,11 @@ export class SceneEditor {
     hierarchyPanel: HTMLElement | null;
     entityList: HTMLElement | null;
     currentPolygon: { x: number, y: number }[];
-    selectedObject: any; // Entity or Walkbox (array)
+    selectedObject: SceneObject | null;
     isDragging: boolean;
     dragOffset: { x: number, y: number };
+    creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
+
     drawMode: boolean;
 
     // UI Elements
@@ -22,11 +27,18 @@ export class SceneEditor {
     fileInput: HTMLInputElement | null;
     chkDrawMode: HTMLInputElement | null;
     propPanel: HTMLElement | null;
+    propName: HTMLInputElement | null;
     propImage: HTMLInputElement | null;
     propX: HTMLInputElement | null;
     propY: HTMLInputElement | null;
+    propWidth: HTMLInputElement | null;
+    propHeight: HTMLInputElement | null;
     propScale: HTMLInputElement | null;
     propLayer: HTMLInputElement | null;
+    propActorGroup: HTMLElement | null;
+    propDirection: HTMLSelectElement | null;
+    propState: HTMLInputElement | null;
+    // propWalkboxName removed - unified Model
     scaleEnabled: HTMLInputElement | null;
     scaleMin: HTMLInputElement | null;
     scaleMax: HTMLInputElement | null;
@@ -36,6 +48,7 @@ export class SceneEditor {
     // Sections
     sectionSceneProps: HTMLElement | null;
     sectionEntityProps: HTMLElement | null;
+    sectionWalkboxProps: HTMLElement | null;
     scenePropertiesItem: HTMLElement | null;
     editorWrapper: HTMLElement | null;
 
@@ -59,11 +72,18 @@ export class SceneEditor {
         this.fileInput = null;
         this.chkDrawMode = null;
         this.propPanel = null;
+        this.propName = null;
         this.propImage = null;
         this.propX = null;
         this.propY = null;
+        this.propWidth = null;
+        this.propHeight = null;
         this.propScale = null;
         this.propLayer = null;
+        this.propActorGroup = null;
+        this.propDirection = null;
+        this.propState = null;
+
         this.scaleEnabled = null;
         this.scaleMin = null;
         this.scaleMax = null;
@@ -72,6 +92,7 @@ export class SceneEditor {
 
         this.sectionSceneProps = null;
         this.sectionEntityProps = null;
+        this.sectionWalkboxProps = null;
         this.scenePropertiesItem = null;
     }
 
@@ -87,16 +108,29 @@ export class SceneEditor {
         this.fileInput = document.getElementById('file-load-json') as HTMLInputElement;
         this.chkDrawMode = document.getElementById('chk-draw-mode') as HTMLInputElement;
 
-        this.propPanel = document.getElementById('editor-panel'); // Reused, though sectionEntityProps is specific
-        this.sectionSceneProps = document.getElementById('section-scene-props');
+        this.propPanel = document.getElementById('editor-panel');
         this.sectionEntityProps = document.getElementById('section-entity-props');
+        this.sectionWalkboxProps = document.getElementById('section-walkbox-props');
         this.scenePropertiesItem = document.getElementById('scene-properties-item');
 
+        this.propName = document.getElementById('prop-name') as HTMLInputElement;
         this.propImage = document.getElementById('prop-image') as HTMLInputElement;
         this.propX = document.getElementById('prop-x') as HTMLInputElement;
         this.propY = document.getElementById('prop-y') as HTMLInputElement;
+        this.propWidth = document.getElementById('prop-width') as HTMLInputElement;
+        this.propHeight = document.getElementById('prop-height') as HTMLInputElement;
         this.propScale = document.getElementById('prop-scale') as HTMLInputElement;
         this.propLayer = document.getElementById('prop-layer') as HTMLInputElement;
+        this.propActorGroup = document.getElementById('prop-actor-group');
+        this.propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
+        this.propState = document.getElementById('prop-state') as HTMLInputElement;
+        // propWalkboxName removed
+
+        // Property Updates
+        [this.propName, this.propWidth, this.propHeight, this.propX, this.propY, this.propScale, this.propLayer, this.propDirection, this.propState].forEach(input => {
+            if (input) input.oninput = () => this.updateEntityFromUI();
+            if (input && input.tagName === 'SELECT') input.onchange = () => this.updateEntityFromUI();
+        });
 
         this.scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
         this.scaleMin = document.getElementById('scale-min') as HTMLInputElement;
@@ -104,9 +138,49 @@ export class SceneEditor {
         this.scaleHorizon = document.getElementById('scale-horizon') as HTMLInputElement;
         this.scaleFront = document.getElementById('scale-front') as HTMLInputElement;
 
+        // Bind New Buttons
+        const btnAdd = document.getElementById('btn-add-object');
+        if (btnAdd) btnAdd.onclick = () => this.onAddObjectClick();
+
+        const btnDel = document.getElementById('btn-delete-object');
+        if (btnDel) btnDel.onclick = () => this.deleteSelectedObject();
+
+        const btnSaveObj = document.getElementById('btn-save-object');
+        if (btnSaveObj) btnSaveObj.onclick = () => {
+            // ... save object logic is SceneObject-compatible
+            if (this.selectedObject && this.selectedObject instanceof SceneObject && this.selectedObject.name !== 'SCENE') {
+                const data = this.selectedObject.toJSON();
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${this.selectedObject.name}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert('Select an Entity to save');
+            }
+        };
+
+        const fileLoadObj = document.getElementById('file-load-object') as HTMLInputElement;
+        if (fileLoadObj) fileLoadObj.onchange = () => {
+            // ToDo: Implement Object Load
+            alert('Load Object not implemented yet');
+        };
+
+        const btnClose = document.getElementById('btn-close-editor');
+        if (btnClose) btnClose.onclick = () => this.toggle();
+
         this.setupListeners();
         this.setupUI();
         console.log('[SceneEditor] UI Initialized');
+    }
+
+    onAddObjectClick(): void {
+        const select = document.getElementById('add-object-type') as HTMLSelectElement;
+        const type = select ? select.value : 'Static';
+        this.startCreating(type);
     }
 
     setupListeners(): void {
@@ -174,6 +248,13 @@ export class SceneEditor {
                 case 'enter':
                     if (!e.ctrlKey) this.finishPolygon();
                     break;
+
+                case 'escape':
+                    this.drawMode = false;
+                    this.currentPolygon = [];
+                    if (this.chkDrawMode) this.chkDrawMode.checked = false;
+                    console.log("[Editor] Draw Mode Cancelled");
+                    break;
             }
         });
 
@@ -188,22 +269,42 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
 
         if (type === 'Static' || type === 'Actor') {
-            const name = prompt(`Enter name for ${type}:`, type + '_' + Math.floor(Math.random() * 1000));
-            if (!name) return;
+            const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
+            let name = nameInput ? nameInput.value : '';
 
-            const ent = new Entity(160, 100, 30, 30, name);
-            ent.color = type === 'Actor' ? '#0000ff' : '#00ff00';
+            if (!name) {
+                name = type + '_' + Math.floor(Math.random() * 1000);
+                if (nameInput) nameInput.value = name; // Feedback to user
+            }
+
+            let ent: Entity;
+            if (type === 'Actor') {
+                ent = new Actor(160, 100, 30, 30, name);
+                ent.color = '#0000ff';
+            } else {
+                ent = new Entity(160, 100, 30, 30, name);
+                ent.color = '#00ff00';
+            }
 
             scene.addEntity(ent);
             this.selectObject(ent);
             this.drawMode = false;
         } else if (type === 'Walkbox') {
+            this.creationType = 'Walkbox';
+            this.currentPolygon = []; // Reset any previous partial polygon
             this.drawMode = true;
             if (this.chkDrawMode) this.chkDrawMode.checked = true;
             this.selectObject(null);
             console.log("Draw Mode: Walkbox");
         } else if (type === 'Triggerbox') {
-            console.log("Draw Mode: Triggerbox (Not fully implemented yet)");
+            this.creationType = 'Triggerbox';
+            this.currentPolygon = [];
+            this.drawMode = true;
+            // distinct draw mode or shared? For now shared but logged
+            console.log("Draw Mode: Triggerbox");
+            // Ideally set a 'drawType' or similar if we want to distinguish
+            // For now, let's treat it same as Walkbox for the UI interaction part
+            this.selectObject(null);
         }
     }
 
@@ -303,14 +404,18 @@ export class SceneEditor {
         }
 
         // Property Updates
-        [this.propX, this.propY, this.propScale, this.propLayer].forEach(input => {
-            if (input) input.oninput = () => this.updateEntityFromUI();
-        });
 
         if (this.propImage) {
             this.propImage.onchange = () => {
                 if (this.selectedObject && typeof this.selectedObject !== 'string' && !Array.isArray(this.selectedObject)) {
-                    this.selectedObject.setSprite(this.propImage!.value);
+                    if (this.selectedObject && this.selectedObject instanceof Entity) {
+                        // Determine if Entity or Actor
+                        // For now, assuming setSprite is on Entity?
+                        // Entity.ts shows spriteName string but no setSprite method in the interface shown earlier?
+                        // Wait, Entity.ts didn't have setSprite in what I viewed?
+                        // Let's just set the property directly for now.
+                        this.selectedObject.spriteName = this.propImage!.value;
+                    }
                 }
             };
         }
@@ -337,15 +442,30 @@ export class SceneEditor {
 
     toggle(): void {
         this.enabled = !this.enabled;
+
+        const parserInput = document.getElementById('parser-input') as HTMLInputElement;
+
         if (this.editorWrapper) {
             if (this.enabled) {
                 this.editorWrapper.classList.remove('hidden');
                 this.syncUI();
                 this.refreshHierarchy();
                 this.selectObject('SCENE');
+
+                // Block Parser
+                if (parserInput) {
+                    parserInput.blur();
+                    parserInput.disabled = true;
+                }
             } else {
                 this.editorWrapper.classList.add('hidden');
                 this.selectedObject = null;
+
+                // Restore Parser
+                if (parserInput) {
+                    parserInput.disabled = false;
+                    parserInput.focus();
+                }
             }
         }
     }
@@ -366,52 +486,6 @@ export class SceneEditor {
         }
     }
 
-    refreshHierarchy(): void {
-        if (!this.entityList) return;
-        this.entityList.innerHTML = '';
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-
-        // Highlight Scene Properties Item?
-        if (this.scenePropertiesItem) {
-            if (this.selectedObject === 'SCENE') {
-                this.scenePropertiesItem.classList.add('selected');
-            } else {
-                this.scenePropertiesItem.classList.remove('selected');
-            }
-        }
-
-        // 1. List Walkboxes
-        if (scene.walkbox) {
-            scene.walkbox.forEach((poly: any, index: number) => {
-                const div = document.createElement('div');
-                div.className = 'entity-item';
-                div.style.color = '#ffff00'; // Yellow for walkboxes
-                if (poly === this.selectedObject) div.classList.add('selected');
-                div.textContent = `Walkbox ${index}`;
-                div.onclick = () => {
-                    this.drawMode = false;
-                    if (this.chkDrawMode) this.chkDrawMode.checked = false;
-                    this.selectObject(poly);
-                };
-                if (this.entityList) this.entityList.appendChild(div);
-            });
-        }
-
-        // 2. List Entities
-        scene.entities.forEach((entity: Entity) => {
-            const div = document.createElement('div');
-            div.className = 'entity-item';
-            if (entity === this.selectedObject) div.classList.add('selected');
-            div.textContent = `${entity.name} (L:${entity.layer})`;
-            div.onclick = () => {
-                this.drawMode = false;
-                if (this.chkDrawMode) this.chkDrawMode.checked = false;
-                this.selectObject(entity);
-            };
-            if (this.entityList) this.entityList.appendChild(div);
-        });
-    }
 
     getMousePos(e: MouseEvent): { x: number, y: number } {
         const rect = this.game.canvas.getBoundingClientRect();
@@ -424,10 +498,12 @@ export class SceneEditor {
     }
 
     onMouseDown(e: MouseEvent): void {
+        console.log(`[Editor] onMouseDown. Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
         if (!this.enabled) return;
         if (this.drawMode) return;
 
         const pos = this.getMousePos(e); // Screen Coords
+        console.log(`[Editor] MousePos: ${pos.x}, ${pos.y}`);
         const scene = this.game.sceneManager.currentScene;
 
         if (scene) {
@@ -459,27 +535,43 @@ export class SceneEditor {
                 if (pos.x >= screenX - screenW / 2 && pos.x <= screenX + screenW / 2 &&
                     pos.y >= screenY - screenH && pos.y <= screenY) {
 
+                    console.log(`[Hitbox] HIT! Entity: ${entity.name}`);
                     this.selectObject(entity);
                     this.isDragging = true;
                     // Offset in Screen Space
                     this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
                     e.stopPropagation();
                     return;
+                } else {
+                    console.log(`[Hitbox] Miss: ${entity.name}. Pos: ${Math.round(pos.x)},${Math.round(pos.y)} vs Left:${Math.round(screenX - screenW / 2)} Top:${Math.round(screenY - screenH)} W:${Math.round(screenW)} H:${Math.round(screenH)}`);
                 }
             }
 
             // 2. Check Walkboxes (World Space, Parallax 1.0)
-            // Mouse (Screen) -> World
             const worldPos = {
                 x: pos.x / zoom + camX,
                 y: pos.y / zoom + camY
             };
 
-            for (const poly of scene.walkbox) {
-                if (Geometry.isPointInPolygon(worldPos, poly)) {
-                    this.selectObject(poly);
-                    e.stopPropagation();
-                    return;
+            if (scene.walkbox) {
+                for (const wb of scene.walkbox) {
+                    if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
+                        this.selectObject(wb);
+                        // Trigger UI Update manually since selectObject might not detect change if same type
+                        e.stopPropagation();
+                        return;
+                    }
+                }
+            }
+
+            // 3. Check Triggerboxes
+            if (scene.triggerboxes) {
+                for (const tb of scene.triggerboxes) {
+                    if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
+                        this.selectObject(tb);
+                        e.stopPropagation();
+                        return;
+                    }
                 }
             }
         }
@@ -490,15 +582,17 @@ export class SceneEditor {
     onMouseMove(e: MouseEvent): void {
         if (!this.enabled || !this.isDragging || !this.selectedObject) return;
 
-        // Only drag Entities for now
-        if (Array.isArray(this.selectedObject)) return; // It's a walkbox
+        // Only drag Entities for now.
+        // Walkbox/Triggerbox are SceneObjects but typically we modify their poly points or move the whole thing.
+        // For now, let's allow moving proper Entities.
+        if (!(this.selectedObject instanceof Entity)) return;
 
         const pos = this.getMousePos(e);
         const scene = this.game.sceneManager.currentScene;
         const camX = scene && scene.camera ? scene.camera.x : 0;
         const camY = scene && scene.camera ? scene.camera.y : 0;
 
-        const entity = this.selectedObject;
+        const entity = this.selectedObject as Entity;
         const p = entity.parallax !== undefined ? entity.parallax : 1.0;
         const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
@@ -526,21 +620,38 @@ export class SceneEditor {
         this.selectedObject = obj;
 
         // Visibility Toggles
-        if (this.selectedObject === 'SCENE') {
+        if ((this.selectedObject as any) === 'SCENE') {
             if (this.sectionSceneProps) this.sectionSceneProps.classList.remove('hidden');
             if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
-        } else if (obj && !Array.isArray(obj)) {
-            // Entity
-            if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
-            if (this.sectionEntityProps) this.sectionEntityProps.classList.remove('hidden');
+            if (this.sectionWalkboxProps) this.sectionWalkboxProps.classList.add('hidden');
+        } else if (obj instanceof SceneObject) {
+            // Unified Logic for all SceneObjects
+            if (obj instanceof Entity) {
+                // Entity Specifics
+                if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
+                if (this.sectionEntityProps) this.sectionEntityProps.classList.remove('hidden');
+                if (this.sectionWalkboxProps) this.sectionWalkboxProps.classList.add('hidden');
+
+                if (this.propActorGroup) {
+                    if (obj instanceof Actor) {
+                        this.propActorGroup.classList.remove('hidden');
+                    } else {
+                        this.propActorGroup.classList.add('hidden');
+                    }
+                }
+            } else if (obj instanceof Walkbox || obj instanceof Triggerbox) {
+                // Walkbox/Triggerbox
+                if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
+                if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
+                if (this.sectionWalkboxProps) this.sectionWalkboxProps.classList.remove('hidden');
+            }
+
             this.updateUIFromObject();
         } else {
-            // Walkbox or Null
-            // If Walkbox, maybe show nothing specific or walkbox props?
-            // For now hide entity props, keep scene props hidden?
-            // Default to nothing?
+            // Null, Scene handled above or something else
             if (this.sectionSceneProps) this.sectionSceneProps.classList.add('hidden');
             if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
+            if (this.sectionWalkboxProps) this.sectionWalkboxProps.classList.add('hidden');
         }
 
         this.refreshHierarchy();
@@ -558,29 +669,140 @@ export class SceneEditor {
         console.log('New Scene Created');
     }
 
+    refreshHierarchy(): void {
+        if (this.entityList) {
+            this.entityList.innerHTML = '';
+            const scene = this.game.sceneManager.currentScene;
+            if (scene) {
+                // Entities
+                scene.entities.forEach((entity: Entity) => {
+                    const div = document.createElement('div');
+                    div.className = 'entity-item';
+
+                    // Determine Type Char
+                    let typeChar = 'S'; // Static
+                    const isActor = entity instanceof Actor;
+                    // @ts-ignore
+                    const typeProp = entity.type;
+
+                    if (isActor || typeProp === 'Actor') typeChar = 'A';
+
+                    // [T] Name
+
+                    // [T] Name
+                    div.innerText = `${typeChar}:${entity.name}`;
+
+                    div.onclick = () => {
+                        this.selectObject(entity);
+                    };
+                    if (this.selectedObject === entity) {
+                        div.classList.add('selected');
+                    }
+                    this.entityList?.appendChild(div);
+                });
+
+                // Walkboxes
+                if (scene.walkbox) {
+                    scene.walkbox.forEach((wb: any, i: number) => {
+                        const div = document.createElement('div');
+                        div.className = 'entity-item';
+                        div.innerText = `W:${wb.name || 'Walkbox ' + i}`;
+                        div.onclick = () => {
+                            this.selectObject(wb);
+                        };
+                        if (this.selectedObject === wb) {
+                            div.classList.add('selected');
+                        }
+                        this.entityList?.appendChild(div);
+                    });
+                }
+
+                // Triggerboxes
+                if (scene.triggerboxes) {
+                    scene.triggerboxes.forEach((trigger: any) => {
+                        const div = document.createElement('div');
+                        div.className = 'entity-item';
+                        div.innerText = `T:${trigger.name || 'Trigger'}`;
+                        div.onclick = () => {
+                            this.selectObject(trigger);
+                        };
+                        if (this.selectedObject === trigger) {
+                            div.classList.add('selected');
+                        }
+                        this.entityList?.appendChild(div);
+                    });
+                }
+            }
+        }
+    }
+
 
     updateUIFromObject(): void {
-        if (!this.selectedObject || Array.isArray(this.selectedObject)) return;
+        if (!this.selectedObject || !(this.selectedObject instanceof SceneObject)) return;
 
-        if (this.propImage) this.propImage.value = this.selectedObject.spriteName || '';
-        if (this.propX) this.propX.value = this.selectedObject.x.toString();
-        if (this.propY) this.propY.value = this.selectedObject.y.toString();
-        if (this.propScale) this.propScale.value = (this.selectedObject.scale || 1.0).toString();
-        if (this.propLayer) this.propLayer.value = (this.selectedObject.layer || 0).toString();
+        // Universal Name Binding
+        if (this.propName) this.propName.value = this.selectedObject.name || '';
+
+        // Entity Specifics
+        if (this.selectedObject instanceof Entity) {
+            const ent = this.selectedObject as Entity;
+            if (this.propImage) this.propImage.value = ent.spriteName || '';
+            if (this.propX) this.propX.value = ent.x.toString();
+            if (this.propY) this.propY.value = ent.y.toString();
+            if (this.propWidth) this.propWidth.value = ent.width.toString();
+            if (this.propHeight) this.propHeight.value = ent.height.toString();
+            if (this.propScale) this.propScale.value = (ent.scale || 1.0).toString();
+            if (this.propLayer) this.propLayer.value = (ent.layer || 0).toString();
+
+            if (ent instanceof Actor) {
+                if (this.propDirection) this.propDirection.value = ent.direction || 'down';
+                if (this.propState) this.propState.value = ent.state || 'idle';
+            }
+        } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
+            // For Walkbox/Triggerbox, we can still use the Entity props panel for Name if we want,
+            // or keep the separated one. Since we unified SceneObject logic, 
+            // we can actually just use the main Name field if we show it.
+            // But our selectObject logic shows specific panels.
+
+            // If we are showing section-walkbox-props, we need to bind that input.
+            const propWalkboxName = document.getElementById('prop-walkbox-name') as HTMLInputElement;
+            if (propWalkboxName) {
+                propWalkboxName.value = this.selectedObject.name;
+                propWalkboxName.oninput = () => {
+                    if (this.selectedObject) {
+                        this.selectedObject.name = propWalkboxName.value;
+                        this.refreshHierarchy();
+                    }
+                };
+            }
+        }
     }
 
     updateEntityFromUI(): void {
-        if (!this.selectedObject || Array.isArray(this.selectedObject)) return;
+        if (!this.selectedObject || !(this.selectedObject instanceof Entity)) return;
+        const ent = this.selectedObject as Entity;
 
-        if (this.propX) this.selectedObject.x = parseInt(this.propX.value) || 0;
-        if (this.propY) this.selectedObject.y = parseInt(this.propY.value) || 0;
-        if (this.propScale) this.selectedObject.scale = parseFloat(this.propScale.value) || 1.0;
-        if (this.propLayer) this.selectedObject.layer = parseInt(this.propLayer.value) || 0;
+        if (this.propName) ent.name = this.propName.value || 'Unnamed';
+        if (this.propX) ent.x = parseInt(this.propX.value) || 0;
+        if (this.propY) ent.y = parseInt(this.propY.value) || 0;
+        if (this.propWidth) ent.width = parseInt(this.propWidth.value) || 1;
+        if (this.propHeight) ent.height = parseInt(this.propHeight.value) || 1;
+        if (this.propScale) ent.scale = parseFloat(this.propScale.value) || 1.0;
+        if (this.propLayer) ent.layer = parseInt(this.propLayer.value) || 0;
 
-        if (this.selectedObject.image && this.selectedObject.image.complete) {
-            this.selectedObject.width = this.selectedObject.image.naturalWidth * this.selectedObject.scale;
-            this.selectedObject.height = this.selectedObject.image.naturalHeight * this.selectedObject.scale;
+        if (ent instanceof Actor) {
+            if (this.propDirection) ent.setDirection(this.propDirection.value as any);
+            if (this.propState) ent.setState(this.propState.value as any);
         }
+
+        if (ent.image && ent.image.complete) {
+            // Optional: Auto-Update width/height if scale changes? 
+            // Only if we want to enforce aspect ratio or something.
+            // For now, let's just leave it manual or handle elsewhere.
+            ent.width = ent.image.naturalWidth * ent.scale;
+            ent.height = ent.image.naturalHeight * ent.scale;
+        }
+
         this.refreshHierarchy();
     }
 
@@ -588,25 +810,37 @@ export class SceneEditor {
         if (!this.selectedObject) return;
         const scene = this.game.sceneManager.currentScene;
         if (scene) {
-            if (Array.isArray(this.selectedObject)) {
-                // Delete Walkbox
+            if (this.selectedObject instanceof Walkbox) {
                 const index = scene.walkbox.indexOf(this.selectedObject);
                 if (index > -1) {
                     scene.walkbox.splice(index, 1);
                     console.log('Walkbox deleted');
                 }
-            } else {
-                // Delete Entity
+            } else if (this.selectedObject instanceof Triggerbox) {
+                const index = scene.triggerboxes.indexOf(this.selectedObject);
+                if (index > -1) {
+                    scene.triggerboxes.splice(index, 1);
+                    console.log('Triggerbox deleted');
+                }
+            } else if (this.selectedObject instanceof Entity) {
                 const index = scene.entities.indexOf(this.selectedObject);
                 if (index > -1) {
                     scene.entities.splice(index, 1);
                     console.log('Entity deleted');
                 }
             }
-            this.selectObject(null);
+
+            this.selectedObject = null;
             this.refreshHierarchy();
+
+            // clear Props
+            if (this.propName) this.propName.value = '';
+            // Hide all sections
+            if (this.sectionEntityProps) this.sectionEntityProps.classList.add('hidden');
+            if (this.sectionWalkboxProps) this.sectionWalkboxProps.classList.add('hidden');
         }
     }
+
 
     saveScene(): void {
         const scene = this.game.sceneManager.currentScene;
@@ -629,18 +863,29 @@ export class SceneEditor {
 
             // Restore Camera
             if (data.camera) {
-                newScene.camera = { ...data.camera };
+                newScene.camera = data.camera;
             }
 
             // Restore Scaling
             if (data.scaling) {
-                newScene.scaling = { ...data.scaling };
+                newScene.scaling = data.scaling;
             }
 
-            // Ensure walkbox coordinates are numbers
-            newScene.walkbox = (data.walkbox || []).map((poly: any) =>
-                poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
-            );
+            // Restore Walkbox (New Structure)
+            if (data.walkbox) {
+                newScene.walkbox = (data.walkbox || []).map((wb: any) => ({
+                    ...wb,
+                    poly: wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
+                }));
+            }
+
+            // Restore Triggerboxes
+            if (data.triggerboxes) {
+                newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => ({
+                    ...t,
+                    poly: t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
+                }));
+            }
 
             if (data.entities) {
                 data.entities.forEach((entityData: any) => {
@@ -693,8 +938,11 @@ export class SceneEditor {
     }
 
     onClick(x: number, y: number): boolean {
+        console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
         if (!this.enabled) return false;
         if (!this.drawMode) return false;
+
+        console.log(`OnClick in DrawMode: ${x}, ${y}`);
 
         // Convert Screen X/Y to World X/Y for storage
         const scene = this.game.sceneManager.currentScene;
@@ -709,18 +957,40 @@ export class SceneEditor {
 
         if (!this.currentPolygon) this.currentPolygon = [];
         this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
+        console.log(`Point Added. Total: ${this.currentPolygon.length}`);
         return true;
     }
 
     finishPolygon(): void {
+        console.log('finishPolygon called');
         if (this.currentPolygon && this.currentPolygon.length > 2) {
             const scene = this.game.sceneManager.currentScene;
             if (scene) {
-                scene.walkbox.push([...this.currentPolygon]);
+                const newPoly = [...this.currentPolygon];
+
+                if (this.creationType === 'Triggerbox') {
+                    if (!scene.triggerboxes) scene.triggerboxes = []; // Init if missing
+                    const newTrigger = new Triggerbox(newPoly, 'Trig_' + Math.floor(Math.random() * 1000));
+                    scene.triggerboxes.push(newTrigger);
+                    console.log('Triggerbox object added to scene');
+                    this.selectObject(newTrigger);
+                } else {
+                    // Walkbox
+                    if (!scene.walkbox) scene.walkbox = [];
+                    const newWalkbox = new Walkbox(newPoly, 'Walk_' + Math.floor(Math.random() * 1000));
+                    scene.walkbox.push(newWalkbox);
+                    console.log('Walkbox object added to scene');
+                    this.selectObject(newWalkbox);
+                }
+
                 this.currentPolygon = [];
-                console.log('Polygon added to scene');
+                // UX Improvement: Auto-exit draw mode
+                this.drawMode = false;
+                if (this.chkDrawMode) this.chkDrawMode.checked = false;
                 this.refreshHierarchy();
             }
+        } else {
+            console.log('Polygon incomplete (<3 points)');
         }
     }
 
@@ -749,20 +1019,47 @@ export class SceneEditor {
             ctx.restore();
         }
 
+        // Check Triggerboxes
+        if (scene.triggerboxes) {
+            scene.triggerboxes.forEach((trigger: any) => {
+                const poly = trigger.poly;
+                if (!poly || poly.length === 0) return;
+
+                // Draw Trigger (World Space)
+                ctx.save();
+                ctx.scale(scene.camera.zoom, scene.camera.zoom); // Zoom
+                ctx.translate(-camX, -camY); // Camera
+
+                ctx.beginPath();
+                ctx.moveTo(poly[0].x, poly[0].y);
+                for (let i = 1; i < poly.length; i++) {
+                    ctx.lineTo(poly[i].x, poly[i].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; // Cyan fill
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)'; // Cyan stroke
+                ctx.stroke();
+
+                ctx.restore();
+            });
+        }
+
         // Highlight selected object
         if (this.selectedObject) {
             ctx.save();
             const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
             ctx.scale(zoom, zoom);
 
-            if (Array.isArray(this.selectedObject)) {
+            if (this.selectedObject instanceof Walkbox) {
                 // Highlight Walkbox (World Space)
                 ctx.translate(-camX, -camY); // Apply Camera
 
                 ctx.strokeStyle = '#ff0000';
                 ctx.lineWidth = 3 / zoom;
                 ctx.beginPath();
-                const poly = this.selectedObject;
+                const poly = this.selectedObject.poly;
                 if (poly.length > 0) {
                     ctx.moveTo(poly[0].x, poly[0].y);
                     for (let i = 1; i < poly.length; i++) {
@@ -771,33 +1068,51 @@ export class SceneEditor {
                     ctx.closePath();
                     ctx.stroke();
                 }
-            } else {
+            } else if (this.selectedObject instanceof Triggerbox) {
+                // Highlight Triggerbox (World Space)
+                ctx.translate(-camX, -camY); // Apply Camera
+
+                ctx.strokeStyle = '#ff00ff'; // Magenta Selection
+                ctx.lineWidth = 3 / zoom;
+                ctx.beginPath();
+                const poly = this.selectedObject.poly;
+                if (poly.length > 0) {
+                    ctx.moveTo(poly[0].x, poly[0].y);
+                    for (let i = 1; i < poly.length; i++) {
+                        ctx.lineTo(poly[i].x, poly[i].y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            } else if (this.selectedObject instanceof Entity) {
                 // Highlight Entity
-                const entity = this.selectedObject;
+                const entity = this.selectedObject as Entity;
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
-                // Move to Entity position in World Space relative to Camera * Parallax
-                // We want to draw at (entity.x, entity.y) but shifted by camera * parallax
-                // Transform: Translate(-camX * p, -camY * p)
+                // Entity is rendered at: (x - camX * p, y - camY * p)
+                // Note: Entity x,y is (top-left? or bottom-center?)
+                // Entity.ts constructor says x,y. Scene render typically calculates screen pos.
+                // Assuming x,y is Top-Left (based on standard canvas rects) or checking prior logic.
+                // Previous logic was: strokeRect(drawX, drawY, width, height)
+                // Let's assume Top-Left for now as it's standard 2D.
 
-                ctx.translate(-camX * p, -camY * p);
+                const drawX = entity.x - camX * p;
+                const drawY = entity.y - camY * p;
 
-                // Draw rect around Entity
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1 / zoom;
-                ctx.setLineDash([4 / zoom, 4 / zoom]);
+                ctx.save();
+                ctx.strokeStyle = '#fff'; // White/Yellow dash
+                ctx.lineWidth = 2 / zoom;
+                ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed Line
+
+                // Entity Anchor is Bottom-Center
+                // We draw the rect starting at Top-Left relative to that anchor
                 ctx.strokeRect(
-                    entity.x - 2,
-                    entity.y - entity.height, // Pivot is bottom-center, draw up
-                    entity.width + 4,
-                    entity.height + 4
+                    drawX - entity.width / 2,
+                    drawY - entity.height,
+                    entity.width,
+                    entity.height
                 );
-                // Note: Entity x/y is Bottom-Center?
-                // scene.render draws entity.render(ctx) at translated pos.
-                // entity.render typically draws image centered at x? or top-left?
-                // Let's check Entity.ts later. Assuming x is center, y is bottom for now.
-                // Actually, Entity.render typically does: ctx.drawImage(img, this.x - w/2, this.y - h)
-                // So this strokeRect matches that.
+                ctx.restore();
             }
             ctx.restore();
         }
