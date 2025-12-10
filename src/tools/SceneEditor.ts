@@ -265,7 +265,7 @@ export class SceneEditor {
             const target = e.target as HTMLElement;
             if (!target) return;
 
-            if (target.id === 'prop-direction' || target.id === 'prop-image') {
+            if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
                 this.updateEntityFromUI();
             }
             if (target.id === 'chk-draw-mode') {
@@ -744,6 +744,7 @@ export class SceneEditor {
             const propLayer = document.getElementById('prop-layer') as HTMLInputElement;
             const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
             const propState = document.getElementById('prop-state') as HTMLInputElement;
+            const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
 
             if (propImage) propImage.value = ent.spriteName || '';
             if (propX) propX.value = ent.x.toString();
@@ -752,6 +753,7 @@ export class SceneEditor {
             if (propHeight) propHeight.value = ent.height.toString();
             if (propScale) propScale.value = (ent.scale || 1.0).toString();
             if (propLayer) propLayer.value = (ent.layer || 0).toString();
+            if (propNoScale) propNoScale.checked = ent.ignoreScaling || false;
 
             if (ent instanceof Actor) {
                 if (propDirection) propDirection.value = ent.direction || 'down';
@@ -784,27 +786,37 @@ export class SceneEditor {
         const propLayer = document.getElementById('prop-layer') as HTMLInputElement;
         const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
         const propState = document.getElementById('prop-state') as HTMLInputElement;
+        const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
 
         if (propName) ent.name = propName.value || 'Unnamed';
         if (propX) ent.x = parseInt(propX.value) || 0;
         if (propY) ent.y = parseInt(propY.value) || 0;
-        if (propWidth) ent.width = parseInt(propWidth.value) || 1;
-        if (propHeight) ent.height = parseInt(propHeight.value) || 1;
+        if (propWidth) {
+            const rawW = parseInt(propWidth.value) || 1;
+            // We want the resulting 'width' to be 'rawW'.
+            // Since width = baseWidth * scale, then baseWidth = rawW / scale.
+            // However, scale might be updated in the same tick.
+            const s = parseFloat(propScale.value) || 1.0;
+            ent.baseWidth = rawW / (s !== 0 ? s : 1);
+            ent.width = rawW; // Force immediate visual update
+        }
+        if (propHeight) {
+            const rawH = parseInt(propHeight.value) || 1;
+            const s = parseFloat(propScale.value) || 1.0;
+            ent.baseHeight = rawH / (s !== 0 ? s : 1);
+            ent.height = rawH;
+        }
+
         if (propScale) ent.scale = parseFloat(propScale.value) || 1.0;
         if (propLayer) ent.layer = parseInt(propLayer.value) || 0;
+        if (propNoScale) ent.ignoreScaling = propNoScale.checked;
 
         if (ent instanceof Actor) {
             if (propDirection) ent.setDirection(propDirection.value as any);
             if (propState) ent.setState(propState.value as any);
         }
 
-        if (ent.image && ent.image.complete) {
-            // Optional: Auto-Update width/height if scale changes? 
-            // Only if we want to enforce aspect ratio or something.
-            // For now, let's just leave it manual or handle elsewhere.
-            ent.width = ent.image.naturalWidth * ent.scale;
-            ent.height = ent.image.naturalHeight * ent.scale;
-        }
+
 
         this.refreshHierarchy();
     }
