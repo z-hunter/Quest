@@ -118,13 +118,19 @@ export class Scene {
     }
 
     onClick(x: number, y: number): void {
-        // ... existing onClick
+        // Transform Screen Coordinates to World Coordinates
+        // World = (Screen / Zoom) + Camera
+        const worldX = x / this.camera.zoom + this.camera.x;
+        const worldY = y / this.camera.zoom + this.camera.y;
+
+        console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
+
         if (this.player) {
-            if (this.isWalkable(x, y)) {
+            if (this.isWalkable(worldX, worldY)) {
                 // @ts-ignore
                 if (typeof this.player.moveTo === 'function') {
                     // @ts-ignore
-                    this.player.moveTo(x, y);
+                    this.player.moveTo(worldX, worldY);
                 }
             } else {
                 console.log("Cannot walk there!");
