@@ -19,6 +19,9 @@ export interface SceneData {
     triggerboxes: { poly: { x: number, y: number }[], name: string, script: string }[];
     scaling: SceneScaling;
     entities: EntityData[];
+    camera?: { x: number, y: number, zoom: number };
+    autoCenter?: boolean;
+    cameraSpeed?: number;
 }
 
 export class Scene {
@@ -30,7 +33,15 @@ export class Scene {
     triggerboxes: Triggerbox[];
     scaling: SceneScaling;
     player: Entity | null;
+
+    // Runtime Camera (used for rendering)
+    // Runtime Camera (used for rendering)
     camera: { x: number, y: number, zoom: number };
+    autoCenter: boolean;
+    cameraSpeed: number;
+
+    // Default Camera (saved to scene file, restored on load/reset)
+    defaultCamera: { x: number, y: number, zoom: number };
 
     constructor(id: string, name: string) {
         this.id = id;
@@ -48,6 +59,9 @@ export class Scene {
         };
         this.player = null;
         this.camera = { x: 0, y: 0, zoom: 1.0 };
+        this.defaultCamera = { x: 0, y: 0, zoom: 1.0 };
+        this.autoCenter = true; // Default to true
+        this.cameraSpeed = 5.0; // Default speed
     }
 
     addEntity(entity: Entity): void {
@@ -120,11 +134,25 @@ export class Scene {
 
     update(deltaTime: number): void {
         // ... existing update
-        if (this.player) {
-            const screenW = 320;
-            const screenH = 200;
-            this.camera.x = this.player.x - screenW / 2;
-            this.camera.y = this.player.y - screenH / 2;
+        // ... existing update
+        if (this.player && this.autoCenter) {
+            const screenW = 420;
+            const screenH = 300;
+            const targetX = this.player.x - screenW / 2;
+
+            // Center on player's visual center (approx mid-height) rather than feet
+            const pHeight = this.player.height || 0;
+            const targetY = (this.player.y - pHeight / 2) - screenH / 2;
+
+            // Smooth Lerp
+            const dt = deltaTime / 1000; // Convert to seconds
+            const speed = this.cameraSpeed || 5.0;
+
+            if (Math.abs(targetX - this.camera.x) < 1) this.camera.x = targetX;
+            else this.camera.x += (targetX - this.camera.x) * speed * dt;
+
+            if (Math.abs(targetY - this.camera.y) < 1) this.camera.y = targetY;
+            else this.camera.y += (targetY - this.camera.y) * speed * dt;
         }
 
         this.entities.forEach(entity => {
@@ -212,12 +240,9 @@ export class Scene {
             triggerboxes: this.triggerboxes,
             scaling: this.scaling,
             entities: savedEntities,
-            // @ts-ignore
-            camera: {
-                x: this.camera.x,
-                y: this.camera.y,
-                zoom: this.camera.zoom
-            }
+            camera: this.defaultCamera, // Save the DEFAULT settings, not the current runtime state
+            autoCenter: this.autoCenter,
+            cameraSpeed: this.cameraSpeed
         };
     }
 }

@@ -232,6 +232,18 @@ export class SceneEditor {
                     this.selectObject(sprite);
                     this.refreshHierarchy();
                 }
+            } else if (target.id === 'btn-camera-reset') {
+                if (this.game.sceneManager.currentScene) {
+                    const s = this.game.sceneManager.currentScene;
+                    s.camera = { ...s.defaultCamera };
+                    // Update UI immediately
+                    const cx = document.getElementById('cam-x') as HTMLInputElement;
+                    const cy = document.getElementById('cam-y') as HTMLInputElement;
+                    const cz = document.getElementById('cam-zoom') as HTMLInputElement;
+                    if (cx) cx.value = Math.round(s.camera.x).toString();
+                    if (cy) cy.value = Math.round(s.camera.y).toString();
+                    if (cz) cz.value = s.camera.zoom.toFixed(2);
+                }
             }
         });
 
@@ -254,6 +266,19 @@ export class SceneEditor {
                 }
             }
 
+            // Camera Inputs (Concurrent Update)
+            if (this.game.sceneManager.currentScene) {
+                const s = this.game.sceneManager.currentScene;
+                if (target.id === 'cam-x') s.camera.x = parseFloat(target.value) || 0;
+                if (target.id === 'cam-y') s.camera.y = parseFloat(target.value) || 0;
+                if (target.id === 'cam-zoom') s.camera.zoom = parseFloat(target.value) || 1.0;
+                if (target.id === 'cam-speed') s.cameraSpeed = parseFloat(target.value) || 5.0;
+
+                if (target.id === 'def-cam-x') s.defaultCamera.x = parseFloat(target.value) || 0;
+                if (target.id === 'def-cam-y') s.defaultCamera.y = parseFloat(target.value) || 0;
+                if (target.id === 'def-cam-zoom') s.defaultCamera.zoom = parseFloat(target.value) || 1.0;
+            }
+
             // Scaling Config
             if (['scale-min', 'scale-max', 'scale-horizon', 'scale-front'].includes(target.id)) {
                 this.updateScalingConfig();
@@ -267,6 +292,16 @@ export class SceneEditor {
 
             if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
                 this.updateEntityFromUI();
+            }
+            if (target.id === 'cam-auto-center') {
+                if (this.game.sceneManager.currentScene) {
+                    this.game.sceneManager.currentScene.autoCenter = (target as HTMLInputElement).checked;
+                }
+            }
+            if (target.id === 'cam-speed') {
+                if (this.game.sceneManager.currentScene) {
+                    this.game.sceneManager.currentScene.cameraSpeed = parseFloat((target as HTMLInputElement).value) || 5.0;
+                }
             }
             if (target.id === 'chk-draw-mode') {
                 this.drawMode = (target as HTMLInputElement).checked;
@@ -882,7 +917,15 @@ export class SceneEditor {
 
             // Restore Camera
             if (data.camera) {
-                newScene.camera = data.camera;
+                newScene.defaultCamera = { ...data.camera };
+                newScene.camera = { ...data.camera }; // Apply default to runtime immediately
+            }
+
+            if (data.autoCenter !== undefined) {
+                newScene.autoCenter = data.autoCenter;
+            }
+            if (data.cameraSpeed !== undefined) {
+                newScene.cameraSpeed = data.cameraSpeed;
             }
 
             // Restore Scaling
@@ -1020,6 +1063,41 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
         const camX = scene && scene.camera ? scene.camera.x : 0;
         const camY = scene && scene.camera ? scene.camera.y : 0;
+
+        // Sync UI if Scene is selected (so coordinates update during auto-center)
+        if (scene && (this.selectedObject as any) === 'SCENE') {
+            const cx = document.getElementById('cam-x') as HTMLInputElement;
+            const cy = document.getElementById('cam-y') as HTMLInputElement;
+            const cz = document.getElementById('cam-zoom') as HTMLInputElement;
+            const ac = document.getElementById('cam-auto-center') as HTMLInputElement;
+            const cs = document.getElementById('cam-speed') as HTMLInputElement;
+
+            const dx = document.getElementById('def-cam-x') as HTMLInputElement;
+            const dy = document.getElementById('def-cam-y') as HTMLInputElement;
+            const dz = document.getElementById('def-cam-zoom') as HTMLInputElement;
+
+            // Always update runtime X/Y if auto-center is ON override inputs
+            if (scene.autoCenter) {
+                if (cx) cx.value = Math.round(camX).toString();
+                if (cy) cy.value = Math.round(camY).toString();
+            } else {
+                // If auto-center is OFF, only update if not focused (allowing edit)
+                if (cx && document.activeElement !== cx) cx.value = Math.round(camX).toString();
+                if (cy && document.activeElement !== cy) cy.value = Math.round(camY).toString();
+            }
+
+            // Sync Zoom and AutoCenter checkbox
+            if (cz && document.activeElement !== cz) cz.value = (scene.camera.zoom || 1.0).toFixed(2);
+            if (ac) ac.checked = scene.autoCenter !== false;
+            if (cs && document.activeElement !== cs) cs.value = (scene.cameraSpeed || 5.0).toString();
+
+            // Sync Default Camera Settings
+            if (scene.defaultCamera) {
+                if (dx && document.activeElement !== dx) dx.value = Math.round(scene.defaultCamera.x).toString();
+                if (dy && document.activeElement !== dy) dy.value = Math.round(scene.defaultCamera.y).toString();
+                if (dz && document.activeElement !== dz) dz.value = (scene.defaultCamera.zoom || 1.0).toFixed(2);
+            }
+        }
 
         // Render current polygon (World Space)
         if (this.currentPolygon && this.currentPolygon.length > 0) {

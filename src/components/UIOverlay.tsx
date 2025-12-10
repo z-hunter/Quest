@@ -123,9 +123,19 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             </div>
 
                             <h4 style={{ marginTop: '10px' }}>Camera</h4>
+
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
-                                <label>Zoom: <span id="camera-zoom-display">1.0</span></label>
-                                <button id="btn-camera-reset">Reset</button>
+                                <label style={{ gridColumn: '1 / -1' }}>Current LookAt:</label>
+                                <label>X: <input type="number" id="cam-x" style={{ width: '50px' }} /></label>
+                                <label>Y: <input type="number" id="cam-y" style={{ width: '50px' }} /></label>
+                                <label style={{ gridColumn: '1 / -1' }}>Zoom: <input type="number" id="cam-zoom" step="0.1" style={{ width: '50px' }} /></label>
+                                <label style={{ gridColumn: '1 / -1' }}><input type="checkbox" id="cam-auto-center" /> Auto-Center on Player</label>
+
+                                <label style={{ gridColumn: '1 / -1', marginTop: '5px' }}>Default (Start):</label>
+                                <label>X: <input type="number" id="def-cam-x" style={{ width: '50px' }} /></label>
+                                <label>Y: <input type="number" id="def-cam-y" style={{ width: '50px' }} /></label>
+                                <label>Zoom: <input type="number" id="def-cam-zoom" step="0.1" style={{ width: '50px' }} /></label>
+                                <button id="btn-camera-reset">Reset to Default</button>
                             </div>
                         </div>
 
