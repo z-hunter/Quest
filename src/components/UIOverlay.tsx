@@ -97,7 +97,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             </div>
                         </div>
 
-                        <div id="scene-properties-item" className="scene-prop-item">Scene Properties</div>
+                        <div id="scene-properties-item" className="scene-prop-item" onClick={() => game?.editor?.selectObject('SCENE')}>Scene Properties</div>
                         <div id="entity-list"></div>
                     </div>
 
@@ -109,7 +109,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         </div>
 
                         {/* Scene Properties */}
-                        <div id="section-scene-props" className="editor-section">
+                        <div id="section-scene-props" className="editor-section hidden">
                             <label>Scene Title:</label>
                             <input type="text" id="editor-scene-title" style={{ width: '100%' }} />
 
