@@ -18,7 +18,7 @@ export class SceneEditor {
     isDragging: boolean;
     dragOffset: { x: number, y: number };
     creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
-
+    draggingVertexIndex: number = -1;
     drawMode: boolean;
 
     // UI Elements
@@ -511,9 +511,45 @@ export class SceneEditor {
             const camY = scene.camera ? scene.camera.y : 0;
             const zoom = scene.camera ? scene.camera.zoom : 1.0;
 
+            // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
+            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
+                const worldPos = {
+                    x: pos.x / zoom + camX,
+                    y: pos.y / zoom + camY
+                };
+                const poly = this.selectedObject.poly;
+                const vertexRadius = 6 / zoom; // Hit radius
+
+                // Check vertices
+                for (let i = 0; i < poly.length; i++) {
+                    const vx = poly[i].x;
+                    const vy = poly[i].y;
+                    if (Math.abs(worldPos.x - vx) < vertexRadius && Math.abs(worldPos.y - vy) < vertexRadius) {
+                        this.isDragging = true;
+                        this.draggingVertexIndex = i;
+                        e.stopPropagation();
+                        return;
+                    }
+                }
+
+                // Check Polygon Body
+                if (Geometry.isPointInPolygon(worldPos, poly)) {
+                    this.isDragging = true;
+                    this.draggingVertexIndex = -1; // Drag Whole Body
+                    // Store offset relative to first point for consistency?
+                    // Actually, let's store mouse World Pos
+                    this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                    e.stopPropagation();
+                    return;
+                }
+            }
+
+
             // 1. Check Entities
-            for (let i = scene.entities.length - 1; i >= 0; i--) {
-                const entity = scene.entities[i];
+            const entities = scene.entities;
+            // Iterate reverse to select top-most
+            for (let i = entities.length - 1; i >= 0; i--) {
+                const entity = entities[i];
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
                 // Entity Screen Rect (With Zoom)
@@ -538,12 +574,13 @@ export class SceneEditor {
                     console.log(`[Hitbox] HIT! Entity: ${entity.name}`);
                     this.selectObject(entity);
                     this.isDragging = true;
+                    this.draggingVertexIndex = -1;
                     // Offset in Screen Space
                     this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
                     e.stopPropagation();
                     return;
                 } else {
-                    console.log(`[Hitbox] Miss: ${entity.name}. Pos: ${Math.round(pos.x)},${Math.round(pos.y)} vs Left:${Math.round(screenX - screenW / 2)} Top:${Math.round(screenY - screenH)} W:${Math.round(screenW)} H:${Math.round(screenH)}`);
+                    // console.log(`[Hitbox] Miss: ${entity.name}`);
                 }
             }
 
@@ -557,7 +594,9 @@ export class SceneEditor {
                 for (const wb of scene.walkbox) {
                     if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
                         this.selectObject(wb);
-                        // Trigger UI Update manually since selectObject might not detect change if same type
+                        this.isDragging = true;
+                        this.draggingVertexIndex = -1;
+                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
                         e.stopPropagation();
                         return;
                     }
@@ -569,6 +608,9 @@ export class SceneEditor {
                 for (const tb of scene.triggerboxes) {
                     if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
                         this.selectObject(tb);
+                        this.isDragging = true;
+                        this.draggingVertexIndex = -1;
+                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
                         e.stopPropagation();
                         return;
                     }
@@ -582,23 +624,55 @@ export class SceneEditor {
     onMouseMove(e: MouseEvent): void {
         if (!this.enabled || !this.isDragging || !this.selectedObject) return;
 
-        // Only drag Entities for now.
-        // Walkbox/Triggerbox are SceneObjects but typically we modify their poly points or move the whole thing.
-        // For now, let's allow moving proper Entities.
-        if (!(this.selectedObject instanceof Entity)) return;
-
         const pos = this.getMousePos(e);
         const scene = this.game.sceneManager.currentScene;
         const camX = scene && scene.camera ? scene.camera.x : 0;
         const camY = scene && scene.camera ? scene.camera.y : 0;
+        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
+        // Polygon Dragging (Walkbox/Triggerbox)
+        if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
+            const worldPos = {
+                x: pos.x / zoom + camX,
+                y: pos.y / zoom + camY
+            };
+
+            const poly = this.selectedObject.poly;
+
+            if (this.draggingVertexIndex >= 0) {
+                // Drag Vertex
+                poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
+                poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
+            } else {
+                // Drag Whole Body
+                // Calculate Delta in World Space
+                const dx = worldPos.x - this.dragOffset.x;
+                const dy = worldPos.y - this.dragOffset.y;
+
+                if (dx !== 0 || dy !== 0) {
+                    for (const pt of poly) {
+                        pt.x += dx;
+                        pt.y += dy;
+                        // Optional: Round to int? 
+                        // pt.x = Math.round(pt.x + dx); 
+                        // But for smooth drag let's just add float and maybe round on save.
+                    }
+                    // Update Offset
+                    this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                }
+            }
+            return;
+        }
+
+        // Only drag Entities for now if not polygon
+        if (!(this.selectedObject instanceof Entity)) return;
+
+        // Entity Drag Logic
         const entity = this.selectedObject as Entity;
         const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
         // targetScreenX (Zoomed) = pos.x - dragOffset
         // Unzoomed ScreenX = targetScreenX / zoom
-        // WorldX = UnzoomedScreenX + camX * p
 
         const targetScreenX = pos.x - this.dragOffset.x;
         const targetScreenY = pos.y - this.dragOffset.y;
@@ -1067,6 +1141,13 @@ export class SceneEditor {
                     }
                     ctx.closePath();
                     ctx.stroke();
+
+                     // Draw Vertex Handles
+                    ctx.fillStyle = '#ff0000';
+                    const handleSize = 6 / zoom;
+                    for (const pt of poly) {
+                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
+                    }
                 }
             } else if (this.selectedObject instanceof Triggerbox) {
                 // Highlight Triggerbox (World Space)
@@ -1083,6 +1164,13 @@ export class SceneEditor {
                     }
                     ctx.closePath();
                     ctx.stroke();
+
+                    // Draw Vertex Handles
+                    ctx.fillStyle = '#ff00ff';
+                    const handleSize = 6 / zoom;
+                    for (const pt of poly) {
+                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
+                    }
                 }
             } else if (this.selectedObject instanceof Entity) {
                 // Highlight Entity
