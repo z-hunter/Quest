@@ -19,7 +19,7 @@ body {
   height: 640px;
   /* 300 * 2 + 40px UI */
   background-color: #111;
-  border: 2px solid #555;
+  border: none;
   image-rendering: pixelated;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;

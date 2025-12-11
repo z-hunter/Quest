@@ -177,6 +177,35 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             <label style={{ display: 'none' }}><input type="checkbox" id="chk-draw-mode" /> Draw Mode</label>
                         </div>
 
+                        {/* F9 Settings Panel */}
+                        <div id="section-settings" className="editor-section hidden">
+                            <h3>GLOBAL SETTINGS</h3>
+                            <h4>CRT Effects</h4>
+                            <label style={{ display: 'block', marginBottom: '5px' }}><input type="checkbox" id="crt-enabled" /> Enabled</label>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', alignItems: 'center' }}>
+                                <label style={{ gridColumn: '1 / -1' }}>Curvature:</label>
+                                <input type="range" id="crt-curvature" min="0" max="1" step="0.01" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <label style={{ gridColumn: '1 / -1' }}>Scanlines (Count):</label>
+                                <input type="range" id="crt-scanlines" min="100" max="600" step="10" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <label style={{ gridColumn: '1 / -1' }}>Scanlines (Intensity):</label>
+                                <input type="range" id="crt-intensity" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <label style={{ gridColumn: '1 / -1' }}>Aberration:</label>
+                                <input type="range" id="crt-aberration" min="0" max="5" step="0.1" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <label style={{ gridColumn: '1 / -1' }}>Vignette:</label>
+                                <input type="range" id="crt-vignette" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <label style={{ gridColumn: '1 / -1' }}>Phosphor/Surface Grain:</label>
+                                <input type="range" id="crt-phosphor" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
+                                <button id="btn-save-settings" style={{ gridColumn: '1 / -1', marginTop: '10px' }}>Save Settings (LocalStorage)</button>
+                            </div>
+                        </div>
+
                         {/* Tools (Removed, but keeping Save JSON accessible vaguely or moved?) 
                             GDD says F2 Save, F3 Load. 
                             Left panel has Object Save/Load.

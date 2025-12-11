@@ -20,6 +20,15 @@ export class SceneEditor {
     drawMode: boolean;
 
 
+    // Event Handlers (Bound)
+    private boundClickHandler: (e: Event) => void;
+    private boundInputHandler: (e: Event) => void;
+    private boundChangeHandler: (e: Event) => void;
+    private boundKeyHandler: (e: KeyboardEvent) => void;
+    private boundMouseDownHandler: (e: MouseEvent) => void;
+    private boundMouseMoveHandler: (e: MouseEvent) => void;
+    private boundMouseUpHandler: (e: MouseEvent) => void;
+
     constructor(game: any) {
         this.game = game;
         this.enabled = false;
@@ -29,9 +38,22 @@ export class SceneEditor {
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.drawMode = false;
+
+        // Bind handlers once for cleanup
+        this.boundClickHandler = this.handleGlobalClick.bind(this);
+        this.boundInputHandler = this.handleGlobalInput.bind(this);
+        this.boundChangeHandler = this.handleGlobalChange.bind(this);
+        this.boundKeyHandler = this.handleGlobalKey.bind(this);
+        this.boundMouseDownHandler = this.onMouseDown.bind(this);
+        this.boundMouseMoveHandler = this.onMouseMove.bind(this);
+        this.boundMouseUpHandler = this.onMouseUp.bind(this);
     }
 
+    private uiInitialized = false;
+
     initUI(): void {
+        if (this.uiInitialized) return;
+
         console.log('[SceneEditor] Initializing UI...');
         // Event delegation or static binding for non-React elements?
         // Note: React manages creation of elements, so we should bind events dynamically or use delegation.
@@ -46,6 +68,8 @@ export class SceneEditor {
         // Ideally, we'd use event delegation on a static parent.
         this.setupListeners();
         this.setupUI();
+
+        this.uiInitialized = true;
         console.log('[SceneEditor] UI Initialized');
     }
 
@@ -57,90 +81,278 @@ export class SceneEditor {
         this.startCreating(type);
     }
 
+    destroy(): void {
+        console.log('[SceneEditor] Destroying, removing listeners...');
+        document.removeEventListener('click', this.boundClickHandler);
+        document.removeEventListener('input', this.boundInputHandler);
+        document.removeEventListener('change', this.boundChangeHandler);
+        document.removeEventListener('keydown', this.boundKeyHandler);
+
+        this.game.canvas.removeEventListener('mousedown', this.boundMouseDownHandler);
+        window.removeEventListener('mousemove', this.boundMouseMoveHandler);
+        window.removeEventListener('mouseup', this.boundMouseUpHandler);
+
+        this.uiInitialized = false;
+    }
+
     setupListeners(): void {
-        // Toggle Key
-        window.addEventListener('keydown', (e) => {
-            // Prevent default for F-keys and Editor keys when editor is open
-            if (this.enabled) {
-                if (['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(e.key.toLowerCase())) {
-                    // e.preventDefault(); // Be careful not to block typing in inputs
+        // UI Interaction Listeners (Delegation)
+        document.addEventListener('click', this.boundClickHandler);
+        document.addEventListener('input', this.boundInputHandler);
+        document.addEventListener('change', this.boundChangeHandler);
+        document.addEventListener('keydown', this.boundKeyHandler);
+
+        // Canvas Interaction Listeners
+        this.game.canvas.addEventListener('mousedown', this.boundMouseDownHandler);
+        window.addEventListener('mousemove', this.boundMouseMoveHandler);
+        window.addEventListener('mouseup', this.boundMouseUpHandler);
+    }
+
+    /* Event Handlers extracted for cleanup */
+
+    handleGlobalClick(e: Event): void {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+
+        // Buttons
+        if (target.id === 'btn-close-editor') {
+            this.toggle();
+        } else if (target.id === 'btn-f2-save' || target.id === 'btn-save-json') {
+            this.saveScene();
+        } else if (target.id === 'btn-f3-load') {
+            const f = document.getElementById('file-load-json');
+            if (f) f.click();
+        } else if (target.id === 'btn-f4-new') {
+            this.newScene();
+        } else if (target.id === 'btn-clear-walkbox') {
+            if (this.game.sceneManager.currentScene && this.selectedObject) {
+                const scene = this.game.sceneManager.currentScene;
+                if (this.selectedObject instanceof Walkbox) {
+                    const index = scene.walkbox.indexOf(this.selectedObject);
+                    if (index > -1) scene.walkbox.splice(index, 1);
+                    this.startCreating('Walkbox');
+                } else if (this.selectedObject instanceof Triggerbox) {
+                    const index = scene.triggerboxes.indexOf(this.selectedObject);
+                    if (index > -1) scene.triggerboxes.splice(index, 1);
+                    this.startCreating('Triggerbox');
                 }
             }
+        } else if (target.id === 'btn-add-sprite') {
+            const spriteInput = document.getElementById('sprite-name-input') as HTMLInputElement;
+            const name = spriteInput ? spriteInput.value : 'Sprite';
+            if (this.game.sceneManager.currentScene) {
+                const sprite = new Entity(160, 100, 30, 30, name || 'Sprite');
+                if (name) sprite.setSprite(name);
+                sprite.color = '#ffa500';
+                this.game.sceneManager.currentScene.addEntity(sprite);
 
-            if (e.key === 'F1') {
+                this.drawMode = false;
+                const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
+                if (chk) chk.checked = false;
+                this.selectObject(sprite);
+                this.refreshHierarchy();
+            }
+        } else if (target.id === 'btn-camera-reset') {
+            if (this.game.sceneManager.currentScene) {
+                const s = this.game.sceneManager.currentScene;
+                s.camera = { ...s.defaultCamera };
+                // Update UI immediately
+                const cx = document.getElementById('cam-x') as HTMLInputElement;
+                const cy = document.getElementById('cam-y') as HTMLInputElement;
+                const cz = document.getElementById('cam-zoom') as HTMLInputElement;
+                if (cx) cx.value = Math.round(s.camera.x).toString();
+                if (cy) cy.value = Math.round(s.camera.y).toString();
+                if (cz) cz.value = s.camera.zoom.toFixed(2);
+            }
+        } else if (target.id === 'btn-f9-settings') {
+            this.selectObject('SETTINGS');
+        } else if (target.id === 'btn-save-settings') {
+            this.game.saveSettings();
+        }
+
+        // Add Object Button
+        if (target.id === 'btn-add-object') {
+            this.onAddObjectClick(); // Ensure onAddObjectClick calls startCreating
+        }
+        if (target.id === 'btn-delete-object') {
+            this.deleteSelectedObject();
+        }
+    }
+
+    handleGlobalInput(e: Event): void {
+        const target = e.target as HTMLInputElement;
+        if (!target) return;
+
+        // F9 Settings Bindings
+        if (target.id.startsWith('crt-')) {
+            const s = this.game.settings.crt;
+            const val = parseFloat(target.value);
+            const checked = target.checked;
+
+            if (target.id === 'crt-enabled') s.enabled = checked;
+            else if (target.id === 'crt-curvature') s.curvature = val;
+            else if (target.id === 'crt-scanlines') s.scanlineCount = val;
+            else if (target.id === 'crt-intensity') s.scanlineIntensity = val;
+            else if (target.id === 'crt-aberration') s.aberration = val;
+            else if (target.id === 'crt-vignette') s.vignette = val;
+            else if (target.id === 'crt-phosphor') s.phosphor = val;
+        }
+
+        // Property Inputs - Only update if focused and valid
+        if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state'].includes(target.id)) {
+            this.updateEntityFromUI();
+        }
+
+        // Scene Title
+        if (target.id === 'editor-scene-title') {
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.name = target.value;
+                const display = document.getElementById('scene-title-display');
+                if (display) display.textContent = target.value;
+            }
+        }
+
+        // Camera Inputs (Concurrent Update)
+        if (this.game.sceneManager.currentScene) {
+            const s = this.game.sceneManager.currentScene;
+            if (target.id === 'cam-x') s.camera.x = parseFloat(target.value) || 0;
+            if (target.id === 'cam-y') s.camera.y = parseFloat(target.value) || 0;
+            if (target.id === 'cam-zoom') s.camera.zoom = parseFloat(target.value) || 1.0;
+            if (target.id === 'cam-speed') s.cameraSpeed = parseFloat(target.value) || 5.0;
+
+            if (target.id === 'def-cam-x') s.defaultCamera.x = parseFloat(target.value) || 0;
+            if (target.id === 'def-cam-y') s.defaultCamera.y = parseFloat(target.value) || 0;
+            if (target.id === 'def-cam-zoom') s.defaultCamera.zoom = parseFloat(target.value) || 1.0;
+        }
+
+        // Scaling Config
+        if (['scale-min', 'scale-max', 'scale-horizon', 'scale-front'].includes(target.id)) {
+            this.updateScalingConfig();
+        }
+    }
+
+    handleGlobalChange(e: Event): void {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+
+        if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
+            this.updateEntityFromUI();
+        }
+        if (target.id === 'cam-auto-center') {
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.autoCenter = (target as HTMLInputElement).checked;
+            }
+        }
+        if (target.id === 'cam-speed') {
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.cameraSpeed = parseFloat((target as HTMLInputElement).value) || 5.0;
+            }
+        }
+        if (target.id === 'chk-draw-mode') {
+            this.drawMode = (target as HTMLInputElement).checked;
+            if (this.drawMode) this.selectObject(null);
+        }
+        if (target.id === 'scale-enabled') {
+            this.updateScalingConfig();
+        }
+
+        if (target.id === 'file-load-json') {
+            const input = target as HTMLInputElement;
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    if (ev.target) this.loadScene(ev.target.result as string);
+                };
+                reader.readAsText(input.files[0]);
+                input.value = '';
+            }
+        }
+    }
+
+    handleGlobalKey(e: KeyboardEvent): void {
+        // Allows opening editor with F1 even if disabled
+        if (!this.enabled && e.key !== 'F1') return;
+
+        if (e.key === 'F1') {
+            e.preventDefault();
+            this.toggle();
+        } else if (e.key === 'F9') {
+            e.preventDefault();
+            this.selectObject('SETTINGS');
+        } else if (e.key === 'Delete') {
+            // Deletion logic handled in click handler mostly, but shortcut here
+            if (this.selectedObject) {
+                this.deleteSelectedObject();
+            }
+        }
+
+        // Other Keys
+        // Prevent default for F-keys and Editor keys when editor is open
+        if (this.enabled) {
+            if (['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(e.key.toLowerCase())) {
+                // e.preventDefault(); // Be careful not to block typing in inputs
+            }
+        }
+
+
+        if (!this.enabled) return;
+
+        // Ignore shortcuts if user is typing in an input
+        if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
+            return;
+        }
+
+        switch (e.key.toLowerCase()) {
+            case 'f2': e.preventDefault(); this.saveScene(); break;
+            case 'f3':
                 e.preventDefault();
-                this.toggle();
-                return;
-            }
+                const f = document.getElementById('file-load-json');
+                if (f) f.click();
+                break;
+            case 'f4': e.preventDefault(); this.newScene(); break;
 
-            if (!this.enabled) return;
+            // Creation Hotkeys
+            case 's': this.startCreating('Static'); break;
+            case 'a': this.startCreating('Actor'); break;
+            case 'w': this.startCreating('Walkbox'); break;
+            case 't': this.startCreating('Triggerbox'); break;
 
-            // Ignore shortcuts if user is typing in an input
-            if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
-                return;
-            }
-
-            switch (e.key.toLowerCase()) {
-                case 'f2': e.preventDefault(); this.saveScene(); break;
-                case 'f3':
-                    e.preventDefault();
-                    const f = document.getElementById('file-load-json');
-                    if (f) f.click();
-                    break;
-                case 'f4': e.preventDefault(); this.newScene(); break;
-
-                // Creation Hotkeys
-                case 's': this.startCreating('Static'); break;
-                case 'a': this.startCreating('Actor'); break;
-                case 'w': this.startCreating('Walkbox'); break;
-                case 't': this.startCreating('Triggerbox'); break;
-
-                // Camera Hotkeys
-                case '+': case '=':
-                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 1.1;
-                    break;
-                case '-':
-                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 0.9;
-                    break;
-                case '*':
-                    // Reset Camera Position
-                    if (this.game.sceneManager.currentScene) {
-                        const s = this.game.sceneManager.currentScene;
-                        if (s.player) {
-                            s.camera.x = s.player.x - 320;
-                            s.camera.y = s.player.y - 200;
-                        } else {
-                            s.camera.x = 0; s.camera.y = 0;
-                        }
+            // Camera Hotkeys
+            case '+': case '=':
+                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 1.1;
+                break;
+            case '-':
+                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 0.9;
+                break;
+            case '*':
+                // Reset Camera Position
+                if (this.game.sceneManager.currentScene) {
+                    const s = this.game.sceneManager.currentScene;
+                    if (s.player) {
+                        s.camera.x = s.player.x - 320;
+                        s.camera.y = s.player.y - 200;
+                    } else {
+                        s.camera.x = 0; s.camera.y = 0;
                     }
-                    break;
-                case '/':
-                    // Reset Zoom
-                    if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom = 1.0;
-                    break;
+                }
+                break;
+            case '/':
+                // Reset Zoom
+                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom = 1.0;
+                break;
 
-                case 'delete':
-                    if (this.selectedObject) this.deleteSelectedObject();
-                    break;
+            case 'enter':
+                if (!e.ctrlKey) this.finishPolygon();
+                break;
 
-                case 'enter':
-                    if (!e.ctrlKey) this.finishPolygon();
-                    break;
-
-                case 'escape':
-                    this.drawMode = false;
-                    this.currentPolygon = [];
-                    const c = document.getElementById('chk-draw-mode') as HTMLInputElement;
-                    if (c) c.checked = false;
-                    console.log("[Editor] Draw Mode Cancelled");
-                    break;
-            }
-        });
-
-        // Mouse Dragging
-        this.game.canvas.addEventListener('mousedown', (e: MouseEvent) => this.onMouseDown(e));
-        this.game.canvas.addEventListener('mousemove', (e: MouseEvent) => this.onMouseMove(e));
-        this.game.canvas.addEventListener('mouseup', () => this.onMouseUp());
+            case 'escape':
+                this.drawMode = false;
+                this.currentPolygon = [];
+                const c = document.getElementById('chk-draw-mode') as HTMLInputElement;
+                if (c) c.checked = false;
+                console.log("[Editor] Draw Mode Cancelled");
+                break;
+        }
     }
 
     startCreating(type: string): void {
@@ -187,142 +399,8 @@ export class SceneEditor {
 
     setupUI(): void {
         console.log('[SceneEditor] Setting up UI Listeners (Delegation)');
-
-        // CLICK HANDLERS (Delegation)
-        document.addEventListener('click', (e: Event) => {
-            const target = e.target as HTMLElement;
-            if (!target) return;
-
-            // Buttons
-            if (target.id === 'btn-close-editor') {
-                this.toggle();
-            } else if (target.id === 'btn-f2-save' || target.id === 'btn-save-json') {
-                this.saveScene();
-            } else if (target.id === 'btn-f3-load') {
-                const f = document.getElementById('file-load-json');
-                if (f) f.click();
-            } else if (target.id === 'btn-f4-new') {
-                this.newScene();
-            } else if (target.id === 'btn-clear-walkbox') {
-                if (this.game.sceneManager.currentScene && this.selectedObject) {
-                    const scene = this.game.sceneManager.currentScene;
-                    // Redraw Logic: Remove current, start new
-                    if (this.selectedObject instanceof Walkbox) {
-                        const index = scene.walkbox.indexOf(this.selectedObject);
-                        if (index > -1) scene.walkbox.splice(index, 1);
-                        this.startCreating('Walkbox');
-                    } else if (this.selectedObject instanceof Triggerbox) {
-                        const index = scene.triggerboxes.indexOf(this.selectedObject);
-                        if (index > -1) scene.triggerboxes.splice(index, 1);
-                        this.startCreating('Triggerbox');
-                    }
-                }
-            } else if (target.id === 'btn-add-sprite') {
-                const spriteInput = document.getElementById('sprite-name-input') as HTMLInputElement;
-                const name = spriteInput ? spriteInput.value : 'Sprite';
-                if (this.game.sceneManager.currentScene) {
-                    const sprite = new Entity(160, 100, 30, 30, name || 'Sprite');
-                    if (name) sprite.setSprite(name);
-                    sprite.color = '#ffa500';
-                    this.game.sceneManager.currentScene.addEntity(sprite);
-
-                    this.drawMode = false;
-                    const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
-                    if (chk) chk.checked = false;
-                    this.selectObject(sprite);
-                    this.refreshHierarchy();
-                }
-            } else if (target.id === 'btn-camera-reset') {
-                if (this.game.sceneManager.currentScene) {
-                    const s = this.game.sceneManager.currentScene;
-                    s.camera = { ...s.defaultCamera };
-                    // Update UI immediately
-                    const cx = document.getElementById('cam-x') as HTMLInputElement;
-                    const cy = document.getElementById('cam-y') as HTMLInputElement;
-                    const cz = document.getElementById('cam-zoom') as HTMLInputElement;
-                    if (cx) cx.value = Math.round(s.camera.x).toString();
-                    if (cy) cy.value = Math.round(s.camera.y).toString();
-                    if (cz) cz.value = s.camera.zoom.toFixed(2);
-                }
-            }
-        });
-
-        // INPUT HANDLERS (Delegation)
-        document.addEventListener('input', (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            if (!target) return;
-
-            // Property Inputs - Only update if focused and valid
-            if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state'].includes(target.id)) {
-                this.updateEntityFromUI();
-            }
-
-            // Scene Title
-            if (target.id === 'editor-scene-title') {
-                if (this.game.sceneManager.currentScene) {
-                    this.game.sceneManager.currentScene.name = target.value;
-                    const display = document.getElementById('scene-title-display');
-                    if (display) display.textContent = target.value;
-                }
-            }
-
-            // Camera Inputs (Concurrent Update)
-            if (this.game.sceneManager.currentScene) {
-                const s = this.game.sceneManager.currentScene;
-                if (target.id === 'cam-x') s.camera.x = parseFloat(target.value) || 0;
-                if (target.id === 'cam-y') s.camera.y = parseFloat(target.value) || 0;
-                if (target.id === 'cam-zoom') s.camera.zoom = parseFloat(target.value) || 1.0;
-                if (target.id === 'cam-speed') s.cameraSpeed = parseFloat(target.value) || 5.0;
-
-                if (target.id === 'def-cam-x') s.defaultCamera.x = parseFloat(target.value) || 0;
-                if (target.id === 'def-cam-y') s.defaultCamera.y = parseFloat(target.value) || 0;
-                if (target.id === 'def-cam-zoom') s.defaultCamera.zoom = parseFloat(target.value) || 1.0;
-            }
-
-            // Scaling Config
-            if (['scale-min', 'scale-max', 'scale-horizon', 'scale-front'].includes(target.id)) {
-                this.updateScalingConfig();
-            }
-        });
-
-        // CHANGE HANDLERS (Delegation)
-        document.addEventListener('change', (e: Event) => {
-            const target = e.target as HTMLElement;
-            if (!target) return;
-
-            if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
-                this.updateEntityFromUI();
-            }
-            if (target.id === 'cam-auto-center') {
-                if (this.game.sceneManager.currentScene) {
-                    this.game.sceneManager.currentScene.autoCenter = (target as HTMLInputElement).checked;
-                }
-            }
-            if (target.id === 'cam-speed') {
-                if (this.game.sceneManager.currentScene) {
-                    this.game.sceneManager.currentScene.cameraSpeed = parseFloat((target as HTMLInputElement).value) || 5.0;
-                }
-            }
-            if (target.id === 'chk-draw-mode') {
-                this.drawMode = (target as HTMLInputElement).checked;
-                if (this.drawMode) this.selectObject(null);
-            }
-            if (target.id === 'scale-enabled') {
-                this.updateScalingConfig();
-            }
-
-            if (target.id === 'file-load-json') {
-                const input = target as HTMLInputElement;
-                if (input.files && input.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                        if (ev.target) this.loadScene(ev.target.result as string);
-                    };
-                    reader.readAsText(input.files[0]);
-                    input.value = '';
-                }
-            }
-        });
+        // All event listeners are now handled by the bound handlers in setupListeners()
+        // This method remains for any initial UI setup that isn't event binding.
     }
 
     updateScalingConfig(): void {
@@ -617,20 +695,27 @@ export class SceneEditor {
         const sectionSceneProps = document.getElementById('section-scene-props');
         const sectionEntityProps = document.getElementById('section-entity-props');
         const sectionWalkboxProps = document.getElementById('section-walkbox-props');
+        const sectionSettingsProps = document.getElementById('section-settings');
         const propActorGroup = document.getElementById('prop-actor-group');
+
+        // Reset all to hidden first
+        if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
+        if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
+        if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
+        if (sectionSettingsProps) sectionSettingsProps.classList.add('hidden');
 
         // Visibility Toggles
         if ((this.selectedObject as any) === 'SCENE') {
             if (sectionSceneProps) sectionSceneProps.classList.remove('hidden');
-            if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
-            if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
+            this.syncUI();
+        } else if ((this.selectedObject as any) === 'SETTINGS') {
+            if (sectionSettingsProps) sectionSettingsProps.classList.remove('hidden');
+            this.syncSettingsUI();
         } else if (obj instanceof SceneObject) {
             // Unified Logic for all SceneObjects
             if (obj instanceof Entity) {
                 // Entity Specifics
-                if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
                 if (sectionEntityProps) sectionEntityProps.classList.remove('hidden');
-                if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
 
                 if (propActorGroup) {
                     if (obj instanceof Actor) {
@@ -641,21 +726,35 @@ export class SceneEditor {
                 }
             } else if (obj instanceof Walkbox || obj instanceof Triggerbox) {
                 // Walkbox/Triggerbox
-                if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
-                if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
                 if (sectionWalkboxProps) sectionWalkboxProps.classList.remove('hidden');
             }
 
             this.updateUIFromObject();
-        } else {
-            // Null, Scene handled above or something else
-            if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
-            if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
-            if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
         }
 
         this.refreshHierarchy();
     }
+
+    syncSettingsUI(): void {
+        const s = this.game.settings.crt;
+
+        const enabled = document.getElementById('crt-enabled') as HTMLInputElement;
+        const curve = document.getElementById('crt-curvature') as HTMLInputElement;
+        const scan = document.getElementById('crt-scanlines') as HTMLInputElement;
+        const inten = document.getElementById('crt-intensity') as HTMLInputElement;
+        const abr = document.getElementById('crt-aberration') as HTMLInputElement;
+        const vig = document.getElementById('crt-vignette') as HTMLInputElement;
+        const phos = document.getElementById('crt-phosphor') as HTMLInputElement;
+
+        if (enabled) enabled.checked = s.enabled;
+        if (curve) curve.value = s.curvature.toString();
+        if (scan) scan.value = s.scanlineCount.toString();
+        if (inten) inten.value = s.scanlineIntensity.toString();
+        if (abr) abr.value = s.aberration.toString();
+        if (vig) vig.value = s.vignette.toString();
+        if (phos) phos.value = (s.phosphor || 0).toString();
+    }
+
 
     newScene(): void {
         const newScene = new Scene('new_scene', 'New Scene');
@@ -1064,8 +1163,6 @@ export class SceneEditor {
                 if (chk) chk.checked = false;
                 this.refreshHierarchy();
             }
-        } else {
-            console.log('Polygon incomplete (<3 points)');
         }
     }
 
@@ -1073,8 +1170,12 @@ export class SceneEditor {
         if (!this.enabled) return;
 
         const scene = this.game.sceneManager.currentScene;
-        const camX = scene && scene.camera ? scene.camera.x : 0;
-        const camY = scene && scene.camera ? scene.camera.y : 0;
+        let camX = 0;
+        let camY = 0;
+        if (scene && scene.camera) {
+            camX = scene.camera.x;
+            camY = scene.camera.y;
+        }
 
         // Sync UI if Scene is selected (so coordinates update during auto-center)
         if (scene && (this.selectedObject as any) === 'SCENE') {

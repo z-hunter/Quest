@@ -1,4 +1,4 @@
-import { CRTFilter } from '../graphics/CRTFilter';
+import { CRTFilter, type CRTSettings } from '../graphics/CRTFilter';
 import { Input } from './Input';
 import { Parser } from '../mechanics/Parser';
 import { SceneManager } from '../scene/SceneManager';
@@ -8,11 +8,14 @@ import { Player } from '../entities/Player';
 import { Entity } from '../entities/Entity';
 
 export class Game {
-    canvas: HTMLCanvasElement; // Input/UI Canvas
-    rendererCanvas: HTMLCanvasElement; // WebGL/CRT Canvas
-    bufferCanvas: HTMLCanvasElement;
-    ctx: CanvasRenderingContext2D;
+    canvas: HTMLCanvasElement; // UI Canvas
+    rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
+    bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
+
+    ctx: CanvasRenderingContext2D | null;
+    rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
     uiCtx: CanvasRenderingContext2D | null;
+
     crtFilter: CRTFilter | null;
     lastTime: number;
     isRunning: boolean;
@@ -23,13 +26,19 @@ export class Game {
     editor: SceneEditor;
 
     // Callbacks for React
-    onSceneChange?: (sceneName: string) => void;
-    onMessage?: (text: string) => void;
+    onSceneChange: ((title: string) => void) | null = null;
+    onMessage: ((text: string) => void) | null = null;
 
-    constructor(rendererCanvas: HTMLCanvasElement, uiCanvas?: HTMLCanvasElement) {
+    settings: {
+        crt: CRTSettings & { enabled: boolean };
+    };
+
+    constructor(
+        rendererCanvas: HTMLCanvasElement, // The main visual canvas (WebGL)
+        uiCanvas: HTMLCanvasElement        // The UI overlay canvas (2D)
+    ) {
         this.rendererCanvas = rendererCanvas;
-        // If uiCanvas is provided, use it for Input/UI. Otherwise fallback to rendererCanvas.
-        this.canvas = uiCanvas || rendererCanvas;
+        this.canvas = uiCanvas;
 
         this.uiCtx = this.canvas.getContext('2d');
 
@@ -37,7 +46,24 @@ export class Game {
         this.bufferCanvas = document.createElement('canvas');
         this.bufferCanvas.width = 420;
         this.bufferCanvas.height = 300;
-        this.ctx = this.bufferCanvas.getContext('2d') as CanvasRenderingContext2D;
+        this.ctx = this.bufferCanvas.getContext('2d');
+
+        // We won't strictly need 2D context for rendererCanvas if we use WebGL,
+        // but we might want it for fallback.
+        this.rendererCtx = null;
+
+        // Default Settings
+        this.settings = {
+            crt: {
+                enabled: true,
+                curvature: 0.1,
+                scanlineCount: 800,
+                scanlineIntensity: 0.5,
+                aberration: 1.0,
+                vignette: 0.3,
+                phosphor: 0.1 // Default surface grain
+            }
+        };
 
         // Initialize CRT Filter on the RENDERER canvas (WebGL)
         this.crtFilter = new CRTFilter(this.rendererCanvas);
@@ -46,8 +72,11 @@ export class Game {
         this.isRunning = false;
         this.inventory = []; // Player inventory
 
+        // Load Settings from LocalStorage
+        this.loadSettings();
+
         // Disable smoothing for pixel art look
-        this.ctx.imageSmoothingEnabled = false;
+        if (this.ctx) this.ctx.imageSmoothingEnabled = false;
         if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
 
         this.input = new Input(this);
@@ -107,6 +136,19 @@ export class Game {
 
     stop(): void {
         this.isRunning = false;
+        // Do not destroy here, as stop might be just pause.
+    }
+
+    destroy(): void {
+        this.stop();
+        // Remove global listeners
+        if (this.editor) {
+            this.editor.destroy();
+        }
+        if (this.input) {
+            // this.input.destroy(); // Input also has listeners? Check Input.ts later.
+        }
+        console.log('[Game] Destroyed');
     }
 
     loop(timestamp: number): void {
@@ -133,26 +175,40 @@ export class Game {
 
     render(): void {
         // 1. Render Game to Buffer
-        // Clear buffer
-        this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
+        if (this.ctx) {
+            // Clear buffer
+            this.ctx.fillStyle = '#000';
+            this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
-        this.sceneManager.render(this.ctx);
+            this.sceneManager.render(this.ctx);
 
-        // Note: Editor is NO LONGER rendered to bufferCanvas.
-        // this.editor.render(this.ctx); 
-
-        // Debug text on buffer
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '10px monospace';
-        this.ctx.fillText('Quest Engine v0.1', 10, 10);
+            // Debug text on buffer
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = '10px monospace';
+            this.ctx.fillText('Quest Engine v0.1', 10, 10);
+        }
 
         // 2. Render Buffer to Screen via CRT Filter
         if (this.crtFilter) {
+            let settings = this.settings.crt;
+
+            // If disabled, use "zero" settings to mimic a clean pass
+            if (!this.settings.crt.enabled) {
+                settings = {
+                    enabled: false,
+                    curvature: 0,
+                    scanlineCount: 0,
+                    scanlineIntensity: 0,
+                    aberration: 0,
+                    vignette: 0,
+                    phosphor: 0
+                };
+            }
+
             try {
-                this.crtFilter.render(this.bufferCanvas, this.bufferCanvas.height);
+                this.crtFilter.render(this.bufferCanvas, settings);
             } catch (e) {
-                console.warn("CRT Filter failed (likely SecurityError), disabling and falling back to 2D canvas:", e);
+                console.warn("CRT Filter failed, disabling:", e);
                 this.disableCRT();
             }
         }
@@ -166,12 +222,6 @@ export class Game {
 
     disableCRT(): void {
         this.crtFilter = null;
-
-        // In React, we might want to just render the buffer canvas directly or copy it
-        // For now, let's just copy buffer to main canvas using 2D context
-        // But wait, rendererCanvas is WebGL. We can't get 2D context from it easily if it's already WebGL.
-        // This fallback might fail if context is lost/incompatible.
-        // For now, assume CRT works or we are screwed.
     }
 
     onMouseClick(x: number, y: number): void {
@@ -211,5 +261,32 @@ export class Game {
 
         // Note: We do NOT resize bufferCanvas. It stays at 420x300.
         // Note: We do NOT resize uiCanvas (this.canvas). It stays at 420x300 (set in React).
+    }
+
+    saveSettings(): void {
+        try {
+            const json = JSON.stringify(this.settings);
+            localStorage.setItem('quest_settings', json);
+            console.log('[Game] Settings saved to LocalStorage');
+            this.showMessage("Settings Saved!");
+        } catch (e) {
+            console.error("Failed to save settings:", e);
+        }
+    }
+
+    loadSettings(): void {
+        try {
+            const json = localStorage.getItem('quest_settings');
+            if (json) {
+                const loaded = JSON.parse(json);
+                // Merge loaded settings with defaults (simple shallow merge for crt)
+                if (loaded.crt) {
+                    this.settings.crt = { ...this.settings.crt, ...loaded.crt };
+                }
+                console.log('[Game] Settings loaded from LocalStorage');
+            }
+        } catch (e) {
+            console.error("Failed to load settings:", e);
+        }
     }
 }

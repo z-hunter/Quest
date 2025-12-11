@@ -28,7 +28,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
 
         return () => {
             if (gameRef.current) {
-                gameRef.current.stop();
+                gameRef.current.destroy();
                 gameRef.current = null;
             }
         };
