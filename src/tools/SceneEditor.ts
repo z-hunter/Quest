@@ -423,11 +423,15 @@ export class SceneEditor {
             const camY = scene.camera ? scene.camera.y : 0;
             const zoom = scene.camera ? scene.camera.zoom : 1.0;
 
+            const halfW = this.game.canvas.width / 2;
+            const halfH = this.game.canvas.height / 2;
+
             // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
             if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
+                // Center-Based: World = (Screen - Center) / Zoom + Camera
                 const worldPos = {
-                    x: pos.x / zoom + camX,
-                    y: pos.y / zoom + camY
+                    x: (pos.x - halfW) / zoom + camX,
+                    y: (pos.y - halfH) / zoom + camY
                 };
                 const poly = this.selectedObject.poly;
                 const vertexRadius = 6 / zoom; // Hit radius
@@ -448,8 +452,6 @@ export class SceneEditor {
                 if (Geometry.isPointInPolygon(worldPos, poly)) {
                     this.isDragging = true;
                     this.draggingVertexIndex = -1; // Drag Whole Body
-                    // Store offset relative to first point for consistency?
-                    // Actually, let's store mouse World Pos
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
                     e.stopPropagation();
                     return;
@@ -464,21 +466,23 @@ export class SceneEditor {
                 const entity = entities[i];
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
-                // Entity Screen Rect (With Zoom)
-                // Center: (EntityX - CamX*p) * Zoom, (EntityY - CamY*p) * Zoom
-                // But easier: Transform Mouse to World
+                // Entity Screen Rect (With Zoom and Center Pivot)
+                // Render Logic:
+                // ctx.translate(halfW, halfH);
+                // ctx.scale(zoom, zoom);
+                // ctx.translate(-camX * p, -camY * p);
+                // Entity draws at x, y
 
-                // Mouse is Screen Coord.
-                // ScreenEntityX = (E.x - CamX*p) * Zoom + CanvasOffsetX? (Assuming canvas is 0,0)
+                // So ScreenX = (EntityX - CamX*p) * Zoom + HalfW
+                const screenX = (entity.x - camX * p) * zoom + halfW;
+                const screenY = (entity.y - camY * p) * zoom + halfH;
 
-                // Let's do Screen Space Check
-                const screenX = (entity.x - camX * p) * zoom;
-                const screenY = (entity.y - camY * p) * zoom; // Assuming y is bottom
                 const screenW = entity.width * zoom;
                 const screenH = entity.height * zoom;
 
-                // Entity pivot is Bottom-Center
+                // Entity pivot is Bottom-Center. 
                 // Rect: Left = screenX - W/2, Top = screenY - H
+                // (Note: in Render we do ctx.strokeRect(entity.x - w/2...))
 
                 if (pos.x >= screenX - screenW / 2 && pos.x <= screenX + screenW / 2 &&
                     pos.y >= screenY - screenH && pos.y <= screenY) {
@@ -487,19 +491,19 @@ export class SceneEditor {
                     this.selectObject(entity);
                     this.isDragging = true;
                     this.draggingVertexIndex = -1;
-                    // Offset in Screen Space
+                    // Offset in Screen Space is easiest for Entities??
+                    // Or maintain World Offset?
+                    // Let's use Screen Offset to avoid complex reverse-projections during drag
                     this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
                     e.stopPropagation();
                     return;
-                } else {
-                    // console.log(`[Hitbox] Miss: ${entity.name}`);
                 }
             }
 
             // 2. Check Walkboxes (World Space, Parallax 1.0)
             const worldPos = {
-                x: pos.x / zoom + camX,
-                y: pos.y / zoom + camY
+                x: (pos.x - halfW) / zoom + camX,
+                y: (pos.y - halfH) / zoom + camY
             };
 
             if (scene.walkbox) {
@@ -542,11 +546,14 @@ export class SceneEditor {
         const camY = scene && scene.camera ? scene.camera.y : 0;
         const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
+        const halfW = this.game.canvas.width / 2;
+        const halfH = this.game.canvas.height / 2;
+
         // Polygon Dragging (Walkbox/Triggerbox)
         if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
             const worldPos = {
-                x: pos.x / zoom + camX,
-                y: pos.y / zoom + camY
+                x: (pos.x - halfW) / zoom + camX,
+                y: (pos.y - halfH) / zoom + camY
             };
 
             const poly = this.selectedObject.poly;
@@ -557,7 +564,6 @@ export class SceneEditor {
                 poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
             } else {
                 // Drag Whole Body
-                // Calculate Delta in World Space
                 const dx = worldPos.x - this.dragOffset.x;
                 const dy = worldPos.y - this.dragOffset.y;
 
@@ -565,11 +571,7 @@ export class SceneEditor {
                     for (const pt of poly) {
                         pt.x += dx;
                         pt.y += dy;
-                        // Optional: Round to int? 
-                        // pt.x = Math.round(pt.x + dx); 
-                        // But for smooth drag let's just add float and maybe round on save.
                     }
-                    // Update Offset
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
                 }
             }
@@ -583,14 +585,21 @@ export class SceneEditor {
         const entity = this.selectedObject as Entity;
         const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
-        // targetScreenX (Zoomed) = pos.x - dragOffset
-        // Unzoomed ScreenX = targetScreenX / zoom
+        // We stored dragOffset as (MouseScreen - EntityScreenCenter)
+        // NewScreenX = MouseX - OffsetX
+        // NewScreenY = MouseY - OffsetY
 
         const targetScreenX = pos.x - this.dragOffset.x;
         const targetScreenY = pos.y - this.dragOffset.y;
 
-        const unzoomedX = targetScreenX / zoom;
-        const unzoomedY = targetScreenY / zoom;
+        // Reverse Project to World:
+        // ScreenX = (WorldX - CamX*p) * Zoom + HalfW
+        // WorldX = (ScreenX - HalfW) / Zoom + CamX*p   <-- Wait, +CamX*p?
+        // (WorldX - CamX*p) = (ScreenX - HalfW) / Zoom
+        // WorldX = ((ScreenX - HalfW) / Zoom) + CamX*p
+
+        const unzoomedX = (targetScreenX - halfW) / zoom;
+        const unzoomedY = (targetScreenY - halfH) / zoom;
 
         entity.x = Math.round(unzoomedX + camX * p);
         entity.y = Math.round(unzoomedY + camY * p);
