@@ -196,6 +196,7 @@ export class SceneEditor {
             else if (target.id === 'crt-aberration') s.aberration = val;
             else if (target.id === 'crt-vignette') s.vignette = val;
             else if (target.id === 'crt-phosphor') s.phosphor = val;
+            else if (target.id === 'crt-glow') s.bezelGlow = checked;
         }
 
         // Property Inputs - Only update if focused and valid

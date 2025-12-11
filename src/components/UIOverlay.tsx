@@ -181,11 +181,21 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         <div id="section-settings" className="editor-section hidden">
                             <h3>GLOBAL SETTINGS</h3>
                             <h4>CRT Effects</h4>
-                            <label style={{ display: 'block', marginBottom: '5px' }}><input type="checkbox" id="crt-enabled" /> Enabled</label>
+                            <div className="inspector-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                <label style={{ gridColumn: '1 / -1', fontWeight: 'bold' }}>Global CRT Effects</label>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', alignItems: 'center' }}>
+                                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center' }}>
+                                    <input type="checkbox" id="crt-enabled" defaultChecked />
+                                    <label htmlFor="crt-enabled" style={{ marginLeft: '5px' }}>Enable CRT Filter</label>
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center' }}>
+                                    <input type="checkbox" id="crt-glow" defaultChecked />
+                                    <label htmlFor="crt-glow" style={{ marginLeft: '5px' }}>Bezel Glow (High Quality)</label>
+                                </div>
+
                                 <label style={{ gridColumn: '1 / -1' }}>Curvature:</label>
-                                <input type="range" id="crt-curvature" min="0" max="1" step="0.01" style={{ gridColumn: '1 / -1', width: '100%' }} />
+                                <input type="range" id="crt-curvature" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
 
                                 <label style={{ gridColumn: '1 / -1' }}>Scanlines (Count):</label>
                                 <input type="range" id="crt-scanlines" min="100" max="600" step="10" style={{ gridColumn: '1 / -1', width: '100%' }} />

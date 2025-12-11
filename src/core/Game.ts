@@ -61,7 +61,8 @@ export class Game {
                 scanlineIntensity: 0.5,
                 aberration: 1.0,
                 vignette: 0.3,
-                phosphor: 0.1 // Default surface grain
+                phosphor: 0.1,
+                bezelGlow: true
             }
         };
 
@@ -185,7 +186,7 @@ export class Game {
             // Debug text on buffer
             this.ctx.fillStyle = '#fff';
             this.ctx.font = '10px monospace';
-            this.ctx.fillText('Quest Engine v0.1', 10, 10);
+            this.ctx.fillText('Quest Engine v0.1                                           F1=Menu', 10, 10);
         }
 
         // 2. Render Buffer to Screen via CRT Filter
@@ -201,7 +202,8 @@ export class Game {
                     scanlineIntensity: 0,
                     aberration: 0,
                     vignette: 0,
-                    phosphor: 0
+                    phosphor: 0,
+                    bezelGlow: false
                 };
             }
 
