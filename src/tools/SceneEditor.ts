@@ -197,6 +197,7 @@ export class SceneEditor {
             else if (target.id === 'crt-vignette') s.vignette = val;
             else if (target.id === 'crt-phosphor') s.phosphor = val;
             else if (target.id === 'crt-glow') s.bezelGlow = checked;
+            else if (target.id === 'crt-bloom') s.bloom = val;
         }
 
         // Property Inputs - Only update if focused and valid
@@ -746,6 +747,7 @@ export class SceneEditor {
         const abr = document.getElementById('crt-aberration') as HTMLInputElement;
         const vig = document.getElementById('crt-vignette') as HTMLInputElement;
         const phos = document.getElementById('crt-phosphor') as HTMLInputElement;
+        const bloom = document.getElementById('crt-bloom') as HTMLInputElement;
 
         if (enabled) enabled.checked = s.enabled;
         if (curve) curve.value = s.curvature.toString();
@@ -754,6 +756,7 @@ export class SceneEditor {
         if (abr) abr.value = s.aberration.toString();
         if (vig) vig.value = s.vignette.toString();
         if (phos) phos.value = (s.phosphor || 0).toString();
+        if (bloom) bloom.value = (s.bloom || 0).toString();
     }
 
 

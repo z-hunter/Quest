@@ -61,8 +61,9 @@ export class Game {
                 scanlineIntensity: 0.5,
                 aberration: 1.0,
                 vignette: 0.3,
-                phosphor: 0.1,
-                bezelGlow: true
+                phosphor: 0.0,
+                bezelGlow: false,
+                bloom: 0.0
             }
         };
 
@@ -203,7 +204,8 @@ export class Game {
                     aberration: 0,
                     vignette: 0,
                     phosphor: 0,
-                    bezelGlow: false
+                    bezelGlow: false,
+                    bloom: 0
                 };
             }
 

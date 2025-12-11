@@ -182,7 +182,6 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             <h3>GLOBAL SETTINGS</h3>
                             <h4>CRT Effects</h4>
                             <div className="inspector-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
-                                <label style={{ gridColumn: '1 / -1', fontWeight: 'bold' }}>Global CRT Effects</label>
 
                                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center' }}>
                                     <input type="checkbox" id="crt-enabled" defaultChecked />
@@ -212,6 +211,9 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                 <label style={{ gridColumn: '1 / -1' }}>Phosphor/Surface Grain:</label>
                                 <input type="range" id="crt-phosphor" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
 
+                                <label style={{ gridColumn: '1 / -1' }}>Bloom / Halation:</label>
+                                <input type="range" id="crt-bloom" min="0" max="1" step="0.05" style={{ gridColumn: '1 / -1', width: '100%' }} />
+
                                 <button id="btn-save-settings" style={{ gridColumn: '1 / -1', marginTop: '10px' }}>Save Settings (LocalStorage)</button>
                             </div>
                         </div>
@@ -223,18 +225,18 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             Actually GDD says F-keys menu. So we rely on F2/F3.
                         */}
                     </div>
-                </div>
+                </div >
 
                 {/* Bottom Bar: F-Keys */}
-                <div id="editor-bottom-bar">
+                < div id="editor-bottom-bar" >
                     <button className="f-key-btn" onClick={() => game?.editor?.toggle()}><span className="f-num">F1</span>Game</button>
                     <button className="f-key-btn" id="btn-f2-save"><span className="f-num">F2</span>Save</button>
                     <button className="f-key-btn" id="btn-f3-load"><span className="f-num">F3</span>Load</button>
                     <button className="f-key-btn" id="btn-f4-new"><span className="f-num">F4</span>New</button>
                     <button className="f-key-btn" id="btn-f5-sprite"><span className="f-num">F5</span>Sprite</button>
                     <button className="f-key-btn" id="btn-f9-settings"><span className="f-num">F9</span>Settings</button>
-                </div>
-            </div>
+                </div >
+            </div >
         </>
     );
 };

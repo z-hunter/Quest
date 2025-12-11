@@ -6,6 +6,7 @@ export interface CRTSettings {
     vignette: number;       // 0.0 to 1.0
     phosphor: number;       // 0.0 to 1.0 (Surface noise/lift)
     bezelGlow: boolean;     // Optimization toggle
+    bloom: number;          // 0.0 to 1.0 (Halation intensity)
 }
 
 export class CRTFilter {
@@ -25,6 +26,7 @@ export class CRTFilter {
     scanlineIntensityLocation: WebGLUniformLocation | null;
     phosphorLocation: WebGLUniformLocation | null;
     bezelGlowLocation: WebGLUniformLocation | null;
+    bloomLocation: WebGLUniformLocation | null;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -46,6 +48,7 @@ export class CRTFilter {
             this.scanlineIntensityLocation = null;
             this.phosphorLocation = null;
             this.bezelGlowLocation = null;
+            this.bloomLocation = null;
             return;
         }
 
@@ -63,6 +66,7 @@ export class CRTFilter {
         this.scanlineIntensityLocation = null;
         this.phosphorLocation = null;
         this.bezelGlowLocation = null;
+        this.bloomLocation = null;
 
         this.init();
     }
@@ -126,6 +130,7 @@ export class CRTFilter {
             uniform float u_scanlineIntensity;
             uniform float u_phosphor;
             uniform float u_bezelGlow;
+            uniform float u_bloom;
             varying vec2 v_texCoord;
 
             // Curvature
@@ -247,7 +252,46 @@ export class CRTFilter {
                 float r = texture2D(u_image, curvedUV + vec2(offset, 0.0)).r;
                 float g = texture2D(u_image, curvedUV).g;
                 float b = texture2D(u_image, curvedUV + vec2(-offset, 0.0)).b;
+
                 vec3 color = vec3(r, g, b);
+
+                // BLOOM / HALATION (Electron Bleed)
+                // Adds a soft glow around bright pixels by sampling neighbors.
+                if (u_bloom > 0.0) {
+                     float bloomRadius = 0.025; // Wide spread for Halo
+                     vec3 bloomSum = vec3(0.0);
+                     
+                     // Simple 12-tap Golden Angle spiral
+                     // Reuse the bezel dither logic or just a constant pattern
+                     for (int i = 0; i < 12; i++) {
+                          // Standard Golden Angle Distribution
+                          float theta = float(i) * 2.39996323; 
+                          float r = float(i) / 12.0; // Linear distribution
+                          r = sqrt(r) * bloomRadius; // Square root for even area coverage
+                          
+                          vec2 b_offset = vec2(cos(theta), sin(theta)) * r;
+                          
+                          // Correct aspect ratio distortion (screen is wider than tall)
+                          // if we want circular glow, we should scale offset.y by aspect ratio.
+                          // But 420x300 is 1.4, so u_resolution.x/y is needed.
+                          // Simplified: just stretch Y slightly more or assume square UVs good enough for "glitchy" CRT.
+                          b_offset.y *= 0.75; // 300/420 approx correction
+
+                          vec3 sample = texture2D(u_image, curvedUV + b_offset).rgb;
+                          // Thresholding: Only bright things glow
+                          sample = pow(sample, vec3(2.2)); 
+                          bloomSum += sample;
+                     }
+                     // Average
+                     bloomSum /= 12.0;
+
+                     // Apply Bloom Amount
+                     vec3 bloomHigh = bloomSum * u_bloom * 5.0; // Boosted intensity for visibility
+
+                     // BLEND MODE: SCREEN (Prevents overexposure/clipping)
+                     // Formula: Result = A + B - (A * B)
+                     color = color + bloomHigh - (color * bloomHigh);
+                }
 
                 // Phosphor Surface Simulation (The "Greyish" look)
                 if (u_phosphor > 0.0) {
@@ -297,6 +341,7 @@ export class CRTFilter {
         this.scanlineIntensityLocation = gl.getUniformLocation(this.program, "u_scanlineIntensity");
         this.phosphorLocation = gl.getUniformLocation(this.program, "u_phosphor");
         this.bezelGlowLocation = gl.getUniformLocation(this.program, "u_bezelGlow");
+        this.bloomLocation = gl.getUniformLocation(this.program, "u_bloom");
 
         // Create buffer for a quad (2 triangles)
         this.buffer = gl.createBuffer();
@@ -351,6 +396,7 @@ export class CRTFilter {
         if (this.vignetteLocation) gl.uniform1f(this.vignetteLocation, settings.vignette);
         if (this.phosphorLocation) gl.uniform1f(this.phosphorLocation, settings.phosphor || 0.0);
         if (this.bezelGlowLocation) gl.uniform1f(this.bezelGlowLocation, settings.bezelGlow ? 1.0 : 0.0);
+        if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
 
         // Texture Unit 0: Main Image (Already bound/uploaded)
         gl.activeTexture(gl.TEXTURE0);
