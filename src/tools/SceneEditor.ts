@@ -1013,13 +1013,16 @@ export class SceneEditor {
         const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
         // Mouse (Screen) -> World
-        // WorldX = ScreenX / Zoom + CamX
-        const worldX = x / zoom + camX;
-        const worldY = y / zoom + camY;
+        // Center-Based: World = (Screen - Center) / Zoom + Camera
+        const halfW = this.game.canvas.width / 2;
+        const halfH = this.game.canvas.height / 2;
+
+        const worldX = (x - halfW) / zoom + camX;
+        const worldY = (y - halfH) / zoom + camY;
 
         if (!this.currentPolygon) this.currentPolygon = [];
         this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
-        console.log(`Point Added. Total: ${this.currentPolygon.length}`);
+        console.log(`Point Added: ${Math.round(worldX)},${Math.round(worldY)}. Total: ${this.currentPolygon.length}`);
         return true;
     }
 
@@ -1099,13 +1102,18 @@ export class SceneEditor {
             }
         }
 
+        const halfW = this.game.canvas.width / 2;
+        const halfH = this.game.canvas.height / 2;
+
         // Render current polygon (World Space)
         if (this.currentPolygon && this.currentPolygon.length > 0) {
             ctx.save();
+            ctx.translate(halfW, halfH);
             ctx.scale(scene && scene.camera ? scene.camera.zoom : 1, scene && scene.camera ? scene.camera.zoom : 1);
             ctx.translate(-camX, -camY); // Apply Camera
+
             ctx.strokeStyle = '#ffff00';
-            ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1); // Keep line width constant
+            ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1);
             ctx.beginPath();
             ctx.moveTo(this.currentPolygon[0].x, this.currentPolygon[0].y);
             for (let i = 1; i < this.currentPolygon.length; i++) {
@@ -1125,6 +1133,7 @@ export class SceneEditor {
 
                 // Draw Trigger (World Space)
                 ctx.save();
+                ctx.translate(halfW, halfH);
                 ctx.scale(scene.camera.zoom, scene.camera.zoom); // Zoom
                 ctx.translate(-camX, -camY); // Camera
 
@@ -1148,76 +1157,24 @@ export class SceneEditor {
         if (this.selectedObject) {
             ctx.save();
             const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
-            ctx.scale(zoom, zoom);
 
-            if (this.selectedObject instanceof Walkbox) {
-                // Highlight Walkbox (World Space)
-                ctx.translate(-camX, -camY); // Apply Camera
-
-                ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 3 / zoom;
-                ctx.beginPath();
-                const poly = this.selectedObject.poly;
-                if (poly.length > 0) {
-                    ctx.moveTo(poly[0].x, poly[0].y);
-                    for (let i = 1; i < poly.length; i++) {
-                        ctx.lineTo(poly[i].x, poly[i].y);
-                    }
-                    ctx.closePath();
-                    ctx.stroke();
-
-                    // Draw Vertex Handles
-                    ctx.fillStyle = '#ff0000';
-                    const handleSize = 6 / zoom;
-                    for (const pt of poly) {
-                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
-                    }
-                }
-            } else if (this.selectedObject instanceof Triggerbox) {
-                // Highlight Triggerbox (World Space)
-                ctx.translate(-camX, -camY); // Apply Camera
-
-                ctx.strokeStyle = '#ff00ff'; // Magenta Selection
-                ctx.lineWidth = 3 / zoom;
-                ctx.beginPath();
-                const poly = this.selectedObject.poly;
-                if (poly.length > 0) {
-                    ctx.moveTo(poly[0].x, poly[0].y);
-                    for (let i = 1; i < poly.length; i++) {
-                        ctx.lineTo(poly[i].x, poly[i].y);
-                    }
-                    ctx.closePath();
-                    ctx.stroke();
-
-                    // Draw Vertex Handles
-                    ctx.fillStyle = '#ff00ff';
-                    const handleSize = 6 / zoom;
-                    for (const pt of poly) {
-                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
-                    }
-                }
-            } else if (this.selectedObject instanceof Entity) {
-                // Highlight Entity
+            if (this.selectedObject instanceof Entity) {
                 const entity = this.selectedObject as Entity;
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
-                // Entity is rendered at: (x - camX * p, y - camY * p)
-                // Note: Entity x,y is (top-left? or bottom-center?)
-                // Entity.ts constructor says x,y. Scene render typically calculates screen pos.
-                // Assuming x,y is Top-Left (based on standard canvas rects) or checking prior logic.
-                // Previous logic was: strokeRect(drawX, drawY, width, height)
-                // Let's assume Top-Left for now as it's standard 2D.
+                ctx.translate(halfW, halfH);
+                ctx.scale(zoom, zoom);
+                ctx.translate(-camX * p, -camY * p);
 
-                const drawX = entity.x - camX * p;
-                const drawY = entity.y - camY * p;
-
-                ctx.save();
-                ctx.strokeStyle = '#fff'; // White/Yellow dash
+                ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 2 / zoom;
-                ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed Line
+                ctx.setLineDash([4 / zoom, 4 / zoom]);
 
                 // Entity Anchor is Bottom-Center
                 // We draw the rect starting at Top-Left relative to that anchor
+                const drawX = entity.x;
+                const drawY = entity.y;
+
                 ctx.strokeRect(
                     drawX - entity.width / 2,
                     drawY - entity.height,
@@ -1225,6 +1182,38 @@ export class SceneEditor {
                     entity.height
                 );
                 ctx.restore();
+            } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
+                // Triggerbox/Walkbox
+                ctx.translate(halfW, halfH);
+                ctx.scale(zoom, zoom);
+                ctx.translate(-camX, -camY);
+
+                const poly = this.selectedObject.poly;
+
+                // If getting bounding box or drawing highlight
+                if (this.selectedObject instanceof Walkbox) ctx.strokeStyle = '#ff0000';
+                else ctx.strokeStyle = '#ff00ff';
+
+                ctx.lineWidth = 3 / zoom;
+                ctx.beginPath();
+
+                if (poly.length > 0) {
+                    ctx.moveTo(poly[0].x, poly[0].y);
+                    for (let i = 1; i < poly.length; i++) {
+                        ctx.lineTo(poly[i].x, poly[i].y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Draw Vertex Handles
+                    if (this.selectedObject instanceof Walkbox) ctx.fillStyle = '#ff0000';
+                    else ctx.fillStyle = '#ff00ff';
+
+                    const handleSize = 6 / zoom;
+                    for (const pt of poly) {
+                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
+                    }
+                }
             }
             ctx.restore();
         }
@@ -1241,7 +1230,7 @@ export class SceneEditor {
             // Horizon Line (Min Scale)
             // Transform World Y -> Screen Y
             const horizonWorldY = scene.scaling.horizon;
-            const horizonScreenY = (horizonWorldY - camY) * zoom;
+            const horizonScreenY = (horizonWorldY - camY) * zoom + halfH;
 
             ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan, semi-transparent
             ctx.setLineDash([5, 5]);
@@ -1255,7 +1244,7 @@ export class SceneEditor {
 
             // Front Line (Max Scale)
             const frontWorldY = scene.scaling.front;
-            const frontScreenY = (frontWorldY - camY) * zoom;
+            const frontScreenY = (frontWorldY - camY) * zoom + halfH;
 
             ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)'; // Magenta, semi-transparent
             ctx.beginPath();

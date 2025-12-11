@@ -119,9 +119,15 @@ export class Scene {
 
     onClick(x: number, y: number): void {
         // Transform Screen Coordinates to World Coordinates
-        // World = (Screen / Zoom) + Camera
-        const worldX = x / this.camera.zoom + this.camera.x;
-        const worldY = y / this.camera.zoom + this.camera.y;
+        // Center-Based: World = (Screen - Center) / Zoom + Camera
+        const screenW = 420; // Internal Resolution
+        const screenH = 300;
+
+        const halfW = screenW / 2;
+        const halfH = screenH / 2;
+
+        const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
+        const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
 
         console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
 
@@ -142,13 +148,11 @@ export class Scene {
         // ... existing update
         // ... existing update
         if (this.player && this.autoCenter) {
-            const screenW = 420;
-            const screenH = 300;
-            const targetX = this.player.x - screenW / 2;
-
-            // Center on player's visual center (approx mid-height) rather than feet
+            // Center is simply the player's position
+            const targetX = this.player.x;
+            // Center on player's visual center (approx mid-height)
             const pHeight = this.player.height || 0;
-            const targetY = (this.player.y - pHeight / 2) - screenH / 2;
+            const targetY = this.player.y - pHeight / 2;
 
             // Smooth Lerp
             const dt = deltaTime / 1000; // Convert to seconds
@@ -181,11 +185,18 @@ export class Scene {
             return a.y - b.y;
         });
 
+        const halfW = ctx.canvas.width / 2;
+        const halfH = ctx.canvas.height / 2;
+
         this.entities.forEach(entity => {
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;
             ctx.save();
+            
+            // Center Pivot Transform
+            ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
             ctx.translate(-this.camera.x * p, -this.camera.y * p);
+            
             entity.render(ctx);
             ctx.restore();
         });
@@ -195,7 +206,9 @@ export class Scene {
         // @ts-ignore
         if (window.game && window.game.editor && window.game.editor.enabled) {
             ctx.save();
-            ctx.scale(this.camera.zoom, this.camera.zoom); // FIX: Apply Zoom
+            // Center Pivot Transform
+            ctx.translate(halfW, halfH);
+            ctx.scale(this.camera.zoom, this.camera.zoom);
             ctx.translate(-this.camera.x, -this.camera.y);
             this.renderWalkbox(ctx);
             ctx.restore();

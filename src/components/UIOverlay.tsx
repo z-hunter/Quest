@@ -73,7 +73,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     {/* Left Panel: Hierarchy & Tools */}
                     <div id="hierarchy-panel">
                         <div className="editor-header">
-                            <h3>SCENE</h3>
+                            <h3> OBJECTS</h3>
                         </div>
 
                         {/* Object Management Toolbar */}
