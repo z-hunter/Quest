@@ -1235,27 +1235,35 @@ export class SceneEditor {
             ctx.save();
             ctx.font = '10px monospace';
 
+            const zoom = scene.camera ? scene.camera.zoom : 1;
+            const camY = scene.camera ? scene.camera.y : 0;
+
             // Horizon Line (Min Scale)
-            const horizonY = scene.scaling.horizon;
+            // Transform World Y -> Screen Y
+            const horizonWorldY = scene.scaling.horizon;
+            const horizonScreenY = (horizonWorldY - camY) * zoom;
+
             ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan, semi-transparent
             ctx.setLineDash([5, 5]);
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(0, horizonY);
-            ctx.lineTo(this.game.canvas.width, horizonY);
+            ctx.moveTo(0, horizonScreenY);
+            ctx.lineTo(this.game.canvas.width, horizonScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.fillText(`Horizon`, 5, horizonY - 2);
+            ctx.fillText(`Horizon (World Y: ${horizonWorldY})`, 5, horizonScreenY - 2);
 
             // Front Line (Max Scale)
-            const frontY = scene.scaling.front;
+            const frontWorldY = scene.scaling.front;
+            const frontScreenY = (frontWorldY - camY) * zoom;
+
             ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)'; // Magenta, semi-transparent
             ctx.beginPath();
-            ctx.moveTo(0, frontY);
-            ctx.lineTo(this.game.canvas.width, frontY);
+            ctx.moveTo(0, frontScreenY);
+            ctx.lineTo(this.game.canvas.width, frontScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
-            ctx.fillText(`Front`, 5, frontY - 2);
+            ctx.fillText(`Front (World Y: ${frontWorldY})`, 5, frontScreenY - 2);
 
             ctx.restore();
         }
