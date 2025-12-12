@@ -6,6 +6,7 @@ import { SceneEditor } from '../tools/SceneEditor';
 import { Scene } from '../scene/Scene';
 import { Player } from '../entities/Player';
 import { Entity } from '../entities/Entity';
+import { registerDemoScripts } from '../scripts/DemoScripts';
 
 export class Game {
     canvas: HTMLCanvasElement; // UI Canvas
@@ -94,6 +95,9 @@ export class Game {
 
         this.initTestScene();
 
+        // Register default scripts
+        registerDemoScripts();
+
         console.log('Game initialized');
     }
 
@@ -110,12 +114,9 @@ export class Game {
         pillar.description = "It's an ancient stone pillar. It looks very heavy.";
 
         // Interaction Logic
+        // Interaction Logic
         pillar.interactions = {
-            'KEY': () => {
-                this.showMessage("You insert the key into a hidden slot in the pillar.");
-                this.showMessage("CLICK! A secret compartment opens!");
-                pillar.description = "The pillar is open, revealing a secret compartment.";
-            }
+            'KEY': 'interaction.pillar.key'
         };
 
         testScene.addEntity(pillar);

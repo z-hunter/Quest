@@ -23,7 +23,7 @@ export class Entity extends SceneObject {
     height: number;
     // name: string; // Inherited from SceneObject
     description: string;
-    interactions: Record<string, () => void>;
+    interactions: Record<string, string>; // Maps VERB -> ScriptID
     isTakeable: boolean;
     color: string;
     visible: boolean;

@@ -1,3 +1,5 @@
+import { ScriptRegistry } from '../core/ScriptRegistry';
+
 export class Parser {
     game: any;
     inputField: HTMLInputElement | null;
@@ -113,8 +115,9 @@ export class Parser {
                             const target = scene.findEntity(targetName);
                             if (target) {
                                 // Perform interaction
-                                if (target.interactions && target.interactions[item.name.toUpperCase()]) {
-                                    target.interactions[item.name.toUpperCase()]();
+                                const interactionId = target.interactions[item.name.toUpperCase()];
+                                if (interactionId) {
+                                    ScriptRegistry.execute(interactionId, { game: this.game, entity: target });
                                 } else {
                                     this.game.showMessage(`Using the ${itemName} on the ${targetName} does nothing.`);
                                 }
