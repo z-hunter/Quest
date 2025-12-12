@@ -2,17 +2,20 @@ export class Input {
     game: any; // Using any to avoid circular dependency for now
     canvas: HTMLCanvasElement;
     mouse: { x: number, y: number, clicked: boolean };
+    keys: { [key: string]: boolean };
 
     constructor(game: any) {
         this.game = game;
         this.canvas = game.canvas;
         this.mouse = { x: 0, y: 0, clicked: false };
+        this.keys = {};
 
         this.setupListeners();
     }
 
     setupListeners(): void {
         this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
+            e.preventDefault(); // Prevent canvas from stealing focus
             const rect = this.canvas.getBoundingClientRect();
             const scaleX = this.canvas.width / rect.width;
             const scaleY = this.canvas.height / rect.height;
@@ -32,6 +35,21 @@ export class Input {
 
         // Prevent context menu on right click
         this.canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+
+        // Keyboard Listeners (Attached to window to catch global input)
+        window.addEventListener('keydown', (e: KeyboardEvent) => {
+            this.keys[e.key] = true;
+            // console.log(`[Input] KeyDown: ${e.key}`);
+        });
+
+        window.addEventListener('keyup', (e: KeyboardEvent) => {
+            this.keys[e.key] = false;
+            // console.log(`[Input] KeyUp: ${e.key}`);
+        });
+    }
+
+    isDown(key: string): boolean {
+        return !!this.keys[key];
     }
 
     updateCanvas(newCanvas: HTMLCanvasElement): void {

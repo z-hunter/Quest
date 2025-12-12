@@ -68,6 +68,68 @@ export class Player extends Actor {
         this.height = 50;
     }
 
+    update(deltaTime: number, isWalkable?: (x: number, y: number) => boolean): void {
+        // Keyboard Movement Logic
+        // @ts-ignore
+        const input = window.game?.input;
+        if (input) {
+            let dx = 0;
+            let dy = 0;
+
+            if (input.isDown('ArrowUp')) dy -= 1;
+            if (input.isDown('ArrowDown')) dy += 1;
+            if (input.isDown('ArrowLeft')) dx -= 1;
+            if (input.isDown('ArrowRight')) dx += 1;
+
+            if (dx !== 0 || dy !== 0) {
+                // If using keys, cancel target (mouse) movement
+                this.target = null;
+                this.setState('walk');
+
+                // Normalize vector
+                const length = Math.sqrt(dx * dx + dy * dy);
+                if (length > 0) {
+                    dx /= length;
+                    dy /= length;
+                }
+
+                // Apply Speed
+                const moveX = dx * this.speed * deltaTime;
+                const moveY = dy * this.speed * deltaTime;
+
+                const nextX = this.x + moveX;
+                const nextY = this.y + moveY;
+
+                // Update Direction
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    this.direction = dx > 0 ? 'right' : 'left';
+                } else {
+                    this.direction = dy > 0 ? 'down' : 'up';
+                }
+
+                // Collision Check
+                if (!isWalkable || isWalkable(nextX, nextY)) {
+                    this.x = nextX;
+                    this.y = nextY;
+                } else {
+                    // Slide along walls? For now just stop if blocked directly.
+                    // Simple slide: try moving just X then just Y
+                    if (isWalkable && isWalkable(nextX, this.y)) {
+                        this.x = nextX;
+                    } else if (isWalkable && isWalkable(this.x, nextY)) {
+                        this.y = nextY;
+                    }
+                }
+            } else if (!this.target) {
+                // If no keys and no target, stop
+                this.setState('idle');
+            }
+        }
+
+        // Parent update handles mouse movement (if this.target is set) and animations
+        super.update(deltaTime, isWalkable);
+    }
+
     toJSON() {
         const data = super.toJSON();
         data.type = 'Player';
