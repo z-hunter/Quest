@@ -57,7 +57,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             width: '1px',
                             height: '1px',
                             pointerEvents: 'none', // Don't block mouse
-                            zIndex: -1
+                            zIndex: 9999
                         }}
                     />
                 </div>

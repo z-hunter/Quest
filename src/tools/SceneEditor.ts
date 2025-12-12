@@ -15,10 +15,11 @@ export class SceneEditor {
     selectedObject: SceneObject | null;
     isDragging: boolean;
     dragOffset: { x: number, y: number };
+    isPanning: boolean;
+    lastMousePos: { x: number, y: number };
     creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
     draggingVertexIndex: number = -1;
     drawMode: boolean;
-
 
     // Event Handlers (Bound)
     private boundClickHandler: (e: Event) => void;
@@ -37,6 +38,8 @@ export class SceneEditor {
         this.selectedObject = null;
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
+        this.isPanning = false;
+        this.lastMousePos = { x: 0, y: 0 };
         this.drawMode = false;
 
         // Bind handlers once for cleanup
@@ -492,6 +495,23 @@ export class SceneEditor {
     onMouseDown(e: MouseEvent): void {
         console.log(`[Editor] onMouseDown. Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
         if (!this.enabled) return;
+
+        // Right Click Panning
+        if (e.button === 2) {
+            console.log("[Editor] Start Panning");
+            this.isPanning = true;
+            this.lastMousePos = { x: e.clientX, y: e.clientY };
+
+            // Disable Auto-Center automatically
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.autoCenter = false;
+                const chk = document.getElementById('cam-auto-center') as HTMLInputElement;
+                if (chk) chk.checked = false;
+            }
+            e.preventDefault();
+            return;
+        }
+
         if (this.drawMode) return;
 
         const pos = this.getMousePos(e); // Screen Coords
@@ -618,7 +638,30 @@ export class SceneEditor {
     }
 
     onMouseMove(e: MouseEvent): void {
-        if (!this.enabled || !this.isDragging || !this.selectedObject) return;
+        if (!this.enabled) return;
+
+        // PANNING LOGIC
+        if (this.isPanning && this.game.sceneManager.currentScene) {
+            const dx = e.clientX - this.lastMousePos.x;
+            const dy = e.clientY - this.lastMousePos.y;
+            this.lastMousePos = { x: e.clientX, y: e.clientY };
+
+            const s = this.game.sceneManager.currentScene;
+            // Move camera opposite to mouse drag
+            // Adjust for Zoom? Panning 10 screen pixels should move 10 screen pixels worth of world.
+            // WorldDelta = ScreenDelta / Zoom.
+            s.camera.x -= dx / s.camera.zoom;
+            s.camera.y -= dy / s.camera.zoom;
+
+            // Update UI
+            const cx = document.getElementById('cam-x') as HTMLInputElement;
+            const cy = document.getElementById('cam-y') as HTMLInputElement;
+            if (cx) cx.value = Math.round(s.camera.x).toString();
+            if (cy) cy.value = Math.round(s.camera.y).toString();
+            return;
+        }
+
+        if (!this.isDragging || !this.selectedObject) return;
 
         const pos = this.getMousePos(e);
         const scene = this.game.sceneManager.currentScene;
@@ -689,6 +732,7 @@ export class SceneEditor {
 
     onMouseUp(): void {
         this.isDragging = false;
+        this.isPanning = false;
     }
 
     selectObject(obj: any): void {
@@ -1114,27 +1158,31 @@ export class SceneEditor {
     onClick(x: number, y: number): boolean {
         console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
         if (!this.enabled) return false;
-        if (!this.drawMode) return false;
 
-        console.log(`OnClick in DrawMode: ${x}, ${y}`);
+        // If in Draw Mode, add points
+        if (this.drawMode) {
+            console.log(`OnClick in DrawMode: ${x}, ${y}`);
 
-        // Convert Screen X/Y to World X/Y for storage
-        const scene = this.game.sceneManager.currentScene;
-        const camX = scene && scene.camera ? scene.camera.x : 0;
-        const camY = scene && scene.camera ? scene.camera.y : 0;
-        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+            // Convert Screen X/Y to World X/Y for storage
+            const scene = this.game.sceneManager.currentScene;
+            const camX = scene && scene.camera ? scene.camera.x : 0;
+            const camY = scene && scene.camera ? scene.camera.y : 0;
+            const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-        // Mouse (Screen) -> World
-        // Center-Based: World = (Screen - Center) / Zoom + Camera
-        const halfW = this.game.canvas.width / 2;
-        const halfH = this.game.canvas.height / 2;
+            // Mouse (Screen) -> World
+            // Center-Based: World = (Screen - Center) / Zoom + Camera
+            const halfW = this.game.canvas.width / 2;
+            const halfH = this.game.canvas.height / 2;
 
-        const worldX = (x - halfW) / zoom + camX;
-        const worldY = (y - halfH) / zoom + camY;
+            const worldX = (x - halfW) / zoom + camX;
+            const worldY = (y - halfH) / zoom + camY;
 
-        if (!this.currentPolygon) this.currentPolygon = [];
-        this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
-        console.log(`Point Added: ${Math.round(worldX)},${Math.round(worldY)}. Total: ${this.currentPolygon.length}`);
+            if (!this.currentPolygon) this.currentPolygon = [];
+            this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
+            console.log(`Point Added: ${Math.round(worldX)},${Math.round(worldY)}. Total: ${this.currentPolygon.length}`);
+        }
+
+        // ALWAYS consume click if editor is enabled to prevent Game/Player interaction
         return true;
     }
 

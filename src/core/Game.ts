@@ -298,7 +298,6 @@ export class Game {
     onMouseClick(x: number, y: number): void {
         console.log(`[Game] onMouseClick: ${x}, ${y}`);
 
-        // Ensure Command Line Input catches focus
         const input = document.getElementById('parser-input');
         if (input) input.focus();
 
