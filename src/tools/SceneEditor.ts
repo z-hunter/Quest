@@ -413,7 +413,8 @@ export class SceneEditor {
     }
 
     updateScalingConfig(): void {
-        if (this.game.sceneManager.currentScene) {
+        const scene = this.game.sceneManager.currentScene;
+        if (scene) {
             const scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
             const scaleMin = document.getElementById('scale-min') as HTMLInputElement;
             const scaleMax = document.getElementById('scale-max') as HTMLInputElement;
@@ -421,12 +422,50 @@ export class SceneEditor {
             const scaleFront = document.getElementById('scale-front') as HTMLInputElement;
 
             if (scaleEnabled) {
-                const s = this.game.sceneManager.currentScene.scaling;
-                s.enabled = scaleEnabled.checked;
+                const s = scene.scaling;
+                const wasEnabled = s.enabled;
+                const isEnabled = scaleEnabled.checked;
+
+                // Update standard config properties
+                s.enabled = isEnabled;
                 s.min = parseFloat(scaleMin?.value) || 0.5;
                 s.max = parseFloat(scaleMax?.value) || 1.0;
                 s.horizon = parseInt(scaleHorizon?.value) || 150;
                 s.front = parseInt(scaleFront?.value) || 300;
+
+                // Normalization Logic on Toggle
+                if (wasEnabled !== isEnabled) {
+                    console.log(`[Editor] Scaling Toggled: ${wasEnabled} -> ${isEnabled}. Normalizing entities...`);
+                    const entities = scene.entities;
+                    for (const ent of entities) {
+                        if (ent.ignoreScaling) continue;
+
+                        const currentVisW = ent.width;
+                        const currentVisH = ent.height;
+
+                        if (isEnabled) {
+                            // Turning ON: base = visual / newScale
+                            // s.enabled is already true, so getScaling works
+                            const newScale = scene.getScaling(ent.y);
+                            ent.scale = newScale;
+                            if (newScale !== 0) {
+                                ent.baseWidth = currentVisW / newScale;
+                                ent.baseHeight = currentVisH / newScale;
+                            }
+                        } else {
+                            // Turning OFF: base = visual (scale becomes 1.0)
+                            ent.scale = 1.0;
+                            ent.baseWidth = currentVisW;
+                            ent.baseHeight = currentVisH;
+                            ent.width = currentVisW;
+                            ent.height = currentVisH;
+                        }
+                    }
+                    // Refresh properties panel if an entity is selected
+                    if (this.selectedObject instanceof Entity) {
+                        this.updateUIFromObject();
+                    }
+                }
             }
         }
     }

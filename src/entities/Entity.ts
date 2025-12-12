@@ -8,6 +8,8 @@ export interface EntityData {
     y: number;
     width: number;
     height: number;
+    baseWidth?: number;  // Added
+    baseHeight?: number; // Added
     spriteName: string | null;
     color: string;
     scale: number;
@@ -93,15 +95,15 @@ export class Entity extends SceneObject {
 
     update(deltaTime: number): void {
         // Dynamic Depth Scaling
-        if (!this.ignoreScaling) {
-            if (this.scene) {
-                const depthScale = this.scene.getScaling(this.y);
-                this.scale = depthScale;
-                this.width = this.baseWidth * this.scale;
-                this.height = this.baseHeight * this.scale;
-            } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
-                // Fallback to global if scene not set (legacy support)
-                const scene = (window as any).game.sceneManager.currentScene;
+        if (!this.ignoreScaling && this.scene && this.scene.scaling && this.scene.scaling.enabled) {
+            // Check scene scaling enabled explicit check to be safe, though getScaling checks it too
+            const depthScale = this.scene.getScaling(this.y);
+            this.scale = depthScale;
+            this.width = this.baseWidth * this.scale;
+            this.height = this.baseHeight * this.scale;
+        } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
+            const scene = (window as any).game.sceneManager.currentScene;
+            if (scene.scaling && scene.scaling.enabled && !this.ignoreScaling) {
                 const depthScale = scene.getScaling(this.y);
                 this.scale = depthScale;
                 this.width = this.baseWidth * this.scale;
@@ -161,6 +163,8 @@ export class Entity extends SceneObject {
             y: this.y,
             width: this.width,
             height: this.height,
+            baseWidth: this.baseWidth,
+            baseHeight: this.baseHeight,
             spriteName: this.spriteName,
             color: this.color,
             scale: this.scale,
@@ -177,6 +181,14 @@ export class Entity extends SceneObject {
         const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
         entity.color = data.color || '#ff0000';
         entity.scale = data.scale || 1.0;
+
+        // Restore base dimensions if present, otherwise calculate/fallback
+        if (data.baseWidth !== undefined) entity.baseWidth = data.baseWidth;
+        else entity.baseWidth = entity.scale > 0 ? data.width / entity.scale : data.width;
+
+        if (data.baseHeight !== undefined) entity.baseHeight = data.baseHeight;
+        else entity.baseHeight = entity.scale > 0 ? data.height / entity.scale : data.height;
+
         entity.layer = data.layer || 0;
         entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
         entity.ignoreScaling = !!data.ignoreScaling;
