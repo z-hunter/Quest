@@ -204,7 +204,7 @@ export class SceneEditor {
         }
 
         // Property Inputs - Only update if focused and valid
-        if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state'].includes(target.id)) {
+        if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state', 'prop-parallax'].includes(target.id)) {
             this.updateEntityFromUI();
         }
 
@@ -936,6 +936,7 @@ export class SceneEditor {
             const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
             const propState = document.getElementById('prop-state') as HTMLInputElement;
             const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
+            const propParallax = document.getElementById('prop-parallax') as HTMLInputElement;
 
             if (propImage) propImage.value = ent.spriteName || '';
             if (propX) propX.value = ent.x.toString();
@@ -944,6 +945,7 @@ export class SceneEditor {
             if (propHeight) propHeight.value = ent.height.toString();
             if (propScale) propScale.value = (ent.scale || 1.0).toString();
             if (propLayer) propLayer.value = (ent.layer || 0).toString();
+            if (propParallax) propParallax.value = (ent.parallax !== undefined ? ent.parallax : 1.0).toString();
             if (propNoScale) propNoScale.checked = ent.ignoreScaling || false;
 
             if (ent instanceof Actor) {
@@ -978,6 +980,7 @@ export class SceneEditor {
         const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
         const propState = document.getElementById('prop-state') as HTMLInputElement;
         const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
+        const propParallax = document.getElementById('prop-parallax') as HTMLInputElement;
 
         if (propName) ent.name = propName.value || 'Unnamed';
         if (propX) ent.x = parseInt(propX.value) || 0;
@@ -1000,6 +1003,11 @@ export class SceneEditor {
 
         if (propScale) ent.scale = parseFloat(propScale.value) || 1.0;
         if (propLayer) ent.layer = parseInt(propLayer.value) || 0;
+        // Allow parallax to be 0
+        if (propParallax) {
+            const val = parseFloat(propParallax.value);
+            ent.parallax = isNaN(val) ? 1.0 : val;
+        }
         if (propNoScale) ent.ignoreScaling = propNoScale.checked;
 
         if (ent instanceof Actor) {
