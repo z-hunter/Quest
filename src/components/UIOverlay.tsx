@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Game } from '../core/Game';
+import { FileBrowser } from './FileBrowser';
 
 interface UIOverlayProps {
     game: Game | null;
@@ -7,12 +8,22 @@ interface UIOverlayProps {
 
 export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     const [message, setMessage] = useState<string | null>(null);
+    const [fileBrowser, setFileBrowser] = useState<{ open: boolean, mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void } | null>(null);
+
+    // Ref to access current state in callbacks if needed, though we pass handlers directly
 
     useEffect(() => {
         if (game) {
             // Bind Game callbacks to React state
-            // game.onSceneChange = (title) => setSceneTitle(title); // Handled by Game Canvas now
             game.onMessage = (text) => setMessage(text);
+
+            // Expose a method for the Editor to open the FileBrowser
+            // We attach it to the editor instance directly since it's the bridge
+            if (game.editor) {
+                game.editor.openFileBrowser = (mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void) => {
+                    setFileBrowser({ open: true, mode, dir, onConfirm });
+                };
+            }
 
             // Initialize UI bindings
             setTimeout(() => {
@@ -24,26 +35,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     const dismissMessage = () => {
         setMessage(null);
         if (game) {
-            // game.dismissMessage(); // If we had this method exposed or needed logic
-            // Refocus input
             const input = document.getElementById('parser-input');
             if (input) input.focus();
+        }
+    };
+
+    const handleBrowserConfirm = (filename: string) => {
+        if (fileBrowser) {
+            fileBrowser.onConfirm(filename);
+            setFileBrowser(null);
         }
     };
 
     return (
         <>
             <div id="ui-layer" style={{ pointerEvents: 'none' }}>
-                {/* 
-                    UI MOVED TO CANVAS (Inside CRT) 
-                    HTML elements hidden, but Input kept for typing 
-                */}
-                {/* <div id="status-bar">...</div> */}
-
                 <div id="command-line" style={{ border: 'none', background: 'transparent' }}>
-                    {/* Prompt drawn on canvas */}
-
-                    {/* Hidden Input Overlay - Captures clicks/typing */}
                     <input
                         type="text"
                         id="parser-input"
@@ -56,7 +63,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             left: 0,
                             width: '1px',
                             height: '1px',
-                            pointerEvents: 'none', // Don't block mouse
+                            pointerEvents: 'none',
                             zIndex: 9999
                         }}
                     />
@@ -71,10 +78,19 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 </div>
             )}
 
-            {/* 
-                Editor Overlay 
-                Wraps the entire editor interface. Controlled by SceneEditor visibility.
-            */}
+            {/* File Browser Modal */}
+            {fileBrowser && fileBrowser.open && (
+                <div style={{ pointerEvents: 'auto' }}>
+                    <FileBrowser
+                        mode={fileBrowser.mode}
+                        directory={fileBrowser.dir}
+                        onConfirm={handleBrowserConfirm}
+                        onCancel={() => setFileBrowser(null)}
+                    />
+                </div>
+            )}
+
+            {/* Editor Overlay */}
             <div id="editor-wrapper" className="hidden">
                 <div className="editor-main-area">
                     {/* Left Panel: Hierarchy & Tools */}
@@ -97,10 +113,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             <div style={{ display: 'flex', gap: '5px' }}>
                                 <button id="btn-delete-object" style={{ flex: 1 }}>Del</button>
                                 <button id="btn-save-object" style={{ flex: 1 }}>Save</button>
-                                <label className="file-upload" style={{ flex: 1, textAlign: 'center', background: '#000', color: '#0f0', border: '1px solid #0f0', cursor: 'pointer', padding: '2px' }}>
-                                    Load
-                                    <input type="file" id="file-load-object" accept=".json" />
-                                </label>
+                                <button id="btn-load-object" style={{ flex: 1 }}>Load</button>
                             </div>
                         </div>
 
@@ -117,6 +130,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
                         {/* Scene Properties */}
                         <div id="section-scene-props" className="editor-section hidden">
+                            <label>Filename (ID):</label>
+                            <input type="text" id="editor-scene-id" style={{ width: '100%', marginBottom: '5px' }} />
                             <label>Scene Title:</label>
                             <input type="text" id="editor-scene-title" style={{ width: '100%' }} />
 
@@ -224,13 +239,6 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                 <button id="btn-save-settings" style={{ gridColumn: '1 / -1', marginTop: '10px' }}>Save Settings (LocalStorage)</button>
                             </div>
                         </div>
-
-                        {/* Tools (Removed, but keeping Save JSON accessible vaguely or moved?) 
-                            GDD says F2 Save, F3 Load. 
-                            Left panel has Object Save/Load.
-                            Let's keep Scene JSON Load/Save hidden or available via F-keys only as per GDD.
-                            Actually GDD says F-keys menu. So we rely on F2/F3.
-                        */}
                     </div>
                 </div >
 

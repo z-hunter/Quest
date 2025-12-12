@@ -15,6 +15,7 @@ export interface SceneScaling {
 export interface SceneData {
     id: string;
     name: string;
+    filename?: string;
     walkbox: { poly: { x: number, y: number }[], name: string }[];
     triggerboxes: { poly: { x: number, y: number }[], name: string, script: string }[];
     scaling: SceneScaling;
@@ -27,6 +28,7 @@ export interface SceneData {
 export class Scene {
     id: string;
     name: string;
+    filename: string;
     background: HTMLImageElement | null;
     entities: Entity[];
     walkbox: Walkbox[];
@@ -34,7 +36,6 @@ export class Scene {
     scaling: SceneScaling;
     player: Entity | null;
 
-    // Runtime Camera (used for rendering)
     // Runtime Camera (used for rendering)
     camera: { x: number, y: number, zoom: number };
     autoCenter: boolean;
@@ -46,6 +47,7 @@ export class Scene {
     constructor(id: string, name: string) {
         this.id = id;
         this.name = name;
+        this.filename = ''; // Default empty
         this.background = null; // Image object
         this.entities = [];
         this.walkbox = [];
@@ -255,6 +257,7 @@ export class Scene {
         return {
             id: this.id,
             name: this.name,
+            filename: this.filename,
             walkbox: this.walkbox,
             triggerboxes: this.triggerboxes,
             scaling: this.scaling,

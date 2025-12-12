@@ -21,6 +21,9 @@ export class SceneEditor {
     draggingVertexIndex: number = -1;
     drawMode: boolean;
 
+    // Callbacks
+    openFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void) => void) | null = null;
+
     // Event Handlers (Bound)
     private boundClickHandler: (e: Event) => void;
     private boundInputHandler: (e: Event) => void;
@@ -121,10 +124,9 @@ export class SceneEditor {
         if (target.id === 'btn-close-editor') {
             this.toggle();
         } else if (target.id === 'btn-f2-save' || target.id === 'btn-save-json') {
-            this.saveScene();
+            this.saveScene(false); // Quick Save
         } else if (target.id === 'btn-f3-load') {
-            const f = document.getElementById('file-load-json');
-            if (f) f.click();
+            this.promptLoadScene();
         } else if (target.id === 'btn-f4-new') {
             this.newScene();
         } else if (target.id === 'btn-clear-walkbox') {
@@ -140,6 +142,10 @@ export class SceneEditor {
                     this.startCreating('Triggerbox');
                 }
             }
+        } else if (target.id === 'btn-save-object') {
+            this.saveObject(); // Opens browser now
+        } else if (target.id === 'btn-load-object') {
+            this.loadObject(); // Opens browser
         } else if (target.id === 'btn-add-sprite') {
             const spriteInput = document.getElementById('sprite-name-input') as HTMLInputElement;
             const name = spriteInput ? spriteInput.value : 'Sprite';
@@ -186,24 +192,21 @@ export class SceneEditor {
         const target = e.target as HTMLInputElement;
         if (!target) return;
 
-        // F9 Settings Bindings
+        // F9 Settings Bindings (Ranges)
         if (target.id.startsWith('crt-')) {
             const s = this.game.settings.crt;
             const val = parseFloat(target.value);
-            const checked = target.checked;
 
-            if (target.id === 'crt-enabled') s.enabled = checked;
-            else if (target.id === 'crt-curvature') s.curvature = val;
+            if (target.id === 'crt-curvature') s.curvature = val;
             else if (target.id === 'crt-scanlines') s.scanlineCount = val;
             else if (target.id === 'crt-intensity') s.scanlineIntensity = val;
             else if (target.id === 'crt-aberration') s.aberration = val;
             else if (target.id === 'crt-vignette') s.vignette = val;
             else if (target.id === 'crt-phosphor') s.phosphor = val;
-            else if (target.id === 'crt-glow') s.bezelGlow = checked;
             else if (target.id === 'crt-bloom') s.bloom = val;
         }
 
-        // Property Inputs - Only update if focused and valid
+        // Property Inputs
         if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state', 'prop-parallax'].includes(target.id)) {
             this.updateEntityFromUI();
         }
@@ -217,7 +220,14 @@ export class SceneEditor {
             }
         }
 
-        // Camera Inputs (Concurrent Update)
+        // Scene Filename
+        if (target.id === 'editor-scene-id') {
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.filename = target.value;
+            }
+        }
+
+        // Camera Inputs
         if (this.game.sceneManager.currentScene) {
             const s = this.game.sceneManager.currentScene;
             if (target.id === 'cam-x') s.camera.x = parseFloat(target.value) || 0;
@@ -237,40 +247,34 @@ export class SceneEditor {
     }
 
     handleGlobalChange(e: Event): void {
-        const target = e.target as HTMLElement;
+        const target = e.target as HTMLInputElement;
         if (!target) return;
 
+        // F9 Settings Bindings (Checkboxes)
+        if (target.id.startsWith('crt-')) {
+            const s = this.game.settings.crt;
+            if (target.id === 'crt-enabled') s.enabled = target.checked;
+            else if (target.id === 'crt-glow') s.bezelGlow = target.checked;
+        }
+
+        // Selects and special properties
         if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
             this.updateEntityFromUI();
         }
+
         if (target.id === 'cam-auto-center') {
             if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.autoCenter = (target as HTMLInputElement).checked;
+                this.game.sceneManager.currentScene.autoCenter = target.checked;
             }
-        }
-        if (target.id === 'cam-speed') {
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.cameraSpeed = parseFloat((target as HTMLInputElement).value) || 5.0;
-            }
-        }
-        if (target.id === 'chk-draw-mode') {
-            this.drawMode = (target as HTMLInputElement).checked;
-            if (this.drawMode) this.selectObject(null);
-        }
-        if (target.id === 'scale-enabled') {
-            this.updateScalingConfig();
         }
 
-        if (target.id === 'file-load-json') {
-            const input = target as HTMLInputElement;
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    if (ev.target) this.loadScene(ev.target.result as string);
-                };
-                reader.readAsText(input.files[0]);
-                input.value = '';
-            }
+        if (target.id === 'chk-draw-mode') {
+            this.drawMode = target.checked;
+            if (this.drawMode) this.selectObject(null);
+        }
+
+        if (target.id === 'scale-enabled') {
+            this.updateScalingConfig();
         }
     }
 
@@ -285,20 +289,17 @@ export class SceneEditor {
             e.preventDefault();
             this.selectObject('SETTINGS');
         } else if (e.key === 'Delete') {
-            // Deletion logic handled in click handler mostly, but shortcut here
             if (this.selectedObject) {
                 this.deleteSelectedObject();
             }
         }
 
-        // Other Keys
         // Prevent default for F-keys and Editor keys when editor is open
         if (this.enabled) {
             if (['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(e.key.toLowerCase())) {
-                // e.preventDefault(); // Be careful not to block typing in inputs
+                // e.preventDefault(); 
             }
         }
-
 
         if (!this.enabled) return;
 
@@ -308,11 +309,14 @@ export class SceneEditor {
         }
 
         switch (e.key.toLowerCase()) {
-            case 'f2': e.preventDefault(); this.saveScene(); break;
+            case 'f2':
+                e.preventDefault();
+                if (e.shiftKey) this.saveScene(true); // Save As
+                else this.saveScene(false); // Quick Save
+                break;
             case 'f3':
                 e.preventDefault();
-                const f = document.getElementById('file-load-json');
-                if (f) f.click();
+                this.promptLoadScene();
                 break;
             case 'f4': e.preventDefault(); this.newScene(); break;
 
@@ -463,6 +467,9 @@ export class SceneEditor {
         if (scene) {
             const titleInput = document.getElementById('editor-scene-title') as HTMLInputElement;
             if (titleInput) titleInput.value = scene.name;
+
+            const idInput = document.getElementById('editor-scene-id') as HTMLInputElement;
+            if (idInput) idInput.value = scene.filename || '';
 
             // Sync Scaling
             const scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
@@ -1081,24 +1088,194 @@ export class SceneEditor {
     }
 
 
-    saveScene(): void {
+    async saveScene(saveAs: boolean = false): Promise<void> {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
-        const data = scene.toJSON();
-        const json = JSON.stringify(data, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${scene.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+
+        // Valid Filename check
+        const needsName = !scene.filename;
+
+        if (saveAs || needsName) {
+            if (this.openFileBrowser) {
+                this.openFileBrowser('save', 'public/scenes', (filename) => {
+                    // Update Filename from browser selection
+                    const name = filename.replace('.json', '');
+                    scene.filename = name;
+                    // Also update ID if it was a new scene
+                    if (scene.id === 'new_scene') scene.id = name;
+
+                    this.syncUI(); // Refresh UI to show new Filename
+                    this.performSaveScene(scene.filename);
+                });
+            } else {
+                const name = prompt("Enter scene filename:", scene.filename || scene.id);
+                if (name) {
+                    scene.filename = name;
+                    if (scene.id === 'new_scene') scene.id = name;
+                    this.syncUI();
+                    this.performSaveScene(name);
+                }
+            }
+        } else {
+            // Quick Save with existing filename
+            this.performSaveScene(scene.filename);
+        }
     }
 
-    loadScene(jsonString: string): void {
+    async performSaveScene(filenameId: string): Promise<void> {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
+
+        const data = scene.toJSON();
+        const json = JSON.stringify(data, null, 2);
+        const filePath = `public/scenes/${filenameId}.json`;
+
         try {
-            const data = JSON.parse(jsonString);
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: filePath, content: json })
+            });
+
+            if (response.ok) {
+                console.log('Scene saved to server:', filePath);
+                // this.game.showMessage(`Scene Saved: ${filenameId}`); // Removed per user request
+            } else {
+                throw new Error(await response.text());
+            }
+        } catch (e) {
+            console.error('Failed to save scene:', e);
+            this.game.showMessage(`Error saving scene: ${e}`);
+        }
+    }
+
+    promptLoadScene(): void {
+        if (this.openFileBrowser) {
+            this.openFileBrowser('load', 'public/scenes', (filename) => {
+                this.loadSceneFromServer(filename);
+            });
+        }
+    }
+
+    async loadSceneFromServer(filename: string): Promise<void> {
+        try {
+            const response = await fetch(`/scenes/${filename}?t=${Date.now()}`); // Burst cache
+            if (!response.ok) throw new Error('File not found');
+            const data = await response.json();
+            this.loadSceneData(data, filename.replace('.json', ''));
+        } catch (e) {
+            console.error(e);
+            this.game.showMessage("Failed to load scene");
+        }
+    }
+
+    async saveObject(): Promise<void> {
+        if (!this.selectedObject || !(this.selectedObject instanceof Entity)) {
+            this.game.showMessage("Select an Object to Save");
+            return;
+        }
+
+        if (this.openFileBrowser) {
+            this.openFileBrowser('save', 'public/prefabs', (filename) => {
+                this.performSaveObject(filename);
+            });
+        }
+    }
+
+    async performSaveObject(filename: string): Promise<void> {
+        if (!this.selectedObject) return;
+        const ent = this.selectedObject as Entity;
+
+        // Use Entity.toJSON or basic properties
+        const data = ent.toJSON ? ent.toJSON() : {
+            type: (ent as any).type || (ent instanceof Actor ? 'Actor' : 'Static'),
+            name: ent.name,
+            x: 0,
+            y: 0,
+            width: ent.width,
+            height: ent.height,
+            color: ent.color,
+            scale: ent.scale,
+            layer: ent.layer,
+            parallax: ent.parallax,
+            spriteName: ent.spriteName,
+            ignoreScaling: ent.ignoreScaling
+        };
+
+        const json = JSON.stringify(data, null, 2);
+        const filePath = `public/prefabs/${filename}`;
+
+        try {
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: filePath, content: json })
+            });
+
+            if (response.ok) {
+                console.log('Prefab saved to server:', filePath);
+                this.game.showMessage(`Prefab Saved: ${filename}`);
+            } else {
+                throw new Error(await response.text());
+            }
+        } catch (e) {
+            console.error('Failed to save prefab:', e);
+            this.game.showMessage(`Error: ${e}`);
+        }
+    }
+
+    async loadObject(): Promise<void> {
+        if (!this.game.sceneManager.currentScene) return;
+        if (this.openFileBrowser) {
+            this.openFileBrowser('load', 'public/prefabs', (filename) => {
+                this.performLoadObject(filename);
+            });
+        }
+    }
+
+    async performLoadObject(filename: string): Promise<void> {
+        try {
+            const response = await fetch(`/prefabs/${filename}?t=${Date.now()}`);
+            if (!response.ok) throw new Error('File not found');
+            const data = await response.json();
+
+            // Validate data
+            if (!data.type) data.type = 'Static'; // Default
+
+            let entity: Entity;
+            if (data.type === 'Actor') {
+                entity = new Actor(160, 100, data.width || 30, data.height || 30, data.name || 'Actor');
+            } else {
+                entity = new Entity(160, 100, data.width || 30, data.height || 30, data.name || 'Static');
+            }
+
+            // Apply prop
+            entity.color = data.color || entity.color;
+            entity.scale = data.scale || 1.0;
+            entity.layer = data.layer || 0;
+            entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
+            entity.ignoreScaling = !!data.ignoreScaling;
+            if (data.spriteName) entity.setSprite(data.spriteName);
+
+            if (this.game.sceneManager.currentScene) {
+                this.game.sceneManager.currentScene.addEntity(entity);
+                this.selectObject(entity);
+                this.refreshHierarchy();
+            }
+
+        } catch (e) {
+            console.error(e);
+            this.game.showMessage("Failed to load prefab");
+        }
+    }
+
+    // Renamed from loadScene to loadSceneData to differentiate from file fetching
+    loadSceneData(data: any, filename?: string): void {
+        try {
+            // const data = JSON.parse(jsonString); // Already parsed json
             const newScene = new Scene(data.id || 'loaded_scene', data.name || 'Untitled');
+            if (filename) newScene.filename = filename;
+            else if (data.filename) newScene.filename = data.filename;
 
             // Restore Camera
             if (data.camera) {

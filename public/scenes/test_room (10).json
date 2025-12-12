@@ -1,0 +1,106 @@
+{
+  "id": "test_room (10)",
+  "name": "Test Room",
+  "walkbox": [],
+  "triggerboxes": [],
+  "scaling": {
+    "enabled": true,
+    "min": 0.5,
+    "max": 1,
+    "horizon": 78,
+    "front": 300
+  },
+  "entities": [
+    {
+      "type": "Entity",
+      "name": "Static_832",
+      "x": 66,
+      "y": 39,
+      "width": 7,
+      "height": 16,
+      "spriteName": null,
+      "color": "#00ff00",
+      "scale": 0.5,
+      "layer": 0,
+      "parallax": 0.5,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Entity",
+      "name": "Pillar",
+      "x": 177,
+      "y": 85,
+      "width": 187,
+      "height": 7,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.5157657657657657,
+      "layer": -6,
+      "parallax": 1,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Entity",
+      "name": "Key",
+      "x": 73,
+      "y": 80,
+      "width": 2.5225225225225225,
+      "height": 2.5225225225225225,
+      "spriteName": null,
+      "color": "#ffff00",
+      "scale": 0.5045045045045045,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Player",
+      "name": "Player",
+      "x": 189.2302647427689,
+      "y": 81.47075175370409,
+      "width": 15.234510253628654,
+      "height": 25.390850422714422,
+      "spriteName": "assets/hero.png",
+      "color": "#00ffff",
+      "scale": 0.5078170084542885,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Actor",
+      "name": "Actor_508",
+      "x": 131,
+      "y": 87,
+      "width": 8,
+      "height": 27,
+      "spriteName": null,
+      "color": "#0000ff",
+      "scale": 0.5202702702702703,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Entity",
+      "name": "Static_385",
+      "x": 198,
+      "y": 136,
+      "width": 9,
+      "height": 40,
+      "spriteName": null,
+      "color": "#00ff00",
+      "scale": 0.6306306306306306,
+      "layer": 0,
+      "parallax": 1.5,
+      "ignoreScaling": false
+    }
+  ],
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "autoCenter": true,
+  "cameraSpeed": 5
+}
