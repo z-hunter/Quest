@@ -1006,7 +1006,28 @@ export class SceneEditor {
         // Allow parallax to be 0
         if (propParallax) {
             const val = parseFloat(propParallax.value);
-            ent.parallax = isNaN(val) ? 1.0 : val;
+            const newVal = isNaN(val) ? 1.0 : val;
+
+            // Auto-adjust coordinates to keep object visually stationary if Parallax changed
+            if (ent.parallax !== undefined && ent.parallax !== newVal) {
+                const scene = this.game.sceneManager.currentScene;
+                if (scene) {
+                    const camX = scene.camera.x;
+                    const camY = scene.camera.y;
+
+                    const oldP = ent.parallax;
+                    const dx = camX * (newVal - oldP);
+                    const dy = camY * (newVal - oldP);
+
+                    ent.x = Math.round(ent.x + dx);
+                    ent.y = Math.round(ent.y + dy);
+
+                    // Update UI inputs
+                    if (propX) propX.value = ent.x.toString();
+                    if (propY) propY.value = ent.y.toString();
+                }
+            }
+            ent.parallax = newVal;
         }
         if (propNoScale) ent.ignoreScaling = propNoScale.checked;
 
