@@ -208,7 +208,7 @@ export class SceneEditor {
 
         // Property Inputs
         if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state', 'prop-parallax'].includes(target.id)) {
-            this.updateEntityFromUI();
+            this.updateEntityFromUI(target.id);
         }
 
         // Scene Title
@@ -989,7 +989,7 @@ export class SceneEditor {
             if (propY) propY.value = ent.y.toString();
             if (propWidth) propWidth.value = ent.width.toString();
             if (propHeight) propHeight.value = ent.height.toString();
-            if (propScale) propScale.value = (ent.scale || 1.0).toString();
+            if (propScale) propScale.value = (ent.modelScale || 1.0).toString();
             if (propLayer) propLayer.value = (ent.layer || 0).toString();
             if (propParallax) propParallax.value = (ent.parallax !== undefined ? ent.parallax : 1.0).toString();
             if (propNoScale) propNoScale.checked = ent.ignoreScaling || false;
@@ -1012,7 +1012,7 @@ export class SceneEditor {
         }
     }
 
-    updateEntityFromUI(): void {
+    updateEntityFromUI(triggerId?: string): void {
         if (!this.selectedObject || !(this.selectedObject instanceof Entity)) return;
         const ent = this.selectedObject as Entity;
 
@@ -1031,23 +1031,61 @@ export class SceneEditor {
         if (propName) ent.name = propName.value || 'Unnamed';
         if (propX) ent.x = parseInt(propX.value) || 0;
         if (propY) ent.y = parseInt(propY.value) || 0;
-        if (propWidth) {
-            const rawW = parseInt(propWidth.value) || 1;
-            // We want the resulting 'width' to be 'rawW'.
-            // Since width = baseWidth * scale, then baseWidth = rawW / scale.
-            // However, scale might be updated in the same tick.
-            const s = parseFloat(propScale.value) || 1.0;
-            ent.baseWidth = rawW / (s !== 0 ? s : 1);
-            ent.width = rawW; // Force immediate visual update
-        }
-        if (propHeight) {
-            const rawH = parseInt(propHeight.value) || 1;
-            const s = parseFloat(propScale.value) || 1.0;
-            ent.baseHeight = rawH / (s !== 0 ? s : 1);
-            ent.height = rawH;
+
+        // SCALE & DIMENSIONS LOGIC
+        // Case 1: Model Scale changed (multiplier for depth scaling)
+        if (triggerId === 'prop-scale') {
+            const newModelScale = parseFloat(propScale.value) || 1.0;
+            ent.modelScale = newModelScale;
+
+            // Note: final 'ent.scale' will be updated in next game loop tick based on depth.
+            // But we can estimate it here for immediate visual feedback if we wanted, 
+            // though it's safer to let the loop handle it to avoid drift.
+
+            // However, we DO need to update the visual width/height in UI immediately to reflect the change?
+            // Actually, if we change modelScale, the size on screen changes.
+            // Let's force an update tick or manually calc:
+            let depthFactor = 1.0;
+            if (!ent.ignoreScaling) {
+                // We can't easily access Scene.getScaling here without referencing scene
+                // But we can trust the loop or just update the UI values on next frame.
+                // For immediate feedback, let's try to grab current depth scale if possible.
+                if (this.game.sceneManager.currentScene && this.game.sceneManager.currentScene.scaling.enabled) {
+                    depthFactor = this.game.sceneManager.currentScene.getScaling(ent.y);
+                }
+            }
+
+            ent.scale = ent.modelScale * depthFactor;
+            ent.width = ent.baseWidth * ent.scale;
+            ent.height = ent.baseHeight * ent.scale;
+
+            // Sync UI Dims
+            if (propWidth) propWidth.value = Math.round(ent.width).toString();
+            if (propHeight) propHeight.value = Math.round(ent.height).toString();
+
+        } else {
+            // Case 2: Visual Width/Height changed.
+            // We want to force the visual size to match input.
+            // width = baseWidth * (modelScale * depthFactor)
+            // so baseWidth = width / (modelScale * depthFactor) => width / ent.scale
+
+            if (propWidth) {
+                const requestedLocalW = parseInt(propWidth.value) || 1;
+                ent.width = requestedLocalW;
+                ent.baseWidth = (ent.scale !== 0) ? ent.width / ent.scale : ent.width;
+            }
+            if (propHeight) {
+                const requestedLocalH = parseInt(propHeight.value) || 1;
+                ent.height = requestedLocalH;
+                ent.baseHeight = (ent.scale !== 0) ? ent.height / ent.scale : ent.height;
+            }
+
+            // In this case, ModelScale likely remains unchanged, we are changing the base sprite size/box size.
+            // Ensure UI shows current Model Scale
+            if (propScale) propScale.value = ent.modelScale.toString();
         }
 
-        if (propScale) ent.scale = parseFloat(propScale.value) || 1.0;
+
         if (propLayer) ent.layer = parseInt(propLayer.value) || 0;
         // Allow parallax to be 0
         if (propParallax) {
@@ -1372,8 +1410,21 @@ export class SceneEditor {
                     entity.parallax = entityData.parallax !== undefined ? entityData.parallax : 1.0;
                     entity.ignoreScaling = !!entityData.ignoreScaling;
 
+                    // Restore base dimensions
+                    if (entityData.baseWidth !== undefined) {
+                        entity.baseWidth = entityData.baseWidth;
+                    } else {
+                        entity.baseWidth = entity.scale > 0 ? entityData.width / entity.scale : entityData.width;
+                    }
+
+                    if (entityData.baseHeight !== undefined) {
+                        entity.baseHeight = entityData.baseHeight;
+                    } else {
+                        entity.baseHeight = entity.scale > 0 ? entityData.height / entity.scale : entityData.height;
+                    }
+
                     if (entityData.spriteName) {
-                        entity.setSprite(entityData.spriteName);
+                        entity.setSprite(entityData.spriteName, false);
                     }
 
                     // Restore Actor specific properties if needed (state, direction)

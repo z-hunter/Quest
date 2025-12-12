@@ -13,6 +13,7 @@ export interface EntityData {
     spriteName: string | null;
     color: string;
     scale: number;
+    modelScale?: number; // User defined scale
     layer: number;
     parallax?: number;
     ignoreScaling?: boolean;
@@ -32,6 +33,7 @@ export class Entity extends SceneObject {
     spriteName: string | null;
     image: HTMLImageElement | null;
     scale: number;
+    modelScale: number;
     layer: number;
     baseWidth: number;
     baseHeight: number;
@@ -59,6 +61,7 @@ export class Entity extends SceneObject {
         this.spriteName = null;
         this.image = null;
         this.scale = 1.0;
+        this.modelScale = 1.0;
         this.layer = 0;
         this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
         this.ignoreScaling = false;
@@ -70,7 +73,7 @@ export class Entity extends SceneObject {
         this.scene = null;
     }
 
-    setSprite(filename: string): void {
+    setSprite(filename: string, resize: boolean = true): void {
         this.spriteName = filename;
         this.image = new Image();
         this.image.src = filename; // Vite might need import, but for now keeping as string path
@@ -79,7 +82,7 @@ export class Entity extends SceneObject {
         this.image.onload = () => {
             if (this.image) {
                 console.log(`[Entity] Loaded sprite: ${filename} (${this.image.naturalWidth}x${this.image.naturalHeight})`);
-                if (!this.animator) {
+                if (!this.animator && resize) {
                     this.baseWidth = this.image.naturalWidth;
                     this.baseHeight = this.image.naturalHeight;
                     this.width = this.baseWidth * this.scale;
@@ -95,21 +98,26 @@ export class Entity extends SceneObject {
 
     update(deltaTime: number): void {
         // Dynamic Depth Scaling
-        if (!this.ignoreScaling && this.scene && this.scene.scaling && this.scene.scaling.enabled) {
-            // Check scene scaling enabled explicit check to be safe, though getScaling checks it too
-            const depthScale = this.scene.getScaling(this.y);
-            this.scale = depthScale;
-            this.width = this.baseWidth * this.scale;
-            this.height = this.baseHeight * this.scale;
-        } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
-            const scene = (window as any).game.sceneManager.currentScene;
-            if (scene.scaling && scene.scaling.enabled && !this.ignoreScaling) {
-                const depthScale = scene.getScaling(this.y);
-                this.scale = depthScale;
-                this.width = this.baseWidth * this.scale;
-                this.height = this.baseHeight * this.scale;
+        let depthFactor = 1.0;
+
+        if (!this.ignoreScaling) {
+            if (this.scene && this.scene.scaling && this.scene.scaling.enabled) {
+                depthFactor = this.scene.getScaling(this.y);
+            } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
+                const scene = (window as any).game.sceneManager.currentScene;
+                if (scene.scaling && scene.scaling.enabled) {
+                    depthFactor = scene.getScaling(this.y);
+                }
             }
         }
+
+        // Final Scale = User Model Scale * Depth Factor
+        this.scale = this.modelScale * depthFactor;
+
+        // Update Hitbox Dims
+        this.width = this.baseWidth * this.scale;
+        this.height = this.baseHeight * this.scale;
+
 
         if (this.animator) {
             this.animator.update(deltaTime);
@@ -183,8 +191,14 @@ export class Entity extends SceneObject {
         entity.scale = data.scale || 1.0;
 
         // Restore base dimensions if present, otherwise calculate/fallback
-        if (data.baseWidth !== undefined) entity.baseWidth = data.baseWidth;
-        else entity.baseWidth = entity.scale > 0 ? data.width / entity.scale : data.width;
+        console.log(`[Entity.fromJSON] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale}`);
+        if (data.baseWidth !== undefined) {
+            entity.baseWidth = data.baseWidth;
+            console.log(`[Entity.fromJSON] Restored baseWidth: ${entity.baseWidth}`);
+        } else {
+            entity.baseWidth = entity.scale > 0 ? data.width / entity.scale : data.width;
+            console.log(`[Entity.fromJSON] Calculated baseWidth: ${entity.baseWidth}`);
+        }
 
         if (data.baseHeight !== undefined) entity.baseHeight = data.baseHeight;
         else entity.baseHeight = entity.scale > 0 ? data.height / entity.scale : data.height;
@@ -194,7 +208,7 @@ export class Entity extends SceneObject {
         entity.ignoreScaling = !!data.ignoreScaling;
 
         if (data.spriteName) {
-            entity.setSprite(data.spriteName);
+            entity.setSprite(data.spriteName, false);
         }
         return entity;
     }

@@ -135,7 +135,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             <label>Scene Title:</label>
                             <input type="text" id="editor-scene-title" style={{ width: '100%' }} />
 
-                            <h4 style={{ marginTop: '10px' }}>Scaling</h4>
+                            <h4 style={{ marginTop: '10px' }}>Depth Scaling</h4>
                             <label><input type="checkbox" id="scale-enabled" /> Enabled</label><br />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                                 <label>Min: <input type="number" id="scale-min" step="0.1" style={{ width: '40px' }} /></label>
@@ -186,7 +186,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                 <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
                                 <label>Parallax: <input type="number" id="prop-parallax" step="0.1" style={{ width: '50px' }} /></label>
                             </div>
-                            <label><input type="checkbox" id="prop-no-scaling" /> No Y-Scale</label>
+                            <label><input type="checkbox" id="prop-no-scaling" /> Disable Depth-Scaling</label>
                         </div>
 
                         {/* Walkbox Properties */}
