@@ -174,8 +174,8 @@ export class Scene {
     render(ctx: CanvasRenderingContext2D): void {
         // ... existing render start
         ctx.save();
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        // ctx.fillStyle = '#000'; // Removed: Game.ts clears the screen.
+        // ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         this.entities.sort((a, b) => {
             const pA = a.parallax !== undefined ? a.parallax : 1.0;
@@ -191,12 +191,12 @@ export class Scene {
         this.entities.forEach(entity => {
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;
             ctx.save();
-            
+
             // Center Pivot Transform
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
             ctx.translate(-this.camera.x * p, -this.camera.y * p);
-            
+
             entity.render(ctx);
             ctx.restore();
         });

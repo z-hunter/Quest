@@ -6,25 +6,18 @@ interface UIOverlayProps {
 }
 
 export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
-    const [sceneTitle, setSceneTitle] = useState('Title');
-    const [score] = useState(0);
     const [message, setMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (game) {
             // Bind Game callbacks to React state
-            game.onSceneChange = (title) => setSceneTitle(title);
+            // game.onSceneChange = (title) => setSceneTitle(title); // Handled by Game Canvas now
             game.onMessage = (text) => setMessage(text);
 
             // Initialize UI bindings
             setTimeout(() => {
                 game.bindUI();
             }, 0);
-
-            // Initial sync
-            if (game.sceneManager.currentScene) {
-                setSceneTitle(game.sceneManager.currentScene.name);
-            }
         }
     }, [game]);
 
@@ -40,19 +33,33 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
     return (
         <>
-            <div id="ui-layer">
-                <div id="status-bar">
-                    <span id="score-display">Score: {score} of 100</span>
-                    <span id="scene-title-display">{sceneTitle}</span>
-                </div>
+            <div id="ui-layer" style={{ pointerEvents: 'none' }}>
+                {/* 
+                    UI MOVED TO CANVAS (Inside CRT) 
+                    HTML elements hidden, but Input kept for typing 
+                */}
+                {/* <div id="status-bar">...</div> */}
 
-                <div id="command-line">
-                    <span className="prompt">&gt;</span>
-                    {/* 
-                        We keep the ID 'parser-input' because Parser.ts looks for it.
-                        In a full refactor, we would bind this to React state and call game.parser.parse() 
-                    */}
-                    <input type="text" id="parser-input" autoComplete="off" autoFocus />
+                <div id="command-line" style={{ border: 'none', background: 'transparent' }}>
+                    {/* Prompt drawn on canvas */}
+
+                    {/* Hidden Input Overlay - Captures clicks/typing */}
+                    <input
+                        type="text"
+                        id="parser-input"
+                        autoComplete="off"
+                        autoFocus
+                        style={{
+                            opacity: 0,
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            width: '1px',
+                            height: '1px',
+                            pointerEvents: 'none', // Don't block mouse
+                            zIndex: -1
+                        }}
+                    />
                 </div>
             </div>
 

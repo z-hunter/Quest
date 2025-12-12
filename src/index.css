@@ -2,9 +2,8 @@ body {
   background-color: #000;
   color: #fff;
   font-family: 'Courier New', Courier, monospace;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  place-items: center;
   min-height: 100vh;
   margin: 0;
   overflow: auto;
@@ -13,16 +12,24 @@ body {
 }
 
 #game-container {
+  display: block;
+  /* Ensure block-level box */
   position: relative;
   width: 840px;
   /* 420 * 2 */
-  height: 640px;
-  /* 300 * 2 + 40px UI */
+  height: 600px;
+  /* 300 * 2 */
+  min-width: 840px;
+  /* Prevent collapse */
+  min-height: 600px;
+  /* Prevent collapse */
   background-color: #111;
   border: none;
   image-rendering: pixelated;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
+  margin: auto;
+  /* Safe Centering */
 }
 
 canvas {
@@ -38,12 +45,17 @@ canvas {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 40px;
-  background-color: #000;
-  border-top: 2px solid #fff;
+  height: 100%;
+  /* Cover full screen to hold absolute children */
+  background-color: transparent;
+  /* WAS: #000 - This hid the game! */
+  border: none;
+  /* WAS: border-top: 2px solid #fff */
   display: flex;
   flex-direction: column;
   z-index: 10;
+  pointer-events: none;
+  /* Let clicks pass through */
 }
 
 #status-bar {

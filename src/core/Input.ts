@@ -21,7 +21,7 @@ export class Input {
             this.mouse.y = (e.clientY - rect.top) * scaleY;
             this.mouse.clicked = true;
 
-            console.log(`[Input] MouseDown Raw: ${e.clientX}, ${e.clientY} -> Scaled: ${this.mouse.x}, ${this.mouse.y}`);
+            console.log(`[Input] MouseDown Raw: ${e.clientX}, ${e.clientY} -> Rect: ${rect.left}, ${rect.top} w=${rect.width} h=${rect.height} -> Scaled: ${this.mouse.x}, ${this.mouse.y}`);
             if (this.game.onMouseClick) {
                 // Input handles mousedown, updates state.
                 // Actual 'click' logic usually happens on mouseup or here?

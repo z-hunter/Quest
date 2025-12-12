@@ -279,18 +279,21 @@ export class CRTFilter {
 
                           vec3 sample = texture2D(u_image, curvedUV + b_offset).rgb;
                           // Thresholding: Only bright things glow
-                          sample = pow(sample, vec3(2.2)); 
+                          // LOWER Power (1.3) allows mid-tones to glow (e.g. orange text)
+                          // 2.2 was too restrictive (only white glowed).
+                          sample = pow(sample, vec3(1.3)); 
                           bloomSum += sample;
                      }
                      // Average
                      bloomSum /= 12.0;
 
                      // Apply Bloom Amount
-                     vec3 bloomHigh = bloomSum * u_bloom * 5.0; // Boosted intensity for visibility
+                     vec3 bloomHigh = bloomSum * u_bloom * 4.5; // Boosted intensity for visibility
 
-                     // BLEND MODE: SCREEN (Prevents overexposure/clipping)
-                     // Formula: Result = A + B - (A * B)
-                     color = color + bloomHigh - (color * bloomHigh);
+                     // BLEND MODE: LIGHTEN ONLY (max)
+                     // This ensures the source sprite is NEVER brightened by the glow,
+                     // but dark areas around it pick up the halo.
+                     color = max(color, bloomHigh);
                 }
 
                 // Phosphor Surface Simulation (The "Greyish" look)
@@ -362,6 +365,10 @@ export class CRTFilter {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
+
+    isValid(): boolean {
+        return !!(this.gl && this.program && this.buffer && this.texture);
     }
 
     render(sourceCanvas: HTMLCanvasElement, settings: CRTSettings): void {

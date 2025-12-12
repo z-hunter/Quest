@@ -24,6 +24,8 @@ export class Game {
     parser: Parser;
     sceneManager: SceneManager;
     editor: SceneEditor;
+    score: number = 0;
+    cursorBlink: number = 0;
 
     // Callbacks for React
     onSceneChange: ((title: string) => void) | null = null;
@@ -182,19 +184,25 @@ export class Game {
             this.ctx.fillStyle = '#000';
             this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
-            this.sceneManager.render(this.ctx);
-
-            // Debug text on buffer
-            this.ctx.fillStyle = '#fff';
+            // Draw text BEHIND scene (Watermark)
+            this.ctx.fillStyle = '#666';
             this.ctx.font = '10px monospace';
             this.ctx.fillText('Quest Engine v0.1                                           F1=Menu', 10, 10);
+
+            this.sceneManager.render(this.ctx);
+
+            // RENDER UI (Status Bar & Command Line) ON TOP OF SCENE (Inside CRT)
+            try {
+                this.renderUI(this.ctx);
+            } catch (uiErr) {
+                console.error("UI Render Failed:", uiErr);
+            }
         }
 
-        // 2. Render Buffer to Screen via CRT Filter
-        if (this.crtFilter) {
+        // 2. Render Buffer to Screen via CRT Filter (or Fallback)
+        if (this.crtFilter && this.crtFilter.isValid()) {
             let settings = this.settings.crt;
 
-            // If disabled, use "zero" settings to mimic a clean pass
             if (!this.settings.crt.enabled) {
                 settings = {
                     enabled: false,
@@ -214,6 +222,13 @@ export class Game {
             } catch (e) {
                 console.warn("CRT Filter failed, disabling:", e);
                 this.disableCRT();
+                // If it fails, allow fallback next frame
+            }
+        } else {
+            // Fallback: If WebGL failed
+            if (this.uiCtx) {
+                this.uiCtx.imageSmoothingEnabled = false;
+                this.uiCtx.drawImage(this.bufferCanvas, 0, 0, this.canvas.width, this.canvas.height);
             }
         }
 
@@ -224,12 +239,69 @@ export class Game {
         }
     }
 
+    renderUI(ctx: CanvasRenderingContext2D): void {
+        const w = this.bufferCanvas.width;
+        const h = this.bufferCanvas.height;
+        const barHeight = 14;
+
+        ctx.font = '10px monospace';
+        ctx.textBaseline = 'middle';
+
+        // --- TOP BAR (Status) ---
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, barHeight);
+
+        // Separator Line
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, barHeight, w, 1);
+
+        // Text
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`Score: ${this.score} of 100`, 10, barHeight / 2);
+
+        const sceneName = this.sceneManager.currentScene ? this.sceneManager.currentScene.name : 'Title';
+        const titleWidth = ctx.measureText(sceneName).width;
+        ctx.fillText(sceneName, w / 2 - titleWidth / 2, barHeight / 2);
+
+        // --- BOTTOM BAR (Command Line) ---
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, h - barHeight, w, barHeight);
+
+        // Separator Line
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, h - (barHeight + 1), w, 1);
+
+        // Command Prompt
+        ctx.fillStyle = '#fff';
+
+        // Read Input from Hidden DOM Element
+        const input = document.getElementById('parser-input') as HTMLInputElement;
+        const inputText = input ? input.value : '';
+        const isFocused = document.activeElement === input;
+
+        // Cursor Blink (Only if focused)
+        let cursor = '';
+        if (isFocused) {
+            this.cursorBlink += 16; // Approx ms per frame
+            if (Math.floor(this.cursorBlink / 500) % 2 === 0) {
+                cursor = '_';
+            }
+        }
+
+        ctx.fillText(`> ${inputText}${cursor}`, 10, h - barHeight / 2);
+    }
+
     disableCRT(): void {
         this.crtFilter = null;
     }
 
     onMouseClick(x: number, y: number): void {
         console.log(`[Game] onMouseClick: ${x}, ${y}`);
+
+        // Ensure Command Line Input catches focus
+        const input = document.getElementById('parser-input');
+        if (input) input.focus();
+
         // If editor consumes the click, don't pass to game
         if (this.editor.onClick(x, y)) {
             console.log(`[Game] Editor consumed click`);

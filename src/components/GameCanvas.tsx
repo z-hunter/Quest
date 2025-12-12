@@ -71,11 +71,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         <div
             ref={containerRef}
             style={{
-                width: '100%',
-                height: '100%',
-                overflow: 'hidden',
-                backgroundColor: '#000',
-                position: 'relative' // Needed for absolute positioning of children
+                // Center the 840x600 canvas in the 840x640 container
+                width: '840px',
+                height: '600px',
+                position: 'relative',
+                backgroundColor: '#000', // Restore bg color as well
+                overflow: 'hidden'       // Restore clipping
             }}
         >
             {/* Layer 1: Game (WebGL + CRT) */}
@@ -94,11 +95,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
             />
 
             {/* Layer 2: UI/Editor (2D, No CRT) */}
-            {/* We keep this at 420x300 to match game logic coordinates. CSS scales it up. */}
             <canvas
                 ref={uiCanvasRef}
                 id="ui-canvas"
-                width={420}
+                width={420} // Internal Resolution
                 height={300}
                 style={{
                     width: '100%',
@@ -108,11 +108,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
                     top: 0,
                     left: 0,
                     zIndex: 2,
-                    backgroundColor: 'transparent', // Ensure it's transparent
-                    imageRendering: 'pixelated', // Keep pixel art look for UI if needed
-                    pointerEvents: 'auto' // Capture clicks here
+                    backgroundColor: 'transparent',
+                    imageRendering: 'pixelated',
+                    pointerEvents: 'auto'
                 }}
             />
-        </div>
+        </div >
     );
 };
