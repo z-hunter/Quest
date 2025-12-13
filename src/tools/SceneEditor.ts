@@ -20,6 +20,7 @@ export class SceneEditor {
     creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
     draggingVertexIndex: number = -1;
     drawMode: boolean;
+    resizingHandle: string | null = null;
 
     // Callbacks
     openFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void) => void) | null = null;
@@ -633,10 +634,25 @@ export class SceneEditor {
                 if (pos.x >= screenX - screenW / 2 && pos.x <= screenX + screenW / 2 &&
                     pos.y >= screenY - screenH && pos.y <= screenY) {
 
-                    console.log(`[Hitbox] HIT! Entity: ${entity.name}`);
+                    // HIT! Entity: ${entity.name}
                     this.selectObject(entity);
+
+                    // Check Handles logic ( Screen Space )
+                    const hSize = 8; // Screen pixels tolerance
+                    const sl = screenX - screenW / 2;
+                    const sr = screenX + screenW / 2;
+                    const st = screenY - screenH;
+                    const sb = screenY;
+
+                    if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - st) < hSize) this.resizingHandle = 'nw';
+                    else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - st) < hSize) this.resizingHandle = 'ne';
+                    else if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - sb) < hSize) this.resizingHandle = 'sw';
+                    else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - sb) < hSize) this.resizingHandle = 'se';
+                    else this.resizingHandle = null;
+
                     this.isDragging = true;
                     this.draggingVertexIndex = -1;
+
                     // Offset in Screen Space is easiest for Entities??
                     // Or maintain World Offset?
                     // Let's use Screen Offset to avoid complex reverse-projections during drag
@@ -746,13 +762,86 @@ export class SceneEditor {
             }
             return;
         }
-
-        // Only drag Entities for now if not polygon
         if (!(this.selectedObject instanceof Entity)) return;
-
-        // Entity Drag Logic
         const entity = this.selectedObject as Entity;
         const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+        // ** ENTITY RESIZING LOGIC **
+        if (this.resizingHandle) {
+            // 1. Calculate Mouse World Position (at entity depth p)
+            // WorldX = ((ScreenX - HalfW) / Zoom) + CamX * p
+            const mouseWorldX = (pos.x - halfW) / zoom + camX * p;
+            const mouseWorldY = (pos.y - halfH) / zoom + camY * p;
+
+            // Current Edges
+            const currentL = entity.x - entity.width / 2;
+            const currentR = entity.x + entity.width / 2;
+            const currentT = entity.y - entity.height;
+            const currentB = entity.y;
+
+            let newL = currentL;
+            let newR = currentR;
+            let newT = currentT;
+            let newB = currentB;
+
+            // Assume symmetric width resizing if dragging corners?
+            // Actually, standard behavior is opposite corner fixed.
+
+            if (this.resizingHandle === 'nw') {
+                // Fixed: Bottom-Right
+                newL = mouseWorldX;
+                newT = mouseWorldY;
+            } else if (this.resizingHandle === 'ne') {
+                // Fixed: Bottom-Left
+                newR = mouseWorldX;
+                newT = mouseWorldY;
+            } else if (this.resizingHandle === 'sw') {
+                // Fixed: Top-Right
+                newL = mouseWorldX;
+                newB = mouseWorldY;
+            } else if (this.resizingHandle === 'se') {
+                // Fixed: Top-Left
+                newR = mouseWorldX;
+                newB = mouseWorldY;
+            }
+
+            // Enforce Min Size
+            if (newR - newL < 5) {
+                if (this.resizingHandle.includes('w')) newL = newR - 5;
+                else newR = newL + 5;
+            }
+            if (newB - newT < 5) {
+                if (this.resizingHandle.includes('n')) newT = newB - 5;
+                else newB = newT + 5;
+            }
+
+            // Apply new dimensions
+            const newW = newR - newL;
+            const newH = newB - newT;
+            const newX = newL + newW / 2; // Center
+            const newY = newB; // Bottom
+
+            // Update Visuals
+            entity.x = Math.round(newX);
+            entity.y = Math.round(newY);
+            entity.width = newW;
+            entity.height = newH;
+
+            // Update Base Dimensions so this persists across scales
+            // base = visual / scale. Scale is current (model * depth).
+            if (entity.scale !== 0) {
+                entity.baseWidth = entity.width / entity.scale;
+                entity.baseHeight = entity.height / entity.scale;
+            } else {
+                entity.baseWidth = entity.width;
+                entity.baseHeight = entity.height;
+            }
+
+            this.updateUIFromObject();
+            return;
+        }
+
+        // Entity Drag Logic (Standard Move)
 
         // We stored dragOffset as (MouseScreen - EntityScreenCenter)
         // NewScreenX = MouseX - OffsetX
@@ -778,6 +867,7 @@ export class SceneEditor {
 
     onMouseUp(): void {
         this.isDragging = false;
+        this.resizingHandle = null;
         this.isPanning = false;
     }
 
@@ -1639,6 +1729,25 @@ export class SceneEditor {
                     entity.width,
                     entity.height
                 );
+
+                // Draw Resize Handles
+                ctx.fillStyle = '#ffffff';
+                const hSize = 6 / zoom; // Handle size
+
+                const l = drawX - entity.width / 2;
+                const r = drawX + entity.width / 2;
+                const t = drawY - entity.height;
+                const b = drawY;
+
+                // NW
+                ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
+                // NE
+                ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
+                // SW
+                ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
+                // SE
+                ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+
                 ctx.restore();
             } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
                 // Triggerbox/Walkbox
