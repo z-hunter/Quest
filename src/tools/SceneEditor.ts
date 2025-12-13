@@ -1203,7 +1203,48 @@ export class SceneEditor {
             }
             ent.parallax = newVal;
         }
-        if (propNoScale) ent.ignoreScaling = propNoScale.checked;
+        if (propNoScale) {
+            const wasIgnored = ent.ignoreScaling;
+            const isIgnored = propNoScale.checked;
+
+            if (wasIgnored !== isIgnored) {
+                // Toggle happened. We need to normalize dimensions to keep VISUAL size constant.
+                // Current Visual Size is ent.width / ent.height (already up to date)
+                const currentVisW = ent.width;
+                const currentVisH = ent.height;
+
+                // Calculate Target Factor
+                let targetFactor = ent.modelScale; // If ignored, scale = modelScale
+
+                if (!isIgnored) {
+                    // We are ENABLING depth scaling.
+                    // Scale will become: modelScale * depthFactor
+                    let depthFactor = 1.0;
+                    if (this.game.sceneManager.currentScene && this.game.sceneManager.currentScene.scaling.enabled) {
+                        depthFactor = this.game.sceneManager.currentScene.getScaling(ent.y);
+                    }
+                    targetFactor = ent.modelScale * depthFactor;
+                }
+
+                // Recalculate Base Dimensions
+                // Visual = Base * Factor
+                // Base = Visual / Factor
+                if (targetFactor !== 0) {
+                    ent.baseWidth = currentVisW / targetFactor;
+                    ent.baseHeight = currentVisH / targetFactor;
+                } else {
+                    ent.baseWidth = currentVisW;
+                    ent.baseHeight = currentVisH;
+                }
+
+                // Apply new state
+                ent.ignoreScaling = isIgnored;
+
+                // Force immediate update of 'scale' prop so next render is correct right away
+                ent.scale = targetFactor;
+                // ent.width/height is technically derived, should match currentVisW/H exactly roughly
+            }
+        }
 
         if (ent instanceof Actor) {
             if (propDirection) ent.setDirection(propDirection.value as any);
