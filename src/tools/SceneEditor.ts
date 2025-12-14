@@ -1,6 +1,5 @@
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
-import { Player } from '../entities/Player';
 import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
@@ -17,6 +16,7 @@ export class SceneEditor {
     dragOffset: { x: number, y: number };
     isPanning: boolean;
     lastMousePos: { x: number, y: number };
+    lastPanPos: { x: number, y: number };
     creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
     draggingVertexIndex: number = -1;
     drawMode: boolean;
@@ -33,6 +33,7 @@ export class SceneEditor {
     private boundMouseDownHandler: (e: MouseEvent) => void;
     private boundMouseMoveHandler: (e: MouseEvent) => void;
     private boundMouseUpHandler: (e: MouseEvent) => void;
+    private boundPasteHandler: (e: ClipboardEvent) => void;
 
     constructor(game: any) {
         this.game = game;
@@ -44,6 +45,7 @@ export class SceneEditor {
         this.dragOffset = { x: 0, y: 0 };
         this.isPanning = false;
         this.lastMousePos = { x: 0, y: 0 };
+        this.lastPanPos = { x: 0, y: 0 };
         this.drawMode = false;
 
         // Bind handlers once for cleanup
@@ -54,6 +56,7 @@ export class SceneEditor {
         this.boundMouseDownHandler = this.onMouseDown.bind(this);
         this.boundMouseMoveHandler = this.onMouseMove.bind(this);
         this.boundMouseUpHandler = this.onMouseUp.bind(this);
+        this.boundPasteHandler = this.handleGlobalPaste.bind(this);
     }
 
     private uiInitialized = false;
@@ -113,6 +116,7 @@ export class SceneEditor {
         this.game.canvas.addEventListener('mousedown', this.boundMouseDownHandler);
         window.addEventListener('mousemove', this.boundMouseMoveHandler);
         window.addEventListener('mouseup', this.boundMouseUpHandler);
+        window.addEventListener('paste', this.boundPasteHandler);
     }
 
     /* Event Handlers extracted for cleanup */
@@ -157,6 +161,23 @@ export class SceneEditor {
                 this.game.sceneManager.currentScene.addEntity(sprite);
 
                 this.drawMode = false;
+                const propActorState = document.getElementById('prop-actor-state') as HTMLSelectElement;
+                if (propActorState) {
+                    propActorState.onchange = () => {
+                        if (this.selectedObject instanceof Actor) {
+                            this.selectedObject.setState(propActorState.value as any);
+                        }
+                    };
+                }
+
+                const propActorIsPlayer = document.getElementById('prop-actor-isplayer') as HTMLInputElement;
+                if (propActorIsPlayer) {
+                    propActorIsPlayer.onchange = () => {
+                        if (this.selectedObject instanceof Actor) {
+                            this.setActorIsPlayer(this.selectedObject, propActorIsPlayer.checked);
+                        }
+                    };
+                }
                 const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
                 if (chk) chk.checked = false;
                 this.selectObject(sprite);
@@ -267,6 +288,12 @@ export class SceneEditor {
             this.updateEntityFromUI();
         }
 
+        if (target.id === 'prop-actor-isplayer') {
+            if (this.selectedObject instanceof Actor) {
+                this.setActorIsPlayer(this.selectedObject, target.checked);
+            }
+        }
+
         if (target.id === 'cam-auto-center') {
             if (this.game.sceneManager.currentScene) {
                 this.game.sceneManager.currentScene.autoCenter = target.checked;
@@ -290,6 +317,19 @@ export class SceneEditor {
             this.duplicateSelectedObject();
             return;
         }
+
+        // Ctrl+C for Copy JSON (Debug)
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'c') {
+            // Only prevent default if we have an object selected, 
+            // otherwise let normal copy work (e.g. text in inputs)
+            if (this.selectedObject && !(document.activeElement instanceof HTMLInputElement)) {
+                e.preventDefault();
+                this.copySelectedObjectToClipboard();
+                return;
+            }
+        }
+
+
 
         // Allows opening editor with F1 even if disabled
         if (!this.enabled && e.key !== 'F1') return;
@@ -568,7 +608,7 @@ export class SceneEditor {
         if (e.button === 2) {
             console.log("[Editor] Start Panning");
             this.isPanning = true;
-            this.lastMousePos = { x: e.clientX, y: e.clientY };
+            this.lastPanPos = { x: e.clientX, y: e.clientY };
 
             // Disable Auto-Center automatically
             if (this.game.sceneManager.currentScene) {
@@ -721,13 +761,15 @@ export class SceneEditor {
     }
 
     onMouseMove(e: MouseEvent): void {
+        this.lastMousePos = this.getMousePos(e); // Track for Paste
+
         if (!this.enabled) return;
 
         // PANNING LOGIC
         if (this.isPanning && this.game.sceneManager.currentScene) {
-            const dx = e.clientX - this.lastMousePos.x;
-            const dy = e.clientY - this.lastMousePos.y;
-            this.lastMousePos = { x: e.clientX, y: e.clientY };
+            const dx = e.clientX - this.lastPanPos.x;
+            const dy = e.clientY - this.lastPanPos.y;
+            this.lastPanPos = { x: e.clientX, y: e.clientY };
 
             const s = this.game.sceneManager.currentScene;
             // Move camera opposite to mouse drag
@@ -1108,6 +1150,9 @@ export class SceneEditor {
             if (ent instanceof Actor) {
                 if (propDirection) propDirection.value = ent.direction || 'down';
                 if (propState) propState.value = ent.state || 'idle';
+
+                const propActorIsPlayer = document.getElementById('prop-actor-isplayer') as HTMLInputElement;
+                if (propActorIsPlayer) propActorIsPlayer.checked = ent.isPlayer;
             }
         } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
             const propWalkboxName = document.getElementById('prop-walkbox-name') as HTMLInputElement;
@@ -1282,22 +1327,13 @@ export class SceneEditor {
         if (!scene || !this.selectedObject) return;
 
         let data: any;
-        let type = '';
-
-        if (this.selectedObject instanceof Entity) {
+        if (this.selectedObject.toJSON) {
             data = this.selectedObject.toJSON();
-            type = (this.selectedObject instanceof Actor) ? 'Actor' : 'Static';
-        } else if (this.selectedObject instanceof Walkbox) {
-            data = this.selectedObject.toJSON();
-            type = 'Walkbox';
-        } else if (this.selectedObject instanceof Triggerbox) {
-            data = this.selectedObject.toJSON();
-            type = 'Triggerbox';
         } else {
             return;
         }
 
-        // Generate Unique Name
+        // Generate Unique Name for Duplicate
         const baseName = data.name;
         // Strip _\d+ suffix
         const match = baseName.match(/^(.*?)_\d+$/);
@@ -1306,12 +1342,13 @@ export class SceneEditor {
         let counter = 1;
         let newName = `${prefix}_${counter}`;
 
+        // Check collision in entire scene
+        // We can reuse a helper or just do it here
         const allObjects = [
             ...(scene.entities || []),
             ...(scene.walkbox || []),
             ...(scene.triggerboxes || [])
         ];
-
         const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
         while (isNameTaken(newName)) {
             counter++;
@@ -1319,55 +1356,310 @@ export class SceneEditor {
         }
         data.name = newName;
 
-        // Instantiate
-        let newObj: any;
-        if (type === 'Actor') {
-            newObj = new Actor(data.x, data.y, data.width, data.height, data.name);
-            if (this.selectedObject instanceof Actor) {
-                const srcActor = this.selectedObject as Actor;
-                newObj.setDirection(srcActor.direction);
-                newObj.setState(srcActor.state);
-            }
-        } else if (type === 'Static') {
-            newObj = new Entity(data.x, data.y, data.width, data.height, data.name);
-        } else if (type === 'Walkbox') {
-            const newPoly = data.poly.map((p: any) => ({ x: p.x, y: p.y }));
-            newObj = new Walkbox(newPoly, data.name);
-        } else if (type === 'Triggerbox') {
-            const newPoly = data.poly.map((p: any) => ({ x: p.x, y: p.y }));
-            newObj = new Triggerbox(newPoly, data.name, data.script || '');
+        // Use unified creation
+        const newObj = this.createObjectFromData(data);
+        if (newObj) {
+            console.log(`Duplicated: ${baseName} -> ${newName}`);
+            this.selectObject(newObj);
+            this.refreshHierarchy();
         }
+    }
 
-        // Common Entity Props Restoration
-        if (newObj instanceof Entity) {
-            newObj.color = data.color;
-            newObj.scale = data.scale;
-            newObj.baseWidth = data.baseWidth;
-            newObj.baseHeight = data.baseHeight;
-            newObj.layer = data.layer;
-            newObj.parallax = data.parallax ?? 1.0;
-            newObj.ignoreScaling = !!data.ignoreScaling;
-            if (data.spriteName) newObj.setSprite(data.spriteName, false);
 
-            if (this.selectedObject instanceof Entity) {
-                newObj.modelScale = this.selectedObject.modelScale;
-            }
-        }
+    setActorIsPlayer(actor: Actor, value: boolean): void {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
 
-        // Add to Scene
-        if (type === 'Walkbox') {
-            if (!scene.walkbox) scene.walkbox = [];
-            scene.walkbox.push(newObj);
-        } else if (type === 'Triggerbox') {
-            if (!scene.triggerboxes) scene.triggerboxes = [];
-            scene.triggerboxes.push(newObj);
+        console.log(`[Editor] Setting isPlayer for ${actor.name} to ${value}`);
+
+        if (value) {
+            // Unset others
+            scene.entities.forEach(e => {
+                if (e instanceof Actor && e !== actor && e.isPlayer) {
+                    e.isPlayer = false;
+                    console.log(`[Editor] Unset isPlayer for ${e.name}`);
+                }
+            });
+            actor.isPlayer = true;
+            scene.player = actor;
         } else {
-            scene.addEntity(newObj);
+            actor.isPlayer = false;
+            // If we are unchecking the current player, clear the reference
+            if (scene.player === actor) {
+                scene.player = null;
+            }
+        }
+        // Force UI update to reflect changes on other objects (if selected, though usually only one selected)
+        // But mainly to reflect THIS object's state correctly.
+        this.updateUIFromObject();
+    }
+
+    // Unified Object Creation Logic
+    createObjectFromData(data: any, overrideX?: number, overrideY?: number): any {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return null;
+
+        // Determine Type (fallback to Static if missing)
+        const type = data.type || 'Static';
+
+        // Coordinates
+        const x = overrideX !== undefined ? overrideX : (data.x || 0);
+        const y = overrideY !== undefined ? overrideY : (data.y || 0);
+
+        let newObj: any;
+
+        try {
+            if (type === 'Actor') {
+                newObj = new Actor(x, y, data.width || 30, data.height || 30, data.name || 'Actor');
+                // Restore Actor specifics if available in data
+                if (data.direction) newObj.setDirection(data.direction);
+                if (data.state) newObj.setState(data.state);
+                if (data.isPlayer) newObj.isPlayer = true; // Apply from JSON
+            } else if (type === 'Player') {
+                // Legacy Import Support: Convert Player to Actor + isPlayer
+                newObj = new Actor(x, y, data.width || 30, data.height || 30, data.name || 'Player');
+                newObj.isPlayer = true;
+                if (data.direction) newObj.setDirection(data.direction);
+            } else if (type === 'Static' || type === 'Entity') {
+                newObj = new Entity(x, y, data.width || 30, data.height || 30, data.name || 'Static');
+            } else if (type === 'Walkbox') {
+                // For Walkboxes, we need to shift the polygon if position changed?
+                // Walkboxes usually store absolute poly points.
+                // If we paste at NEW mouse position, we should shift all points relative to center.
+                // But data.poly is absolute.
+                // Let's see... duplicate just copies poly.
+                // If we Paste, we want to center it at mouse.
+
+                let poly = data.poly || [];
+                if (overrideX !== undefined && overrideY !== undefined) {
+                    // Calculate centroid or top-left of original poly to detect offset
+                    // Simple approach: Center of bounding box
+                    if (poly.length > 0) {
+                        const minX = Math.min(...poly.map((p: any) => p.x));
+                        const minY = Math.min(...poly.map((p: any) => p.y));
+                        const maxX = Math.max(...poly.map((p: any) => p.x));
+                        const maxY = Math.max(...poly.map((p: any) => p.y));
+                        const cx = (minX + maxX) / 2;
+                        const cy = (minY + maxY) / 2;
+
+                        const dx = overrideX - cx;
+                        const dy = overrideY - cy;
+
+                        poly = poly.map((p: any) => ({ x: p.x + dx, y: p.y + dy }));
+                    }
+                } else {
+                    // Just copy
+                    poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
+                }
+
+                newObj = new Walkbox(poly, data.name);
+            } else if (type === 'Triggerbox') {
+                // Same logic as Walkbox for poly
+                let poly = data.poly || [];
+                if (overrideX !== undefined && overrideY !== undefined) {
+                    if (poly.length > 0) {
+                        const minX = Math.min(...poly.map((p: any) => p.x));
+                        const minY = Math.min(...poly.map((p: any) => p.y));
+                        const maxX = Math.max(...poly.map((p: any) => p.x));
+                        const maxY = Math.max(...poly.map((p: any) => p.y));
+                        const cx = (minX + maxX) / 2;
+                        const cy = (minY + maxY) / 2;
+                        const dx = overrideX - cx;
+                        const dy = overrideY - cy;
+                        poly = poly.map((p: any) => ({ x: p.x + dx, y: p.y + dy }));
+                    }
+                } else {
+                    poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
+                }
+                newObj = new Triggerbox(poly, data.name, data.script || '');
+            } else {
+                console.warn("Unknown object type:", type);
+                return null;
+            }
+
+            // Common Entity Props
+            if (newObj instanceof Entity) {
+                newObj.color = data.color || '#ff0000';
+                newObj.scale = data.scale || 1.0;
+                newObj.layer = data.layer || 0;
+                newObj.parallax = data.parallax !== undefined ? data.parallax : 1.0;
+                newObj.ignoreScaling = !!data.ignoreScaling;
+
+                // Base Dimensions
+                if (data.baseWidth !== undefined) newObj.baseWidth = data.baseWidth;
+                else newObj.baseWidth = newObj.width / newObj.scale; // Approx
+
+                if (data.baseHeight !== undefined) newObj.baseHeight = data.baseHeight;
+                else newObj.baseHeight = newObj.height / newObj.scale;
+
+                // Restore Model Scale if present (from duplicate or save)
+                if (data.modelScale !== undefined) newObj.modelScale = data.modelScale;
+                // Otherwise derive/default?
+
+                if (data.spriteName) newObj.setSprite(data.spriteName, false);
+            }
+
+            // ADD TO SCENE
+            if (type === 'Walkbox') {
+                if (!scene.walkbox) scene.walkbox = [];
+                scene.walkbox.push(newObj);
+            } else if (type === 'Triggerbox') {
+                if (!scene.triggerboxes) scene.triggerboxes = [];
+                scene.triggerboxes.push(newObj);
+            } else {
+                scene.addEntity(newObj);
+            }
+
+            return newObj;
+
+        } catch (e) {
+            console.error("Error creating object from data:", e);
+            return null;
+        }
+    }
+
+    handleGlobalPaste(e: ClipboardEvent): void {
+        if (!this.enabled) return;
+        if (document.activeElement instanceof HTMLInputElement) return;
+
+        // Use clipboard data from event if available (Synchronous and reliable)
+        const text = e.clipboardData?.getData('text');
+        if (text) {
+            e.preventDefault();
+            console.log("Paste Event Captured. Text length:", text.length);
+            this.processPasteData(text);
+        } else {
+            // Fallback to async read if needed, or just standard action
+        }
+    }
+
+    async pasteObjectFromClipboard(): Promise<void> {
+        // Kept for manual call if needed, but Event is preferred
+        try {
+            // This method previously contained the logic for reading from clipboard and processing.
+            // Now, it should ideally call processPasteData after reading from clipboard.
+            // However, the instruction implies it should be mostly empty or just a fallback.
+            // The primary paste mechanism is now `handleGlobalPaste` which uses `e.clipboardData`.
+            // If this method is still called, it would use `navigator.clipboard.readText()`.
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                console.log("pasteObjectFromClipboard (fallback) called. Text length:", text.length);
+                this.processPasteData(text);
+            }
+        } catch (e) {
+            console.error("Manual pasteObjectFromClipboard failed:", e);
+        }
+    }
+
+    async processPasteData(text: string): Promise<void> {
+        try {
+            console.log("Processing Paste Data...");
+            let data: any;
+            try {
+                data = JSON.parse(text);
+                console.log("JSON Parsed:", data);
+            } catch (e) {
+                console.warn("Clipboard does not contain valid JSON");
+                return;
+            }
+
+            // Basic Validation
+            if (!data || typeof data !== 'object') {
+                console.warn("Clipboard data is not an object");
+                return;
+            }
+
+            // Check Mouse Pos
+            if (!this.lastMousePos) {
+                console.log("Mouse position unknown, cannot paste at cursor.");
+                return;
+            }
+            console.log("Paste Position (Screen):", this.lastMousePos);
+
+            // Helper to get World Coords
+            const worldPos = this.convertScreenToWorld(this.lastMousePos.x, this.lastMousePos.y);
+            console.log("Paste Position (World):", worldPos);
+
+            // Ensure unique name for Paste as well
+            const scene = this.game.sceneManager.currentScene;
+            if (scene) {
+                const baseName = data.name || 'Object';
+                const match = baseName.match(/^(.*?)_\d+$/);
+                const prefix = match ? match[1] : baseName;
+
+                let counter = 1;
+                let newName = `${prefix}_${counter}`;
+                const allObjects = [
+                    ...(scene.entities || []),
+                    ...(scene.walkbox || []),
+                    ...(scene.triggerboxes || [])
+                ];
+                const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
+                while (isNameTaken(newName)) {
+                    counter++;
+                    newName = `${prefix}_${counter}`;
+                }
+                data.name = newName;
+            }
+
+            const newObj = this.createObjectFromData(data, worldPos.x, worldPos.y);
+            if (newObj) {
+                console.log("Pasted object successfully:", newObj.name);
+                this.selectObject(newObj);
+                this.refreshHierarchy();
+            } else {
+                console.warn("Failed to create object from data.");
+            }
+
+        } catch (e) {
+            console.error("Paste failed:", e);
+        }
+    }
+
+    // New Helper: Convert Screen to World
+    convertScreenToWorld(x: number, y: number): { x: number, y: number } {
+        const scene = this.game.sceneManager.currentScene;
+        const camX = scene && scene.camera ? scene.camera.x : 0;
+        const camY = scene && scene.camera ? scene.camera.y : 0;
+        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+
+        const halfW = this.game.canvas.width / 2;
+        const halfH = this.game.canvas.height / 2;
+
+        const worldX = (x - halfW) / zoom + camX;
+        const worldY = (y - halfH) / zoom + camY;
+
+        return { x: Math.round(worldX), y: Math.round(worldY) };
+    }
+
+
+
+    // Existing mouse move needs to update this
+
+    getMouseWorldPos(): { x: number, y: number } {
+        if (this.lastMousePos) return this.convertScreenToWorld(this.lastMousePos.x, this.lastMousePos.y);
+        return { x: 0, y: 0 };
+    }
+
+
+    copySelectedObjectToClipboard(): void {
+        if (!this.selectedObject) return;
+
+        let data: any;
+        if (this.selectedObject.toJSON) {
+            data = this.selectedObject.toJSON();
+        } else {
+            return;
         }
 
-        console.log(`Duplicated ${type}: ${baseName} -> ${newName}`);
-        this.selectObject(newObj);
-        this.refreshHierarchy();
+        const json = JSON.stringify(data, null, 2);
+
+        navigator.clipboard.writeText(json).then(() => {
+            console.log('Object JSON copied to clipboard');
+            // Silent success as requested
+        }).catch(err => {
+            console.error('Failed to copy object JSON: ', err);
+        });
     }
 
     deleteSelectedObject(): void {
@@ -1564,23 +1856,9 @@ export class SceneEditor {
             // Validate data
             if (!data.type) data.type = 'Static'; // Default
 
-            let entity: Entity;
-            if (data.type === 'Actor') {
-                entity = new Actor(160, 100, data.width || 30, data.height || 30, data.name || 'Actor');
-            } else {
-                entity = new Entity(160, 100, data.width || 30, data.height || 30, data.name || 'Static');
-            }
+            const entity = this.createObjectFromData(data);
 
-            // Apply prop
-            entity.color = data.color || entity.color;
-            entity.scale = data.scale || 1.0;
-            entity.layer = data.layer || 0;
-            entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
-            entity.ignoreScaling = !!data.ignoreScaling;
-            if (data.spriteName) entity.setSprite(data.spriteName);
-
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.addEntity(entity);
+            if (entity) {
                 this.selectObject(entity);
                 this.refreshHierarchy();
             }
@@ -1638,12 +1916,12 @@ export class SceneEditor {
                     let entity: Entity;
 
                     if (entityData.type === 'Player') {
-                        entity = new Player(entityData.x, entityData.y);
-                        // Player constructor sets hardcoded size/sprite, might need to override from saved data
-                        // if we want perfect persistence.
-                        // For now we assume Player defaults are good, but we should restore position at least (done in constructor).
+                        // Legacy: Convert Player to Actor
+                        entity = new Actor(entityData.x, entityData.y, 30, 50, 'Player');
+                        (entity as Actor).isPlayer = true;
                     } else if (entityData.type === 'Actor') {
                         entity = new Actor(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
+                        if (entityData.isPlayer) (entity as Actor).isPlayer = true;
                     } else {
                         entity = new Entity(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
                     }

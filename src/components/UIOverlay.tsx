@@ -101,6 +101,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
                         {/* Object Management Toolbar */}
                         <div className="editor-toolbar" style={{ padding: '5px', borderBottom: '1px solid #0f0', marginBottom: '5px' }}>
+
                             <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
                                 <select id="add-object-type" style={{ width: '70px', background: '#000', color: '#0f0', border: '1px solid #0f0' }}>
                                     <option value="Static">Static (S)</option>
@@ -186,6 +187,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                 <label>Scale: <input type="number" id="prop-scale" step="0.1" style={{ width: '50px' }} /></label>
                                 <label>Layer: <input type="number" id="prop-layer" style={{ width: '50px' }} /></label>
                                 <label>Parallax: <input type="number" id="prop-parallax" step="0.1" style={{ width: '50px' }} /></label>
+                            </div>
+
+                            <div id="prop-actor-group" className="hidden mt-2 border-t border-gray-600 pt-2">
+                                <div className="mb-2">
+                                    <label className="block text-gray-400 text-xs mb-1">State</label>
+                                    <select id="prop-actor-state" className="w-full bg-gray-700 text-white px-2 py-1 text-sm rounded border border-gray-600">
+                                        <option value="idle">Idle</option>
+                                        <option value="walk">Walk</option>
+                                        <option value="talk">Talk</option>
+                                        <option value="interact">Interact</option>
+                                    </select>
+                                </div>
+                                <div className="mb-2 flex items-center">
+                                    <input type="checkbox" id="prop-actor-isplayer" className="mr-2" />
+                                    <label htmlFor="prop-actor-isplayer" className="text-gray-300 text-sm">Is Player</label>
+                                </div>
                             </div>
                             <label><input type="checkbox" id="prop-no-scaling" /> Disable Depth-Scaling</label>
                         </div>

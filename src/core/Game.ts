@@ -1,10 +1,11 @@
+
 import { CRTFilter, type CRTSettings } from '../graphics/CRTFilter';
 import { Input } from './Input';
 import { Parser } from '../mechanics/Parser';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Scene } from '../scene/Scene';
-import { Player } from '../entities/Player';
+import { Actor } from '../entities/Actor'; // Use Actor instead of Player
 import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 
@@ -100,12 +101,56 @@ export class Game {
 
         console.log('Game initialized');
     }
-
     initTestScene(): void {
         const testScene = new Scene('test_room', 'Test Room');
 
-        // Add player
-        const player = new Player(160, 100);
+        // Add player (as Actor)
+        const player = new Actor(160, 100, 30, 50, 'Hero');
+        player.isPlayer = true;
+        player.color = '#00ffff'; // Cyan
+        player.setSprite('assets/hero.png');
+
+        // --- MANUAL ANIMATION SETUP (Migrated from Player.ts) ---
+        const W = 176;    // Frame Width
+        const H = 192;    // Frame Height
+        const offX = 0;   // Horizontal Offset (shift right)
+        const offY = 20;   // Vertical Offset (shift down)
+
+        // Row 1: Down
+        const walkDown = [
+            { x: offX, y: offY, w: W, h: H },
+            { x: offX + W, y: offY, w: W, h: H },
+            { x: offX + W * 2, y: offY, w: W, h: H },
+            { x: offX + W * 3, y: offY, w: W, h: H }
+        ];
+        if (player.animator) {
+            player.animator.addAnimation('WALK_DOWN', walkDown);
+            player.animator.addAnimation('IDLE_DOWN', [{ x: offX, y: offY, w: W, h: H }]);
+
+            // Row 2: Up
+            const walkUp = [
+                { x: offX, y: offY + H, w: W, h: H },
+                { x: offX + W, y: offY + H, w: W, h: H },
+                { x: offX + W * 2, y: offY + H, w: W, h: H },
+                { x: offX + W * 3, y: offY + H, w: W, h: H }
+            ];
+            player.animator.addAnimation('WALK_UP', walkUp);
+            player.animator.addAnimation('IDLE_UP', [{ x: offX, y: offY + H, w: W, h: H }]);
+
+            // Row 3: Right
+            const walkRight = [
+                { x: offX, y: offY + H * 2, w: W, h: H },
+                { x: offX + W, y: offY + H * 2, w: W, h: H },
+                { x: offX + W * 2, y: offY + H * 2, w: W, h: H },
+                { x: offX + W * 3, y: offY + H * 2, w: W, h: H }
+            ];
+            player.animator.addAnimation('WALK_RIGHT', walkRight);
+            player.animator.addAnimation('IDLE_RIGHT', [{ x: offX, y: offY + H * 2, w: W, h: H }]);
+
+            // Default
+            player.animator.play('IDLE_DOWN');
+        }
+
         testScene.addEntity(player);
 
         // Add a dummy prop (Pillar)

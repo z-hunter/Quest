@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
@@ -34,7 +35,7 @@ export class Scene {
     walkbox: Walkbox[];
     triggerboxes: Triggerbox[];
     scaling: SceneScaling;
-    player: Entity | null;
+    player: Actor | null;
 
     // Runtime Camera (used for rendering)
     camera: { x: number, y: number, zoom: number };
@@ -71,7 +72,7 @@ export class Scene {
         // @ts-ignore
         entity.scene = this;
         // If this entity is the player, store a reference
-        if (entity.constructor.name === 'Player') {
+        if (entity instanceof Actor && entity.isPlayer) {
             this.player = entity;
         }
     }
@@ -80,6 +81,9 @@ export class Scene {
         const index = this.entities.indexOf(entity);
         if (index > -1) {
             this.entities.splice(index, 1);
+            if (this.player === entity) {
+                this.player = null;
+            }
         }
     }
 
