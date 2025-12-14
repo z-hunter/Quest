@@ -109,6 +109,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                     <option value="Triggerbox">Trigger (T)</option>
                                 </select>
                                 <button id="btn-add-object" style={{ flex: 1 }}>Add</button>
+                                <button id="btn-dup-object" style={{ flex: 0.4 }}>Dup</button>
                             </div>
                             <div style={{ display: 'flex', gap: '5px' }}>
                                 <button id="btn-delete-object" style={{ flex: 1 }}>Del</button>

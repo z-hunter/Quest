@@ -180,6 +180,10 @@ export class SceneEditor {
             this.game.saveSettings();
         }
 
+        if (target.id === 'btn-dup-object') {
+            this.duplicateSelectedObject();
+        }
+
         // Add Object Button
         if (target.id === 'btn-add-object') {
             this.onAddObjectClick(); // Ensure onAddObjectClick calls startCreating
@@ -280,6 +284,13 @@ export class SceneEditor {
     }
 
     handleGlobalKey(e: KeyboardEvent): void {
+        // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            this.duplicateSelectedObject();
+            return;
+        }
+
         // Allows opening editor with F1 even if disabled
         if (!this.enabled && e.key !== 'F1') return;
 
@@ -320,6 +331,7 @@ export class SceneEditor {
                 this.promptLoadScene();
                 break;
             case 'f4': e.preventDefault(); this.newScene(); break;
+
 
             // Creation Hotkeys
             case 's': this.startCreating('Static'); break;
@@ -1262,6 +1274,99 @@ export class SceneEditor {
 
 
 
+        this.refreshHierarchy();
+    }
+
+    duplicateSelectedObject(): void {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene || !this.selectedObject) return;
+
+        let data: any;
+        let type = '';
+
+        if (this.selectedObject instanceof Entity) {
+            data = this.selectedObject.toJSON();
+            type = (this.selectedObject instanceof Actor) ? 'Actor' : 'Static';
+        } else if (this.selectedObject instanceof Walkbox) {
+            data = this.selectedObject.toJSON();
+            type = 'Walkbox';
+        } else if (this.selectedObject instanceof Triggerbox) {
+            data = this.selectedObject.toJSON();
+            type = 'Triggerbox';
+        } else {
+            return;
+        }
+
+        // Generate Unique Name
+        const baseName = data.name;
+        // Strip _\d+ suffix
+        const match = baseName.match(/^(.*?)_\d+$/);
+        const prefix = match ? match[1] : baseName;
+
+        let counter = 1;
+        let newName = `${prefix}_${counter}`;
+
+        const allObjects = [
+            ...(scene.entities || []),
+            ...(scene.walkbox || []),
+            ...(scene.triggerboxes || [])
+        ];
+
+        const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
+        while (isNameTaken(newName)) {
+            counter++;
+            newName = `${prefix}_${counter}`;
+        }
+        data.name = newName;
+
+        // Instantiate
+        let newObj: any;
+        if (type === 'Actor') {
+            newObj = new Actor(data.x, data.y, data.width, data.height, data.name);
+            if (this.selectedObject instanceof Actor) {
+                const srcActor = this.selectedObject as Actor;
+                newObj.setDirection(srcActor.direction);
+                newObj.setState(srcActor.state);
+            }
+        } else if (type === 'Static') {
+            newObj = new Entity(data.x, data.y, data.width, data.height, data.name);
+        } else if (type === 'Walkbox') {
+            const newPoly = data.poly.map((p: any) => ({ x: p.x, y: p.y }));
+            newObj = new Walkbox(newPoly, data.name);
+        } else if (type === 'Triggerbox') {
+            const newPoly = data.poly.map((p: any) => ({ x: p.x, y: p.y }));
+            newObj = new Triggerbox(newPoly, data.name, data.script || '');
+        }
+
+        // Common Entity Props Restoration
+        if (newObj instanceof Entity) {
+            newObj.color = data.color;
+            newObj.scale = data.scale;
+            newObj.baseWidth = data.baseWidth;
+            newObj.baseHeight = data.baseHeight;
+            newObj.layer = data.layer;
+            newObj.parallax = data.parallax ?? 1.0;
+            newObj.ignoreScaling = !!data.ignoreScaling;
+            if (data.spriteName) newObj.setSprite(data.spriteName, false);
+
+            if (this.selectedObject instanceof Entity) {
+                newObj.modelScale = this.selectedObject.modelScale;
+            }
+        }
+
+        // Add to Scene
+        if (type === 'Walkbox') {
+            if (!scene.walkbox) scene.walkbox = [];
+            scene.walkbox.push(newObj);
+        } else if (type === 'Triggerbox') {
+            if (!scene.triggerboxes) scene.triggerboxes = [];
+            scene.triggerboxes.push(newObj);
+        } else {
+            scene.addEntity(newObj);
+        }
+
+        console.log(`Duplicated ${type}: ${baseName} -> ${newName}`);
+        this.selectObject(newObj);
         this.refreshHierarchy();
     }
 
