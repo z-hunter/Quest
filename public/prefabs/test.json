@@ -1,0 +1,16 @@
+{
+  "type": "Entity",
+  "name": "Static_398",
+  "x": -7,
+  "y": -26,
+  "width": 89,
+  "height": 95,
+  "baseWidth": 178,
+  "baseHeight": 190,
+  "spriteName": null,
+  "color": "#00ff00",
+  "scale": 0.5,
+  "layer": 0,
+  "parallax": 1,
+  "ignoreScaling": false
+}

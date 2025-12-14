@@ -445,19 +445,28 @@ export class SceneEditor {
                         const currentVisH = ent.height;
 
                         if (isEnabled) {
-                            // Turning ON: base = visual / newScale
-                            // s.enabled is already true, so getScaling works
-                            const newScale = scene.getScaling(ent.y);
-                            ent.scale = newScale;
-                            if (newScale !== 0) {
-                                ent.baseWidth = currentVisW / newScale;
-                                ent.baseHeight = currentVisH / newScale;
+                            // Turning ON: Scale = Model * Depth
+                            const depthFactor = scene.getScaling(ent.y);
+                            const totalScale = ent.modelScale * depthFactor;
+                            ent.scale = totalScale;
+
+                            if (totalScale !== 0) {
+                                ent.baseWidth = currentVisW / totalScale;
+                                ent.baseHeight = currentVisH / totalScale;
                             }
                         } else {
-                            // Turning OFF: base = visual (scale becomes 1.0)
-                            ent.scale = 1.0;
-                            ent.baseWidth = currentVisW;
-                            ent.baseHeight = currentVisH;
+                            // Turning OFF: Scale = Model * 1.0
+                            const totalScale = ent.modelScale;
+                            ent.scale = totalScale;
+
+                            if (totalScale !== 0) {
+                                ent.baseWidth = currentVisW / totalScale;
+                                ent.baseHeight = currentVisH / totalScale;
+                            } else {
+                                ent.baseWidth = currentVisW; // Fallback
+                                ent.baseHeight = currentVisH;
+                            }
+
                             ent.width = currentVisW;
                             ent.height = currentVisH;
                         }
