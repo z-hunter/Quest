@@ -17,6 +17,10 @@ export interface EntityData {
     layer: number;
     parallax?: number;
     ignoreScaling?: boolean;
+    isPlayer?: boolean;
+    speed?: number;
+    direction?: string;
+    state?: string;
 }
 
 export class Entity extends SceneObject {

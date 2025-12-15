@@ -284,7 +284,7 @@ export class SceneEditor {
         }
 
         // Selects and special properties
-        if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling') {
+        if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling' || target.id === 'prop-actor-speed') {
             this.updateEntityFromUI();
         }
 
@@ -1151,6 +1151,9 @@ export class SceneEditor {
                 if (propDirection) propDirection.value = ent.direction || 'down';
                 if (propState) propState.value = ent.state || 'idle';
 
+                const propActorSpeed = document.getElementById('prop-actor-speed') as HTMLInputElement;
+                if (propActorSpeed) propActorSpeed.value = ent.speed.toString();
+
                 const propActorIsPlayer = document.getElementById('prop-actor-isplayer') as HTMLInputElement;
                 if (propActorIsPlayer) propActorIsPlayer.checked = ent.isPlayer;
             }
@@ -1315,6 +1318,8 @@ export class SceneEditor {
         if (ent instanceof Actor) {
             if (propDirection) ent.setDirection(propDirection.value as any);
             if (propState) ent.setState(propState.value as any);
+            const propActorSpeed = document.getElementById('prop-actor-speed') as HTMLInputElement;
+            if (propActorSpeed) ent.speed = parseFloat(propActorSpeed.value) || 0.1;
         }
 
 
@@ -1414,6 +1419,7 @@ export class SceneEditor {
                 // Restore Actor specifics if available in data
                 if (data.direction) newObj.setDirection(data.direction);
                 if (data.state) newObj.setState(data.state);
+                if (data.speed) newObj.speed = data.speed;
                 if (data.isPlayer) newObj.isPlayer = true; // Apply from JSON
             } else if (type === 'Player') {
                 // Legacy Import Support: Convert Player to Actor + isPlayer
@@ -2240,7 +2246,7 @@ export class SceneEditor {
             ctx.lineTo(this.game.canvas.width, horizonScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.fillText(`Horizon (World Y: ${horizonWorldY})`, 5, horizonScreenY - 2);
+            ctx.fillText(`Horizon (${horizonWorldY})`, 5, horizonScreenY - 2);
 
             // Front Line (Max Scale)
             const frontWorldY = scene.scaling.front;
@@ -2252,7 +2258,7 @@ export class SceneEditor {
             ctx.lineTo(this.game.canvas.width, frontScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
-            ctx.fillText(`Front (World Y: ${frontWorldY})`, 5, frontScreenY - 2);
+            ctx.fillText(`Front (${frontWorldY})`, 5, frontScreenY - 2);
 
             ctx.restore();
         }

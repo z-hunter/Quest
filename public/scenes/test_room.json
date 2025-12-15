@@ -13,10 +13,10 @@
   },
   "entities": [
     {
-      "type": "Player",
-      "name": "Player",
-      "x": 176.6988077169717,
-      "y": 90.02880771697507,
+      "type": "Actor",
+      "name": "Hero",
+      "x": 181.5,
+      "y": 91.75,
       "width": 15,
       "height": 25,
       "baseWidth": 30,
@@ -26,23 +26,9 @@
       "scale": 0.5,
       "layer": 0,
       "parallax": 1,
-      "ignoreScaling": false
-    },
-    {
-      "type": "Actor",
-      "name": "Player_1",
-      "x": 121,
-      "y": 105,
-      "width": 67.05180133688471,
-      "height": 61.93553918213036,
-      "baseWidth": 134.10360267376942,
-      "baseHeight": 123.87107836426073,
-      "spriteName": "assets/hero.png",
-      "color": "#00ffff",
-      "scale": 0.5,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false
+      "ignoreScaling": false,
+      "isPlayer": true,
+      "speed": 0.1
     },
     {
       "type": "Entity",
@@ -53,6 +39,22 @@
       "height": 20,
       "baseWidth": 20,
       "baseHeight": 40,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.5,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false
+    },
+    {
+      "type": "Entity",
+      "name": "Pillar_1",
+      "x": 179,
+      "y": 129,
+      "width": 30.212418019771576,
+      "height": 12,
+      "baseWidth": 60.42483603954315,
+      "baseHeight": 24,
       "spriteName": null,
       "color": "#888888",
       "scale": 0.5,
@@ -82,6 +84,6 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5
 }

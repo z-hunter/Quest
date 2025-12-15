@@ -57,13 +57,15 @@ export class Actor extends Entity {
             const dy = this.target.y - this.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist < 2) {
+            const step = this.speed * deltaTime;
+
+            if (dist <= step) {
                 this.x = this.target.x;
                 this.y = this.target.y;
                 this.stop();
             } else {
-                const moveX = (dx / dist) * this.speed * deltaTime;
-                const moveY = (dy / dist) * this.speed * deltaTime;
+                const moveX = (dx / dist) * step;
+                const moveY = (dy / dist) * step;
                 const nextX = this.x + moveX;
                 const nextY = this.y + moveY;
 
@@ -179,6 +181,7 @@ export class Actor extends Entity {
         const data = super.toJSON();
         data.type = 'Actor';
         if (this.isPlayer) data.isPlayer = true;
+        data.speed = this.speed;
         return data;
     }
 }

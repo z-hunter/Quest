@@ -119,7 +119,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                             </div>
                         </div>
 
-                        <div id="scene-properties-item" className="scene-prop-item" onClick={() => game?.editor?.selectObject('SCENE')}>Scene Properties</div>
+                        <div id="scene-properties-item" className="scene-prop-item" onClick={() => game?.editor?.selectObject('SCENE')}>Scene</div>
                         <div id="entity-list"></div>
                     </div>
 
@@ -198,6 +198,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                         <option value="talk">Talk</option>
                                         <option value="interact">Interact</option>
                                     </select>
+                                </div>
+                                <div className="mb-2">
+                                    <label className="block text-gray-400 text-xs mb-1">Speed</label>
+                                    <input type="number" id="prop-actor-speed" step="0.01" min="0.01" max="2.0" className="w-full bg-gray-700 text-white px-2 py-1 text-sm rounded border border-gray-600" />
                                 </div>
                                 <div className="mb-2 flex items-center">
                                     <input type="checkbox" id="prop-actor-isplayer" className="mr-2" />
