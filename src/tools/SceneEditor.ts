@@ -23,7 +23,7 @@ export class SceneEditor {
     resizingHandle: string | null = null;
 
     // Callbacks
-    openFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void) => void) | null = null;
+    openFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string) => void) | null = null;
 
     // Event Handlers (Bound)
     private boundClickHandler: (e: Event) => void;
@@ -205,6 +205,10 @@ export class SceneEditor {
             this.duplicateSelectedObject();
         }
 
+        if (target.id === 'btn-f5-sprite') {
+            this.game.spriteEditor.toggle(true);
+        }
+
         // Add Object Button
         if (target.id === 'btn-add-object') {
             this.onAddObjectClick(); // Ensure onAddObjectClick calls startCreating
@@ -371,6 +375,10 @@ export class SceneEditor {
                 this.promptLoadScene();
                 break;
             case 'f4': e.preventDefault(); this.newScene(); break;
+            case 'f5':
+                e.preventDefault();
+                this.game.spriteEditor.toggle(true);
+                break;
 
 
             // Creation Hotkeys

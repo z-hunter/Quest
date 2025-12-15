@@ -93,7 +93,8 @@ canvas {
 
 /* Editor Styles */
 /* Editor Overlay - Full Screen Wrapper */
-#editor-wrapper {
+#editor-wrapper,
+#sprite-editor-wrapper {
   position: fixed;
   top: 0;
   left: 0;
@@ -107,7 +108,8 @@ canvas {
   z-index: 100;
 }
 
-#editor-wrapper.hidden {
+#editor-wrapper.hidden,
+#sprite-editor-wrapper.hidden {
   display: none;
 }
 
@@ -139,7 +141,8 @@ canvas {
 }
 
 /* Right Panel - Properties */
-#editor-panel {
+#editor-panel,
+#se-panel {
   width: 250px;
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid #00ff00;
@@ -149,10 +152,14 @@ canvas {
   pointer-events: auto;
   margin-left: auto;
   /* Push to right */
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Bottom Bar - F-Keys */
-#editor-bottom-bar {
+.editor-bottom-bar {
   background: #000;
   color: #00ff00;
   display: flex;
@@ -161,6 +168,17 @@ canvas {
   border-top: 2px solid #00ff00;
   font-family: monospace;
   pointer-events: auto;
+}
+
+#se-preview-container {
+  overflow: hidden;
+  position: relative;
+}
+
+#se-preview-canvas {
+  width: 200px !important;
+  height: 200px !important;
+  background: #000;
 }
 
 .f-key-btn {

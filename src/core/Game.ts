@@ -4,6 +4,7 @@ import { Input } from './Input';
 import { Parser } from '../mechanics/Parser';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
+import { SpriteEditor } from '../tools/SpriteEditor';
 import { Scene } from '../scene/Scene';
 import { Actor } from '../entities/Actor'; // Use Actor instead of Player
 import { Entity } from '../entities/Entity';
@@ -26,6 +27,7 @@ export class Game {
     parser: Parser;
     sceneManager: SceneManager;
     editor: SceneEditor;
+    spriteEditor: SpriteEditor;
     score: number = 0;
     cursorBlink: number = 0;
 
@@ -89,6 +91,7 @@ export class Game {
         this.parser = new Parser(this);
         this.sceneManager = new SceneManager(this);
         this.editor = new SceneEditor(this);
+        this.spriteEditor = new SpriteEditor(this);
 
         // Expose game instance globally for legacy compatibility (Entity.ts uses it)
         // @ts-ignore
@@ -281,7 +284,13 @@ export class Game {
         // 3. Render UI/Editor to UI Canvas (Overlay)
         if (this.uiCtx) {
             this.uiCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            this.editor.render(this.uiCtx);
+
+            // Sprite Editor Overlay (Takes over screen if active)
+            if (this.spriteEditor.active) {
+                this.spriteEditor.render(this.uiCtx);
+            } else {
+                this.editor.render(this.uiCtx);
+            }
         }
     }
 

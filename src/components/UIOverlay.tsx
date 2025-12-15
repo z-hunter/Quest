@@ -8,7 +8,7 @@ interface UIOverlayProps {
 
 export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     const [message, setMessage] = useState<string | null>(null);
-    const [fileBrowser, setFileBrowser] = useState<{ open: boolean, mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void } | null>(null);
+    const [fileBrowser, setFileBrowser] = useState<{ open: boolean, mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string } | null>(null);
 
     // Ref to access current state in callbacks if needed, though we pass handlers directly
 
@@ -20,8 +20,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             // Expose a method for the Editor to open the FileBrowser
             // We attach it to the editor instance directly since it's the bridge
             if (game.editor) {
-                game.editor.openFileBrowser = (mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void) => {
-                    setFileBrowser({ open: true, mode, dir, onConfirm });
+                game.editor.openFileBrowser = (mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string) => {
+                    setFileBrowser({ open: true, mode, dir, onConfirm, extension });
                 };
             }
 
@@ -86,6 +86,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         directory={fileBrowser.dir}
                         onConfirm={handleBrowserConfirm}
                         onCancel={() => setFileBrowser(null)}
+                        extension={fileBrowser.extension}
+                        title={fileBrowser.title}
                     />
                 </div>
             )}
@@ -265,7 +267,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 </div >
 
                 {/* Bottom Bar: F-Keys */}
-                < div id="editor-bottom-bar" >
+                <div className="editor-bottom-bar" id="editor-bottom-bar">
                     <button className="f-key-btn" onClick={() => game?.editor?.toggle()}><span className="f-num">F1</span>Game</button>
                     <button className="f-key-btn" id="btn-f2-save"><span className="f-num">F2</span>Save</button>
                     <button className="f-key-btn" id="btn-f3-load"><span className="f-num">F3</span>Load</button>
@@ -274,6 +276,61 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     <button className="f-key-btn" id="btn-f9-settings"><span className="f-num">F9</span>Settings</button>
                 </div >
             </div >
+
+            {/* Sprite Editor Overlay */}
+            <div id="sprite-editor-wrapper" className="hidden" style={{ pointerEvents: 'auto' }}>
+                <div className="editor-main-area">
+
+                    {/* Spacer for Left Panel Equivalent (or just center logic? GDD says "Right Panel... workspace in center") */}
+                    {/* We use grid/flex layout. If we use same class 'editor-main-area', it expects left/right panels.
+                            Let's follow the style: Left is maybe empty or minimal, Center is the specific workspace handled by canvas (underneath), 
+                            Right is properties.
+                            Actually the Workspace is DRAWN on canvas. So we just need the Right Panel here.
+                            So we can have an empty filler for left.
+                         */}
+                    <div style={{ flex: 1 }}></div>
+
+                    {/* Right Panel: Sprite Properties */}
+                    <div id="se-panel" className="editor-panel">
+                        <div className="editor-header">
+                            <h3>SPRITE EDITOR</h3>
+                        </div>
+
+                        <div className="editor-section">
+                            <label>Sprite ID (Filename):</label>
+                            <input type="text" id="se-prop-id" style={{ width: '100%', marginBottom: '10px' }} />
+
+                            <button id="btn-se-load-image" style={{ width: '100%', marginBottom: '10px' }}>Load Image (Ctrl+O)</button>
+
+                            <h4>Coordinates</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                <label>X: <input type="number" id="se-prop-x" style={{ width: '50px' }} /></label>
+                                <label>Y: <input type="number" id="se-prop-y" style={{ width: '50px' }} /></label>
+                                <label>W: <input type="number" id="se-prop-width" style={{ width: '50px' }} /></label>
+                                <label>H: <input type="number" id="se-prop-height" style={{ width: '50px' }} /></label>
+                            </div>
+
+                            <h4 style={{ marginTop: '10px' }}>Animation</h4>
+                            <label>Frames: <input type="number" id="se-prop-frames" min="1" style={{ width: '50px' }} /></label>
+
+                            <h4 style={{ marginTop: '10px' }}>Preview</h4>
+                            <div id="se-preview-container" style={{ width: '200px', height: '200px', border: '1px solid #444', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {/* Canvas for precise rendering */}
+                                <canvas id="se-preview-canvas" width="200" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom Bar: F-Keys */}
+                <div className="editor-bottom-bar">
+                    <button className="f-key-btn" id="btn-se-f1"><span className="f-num">F1</span>Scene Edit</button>
+                    <button className="f-key-btn" id="btn-se-f2"><span className="f-num">F2</span>Save</button>
+                    <button className="f-key-btn" id="btn-se-f3"><span className="f-num">F3</span>Load</button>
+                    <button className="f-key-btn" id="btn-se-f4"><span className="f-num">F4</span>New</button>
+                    <button className="f-key-btn" id="btn-se-f5"><span className="f-num">F5</span>Game</button>
+                </div>
+            </div>
         </>
     );
 };
