@@ -335,12 +335,15 @@ export class SceneEditor {
 
 
 
-        // Allows opening editor with F1 even if disabled
-        if (!this.enabled && e.key !== 'F1') return;
+        // Allows opening editor with F1 or F5 even if disabled
+        if (!this.enabled && e.key !== 'F1' && e.key !== 'F5') return;
 
         if (e.key === 'F1') {
             e.preventDefault();
             this.toggle();
+        } else if (e.key === 'F5') {
+            e.preventDefault();
+            this.game.spriteEditor.toggle(true);
         } else if (e.key === 'F9') {
             e.preventDefault();
             this.selectObject('SETTINGS');
