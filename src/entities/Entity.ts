@@ -77,27 +77,95 @@ export class Entity extends SceneObject {
         this.scene = null;
     }
 
-    setSprite(filename: string, resize: boolean = true): void {
+    setSprite(filename: string): void {
+        // Strict JSON support as requested
+        if (!filename.toLowerCase().endsWith('.json')) {
+            filename += '.json';
+        }
+
         this.spriteName = filename;
-        this.image = new Image();
-        this.image.src = filename; // Vite might need import, but for now keeping as string path
-        console.log(`[Entity] Loading sprite: ${filename}`);
+        console.log(`[Entity] Loading sprite config: ${filename}`);
 
-        this.image.onload = () => {
-            if (this.image) {
-                console.log(`[Entity] Loaded sprite: ${filename} (${this.image.naturalWidth}x${this.image.naturalHeight})`);
-                if (!this.animator && resize) {
-                    this.baseWidth = this.image.naturalWidth;
-                    this.baseHeight = this.image.naturalHeight;
-                    this.width = this.baseWidth * this.scale;
-                    this.height = this.baseHeight * this.scale;
+        // Construct path for fetch.
+        // If filename starts with 'public/', we need to strip it for the browser fetch check?
+        // Usually filenames stored are relative or just names.
+        // FileBrowser generally returns just the filename if flattened, or relative path.
+        // Let's assume input might be "public/sprites/foo.json" or just "foo.json"
+
+        // However, fetch needs a valid URL path.
+        // In this project, 'public' is root.
+
+        let fetchPath = filename;
+        if (fetchPath.startsWith('public/')) {
+            fetchPath = '/' + fetchPath.substring(7);
+        } else if (!fetchPath.startsWith('/')) {
+            // If just filename, assume /sprites/ ? Or try to respect path provided?
+            // PropertiesPanel sends whatever FileBrowser returns.
+            // If PropertiesPanel was set to 'public/sprites', it typically returns just the file name in the callback 
+            // IF the file browser implementation does that.
+            // Let's look at `PropertiesPanel` again... `handleChange('spriteName', f)`
+            // If FileBrowser returns 'foo.json', we might need to prepend path.
+            // But let's handle the full path case first.
+
+            // Safest bet: If it doesn't look like a path, assume /sprites/
+            fetchPath = '/sprites/' + filename;
+        }
+
+        fetch(fetchPath)
+            .then(res => {
+                if (!res.ok) throw new Error(`Failed to load sprite json: ${res.statusText}`);
+                return res.json();
+            })
+            .then(data => {
+                // Parse Sprite Data
+                // Expected format: { imageFile: string, x, y, width, height, frames, ... }
+
+                // 1. Setup Dimensions (Frame Size)
+                this.baseWidth = data.width;
+                this.baseHeight = data.height;
+                // Update current dimensions based on scale
+                this.width = this.baseWidth * this.scale;
+                this.height = this.baseHeight * this.scale;
+
+                // 2. Load Image
+                let imagePath = data.imageFile;
+                // Handle relative paths in JSON
+                if (imagePath.startsWith('public/')) {
+                    imagePath = '/' + imagePath.substring(7);
+                } else if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
+                    imagePath = '/assets/' + imagePath; // Assumption: images are in assets
                 }
-            }
-        };
 
-        this.image.onerror = (e) => {
-            console.error(`[Entity] Failed to load sprite: ${filename}`, e);
-        };
+                this.image = new Image();
+                this.image.src = imagePath;
+                this.image.onload = () => {
+                    console.log(`[Entity] Loaded sprite image: ${imagePath}`);
+                };
+                this.image.onerror = (e) => console.error(`[Entity] Failed to load sprite image: ${imagePath}`, e);
+
+                // 3. Setup Animator
+                if (!this.animator) {
+                    this.animator = new Animator(this);
+                }
+
+                const frames = [];
+                for (let i = 0; i < (data.frames || 1); i++) {
+                    frames.push({
+                        x: data.x,
+                        y: data.y + (i * data.height), // Vertical strip assumption from SpriteEditor
+                        w: data.width,
+                        h: data.height
+                    });
+                }
+
+                this.animator.addAnimation('default', frames, true);
+                this.animator.play('default');
+
+            })
+            .catch(err => {
+                console.error(`[Entity] Sprite load error:`, err);
+                // Fallback? User asked to remove legacy support, so maybe just log.
+            });
     }
 
     update(deltaTime: number): void {
@@ -212,7 +280,7 @@ export class Entity extends SceneObject {
         entity.ignoreScaling = !!data.ignoreScaling;
 
         if (data.spriteName) {
-            entity.setSprite(data.spriteName, false);
+            entity.setSprite(data.spriteName);
         }
         return entity;
     }

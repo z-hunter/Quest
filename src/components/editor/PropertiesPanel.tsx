@@ -208,7 +208,7 @@ export const PropertiesPanel: React.FC = () => {
                             <label className="e-label">Sprite</label>
                             <div style={{ display: 'flex', gap: '5px' }}>
                                 <input type="text" className="e-input" style={{ flex: 1 }} value={obj.spriteName || ''} onChange={(e) => handleChange('spriteName', e.target.value)} />
-                                <button className="e-btn" onClick={() => Game.instance.editor.openFileBrowser?.('load', 'assets', (f) => handleChange('spriteName', f))}>...</button>
+                                <button className="e-btn" onClick={() => Game.instance.openFileBrowser('load', 'public/sprites', (f) => handleChange('spriteName', f))}>...</button>
                             </div>
                         </div>
 

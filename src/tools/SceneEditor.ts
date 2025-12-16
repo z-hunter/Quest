@@ -727,6 +727,52 @@ export class SceneEditor {
                 newB = mouseWorldY;
             }
 
+            // 2. Proportional Scaling (Shift Key)
+            if (e.shiftKey) {
+                const startW = currentR - currentL;
+                const startH = currentB - currentT;
+                // Avoid division by zero
+                if (startH !== 0) {
+                    const aspect = startW / startH;
+
+                    // Calculate proposed dimensions based on mouse move
+                    let propW = Math.abs(newR - newL);
+                    let propH = Math.abs(newB - newT);
+
+                    // Use the larger relative change or just Width as master?
+                    // Simple "Width drives Height" is predictable for corner drags.
+                    // But if dragging more vertically, might feel weird.
+                    // Let's use the larger dimension to drive.
+
+                    if (propW > propH * aspect) {
+                        // Width is dominant
+                        propH = propW / aspect;
+                    } else {
+                        // Height is dominant
+                        propW = propH * aspect;
+                    }
+
+                    // Re-apply to edges based on fixed corner
+                    if (this.resizingHandle === 'nw') {
+                        // Fixed: BR
+                        newL = newR - propW;
+                        newT = newB - propH;
+                    } else if (this.resizingHandle === 'ne') {
+                        // Fixed: BL
+                        newR = newL + propW;
+                        newT = newB - propH;
+                    } else if (this.resizingHandle === 'sw') {
+                        // Fixed: TR
+                        newL = newR - propW;
+                        newB = newT + propH;
+                    } else if (this.resizingHandle === 'se') {
+                        // Fixed: TL
+                        newR = newL + propW;
+                        newB = newT + propH;
+                    }
+                }
+            }
+
             // Enforce Min Size
             if (newR - newL < 5) {
                 if (this.resizingHandle.includes('w')) newL = newR - 5;
