@@ -657,8 +657,18 @@ export class SceneEditor {
 
             if (this.draggingVertexIndex >= 0) {
                 // Drag Vertex
-                poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
-                poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
+                if (e.shiftKey) {
+                    // Logic: Snap relative to PREVIOUS vertex in the loop
+                    // (i - 1 + length) % length
+                    const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
+                    const anchor = poly[prevIndex];
+                    const snapped = this.getSnappedPos(worldPos, anchor);
+                    poly[this.draggingVertexIndex].x = snapped.x;
+                    poly[this.draggingVertexIndex].y = snapped.y;
+                } else {
+                    poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
+                    poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
+                }
             } else {
                 // Drag Whole Body
                 const dx = worldPos.x - this.dragOffset.x;
@@ -1521,6 +1531,23 @@ export class SceneEditor {
         return { x: 0, y: 0 };
     }
 
+    getSnappedPos(current: { x: number, y: number }, anchor: { x: number, y: number }): { x: number, y: number } {
+        const dx = current.x - anchor.x;
+        const dy = current.y - anchor.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist === 0) return anchor;
+
+        const angle = Math.atan2(dy, dx);
+        const snapAngle = Math.PI / 8; // 22.5 degrees
+        const snappedAngle = Math.round(angle / snapAngle) * snapAngle;
+
+        return {
+            x: Math.round(anchor.x + Math.cos(snappedAngle) * dist),
+            y: Math.round(anchor.y + Math.sin(snappedAngle) * dist)
+        };
+    }
+
 
     copySelectedObjectToClipboard(): void {
         if (!this.selectedObject) return;
@@ -1879,8 +1906,20 @@ export class SceneEditor {
             const worldY = (y - halfH) / zoom + camY;
 
             if (!this.currentPolygon) this.currentPolygon = [];
-            this.currentPolygon.push({ x: Math.round(worldX), y: Math.round(worldY) });
-            console.log(`Point Added: ${Math.round(worldX)},${Math.round(worldY)}. Total: ${this.currentPolygon.length}`);
+
+            // SNAP LOGIC
+            let finalX = Math.round(worldX);
+            let finalY = Math.round(worldY);
+
+            if (this.game.input.isDown('Shift') && this.currentPolygon.length > 0) {
+                const anchor = this.currentPolygon[this.currentPolygon.length - 1];
+                const snapped = this.getSnappedPos({ x: worldX, y: worldY }, anchor);
+                finalX = snapped.x;
+                finalY = snapped.y;
+            }
+
+            this.currentPolygon.push({ x: finalX, y: finalY });
+            console.log(`Point Added: ${finalX},${finalY}. Total: ${this.currentPolygon.length}`);
         }
 
         // ALWAYS consume click if editor is enabled to prevent Game/Player interaction

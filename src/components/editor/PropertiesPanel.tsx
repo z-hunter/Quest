@@ -163,8 +163,8 @@ export const PropertiesPanel: React.FC = () => {
                         </button>
                         <div className="e-label">
                             {mode && mode.includes('DRAW')
-                                ? "Click to add points. Press ENTER to finish."
-                                : "To edit, drag vertices on screen. Hold Shift for 18° snap."}
+                                ? "Click to add points. Press ENTER to finish. Hold Shift for 22.5° snap."
+                                : "To edit, drag vertices on screen. Hold Shift for 22.5° snap."}
                         </div>
                     </div>
                 )}
