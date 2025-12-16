@@ -20,7 +20,9 @@ export class SceneEditor {
     lastPanPos: { x: number, y: number };
     creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
     draggingVertexIndex: number = -1;
-    drawMode: boolean;
+    undoBuffer: any = null; // Stores SceneData for Undo
+    drawMode: boolean = false;
+
     resizingHandle: string | null = null;
 
     // Callbacks
@@ -121,6 +123,77 @@ export class SceneEditor {
 
     /* handleGlobalChange Removed */
 
+    saveUndoState(): void {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
+        this.undoBuffer = scene.toJSON();
+        console.log('[Editor] Undo State Saved');
+    }
+
+    restoreSceneState(data: any): void {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
+
+        // Clear existing
+        scene.entities = [];
+        scene.walkbox = [];
+        scene.triggerboxes = [];
+        scene.player = null;
+
+        // Restore Entities
+        if (data.entities) {
+            data.entities.forEach((eData: any) => {
+                this.createObjectFromData(eData);
+            });
+        }
+
+        // Restore Walkboxes
+        if (data.walkbox) {
+            data.walkbox.forEach((wData: any) => {
+                this.createObjectFromData({ ...wData, type: 'Walkbox' });
+            });
+        }
+
+        // Restore Triggerboxes
+        if (data.triggerboxes) {
+            data.triggerboxes.forEach((tData: any) => {
+                this.createObjectFromData({ ...tData, type: 'Triggerbox' });
+            });
+        }
+
+        // Restore Scene Settings
+        if (data.scaling) scene.scaling = { ...data.scaling };
+        // We do NOT restore cameraX/Y to allow keeping view focused
+
+        this.selectObject(null);
+        this.drawMode = false;
+        this.refreshHierarchy();
+    }
+
+    undo(): void {
+        if (!this.undoBuffer) {
+            console.log("[Editor] Nothing to undo.");
+            return;
+        }
+
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
+
+        console.log("[Editor] Performing Undo...");
+
+        // 1. Capture CURRENT state
+        const currentState = scene.toJSON();
+
+        // 2. Restore BACKUP state
+        const backupState = this.undoBuffer;
+        this.restoreSceneState(backupState);
+
+        // 3. Swap: Backup becomes what was 'Current'
+        this.undoBuffer = currentState;
+
+        console.log("[Editor] Undo Complete. State Swapped.");
+    }
+
     handleGlobalKey(e: KeyboardEvent): void {
         // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
         if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'd') {
@@ -162,6 +235,13 @@ export class SceneEditor {
         if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'o') {
             e.preventDefault();
             this.loadObject();
+            return;
+        }
+
+        // Ctrl+Z: Undo
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            this.undo();
             return;
         }
 
@@ -270,7 +350,11 @@ export class SceneEditor {
 
     startCreating(type: string): void {
         if (!this.game.sceneManager.currentScene) return;
+
+        this.saveUndoState(); // Save before creation
+
         const scene = this.game.sceneManager.currentScene;
+
 
         if (type === 'Static' || type === 'Actor') {
             const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
@@ -497,6 +581,7 @@ export class SceneEditor {
                     const vx = poly[i].x;
                     const vy = poly[i].y;
                     if (Math.abs(worldPos.x - vx) < vertexRadius && Math.abs(worldPos.y - vy) < vertexRadius) {
+                        this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = i;
                         e.stopPropagation();
@@ -506,6 +591,7 @@ export class SceneEditor {
 
                 // Check Polygon Body
                 if (Geometry.isPointInPolygon(worldPos, poly)) {
+                    this.saveUndoState();
                     this.isDragging = true;
                     this.draggingVertexIndex = -1; // Drag Whole Body
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
@@ -559,6 +645,7 @@ export class SceneEditor {
                     else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - sb) < hSize) this.resizingHandle = 'se';
                     else this.resizingHandle = null;
 
+                    this.saveUndoState();
                     this.isDragging = true;
                     this.draggingVertexIndex = -1;
 
@@ -581,6 +668,7 @@ export class SceneEditor {
                 for (const wb of scene.walkbox) {
                     if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
                         this.selectObject(wb);
+                        this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = -1;
                         this.dragOffset = { x: worldPos.x, y: worldPos.y };
@@ -595,6 +683,7 @@ export class SceneEditor {
                 for (const tb of scene.triggerboxes) {
                     if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
                         this.selectObject(tb);
+                        this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = -1;
                         this.dragOffset = { x: worldPos.x, y: worldPos.y };
@@ -852,8 +941,11 @@ export class SceneEditor {
         } else if (obj === 'SETTINGS') {
             type = 'SETTINGS';
             id = 'SETTINGS';
+        } else if (obj instanceof Actor) {
+            type = 'Actor';
+            id = obj.name;
         } else if (obj instanceof Entity) {
-            type = 'Entity';
+            type = 'Entity'; // Used for generic/static entities
             id = obj.name;
         } else if (obj instanceof Walkbox) {
             type = 'Walkbox';
@@ -1103,6 +1195,9 @@ export class SceneEditor {
 
     updateEntityFromUI(triggerId?: string): void {
         if (!this.selectedObject || !(this.selectedObject instanceof Entity)) return;
+
+        this.saveUndoState(); // Save before modification
+
         const ent = this.selectedObject as Entity;
 
         const propName = document.getElementById('prop-name') as HTMLInputElement;
@@ -1260,6 +1355,8 @@ export class SceneEditor {
     duplicateSelectedObject(): void {
         const scene = this.game.sceneManager.currentScene;
         if (!scene || !this.selectedObject) return;
+
+        this.saveUndoState(); // Save before duplication
 
         let data: any;
         if (this.selectedObject.toJSON) {
@@ -1432,7 +1529,7 @@ export class SceneEditor {
                 if (data.modelScale !== undefined) newObj.modelScale = data.modelScale;
                 // Otherwise derive/default?
 
-                if (data.spriteName) newObj.setSprite(data.spriteName, false);
+                if (data.spriteName) newObj.setSprite(data.spriteName);
             }
 
             // ADD TO SCENE
@@ -1490,6 +1587,7 @@ export class SceneEditor {
     async processPasteData(text: string): Promise<void> {
         try {
             console.log("Processing Paste Data...");
+            this.saveUndoState(); // Save before paste
             let data: any;
             try {
                 data = JSON.parse(text);
@@ -1617,6 +1715,7 @@ export class SceneEditor {
 
     deleteSelectedObject(): void {
         if (!this.selectedObject) return;
+        this.saveUndoState(); // Save before deletion
         const scene = this.game.sceneManager.currentScene;
         if (scene) {
             if (this.selectedObject instanceof Walkbox) {
@@ -1675,7 +1774,7 @@ export class SceneEditor {
         const hasValidId = scene.id && scene.id !== 'new_scene';
 
         if (saveAs || (!hasFilename && !hasValidId)) {
-            this.game.openFileBrowser('save', 'public/scenes', (filename) => {
+            this.game.openFileBrowser('save', 'public/scenes', (filename: string) => {
                 // Update Filename from browser selection
                 const name = filename.replace('.json', '');
                 scene.filename = name;
@@ -1725,7 +1824,7 @@ export class SceneEditor {
     }
 
     promptLoadScene(): void {
-        this.game.openFileBrowser('load', 'public/scenes', (filename) => {
+        this.game.openFileBrowser('load', 'public/scenes', (filename: string) => {
             this.loadSceneFromServer(filename);
         });
     }
@@ -1748,7 +1847,7 @@ export class SceneEditor {
             return;
         }
 
-        this.game.openFileBrowser('save', 'public/prefabs', (filename) => {
+        this.game.openFileBrowser('save', 'public/prefabs', (filename: string) => {
             this.performSaveObject(filename);
         });
     }
@@ -1797,7 +1896,7 @@ export class SceneEditor {
 
     async loadObject(): Promise<void> {
         if (!this.game.sceneManager.currentScene) return;
-        this.game.openFileBrowser('load', 'public/prefabs', (filename) => {
+        this.game.openFileBrowser('load', 'public/prefabs', (filename: string) => {
             this.performLoadObject(filename);
         });
     }
@@ -1902,7 +2001,7 @@ export class SceneEditor {
                     }
 
                     if (entityData.spriteName) {
-                        entity.setSprite(entityData.spriteName, false);
+                        entity.setSprite(entityData.spriteName);
                     }
 
                     // Restore Actor specific properties if needed (state, direction)

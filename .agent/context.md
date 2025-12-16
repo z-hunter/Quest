@@ -1,7 +1,7 @@
 # Project Context & Memory
 
 ## Current Focus
-We are currently focusing on the **Sprite Editor** and its integration with the Scene Editor. The goal is to make it fully functional for creating and editing sprites/animations.
+We have successfully implemented **Actor Animation Sets** and **Directional Sprites**. The focus is now shifting towards **Game Logic & Scripting** to utilize these new capabilities effectively (e.g. interacting with triggers, changing states via script).
 
 ## Architectural Decisions
 - **Framework:** React + Vite.
@@ -22,6 +22,10 @@ We are currently focusing on the **Sprite Editor** and its integration with the 
     - Camera control (panning, zooming).
     - Depth scaling (pseudo-3D perspective).
     - Parallax scrolling support.
+    - **Actor Animation Sets:**
+        - Directional sprites (Up, Down, Left, Right).
+        - State management (Idle, Walk, Custom).
+        - UI for managing Animation Sets.
 - **Sprite Editor (F5):**
     - Basic UI structure.
     - Loading images.

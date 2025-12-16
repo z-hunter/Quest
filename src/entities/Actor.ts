@@ -1,12 +1,30 @@
-import { Entity } from './Entity';
+import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 
-export type ActorState = 'idle' | 'walk' | 'talk' | 'interact';
+export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
+
+export interface AnimationSet {
+    id: string; // e.g. 'idle', 'walk'
+    up: string | null;   // Sprite Name
+    down: string | null;
+    left: string | null;
+    right: string | null;
+}
+
+export interface ActorData extends EntityData {
+    direction: ActorDirection;
+    animSets: Record<string, AnimationSet>;
+}
 
 export class Actor extends Entity {
     direction: ActorDirection;
     state: ActorState;
+
+    // Animation Sets
+    animSets: Record<string, AnimationSet>;
+    overrideAnimSet: string | null;
+
     speed: number;
     target: { x: number, y: number } | null;
     readonly type: string = 'Actor';
@@ -21,23 +39,49 @@ export class Actor extends Entity {
         this.target = null;
         this.isPlayer = false;
 
+        this.animSets = {};
+        this.overrideAnimSet = null;
+
         // Actors usually have animators
         this.animator = new Animator(this);
     }
 
     setDirection(dir: ActorDirection) {
         this.direction = dir;
-        this.updateAnimationState();
+        this.updateSpriteForState();
     }
 
-    setState(state: ActorState) {
-        this.state = state;
-        this.updateAnimationState();
+    playAnimSet(setName: string) {
+        if (this.animSets[setName]) {
+            this.overrideAnimSet = setName;
+            this.updateSpriteForState();
+        } else {
+            console.warn(`[Actor] Animation Set '${setName}' not found on actor '${this.name}'`);
+        }
+    }
+
+    resetAnimSet() {
+        this.overrideAnimSet = null;
+        this.updateSpriteForState();
+    }
+
+    addAnimSet(id: string) {
+        if (this.animSets[id]) return;
+        this.animSets[id] = { id, up: null, down: null, left: null, right: null };
+    }
+
+    removeAnimSet(id: string) {
+        delete this.animSets[id];
+    }
+
+    getAnimSet(id: string): AnimationSet | undefined {
+        return this.animSets[id];
     }
 
     moveTo(x: number, y: number): void {
         this.target = { x, y };
         this.setState('walk');
+        this.overrideAnimSet = null;
     }
 
     stop(): void {
@@ -45,7 +89,13 @@ export class Actor extends Entity {
         this.setState('idle');
     }
 
+    setState(state: ActorState) {
+        this.state = state;
+        this.updateSpriteForState();
+    }
+
     update(deltaTime: number, isWalkable?: (x: number, y: number) => boolean): void {
+        // Call Entity update (handles scaling etc)
         super.update(deltaTime);
 
         if (this.isPlayer) {
@@ -79,17 +129,18 @@ export class Actor extends Entity {
                 if (!isWalkable || isWalkable(nextX, nextY)) {
                     this.x = nextX;
                     this.y = nextY;
+                    if (this.overrideAnimSet) this.overrideAnimSet = null;
                 } else {
                     this.stop();
                 }
             }
         }
 
-        this.updateAnimationState();
+        // Ensure sprite is correct every frame (e.g. if direction changed)
+        this.updateSpriteForState();
     }
 
     handlePlayerInput(deltaTime: number, isWalkable?: (x: number, y: number) => boolean) {
-        // Keyboard Movement Logic
         // @ts-ignore
         const input = window.game?.input;
         if (input) {
@@ -102,18 +153,16 @@ export class Actor extends Entity {
             if (input.isDown('ArrowRight')) dx += 1;
 
             if (dx !== 0 || dy !== 0) {
-                // Keys pressed: Override any mouse target
                 this.target = null;
                 this.setState('walk');
+                if (this.overrideAnimSet) this.overrideAnimSet = null;
 
-                // Normalize vector
                 const length = Math.sqrt(dx * dx + dy * dy);
                 if (length > 0) {
                     dx /= length;
                     dy /= length;
                 }
 
-                // Apply Speed
                 const moveX = dx * this.speed * deltaTime;
                 const moveY = dy * this.speed * deltaTime;
 
@@ -127,13 +176,10 @@ export class Actor extends Entity {
                     this.direction = dy > 0 ? 'down' : 'up';
                 }
 
-                // Collision Check
                 if (!isWalkable || isWalkable(nextX, nextY)) {
                     this.x = nextX;
                     this.y = nextY;
                 } else {
-                    // Slide along walls? For now just stop if blocked directly.
-                    // Simple slide: try moving just X then just Y
                     if (isWalkable && isWalkable(nextX, this.y)) {
                         this.x = nextX;
                     } else if (isWalkable && isWalkable(this.x, nextY)) {
@@ -141,47 +187,73 @@ export class Actor extends Entity {
                     }
                 }
             } else if (!this.target) {
-                // If no keys and no target, stop
                 this.setState('idle');
             }
         }
     }
 
-    updateAnimationState() {
-        if (!this.animator) return;
+    updateSpriteForState() {
+        let setId = this.state;
+        if (this.overrideAnimSet) {
+            setId = this.overrideAnimSet;
+        }
 
-        // Convention: STATE_DIRECTION e.g. WALK_DOWN, IDLE_RIGHT
-        const safeState = this.state.toUpperCase();
-        const safeDir = this.direction.toUpperCase();
-        const animName = `${safeState}_${safeDir}`;
+        const animSet = this.animSets[setId];
 
-        // Fallback logic
-        // If specific anim doesn't exist, try just component parts or default? 
-        // For now, assume strict naming or existing fallback in Animator (which just doesn't play if missing)
-
-        // Special handling for Left/Right mirroring if needed
-        if (this.direction === 'left') {
-            // If we rely on flipX for left/right
-            this.flipX = true;
-            // Try playing RIGHT animation if LEFT doesn't exist?
-            // Checking if animation exists is hard without reaching into Animator internals
-            // For now assume we play 'WALK_RIGHT' and flip
-            if (this.animator.animations[`${safeState}_RIGHT`]) {
-                this.animator.play(`${safeState}_RIGHT`);
-                return;
+        if (!animSet) {
+            // Fallback to idle if not idle
+            if (setId !== 'idle' && this.animSets['idle']) {
+                this.applySpriteFromSet(this.animSets['idle']);
             }
+            return;
+        }
+
+        this.applySpriteFromSet(animSet);
+    }
+
+    applySpriteFromSet(set: AnimationSet) {
+        if (!set) return;
+
+        let spriteName = set[this.direction];
+
+        // Fallback: Use idle's direction sprite?
+        if (!spriteName && set.id !== 'idle' && this.animSets['idle']) {
+            spriteName = this.animSets['idle'][this.direction];
+        }
+
+        // Implicit Flip: If Left missing, use Right + Flip
+        if (!spriteName && this.direction === 'left' && set['right']) {
+            spriteName = set['right'];
+            this.flipX = true;
+        } else if (!spriteName && this.direction === 'left' && this.animSets['idle'] && this.animSets['idle']['right']) {
+            // Fallback to idle right flipped
+            spriteName = this.animSets['idle']['right'];
+            this.flipX = true;
+        } else if (this.direction === 'left' && spriteName) {
+            // Have explicit left, don't flip
+            this.flipX = false;
         } else {
             this.flipX = false;
         }
 
-        this.animator.play(animName);
+        // If still nothing, we might be empty (invisible or red box)
+
+        if (spriteName && spriteName !== this.spriteName) {
+            this.setSprite(spriteName);
+        }
+    }
+
+    stopAnimation() {
+        this.resetAnimSet();
     }
 
     toJSON() {
-        const data = super.toJSON();
+        const data = super.toJSON() as ActorData;
         data.type = 'Actor';
         if (this.isPlayer) data.isPlayer = true;
         data.speed = this.speed;
+        data.direction = this.direction;
+        data.animSets = this.animSets;
         return data;
     }
 }

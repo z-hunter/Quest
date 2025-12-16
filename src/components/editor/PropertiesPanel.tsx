@@ -169,17 +169,104 @@ export const PropertiesPanel: React.FC = () => {
                     </div>
                 )}
 
-                {/* Actor Specific Properties (States) */}
                 {selectedObjectType === 'Actor' && (
-                    <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                        <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>ANIMATION STATES</div>
-                        <div className="e-label" style={{ marginBottom: '5px' }}>
-                            States: {obj.animator?.animations ? Object.keys(obj.animator.animations).join(', ') : 'None'}
+                    <>
+                        <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
+                            <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>ACTOR PROPERTIES</div>
                         </div>
-                        <button className="e-btn" style={{ width: '100%' }} onClick={() => alert("Detailed State Editor coming soon.")}>
-                            + Manage States
-                        </button>
-                    </div>
+
+                        {/* Direction */}
+                        <div className="e-row">
+                            <label className="e-label">Direction</label>
+                            <select
+                                className="e-input"
+                                value={obj.direction || 'down'}
+                                onChange={(e) => {
+                                    handleChange('direction', e.target.value);
+                                    // Also trigger sprite update on the real object immediately
+                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.setDirection) {
+                                        Game.instance.editor.selectedObject.setDirection(e.target.value);
+                                    }
+                                }}
+                            >
+                                <option value="down">Down</option>
+                                <option value="up">Up</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+
+                        {/* Animation Sets */}
+                        <div className="e-row" style={{ marginTop: '10px' }}>
+                            <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>ANIMATION SETS</span>
+                                <button className="e-btn" style={{ padding: '0 5px', fontSize: '10px' }} onClick={() => {
+                                    if (!obj.animSets) obj.animSets = {};
+                                    // Auto naming
+                                    let newId = 'idle';
+                                    if (obj.animSets['idle']) newId = 'walk';
+                                    if (obj.animSets['walk']) newId = 'state_' + Object.keys(obj.animSets).length;
+
+                                    // Add to local obj
+                                    obj.animSets[newId] = { id: newId, up: null, down: null, left: null, right: null };
+
+                                    // Add to real obj
+                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.addAnimSet) {
+                                        Game.instance.editor.selectedObject.addAnimSet(newId);
+                                    }
+                                    setObj({ ...obj });
+                                }}>+ ADD</button>
+                            </div>
+                        </div>
+
+                        {/* List Sets */}
+                        {obj.animSets && Object.keys(obj.animSets).map((setId) => {
+                            const set = obj.animSets[setId];
+                            return (
+                                <div key={setId} style={{ background: '#222', padding: '5px', marginBottom: '5px', borderRadius: '4px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                        <span style={{ fontWeight: 'bold', color: '#ddd' }}>{setId}</span>
+                                        <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
+                                            if (confirm(`Delete animation set '${setId}'?`)) {
+                                                delete obj.animSets[setId];
+                                                if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.removeAnimSet) {
+                                                    Game.instance.editor.selectedObject.removeAnimSet(setId);
+                                                }
+                                                setObj({ ...obj });
+                                            }
+                                        }}>x</button>
+                                    </div>
+
+                                    {/* Directions */}
+                                    {['down', 'up', 'left', 'right'].map((dir) => (
+                                        <div key={dir} style={{ display: 'flex', gap: '5px', marginBottom: '2px', alignItems: 'center' }}>
+                                            <div style={{ width: '30px', fontSize: '10px', color: '#888' }}>{dir.toUpperCase()}</div>
+                                            <input
+                                                type="text"
+                                                className="e-input"
+                                                style={{ flex: 1, fontSize: '10px', padding: '1px' }}
+                                                value={set[dir] || ''}
+                                                readOnly
+                                            />
+                                            <button className="e-btn" style={{ padding: '0 5px' }} onClick={() => {
+                                                Game.instance.openFileBrowser('load', 'public/sprites', (f) => {
+                                                    set[dir] = f;
+                                                    // Sync to real object
+                                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.animSets) {
+                                                        const realSet = Game.instance.editor.selectedObject.animSets[setId];
+                                                        if (realSet) realSet[dir] = f;
+                                                        // If this is the current state, update sprite immediately
+                                                        Game.instance.editor.selectedObject.updateSpriteForState();
+                                                    }
+                                                    setObj({ ...obj });
+                                                });
+                                            }}>...</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                    </>
                 )}
 
                 {/* Entity Transforms */}

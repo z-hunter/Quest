@@ -1,28 +1,24 @@
-# Current Task: Refining Sprite Editor
+# Current Task: Implementing Actor Animation Sets
 
-**Objective:** Polish the Sprite Editor implementation, fixing UX issues and ensuring seamless integration with the Scene Editor.
+**Objective:** Implement directional sprites and animation states (idle, walk, etc.) for Actor entities, along with the necessary Editor UI to manage them.
 
 ## Status
-## Status
-- [x] **Fix File Loading Info:** Ensure the Sprite Editor displays the filename and resolution of the loaded image correctly.
-- [x] **Fix Hotkeys:**
-    - [x] `Ctrl+O` should trigger "Load Image" in Sprite Editor context.
-    - [x] `Ctrl+S` should save the sprite.
-    - [x] Prevent default browser actions for these shortcuts.
-- [x] **Fix Navigation (F5):** 
-    - [x] Ensure F5 correctly toggles *back* to Scene Editor from Sprite Editor.
-    - [x] Verify F5 switches *to* Sprite Editor from Scene Editor.
-- [x] **Sprite Integration:**
-    - [x] Fix "Sprite" button in Properties Panel to open correct `public/sprites` folder.
-    - [x] Add JSON sprite loading support to `Static` objects (Entity class).
-    - [x] Implement Refactoring of Entity to remove legacy image support.
-- [x] **Editor UX:**
-    - [x] Implement proportional resizing (Shift+Drag) for entities.
-- [ ] **Data Persistence:**
-    - [ ] Make sure changes in Sprite Editor are reflected immediately if that sprite is used in the active Scene.
-- [ ] **Visual Feedback:**
-    - [ ] Add better visual indicators for the currently selected frame in the atlas view.
+- [x] **Core Actor Logic:**
+    - [x] Add `direction` property (up, down, left, right).
+    - [x] Add `animSets` structure (state -> direction sprites).
+    - [x] Implement `updateSprite` to auto-select sprite based on state & direction.
+    - [x] Auto-switching states (idle <-> walk) based on movement.
+- [x] **Editor UI (Properties Panel):**
+    - [x] Direction selector.
+    - [x] Animation Set Manager (Add/Remove sets).
+    - [x] File browser integration for directional sprite slots.
+    - [x] **Fix:** Ensure Properties Panel correctly identifies `Actor` objects (fixed `SceneEditor` selection bug).
+- [x] **Scripting API:**
+    - [x] `setDirection(dir)`
+    - [x] `playAnimSet(state)`
+    - [x] `resetAnimSet()`
 
 ## Notes
-- Completed fixes for sprite loading paths and JSON sprite support.
-- Added proportional resizing to Editor.
+- `Actor` now supports complex visual states.
+- Legacy `Entity` sprites are still supported for Static objects.
+- Editor UI now properly distinguishes between `Actor` and `Entity` selection.
