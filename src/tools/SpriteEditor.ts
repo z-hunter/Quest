@@ -1,5 +1,6 @@
 
 import { Game } from '../core/Game';
+import { useEditorStore } from '../store/editorStore';
 
 export interface SpriteData {
     id: string; // Filename without extension
@@ -13,7 +14,14 @@ export interface SpriteData {
 
 export class SpriteEditor {
     game: Game;
-    active: boolean = false;
+
+    get active(): boolean {
+        return useEditorStore.getState().spriteEditorEnabled;
+    }
+
+    set active(value: boolean) {
+        useEditorStore.getState().toggleSpriteEditor(value);
+    }
 
     // Data State
     sprite: SpriteData;
@@ -37,136 +45,102 @@ export class SpriteEditor {
         };
 
         // Bind Global Keys
-        window.addEventListener('keydown', (e) => {
-            if (!this.active) return;
-            if (e.defaultPrevented) return; // Ignore if handled by Scene/Game editor
-
-            // F5: Close Sprite Editor (Return to Game)
-            if (e.key === 'F5') {
-                e.preventDefault();
-                this.toggle(false);
-            }
-            // F1: Switch to Scene Editor
-            else if (e.key === 'F1') {
-                e.preventDefault();
-                this.switchToSceneEditor();
-            }
-            // Ctrl+O: Load Sprite
-            else if (e.ctrlKey && e.key.toLowerCase() === 'o') {
-                e.preventDefault();
-                this.loadSprite();
-            }
-            // Ctrl+S: Save Sprite
-            else if (e.ctrlKey && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                this.saveSprite();
-            }
-        });
-
+        // Bind Global Keys (Capture Phase on Document)
+        // Using bind to ensure 'this' context and consistent reference
+        this.boundKeyHandler = this.handleKey.bind(this);
+        document.addEventListener('keydown', this.boundKeyHandler, true);
     }
 
+    private boundKeyHandler: (e: KeyboardEvent) => void;
+
     toggle(force?: boolean): void {
-        this.active = force !== undefined ? force : !this.active;
+        const newState = force !== undefined ? force : !this.active;
+        this.active = newState;
 
-        const editorWrapper = document.getElementById('sprite-editor-wrapper');
-
-        // Scene Editor handling handled by SceneEditor itself or Game?
-        // If we force active=true, we should force SceneEditor=false.
+        const parserInput = document.getElementById('parser-input') as HTMLInputElement;
 
         if (this.active) {
             console.log('[SpriteEditor] Activated');
+
+            // Disable Parser Input to prevent game commands and focus stealing
+            if (parserInput) {
+                parserInput.blur();
+                parserInput.disabled = true;
+            }
+
+            // Ensure checkerboard pattern is ready
+            if (!this.checkerboardPattern) {
+                this.createCheckerboard();
+            }
+
             // Hide Scene Editor if open
             if (this.game.editor && this.game.editor.enabled) {
                 this.game.editor.toggle();
             }
-
-            // Show Sprite Editor UI
-            if (editorWrapper) editorWrapper.classList.remove('hidden');
-
-            // Initialize/Bind UI if needed
-            this.initUI();
             this.updateUI();
-
         } else {
             console.log('[SpriteEditor] Deactivated');
-            if (editorWrapper) editorWrapper.classList.add('hidden');
-        }
-    }
-
-    initUI(): void {
-        // Prevent multiple bindings?
-        // Actually, simple way: remove old listeners if possible, or check flag.
-        // For now, let's just bind 'onclick' which overwrites.
-
-        // Bind F-Key Buttons
-        const bindBtn = (id: string, cb: () => void) => {
-            const btn = document.getElementById(id);
-            if (btn) btn.onclick = cb;
-        };
-
-        bindBtn('btn-se-f1', () => this.switchToSceneEditor());
-        bindBtn('btn-se-f2', () => this.saveSprite());
-        bindBtn('btn-se-f3', () => this.loadSprite());
-        bindBtn('btn-se-f4', () => this.newSprite());
-        bindBtn('btn-se-f5', () => this.toggle(false)); // Close = Return to Game
-
-        // Bind Load Image Button
-        bindBtn('btn-se-load-image', () => this.promptLoadImage());
-
-        // Bind Inputs
-        const bindInput = (id: string, field: keyof SpriteData) => {
-            const el = document.getElementById(id) as HTMLInputElement;
-            if (el) {
-                el.oninput = () => {
-                    if (field === 'id' || field === 'imageFile') {
-                        (this.sprite as any)[field] = el.value;
-                    } else {
-                        (this.sprite as any)[field] = parseFloat(el.value) || 0;
-                    }
-                };
+            // Re-enable Parser
+            if (parserInput) {
+                parserInput.disabled = false;
+                // Optional: focus it back? Maybe not if we just closed editor.
             }
-        };
-
-        bindInput('se-prop-id', 'id');
-        bindInput('se-prop-x', 'x');
-        bindInput('se-prop-y', 'y');
-        bindInput('se-prop-width', 'width');
-        bindInput('se-prop-height', 'height');
-        bindInput('se-prop-frames', 'frames');
-
-        // Global Keys - We need a bound handler to remove it later?
-        // Ideally yes. For now, let's add it ONCE globally in constructor or use a flag,
-        // OR add it here and be careful.
-        // Only active when this.active is true.
-        if (!(this as any).keysBound) {
-            document.addEventListener('keydown', (e) => this.handleKey(e));
-            (this as any).keysBound = true;
         }
-
-        this.createCheckerboard();
     }
+
+    // Removed dead initUI code (DOM bindings handled by React now)
 
     handleKey(e: KeyboardEvent): void {
+        // HMR/Reload Protection:
+        // If this editor belongs to an old Game instance (zombie), kill the listener.
+        if (this.game !== Game.instance) {
+            console.warn('[SpriteEditor] Detected Zombie Instance - Removing Listener');
+            document.removeEventListener('keydown', this.boundKeyHandler, true);
+            return;
+        }
+
+        // If not active, let it propagate (e.g. to SceneEditor)
         if (!this.active) return;
-        // Ignore if typing in input
-        if (document.activeElement instanceof HTMLInputElement) return;
 
-        if (e.key === 'F1') { e.preventDefault(); this.switchToSceneEditor(); }
-        if (e.key === 'F2') { e.preventDefault(); this.saveSprite(); }
-        if (e.key === 'F3') { e.preventDefault(); this.loadSprite(); }
-        if (e.key === 'F4') { e.preventDefault(); this.newSprite(); }
-        if (e.key === 'F5') { e.preventDefault(); this.toggle(false); }
+        const isInputFocused = document.activeElement instanceof HTMLInputElement;
 
-        // Ctrl+O
+        // AGGRESSIVE HOTKEY HANDLING
+        // We check keys first and return immediately if handled, bypassing input focus checks for specific keys.
+
         if (e.ctrlKey && e.key.toLowerCase() === 'o') {
             e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('[SpriteEditor] Ctrl+O Handled');
             this.promptLoadImage();
+            return;
         }
-        // Ctrl+S
+
         if (e.ctrlKey && e.key.toLowerCase() === 's') {
             e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             this.saveSprite();
+            return;
         }
+
+        let handled = false;
+
+        if (e.key === 'F1') { this.switchToSceneEditor(); handled = true; }
+        else if (e.key === 'F2') { this.saveSprite(); handled = true; }
+        else if (e.key === 'F3') { this.loadSprite(); handled = true; }
+        else if (e.key === 'F4') { this.newSprite(); handled = true; }
+        else if (e.key === 'F5') { this.toggle(false); handled = true; }
+
+        if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            return;
+        }
+
+        // Only now do we respect input focus for other keys
+        if (isInputFocused) return;
     }
 
     switchToSceneEditor(): void {
@@ -175,18 +149,7 @@ export class SpriteEditor {
     }
 
     updateUI(): void {
-        const setVal = (id: string, val: any) => {
-            const el = document.getElementById(id) as HTMLInputElement;
-            if (el) el.value = val.toString();
-        };
-
-        setVal('se-prop-id', this.sprite.id);
-        setVal('se-prop-x', this.sprite.x);
-        setVal('se-prop-y', this.sprite.y);
-        setVal('se-prop-width', this.sprite.width);
-        setVal('se-prop-height', this.sprite.height);
-        setVal('se-prop-frames', this.sprite.frames);
-
+        useEditorStore.getState().incrementSpriteVersion();
         this.updatePreview();
     }
 
@@ -204,14 +167,15 @@ export class SpriteEditor {
                 return;
             }
 
+            // Always request next frame
+            this.animationInterval = requestAnimationFrame(loop);
+
             // Update Frame every 400ms (Reduced speed)
             if (timestamp - this.lastFrameTime > 400) {
                 this.currentFrame = (this.currentFrame + 1) % (this.sprite.frames || 1);
                 this.lastFrameTime = timestamp;
                 this.updatePreviewCanvas();
             }
-
-            this.animationInterval = requestAnimationFrame(loop);
         };
 
         this.animationInterval = requestAnimationFrame(loop);
@@ -299,22 +263,19 @@ export class SpriteEditor {
     }
 
     promptLoadImage(): void {
-        if (this.game.editor && this.game.editor.openFileBrowser) {
-            const dir = 'public/assets';
-            this.game.editor.openFileBrowser('load', dir, (file) => {
-                // FileBrowser returns just the filename (e.g. 'hero.png')
-                // We need to construct the path relative to project root or public
-                // If the file string doesn't include the dir, add it.
-                // Assuming FileBrowser returns simple filename from the list.
+        this.game.openFileBrowser('load', 'public/assets', (file) => {
+            // FileBrowser returns just the filename (e.g. 'hero.png')
+            // We need to construct the path relative to project root or public
+            // If the file string doesn't include the dir, add it.
+            // Assuming FileBrowser returns simple filename from the list.
 
-                // Construct full path
-                // If dir is 'public/assets', we want 'public/assets/hero.png' 
-                // (which loadImage will then convert to '/assets/hero.png')
+            // Construct full path
+            // If dir is 'public/assets', we want 'public/assets/hero.png' 
+            // (which loadImage will then convert to '/assets/hero.png')
 
-                const fullPath = `${dir}/${file}`;
-                this.loadImage(fullPath);
-            }, '.png');
-        }
+            const fullPath = `public/assets/${file}`;
+            this.loadImage(fullPath);
+        }, '.png');
     }
 
     loadImage(path: string, keepDimensions: boolean = false): void {
@@ -368,13 +329,9 @@ export class SpriteEditor {
     }
 
     saveSprite(): void {
-        if (this.game.editor && this.game.editor.openFileBrowser) {
-            // Use separate folder for sprites
-            const dir = 'public/sprites';
-            this.game.editor.openFileBrowser('save', dir, (file) => {
-                this.doSave(file);
-            });
-        }
+        this.game.openFileBrowser('save', 'public/sprites', (file) => {
+            this.doSave(file);
+        });
     }
 
     async doSave(filename: string): Promise<void> {
@@ -407,29 +364,27 @@ export class SpriteEditor {
     }
 
     loadSprite(): void {
-        if (this.game.editor && this.game.editor.openFileBrowser) {
+        this.game.openFileBrowser('load', 'public/sprites', (file) => {
+            // Construct path. FileBrowser returns name.
+            // We need to fetch from server relative path
             const dir = 'public/sprites';
-            this.game.editor.openFileBrowser('load', dir, (file) => {
-                // Construct path. FileBrowser returns name.
-                // We need to fetch from server relative path
-                const path = `/${dir.replace('public/', '')}/${file}`;
+            const path = `/${dir.replace('public/', '')}/${file}`;
 
-                fetch(path).then(res => {
-                    if (!res.ok) throw new Error("Fetch failed");
-                    return res.json();
-                }).then(data => {
-                    this.sprite = data;
-                    if (this.sprite.imageFile) {
-                        // PASS TRUE to preserve dimensions from JSON
-                        this.loadImage(this.sprite.imageFile, true);
-                    }
-                    this.updateUI();
-                }).catch(err => {
-                    console.error("Failed to load sprite json", err);
-                    alert("Failed to load sprite. Ensure it is accessible via URL.");
-                });
+            fetch(path).then(res => {
+                if (!res.ok) throw new Error("Fetch failed");
+                return res.json();
+            }).then(data => {
+                this.sprite = data;
+                if (this.sprite.imageFile) {
+                    // PASS TRUE to preserve dimensions from JSON
+                    this.loadImage(this.sprite.imageFile, true);
+                }
+                this.updateUI();
+            }).catch(err => {
+                console.error("Failed to load sprite json", err);
+                alert("Failed to load sprite. Ensure it is accessible via URL.");
             });
-        }
+        });
     }
 
     newSprite(): void {
@@ -468,6 +423,11 @@ export class SpriteEditor {
 
         // Ensure opacity
         ctx.globalAlpha = 1.0;
+
+        // Ensure checkerboard pattern exists (fallback if init failed)
+        if (!this.checkerboardPattern) {
+            this.createCheckerboard();
+        }
 
         // Fill background (Dark Grey usually, but checkerboard handles it)
         if (this.checkerboardPattern) {

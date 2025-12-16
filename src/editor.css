@@ -1,0 +1,250 @@
+/* Main App Container */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background: #000;
+    overflow: hidden;
+}
+
+.workspace-row {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.game-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    overflow: hidden;
+    /* Ensure Game Canvas fills this space */
+}
+
+/* React Editor Layout Logic */
+.editor-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    pointer-events: none;
+    /* This now only holds overlays like Messages/Modal, NOT panels */
+}
+
+/* DEPRECATED: Old Main Row */
+/* .editor-main-row { ... } */
+
+
+.editor-main-row {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    width: 100%;
+}
+
+.editor-sidebar {
+    width: 260px;
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid #333;
+    color: #ddd;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+    /* Capture clicks */
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.editor-sidebar.left {
+    border-right: 1px solid #0f0;
+    /* Retro Green accent */
+}
+
+.editor-sidebar.right {
+    border-left: 1px solid #0f0;
+}
+
+.editor-center-spacer {
+    flex: 1;
+    pointer-events: none;
+    /* Pass through to game */
+}
+
+.editor-header {
+    padding: 5px;
+    background: #222;
+    border-bottom: 1px solid #444;
+    font-weight: bold;
+    color: #0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editor-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* Controls */
+.e-btn {
+    background: #111;
+    border: 1px solid #555;
+    color: #eee;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.e-btn:hover {
+    background: #333;
+    border-color: #0f0;
+    color: #fff;
+}
+
+.e-btn-red {
+    border-color: #900;
+    color: #faa;
+}
+
+.e-btn-red:hover {
+    background: #500;
+}
+
+.e-btn-yellow {
+    border-color: #990;
+    color: #ffa;
+}
+
+.e-btn-small {
+    padding: 2px 4px;
+    font-size: 10px;
+}
+
+.e-input {
+    background: #000;
+    border: 1px solid #444;
+    color: #0f0;
+    padding: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 5px;
+}
+
+.e-select {
+    background: #000;
+    border: 1px solid #444;
+    color: #0f0;
+    padding: 4px;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+.e-row {
+    margin-bottom: 8px;
+}
+
+.e-label {
+    display: block;
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+/* Bottom Menu */
+.editor-bottom-menu {
+    height: 32px;
+    background: #111;
+    border-top: 1px solid #0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Center items */
+    padding: 0 10px;
+    gap: 15px;
+    pointer-events: auto;
+    font-family: monospace;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 200;
+}
+
+.e-menu-btn {
+    background: transparent;
+    border: none;
+    color: #0f0;
+    cursor: pointer;
+    font-size: 12px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+}
+
+/* Hotkey Accent Color (Darker Green) */
+.hotkey-accent {
+    color: #008800;
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+.e-menu-btn:hover {
+    background: #0f0;
+    color: #000;
+}
+
+.e-menu-btn:hover .hotkey-accent {
+    color: #000;
+    /* reset on hover */
+}
+
+/* ... existing code ... */
+
+/* Entity List Items */
+.entity-item {
+    padding: 2px 5px;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+}
+
+.entity-item:hover {
+    background: rgba(0, 255, 0, 0.2);
+    border-bottom: 1px solid #0f0;
+}
+
+.entity-item.selected {
+  background-color: #0f0;
+  color: #000;
+}
+
+background: #111;
+border: 2px solid #f0f;
+position: absolute;
+top: 50px;
+left: 50%;
+transform: translateX(-50%);
+width: 600px;
+height: 500px;
+z-index: 2000;
+display: flex;
+flex-direction: column;
+pointer-events: auto;
+box-shadow: 0 0 20px #f0f;
+}
+
+.sprite-panel-header {
+    background: #303;
+    color: #fff;
+    padding: 5px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+}

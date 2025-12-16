@@ -5,6 +5,7 @@ import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
+import { useEditorStore } from '../store/editorStore';
 
 export class SceneEditor {
     game: any;
@@ -23,12 +24,10 @@ export class SceneEditor {
     resizingHandle: string | null = null;
 
     // Callbacks
-    openFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string) => void) | null = null;
+    // Callbacks
+    // Refactored: Use this.game.openFileBrowser instead of local property
 
     // Event Handlers (Bound)
-    private boundClickHandler: (e: Event) => void;
-    private boundInputHandler: (e: Event) => void;
-    private boundChangeHandler: (e: Event) => void;
     private boundKeyHandler: (e: KeyboardEvent) => void;
     private boundMouseDownHandler: (e: MouseEvent) => void;
     private boundMouseMoveHandler: (e: MouseEvent) => void;
@@ -49,9 +48,7 @@ export class SceneEditor {
         this.drawMode = false;
 
         // Bind handlers once for cleanup
-        this.boundClickHandler = this.handleGlobalClick.bind(this);
-        this.boundInputHandler = this.handleGlobalInput.bind(this);
-        this.boundChangeHandler = this.handleGlobalChange.bind(this);
+
         this.boundKeyHandler = this.handleGlobalKey.bind(this);
         this.boundMouseDownHandler = this.onMouseDown.bind(this);
         this.boundMouseMoveHandler = this.onMouseMove.bind(this);
@@ -93,9 +90,6 @@ export class SceneEditor {
 
     destroy(): void {
         console.log('[SceneEditor] Destroying, removing listeners...');
-        document.removeEventListener('click', this.boundClickHandler);
-        document.removeEventListener('input', this.boundInputHandler);
-        document.removeEventListener('change', this.boundChangeHandler);
         document.removeEventListener('keydown', this.boundKeyHandler);
 
         this.game.canvas.removeEventListener('mousedown', this.boundMouseDownHandler);
@@ -106,213 +100,26 @@ export class SceneEditor {
     }
 
     setupListeners(): void {
-        // UI Interaction Listeners (Delegation)
-        document.addEventListener('click', this.boundClickHandler);
-        document.addEventListener('input', this.boundInputHandler);
-        document.addEventListener('change', this.boundChangeHandler);
-        document.addEventListener('keydown', this.boundKeyHandler);
-
         // Canvas Interaction Listeners
         this.game.canvas.addEventListener('mousedown', this.boundMouseDownHandler);
         window.addEventListener('mousemove', this.boundMouseMoveHandler);
         window.addEventListener('mouseup', this.boundMouseUpHandler);
         window.addEventListener('paste', this.boundPasteHandler);
+
+        // Global Key Handler (Shortcuts) - Still valid as it targets document body
+        document.addEventListener('keydown', this.boundKeyHandler);
     }
 
     /* Event Handlers extracted for cleanup */
 
-    handleGlobalClick(e: Event): void {
-        const target = e.target as HTMLElement;
-        if (!target) return;
+    /* Legacy Event Handlers Removed */
 
-        // Buttons
-        if (target.id === 'btn-close-editor') {
-            this.toggle();
-        } else if (target.id === 'btn-f2-save' || target.id === 'btn-save-json') {
-            this.saveScene(false); // Quick Save
-        } else if (target.id === 'btn-f3-load') {
-            this.promptLoadScene();
-        } else if (target.id === 'btn-f4-new') {
-            this.newScene();
-        } else if (target.id === 'btn-clear-walkbox') {
-            if (this.game.sceneManager.currentScene && this.selectedObject) {
-                const scene = this.game.sceneManager.currentScene;
-                if (this.selectedObject instanceof Walkbox) {
-                    const index = scene.walkbox.indexOf(this.selectedObject);
-                    if (index > -1) scene.walkbox.splice(index, 1);
-                    this.startCreating('Walkbox');
-                } else if (this.selectedObject instanceof Triggerbox) {
-                    const index = scene.triggerboxes.indexOf(this.selectedObject);
-                    if (index > -1) scene.triggerboxes.splice(index, 1);
-                    this.startCreating('Triggerbox');
-                }
-            }
-        } else if (target.id === 'btn-save-object') {
-            this.saveObject(); // Opens browser now
-        } else if (target.id === 'btn-load-object') {
-            this.loadObject(); // Opens browser
-        } else if (target.id === 'btn-add-sprite') {
-            const spriteInput = document.getElementById('sprite-name-input') as HTMLInputElement;
-            const name = spriteInput ? spriteInput.value : 'Sprite';
-            if (this.game.sceneManager.currentScene) {
-                const sprite = new Entity(160, 100, 30, 30, name || 'Sprite');
-                if (name) sprite.setSprite(name);
-                sprite.color = '#ffa500';
-                this.game.sceneManager.currentScene.addEntity(sprite);
+    // Kept for F-Key shortcuts
 
-                this.drawMode = false;
-                const propActorState = document.getElementById('prop-actor-state') as HTMLSelectElement;
-                if (propActorState) {
-                    propActorState.onchange = () => {
-                        if (this.selectedObject instanceof Actor) {
-                            this.selectedObject.setState(propActorState.value as any);
-                        }
-                    };
-                }
 
-                const propActorIsPlayer = document.getElementById('prop-actor-isplayer') as HTMLInputElement;
-                if (propActorIsPlayer) {
-                    propActorIsPlayer.onchange = () => {
-                        if (this.selectedObject instanceof Actor) {
-                            this.setActorIsPlayer(this.selectedObject, propActorIsPlayer.checked);
-                        }
-                    };
-                }
-                const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
-                if (chk) chk.checked = false;
-                this.selectObject(sprite);
-                this.refreshHierarchy();
-            }
-        } else if (target.id === 'btn-camera-reset') {
-            if (this.game.sceneManager.currentScene) {
-                const s = this.game.sceneManager.currentScene;
-                s.camera = { ...s.defaultCamera };
-                // Update UI immediately
-                const cx = document.getElementById('cam-x') as HTMLInputElement;
-                const cy = document.getElementById('cam-y') as HTMLInputElement;
-                const cz = document.getElementById('cam-zoom') as HTMLInputElement;
-                if (cx) cx.value = Math.round(s.camera.x).toString();
-                if (cy) cy.value = Math.round(s.camera.y).toString();
-                if (cz) cz.value = s.camera.zoom.toFixed(2);
-            }
-        } else if (target.id === 'btn-f9-settings') {
-            this.selectObject('SETTINGS');
-        } else if (target.id === 'btn-save-settings') {
-            this.game.saveSettings();
-        }
+    /* handleGlobalInput Removed */
 
-        if (target.id === 'btn-dup-object') {
-            this.duplicateSelectedObject();
-        }
-
-        if (target.id === 'btn-f5-sprite') {
-            this.game.spriteEditor.toggle(true);
-        }
-
-        // Add Object Button
-        if (target.id === 'btn-add-object') {
-            this.onAddObjectClick(); // Ensure onAddObjectClick calls startCreating
-        }
-        if (target.id === 'btn-delete-object') {
-            this.deleteSelectedObject();
-        }
-    }
-
-    handleGlobalInput(e: Event): void {
-        const target = e.target as HTMLInputElement;
-        if (!target) return;
-
-        // F9 Settings Bindings (Ranges)
-        if (target.id.startsWith('crt-')) {
-            const s = this.game.settings.crt;
-            const val = parseFloat(target.value);
-
-            if (target.id === 'crt-curvature') s.curvature = val;
-            else if (target.id === 'crt-scanlines') s.scanlineCount = val;
-            else if (target.id === 'crt-intensity') s.scanlineIntensity = val;
-            else if (target.id === 'crt-aberration') s.aberration = val;
-            else if (target.id === 'crt-vignette') s.vignette = val;
-            else if (target.id === 'crt-phosphor') s.phosphor = val;
-            else if (target.id === 'crt-bloom') s.bloom = val;
-        }
-
-        // Property Inputs
-        if (['prop-name', 'prop-width', 'prop-height', 'prop-x', 'prop-y', 'prop-scale', 'prop-layer', 'prop-state', 'prop-parallax'].includes(target.id)) {
-            this.updateEntityFromUI(target.id);
-        }
-
-        // Scene Title
-        if (target.id === 'editor-scene-title') {
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.name = target.value;
-                const display = document.getElementById('scene-title-display');
-                if (display) display.textContent = target.value;
-            }
-        }
-
-        // Scene Filename
-        if (target.id === 'editor-scene-id') {
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.filename = target.value;
-            }
-        }
-
-        // Camera Inputs
-        if (this.game.sceneManager.currentScene) {
-            const s = this.game.sceneManager.currentScene;
-            if (target.id === 'cam-x') s.camera.x = parseFloat(target.value) || 0;
-            if (target.id === 'cam-y') s.camera.y = parseFloat(target.value) || 0;
-            if (target.id === 'cam-zoom') s.camera.zoom = parseFloat(target.value) || 1.0;
-            if (target.id === 'cam-speed') s.cameraSpeed = parseFloat(target.value) || 5.0;
-
-            if (target.id === 'def-cam-x') s.defaultCamera.x = parseFloat(target.value) || 0;
-            if (target.id === 'def-cam-y') s.defaultCamera.y = parseFloat(target.value) || 0;
-            if (target.id === 'def-cam-zoom') s.defaultCamera.zoom = parseFloat(target.value) || 1.0;
-        }
-
-        // Scaling Config
-        if (['scale-min', 'scale-max', 'scale-horizon', 'scale-front'].includes(target.id)) {
-            this.updateScalingConfig();
-        }
-    }
-
-    handleGlobalChange(e: Event): void {
-        const target = e.target as HTMLInputElement;
-        if (!target) return;
-
-        // F9 Settings Bindings (Checkboxes)
-        if (target.id.startsWith('crt-')) {
-            const s = this.game.settings.crt;
-            if (target.id === 'crt-enabled') s.enabled = target.checked;
-            else if (target.id === 'crt-glow') s.bezelGlow = target.checked;
-        }
-
-        // Selects and special properties
-        if (target.id === 'prop-direction' || target.id === 'prop-image' || target.id === 'prop-no-scaling' || target.id === 'prop-actor-speed') {
-            this.updateEntityFromUI();
-        }
-
-        if (target.id === 'prop-actor-isplayer') {
-            if (this.selectedObject instanceof Actor) {
-                this.setActorIsPlayer(this.selectedObject, target.checked);
-            }
-        }
-
-        if (target.id === 'cam-auto-center') {
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.autoCenter = target.checked;
-            }
-        }
-
-        if (target.id === 'chk-draw-mode') {
-            this.drawMode = target.checked;
-            if (this.drawMode) this.selectObject(null);
-        }
-
-        if (target.id === 'scale-enabled') {
-            this.updateScalingConfig();
-        }
-    }
+    /* handleGlobalChange Removed */
 
     handleGlobalKey(e: KeyboardEvent): void {
         // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
@@ -461,12 +268,14 @@ export class SceneEditor {
             if (chk) chk.checked = true;
             this.selectObject(null);
             console.log("Draw Mode: Walkbox");
+            useEditorStore.getState().setMode('DRAW_WALKBOX');
         } else if (type === 'Triggerbox') {
             this.creationType = 'Triggerbox';
             this.currentPolygon = [];
             this.drawMode = true;
             console.log("Draw Mode: Triggerbox");
             this.selectObject(null);
+            useEditorStore.getState().setMode('DRAW_TRIGGER');
         }
     }
 
@@ -476,70 +285,57 @@ export class SceneEditor {
         // This method remains for any initial UI setup that isn't event binding.
     }
 
-    updateScalingConfig(): void {
+    setScalingEnabled(isEnabled: boolean): void {
         const scene = this.game.sceneManager.currentScene;
-        if (scene) {
-            const scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
-            const scaleMin = document.getElementById('scale-min') as HTMLInputElement;
-            const scaleMax = document.getElementById('scale-max') as HTMLInputElement;
-            const scaleHorizon = document.getElementById('scale-horizon') as HTMLInputElement;
-            const scaleFront = document.getElementById('scale-front') as HTMLInputElement;
+        if (!scene) return;
 
-            if (scaleEnabled) {
-                const s = scene.scaling;
-                const wasEnabled = s.enabled;
-                const isEnabled = scaleEnabled.checked;
+        const s = scene.scaling;
+        const wasEnabled = s.enabled;
 
-                // Update standard config properties
-                s.enabled = isEnabled;
-                s.min = parseFloat(scaleMin?.value) || 0.5;
-                s.max = parseFloat(scaleMax?.value) || 1.0;
-                s.horizon = parseInt(scaleHorizon?.value) || 150;
-                s.front = parseInt(scaleFront?.value) || 300;
+        // Start Logic
+        s.enabled = isEnabled;
 
-                // Normalization Logic on Toggle
-                if (wasEnabled !== isEnabled) {
-                    console.log(`[Editor] Scaling Toggled: ${wasEnabled} -> ${isEnabled}. Normalizing entities...`);
-                    const entities = scene.entities;
-                    for (const ent of entities) {
-                        if (ent.ignoreScaling) continue;
+        // Normalization Logic on Toggle
+        if (wasEnabled !== isEnabled) {
+            console.log(`[Editor] Scaling Toggled: ${wasEnabled} -> ${isEnabled}. Normalizing entities...`);
+            const entities = scene.entities;
+            for (const ent of entities) {
+                if (ent.ignoreScaling) continue;
 
-                        const currentVisW = ent.width;
-                        const currentVisH = ent.height;
+                const currentVisW = ent.width;
+                const currentVisH = ent.height;
 
-                        if (isEnabled) {
-                            // Turning ON: Scale = Model * Depth
-                            const depthFactor = scene.getScaling(ent.y);
-                            const totalScale = ent.modelScale * depthFactor;
-                            ent.scale = totalScale;
+                if (isEnabled) {
+                    // Turning ON: Scale = Model * Depth
+                    const depthFactor = scene.getScaling(ent.y);
+                    const totalScale = ent.modelScale * depthFactor;
+                    ent.scale = totalScale;
 
-                            if (totalScale !== 0) {
-                                ent.baseWidth = currentVisW / totalScale;
-                                ent.baseHeight = currentVisH / totalScale;
-                            }
-                        } else {
-                            // Turning OFF: Scale = Model * 1.0
-                            const totalScale = ent.modelScale;
-                            ent.scale = totalScale;
-
-                            if (totalScale !== 0) {
-                                ent.baseWidth = currentVisW / totalScale;
-                                ent.baseHeight = currentVisH / totalScale;
-                            } else {
-                                ent.baseWidth = currentVisW; // Fallback
-                                ent.baseHeight = currentVisH;
-                            }
-
-                            ent.width = currentVisW;
-                            ent.height = currentVisH;
-                        }
+                    if (totalScale !== 0) {
+                        ent.baseWidth = currentVisW / totalScale;
+                        ent.baseHeight = currentVisH / totalScale;
                     }
-                    // Refresh properties panel if an entity is selected
-                    if (this.selectedObject instanceof Entity) {
-                        this.updateUIFromObject();
+                } else {
+                    // Turning OFF: Scale = Model * 1.0
+                    const totalScale = ent.modelScale;
+                    ent.scale = totalScale;
+
+                    if (totalScale !== 0) {
+                        ent.baseWidth = currentVisW / totalScale;
+                        ent.baseHeight = currentVisH / totalScale;
+                    } else {
+                        ent.baseWidth = currentVisW; // Fallback
+                        ent.baseHeight = currentVisH;
                     }
+
+                    ent.width = currentVisW;
+                    ent.height = currentVisH;
                 }
             }
+            // Refresh properties panel calls if needed (Store update handles it via objectVersion usually, 
+            // but we might want to trigger a hierarchy/object version bump since ALL entities changed)
+            useEditorStore.getState().incrementObjectVersion();
+            useEditorStore.getState().incrementHierarchyVersion();
         }
     }
 
@@ -549,29 +345,27 @@ export class SceneEditor {
         const parserInput = document.getElementById('parser-input') as HTMLInputElement;
         const editorWrapper = document.getElementById('editor-wrapper');
 
-        if (editorWrapper) {
-            if (this.enabled) {
-                editorWrapper.classList.remove('hidden');
-                this.syncUI();
-                this.refreshHierarchy();
-                this.selectObject('SCENE');
+        if (this.enabled) {
+            if (editorWrapper) editorWrapper.classList.remove('hidden');
+            this.syncUI();
+            this.refreshHierarchy();
+            this.selectObject('SCENE');
 
-                // Block Parser
-                if (parserInput) {
-                    parserInput.blur();
-                    parserInput.disabled = true;
-                }
-            } else {
-                editorWrapper.classList.add('hidden');
-                this.selectedObject = null;
-
-                // Restore Parser
-                if (parserInput) {
-                    parserInput.disabled = false;
-                    parserInput.focus();
-                }
+            // Block Parser
+            if (parserInput) {
+                parserInput.blur();
+                parserInput.disabled = true;
+            }
+        } else {
+            if (editorWrapper) editorWrapper.classList.add('hidden');
+            // Restore Parser
+            if (parserInput) {
+                parserInput.disabled = false;
+                parserInput.focus();
             }
         }
+        // Update Store
+        useEditorStore.getState().toggle(this.enabled);
     }
 
     syncUI(): void {
@@ -582,6 +376,8 @@ export class SceneEditor {
 
             const idInput = document.getElementById('editor-scene-id') as HTMLInputElement;
             if (idInput) idInput.value = scene.filename || '';
+
+            useEditorStore.getState().setSceneInfo(scene.name, scene.filename || '');
 
             // Sync Scaling
             const scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
@@ -597,6 +393,9 @@ export class SceneEditor {
                 if (scaleHorizon) scaleHorizon.value = scene.scaling.horizon.toString();
                 if (scaleFront) scaleFront.value = scene.scaling.front.toString();
             }
+
+            // Sync to Store
+            useEditorStore.getState().setSceneInfo(scene.name, scene.filename || '');
         }
     }
 
@@ -770,6 +569,7 @@ export class SceneEditor {
 
         this.selectObject(null);
     }
+
 
     onMouseMove(e: MouseEvent): void {
         this.lastMousePos = this.getMousePos(e); // Track for Paste
@@ -948,6 +748,28 @@ export class SceneEditor {
     selectObject(obj: any): void {
         this.selectedObject = obj;
 
+        // Sync to Store
+        let type: string | null = null;
+        let id: string | null = null;
+
+        if (obj === 'SCENE') {
+            type = 'SCENE';
+            id = 'SCENE';
+        } else if (obj === 'SETTINGS') {
+            type = 'SETTINGS';
+            id = 'SETTINGS';
+        } else if (obj instanceof Entity) {
+            type = 'Entity';
+            id = obj.name;
+        } else if (obj instanceof Walkbox) {
+            type = 'Walkbox';
+            id = obj.name || 'Walkbox';
+        } else if (obj instanceof Triggerbox) {
+            type = 'Triggerbox';
+            id = obj.name || 'Triggerbox';
+        }
+        useEditorStore.getState().selectObject(id, type);
+
         const sectionSceneProps = document.getElementById('section-scene-props');
         const sectionEntityProps = document.getElementById('section-entity-props');
         const sectionWalkboxProps = document.getElementById('section-walkbox-props');
@@ -1027,6 +849,9 @@ export class SceneEditor {
     }
 
     refreshHierarchy(): void {
+        // Sync to Store
+        useEditorStore.getState().incrementHierarchyVersion();
+
         // Sync static Scene Item selection state
         const scenePropertiesItem = document.getElementById('scene-properties-item');
         if (scenePropertiesItem) {
@@ -1390,7 +1215,7 @@ export class SceneEditor {
 
         if (value) {
             // Unset others
-            scene.entities.forEach(e => {
+            scene.entities.forEach((e: Entity) => {
                 if (e instanceof Actor && e !== actor && e.isPlayer) {
                     e.isPlayer = false;
                     console.log(`[Editor] Unset isPlayer for ${e.name}`);
@@ -1685,36 +1510,31 @@ export class SceneEditor {
         if (scene) {
             if (this.selectedObject instanceof Walkbox) {
                 const index = scene.walkbox.indexOf(this.selectedObject);
-                if (index > -1) {
-                    scene.walkbox.splice(index, 1);
-                    console.log('Walkbox deleted');
-                }
+                if (index > -1) scene.walkbox.splice(index, 1);
             } else if (this.selectedObject instanceof Triggerbox) {
                 const index = scene.triggerboxes.indexOf(this.selectedObject);
-                if (index > -1) {
-                    scene.triggerboxes.splice(index, 1);
-                    console.log('Triggerbox deleted');
-                }
+                if (index > -1) scene.triggerboxes.splice(index, 1);
             } else if (this.selectedObject instanceof Entity) {
                 const index = scene.entities.indexOf(this.selectedObject);
-                if (index > -1) {
-                    scene.entities.splice(index, 1);
-                    console.log('Entity deleted');
-                }
+                if (index > -1) scene.entities.splice(index, 1);
+            } else if (this.selectedObject instanceof Actor) {
+                const index = scene.entities.indexOf(this.selectedObject);
+                if (index > -1) scene.entities.splice(index, 1);
             }
+            console.log('Object deleted');
+        }
 
-            this.selectedObject = null;
-            this.refreshHierarchy();
+        this.selectedObject = null;
+        this.selectObject(null); // Ensure store updates
+        this.refreshHierarchy();
+    }
 
-            // clear Props
-            const propName = document.getElementById('prop-name') as HTMLInputElement;
-            if (propName) propName.value = '';
-
-            // Hide all sections
-            const sectionEntityProps = document.getElementById('section-entity-props');
-            const sectionWalkboxProps = document.getElementById('section-walkbox-props');
-            if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
-            if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
+    redrawSelected(): void {
+        if (!this.selectedObject) return;
+        const type = this.selectedObject.type;
+        if (type === 'Walkbox' || type === 'Triggerbox') {
+            this.deleteSelectedObject();
+            this.startCreating(type as any);
         }
     }
 
@@ -1727,26 +1547,16 @@ export class SceneEditor {
         const needsName = !scene.filename;
 
         if (saveAs || needsName) {
-            if (this.openFileBrowser) {
-                this.openFileBrowser('save', 'public/scenes', (filename) => {
-                    // Update Filename from browser selection
-                    const name = filename.replace('.json', '');
-                    scene.filename = name;
-                    // Also update ID if it was a new scene
-                    if (scene.id === 'new_scene') scene.id = name;
+            this.game.openFileBrowser('save', 'public/scenes', (filename) => {
+                // Update Filename from browser selection
+                const name = filename.replace('.json', '');
+                scene.filename = name;
+                // Also update ID if it was a new scene
+                if (scene.id === 'new_scene') scene.id = name;
 
-                    this.syncUI(); // Refresh UI to show new Filename
-                    this.performSaveScene(scene.filename);
-                });
-            } else {
-                const name = prompt("Enter scene filename:", scene.filename || scene.id);
-                if (name) {
-                    scene.filename = name;
-                    if (scene.id === 'new_scene') scene.id = name;
-                    this.syncUI();
-                    this.performSaveScene(name);
-                }
-            }
+                this.syncUI(); // Refresh UI to show new Filename
+                this.performSaveScene(scene.filename);
+            });
         } else {
             // Quick Save with existing filename
             this.performSaveScene(scene.filename);
@@ -1781,11 +1591,9 @@ export class SceneEditor {
     }
 
     promptLoadScene(): void {
-        if (this.openFileBrowser) {
-            this.openFileBrowser('load', 'public/scenes', (filename) => {
-                this.loadSceneFromServer(filename);
-            });
-        }
+        this.game.openFileBrowser('load', 'public/scenes', (filename) => {
+            this.loadSceneFromServer(filename);
+        });
     }
 
     async loadSceneFromServer(filename: string): Promise<void> {
@@ -1806,11 +1614,9 @@ export class SceneEditor {
             return;
         }
 
-        if (this.openFileBrowser) {
-            this.openFileBrowser('save', 'public/prefabs', (filename) => {
-                this.performSaveObject(filename);
-            });
-        }
+        this.game.openFileBrowser('save', 'public/prefabs', (filename) => {
+            this.performSaveObject(filename);
+        });
     }
 
     async performSaveObject(filename: string): Promise<void> {
@@ -1857,11 +1663,9 @@ export class SceneEditor {
 
     async loadObject(): Promise<void> {
         if (!this.game.sceneManager.currentScene) return;
-        if (this.openFileBrowser) {
-            this.openFileBrowser('load', 'public/prefabs', (filename) => {
-                this.performLoadObject(filename);
-            });
-        }
+        this.game.openFileBrowser('load', 'public/prefabs', (filename) => {
+            this.performLoadObject(filename);
+        });
     }
 
     async performLoadObject(filename: string): Promise<void> {

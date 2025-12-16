@@ -11,6 +11,8 @@ import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 
 export class Game {
+    public static instance: Game;
+
     canvas: HTMLCanvasElement; // UI Canvas
     rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
     bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
@@ -34,15 +36,26 @@ export class Game {
     // Callbacks for React
     onSceneChange: ((title: string) => void) | null = null;
     onMessage: ((text: string) => void) | null = null;
+    onRequestFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string) => void) | null = null;
 
     settings: {
         crt: CRTSettings & { enabled: boolean };
     };
 
+    openFileBrowser(mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string): void {
+        if (this.onRequestFileBrowser) {
+            this.onRequestFileBrowser(mode, dir, onConfirm, extension, title);
+        } else {
+            console.error("File Browser UI not hooked up!");
+            alert("File Browser Unavailable");
+        }
+    }
+
     constructor(
         rendererCanvas: HTMLCanvasElement, // The main visual canvas (WebGL)
         uiCanvas: HTMLCanvasElement        // The UI overlay canvas (2D)
     ) {
+        Game.instance = this;
         this.rendererCanvas = rendererCanvas;
         this.canvas = uiCanvas;
 

@@ -2,34 +2,29 @@ body {
   background-color: #000;
   color: #fff;
   font-family: 'Courier New', Courier, monospace;
-  display: grid;
-  place-items: center;
-  min-height: 100vh;
+  height: 100vh;
   margin: 0;
-  overflow: auto;
-  padding: 20px;
-  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+  /* Prevent scrollbars */
+  width: 100vw;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
 }
 
 #game-container {
   display: block;
-  /* Ensure block-level box */
   position: relative;
   width: 840px;
-  /* 420 * 2 */
   height: 600px;
-  /* 300 * 2 */
-  min-width: 840px;
-  /* Prevent collapse */
-  min-height: 600px;
-  /* Prevent collapse */
   background-color: #111;
   border: none;
   image-rendering: pixelated;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
-  margin: auto;
-  /* Safe Centering */
 }
 
 canvas {
