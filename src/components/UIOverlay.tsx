@@ -58,6 +58,33 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         autoComplete="off"
                         autoFocus={!editorEnabled}
                         disabled={editorEnabled}
+                        onKeyDown={(e) => {
+                            console.log(`[UIOverlay] Input Key: ${e.key}`);
+                            // Layer 2: React Event Fallback (fires if Global Capture misses or bubbles up)
+
+                            // F1: Toggle Scene Editor
+                            if (e.key === 'F1') {
+                                e.preventDefault();
+                                game?.editor.toggle();
+                                return;
+                            }
+
+                            // F5: Toggle Sprite Editor
+                            if (e.key === 'F5') {
+                                e.preventDefault();
+                                game?.spriteEditor.toggle();
+                                return;
+                            }
+
+                            // Enter: Parse Command
+                            if (e.key === 'Enter') {
+                                const val = e.currentTarget.value.trim().toUpperCase();
+                                if (val && game) {
+                                    game.parser.parse(val);
+                                    e.currentTarget.value = '';
+                                }
+                            }
+                        }}
                         style={{
                             opacity: 0,
                             position: 'absolute',

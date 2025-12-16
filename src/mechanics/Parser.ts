@@ -12,27 +12,8 @@ export class Parser {
     }
 
     setupListener(): void {
-        this.inputField = document.getElementById('parser-input') as HTMLInputElement;
-        if (!this.inputField) {
-            console.warn("Parser input field not found");
-            return;
-        }
-
-        this.inputField.addEventListener('keydown', (e: KeyboardEvent) => {
-            // Block command input if Editor is open
-            console.log(`[Parser] KeyDown: ${e.key}. Editor Enabled: ${this.game.editor ? this.game.editor.enabled : 'NoEditor'}`);
-            if (this.game.editor && this.game.editor.enabled) return;
-
-            if (e.key === 'Enter') {
-                if (this.inputField) {
-                    const command = this.inputField.value.trim().toUpperCase();
-                    if (command) {
-                        this.parse(command);
-                        this.inputField.value = '';
-                    }
-                }
-            }
-        });
+        // Obsolete: Event handling moved to UIOverlay.tsx (React) to prevent stale DOM references.
+        // This method remains for compatibility with Game.ts bindUI call.
     }
 
     parse(input: string): void {

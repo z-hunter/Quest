@@ -3,7 +3,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { Game } from '../../core/Game';
 
 export const PropertiesPanel: React.FC = () => {
-    const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion } = useEditorStore();
+    const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode } = useEditorStore();
     const [obj, setObj] = useState<any>(null);
 
     // Refresh local object reference when selection or hierarchy changes
@@ -14,6 +14,9 @@ export const PropertiesPanel: React.FC = () => {
         if (editor.selectedObject === 'SETTINGS') {
             // Special case: Bind to Global Settings
             setObj(Game.instance.settings);
+        } else if (editor.selectedObject === 'SCENE') {
+            // Special case: Bind to Current Scene
+            setObj(Game.instance.sceneManager.currentScene);
         } else if (editor.selectedObject) {
             setObj(editor.selectedObject);
             // Force update to read new values
@@ -40,6 +43,20 @@ export const PropertiesPanel: React.FC = () => {
             if (isNaN(value)) value = 0;
         }
 
+        // 1. Identify Real Object
+        let realObj: any = null;
+        if (Game.instance) {
+            if (Game.instance.editor.selectedObject === 'SETTINGS') realObj = Game.instance.settings;
+            else if (Game.instance.editor.selectedObject === 'SCENE') realObj = Game.instance.sceneManager.currentScene;
+            else realObj = Game.instance.editor.selectedObject;
+        }
+
+        // 2. Apply to Real Object
+        if (realObj) {
+            realObj[field] = value;
+        }
+
+        // 3. Update Local State
         obj[field] = value;
         setObj({ ...obj }); // Force re-render
 
@@ -53,7 +70,48 @@ export const PropertiesPanel: React.FC = () => {
 
         // Special handling for Sprite changes (reload)
         if (field === 'spriteName') {
-            if (obj.setSprite) obj.setSprite(value);
+            if (realObj && realObj.setSprite) realObj.setSprite(value);
+        }
+
+        // Special handling for Ignore Scaling (preserve visual size)
+        if (field === 'ignoreScaling') {
+            const isIgnored = value;
+            const scene = Game.instance.sceneManager.currentScene;
+            if (scene && realObj && (selectedObjectType === 'Static' || selectedObjectType === 'Actor' || selectedObjectType === 'Entity')) {
+                const ent = realObj; // Use Real Object
+                const currentVisW = ent.width;
+                const currentVisH = ent.height;
+                const modelScale = ent.modelScale || 1.0;
+
+                let targetFactor = modelScale;
+
+                if (!isIgnored) {
+                    // Enable Depth Scaling: Scale = Model * Depth
+                    let depthFactor = 1.0;
+                    if (scene.scaling && scene.scaling.enabled) {
+                        depthFactor = scene.getScaling(ent.y);
+                    }
+                    targetFactor = modelScale * depthFactor;
+                }
+
+                // Recalculate Base Dimensions to maintain Visual Size
+                if (targetFactor !== 0) {
+                    ent.baseWidth = currentVisW / targetFactor;
+                    ent.baseHeight = currentVisH / targetFactor;
+                } else {
+                    ent.baseWidth = currentVisW;
+                    ent.baseHeight = currentVisH;
+                }
+
+                // Apply immediate scale to prevent jitter
+                ent.scale = targetFactor;
+
+                // Sync to local object
+                obj.baseWidth = ent.baseWidth;
+                obj.baseHeight = ent.baseHeight;
+                obj.scale = ent.scale;
+                setObj({ ...obj });
+            }
         }
     };
 
@@ -68,8 +126,8 @@ export const PropertiesPanel: React.FC = () => {
             <div className="editor-content">
                 {selectedObjectType !== 'SETTINGS' && (
                     <>
-                        <div className="e-row">
-                            <label className="e-label">Type</label>
+                        <div className="e-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="e-label" style={{ marginBottom: 0 }}>Type</label>
                             <div style={{ color: '#fff', fontFamily: 'monospace' }}>{selectedObjectType}</div>
                         </div>
 
@@ -79,8 +137,8 @@ export const PropertiesPanel: React.FC = () => {
                             <input
                                 type="text"
                                 className="e-input"
-                                value={obj.name || ''}
-                                onChange={(e) => handleChange('name', e.target.value)}
+                                value={selectedObjectType === 'SCENE' ? (obj.id || '') : (obj.name || '')}
+                                onChange={(e) => handleChange(selectedObjectType === 'SCENE' ? 'id' : 'name', e.target.value)}
                             />
                         </div>
                     </>
@@ -92,18 +150,21 @@ export const PropertiesPanel: React.FC = () => {
                         <button
                             className="e-btn e-btn-yellow"
                             style={{ width: '100%', marginBottom: '5px' }}
-                            onClick={() => {
+                            onClick={(e) => {
                                 if (confirm("Redraw polygon? Current points will be cleared.")) {
-                                    if (obj.points) obj.points = [];
-                                    Game.instance.editor.startCreating(selectedObjectType as any);
+                                    // Clean Redraw Logic: Editor handles clearing and mode setting
                                     Game.instance.editor.redrawSelected();
+                                    // Blur the button so hitting Enter doesn't re-trigger it
+                                    (e.target as HTMLElement).blur();
                                 }
                             }}
                         >
                             Redraw Polygon
                         </button>
                         <div className="e-label">
-                            To edit, drag vertices on screen. Hold Shift for 18° snap.
+                            {mode && mode.includes('DRAW')
+                                ? "Click to add points. Press ENTER to finish."
+                                : "To edit, drag vertices on screen. Hold Shift for 18° snap."}
                         </div>
                     </div>
                 )}
@@ -231,6 +292,96 @@ export const PropertiesPanel: React.FC = () => {
                                             }}
                                         />
                                     </div>
+                                </div>
+
+                                <div className="e-row" style={{ marginTop: '5px' }}>
+                                    <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                                        <input
+                                            type="checkbox"
+                                            style={{ marginRight: '5px' }}
+                                            checked={!!obj.autoCenter}
+                                            onChange={(e) => {
+                                                obj.autoCenter = e.target.checked;
+                                                setObj({ ...obj });
+                                            }}
+                                        />
+                                        Auto-Center on Player
+                                    </label>
+                                </div>
+                                <div className="e-row">
+                                    <label className="e-label">Cam Speed</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="e-input"
+                                        value={obj.cameraSpeed || 5}
+                                        onChange={(e) => {
+                                            obj.cameraSpeed = parseFloat(e.target.value);
+                                            setObj({ ...obj });
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Default Camera (Start Position) */}
+                        {obj.defaultCamera && (
+                            <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
+                                <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>DEFAULT CAMERA</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                                    <div>
+                                        <label className="e-label">Def X</label>
+                                        <input
+                                            type="number"
+                                            className="e-input"
+                                            value={Math.round(obj.defaultCamera.x)}
+                                            onChange={(e) => {
+                                                obj.defaultCamera.x = parseFloat(e.target.value);
+                                                setObj({ ...obj });
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="e-label">Def Y</label>
+                                        <input
+                                            type="number"
+                                            className="e-input"
+                                            value={Math.round(obj.defaultCamera.y)}
+                                            onChange={(e) => {
+                                                obj.defaultCamera.y = parseFloat(e.target.value);
+                                                setObj({ ...obj });
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="e-label">Def Zoom</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            className="e-input"
+                                            value={obj.defaultCamera.zoom}
+                                            onChange={(e) => {
+                                                obj.defaultCamera.zoom = parseFloat(e.target.value);
+                                                setObj({ ...obj });
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="e-row" style={{ marginTop: '5px' }}>
+                                    <button
+                                        className="e-btn"
+                                        style={{ width: '100%' }}
+                                        onClick={() => {
+                                            if (obj.camera && obj.defaultCamera) {
+                                                obj.defaultCamera.x = obj.camera.x;
+                                                obj.defaultCamera.y = obj.camera.y;
+                                                obj.defaultCamera.zoom = obj.camera.zoom;
+                                                setObj({ ...obj });
+                                            }
+                                        }}
+                                    >
+                                        Set Current as Default
+                                    </button>
                                 </div>
                             </div>
                         )}

@@ -90,7 +90,7 @@ export class SceneEditor {
 
     destroy(): void {
         console.log('[SceneEditor] Destroying, removing listeners...');
-        document.removeEventListener('keydown', this.boundKeyHandler);
+        document.removeEventListener('keydown', this.boundKeyHandler, { capture: true });
 
         this.game.canvas.removeEventListener('mousedown', this.boundMouseDownHandler);
         window.removeEventListener('mousemove', this.boundMouseMoveHandler);
@@ -107,7 +107,7 @@ export class SceneEditor {
         window.addEventListener('paste', this.boundPasteHandler);
 
         // Global Key Handler (Shortcuts) - Still valid as it targets document body
-        document.addEventListener('keydown', this.boundKeyHandler);
+        document.addEventListener('keydown', this.boundKeyHandler, { capture: true });
     }
 
     /* Event Handlers extracted for cleanup */
@@ -129,7 +129,7 @@ export class SceneEditor {
             return;
         }
 
-        // Ctrl+C for Copy JSON (Debug)
+        // Ctrl+C: Copy Object
         if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'c') {
             // Only prevent default if we have an object selected, 
             // otherwise let normal copy work (e.g. text in inputs)
@@ -140,17 +140,50 @@ export class SceneEditor {
             }
         }
 
+        // Ctrl+V: Paste Object
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'v') {
+            if (!(document.activeElement instanceof HTMLInputElement)) {
+                // e.preventDefault(); // Don't prevent default, let 'paste' event fire
+                // We rely on the global 'paste' event listener which calls handleGlobalPaste
+                // But if we want to force it?
+                // The 'paste' event is standard.
+                return;
+            }
+        }
+
+        // Ctrl+S: Save Object
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            this.saveObject();
+            return;
+        }
+
+        // Ctrl+O: Load Object
+        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'o') {
+            e.preventDefault();
+            this.loadObject();
+            return;
+        }
+
 
 
         // Allows opening editor with F1 or F5 even if disabled
         if (!this.enabled && e.key !== 'F1' && e.key !== 'F5') return;
 
+        // F1: Toggle Scene Editor
         if (e.key === 'F1') {
             e.preventDefault();
+            e.stopPropagation();
+
+            // Ensure Sprite Editor is closed if switching
+            if (this.game.spriteEditor && this.game.spriteEditor.active) {
+                this.game.spriteEditor.toggle(false);
+            }
             this.toggle();
         } else if (e.key === 'F5') {
             e.preventDefault();
-            this.game.spriteEditor.toggle(true);
+            e.stopPropagation();
+            this.game.spriteEditor.toggle();
         } else if (e.key === 'F9') {
             e.preventDefault();
             this.selectObject('SETTINGS');
@@ -261,21 +294,26 @@ export class SceneEditor {
             this.selectObject(ent);
             this.drawMode = false;
         } else if (type === 'Walkbox') {
-            this.creationType = 'Walkbox';
-            this.currentPolygon = []; // Reset any previous partial polygon
-            this.drawMode = true;
-            const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
-            if (chk) chk.checked = true;
-            this.selectObject(null);
-            console.log("Draw Mode: Walkbox");
-            useEditorStore.getState().setMode('DRAW_WALKBOX');
+            // New Flow: Create Object First
+            if (!scene.walkbox) scene.walkbox = [];
+            const newWalkbox = new Walkbox([], 'Walk_' + Math.floor(Math.random() * 1000));
+            scene.walkbox.push(newWalkbox);
+            console.log('Walkbox object added to scene (Empty)');
+            this.selectObject(newWalkbox);
+
+            // Now start drawing for this object
+            this.redrawSelected();
+
         } else if (type === 'Triggerbox') {
-            this.creationType = 'Triggerbox';
-            this.currentPolygon = [];
-            this.drawMode = true;
-            console.log("Draw Mode: Triggerbox");
-            this.selectObject(null);
-            useEditorStore.getState().setMode('DRAW_TRIGGER');
+            // New Flow: Create Object First
+            if (!scene.triggerboxes) scene.triggerboxes = [];
+            const newTrigger = new Triggerbox([], 'Trig_' + Math.floor(Math.random() * 1000));
+            scene.triggerboxes.push(newTrigger);
+            console.log('Triggerbox object added to scene (Empty)');
+            this.selectObject(newTrigger);
+
+            // Now start drawing for this object
+            this.redrawSelected();
         }
     }
 
@@ -1532,9 +1570,25 @@ export class SceneEditor {
     redrawSelected(): void {
         if (!this.selectedObject) return;
         const type = this.selectedObject.type;
+
         if (type === 'Walkbox' || type === 'Triggerbox') {
-            this.deleteSelectedObject();
-            this.startCreating(type as any);
+            // Keep object, just clear points
+            if ((this.selectedObject as any).poly) {
+                (this.selectedObject as any).poly = [];
+            }
+
+            this.currentPolygon = [];
+            this.creationType = type as any;
+            this.drawMode = true;
+
+            // UI Feedback
+            const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
+            if (chk) chk.checked = true;
+
+            if (type === 'Walkbox') useEditorStore.getState().setMode('DRAW_WALKBOX');
+            else useEditorStore.getState().setMode('DRAW_TRIGGER');
+
+            console.log(`Redrawing ${type}: ${this.selectedObject.name}`);
         }
     }
 
@@ -1544,9 +1598,10 @@ export class SceneEditor {
         if (!scene) return;
 
         // Valid Filename check
-        const needsName = !scene.filename;
+        const hasFilename = !!scene.filename;
+        const hasValidId = scene.id && scene.id !== 'new_scene';
 
-        if (saveAs || needsName) {
+        if (saveAs || (!hasFilename && !hasValidId)) {
             this.game.openFileBrowser('save', 'public/scenes', (filename) => {
                 // Update Filename from browser selection
                 const name = filename.replace('.json', '');
@@ -1558,7 +1613,13 @@ export class SceneEditor {
                 this.performSaveScene(scene.filename);
             });
         } else {
-            // Quick Save with existing filename
+            // Quick Save
+            // If we don't have a filename but have a valid ID, use ID as filename
+            if (!hasFilename && hasValidId) {
+                scene.filename = scene.id;
+                console.log(`[Editor] Auto-setting filename from ID: ${scene.filename}`);
+            }
+
             this.performSaveScene(scene.filename);
         }
     }
@@ -1829,32 +1890,25 @@ export class SceneEditor {
     finishPolygon(): void {
         console.log('finishPolygon called');
         if (this.currentPolygon && this.currentPolygon.length > 2) {
-            const scene = this.game.sceneManager.currentScene;
-            if (scene) {
-                const newPoly = [...this.currentPolygon];
-
-                if (this.creationType === 'Triggerbox') {
-                    if (!scene.triggerboxes) scene.triggerboxes = []; // Init if missing
-                    const newTrigger = new Triggerbox(newPoly, 'Trig_' + Math.floor(Math.random() * 1000));
-                    scene.triggerboxes.push(newTrigger);
-                    console.log('Triggerbox object added to scene');
-                    this.selectObject(newTrigger);
-                } else {
-                    // Walkbox
-                    if (!scene.walkbox) scene.walkbox = [];
-                    const newWalkbox = new Walkbox(newPoly, 'Walk_' + Math.floor(Math.random() * 1000));
-                    scene.walkbox.push(newWalkbox);
-                    console.log('Walkbox object added to scene');
-                    this.selectObject(newWalkbox);
-                }
-
-                this.currentPolygon = [];
-                // UX Improvement: Auto-exit draw mode
-                this.drawMode = false;
-                const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
-                if (chk) chk.checked = false;
-                this.refreshHierarchy();
+            // Instead of creating NEW object, assign to SELECTED object (if valid)
+            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
+                this.selectedObject.poly = [...this.currentPolygon];
+                console.log("Polygon updated for " + this.selectedObject.name);
+            } else {
+                // Fallback if somehow lost selection (shouldn't happen with new flow, but good safety)
+                console.warn("No valid object selected for polygon completion!");
             }
+
+            this.currentPolygon = [];
+            this.drawMode = false;
+
+            const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
+            if (chk) chk.checked = false;
+
+            // Reset Mode string
+            useEditorStore.getState().setMode('SELECT');
+
+            this.refreshHierarchy();
         }
     }
 

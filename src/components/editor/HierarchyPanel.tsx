@@ -24,12 +24,30 @@ export const HierarchyPanel: React.FC = () => {
     return (
 
         <div id="hierarchy-panel" className="editor-sidebar left">
-            {/* Header Controls */}
             <div className="editor-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}>
-                <div>OBJECTS</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>OBJECTS</div>
+                    <div style={{ display: 'flex', gap: '2px' }}>
+                        <button
+                            className="e-btn e-btn-small"
+                            onClick={() => Game.instance.editor.saveObject()}
+                            title="Save Object (Ctrl+S)"
+                        >
+                            💾
+                        </button>
+                        <button
+                            className="e-btn e-btn-small"
+                            onClick={() => Game.instance.editor.loadObject()}
+                            title="Load Object (Ctrl+O)"
+                        >
+                            📂
+                        </button>
+                    </div>
+                </div>
                 <div style={{ display: 'flex', gap: '5px' }}>
                     <select
                         className="e-select"
+                        style={{ flex: 1 }}
                         onChange={(e) => {
                             if (e.target.value) {
                                 handleAdd(e.target.value);
@@ -44,11 +62,25 @@ export const HierarchyPanel: React.FC = () => {
                         <option value="Triggerbox">Triggerbox (T)</option>
                     </select>
                     <button
-                        className="e-btn e-btn-red"
+                        className="e-btn e-btn-small"
+                        onClick={() => Game.instance.editor.copySelectedObjectToClipboard()}
+                        title="Copy (Ctrl+C)"
+                    >
+                        📋
+                    </button>
+                    <button
+                        className="e-btn e-btn-small"
+                        onClick={() => Game.instance.editor.pasteObjectFromClipboard()}
+                        title="Paste (Ctrl+V)"
+                    >
+                        📝
+                    </button>
+                    <button
+                        className="e-btn e-btn-red e-btn-small"
                         onClick={handleDelete}
                         title="Delete Selected (Del)"
                     >
-                        Delete
+                        🗑️
                     </button>
                 </div>
             </div>
