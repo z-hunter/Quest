@@ -3,7 +3,7 @@ import { Game } from '../core/Game';
 import { FileBrowser } from './FileBrowser';
 import { useEditorStore } from '../store/editorStore';
 
-import { SpriteEditorPanel } from './tools/SpriteEditorPanel';
+
 
 interface UIOverlayProps {
     game: Game | null;
@@ -14,7 +14,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     const [fileBrowser, setFileBrowser] = useState<{ open: boolean, mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string } | null>(null);
 
     // Editor Store State
-    const { enabled: editorEnabled, spriteEditorEnabled } = useEditorStore();
+    const { enabled: editorEnabled } = useEditorStore();
 
     useEffect(() => {
         if (game) {

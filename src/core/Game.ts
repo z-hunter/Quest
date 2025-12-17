@@ -221,8 +221,15 @@ export class Game {
         if (!this.isRunning) return;
 
         try {
-            const deltaTime = timestamp - this.lastTime;
+            let deltaTime = timestamp - this.lastTime;
             this.lastTime = timestamp;
+
+            // Cap delta time to prevent spiraling or fast-forwarding after backgrounding
+            // If the game was in the background, this prevents animations from trying to "catch up"
+            // by playing all missed frames at once.
+            if (deltaTime > 100) {
+                deltaTime = 100;
+            }
 
             this.update(deltaTime);
             this.render();

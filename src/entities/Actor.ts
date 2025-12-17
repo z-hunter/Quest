@@ -1,5 +1,7 @@
 import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
+import { useEditorStore } from '../store/editorStore';
+import { Game } from '../core/Game';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -46,15 +48,25 @@ export class Actor extends Entity {
         this.animator = new Animator(this);
     }
 
+    notifyEditor() {
+        // If this object is currently selected in the editor, notify the UI to refresh
+        if (Game.instance && Game.instance.editor && Game.instance.editor.selectedObject === this) {
+            useEditorStore.getState().incrementObjectVersion();
+        }
+    }
+
     setDirection(dir: ActorDirection) {
+        if (this.direction === dir) return;
         this.direction = dir;
         this.updateSpriteForState();
+        this.notifyEditor();
     }
 
     playAnimSet(setName: string) {
         if (this.animSets[setName]) {
             this.overrideAnimSet = setName;
             this.updateSpriteForState();
+            this.notifyEditor();
         } else {
             console.warn(`[Actor] Animation Set '${setName}' not found on actor '${this.name}'`);
         }
@@ -63,19 +75,33 @@ export class Actor extends Entity {
     resetAnimSet() {
         this.overrideAnimSet = null;
         this.updateSpriteForState();
+        this.notifyEditor();
     }
 
     addAnimSet(id: string) {
         if (this.animSets[id]) return;
         this.animSets[id] = { id, up: null, down: null, left: null, right: null };
+        this.notifyEditor();
     }
 
     removeAnimSet(id: string) {
         delete this.animSets[id];
+        this.notifyEditor();
     }
 
     getAnimSet(id: string): AnimationSet | undefined {
         return this.animSets[id];
+    }
+
+    walkTo(x: number, y: number): void {
+        // Validation: Check if destination is walkable using the Scene's logic
+        if (this.scene && typeof this.scene.isWalkable === 'function') {
+            if (!this.scene.isWalkable(x, y)) {
+                console.warn(`[Actor] walkTo destination ${x},${y} is not walkable.`);
+                return;
+            }
+        }
+        this.moveTo(x, y);
     }
 
     moveTo(x: number, y: number): void {
@@ -90,8 +116,10 @@ export class Actor extends Entity {
     }
 
     setState(state: ActorState) {
+        if (this.state === state) return;
         this.state = state;
         this.updateSpriteForState();
+        this.notifyEditor();
     }
 
     update(deltaTime: number, isWalkable?: (x: number, y: number) => boolean): void {
@@ -121,9 +149,9 @@ export class Actor extends Entity {
 
                 // Determine Direction
                 if (Math.abs(dx) > Math.abs(dy)) {
-                    this.direction = dx > 0 ? 'right' : 'left';
+                    this.setDirection(dx > 0 ? 'right' : 'left');
                 } else {
-                    this.direction = dy > 0 ? 'down' : 'up';
+                    this.setDirection(dy > 0 ? 'down' : 'up');
                 }
 
                 if (!isWalkable || isWalkable(nextX, nextY)) {
@@ -171,9 +199,9 @@ export class Actor extends Entity {
 
                 // Update Direction
                 if (Math.abs(dx) > Math.abs(dy)) {
-                    this.direction = dx > 0 ? 'right' : 'left';
+                    this.setDirection(dx > 0 ? 'right' : 'left');
                 } else {
-                    this.direction = dy > 0 ? 'down' : 'up';
+                    this.setDirection(dy > 0 ? 'down' : 'up');
                 }
 
                 if (!isWalkable || isWalkable(nextX, nextY)) {

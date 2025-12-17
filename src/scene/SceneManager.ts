@@ -16,21 +16,33 @@ export class SceneManager {
     }
 
     switchTo(sceneId: string): void {
-        if (this.scenes.has(sceneId)) {
-            this.currentScene = this.scenes.get(sceneId) || null;
-            if (this.currentScene) {
-                console.log(`Switched to scene: ${this.currentScene.name}`);
-
-                // Update UI Title
-                // In React world, this might be handled via state, but for now keeping DOM manip or hook later
-                // We'll emit an event or update game state that React observes
-                if (this.game.onSceneChange) {
-                    this.game.onSceneChange(this.currentScene.name);
-                }
+        const scene = this.scenes.get(sceneId);
+        if (scene) {
+            this.currentScene = scene;
+            console.log(`Switched to scene: ${this.currentScene.name}`);
+            this.exposeEntitiesToWindow();
+            // Optional: Notify UI provided by Game
+            if (this.game.onSceneChange) {
+                this.game.onSceneChange(scene.name);
             }
         } else {
-            console.error(`Scene not found: ${sceneId}`);
+            console.error(`Scene ${sceneId} not found!`);
         }
+    }
+
+    exposeEntitiesToWindow(): void {
+        if (!this.currentScene) return;
+
+        // Expose all entities by Name to window for Console API usage
+        this.currentScene.entities.forEach(entity => {
+            if (entity.name) {
+                // Sanitize name to be a valid JS identifier if needed, or just warn
+                // For now, assuming names are valid identifiers (e.g. Hero, Box, etc.)
+                // @ts-ignore
+                window[entity.name] = entity;
+            }
+        });
+        console.log(`[SceneManager] Entities exposed to Console: ${this.currentScene.entities.map(e => e.name).join(', ')}`);
     }
 
     update(deltaTime: number): void {

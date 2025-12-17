@@ -1543,7 +1543,11 @@ export class SceneEditor {
                 scene.addEntity(newObj);
             }
 
+            // Ensure new object is available in console
+            this.game.sceneManager.exposeEntitiesToWindow();
+
             return newObj;
+
 
         } catch (e) {
             console.error("Error creating object from data:", e);

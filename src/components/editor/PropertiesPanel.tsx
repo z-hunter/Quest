@@ -184,8 +184,8 @@ export const PropertiesPanel: React.FC = () => {
                                 onChange={(e) => {
                                     handleChange('direction', e.target.value);
                                     // Also trigger sprite update on the real object immediately
-                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.setDirection) {
-                                        Game.instance.editor.selectedObject.setDirection(e.target.value);
+                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).setDirection) {
+                                        (Game.instance.editor.selectedObject as any).setDirection(e.target.value);
                                     }
                                 }}
                             >
@@ -211,8 +211,8 @@ export const PropertiesPanel: React.FC = () => {
                                     obj.animSets[newId] = { id: newId, up: null, down: null, left: null, right: null };
 
                                     // Add to real obj
-                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.addAnimSet) {
-                                        Game.instance.editor.selectedObject.addAnimSet(newId);
+                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).addAnimSet) {
+                                        (Game.instance.editor.selectedObject as any).addAnimSet(newId);
                                     }
                                     setObj({ ...obj });
                                 }}>+ ADD</button>
@@ -229,8 +229,8 @@ export const PropertiesPanel: React.FC = () => {
                                         <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
                                             if (confirm(`Delete animation set '${setId}'?`)) {
                                                 delete obj.animSets[setId];
-                                                if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.removeAnimSet) {
-                                                    Game.instance.editor.selectedObject.removeAnimSet(setId);
+                                                if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).removeAnimSet) {
+                                                    (Game.instance.editor.selectedObject as any).removeAnimSet(setId);
                                                 }
                                                 setObj({ ...obj });
                                             }
@@ -252,11 +252,11 @@ export const PropertiesPanel: React.FC = () => {
                                                 Game.instance.openFileBrowser('load', 'public/sprites', (f) => {
                                                     set[dir] = f;
                                                     // Sync to real object
-                                                    if (Game.instance.editor.selectedObject && Game.instance.editor.selectedObject.animSets) {
-                                                        const realSet = Game.instance.editor.selectedObject.animSets[setId];
+                                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).animSets) {
+                                                        const realSet = (Game.instance.editor.selectedObject as any).animSets[setId];
                                                         if (realSet) realSet[dir] = f;
                                                         // If this is the current state, update sprite immediately
-                                                        Game.instance.editor.selectedObject.updateSpriteForState();
+                                                        (Game.instance.editor.selectedObject as any).updateSpriteForState();
                                                     }
                                                     setObj({ ...obj });
                                                 });
@@ -275,19 +275,19 @@ export const PropertiesPanel: React.FC = () => {
                         <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                             <div>
                                 <label className="e-label">X</label>
-                                <input type="number" className="e-input" value={obj.x} onChange={(e) => handleChange('x', e.target.value, true)} />
+                                <input type="number" className="e-input" value={obj.x ?? 0} onChange={(e) => handleChange('x', e.target.value, true)} />
                             </div>
                             <div>
                                 <label className="e-label">Y</label>
-                                <input type="number" className="e-input" value={obj.y} onChange={(e) => handleChange('y', e.target.value, true)} />
+                                <input type="number" className="e-input" value={obj.y ?? 0} onChange={(e) => handleChange('y', e.target.value, true)} />
                             </div>
                             <div>
                                 <label className="e-label">Width</label>
-                                <input type="number" className="e-input" value={obj.width} onChange={(e) => handleChange('width', e.target.value, true)} />
+                                <input type="number" className="e-input" value={obj.width ?? 0} onChange={(e) => handleChange('width', e.target.value, true)} />
                             </div>
                             <div>
                                 <label className="e-label">Height</label>
-                                <input type="number" className="e-input" value={obj.height} onChange={(e) => handleChange('height', e.target.value, true)} />
+                                <input type="number" className="e-input" value={obj.height ?? 0} onChange={(e) => handleChange('height', e.target.value, true)} />
                             </div>
                         </div>
 
