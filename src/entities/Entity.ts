@@ -83,31 +83,18 @@ export class Entity extends SceneObject {
             filename += '.json';
         }
 
+        // Update the sprite name immediately so we know what is INTENDED.
+        // This prevents repeated calls and ensures serialization is correct even while loading.
         this.spriteName = filename;
         console.log(`[Entity] Loading sprite config: ${filename}`);
 
-        // Construct path for fetch.
-        // If filename starts with 'public/', we need to strip it for the browser fetch check?
-        // Usually filenames stored are relative or just names.
-        // FileBrowser generally returns just the filename if flattened, or relative path.
-        // Let's assume input might be "public/sprites/foo.json" or just "foo.json"
-
-        // However, fetch needs a valid URL path.
-        // In this project, 'public' is root.
+        // Capture the requested filename to handle race conditions
+        const requestName = filename;
 
         let fetchPath = filename;
         if (fetchPath.startsWith('public/')) {
             fetchPath = '/' + fetchPath.substring(7);
         } else if (!fetchPath.startsWith('/')) {
-            // If just filename, assume /sprites/ ? Or try to respect path provided?
-            // PropertiesPanel sends whatever FileBrowser returns.
-            // If PropertiesPanel was set to 'public/sprites', it typically returns just the file name in the callback 
-            // IF the file browser implementation does that.
-            // Let's look at `PropertiesPanel` again... `handleChange('spriteName', f)`
-            // If FileBrowser returns 'foo.json', we might need to prepend path.
-            // But let's handle the full path case first.
-
-            // Safest bet: If it doesn't look like a path, assume /sprites/
             fetchPath = '/sprites/' + filename;
         }
 
@@ -117,54 +104,70 @@ export class Entity extends SceneObject {
                 return res.json();
             })
             .then(data => {
-                // Parse Sprite Data
-                // Expected format: { imageFile: string, x, y, width, height, frames, ... }
+                // Check if the request is still valid before processing
+                if (this.spriteName !== requestName) {
+                    console.log(`[Entity] Ignoring stale sprite load: ${requestName} (Current: ${this.spriteName})`);
+                    return;
+                }
 
-                // 1. Setup Dimensions (Frame Size)
-                this.baseWidth = data.width;
-                this.baseHeight = data.height;
-                // Update current dimensions based on scale
-                this.width = this.baseWidth * this.scale;
-                this.height = this.baseHeight * this.scale;
+                // Prepare new state in local variables (ATOMIC PREPARATION)
 
-                // 2. Load Image
+                // 1. Dimensions
+                const newBaseWidth = data.width;
+                const newBaseHeight = data.height;
+
+                // 2. Image
                 let imagePath = data.imageFile;
-                // Handle relative paths in JSON
                 if (imagePath.startsWith('public/')) {
                     imagePath = '/' + imagePath.substring(7);
                 } else if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
-                    imagePath = '/assets/' + imagePath; // Assumption: images are in assets
+                    imagePath = '/assets/' + imagePath;
                 }
 
-                this.image = new Image();
-                this.image.src = imagePath;
-                this.image.onload = () => {
-                    console.log(`[Entity] Loaded sprite image: ${imagePath}`);
-                };
-                this.image.onerror = (e) => console.error(`[Entity] Failed to load sprite image: ${imagePath}`, e);
+                const newImage = new Image();
+                newImage.src = imagePath;
 
-                // 3. Setup Animator
-                if (!this.animator) {
-                    this.animator = new Animator(this);
-                }
-
+                // 3. Animator
+                const newAnimator = new Animator(this);
                 const frames = [];
                 for (let i = 0; i < (data.frames || 1); i++) {
                     frames.push({
                         x: data.x,
-                        y: data.y + (i * data.height), // Vertical strip assumption from SpriteEditor
+                        y: data.y + (i * data.height),
                         w: data.width,
                         h: data.height
                     });
                 }
+                newAnimator.addAnimation('default', frames, true);
+                newAnimator.play('default');
 
-                this.animator.addAnimation('default', frames, true);
-                this.animator.play('default');
+                // 4. Atomic Swap on Load
+                newImage.onload = () => {
+                    // Double check race condition inside onload
+                    if (this.spriteName !== requestName) {
+                        console.log(`[Entity] Ignoring stale sprite load (onload): ${requestName}`);
+                        return;
+                    }
 
+                    console.log(`[Entity] Applying sprite: ${requestName}`);
+
+                    this.baseWidth = newBaseWidth;
+                    this.baseHeight = newBaseHeight;
+
+                    // Recalculate current dimensions
+                    this.width = this.baseWidth * this.scale;
+                    this.height = this.baseHeight * this.scale;
+
+                    this.image = newImage;
+                    this.animator = newAnimator;
+                };
+
+                newImage.onerror = (e) => {
+                    console.error(`[Entity] Failed to load sprite image: ${imagePath}`, e);
+                };
             })
             .catch(err => {
                 console.error(`[Entity] Sprite load error:`, err);
-                // Fallback? User asked to remove legacy support, so maybe just log.
             });
     }
 

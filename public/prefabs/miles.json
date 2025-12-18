@@ -1,15 +1,15 @@
 {
   "type": "Actor",
   "name": "Hero",
-  "x": 211,
-  "y": 132,
-  "width": 22.1,
-  "height": 57.7,
+  "x": 140.89893218809877,
+  "y": 214.25893218814159,
+  "width": 63.13496535143906,
+  "height": 164.8365384967436,
   "baseWidth": 221,
   "baseHeight": 577,
   "spriteName": "miles-idle-down.json",
   "color": "#00ffff",
-  "scale": 0.1,
+  "scale": 0.28567857625085546,
   "layer": 0,
   "parallax": 1,
   "ignoreScaling": false,
@@ -21,8 +21,15 @@
       "id": "idle",
       "up": "miles-idle-up.json",
       "down": "miles-idle-down.json",
-      "left": "miles-idle-left.json",
-      "right": null
+      "left": null,
+      "right": "miles-idle-left.json"
+    },
+    "walk": {
+      "id": "walk",
+      "up": "miles-walk-up.json",
+      "down": "miles-walk-down.json",
+      "left": null,
+      "right": "miles-walk-right.json"
     }
   }
 }

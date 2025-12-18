@@ -192,8 +192,19 @@ export const PropertiesPanel: React.FC = () => {
                                 <option value="down">Down</option>
                                 <option value="up">Up</option>
                                 <option value="left">Left</option>
-                                <option value="right">Right</option>
                             </select>
+                        </div>
+
+                        {/* Speed */}
+                        <div className="e-row">
+                            <label className="e-label">Speed</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                className="e-input"
+                                value={obj.speed !== undefined ? obj.speed : 0.1}
+                                onChange={(e) => handleChange('speed', e.target.value, true)}
+                            />
                         </div>
 
                         {/* Animation Sets */}
