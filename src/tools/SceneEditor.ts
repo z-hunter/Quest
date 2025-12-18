@@ -1448,6 +1448,10 @@ export class SceneEditor {
                 if (data.state) newObj.setState(data.state);
                 if (data.speed) newObj.speed = data.speed;
                 if (data.isPlayer) newObj.isPlayer = true; // Apply from JSON
+                if (data.animSets) {
+                    // Deep copy to ensure no reference sharing (especially for Duplicate)
+                    newObj.animSets = JSON.parse(JSON.stringify(data.animSets));
+                }
             } else if (type === 'Player') {
                 // Legacy Import Support: Convert Player to Actor + isPlayer
                 newObj = new Actor(x, y, data.width || 30, data.height || 30, data.name || 'Player');
@@ -2015,6 +2019,9 @@ export class SceneEditor {
                         // We can cast entityData to have random props for now
                         if ((entityData as any).state) entity.setState((entityData as any).state);
                         if ((entityData as any).direction) entity.setDirection((entityData as any).direction);
+                        if ((entityData as any).animSets) {
+                            (entity as Actor).animSets = JSON.parse(JSON.stringify((entityData as any).animSets));
+                        }
                     }
 
                     newScene.addEntity(entity);

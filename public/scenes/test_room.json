@@ -14,48 +14,14 @@
   "entities": [
     {
       "type": "Entity",
-      "name": "Pillar_1",
-      "x": 142,
-      "y": 88,
-      "width": 28.21174894383165,
-      "height": 24.381696681093658,
-      "baseWidth": 56.4234978876633,
-      "baseHeight": 48.763393362187315,
-      "spriteName": null,
-      "color": "#888888",
-      "scale": 0.5,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false
-    },
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": 160,
-      "y": 100,
-      "width": 15,
-      "height": 25,
-      "baseWidth": 30,
-      "baseHeight": 50,
-      "spriteName": "assets/hero.png.json",
-      "color": "#00ffff",
-      "scale": 0.5,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "isPlayer": true,
-      "speed": 0.1
-    },
-    {
-      "type": "Entity",
       "name": "Pillar",
-      "x": 174,
-      "y": 109,
-      "width": 33.15322980604142,
-      "height": 26.092562469684268,
-      "baseWidth": 66.30645961208285,
-      "baseHeight": 52.185124939368535,
-      "spriteName": null,
+      "x": 180,
+      "y": 110,
+      "width": 640,
+      "height": 360,
+      "baseWidth": 1280,
+      "baseHeight": 720,
+      "spriteName": "bg.json",
       "color": "#888888",
       "scale": 0.5,
       "layer": 0,
@@ -77,6 +43,34 @@
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false
+    },
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": 265.379303318778,
+      "y": 6.789222971241676,
+      "width": 49,
+      "height": 120,
+      "baseWidth": 245,
+      "baseHeight": 600,
+      "spriteName": "miles-walk-down.json",
+      "color": "#00ffff",
+      "scale": 0.2,
+      "layer": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "down",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles-walk-up.json",
+          "down": "miles-walk-down.json",
+          "left": null,
+          "right": "miles-walk-right.json"
+        }
+      }
     }
   ],
   "camera": {
@@ -84,6 +78,6 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5
 }

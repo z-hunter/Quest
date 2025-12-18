@@ -1,0 +1,28 @@
+{
+  "type": "Actor",
+  "name": "Hero",
+  "x": 211,
+  "y": 132,
+  "width": 22.1,
+  "height": 57.7,
+  "baseWidth": 221,
+  "baseHeight": 577,
+  "spriteName": "miles-idle-down.json",
+  "color": "#00ffff",
+  "scale": 0.1,
+  "layer": 0,
+  "parallax": 1,
+  "ignoreScaling": false,
+  "isPlayer": true,
+  "speed": 0.1,
+  "direction": "down",
+  "animSets": {
+    "idle": {
+      "id": "idle",
+      "up": "miles-idle-up.json",
+      "down": "miles-idle-down.json",
+      "left": "miles-idle-left.json",
+      "right": null
+    }
+  }
+}
