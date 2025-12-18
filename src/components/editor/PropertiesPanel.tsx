@@ -113,6 +113,13 @@ export const PropertiesPanel: React.FC = () => {
                 setObj({ ...obj });
             }
         }
+
+        // Special handling for Animation Speed (Live Update)
+        if (field === 'animationSpeed') {
+            if (realObj && realObj.animator) {
+                realObj.animator.frameDuration = value;
+            }
+        }
     };
 
     return (
@@ -197,13 +204,25 @@ export const PropertiesPanel: React.FC = () => {
 
                         {/* Speed */}
                         <div className="e-row">
-                            <label className="e-label">Speed</label>
+                            <label className="e-label">Move Speed</label>
                             <input
                                 type="number"
                                 step="0.01"
                                 className="e-input"
                                 value={obj.speed !== undefined ? obj.speed : 0.1}
                                 onChange={(e) => handleChange('speed', e.target.value, true)}
+                            />
+                        </div>
+
+                        {/* Anim Speed */}
+                        <div className="e-row">
+                            <label className="e-label">Anim Speed (ms)</label>
+                            <input
+                                type="number"
+                                step="10"
+                                className="e-input"
+                                value={obj.animationSpeed !== undefined ? obj.animationSpeed : 150}
+                                onChange={(e) => handleChange('animationSpeed', e.target.value, true)}
                             />
                         </div>
 

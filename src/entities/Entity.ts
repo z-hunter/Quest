@@ -21,6 +21,7 @@ export interface EntityData {
     speed?: number;
     direction?: string;
     state?: string;
+    animationSpeed?: number;
 }
 
 export class Entity extends SceneObject {
@@ -48,6 +49,8 @@ export class Entity extends SceneObject {
     ignoreScaling: boolean;
     // readonly type: string = 'Static'; // Inherited
 
+    animationSpeed: number; // Added
+
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         super(name, 'Static');
         this.x = x;
@@ -69,6 +72,7 @@ export class Entity extends SceneObject {
         this.layer = 0;
         this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
         this.ignoreScaling = false;
+        this.animationSpeed = 150; // Default 150ms
 
         this.baseWidth = this.width;
         this.baseHeight = this.height;
@@ -129,6 +133,9 @@ export class Entity extends SceneObject {
 
                 // 3. Animator
                 const newAnimator = new Animator(this);
+                // Apply current animation speed
+                newAnimator.frameDuration = this.animationSpeed;
+
                 const frames = [];
                 for (let i = 0; i < (data.frames || 1); i++) {
                     frames.push({
@@ -253,7 +260,8 @@ export class Entity extends SceneObject {
             scale: this.scale,
             layer: this.layer,
             parallax: this.parallax,
-            ignoreScaling: this.ignoreScaling
+            ignoreScaling: this.ignoreScaling,
+            animationSpeed: this.animationSpeed // Added
         };
     }
 
@@ -281,6 +289,11 @@ export class Entity extends SceneObject {
         entity.layer = data.layer || 0;
         entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
         entity.ignoreScaling = !!data.ignoreScaling;
+
+        // Added restoring animationSpeed
+        if (data.animationSpeed !== undefined) {
+            entity.animationSpeed = data.animationSpeed;
+        }
 
         if (data.spriteName) {
             entity.setSprite(data.spriteName);
