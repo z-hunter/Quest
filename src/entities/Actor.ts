@@ -1,7 +1,7 @@
 import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
-import { Game } from '../core/Game';
+// import { Game } from '../core/Game';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -50,7 +50,8 @@ export class Actor extends Entity {
 
     notifyEditor() {
         // If this object is currently selected in the editor, notify the UI to refresh
-        if (Game.instance && Game.instance.editor && Game.instance.editor.selectedObject === this) {
+        const game = (window as any).game;
+        if (game && game.editor && game.editor.selectedObject === this) {
             useEditorStore.getState().incrementObjectVersion();
         }
     }
@@ -283,5 +284,28 @@ export class Actor extends Entity {
         data.direction = this.direction;
         data.animSets = this.animSets;
         return data;
+    }
+
+    override load(data: ActorData): void {
+        super.load(data);
+        if (data.direction) this.direction = data.direction;
+        if (data.speed !== undefined) this.speed = data.speed;
+        if (data.isPlayer !== undefined) this.isPlayer = data.isPlayer;
+
+        // Restore AnimSets
+        if (data.animSets) {
+            this.animSets = JSON.parse(JSON.stringify(data.animSets)); // Deep copy to prevent ref issues
+        } else {
+            this.animSets = {};
+        }
+
+        // Initial sprite update
+        this.updateSpriteForState();
+    }
+
+    static override fromJSON(data: ActorData): Actor {
+        const actor = new Actor(data.x, data.y, data.width, data.height, data.name);
+        actor.load(data);
+        return actor;
     }
 }

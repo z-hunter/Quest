@@ -3,7 +3,12 @@ import { useEditorStore } from '../../store/editorStore';
 import { Game } from '../../core/Game';
 
 export const HierarchyPanel: React.FC = () => {
-    const { hierarchyVersion, selectedObjectId, selectObject } = useEditorStore();
+    const { hierarchyVersion, selectedObjectId } = useEditorStore();
+
+    // Force re-render on hierarchy version change (subscription)
+    React.useEffect(() => {
+        // This effect solely exists to subscribe to hierarchyVersion updates
+    }, [hierarchyVersion]);
 
     const handleAdd = (type: string) => {
         Game.instance.editor.startCreating(type);
@@ -29,9 +34,9 @@ export const HierarchyPanel: React.FC = () => {
                     <div>OBJECTS</div>
                 </div>
                 <div style={{ marginBottom: '5px' }}>
-                    <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(6, 1fr)', 
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
                         gap: '2px',
                         marginBottom: '5px'
                     }}>

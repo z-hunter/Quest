@@ -374,7 +374,11 @@ export class Game {
         console.log(`[Game] onMouseClick: ${x}, ${y}`);
 
         const input = document.getElementById('parser-input');
-        if (input) input.focus();
+
+        // Only focus parser if editor is NOT enabled
+        if (input && !this.editor.enabled) {
+            input.focus();
+        }
 
         // If editor consumes the click, don't pass to game
         if (this.editor.onClick(x, y)) {

@@ -258,46 +258,54 @@ export class Entity extends SceneObject {
             spriteName: this.spriteName,
             color: this.color,
             scale: this.scale,
+            modelScale: this.modelScale, // Added persistence
             layer: this.layer,
             parallax: this.parallax,
             ignoreScaling: this.ignoreScaling,
-            animationSpeed: this.animationSpeed // Added
         };
     }
 
-    static fromJSON(data: EntityData): Entity {
-        // Note: subclasses like Actor should handle their own instantiation if using this directly,
-        // or the caller should instantiate the right class and then populate.
-        // This default implementation creates a base Entity.
-        const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
-        entity.color = data.color || '#ff0000';
-        entity.scale = data.scale || 1.0;
+    load(data: EntityData): void {
+        this.x = data.x;
+        this.y = data.y;
+        this.width = data.width;
+        this.height = data.height;
+        this.name = data.name; // SceneObject property
 
-        // Restore base dimensions if present, otherwise calculate/fallback
-        console.log(`[Entity.fromJSON] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale}`);
+        this.color = data.color || '#ff0000';
+        this.scale = data.scale || 1.0;
+        if (data.modelScale !== undefined) this.modelScale = data.modelScale;
+
+        // Restore base dimensions
+        console.log(`[Entity.load] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale}`);
         if (data.baseWidth !== undefined) {
-            entity.baseWidth = data.baseWidth;
-            console.log(`[Entity.fromJSON] Restored baseWidth: ${entity.baseWidth}`);
+            this.baseWidth = data.baseWidth;
         } else {
-            entity.baseWidth = entity.scale > 0 ? data.width / entity.scale : data.width;
-            console.log(`[Entity.fromJSON] Calculated baseWidth: ${entity.baseWidth}`);
+            this.baseWidth = this.scale > 0 ? data.width / this.scale : data.width;
         }
 
-        if (data.baseHeight !== undefined) entity.baseHeight = data.baseHeight;
-        else entity.baseHeight = entity.scale > 0 ? data.height / entity.scale : data.height;
+        if (data.baseHeight !== undefined) this.baseHeight = data.baseHeight;
+        else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
 
-        entity.layer = data.layer || 0;
-        entity.parallax = data.parallax !== undefined ? data.parallax : 1.0;
-        entity.ignoreScaling = !!data.ignoreScaling;
+        this.layer = data.layer || 0;
+        this.parallax = data.parallax !== undefined ? data.parallax : 1.0;
+        this.ignoreScaling = !!data.ignoreScaling;
 
-        // Added restoring animationSpeed
+        // Restore animationSpeed
         if (data.animationSpeed !== undefined) {
-            entity.animationSpeed = data.animationSpeed;
+            this.animationSpeed = data.animationSpeed;
         }
 
         if (data.spriteName) {
-            entity.setSprite(data.spriteName);
+            this.setSprite(data.spriteName);
         }
+    }
+
+    static fromJSON(data: EntityData): Entity {
+        // Factory pattern should be used here or by caller, but for backward compatibility:
+        // Use the instance load method.
+        const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
+        entity.load(data);
         return entity;
     }
 }

@@ -11,10 +11,11 @@ export const PropertiesPanel: React.FC = () => {
         const editor = Game.instance?.editor;
         if (!editor) return;
 
-        if (editor.selectedObject === 'SETTINGS') {
+        const sel = editor.selectedObject as any;
+        if (sel === 'SETTINGS') {
             // Special case: Bind to Global Settings
             setObj(Game.instance.settings);
-        } else if (editor.selectedObject === 'SCENE') {
+        } else if (sel === 'SCENE') {
             // Special case: Bind to Current Scene
             setObj(Game.instance.sceneManager.currentScene);
         } else if (editor.selectedObject) {
@@ -45,9 +46,10 @@ export const PropertiesPanel: React.FC = () => {
 
         // 1. Identify Real Object
         let realObj: any = null;
-        if (Game.instance) {
-            if (Game.instance.editor.selectedObject === 'SETTINGS') realObj = Game.instance.settings;
-            else if (Game.instance.editor.selectedObject === 'SCENE') realObj = Game.instance.sceneManager.currentScene;
+        if (Game.instance && Game.instance.editor) {
+            const sel = Game.instance.editor.selectedObject as any;
+            if (sel === 'SETTINGS') realObj = Game.instance.settings;
+            else if (sel === 'SCENE') realObj = Game.instance.sceneManager.currentScene;
             else realObj = Game.instance.editor.selectedObject;
         }
 

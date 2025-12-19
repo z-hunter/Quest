@@ -13,7 +13,7 @@ export const EditorBottomMenu: React.FC = () => {
             case 'F2': editor.saveScene(false); break;
             case 'ShiftF2': editor.saveScene(true); break;
             case 'F3': editor.promptLoadScene(); break;
-            case 'F4': editor.startCreatingNewScene(); break;
+            case 'F4': editor.newScene(); break;
             case 'F5': toggleSpriteEditor(true); break;
             case 'F9': editor.selectObject('SETTINGS'); break;
         }

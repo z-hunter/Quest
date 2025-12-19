@@ -1,8 +1,10 @@
+
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import { DefaultActorData, DefaultEntityData } from '../entities/EntityPrefabs';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
@@ -367,11 +369,21 @@ export class SceneEditor {
 
             let ent: Entity;
             if (type === 'Actor') {
-                ent = new Actor(160, 100, 30, 30, name);
-                ent.color = '#0000ff';
+                // Use Prefab Data
+                const data = JSON.parse(JSON.stringify(DefaultActorData));
+                data.name = name;
+                data.x = 160;
+                data.y = 100;
+                data.color = '#0000ff'; // Override default green?
+                ent = Actor.fromJSON(data);
             } else {
-                ent = new Entity(160, 100, 30, 30, name);
-                ent.color = '#00ff00';
+                // Use Prefab Data
+                const data = JSON.parse(JSON.stringify(DefaultEntityData));
+                data.name = name;
+                data.x = 160;
+                data.y = 100;
+                data.color = '#00ff00';
+                ent = Entity.fromJSON(data);
             }
 
             scene.addEntity(ent);
@@ -533,7 +545,7 @@ export class SceneEditor {
     }
 
     onMouseDown(e: MouseEvent): void {
-        console.log(`[Editor] onMouseDown. Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
+        console.log(`[Editor] onMouseDown.Enabled: ${this.enabled}, DrawMode: ${this.drawMode} `);
         if (!this.enabled) return;
 
         // Right Click Panning
@@ -555,7 +567,7 @@ export class SceneEditor {
         if (this.drawMode) return;
 
         const pos = this.getMousePos(e); // Screen Coords
-        console.log(`[Editor] MousePos: ${pos.x}, ${pos.y}`);
+        console.log(`[Editor] MousePos: ${pos.x}, ${pos.y} `);
         const scene = this.game.sceneManager.currentScene;
 
         if (scene) {
@@ -1067,7 +1079,7 @@ export class SceneEditor {
                     if (isActor || typeProp === 'Actor') typeChar = 'A';
 
                     // [T] Name
-                    div.innerText = `${typeChar}:${entity.name}`;
+                    div.innerText = `${typeChar}:${entity.name} `;
 
                     div.onclick = () => {
                         this.selectObject(entity);
@@ -1083,7 +1095,7 @@ export class SceneEditor {
                     scene.walkbox.forEach((wb: any, i: number) => {
                         const div = document.createElement('div');
                         div.className = 'entity-item';
-                        div.innerText = `W:${wb.name || 'Walkbox ' + i}`;
+                        div.innerText = `W:${wb.name || 'Walkbox ' + i} `;
                         div.onclick = () => {
                             this.selectObject(wb);
                         };
@@ -1099,7 +1111,7 @@ export class SceneEditor {
                     scene.triggerboxes.forEach((trigger: any) => {
                         const div = document.createElement('div');
                         div.className = 'entity-item';
-                        div.innerText = `T:${trigger.name || 'Trigger'}`;
+                        div.innerText = `T:${trigger.name || 'Trigger'} `;
                         div.onclick = () => {
                             this.selectObject(trigger);
                         };
@@ -1372,7 +1384,7 @@ export class SceneEditor {
         const prefix = match ? match[1] : baseName;
 
         let counter = 1;
-        let newName = `${prefix}_${counter}`;
+        let newName = `${prefix}_${counter} `;
 
         // Check collision in entire scene
         // We can reuse a helper or just do it here
@@ -1384,14 +1396,14 @@ export class SceneEditor {
         const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
         while (isNameTaken(newName)) {
             counter++;
-            newName = `${prefix}_${counter}`;
+            newName = `${prefix}_${counter} `;
         }
         data.name = newName;
 
         // Use unified creation
         const newObj = this.createObjectFromData(data);
         if (newObj) {
-            console.log(`Duplicated: ${baseName} -> ${newName}`);
+            console.log(`Duplicated: ${baseName} -> ${newName} `);
             this.selectObject(newObj);
             this.refreshHierarchy();
         }
@@ -1402,7 +1414,7 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
 
-        console.log(`[Editor] Setting isPlayer for ${actor.name} to ${value}`);
+        console.log(`[Editor] Setting isPlayer for ${actor.name} to ${value} `);
 
         if (value) {
             // Unset others
@@ -1434,6 +1446,7 @@ export class SceneEditor {
         // Determine Type (fallback to Static if missing)
         const type = data.type || 'Static';
 
+
         // Coordinates
         const x = overrideX !== undefined ? overrideX : (data.x || 0);
         const y = overrideY !== undefined ? overrideY : (data.y || 0);
@@ -1441,25 +1454,11 @@ export class SceneEditor {
         let newObj: any;
 
         try {
-            if (type === 'Actor') {
-                newObj = new Actor(x, y, data.width || 30, data.height || 30, data.name || 'Actor');
-                // Restore Actor specifics if available in data
-                if (data.direction) newObj.setDirection(data.direction);
-                if (data.state) newObj.setState(data.state);
-                if (data.speed) newObj.speed = data.speed;
-                if (data.isPlayer) newObj.isPlayer = true; // Apply from JSON
-                if (data.animSets) {
-                    // Deep copy to ensure no reference sharing (especially for Duplicate)
-                    newObj.animSets = JSON.parse(JSON.stringify(data.animSets));
-                }
-            } else if (type === 'Player') {
-                // Legacy Import Support: Convert Player to Actor + isPlayer
-                newObj = new Actor(x, y, data.width || 30, data.height || 30, data.name || 'Player');
-                newObj.isPlayer = true;
-                if (data.direction) newObj.setDirection(data.direction);
-            } else if (type === 'Static' || type === 'Entity') {
-                newObj = new Entity(x, y, data.width || 30, data.height || 30, data.name || 'Static');
-            } else if (type === 'Walkbox') {
+            // Apply Overrides to data
+            data.x = x;
+            data.y = y;
+
+            if (type === 'Walkbox') {
                 // For Walkboxes, we need to shift the polygon if position changed?
                 // Walkboxes usually store absolute poly points.
                 // If we paste at NEW mouse position, we should shift all points relative to center.
@@ -1509,31 +1508,19 @@ export class SceneEditor {
                     poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
                 }
                 newObj = new Triggerbox(poly, data.name, data.script || '');
-            } else {
-                console.warn("Unknown object type:", type);
-                return null;
+
+            } else if (type === 'Actor') {
+                newObj = Actor.fromJSON(data);
+            } else if (type === 'Player') {
+                newObj = Actor.fromJSON({ ...data, type: 'Actor', isPlayer: true });
+            } else if (type === 'Static' || type === 'Entity') {
+                newObj = Entity.fromJSON(data);
             }
-
-            // Common Entity Props
-            if (newObj instanceof Entity) {
-                newObj.color = data.color || '#ff0000';
-                newObj.scale = data.scale || 1.0;
-                newObj.layer = data.layer || 0;
-                newObj.parallax = data.parallax !== undefined ? data.parallax : 1.0;
-                newObj.ignoreScaling = !!data.ignoreScaling;
-
-                // Base Dimensions
-                if (data.baseWidth !== undefined) newObj.baseWidth = data.baseWidth;
-                else newObj.baseWidth = newObj.width / newObj.scale; // Approx
-
-                if (data.baseHeight !== undefined) newObj.baseHeight = data.baseHeight;
-                else newObj.baseHeight = newObj.height / newObj.scale;
-
-                // Restore Model Scale if present (from duplicate or save)
-                if (data.modelScale !== undefined) newObj.modelScale = data.modelScale;
-                // Otherwise derive/default?
-
-                if (data.spriteName) newObj.setSprite(data.spriteName);
+            // Fallback
+            if (!newObj) {
+                if (type !== 'Walkbox' && type !== 'Triggerbox') {
+                    newObj = Entity.fromJSON(data);
+                }
             }
 
             // ADD TO SCENE
@@ -1630,7 +1617,7 @@ export class SceneEditor {
                 const prefix = match ? match[1] : baseName;
 
                 let counter = 1;
-                let newName = `${prefix}_${counter}`;
+                let newName = `${prefix}_${counter} `;
                 const allObjects = [
                     ...(scene.entities || []),
                     ...(scene.walkbox || []),
@@ -1639,7 +1626,7 @@ export class SceneEditor {
                 const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
                 while (isNameTaken(newName)) {
                     counter++;
-                    newName = `${prefix}_${counter}`;
+                    newName = `${prefix}_${counter} `;
                 }
                 data.name = newName;
             }
@@ -1768,7 +1755,7 @@ export class SceneEditor {
             if (type === 'Walkbox') useEditorStore.getState().setMode('DRAW_WALKBOX');
             else useEditorStore.getState().setMode('DRAW_TRIGGER');
 
-            console.log(`Redrawing ${type}: ${this.selectedObject.name}`);
+            console.log(`Redrawing ${type}: ${this.selectedObject.name} `);
         }
     }
 
@@ -1797,7 +1784,7 @@ export class SceneEditor {
             // If we don't have a filename but have a valid ID, use ID as filename
             if (!hasFilename && hasValidId) {
                 scene.filename = scene.id;
-                console.log(`[Editor] Auto-setting filename from ID: ${scene.filename}`);
+                console.log(`[Editor] Auto - setting filename from ID: ${scene.filename} `);
             }
 
             this.performSaveScene(scene.filename);
@@ -1821,13 +1808,13 @@ export class SceneEditor {
 
             if (response.ok) {
                 console.log('Scene saved to server:', filePath);
-                // this.game.showMessage(`Scene Saved: ${filenameId}`); // Removed per user request
+                // this.game.showMessage(`Scene Saved: ${ filenameId } `); // Removed per user request
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('Failed to save scene:', e);
-            this.game.showMessage(`Error saving scene: ${e}`);
+            this.game.showMessage(`Error saving scene: ${e} `);
         }
     }
 
@@ -1892,13 +1879,13 @@ export class SceneEditor {
 
             if (response.ok) {
                 console.log('Prefab saved to server:', filePath);
-                this.game.showMessage(`Prefab Saved: ${filename}`);
+                this.game.showMessage(`Prefab Saved: ${filename} `);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('Failed to save prefab:', e);
-            this.game.showMessage(`Error: ${e}`);
+            this.game.showMessage(`Error: ${e} `);
         }
     }
 
@@ -1979,13 +1966,12 @@ export class SceneEditor {
 
                     if (entityData.type === 'Player') {
                         // Legacy: Convert Player to Actor
-                        entity = new Actor(entityData.x, entityData.y, 30, 50, 'Player');
-                        (entity as Actor).isPlayer = true;
+                        entity = Actor.fromJSON({ ...entityData, type: 'Actor', isPlayer: true });
                     } else if (entityData.type === 'Actor') {
-                        entity = new Actor(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
+                        entity = Actor.fromJSON(entityData);
                         if (entityData.isPlayer) (entity as Actor).isPlayer = true;
                     } else {
-                        entity = new Entity(entityData.x, entityData.y, entityData.width, entityData.height, entityData.name);
+                        entity = Entity.fromJSON(entityData);
                     }
 
                     // Restore common properties
@@ -2040,12 +2026,12 @@ export class SceneEditor {
     }
 
     onClick(x: number, y: number): boolean {
-        console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode}`);
+        console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode} `);
         if (!this.enabled) return false;
 
         // If in Draw Mode, add points
         if (this.drawMode) {
-            console.log(`OnClick in DrawMode: ${x}, ${y}`);
+            console.log(`OnClick in DrawMode: ${x}, ${y} `);
 
             // Convert Screen X/Y to World X/Y for storage
             const scene = this.game.sceneManager.currentScene;
@@ -2075,7 +2061,7 @@ export class SceneEditor {
             }
 
             this.currentPolygon.push({ x: finalX, y: finalY });
-            console.log(`Point Added: ${finalX},${finalY}. Total: ${this.currentPolygon.length}`);
+            console.log(`Point Added: ${finalX},${finalY}.Total: ${this.currentPolygon.length} `);
         }
 
         // ALWAYS consume click if editor is enabled to prevent Game/Player interaction
@@ -2310,7 +2296,7 @@ export class SceneEditor {
             ctx.lineTo(this.game.canvas.width, horizonScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.fillText(`Horizon (${horizonWorldY})`, 5, horizonScreenY - 2);
+            ctx.fillText(`Horizon(${horizonWorldY})`, 5, horizonScreenY - 2);
 
             // Front Line (Max Scale)
             const frontWorldY = scene.scaling.front;
@@ -2322,7 +2308,7 @@ export class SceneEditor {
             ctx.lineTo(this.game.canvas.width, frontScreenY);
             ctx.stroke();
             ctx.fillStyle = 'rgba(255, 0, 255, 0.8)';
-            ctx.fillText(`Front (${frontWorldY})`, 5, frontScreenY - 2);
+            ctx.fillText(`Front(${frontWorldY})`, 5, frontScreenY - 2);
 
             ctx.restore();
         }

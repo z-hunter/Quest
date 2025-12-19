@@ -1,9 +1,9 @@
 import React from 'react';
 import { Game } from '../../core/Game';
-import { useEditorStore } from '../../store/editorStore';
+// import { useEditorStore } from '../../store/editorStore';
 
 export const EditorToolbar: React.FC = () => {
-    const { selectObject } = useEditorStore();
+    // const { selectObject } = useEditorStore();
 
     const handleAdd = (type: string) => {
         Game.instance.editor.startCreating(type);
