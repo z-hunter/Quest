@@ -22,6 +22,7 @@ export interface EntityData {
     direction?: string;
     state?: string;
     animationSpeed?: number;
+    locked?: boolean;
 }
 
 export class Entity extends SceneObject {
@@ -47,6 +48,7 @@ export class Entity extends SceneObject {
     scene: any; // Reference to the scene this entity belongs to
     parallax: number;
     ignoreScaling: boolean;
+    // locked: boolean; // Inherited from SceneObject
     // readonly type: string = 'Static'; // Inherited
 
     private loadingRefCount: number = 0;
@@ -87,6 +89,7 @@ export class Entity extends SceneObject {
         this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
         this.ignoreScaling = false;
         this.animationSpeed = 150; // Default 150ms
+        // this.locked = false; // Inherited
 
         this.baseWidth = this.width;
         this.baseHeight = this.height;
@@ -292,7 +295,8 @@ export class Entity extends SceneObject {
             layer: this.layer,
             parallax: this.parallax,
             ignoreScaling: this.ignoreScaling,
-            animationSpeed: this.animationSpeed
+            animationSpeed: this.animationSpeed,
+            locked: this.locked // Added Locked Property
         };
     }
 
@@ -327,6 +331,10 @@ export class Entity extends SceneObject {
             // Restore animationSpeed
             if (data.animationSpeed !== undefined) {
                 this.animationSpeed = data.animationSpeed;
+            }
+
+            if (data.locked !== undefined) {
+                this.locked = data.locked;
             }
 
             if (data.spriteName) {

@@ -593,6 +593,10 @@ export class SceneEditor {
                     const vx = poly[i].x;
                     const vy = poly[i].y;
                     if (Math.abs(worldPos.x - vx) < vertexRadius && Math.abs(worldPos.y - vy) < vertexRadius) {
+                        if (this.selectedObject.locked) {
+                            console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
+                            return;
+                        }
                         this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = i;
@@ -603,6 +607,12 @@ export class SceneEditor {
 
                 // Check Polygon Body
                 if (Geometry.isPointInPolygon(worldPos, poly)) {
+                    if (this.selectedObject.locked) {
+                        console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
+                        // Still consume event? if we clicked ON it, maybe we want to select it (it is already selected here).
+                        // Just don't drag.
+                        return;
+                    }
                     this.saveUndoState();
                     this.isDragging = true;
                     this.draggingVertexIndex = -1; // Drag Whole Body
@@ -643,6 +653,16 @@ export class SceneEditor {
 
                     // HIT! Entity: ${entity.name}
                     this.selectObject(entity);
+
+                    // Check Object Lock
+                    if (entity.locked) {
+                        console.log(`[Editor] Object ${entity.name} is locked.`);
+                        this.resizingHandle = null;
+                        this.isDragging = false;
+                        // Still allow selection, so we stop propagation, but don't start drag
+                        e.stopPropagation();
+                        return;
+                    }
 
                     // Check Handles logic ( Screen Space )
                     const hSize = 8; // Screen pixels tolerance
@@ -1948,7 +1968,9 @@ export class SceneEditor {
             if (data.walkbox) {
                 newScene.walkbox = (data.walkbox || []).map((wb: any) => {
                     const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
-                    return new Walkbox(poly, wb.name || 'Walkbox');
+                    const w = new Walkbox(poly, wb.name || 'Walkbox');
+                    if (wb.locked) w.locked = true;
+                    return w;
                 });
             }
 
@@ -1956,7 +1978,9 @@ export class SceneEditor {
             if (data.triggerboxes) {
                 newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
                     const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
-                    return new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
+                    const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
+                    if (t.locked) tb.locked = true;
+                    return tb;
                 });
             }
 
@@ -2212,9 +2236,15 @@ export class SceneEditor {
                 ctx.scale(zoom, zoom);
                 ctx.translate(-camX * p, -camY * p);
 
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2 / zoom;
-                ctx.setLineDash([4 / zoom, 4 / zoom]);
+                if (entity.locked) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 1 / zoom;
+                    ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed, thin line
+                } else {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2 / zoom;
+                    ctx.setLineDash([4 / zoom, 4 / zoom]);
+                }
 
                 // Entity Anchor is Bottom-Center
                 // We draw the rect starting at Top-Left relative to that anchor
@@ -2228,23 +2258,25 @@ export class SceneEditor {
                     entity.height
                 );
 
-                // Draw Resize Handles
-                ctx.fillStyle = '#ffffff';
-                const hSize = 6 / zoom; // Handle size
+                // Draw Resize Handles (Only if NOT locked)
+                if (!entity.locked) {
+                    ctx.fillStyle = '#ffffff';
+                    const hSize = 6 / zoom; // Handle size
 
-                const l = drawX - entity.width / 2;
-                const r = drawX + entity.width / 2;
-                const t = drawY - entity.height;
-                const b = drawY;
+                    const l = drawX - entity.width / 2;
+                    const r = drawX + entity.width / 2;
+                    const t = drawY - entity.height;
+                    const b = drawY;
 
-                // NW
-                ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
-                // NE
-                ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
-                // SW
-                ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
-                // SE
-                ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+                    // NW
+                    ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
+                    // NE
+                    ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
+                    // SW
+                    ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
+                    // SE
+                    ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+                }
 
                 ctx.restore();
             } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
@@ -2259,7 +2291,15 @@ export class SceneEditor {
                 if (this.selectedObject instanceof Walkbox) ctx.strokeStyle = '#ff0000';
                 else ctx.strokeStyle = '#ff00ff';
 
-                ctx.lineWidth = 3 / zoom;
+                if (this.selectedObject.locked) {
+                    // Locked Style
+                    ctx.lineWidth = 1.5 / zoom;
+                    ctx.setLineDash([]);
+                } else {
+                    ctx.lineWidth = 3 / zoom;
+                    ctx.setLineDash([]);
+                }
+
                 ctx.beginPath();
 
                 if (poly.length > 0) {
@@ -2270,13 +2310,15 @@ export class SceneEditor {
                     ctx.closePath();
                     ctx.stroke();
 
-                    // Draw Vertex Handles
-                    if (this.selectedObject instanceof Walkbox) ctx.fillStyle = '#ff0000';
-                    else ctx.fillStyle = '#ff00ff';
+                    // Draw Vertex Handles (Only if NOT locked)
+                    if (!this.selectedObject.locked) {
+                        if (this.selectedObject instanceof Walkbox) ctx.fillStyle = '#ff0000';
+                        else ctx.fillStyle = '#ff00ff';
 
-                    const handleSize = 6 / zoom;
-                    for (const pt of poly) {
-                        ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
+                        const handleSize = 6 / zoom;
+                        for (const pt of poly) {
+                            ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
+                        }
                     }
                 }
             }

@@ -6,6 +6,7 @@
     {
       "type": "Walkbox",
       "name": "Walk_892",
+      "locked": true,
       "poly": [
         {
           "x": -61,
@@ -95,7 +96,7 @@
       "type": "Entity",
       "name": "CityView",
       "x": 54,
-      "y": 182,
+      "y": 225,
       "width": 821.6,
       "height": 551.2,
       "baseWidth": 1264,
@@ -107,7 +108,8 @@
       "layer": 0,
       "parallax": 0.3,
       "ignoreScaling": true,
-      "animationSpeed": 150
+      "animationSpeed": 150,
+      "locked": true
     },
     {
       "type": "Entity",
@@ -125,7 +127,8 @@
       "layer": -1,
       "parallax": 1,
       "ignoreScaling": true,
-      "animationSpeed": 150
+      "animationSpeed": 150,
+      "locked": true
     },
     {
       "type": "Entity",
@@ -143,25 +146,27 @@
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
-      "animationSpeed": 150
+      "animationSpeed": 150,
+      "locked": false
     },
     {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 309.42987064992894,
-      "y": 252.68554081631186,
-      "width": 108.46930271224295,
-      "height": 279.27164363468887,
+      "x": 242.61727488285183,
+      "y": 228.40411612583208,
+      "width": 105.24958579828534,
+      "height": 270.9819652453591,
       "baseWidth": 221,
       "baseHeight": 569,
       "spriteName": "miles-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.4908113244897871,
+      "scale": 0.47624246967549927,
       "modelScale": 0.5,
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 30,
+      "locked": false,
       "isPlayer": true,
       "speed": 0.2,
       "direction": "left",
@@ -198,7 +203,8 @@
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": true,
-      "animationSpeed": 150
+      "animationSpeed": 150,
+      "locked": true
     }
   ],
   "camera": {
@@ -206,6 +212,6 @@
     "y": 9,
     "zoom": 0.5314410000000002
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5
 }

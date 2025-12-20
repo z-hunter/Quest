@@ -141,20 +141,24 @@ export const HierarchyPanel: React.FC = () => {
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
                                 background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa'
+                                color: isSelected ? '#000' : '#aaa',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(ent)}
                         >
-                            <span style={{
-                                filter: isSelected
-                                    ? 'grayscale(100%) brightness(0)'
-                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
-                                marginRight: '6px',
-                                display: 'inline-block'
-                            }}>
-                                {ent.type === 'Actor' ? '👤' : '📦'}
-                            </span>
-                            {ent.name}
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span style={{
+                                    filter: isSelected
+                                        ? 'grayscale(100%) brightness(0)'
+                                        : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                    marginRight: '6px',
+                                    display: 'inline-block'
+                                }}>
+                                    {ent.type === 'Actor' ? '👤' : '📦'}
+                                </span>
+                                {ent.name}
+                            </div>
+                            {ent.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
                         </div>
                     );
                 })}
@@ -169,20 +173,24 @@ export const HierarchyPanel: React.FC = () => {
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
                                 background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa'
+                                color: isSelected ? '#000' : '#aaa',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(wb)}
                         >
-                            <span style={{
-                                filter: isSelected
-                                    ? 'grayscale(100%) brightness(0)'
-                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
-                                marginRight: '6px',
-                                display: 'inline-block'
-                            }}>
-                                👣
-                            </span>
-                            {wb.name || `Walkbox ${i}`}
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span style={{
+                                    filter: isSelected
+                                        ? 'grayscale(100%) brightness(0)'
+                                        : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                    marginRight: '6px',
+                                    display: 'inline-block'
+                                }}>
+                                    👣
+                                </span>
+                                {wb.name || `Walkbox ${i}`}
+                            </div>
+                            {wb.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
                         </div>
                     );
                 })}
@@ -197,20 +205,24 @@ export const HierarchyPanel: React.FC = () => {
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
                                 background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa'
+                                color: isSelected ? '#000' : '#aaa',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(tb)}
                         >
-                            <span style={{
-                                filter: isSelected
-                                    ? 'grayscale(100%) brightness(0)'
-                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
-                                marginRight: '6px',
-                                display: 'inline-block'
-                            }}>
-                                ⚡
-                            </span>
-                            {tb.name || `Trigger ${i}`}
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span style={{
+                                    filter: isSelected
+                                        ? 'grayscale(100%) brightness(0)'
+                                        : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                    marginRight: '6px',
+                                    display: 'inline-block'
+                                }}>
+                                    ⚡
+                                </span>
+                                {tb.name || `Trigger ${i}`}
+                            </div>
+                            {tb.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
                         </div>
                     );
                 })}
