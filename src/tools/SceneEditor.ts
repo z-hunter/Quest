@@ -2172,7 +2172,7 @@ export class SceneEditor {
         }
 
         // Check Triggerboxes
-        if (scene.triggerboxes) {
+        if (scene.triggerboxes && this.selectedObject instanceof Triggerbox) {
             scene.triggerboxes.forEach((trigger: any) => {
                 const poly = trigger.poly;
                 if (!poly || poly.length === 0) return;

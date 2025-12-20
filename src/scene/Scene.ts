@@ -210,14 +210,18 @@ export class Scene {
         // 4. Draw Walkbox (Debug)
         // Correctly apply Camera Zoom and Translate (Parallax 1.0)
         // @ts-ignore
-        if (window.game && window.game.editor && window.game.editor.enabled) {
-            ctx.save();
-            // Center Pivot Transform
-            ctx.translate(halfW, halfH);
-            ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x, -this.camera.y);
-            this.renderWalkbox(ctx);
-            ctx.restore();
+        const editor = window.game?.editor;
+        if (editor && editor.enabled) {
+            // Only draw if a Walkbox is selected
+            if (editor.selectedObject && editor.selectedObject instanceof Walkbox) {
+                ctx.save();
+                // Center Pivot Transform
+                ctx.translate(halfW, halfH);
+                ctx.scale(this.camera.zoom, this.camera.zoom);
+                ctx.translate(-this.camera.x, -this.camera.y);
+                this.renderWalkbox(ctx);
+                ctx.restore();
+            }
         }
 
         ctx.restore();
