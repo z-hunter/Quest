@@ -1,0 +1,38 @@
+{
+  "type": "Actor",
+  "name": "Hero_1",
+  "x": 227.5566208562041,
+  "y": 235.135810240617,
+  "width": 67.31625309799492,
+  "height": 274.87470015014594,
+  "baseWidth": 96,
+  "baseHeight": 392,
+  "spriteName": "miles_ds-idle-right.json",
+  "color": "#00ffff",
+  "scale": 0.7012109697707805,
+  "modelScale": 0.73,
+  "layer": 0,
+  "parallax": 1,
+  "ignoreScaling": false,
+  "animationSpeed": 30,
+  "locked": false,
+  "isPlayer": true,
+  "speed": 0.24,
+  "direction": "left",
+  "animSets": {
+    "idle": {
+      "id": "idle",
+      "up": "miles_ds-idle-up.json",
+      "down": "miles_ds-idle-down.json",
+      "left": null,
+      "right": "miles_ds-idle-right.json"
+    },
+    "walk": {
+      "id": "walk",
+      "up": "miles_ds-walk-up.json",
+      "down": "miles_ds-walk-down.json",
+      "left": null,
+      "right": "miles_ds-walk-right.json"
+    }
+  }
+}

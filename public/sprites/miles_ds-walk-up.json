@@ -1,0 +1,9 @@
+{
+  "id": "new_sprite",
+  "imageFile": "public/assets/Miles2_ds.png",
+  "x": 166,
+  "y": 397,
+  "width": 152,
+  "height": 397,
+  "frames": 27
+}
