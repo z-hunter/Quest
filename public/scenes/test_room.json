@@ -2,31 +2,129 @@
   "id": "test_room",
   "name": "Test Room",
   "filename": "test_room",
-  "walkbox": [],
+  "walkbox": [
+    {
+      "type": "Walkbox",
+      "name": "Walk_892",
+      "poly": [
+        {
+          "x": -61,
+          "y": 295
+        },
+        {
+          "x": -211,
+          "y": 262
+        },
+        {
+          "x": -122,
+          "y": 244
+        },
+        {
+          "x": -110,
+          "y": 250
+        },
+        {
+          "x": 28,
+          "y": 216
+        },
+        {
+          "x": 43,
+          "y": 232
+        },
+        {
+          "x": 62,
+          "y": 253
+        },
+        {
+          "x": 122,
+          "y": 255
+        },
+        {
+          "x": 148,
+          "y": 233
+        },
+        {
+          "x": 138,
+          "y": 215
+        },
+        {
+          "x": 114,
+          "y": 207
+        },
+        {
+          "x": 67,
+          "y": 207
+        },
+        {
+          "x": 97,
+          "y": 187
+        },
+        {
+          "x": 428,
+          "y": 189
+        },
+        {
+          "x": 442,
+          "y": 201
+        },
+        {
+          "x": 476,
+          "y": 203
+        },
+        {
+          "x": 646,
+          "y": 221
+        },
+        {
+          "x": 643,
+          "y": 285
+        }
+      ]
+    }
+  ],
   "triggerboxes": [],
   "scaling": {
     "enabled": true,
-    "min": 0.5,
+    "min": 0.91,
     "max": 1,
-    "horizon": 150,
-    "front": 300
+    "horizon": 193,
+    "front": 268
   },
   "entities": [
     {
       "type": "Entity",
-      "name": "Pillar",
-      "x": 180,
-      "y": 110,
-      "width": 10,
-      "height": 20,
-      "baseWidth": 20,
-      "baseHeight": 40,
-      "spriteName": null,
-      "color": "#888888",
-      "scale": 0.5,
+      "name": "CityView",
+      "x": 54,
+      "y": 182,
+      "width": 821.6,
+      "height": 551.2,
+      "baseWidth": 1264,
+      "baseHeight": 848,
+      "spriteName": "window-view.json",
+      "color": "#00ff00",
+      "scale": 0.65,
+      "modelScale": 0.65,
       "layer": 0,
+      "parallax": 0.3,
+      "ignoreScaling": true,
+      "animationSpeed": 150
+    },
+    {
+      "type": "Entity",
+      "name": "Back",
+      "x": 199,
+      "y": 297,
+      "width": 884.8,
+      "height": 593.5999999999999,
+      "baseWidth": 1264,
+      "baseHeight": 847.9999999999999,
+      "spriteName": "room.json",
+      "color": "#888888",
+      "scale": 0.7,
+      "modelScale": 0.7,
+      "layer": -1,
       "parallax": 1,
-      "ignoreScaling": false,
+      "ignoreScaling": true,
       "animationSpeed": 150
     },
     {
@@ -34,13 +132,14 @@
       "name": "Key",
       "x": 200,
       "y": 150,
-      "width": 5,
-      "height": 5,
+      "width": 9.1,
+      "height": 9.1,
       "baseWidth": 10,
       "baseHeight": 10,
       "spriteName": null,
       "color": "#ffff00",
-      "scale": 0.5,
+      "scale": 0.91,
+      "modelScale": 1,
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
@@ -48,22 +147,23 @@
     },
     {
       "type": "Actor",
-      "name": "Hero",
-      "x": 143.05000000074506,
-      "y": 205,
-      "width": 45.305,
-      "height": 118.285,
+      "name": "Hero_1",
+      "x": 309.42987064992894,
+      "y": 252.68554081631186,
+      "width": 108.46930271224295,
+      "height": 279.27164363468887,
       "baseWidth": 221,
-      "baseHeight": 577,
-      "spriteName": "miles-idle-left.json",
+      "baseHeight": 569,
+      "spriteName": "miles-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.205,
+      "scale": 0.4908113244897871,
+      "modelScale": 0.5,
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "isPlayer": true,
-      "speed": 0.5,
+      "speed": 0.2,
       "direction": "left",
       "animSets": {
         "idle": {
@@ -71,7 +171,7 @@
           "up": "miles-idle-up.json",
           "down": "miles-idle-down.json",
           "left": null,
-          "right": "miles-idle-left.json"
+          "right": "miles-idle-right.json"
         },
         "walk": {
           "id": "walk",
@@ -81,13 +181,31 @@
           "right": "miles-walk-right.json"
         }
       }
+    },
+    {
+      "type": "Entity",
+      "name": "Chair",
+      "x": 101,
+      "y": 254,
+      "width": 119.32881535158194,
+      "height": 202.9304404781395,
+      "baseWidth": 397.7627178386065,
+      "baseHeight": 676.4348015937984,
+      "spriteName": "chair.json",
+      "color": "#00ff00",
+      "scale": 0.3,
+      "modelScale": 0.3,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150
     }
   ],
   "camera": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
+    "x": 164,
+    "y": 9,
+    "zoom": 0.5314410000000002
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 5
 }

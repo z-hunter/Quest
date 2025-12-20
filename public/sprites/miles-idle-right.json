@@ -1,0 +1,9 @@
+{
+  "id": "new_sprite",
+  "imageFile": "public/assets/miles-idle.png",
+  "x": 219,
+  "y": 0,
+  "width": 221,
+  "height": 569,
+  "frames": 1
+}

@@ -1,0 +1,9 @@
+{
+  "id": "new_sprite",
+  "imageFile": "public/assets/room.png",
+  "x": 0,
+  "y": 0,
+  "width": 1264,
+  "height": 848,
+  "frames": 1
+}

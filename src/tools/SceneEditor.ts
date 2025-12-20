@@ -1944,20 +1944,20 @@ export class SceneEditor {
                 newScene.scaling = data.scaling;
             }
 
-            // Restore Walkbox (New Structure)
+            // Restore Walkboxes
             if (data.walkbox) {
-                newScene.walkbox = (data.walkbox || []).map((wb: any) => ({
-                    ...wb,
-                    poly: wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
-                }));
+                newScene.walkbox = (data.walkbox || []).map((wb: any) => {
+                    const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
+                    return new Walkbox(poly, wb.name || 'Walkbox');
+                });
             }
 
             // Restore Triggerboxes
             if (data.triggerboxes) {
-                newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => ({
-                    ...t,
-                    poly: t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }))
-                }));
+                newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
+                    const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
+                    return new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
+                });
             }
 
             if (data.entities) {
@@ -1994,7 +1994,16 @@ export class SceneEditor {
                         entity.baseHeight = entity.scale > 0 ? entityData.height / entity.scale : entityData.height;
                     }
 
-                    if (entityData.spriteName) {
+                    let skipSprite = false;
+                    if (entity.spriteName && entityData.spriteName) {
+                        const s1 = entity.spriteName;
+                        const s2 = entityData.spriteName;
+                        if (s1 === s2 || s1.endsWith('/' + s2) || s2.endsWith('/' + s1)) {
+                            skipSprite = true;
+                        }
+                    }
+
+                    if (entityData.spriteName && !skipSprite) {
                         entity.setSprite(entityData.spriteName);
                     }
 

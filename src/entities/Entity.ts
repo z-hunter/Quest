@@ -49,6 +49,20 @@ export class Entity extends SceneObject {
     ignoreScaling: boolean;
     // readonly type: string = 'Static'; // Inherited
 
+    private loadingRefCount: number = 0;
+
+    get isLoading(): boolean {
+        return this.loadingRefCount > 0;
+    }
+
+    startLoading() {
+        this.loadingRefCount++;
+    }
+
+    endLoading() {
+        if (this.loadingRefCount > 0) this.loadingRefCount--;
+    }
+
     animationSpeed: number; // Added
 
     constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
@@ -79,9 +93,12 @@ export class Entity extends SceneObject {
         this.animator = null;
         this.flipX = false;
         this.scene = null;
+        this.loadingRefCount = 0;
     }
 
-    setSprite(filename: string): void {
+    setSprite(filename: string, keepSize: boolean = false): void {
+        // Auto-detect loading state if not explicitly set
+        if (this.isLoading) keepSize = true;
         // Strict JSON support as requested
         if (!filename.toLowerCase().endsWith('.json')) {
             filename += '.json';
@@ -94,6 +111,9 @@ export class Entity extends SceneObject {
 
         // Capture the requested filename to handle race conditions
         const requestName = filename;
+
+        // Capture current dimensions target if we need to preserve them
+        const targetWidth = this.width;
 
         let fetchPath = filename;
         if (fetchPath.startsWith('public/')) {
@@ -156,14 +176,24 @@ export class Entity extends SceneObject {
                         return;
                     }
 
-                    console.log(`[Entity] Applying sprite: ${requestName}`);
+                    console.log(`[Entity] Applying sprite: ${requestName} | keepSize: ${keepSize} | isLoading: ${this.isLoading} | targetW: ${targetWidth} | newBaseW: ${newImage.naturalWidth}`);
 
-                    this.baseWidth = newBaseWidth;
-                    this.baseHeight = newBaseHeight;
+                    // Logic to preserve visual size if requested (e.g. during Load)
+                    if (keepSize) {
+                        // STRICT keepSize: Do NOT update baseWidth/baseHeight/modelScale.
+                        // We trust that the existing dimensions (from Load or current state) are what the user wants.
+                        // Changing them to match newImage.naturalWidth would enforce the new sprite's aspect ratio,
+                        // destroying any non-uniform scaling (squashing/stretching) done by the user.
+                        console.log(`[Entity] keepSize active. Preserving existing dimensions: W:${this.width} H:${this.height} BaseW:${this.baseWidth} BaseH:${this.baseHeight}`);
+                    } else {
+                        // Default behavior: conform to sprite size
+                        this.baseWidth = newBaseWidth;
+                        this.baseHeight = newBaseHeight;
 
-                    // Recalculate current dimensions
-                    this.width = this.baseWidth * this.scale;
-                    this.height = this.baseHeight * this.scale;
+                        // Force immediate update for visual snap
+                        this.width = this.baseWidth * this.scale;
+                        this.height = this.baseHeight * this.scale;
+                    }
 
                     this.image = newImage;
                     this.animator = newAnimator;
@@ -262,42 +292,49 @@ export class Entity extends SceneObject {
             layer: this.layer,
             parallax: this.parallax,
             ignoreScaling: this.ignoreScaling,
+            animationSpeed: this.animationSpeed
         };
     }
 
     load(data: EntityData): void {
-        this.x = data.x;
-        this.y = data.y;
-        this.width = data.width;
-        this.height = data.height;
-        this.name = data.name; // SceneObject property
+        this.startLoading();
+        try {
+            this.x = data.x;
+            this.y = data.y;
+            this.width = data.width;
+            this.height = data.height;
+            this.name = data.name; // SceneObject property
 
-        this.color = data.color || '#ff0000';
-        this.scale = data.scale || 1.0;
-        if (data.modelScale !== undefined) this.modelScale = data.modelScale;
+            this.color = data.color || '#ff0000';
+            this.scale = data.scale || 1.0;
+            if (data.modelScale !== undefined) this.modelScale = data.modelScale;
 
-        // Restore base dimensions
-        console.log(`[Entity.load] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale}`);
-        if (data.baseWidth !== undefined) {
-            this.baseWidth = data.baseWidth;
-        } else {
-            this.baseWidth = this.scale > 0 ? data.width / this.scale : data.width;
-        }
+            // Restore base dimensions
+            console.log(`[Entity.load] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale} ModelScale:${data.modelScale} Sprite:${data.spriteName}`);
+            if (data.baseWidth !== undefined) {
+                this.baseWidth = data.baseWidth;
+            } else {
+                this.baseWidth = this.scale > 0 ? data.width / this.scale : data.width;
+            }
 
-        if (data.baseHeight !== undefined) this.baseHeight = data.baseHeight;
-        else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
+            if (data.baseHeight !== undefined) this.baseHeight = data.baseHeight;
+            else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
 
-        this.layer = data.layer || 0;
-        this.parallax = data.parallax !== undefined ? data.parallax : 1.0;
-        this.ignoreScaling = !!data.ignoreScaling;
+            this.layer = data.layer || 0;
+            this.parallax = data.parallax !== undefined ? data.parallax : 1.0;
+            this.ignoreScaling = !!data.ignoreScaling;
 
-        // Restore animationSpeed
-        if (data.animationSpeed !== undefined) {
-            this.animationSpeed = data.animationSpeed;
-        }
+            // Restore animationSpeed
+            if (data.animationSpeed !== undefined) {
+                this.animationSpeed = data.animationSpeed;
+            }
 
-        if (data.spriteName) {
-            this.setSprite(data.spriteName);
+            if (data.spriteName) {
+                // Pass isLoading (true) explicitly, or rely on internal flag
+                this.setSprite(data.spriteName, true);
+            }
+        } finally {
+            this.endLoading();
         }
     }
 

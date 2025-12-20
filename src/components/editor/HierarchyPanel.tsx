@@ -120,53 +120,100 @@ export const HierarchyPanel: React.FC = () => {
                     }}
                     onClick={() => Game.instance.editor.selectObject('SCENE')}
                 >
+                    <span style={{
+                        filter: selectedObjectId === 'SCENE'
+                            ? 'grayscale(100%) brightness(0)'
+                            : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                        marginRight: '6px',
+                        display: 'inline-block'
+                    }}>
+                        🎥
+                    </span>
                     Scene
                 </div>
 
                 {/* Entities */}
-                {entities.map((ent: any) => (
-                    <div
-                        key={ent.name}
-                        style={{
-                            padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                            background: selectedObjectId === ent.name ? '#0f0' : 'transparent',
-                            color: selectedObjectId === ent.name ? '#000' : '#aaa'
-                        }}
-                        onClick={() => Game.instance.editor.selectObject(ent)}
-                    >
-                        {ent.type === 'Actor' ? '👤' : '📦'} {ent.name}
-                    </div>
-                ))}
+                {entities.map((ent: any) => {
+                    const isSelected = selectedObjectId === ent.name;
+                    return (
+                        <div
+                            key={ent.name}
+                            style={{
+                                padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
+                                background: isSelected ? '#0f0' : 'transparent',
+                                color: isSelected ? '#000' : '#aaa'
+                            }}
+                            onClick={() => Game.instance.editor.selectObject(ent)}
+                        >
+                            <span style={{
+                                filter: isSelected
+                                    ? 'grayscale(100%) brightness(0)'
+                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                marginRight: '6px',
+                                display: 'inline-block'
+                            }}>
+                                {ent.type === 'Actor' ? '👤' : '📦'}
+                            </span>
+                            {ent.name}
+                        </div>
+                    );
+                })}
 
                 {/* Walkboxes */}
-                {walkboxes.map((wb: any, i: number) => (
-                    <div
-                        key={wb.name || i}
-                        style={{
-                            padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                            background: selectedObjectId === (wb.name || 'Walkbox') ? '#0f0' : 'transparent',
-                            color: selectedObjectId === (wb.name || 'Walkbox') ? '#000' : '#aaa'
-                        }}
-                        onClick={() => Game.instance.editor.selectObject(wb)}
-                    >
-                        👣 {wb.name || `Walkbox ${i}`}
-                    </div>
-                ))}
+                {walkboxes.map((wb: any, i: number) => {
+                    const id = wb.name || 'Walkbox';
+                    const isSelected = selectedObjectId === id;
+                    return (
+                        <div
+                            key={wb.name || i}
+                            style={{
+                                padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
+                                background: isSelected ? '#0f0' : 'transparent',
+                                color: isSelected ? '#000' : '#aaa'
+                            }}
+                            onClick={() => Game.instance.editor.selectObject(wb)}
+                        >
+                            <span style={{
+                                filter: isSelected
+                                    ? 'grayscale(100%) brightness(0)'
+                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                marginRight: '6px',
+                                display: 'inline-block'
+                            }}>
+                                👣
+                            </span>
+                            {wb.name || `Walkbox ${i}`}
+                        </div>
+                    );
+                })}
 
                 {/* Triggers */}
-                {triggers.map((tb: any, i: number) => (
-                    <div
-                        key={tb.name || i}
-                        style={{
-                            padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                            background: selectedObjectId === (tb.name || 'Triggerbox') ? '#0f0' : 'transparent',
-                            color: selectedObjectId === (tb.name || 'Triggerbox') ? '#000' : '#aaa'
-                        }}
-                        onClick={() => Game.instance.editor.selectObject(tb)}
-                    >
-                        ⚡ {tb.name || `Trigger ${i}`}
-                    </div>
-                ))}
+                {triggers.map((tb: any, i: number) => {
+                    const id = tb.name || 'Triggerbox';
+                    const isSelected = selectedObjectId === id;
+                    return (
+                        <div
+                            key={tb.name || i}
+                            style={{
+                                padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
+                                background: isSelected ? '#0f0' : 'transparent',
+                                color: isSelected ? '#000' : '#aaa'
+                            }}
+                            onClick={() => Game.instance.editor.selectObject(tb)}
+                        >
+                            <span style={{
+                                filter: isSelected
+                                    ? 'grayscale(100%) brightness(0)'
+                                    : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
+                                marginRight: '6px',
+                                display: 'inline-block'
+                            }}>
+                                ⚡
+                            </span>
+                            {tb.name || `Trigger ${i}`}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
