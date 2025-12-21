@@ -1,7 +1,7 @@
 {
   "id": "test_room1",
   "name": "Test Room",
-  "filename": "test_room",
+  "filename": "test_room1",
   "walkbox": [
     {
       "type": "Walkbox",

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
+import { exec } from 'child_process'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -63,14 +64,56 @@ export default defineConfig({
                   return;
                 }
 
-                const files = fs.readdirSync(targetPath).filter(file => {
-                  return fs.statSync(path.join(targetPath, file)).isFile();
+                const items = fs.readdirSync(targetPath).map(file => {
+                  const stats = fs.statSync(path.join(targetPath, file));
+                  return {
+                    name: file,
+                    isDir: stats.isDirectory()
+                  };
+                });
+
+                // Sort: Directories first, then files
+                items.sort((a, b) => {
+                  if (a.isDir === b.isDir) return a.name.localeCompare(b.name);
+                  return a.isDir ? -1 : 1;
                 });
 
                 res.statusCode = 200;
-                res.end(JSON.stringify({ files }));
+                res.end(JSON.stringify({ files: items }));
               } catch (err) {
                 console.error('[Vite] List error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+        // OPEN FOLDER ENDPOINT
+        server.middlewares.use('/api/open-folder', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+
+                console.log(`[Vite] Opening folder: ${targetPath}`);
+
+                // Determine command based on platform
+                // Since user is on Windows (based on paths), we use 'explorer'
+                // 'explorer "path"' is also good.
+
+                exec(`explorer "${targetPath}"`);
+
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('[Vite] Open folder error:', err);
                 res.statusCode = 500;
                 res.end(JSON.stringify({ error: String(err) }));
               }

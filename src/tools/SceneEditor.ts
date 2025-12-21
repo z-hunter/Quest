@@ -2327,7 +2327,7 @@ export class SceneEditor {
 
         // Draw Scaling Lines (Horizon and Front)
         // const scene = this.game.sceneManager.currentScene; // Already declared at top
-        if (scene && scene.scaling && scene.scaling.enabled) {
+        if (scene && scene.scaling && scene.scaling.enabled && (this.selectedObject as any) === 'SCENE') {
             ctx.save();
             ctx.font = '10px monospace';
 
