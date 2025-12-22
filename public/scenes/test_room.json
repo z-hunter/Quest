@@ -1,147 +1,52 @@
 {
-  "id": "test_room1",
+  "id": "test_room",
   "name": "Test Room",
   "filename": "test_room",
-  "walkbox": [
-    {
-      "type": "Walkbox",
-      "name": "Walk_892",
-      "locked": false,
-      "poly": [
-        {
-          "x": -81,
-          "y": 310
-        },
-        {
-          "x": -211,
-          "y": 262
-        },
-        {
-          "x": -122,
-          "y": 244
-        },
-        {
-          "x": -110,
-          "y": 250
-        },
-        {
-          "x": 28,
-          "y": 216
-        },
-        {
-          "x": 43,
-          "y": 232
-        },
-        {
-          "x": 62,
-          "y": 253
-        },
-        {
-          "x": 122,
-          "y": 255
-        },
-        {
-          "x": 148,
-          "y": 233
-        },
-        {
-          "x": 138,
-          "y": 215
-        },
-        {
-          "x": 114,
-          "y": 207
-        },
-        {
-          "x": 67,
-          "y": 207
-        },
-        {
-          "x": 96,
-          "y": 195
-        },
-        {
-          "x": 426,
-          "y": 195
-        },
-        {
-          "x": 442,
-          "y": 201
-        },
-        {
-          "x": 476,
-          "y": 203
-        },
-        {
-          "x": 646,
-          "y": 221
-        },
-        {
-          "x": 643,
-          "y": 285
-        }
-      ]
-    }
-  ],
+  "walkbox": [],
   "triggerboxes": [],
   "scaling": {
     "enabled": true,
-    "min": 0.91,
+    "min": 0.5,
     "max": 1,
-    "horizon": 193,
-    "front": 268
+    "horizon": 150,
+    "front": 300
   },
   "entities": [
     {
-      "type": "Entity",
-      "name": "CityView",
-      "x": 54,
-      "y": 225,
-      "width": 821.6,
-      "height": 551.2,
-      "baseWidth": 1264,
-      "baseHeight": 848,
-      "spriteName": "window-view.json",
-      "color": "#00ff00",
-      "scale": 0.65,
-      "modelScale": 0.65,
+      "type": "Actor",
+      "name": "Hero",
+      "x": 160,
+      "y": 100,
+      "width": 15,
+      "height": 25,
+      "baseWidth": 30,
+      "baseHeight": 50,
+      "spriteName": "assets/hero.png.json",
+      "color": "#00ffff",
+      "scale": 0.5,
+      "modelScale": 1,
       "layer": 0,
-      "parallax": 0.3,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": true
-    },
-    {
-      "type": "Entity",
-      "name": "Back",
-      "x": 199,
-      "y": 297,
-      "width": 884.8,
-      "height": 593.5999999999999,
-      "baseWidth": 1264,
-      "baseHeight": 847.9999999999999,
-      "spriteName": "room.json",
-      "color": "#888888",
-      "scale": 0.7,
-      "modelScale": 0.7,
-      "layer": -1,
       "parallax": 1,
-      "ignoreScaling": true,
+      "ignoreScaling": false,
       "animationSpeed": 150,
-      "locked": true
+      "locked": false,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "down",
+      "animSets": {}
     },
     {
       "type": "Entity",
-      "name": "Key",
-      "x": 200,
-      "y": 150,
-      "width": 9.1,
-      "height": 9.1,
-      "baseWidth": 10,
-      "baseHeight": 10,
+      "name": "Pillar",
+      "x": 180,
+      "y": 110,
+      "width": 10,
+      "height": 20,
+      "baseWidth": 20,
+      "baseHeight": 40,
       "spriteName": null,
-      "color": "#ffff00",
-      "scale": 0.91,
+      "color": "#888888",
+      "scale": 0.5,
       "modelScale": 1,
       "layer": 0,
       "parallax": 1,
@@ -151,74 +56,17 @@
     },
     {
       "type": "Entity",
-      "name": "Chair",
-      "x": 100,
-      "y": 248,
-      "width": 115.16404822086872,
-      "height": 195.84784248339412,
-      "baseWidth": 1151.6404822086872,
-      "baseHeight": 1958.478424833941,
-      "spriteName": "chair.json",
-      "color": "#00ff00",
-      "scale": 0.1,
-      "modelScale": 0.1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": true
-    },
-    {
-      "type": "Actor",
-      "name": "Hero_1",
-      "x": 242.93058522517424,
-      "y": 256.42809227795317,
-      "width": 70.05351801051096,
-      "height": 286.05186520958637,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.7297241459428224,
-      "modelScale": 0.74,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "isPlayer": true,
-      "speed": 0.24,
-      "direction": "left",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
-    },
-    {
-      "type": "Entity",
-      "name": "Static_672",
-      "x": 195,
-      "y": 292,
-      "width": 871.0475105620648,
-      "height": 78.05580388066096,
-      "baseWidth": 1244.3535865172355,
-      "baseHeight": 111.5082912580871,
-      "spriteName": "sofa.json",
-      "color": "#00ff00",
-      "scale": 0.7,
-      "modelScale": 0.7,
+      "name": "Key",
+      "x": 200,
+      "y": 150,
+      "width": 5,
+      "height": 5,
+      "baseWidth": 10,
+      "baseHeight": 10,
+      "spriteName": null,
+      "color": "#ffff00",
+      "scale": 0.5,
+      "modelScale": 1,
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
@@ -227,10 +75,10 @@
     }
   ],
   "camera": {
-    "x": 164,
-    "y": 9,
-    "zoom": 0.5314410000000002
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5
 }

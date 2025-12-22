@@ -171,7 +171,12 @@ export class Actor extends Entity {
 
     handlePlayerInput(deltaTime: number, isWalkable?: (x: number, y: number) => boolean) {
         // @ts-ignore
-        const input = window.game?.input;
+        const game = window.game;
+        const input = game?.input;
+
+        // Block input if mouse is over UI
+        if (game?.isMouseOverUI) return;
+
         if (input) {
             let dx = 0;
             let dy = 0;

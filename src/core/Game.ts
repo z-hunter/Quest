@@ -33,6 +33,9 @@ export class Game {
     score: number = 0;
     cursorBlink: number = 0;
 
+    // UI State
+    public isMouseOverUI: boolean = false;
+
     // Callbacks for React
     onSceneChange: ((title: string) => void) | null = null;
     onMessage: ((text: string) => void) | null = null;

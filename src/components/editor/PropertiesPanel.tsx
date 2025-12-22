@@ -29,7 +29,12 @@ export const PropertiesPanel: React.FC = () => {
 
     if (!obj && selectedObjectId !== 'SETTINGS') {
         return (
-            <div id="editor-panel" className="bg-gray-900 border-l border-gray-700 h-full p-2 text-sm text-gray-400">
+            <div
+                id="editor-panel"
+                className="bg-gray-900 border-l border-gray-700 h-full p-2 text-sm text-gray-400"
+                onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
+                onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+            >
                 <div className="font-bold border-b border-gray-700 mb-2 pb-1">PROPERTIES</div>
                 No Selection
             </div>
@@ -126,7 +131,12 @@ export const PropertiesPanel: React.FC = () => {
 
     return (
 
-        <div id="editor-panel" className="editor-sidebar right">
+        <div
+            id="editor-panel"
+            className="editor-sidebar right"
+            onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
+            onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+        >
             <div className="editor-header">
                 <span>{selectedObjectType === 'SETTINGS' ? 'SETTINGS' : 'PROPERTIES'}</span>
                 <button className="e-btn" onClick={() => (useEditorStore.getState().toggle(false))}>X</button>

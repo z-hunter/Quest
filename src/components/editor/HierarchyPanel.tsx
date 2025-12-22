@@ -26,9 +26,74 @@ export const HierarchyPanel: React.FC = () => {
     const walkboxes = scene.walkbox || [];
     const triggers = scene.triggerboxes || [];
 
+    // Helper to resolve display ID for an item, matching how it's identified in the UI
+    const getDisplayId = (item: any): string => {
+        if (item === 'SCENE') return 'SCENE';
+        if (item && typeof item === 'object') {
+            if (item.type === 'Walkbox') return item.name || 'Walkbox';
+            if (item.type === 'Triggerbox') return item.name || 'Triggerbox';
+            return item.name; // For entities and other objects
+        }
+        return String(item); // Fallback, should not be hit with current data structure
+    };
+
+    // Unified list for navigation
+    const allItems = React.useMemo(() => {
+        return ['SCENE', ...entities, ...walkboxes, ...triggers];
+    }, [entities, walkboxes, triggers]);
+
+    // Track hover state
+    const isHovered = React.useRef(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isHovered.current) return;
+
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+
+                // Find the current selected object's index using the consistent display ID
+                const currentIndex = allItems.findIndex((item: any) => getDisplayId(item) === selectedObjectId);
+
+                let nextIndex = currentIndex;
+
+                // If no object is currently selected, start navigation from the first item
+                if (currentIndex === -1) {
+                    nextIndex = 0;
+                } else {
+                    if (e.key === 'ArrowUp') {
+                        nextIndex = Math.max(0, currentIndex - 1);
+                    } else {
+                        nextIndex = Math.min(allItems.length - 1, currentIndex + 1);
+                    }
+                }
+
+                // Only select if the next index is valid and different from the current one
+                if (nextIndex !== -1 && nextIndex !== currentIndex) {
+                    const itemToSelect = allItems[nextIndex];
+                    Game.instance.editor.selectObject(itemToSelect);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [allItems, selectedObjectId]);
+
     return (
 
-        <div id="hierarchy-panel" className="editor-sidebar left">
+        <div
+            id="hierarchy-panel"
+            className="editor-sidebar left"
+            onMouseEnter={() => {
+                isHovered.current = true;
+                if (Game.instance) Game.instance.isMouseOverUI = true;
+            }}
+            onMouseLeave={() => {
+                isHovered.current = false;
+                if (Game.instance) Game.instance.isMouseOverUI = false;
+            }}
+        >
             <div className="editor-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>OBJECTS</div>

@@ -70,6 +70,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
     return (
         <div
             ref={containerRef}
+            onMouseEnter={() => {
+                // Blur active inputs when entering game view
+                const active = document.activeElement as HTMLElement;
+                if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+                    active.blur();
+                }
+                // Ensure UI flag is cleared
+                if (gameRef.current) gameRef.current.isMouseOverUI = false;
+            }}
             style={{
                 // Center the 840x600 canvas in the 840x640 container
                 width: '840px',
