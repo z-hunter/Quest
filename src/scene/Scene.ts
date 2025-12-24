@@ -109,11 +109,14 @@ export class Scene {
     }
 
     isWalkable(x: number, y: number): boolean {
-        // If no walkbox, everything is walkable
-        if (!this.walkbox || this.walkbox.length === 0) return true;
+        // Filter out disabled walkboxes first
+        const activeWalkboxes = this.walkbox ? this.walkbox.filter(wb => !wb.disabled) : [];
+
+        // If no active walkboxes, everything is walkable
+        if (activeWalkboxes.length === 0) return true;
 
         let inclusionCount = 0;
-        for (const wb of this.walkbox) {
+        for (const wb of activeWalkboxes) {
             if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
                 inclusionCount++;
             }
@@ -172,6 +175,7 @@ export class Scene {
         }
 
         this.entities.forEach(entity => {
+            if (entity.disabled) return;
             // @ts-ignore
             entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
         });
@@ -195,6 +199,7 @@ export class Scene {
         const halfH = ctx.canvas.height / 2;
 
         this.entities.forEach(entity => {
+            if (entity.disabled) return;
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;
             ctx.save();
 

@@ -192,6 +192,12 @@ export const PropertiesPanel: React.FC = () => {
                                 Lock Object (Prevent Mouse Edit)
                             </label>
                         </div>
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#faa' }}>
+                                <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.disabled} onChange={(e) => handleChange('disabled', e.target.checked)} />
+                                Disabled (Hidden in Game)
+                            </label>
+                        </div>
                     </div>
                 )}
 
@@ -374,6 +380,12 @@ export const PropertiesPanel: React.FC = () => {
                             <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
                                 <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.locked} onChange={(e) => handleChange('locked', e.target.checked)} />
                                 Lock Object (Prevent Mouse Edit)
+                            </label>
+                        </div>
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#faa' }}>
+                                <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.disabled} onChange={(e) => handleChange('disabled', e.target.checked)} />
+                                Disabled (Hidden in Game)
                             </label>
                         </div>
                     </>

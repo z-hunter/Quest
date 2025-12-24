@@ -300,6 +300,17 @@ export class SceneEditor {
                 this.promptLoadScene();
                 break;
             case 'f4': e.preventDefault(); this.newScene(); break;
+
+            case ' ':
+                // Spacebar: Select Scene if mouse is over canvas
+                const mx = this.lastMousePos.x;
+                const my = this.lastMousePos.y;
+                if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+                    e.preventDefault();
+                    this.selectObject('SCENE');
+                }
+                break;
+
             case 'f5':
                 e.preventDefault();
                 this.game.spriteEditor.toggle(true);
@@ -617,6 +628,57 @@ export class SceneEditor {
                     this.isDragging = true;
                     this.draggingVertexIndex = -1; // Drag Whole Body
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                    e.stopPropagation();
+                    return;
+                }
+            }
+
+            // 0.5 CHECK SELECTED ENTITY (High Priority - Exclusive Interaction)
+            if (this.selectedObject && this.selectedObject instanceof Entity) {
+                const entity = this.selectedObject;
+                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+                // Entity Screen Rect Calculation
+                const screenX = (entity.x - camX * p) * zoom + halfW;
+                const screenY = (entity.y - camY * p) * zoom + halfH;
+                const screenW = entity.width * zoom;
+                const screenH = entity.height * zoom;
+
+                const sl = screenX - screenW / 2;
+                const sr = screenX + screenW / 2;
+                const st = screenY - screenH;
+                const sb = screenY;
+
+                // Check Handles (Screen Space)
+                const hSize = 8;
+                let hitHandle = null;
+
+                if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - st) < hSize) hitHandle = 'nw';
+                else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - st) < hSize) hitHandle = 'ne';
+                else if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - sb) < hSize) hitHandle = 'sw';
+                else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - sb) < hSize) hitHandle = 'se';
+
+                const hitBody = (pos.x >= sl && pos.x <= sr && pos.y >= st && pos.y <= sb);
+
+                if (hitHandle || hitBody) {
+                    if (entity.locked) {
+                        console.log(`[Editor] Object ${entity.name} is locked.`);
+                        e.stopPropagation();
+                        return;
+                    }
+
+                    this.saveUndoState();
+                    this.isDragging = true;
+                    this.draggingVertexIndex = -1;
+
+                    if (hitHandle) {
+                        this.resizingHandle = hitHandle;
+                    } else {
+                        // Body Drag
+                        this.resizingHandle = null;
+                        this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
+                    }
+
                     e.stopPropagation();
                     return;
                 }

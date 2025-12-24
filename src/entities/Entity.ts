@@ -23,6 +23,7 @@ export interface EntityData {
     state?: string;
     animationSpeed?: number;
     locked?: boolean;
+    disabled?: boolean;
 }
 
 export class Entity extends SceneObject {
@@ -296,7 +297,8 @@ export class Entity extends SceneObject {
             parallax: this.parallax,
             ignoreScaling: this.ignoreScaling,
             animationSpeed: this.animationSpeed,
-            locked: this.locked // Added Locked Property
+            locked: this.locked, // Added Locked Property
+            disabled: this.disabled
         };
     }
 
@@ -335,6 +337,10 @@ export class Entity extends SceneObject {
 
             if (data.locked !== undefined) {
                 this.locked = data.locked;
+            }
+
+            if (data.disabled !== undefined) {
+                this.disabled = data.disabled;
             }
 
             if (data.spriteName) {

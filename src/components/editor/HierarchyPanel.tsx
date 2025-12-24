@@ -80,6 +80,52 @@ export const HierarchyPanel: React.FC = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [allItems, selectedObjectId]);
 
+    const centerCameraOn = (item: any) => {
+        const scene = Game.instance?.sceneManager?.currentScene;
+        if (!scene) return;
+
+        let targetX = 0;
+        let targetY = 0;
+
+        if (item === 'SCENE') {
+            targetX = 0;
+            targetY = 0;
+        } else if (item.x !== undefined && item.y !== undefined) {
+            // Entity
+            targetX = item.x;
+            targetY = item.y;
+
+            // Handle Parallax
+            const p = item.parallax !== undefined ? item.parallax : 1.0;
+            if (Math.abs(p) > 0.0001) {
+                targetX = item.x / p;
+                targetY = item.y / p;
+            }
+        } else if (item.poly) {
+            // Walkbox / Triggerbox - Centroid
+            const poly = item.poly;
+            if (poly.length > 0) {
+                let sumX = 0, sumY = 0;
+                poly.forEach((p: any) => { sumX += p.x; sumY += p.y; });
+                targetX = sumX / poly.length;
+                targetY = sumY / poly.length;
+            }
+        }
+
+        scene.camera.x = targetX;
+        scene.camera.y = targetY;
+        scene.autoCenter = false; // Disable auto-follow
+
+        // Update UI inputs manually since they are not reactive
+        const autoCenterChk = document.getElementById('cam-auto-center') as HTMLInputElement;
+        if (autoCenterChk) autoCenterChk.checked = false;
+
+        const cx = document.getElementById('cam-x') as HTMLInputElement;
+        const cy = document.getElementById('cam-y') as HTMLInputElement;
+        if (cx) cx.value = Math.round(targetX).toString();
+        if (cy) cy.value = Math.round(targetY).toString();
+    };
+
     return (
 
         <div
@@ -184,6 +230,7 @@ export const HierarchyPanel: React.FC = () => {
                         color: selectedObjectId === 'SCENE' ? '#000' : '#aaa'
                     }}
                     onClick={() => Game.instance.editor.selectObject('SCENE')}
+                    onDoubleClick={() => centerCameraOn('SCENE')}
                 >
                     <span style={{
                         filter: selectedObjectId === 'SCENE'
@@ -210,6 +257,7 @@ export const HierarchyPanel: React.FC = () => {
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(ent)}
+                            onDoubleClick={() => centerCameraOn(ent)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <span style={{
@@ -242,6 +290,7 @@ export const HierarchyPanel: React.FC = () => {
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(wb)}
+                            onDoubleClick={() => centerCameraOn(wb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <span style={{
@@ -274,6 +323,7 @@ export const HierarchyPanel: React.FC = () => {
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(tb)}
+                            onDoubleClick={() => centerCameraOn(tb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <span style={{
@@ -295,3 +345,4 @@ export const HierarchyPanel: React.FC = () => {
         </div>
     );
 };
+
