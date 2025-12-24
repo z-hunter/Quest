@@ -166,6 +166,20 @@ export const PropertiesPanel: React.FC = () => {
                 {/* Walkbox/Triggerbox Properties */}
                 {(selectedObjectType === 'Walkbox' || selectedObjectType === 'Triggerbox') && (
                     <div className="e-row">
+                        {selectedObjectType === 'Walkbox' && (
+                            <div className="e-row">
+                                <label className="e-label">Mode</label>
+                                <select
+                                    className="e-input"
+                                    value={obj.mode || 'Invert'}
+                                    onChange={(e) => handleChange('mode', e.target.value)}
+                                >
+                                    <option value="Invert">Invert (Standard)</option>
+                                    <option value="Add">Add (Bridge)</option>
+                                    <option value="Subtract">Subtract (Hole)</option>
+                                </select>
+                            </div>
+                        )}
                         <button
                             className="e-btn e-btn-yellow"
                             style={{ width: '100%', marginBottom: '5px' }}
