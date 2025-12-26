@@ -33,13 +33,14 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
         }
     }, [game]);
 
-    const dismissMessage = () => {
-        setMessage(null);
-        if (game) {
-            const input = document.getElementById('parser-input');
-            if (input) input.focus();
+    useEffect(() => {
+        if (message) {
+            const timer = setTimeout(() => {
+                setMessage(null);
+            }, 2000);
+            return () => clearTimeout(timer);
         }
-    };
+    }, [message]);
 
     const handleBrowserConfirm = (filename: string) => {
         if (fileBrowser) {
@@ -99,11 +100,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 </div>
             </div>
 
-            {/* Message Box */}
+            {/* Notification Toast */}
             {message && (
-                <div id="message-box" onClick={dismissMessage}>
-                    <p id="message-text">{message}</p>
-                    <div className="message-footer">Click to continue</div>
+                <div className="notification-toast">
+                    {message}
                 </div>
             )}
 

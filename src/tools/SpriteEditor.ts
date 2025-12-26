@@ -139,7 +139,14 @@ export class SpriteEditor {
         let handled = false;
 
         if (e.key === 'F1') { this.switchToSceneEditor(); handled = true; }
-        else if (e.key === 'F2') { this.saveSprite(); handled = true; }
+        else if (e.key === 'F2') {
+            if (e.shiftKey) {
+                this.saveSprite(true); // Shift+F2 = Save As
+            } else {
+                this.saveSprite(false); // F2 = Smart Save
+            }
+            handled = true;
+        }
         else if (e.key === 'F3') { this.loadSprite(); handled = true; }
         else if (e.key === 'F4') { this.newSprite(); handled = true; }
         else if (e.key === 'F5') { this.toggle(false); handled = true; }
@@ -402,9 +409,39 @@ export class SpriteEditor {
         };
     }
 
-    saveSprite(): void {
+    saveSprite(forceSaveAs: boolean = false): void {
+        // Validation:
+        // If forceSaveAs is FALSE and I have a valid ID, save directly.
+        // Allow backslashes in ID now
+        const id = this.sprite.id.trim();
+        const isValidId = id && id !== 'new_sprite' && !id.includes('.');
+
+        if (!forceSaveAs && isValidId) {
+            // Smart Save
+            // Convert ID to filename path: chars\hero -> chars/hero.json
+            const filename = `${id.replace(/\\/g, '/')}.json`;
+            this.doSave(filename);
+            return;
+        }
+
+        // Save As / Fallback
         this.game.openFileBrowser('save', 'public/sprites', (file) => {
+            // Derive ID from path: chars/hero.json -> chars\hero
+            const name = file.split(/[\\/]/).pop() || 'sprite.json';
+            // Wait, file from browser might be "chars/hero.json" if we navigated. 
+            // We need to respect the full relative path returned.
+
+            // Check if file contains separate path parts
+            // FileBrowser returns relative path from 'public/sprites' if we are deeper?
+            // Actually FileBrowser logic constructs relative path from root of search.
+
+            // Let's assume 'file' is the relative path we want to save to.
             this.doSave(file);
+
+            // Update ID to match the save path
+            const newId = file.replace('.json', '').replace(/\//g, '\\');
+            this.sprite.id = newId;
+            this.updateUI();
         });
     }
 
@@ -412,9 +449,10 @@ export class SpriteEditor {
         // Ensure filename has .json
         if (!filename.toLowerCase().endsWith('.json')) filename += '.json';
 
-        // Remove path if user picked one (FileBrowser returns just name usually)
-        const name = filename.split(/[\\/]/).pop() || 'sprite.json';
-        const filePath = `public/sprites/${name}`;
+        // Normalize path separators
+        const normalizedFilename = filename.replace(/\\/g, '/');
+
+        const filePath = `public/sprites/${normalizedFilename}`;
 
         const data = JSON.stringify(this.sprite, null, 2);
 
@@ -427,20 +465,20 @@ export class SpriteEditor {
 
             if (response.ok) {
                 console.log(`[SpriteEditor] Saved to server: ${filePath}`);
-                alert(`Sprite saved: ${name}`);
+                // Use Toast Message instead of Alert
+                this.game.showMessage(`Sprite saved as ${normalizedFilename}`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('[SpriteEditor] Failed to save sprite:', e);
-            alert(`Error saving sprite: ${e}`);
+            this.game.showMessage(`Error saving sprite: ${e}`);
         }
     }
 
     loadSprite(): void {
         this.game.openFileBrowser('load', 'public/sprites', (file) => {
-            // Construct path. FileBrowser returns name.
-            // We need to fetch from server relative path
+            // Construct path. FileBrowser returns relative path like "sub/file.json"
             const dir = 'public/sprites';
             const path = `/${dir.replace('public/', '')}/${file}`;
 
@@ -450,8 +488,8 @@ export class SpriteEditor {
             }).then(data => {
                 this.sprite = data;
 
-                // Sync ID with filename (without extension)
-                const id = file.split('.')[0];
+                // Sync ID with filename path (sub/file -> sub\file)
+                const id = file.replace('.json', '').replace(/\//g, '\\');
                 this.sprite.id = id;
 
                 if (this.sprite.imageFile) {

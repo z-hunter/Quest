@@ -1,7 +1,7 @@
 {
   "id": "test_room",
   "name": "Test Room",
-  "filename": "test_room",
+  "filename": "home/test",
   "walkbox": [],
   "triggerboxes": [],
   "scaling": {
@@ -34,7 +34,7 @@
     },
     {
       "type": "Entity",
-      "name": "test",
+      "name": "Pillar1",
       "x": 180,
       "y": 110,
       "width": 10,
@@ -51,50 +51,6 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": false
-    },
-    {
-      "type": "Entity",
-      "name": "t\\test",
-      "x": 180,
-      "y": 110,
-      "width": 10,
-      "height": 20,
-      "baseWidth": 20,
-      "baseHeight": 40,
-      "spriteName": null,
-      "color": "#888888",
-      "scale": 0.5,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false
-    },
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": 110.54642758554616,
-      "y": 111.214178744953,
-      "width": 15,
-      "height": 25,
-      "baseWidth": 30,
-      "baseHeight": 50,
-      "spriteName": "assets/hero.png.json",
-      "color": "#00ffff",
-      "scale": 0.5,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "up",
-      "animSets": {}
     },
     {
       "type": "Entity",
@@ -115,6 +71,30 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": false
+    },
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": 133.19517108020003,
+      "y": 195.30310749907326,
+      "width": 11.540632752056291,
+      "height": 22.840845588741146,
+      "baseWidth": 17.727264404296875,
+      "baseHeight": 35.08522605895996,
+      "spriteName": "assets/hero.png.json",
+      "color": "#00ffff",
+      "scale": 0.6510103583302442,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "down",
+      "animSets": {}
     }
   ],
   "camera": {
@@ -122,6 +102,6 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 5
 }

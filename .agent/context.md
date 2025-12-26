@@ -10,6 +10,7 @@ We have successfully implemented **Actor Animation Sets** and **Directional Spri
 - **Rendering:** Hybrid approach.
   - **Game View:** HTML5 Canvas for performance (pixel manipulation, CRT effects).
   - **Editor UI:** React components overlaying the canvas (simulating retro UI).
+    - **Notifications:** Non-blocking "Toast" notifications for feedback (e.g. "Saved successfully").
 - **State Management:** Currently local component state + direct manipulation of Game singleton. We may need to standardize this (Zustand mentioned in discussions).
 - **File Format:**
   - Scenes: `.json` files.
@@ -25,7 +26,8 @@ We have successfully implemented **Actor Animation Sets** and **Directional Spri
 - **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation.
 - **Scene Editor (F1):**
   - Object placement (Static, Actor, WalkBox, TriggerBox).
-  - Properties panel.
+  - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
+  - Properties panel with **Smart Save (F2)** and **Save As (Shift+F2)**.
   - Camera control (panning, zooming).
   - Depth scaling (pseudo-3D perspective).
   - Parallax scrolling support.
@@ -37,7 +39,8 @@ We have successfully implemented **Actor Animation Sets** and **Directional Spri
   - Basic UI structure.
   - Loading images.
   - Defining frames/animations.
-  - Preview window.
+  - Preview window with backgrounds and rulers.
+  - **Smart Save (F2)** integration.
   - Integration with Scene Editor (switching context).
 
 ## Known Issues / Technical Debt

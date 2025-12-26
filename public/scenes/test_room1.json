@@ -7,6 +7,7 @@
       "type": "Walkbox",
       "name": "Walk_892",
       "locked": false,
+      "disabled": false,
       "poly": [
         {
           "x": -81,
@@ -80,7 +81,8 @@
           "x": 643,
           "y": 285
         }
-      ]
+      ],
+      "mode": "Invert"
     }
   ],
   "triggerboxes": [],
@@ -109,7 +111,8 @@
       "parallax": 0.3,
       "ignoreScaling": true,
       "animationSpeed": 150,
-      "locked": true
+      "locked": true,
+      "disabled": false
     },
     {
       "type": "Entity",
@@ -128,7 +131,8 @@
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
-      "locked": true
+      "locked": true,
+      "disabled": false
     },
     {
       "type": "Entity",
@@ -147,17 +151,18 @@
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
-      "locked": false
+      "locked": false,
+      "disabled": false
     },
     {
       "type": "Entity",
       "name": "Chair",
       "x": 100,
       "y": 248,
-      "width": 115.16404822086872,
-      "height": 195.84784248339412,
-      "baseWidth": 1151.6404822086872,
-      "baseHeight": 1958.478424833941,
+      "width": 16.7,
+      "height": 28.400000000000002,
+      "baseWidth": 167,
+      "baseHeight": 284,
       "spriteName": "chair.json",
       "color": "#00ff00",
       "scale": 0.1,
@@ -166,26 +171,28 @@
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
-      "locked": true
+      "locked": true,
+      "disabled": false
     },
     {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 242.93058522517424,
-      "y": 256.42809227795317,
-      "width": 70.05351801051096,
-      "height": 286.05186520958637,
+      "x": 316.32304572056074,
+      "y": 249.2996819915742,
+      "width": 69.44583529041772,
+      "height": 283.57049410253904,
       "baseWidth": 96,
       "baseHeight": 392,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.7297241459428224,
+      "scale": 0.7233941176085179,
       "modelScale": 0.74,
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "locked": false,
+      "disabled": false,
       "isPlayer": true,
       "speed": 0.24,
       "direction": "left",
@@ -223,7 +230,8 @@
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
-      "locked": false
+      "locked": false,
+      "disabled": false
     }
   ],
   "camera": {

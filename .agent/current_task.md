@@ -1,32 +1,29 @@
-# Current Task: Implementing Actor Animation Sets
+# Current Task: Notifications & Smart Save (Completed)
 
-**Objective:** Implement directional sprites and animation states (idle, walk, etc.) for Actor entities, along with the necessary Editor UI to manage them.
+**Objective:** Enhance the editor experience by adding non-blocking "Toast" notifications and streamlining the save workflow with "Smart Save" functionality.
 
 ## Status
 
-- [x] **Core Actor Logic:**
-  - [x] Add `direction` property (up, down, left, right).
-  - [x] Add `animSets` structure (state -> direction sprites).
-  - [x] Implement `updateSprite` to auto-select sprite based on state & direction.
-  - [x] Auto-switching states (idle <-> walk) based on movement.
-- [x] **Editor UI (Properties Panel):**
-  - [x] Direction selector.
-  - [x] Animation Set Manager (Add/Remove sets).
-  - [x] File browser integration for directional sprite slots.
-  - [x] **Fix:** Ensure Properties Panel correctly identifies `Actor` objects (fixed `SceneEditor` selection bug).
-- [x] **Scripting API:**
-- [x] **Scripting API:**
-  - [x] `setDirection(dir)`
-  - [x] `playAnimSet(state)`
-  - [x] `resetAnimSet()`
-- [x] **Serialization & Editor Integrity:**
-  - [x] Implemented `animationSpeed` with serialization.
-  - [x] Implemented `modelScale` persistence.
-  - [x] Fixed `SceneEditor` object hydration bugs (Ctrl+V, Scale).
-  - [x] Documented Serialization Standards in `context.md`.
+- [x] **Walkbox Modes (Previous Task):**
+  - [x] Implemented Add, Subtract, Invert modes.
+  - [x] Updated rendering logic for proper composition.
+  - [x] Added UI controls to Properties Panel.
+- [x] **Notifications:**
+  - [x] Replaced blocking `alert` and "Click to continue" modal with non-blocking Toast UI.
+  - [x] Implemented `showMessage` in `Game.ts` to trigger toasts.
+  - [x] Styled toasts to match retro aesthetic (Green border, fade out).
+- [x] **Sprite Editor Improvements:**
+  - [x] **Smart Save (F2):** Saves directly if `sprite.id` is valid.
+  - [x] **Save As (Shift+F2):** Always prompts file browser.
+  - [x] **Visualization:** Added background options (Black/Pink/Checker) and Rulers.
+  - [x] Fixed "Empty Preview" bug.
+- [x] **Scene Editor Improvements:**
+  - [x] **Smart Save (F2):** Saves directly if `scene.id` is valid.
+  - [x] **Save As (Shift+F2):** Always prompts file browser.
+  - [x] Renamed "ID" label to "ID/File" for clarity.
 
 ## Notes
 
-- `Actor` now supports complex visual states and variable animation speeds.
-- Editor Copy/Paste (Ctrl+V) is fixed.
-- Serialization Standards established to prevent future regression.
+- The blocking interaction flow has been removed, making the editor feel much faster.
+- "Smart Save" significantly reduces friction for iterative updates.
+- Walkbox modes allow for complex navigation meshes (bridges, holes).

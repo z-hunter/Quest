@@ -38,9 +38,11 @@ export const HierarchyPanel: React.FC = () => {
     };
 
     // Unified list for navigation
+    // CRITICAL: Must depend on hierarchyVersion because entities/walkboxes/triggers arrays are MUTABLE.
+    // React won't see changes to the array reference, so we need the version counter to force refresh.
     const allItems = React.useMemo(() => {
         return ['SCENE', ...entities, ...walkboxes, ...triggers];
-    }, [entities, walkboxes, triggers]);
+    }, [entities, walkboxes, triggers, hierarchyVersion]);
 
     // Track hover state
     const isHovered = React.useRef(false);
@@ -52,8 +54,13 @@ export const HierarchyPanel: React.FC = () => {
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault();
 
+                // Helper to normalize slashes for comparison
+                const normalize = (s: string | null) => (s || '').replace(/\\/g, '/');
+
                 // Find the current selected object's index using the consistent display ID
-                const currentIndex = allItems.findIndex((item: any) => getDisplayId(item) === selectedObjectId);
+                const currentIndex = allItems.findIndex((item: any) =>
+                    normalize(getDisplayId(item)) === normalize(selectedObjectId)
+                );
 
                 let nextIndex = currentIndex;
 
@@ -124,6 +131,13 @@ export const HierarchyPanel: React.FC = () => {
         const cy = document.getElementById('cam-y') as HTMLInputElement;
         if (cx) cx.value = Math.round(targetX).toString();
         if (cy) cy.value = Math.round(targetY).toString();
+    };
+
+    // Normalize helper for consistent ID comparison
+    const normalize = (s: string | null) => (s || '').replace(/\\/g, '/');
+
+    const isItemSelected = (id: string | null) => {
+        return normalize(id) === normalize(selectedObjectId);
     };
 
     return (
@@ -226,14 +240,14 @@ export const HierarchyPanel: React.FC = () => {
                     className="e-list-item"
                     style={{
                         padding: '4px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                        background: selectedObjectId === 'SCENE' ? '#0f0' : 'transparent',
-                        color: selectedObjectId === 'SCENE' ? '#000' : '#aaa'
+                        background: isItemSelected('SCENE') ? '#0f0' : 'transparent',
+                        color: isItemSelected('SCENE') ? '#000' : '#aaa'
                     }}
                     onClick={() => Game.instance.editor.selectObject('SCENE')}
                     onDoubleClick={() => centerCameraOn('SCENE')}
                 >
                     <span style={{
-                        filter: selectedObjectId === 'SCENE'
+                        filter: isItemSelected('SCENE')
                             ? 'grayscale(100%) brightness(0)'
                             : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
                         marginRight: '6px',
@@ -246,7 +260,7 @@ export const HierarchyPanel: React.FC = () => {
 
                 {/* Entities */}
                 {entities.map((ent: any) => {
-                    const isSelected = selectedObjectId === ent.name;
+                    const isSelected = isItemSelected(ent.name);
                     return (
                         <div
                             key={ent.name}
@@ -279,7 +293,7 @@ export const HierarchyPanel: React.FC = () => {
                 {/* Walkboxes */}
                 {walkboxes.map((wb: any, i: number) => {
                     const id = wb.name || 'Walkbox';
-                    const isSelected = selectedObjectId === id;
+                    const isSelected = isItemSelected(id);
                     return (
                         <div
                             key={wb.name || i}
@@ -312,7 +326,7 @@ export const HierarchyPanel: React.FC = () => {
                 {/* Triggers */}
                 {triggers.map((tb: any, i: number) => {
                     const id = tb.name || 'Triggerbox';
-                    const isSelected = selectedObjectId === id;
+                    const isSelected = isItemSelected(id);
                     return (
                         <div
                             key={tb.name || i}

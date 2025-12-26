@@ -152,7 +152,7 @@ export const PropertiesPanel: React.FC = () => {
 
                         {/* Common: Name -> ID */}
                         <div className="e-row">
-                            <label className="e-label">ID</label>
+                            <label className="e-label">{selectedObjectType === 'SCENE' ? 'ID/File' : 'ID'}</label>
                             <input
                                 type="text"
                                 className="e-input"

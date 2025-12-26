@@ -248,6 +248,17 @@ export class SceneEditor {
         }
 
 
+        // Insert: Assign Sprite (Static/Actor)
+        if (this.enabled && e.key === 'Insert') {
+            e.preventDefault();
+            if (this.selectedObject && (this.selectedObject instanceof Entity || this.selectedObject instanceof Actor)) {
+                // Check if method exists, else implement inline or warn
+                this.promptSetSprite();
+            }
+            return;
+        }
+
+
 
         // Allows opening editor with F1 or F5 even if disabled
         if (!this.enabled && e.key !== 'F1' && e.key !== 'F5') return;
@@ -1846,40 +1857,50 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
 
-        // Valid Filename check
-        const hasFilename = !!scene.filename;
-        const hasValidId = scene.id && scene.id !== 'new_scene';
+        // Smart Save (F2) Logic
+        // 1. If SAVE AS (Shift+F2), always prompt.
+        // 2. If Quick Save (F2):
+        //    a. If ID is valid (not 'new_scene', not empty), save directly to <id>.json.
+        //    b. If ID is 'new_scene' or empty, fallback to File Browser.
 
-        if (saveAs || (!hasFilename && !hasValidId)) {
-            this.game.openFileBrowser('save', 'public/scenes', (filename: string) => {
-                // Update Filename from browser selection
-                const name = filename.replace('.json', '');
-                scene.filename = name;
-                // Also update ID if it was a new scene
-                if (scene.id === 'new_scene') scene.id = name;
+        const id = scene.id || '';
+        // Allow backslashes for subfolders
+        const isValidId = id && id !== 'new_scene';
 
-                this.syncUI(); // Refresh UI to show new Filename
-                this.performSaveScene(scene.filename);
-            });
-        } else {
-            // Quick Save
-            // If we don't have a filename but have a valid ID, use ID as filename
-            if (!hasFilename && hasValidId) {
-                scene.filename = scene.id;
-                console.log(`[Editor] Auto - setting filename from ID: ${scene.filename} `);
-            }
-
+        if (!saveAs && isValidId) {
+            // Smart Save
+            // Ensure filename property matches ID (normalized for file system)
+            scene.filename = id.replace(/\\/g, '/');
             this.performSaveScene(scene.filename);
+            return;
         }
+
+        // Fallback / Save As
+        this.game.openFileBrowser('save', 'public/scenes', (filename: string) => {
+            // Update Filename from browser selection
+            const name = filename.replace('.json', '');
+
+            // Normalize slashes for ID: use backslash for subfolders
+            const idFromName = name.replace(/\//g, '\\');
+
+            scene.filename = name;
+            scene.id = idFromName;
+
+            this.syncUI(); // Refresh UI to show new Filename
+            this.performSaveScene(scene.filename);
+        });
     }
 
     async performSaveScene(filenameId: string): Promise<void> {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
 
+        // Ensure filenameId uses forward slashes for URL/Path
+        const normalizedPath = filenameId.replace(/\\/g, '/');
+
         const data = scene.toJSON();
         const json = JSON.stringify(data, null, 2);
-        const filePath = `public/scenes/${filenameId}.json`;
+        const filePath = `public/scenes/${normalizedPath}.json`;
 
         try {
             const response = await fetch('/api/save', {
@@ -1890,13 +1911,14 @@ export class SceneEditor {
 
             if (response.ok) {
                 console.log('Scene saved to server:', filePath);
-                // this.game.showMessage(`Scene Saved: ${ filenameId } `); // Removed per user request
+                // Use Toast Message
+                this.game.showMessage(`Scene saved as ${normalizedPath}.json`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('Failed to save scene:', e);
-            this.game.showMessage(`Error saving scene: ${e} `);
+            this.game.showMessage(`Error saving scene: ${e}`);
         }
     }
 
@@ -1906,12 +1928,20 @@ export class SceneEditor {
         });
     }
 
+
+
     async loadSceneFromServer(filename: string): Promise<void> {
         try {
+            // Filename comes from FileBrowser as 'path/to/file.json' or 'file.json'
+            // We want ID to be 'path\to\file'
+            const idFromPath = filename.replace('.json', '').replace(/\//g, '\\');
+
             const response = await fetch(`/scenes/${filename}?t=${Date.now()}`); // Burst cache
             if (!response.ok) throw new Error('File not found');
             const data = await response.json();
-            this.loadSceneData(data, filename.replace('.json', ''));
+
+            // Pass the derived ID to loadSceneData
+            this.loadSceneData(data, idFromPath);
         } catch (e) {
             console.error(e);
             this.game.showMessage("Failed to load scene");
@@ -1978,6 +2008,22 @@ export class SceneEditor {
         });
     }
 
+    promptSetSprite(): void {
+        if (!this.selectedObject || !(this.selectedObject instanceof Entity)) return;
+
+        this.game.openFileBrowser('load', 'public/sprites', (filename: string) => {
+            // Logic to set sprite
+            const ent = this.selectedObject as Entity;
+            // Assume browser returns "chars/hero.json" or "folder/hero.json"
+            // We want "folder/hero" or "chars/hero" for internal use? 
+            // setSprite typically expects "path/name".
+
+            const spriteName = filename.replace('.json', '');
+            ent.setSprite(spriteName);
+            this.updateUIFromObject();
+        });
+    }
+
     async performLoadObject(filename: string): Promise<void> {
         try {
             const response = await fetch(`/prefabs/${filename}?t=${Date.now()}`);
@@ -1986,6 +2032,39 @@ export class SceneEditor {
 
             // Validate data
             if (!data.type) data.type = 'Static'; // Default
+
+            // Logic 2 & 3: ID Derivation & Collision
+            // Filename: "folder/chair.json" -> ID: "folder\chair"
+            const baseId = filename.replace('.json', '').replace(/\//g, '\\');
+
+            // Check Collision against current scene objects
+            const scene = this.game.sceneManager.currentScene;
+            if (scene) {
+                const allObjects = [
+                    ...(scene.entities || []),
+                    ...(scene.walkbox || []),
+                    ...(scene.triggerboxes || [])
+                ];
+
+                // Override name in data to be the ID (or base it off ID)
+                // Actually, objects have 'name', not 'id'. We treat 'name' as unique identifier in Editor.
+                // So we format the name as "folder\chair".
+
+                let newName = baseId;
+                let counter = 1;
+
+                const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
+
+                if (isNameTaken(newName)) {
+                    // Try name_1, name_2...
+                    while (isNameTaken(`${baseId}_${counter}`)) {
+                        counter++;
+                    }
+                    newName = `${baseId}_${counter}`;
+                }
+
+                data.name = newName;
+            }
 
             const entity = this.createObjectFromData(data);
 
@@ -2003,10 +2082,21 @@ export class SceneEditor {
     // Renamed from loadScene to loadSceneData to differentiate from file fetching
     loadSceneData(data: any, filename?: string): void {
         try {
-            // const data = JSON.parse(jsonString); // Already parsed json
-            const newScene = new Scene(data.id || 'loaded_scene', data.name || 'Untitled');
-            if (filename) newScene.filename = filename;
+            // Priority:
+            // 1. filename argument (derived from path: "sub\scene")
+            // 2. data.id (from json)
+            // 3. Fallback
+            const sceneId = filename || data.id || 'loaded_scene';
+            const newScene = new Scene(sceneId, data.name || 'Untitled');
+
+            if (filename) {
+                // Determine filename for saving (forward slashes)
+                newScene.filename = filename.replace(/\\/g, '/');
+            }
             else if (data.filename) newScene.filename = data.filename;
+
+            // If ID was missing in File but provided by filename, ensure consistency
+            newScene.id = sceneId;
 
             // Restore Camera
             if (data.camera) {
