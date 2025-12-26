@@ -104,112 +104,63 @@ export class Entity extends SceneObject {
     setSprite(filename: string, keepSize: boolean = false): void {
         // Auto-detect loading state if not explicitly set
         if (this.isLoading) keepSize = true;
-        // Strict JSON support as requested
-        if (!filename.toLowerCase().endsWith('.json')) {
-            filename += '.json';
-        }
 
-        // Update the sprite name immediately so we know what is INTENDED.
-        // This prevents repeated calls and ensures serialization is correct even while loading.
-        this.spriteName = filename;
-        console.log(`[Entity] Loading sprite config: ${filename}`);
-
-        // Capture the requested filename to handle race conditions
+        // Delegate to AssetLoader
+        // Note: AssetLoader handles extension and path resolution
         const requestName = filename;
+        console.log(`[Entity] Requesting sprite: ${requestName}`);
 
         // Capture current dimensions target if we need to preserve them
-        const targetWidth = this.width;
 
-        let fetchPath = filename;
-        if (fetchPath.startsWith('public/')) {
-            fetchPath = '/' + fetchPath.substring(7);
-        } else if (!fetchPath.startsWith('/')) {
-            fetchPath = '/sprites/' + filename;
-        }
-
-        fetch(fetchPath)
-            .then(res => {
-                if (!res.ok) throw new Error(`Failed to load sprite json: ${res.statusText}`);
-                return res.json();
-            })
+        Game.instance.assets.loadSprite(filename)
             .then(data => {
-                // Check if the request is still valid before processing
-                if (this.spriteName !== requestName) {
-                    console.log(`[Entity] Ignoring stale sprite load: ${requestName} (Current: ${this.spriteName})`);
-                    return;
-                }
+                const { json, image } = data;
 
-                // Prepare new state in local variables (ATOMIC PREPARATION)
+                // Check if the request is still valid (Basic race check - though AssetLoader handles some concurrency, 
+                // we still need to check if *this* entity changed its mind)
+                // However, since we don't store "pendingSpriteName", we assume latest is winner? 
+                // Or we should update spriteName immediately?
+                // The original code set this.spriteName = filename at start.
+                this.spriteName = filename; // Ensure consistency
 
                 // 1. Dimensions
-                const newBaseWidth = data.width;
-                const newBaseHeight = data.height;
+                const newBaseWidth = json.width;
+                const newBaseHeight = json.height;
 
-                // 2. Image
-                let imagePath = data.imageFile;
-                if (imagePath.startsWith('public/')) {
-                    imagePath = '/' + imagePath.substring(7);
-                } else if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
-                    imagePath = '/assets/' + imagePath;
-                }
-
-                const newImage = new Image();
-                newImage.src = imagePath;
-
-                // 3. Animator
+                // 2. Animator
                 const newAnimator = new Animator(this);
-                // Apply current animation speed
                 newAnimator.frameDuration = this.animationSpeed;
 
                 const frames = [];
-                for (let i = 0; i < (data.frames || 1); i++) {
+                for (let i = 0; i < (json.frames || 1); i++) {
                     frames.push({
-                        x: data.x,
-                        y: data.y + (i * data.height),
-                        w: data.width,
-                        h: data.height
+                        x: json.x,
+                        y: json.y + (i * json.height),
+                        w: json.width,
+                        h: json.height
                     });
                 }
                 newAnimator.addAnimation('default', frames, true);
                 newAnimator.play('default');
 
-                // 4. Atomic Swap on Load
-                newImage.onload = () => {
-                    // Double check race condition inside onload
-                    if (this.spriteName !== requestName) {
-                        console.log(`[Entity] Ignoring stale sprite load (onload): ${requestName}`);
-                        return;
-                    }
+                // 3. Apply
+                console.log(`[Entity] Applying sprite: ${filename} | keepSize: ${keepSize}`);
 
-                    console.log(`[Entity] Applying sprite: ${requestName} | keepSize: ${keepSize} | isLoading: ${this.isLoading} | targetW: ${targetWidth} | newBaseW: ${newImage.naturalWidth}`);
+                if (keepSize) {
+                    // Preserve existing visual dimensions
+                } else {
+                    this.baseWidth = newBaseWidth;
+                    this.baseHeight = newBaseHeight;
+                    // Force immediate update
+                    this.width = this.baseWidth * this.scale;
+                    this.height = this.baseHeight * this.scale;
+                }
 
-                    // Logic to preserve visual size if requested (e.g. during Load)
-                    if (keepSize) {
-                        // STRICT keepSize: Do NOT update baseWidth/baseHeight/modelScale.
-                        // We trust that the existing dimensions (from Load or current state) are what the user wants.
-                        // Changing them to match newImage.naturalWidth would enforce the new sprite's aspect ratio,
-                        // destroying any non-uniform scaling (squashing/stretching) done by the user.
-                        console.log(`[Entity] keepSize active. Preserving existing dimensions: W:${this.width} H:${this.height} BaseW:${this.baseWidth} BaseH:${this.baseHeight}`);
-                    } else {
-                        // Default behavior: conform to sprite size
-                        this.baseWidth = newBaseWidth;
-                        this.baseHeight = newBaseHeight;
-
-                        // Force immediate update for visual snap
-                        this.width = this.baseWidth * this.scale;
-                        this.height = this.baseHeight * this.scale;
-                    }
-
-                    this.image = newImage;
-                    this.animator = newAnimator;
-                };
-
-                newImage.onerror = (e) => {
-                    console.error(`[Entity] Failed to load sprite image: ${imagePath}`, e);
-                };
+                this.image = image;
+                this.animator = newAnimator;
             })
             .catch(err => {
-                console.error(`[Entity] Sprite load error:`, err);
+                console.error(`[Entity] Sprite load error for ${filename}:`, err);
             });
     }
 

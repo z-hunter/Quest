@@ -5,6 +5,7 @@ import { Parser } from '../mechanics/Parser';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { SpriteEditor } from '../tools/SpriteEditor';
+import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 
@@ -26,6 +27,7 @@ export class Game {
     input: Input;
     parser: Parser;
     sceneManager: SceneManager;
+    assets: AssetLoader;
     editor: SceneEditor;
     spriteEditor: SpriteEditor;
     score: number = 0;
@@ -103,6 +105,7 @@ export class Game {
 
         this.input = new Input(this);
         this.parser = new Parser(this);
+        this.assets = new AssetLoader();
         this.sceneManager = new SceneManager(this);
         this.editor = new SceneEditor(this);
         this.spriteEditor = new SpriteEditor(this);
