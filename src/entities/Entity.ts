@@ -1,4 +1,5 @@
 import { Animator } from '../core/Animator';
+import { Game } from '../core/Game';
 import { SceneObject } from './SceneObject';
 
 export interface EntityData {
@@ -219,8 +220,8 @@ export class Entity extends SceneObject {
         if (!this.ignoreScaling) {
             if (this.scene && this.scene.scaling && this.scene.scaling.enabled) {
                 depthFactor = this.scene.getScaling(this.y);
-            } else if ((window as any).game && (window as any).game.sceneManager && (window as any).game.sceneManager.currentScene) {
-                const scene = (window as any).game.sceneManager.currentScene;
+            } else if (Game.instance && Game.instance.sceneManager && Game.instance.sceneManager.currentScene) {
+                const scene = Game.instance.sceneManager.currentScene;
                 if (scene.scaling && scene.scaling.enabled) {
                     depthFactor = scene.getScaling(this.y);
                 }
@@ -233,7 +234,6 @@ export class Entity extends SceneObject {
         // Update Hitbox Dims
         this.width = this.baseWidth * this.scale;
         this.height = this.baseHeight * this.scale;
-
 
         if (this.animator) {
             this.animator.update(deltaTime);

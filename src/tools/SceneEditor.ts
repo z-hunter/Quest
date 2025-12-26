@@ -527,31 +527,8 @@ export class SceneEditor {
     syncUI(): void {
         const scene = this.game.sceneManager.currentScene;
         if (scene) {
-            const titleInput = document.getElementById('editor-scene-title') as HTMLInputElement;
-            if (titleInput) titleInput.value = scene.name;
-
-            const idInput = document.getElementById('editor-scene-id') as HTMLInputElement;
-            if (idInput) idInput.value = scene.filename || '';
-
             useEditorStore.getState().setSceneInfo(scene.name, scene.filename || '');
-
-            // Sync Scaling
-            const scaleEnabled = document.getElementById('scale-enabled') as HTMLInputElement;
-            const scaleMin = document.getElementById('scale-min') as HTMLInputElement;
-            const scaleMax = document.getElementById('scale-max') as HTMLInputElement;
-            const scaleHorizon = document.getElementById('scale-horizon') as HTMLInputElement;
-            const scaleFront = document.getElementById('scale-front') as HTMLInputElement;
-
-            if (scene.scaling && scaleEnabled) {
-                scaleEnabled.checked = scene.scaling.enabled;
-                if (scaleMin) scaleMin.value = scene.scaling.min.toString();
-                if (scaleMax) scaleMax.value = scene.scaling.max.toString();
-                if (scaleHorizon) scaleHorizon.value = scene.scaling.horizon.toString();
-                if (scaleFront) scaleFront.value = scene.scaling.front.toString();
-            }
-
-            // Sync to Store
-            useEditorStore.getState().setSceneInfo(scene.name, scene.filename || '');
+            useEditorStore.getState().incrementObjectVersion();
         }
     }
 
@@ -1221,81 +1198,7 @@ export class SceneEditor {
 
 
     updateUIFromObject(): void {
-        const scenePropertiesItem = document.getElementById('scene-properties-item');
-        if (scenePropertiesItem) {
-            if ((this.selectedObject as any) === 'SCENE') {
-                scenePropertiesItem.classList.add('selected');
-            } else {
-                scenePropertiesItem.classList.remove('selected');
-            }
-        }
-
-        if (!this.selectedObject || typeof this.selectedObject === 'string') return;
-
-        // Update Type Display
-        const typeDisplay = document.getElementById('selected-entity-name');
-        if (typeDisplay) {
-            let typeStr = 'Object';
-            if (this.selectedObject instanceof Actor) typeStr = 'Actor';
-            else if (this.selectedObject instanceof Entity) typeStr = 'Static';
-            else if (this.selectedObject instanceof Walkbox) typeStr = 'Walkbox';
-            else if (this.selectedObject instanceof Triggerbox) typeStr = 'Triggerbox';
-            typeDisplay.textContent = typeDisplay.textContent?.split(':')[0] ? typeStr : typeStr; // Preserve existing styling if any
-            typeDisplay.textContent = typeStr;
-        }
-
-        const propName = document.getElementById('prop-name') as HTMLInputElement;
-
-        // Universal Name Binding
-        if (propName) propName.value = this.selectedObject.name || '';
-
-        // Entity Specifics
-        if (this.selectedObject instanceof Entity) {
-            const ent = this.selectedObject as Entity;
-            const propImage = document.getElementById('prop-image') as HTMLInputElement;
-            const propX = document.getElementById('prop-x') as HTMLInputElement;
-            const propY = document.getElementById('prop-y') as HTMLInputElement;
-            const propWidth = document.getElementById('prop-width') as HTMLInputElement;
-            const propHeight = document.getElementById('prop-height') as HTMLInputElement;
-            const propScale = document.getElementById('prop-scale') as HTMLInputElement;
-            const propLayer = document.getElementById('prop-layer') as HTMLInputElement;
-            const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
-            const propState = document.getElementById('prop-state') as HTMLInputElement;
-            const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
-            const propParallax = document.getElementById('prop-parallax') as HTMLInputElement;
-
-            if (propImage) propImage.value = ent.spriteName || '';
-            if (propX) propX.value = ent.x.toString();
-            if (propY) propY.value = ent.y.toString();
-            if (propWidth) propWidth.value = ent.width.toString();
-            if (propHeight) propHeight.value = ent.height.toString();
-            if (propScale) propScale.value = (ent.modelScale || 1.0).toString();
-            if (propLayer) propLayer.value = (ent.layer || 0).toString();
-            if (propParallax) propParallax.value = (ent.parallax !== undefined ? ent.parallax : 1.0).toString();
-            if (propNoScale) propNoScale.checked = ent.ignoreScaling || false;
-
-            if (ent instanceof Actor) {
-                if (propDirection) propDirection.value = ent.direction || 'down';
-                if (propState) propState.value = ent.state || 'idle';
-
-                const propActorSpeed = document.getElementById('prop-actor-speed') as HTMLInputElement;
-                if (propActorSpeed) propActorSpeed.value = ent.speed.toString();
-
-                const propActorIsPlayer = document.getElementById('prop-actor-isplayer') as HTMLInputElement;
-                if (propActorIsPlayer) propActorIsPlayer.checked = ent.isPlayer;
-            }
-        } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
-            const propWalkboxName = document.getElementById('prop-walkbox-name') as HTMLInputElement;
-            if (propWalkboxName) {
-                propWalkboxName.value = this.selectedObject.name;
-                propWalkboxName.oninput = () => {
-                    if (this.selectedObject) {
-                        this.selectedObject.name = propWalkboxName.value;
-                        this.refreshHierarchy();
-                    }
-                };
-            }
-        }
+        useEditorStore.getState().incrementObjectVersion();
     }
 
     updateEntityFromUI(triggerId?: string): void {
@@ -1923,30 +1826,17 @@ export class SceneEditor {
     }
 
     promptLoadScene(): void {
-        this.game.openFileBrowser('load', 'public/scenes', (filename: string) => {
-            this.loadSceneFromServer(filename);
+        this.game.openFileBrowser('load', 'public/scenes', async (filename: string) => {
+            await this.game.sceneManager.loadScene(filename);
+            this.syncUI();
+            this.refreshHierarchy();
+            this.selectObject(null);
         });
     }
 
 
 
-    async loadSceneFromServer(filename: string): Promise<void> {
-        try {
-            // Filename comes from FileBrowser as 'path/to/file.json' or 'file.json'
-            // We want ID to be 'path\to\file'
-            const idFromPath = filename.replace('.json', '').replace(/\//g, '\\');
 
-            const response = await fetch(`/scenes/${filename}?t=${Date.now()}`); // Burst cache
-            if (!response.ok) throw new Error('File not found');
-            const data = await response.json();
-
-            // Pass the derived ID to loadSceneData
-            this.loadSceneData(data, idFromPath);
-        } catch (e) {
-            console.error(e);
-            this.game.showMessage("Failed to load scene");
-        }
-    }
 
     async saveObject(): Promise<void> {
         if (!this.selectedObject || !(this.selectedObject instanceof Entity)) {
@@ -2080,135 +1970,7 @@ export class SceneEditor {
     }
 
     // Renamed from loadScene to loadSceneData to differentiate from file fetching
-    loadSceneData(data: any, filename?: string): void {
-        try {
-            // Priority:
-            // 1. filename argument (derived from path: "sub\scene")
-            // 2. data.id (from json)
-            // 3. Fallback
-            const sceneId = filename || data.id || 'loaded_scene';
-            const newScene = new Scene(sceneId, data.name || 'Untitled');
 
-            if (filename) {
-                // Determine filename for saving (forward slashes)
-                newScene.filename = filename.replace(/\\/g, '/');
-            }
-            else if (data.filename) newScene.filename = data.filename;
-
-            // If ID was missing in File but provided by filename, ensure consistency
-            newScene.id = sceneId;
-
-            // Restore Camera
-            if (data.camera) {
-                newScene.defaultCamera = { ...data.camera };
-                newScene.camera = { ...data.camera }; // Apply default to runtime immediately
-            }
-
-            if (data.autoCenter !== undefined) {
-                newScene.autoCenter = data.autoCenter;
-            }
-            if (data.cameraSpeed !== undefined) {
-                newScene.cameraSpeed = data.cameraSpeed;
-            }
-
-            // Restore Scaling
-            if (data.scaling) {
-                newScene.scaling = data.scaling;
-            }
-
-            // Restore Walkboxes
-            if (data.walkbox) {
-                newScene.walkbox = (data.walkbox || []).map((wb: any) => {
-                    const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
-                    const w = new Walkbox(poly, wb.name || 'Walkbox');
-                    if (wb.locked) w.locked = true;
-                    return w;
-                });
-            }
-
-            // Restore Triggerboxes
-            if (data.triggerboxes) {
-                newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
-                    const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
-                    const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
-                    if (t.locked) tb.locked = true;
-                    return tb;
-                });
-            }
-
-            if (data.entities) {
-                data.entities.forEach((entityData: any) => {
-                    let entity: Entity;
-
-                    if (entityData.type === 'Player') {
-                        // Legacy: Convert Player to Actor
-                        entity = Actor.fromJSON({ ...entityData, type: 'Actor', isPlayer: true });
-                    } else if (entityData.type === 'Actor') {
-                        entity = Actor.fromJSON(entityData);
-                        if (entityData.isPlayer) (entity as Actor).isPlayer = true;
-                    } else {
-                        entity = Entity.fromJSON(entityData);
-                    }
-
-                    // Restore common properties
-                    entity.color = entityData.color || entity.color;
-                    entity.scale = entityData.scale || entity.scale;
-                    entity.layer = entityData.layer || entity.layer;
-                    entity.parallax = entityData.parallax !== undefined ? entityData.parallax : 1.0;
-                    entity.ignoreScaling = !!entityData.ignoreScaling;
-
-                    // Restore base dimensions
-                    if (entityData.baseWidth !== undefined) {
-                        entity.baseWidth = entityData.baseWidth;
-                    } else {
-                        entity.baseWidth = entity.scale > 0 ? entityData.width / entity.scale : entityData.width;
-                    }
-
-                    if (entityData.baseHeight !== undefined) {
-                        entity.baseHeight = entityData.baseHeight;
-                    } else {
-                        entity.baseHeight = entity.scale > 0 ? entityData.height / entity.scale : entityData.height;
-                    }
-
-                    let skipSprite = false;
-                    if (entity.spriteName && entityData.spriteName) {
-                        const s1 = entity.spriteName;
-                        const s2 = entityData.spriteName;
-                        if (s1 === s2 || s1.endsWith('/' + s2) || s2.endsWith('/' + s1)) {
-                            skipSprite = true;
-                        }
-                    }
-
-                    if (entityData.spriteName && !skipSprite) {
-                        entity.setSprite(entityData.spriteName);
-                    }
-
-                    // Restore Actor specific properties if needed (state, direction)
-                    if (entity instanceof Actor && entityData.type === 'Actor') { // or Player
-                        // If we saved state/direction, restore them here.
-                        // Currently EntityData doesn't strictly track them, but strict serialization would.
-                        // We can cast entityData to have random props for now
-                        if ((entityData as any).state) entity.setState((entityData as any).state);
-                        if ((entityData as any).direction) entity.setDirection((entityData as any).direction);
-                        if ((entityData as any).animSets) {
-                            (entity as Actor).animSets = JSON.parse(JSON.stringify((entityData as any).animSets));
-                        }
-                    }
-
-                    newScene.addEntity(entity);
-                });
-            }
-
-            this.game.sceneManager.addScene(newScene);
-            this.game.sceneManager.switchTo(newScene.id);
-            this.syncUI();
-            this.refreshHierarchy();
-            console.log('Scene loaded successfully!');
-        } catch (e) {
-            console.error('Failed to load scene:', e);
-            alert('Error loading JSON');
-        }
-    }
 
     onClick(x: number, y: number): boolean {
         console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode} `);
