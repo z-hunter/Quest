@@ -138,7 +138,7 @@ canvas {
 /* Right Panel - Properties */
 #editor-panel,
 #se-panel {
-  width: 250px;
+  width: 300px;
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid #00ff00;
   color: #00ff00;
@@ -171,8 +171,8 @@ canvas {
 }
 
 #se-preview-canvas {
-  width: 200px !important;
-  height: 200px !important;
+  width: 250px !important;
+  height: 250px !important;
   background: #000;
 }
 

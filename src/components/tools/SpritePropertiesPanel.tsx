@@ -18,6 +18,12 @@ export const SpritePropertiesPanel: React.FC = () => {
         incrementSpriteVersion();
     };
 
+    const handleEditorChange = (field: string, value: any) => {
+        (spriteEditor as any)[field] = value;
+        spriteEditor.updatePreview();
+        incrementSpriteVersion();
+    };
+
     return (
         <div id="editor-panel" className="editor-sidebar right">
             <div className="editor-header">
@@ -27,7 +33,7 @@ export const SpritePropertiesPanel: React.FC = () => {
 
             <div className="editor-content">
                 <div className="e-row">
-                    <label className="e-label">Sprite ID</label>
+                    <label className="e-label">Sprite ID/File</label>
                     <input
                         className="e-input"
                         value={spriteEditor.sprite.id}
@@ -79,7 +85,61 @@ export const SpritePropertiesPanel: React.FC = () => {
                 <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '10px', marginTop: '10px' }}>
                     <label className="e-label">Preview</label>
                     <div style={{ width: '100%', aspectRatio: '1/1', background: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #444' }}>
-                        <canvas id="se-preview-canvas" width="200" height="200" style={{ maxWidth: '100%', maxHeight: '100%' }}></canvas>
+                        <canvas id="se-preview-canvas" width="250" height="250" style={{ maxWidth: '100%', maxHeight: '100%' }}></canvas>
+                    </div>
+                </div>
+
+                {/* Animation Controls */}
+                <div className="e-row" style={{ marginTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                        <button
+                            className={`e-btn ${spriteEditor.isPlaying ? 'e-btn-green' : ''}`}
+                            style={{ flex: 1, marginRight: '5px' }}
+                            onClick={() => spriteEditor.togglePlay()}
+                        >
+                            {spriteEditor.isPlaying ? 'PAUSE' : 'PLAY'}
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <label className="e-label" style={{ marginRight: '5px', marginBottom: 0 }}>Speed(ms)</label>
+                            <input
+                                type="number"
+                                className="e-input"
+                                style={{ width: '60px' }}
+                                value={spriteEditor.previewSpeed}
+                                onChange={(e) => handleEditorChange('previewSpeed', parseInt(e.target.value) || 100)}
+                            />
+                        </div>
+                    </div>
+
+                    {!spriteEditor.isPlaying && (
+                        <div className="e-row">
+                            <label className="e-label">Frame: {spriteEditor.currentFrame}</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max={(spriteEditor.sprite.frames || 1) - 1}
+                                value={spriteEditor.currentFrame}
+                                onChange={(e) => spriteEditor.setFrame(parseInt(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Visualization Controls */}
+                <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '10px' }}>
+                    <label className="e-label">Background</label>
+                    <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
+                        <button className="e-btn" style={{ background: '#000', border: spriteEditor.previewBg === 'black' ? '2px solid #fff' : '1px solid #555', width: '30px', height: '20px' }} onClick={() => handleEditorChange('previewBg', 'black')}></button>
+                        <button className="e-btn" style={{ background: '#999', border: spriteEditor.previewBg === 'checker' ? '2px solid #fff' : '1px solid #555', width: '30px', height: '20px' }} onClick={() => handleEditorChange('previewBg', 'checker')}></button>
+                        <button className="e-btn" style={{ background: '#ff00ff', border: spriteEditor.previewBg === 'pink' ? '2px solid #fff' : '1px solid #555', width: '30px', height: '20px' }} onClick={() => handleEditorChange('previewBg', 'pink')}></button>
+
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', margin: 0, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={spriteEditor.showRulers} onChange={(e) => handleEditorChange('showRulers', e.target.checked)} style={{ marginRight: '5px' }} />
+                                Rulers
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
