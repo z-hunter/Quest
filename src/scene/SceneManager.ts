@@ -107,8 +107,14 @@ export class SceneManager {
             if (data.cameraSpeed !== undefined) {
                 newScene.cameraSpeed = data.cameraSpeed;
             }
+            if (data.camDeadzoneX !== undefined) newScene.camDeadzoneX = data.camDeadzoneX;
+            if (data.camDeadzoneY !== undefined) newScene.camDeadzoneY = data.camDeadzoneY;
+            if (data.camMinX !== undefined) newScene.camMinX = data.camMinX;
+            if (data.camMaxX !== undefined) newScene.camMaxX = data.camMaxX;
+            if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
+            if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
 
-            // Restore Scaling
+            // Restore Cameraling
             if (data.scaling) {
                 newScene.scaling = data.scaling;
             }

@@ -544,20 +544,22 @@ export class SceneEditor {
     }
 
     onMouseDown(e: MouseEvent): void {
-        console.log(`[Editor] onMouseDown.Enabled: ${this.enabled}, DrawMode: ${this.drawMode} `);
         if (!this.enabled) return;
 
         // Right Click Panning
         if (e.button === 2) {
-            console.log("[Editor] Start Panning");
             this.isPanning = true;
             this.lastPanPos = { x: e.clientX, y: e.clientY };
 
             // Disable Auto-Center automatically
             if (this.game.sceneManager.currentScene) {
                 this.game.sceneManager.currentScene.autoCenter = false;
-                const chk = document.getElementById('cam-auto-center') as HTMLInputElement;
-                if (chk) chk.checked = false;
+
+                // Notify UI immediately
+                const store = useEditorStore.getState();
+                if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
+                    store.incrementObjectVersion();
+                }
             }
             e.preventDefault();
             return;
@@ -566,7 +568,6 @@ export class SceneEditor {
         if (this.drawMode) return;
 
         const pos = this.getMousePos(e); // Screen Coords
-        console.log(`[Editor] MousePos: ${pos.x}, ${pos.y} `);
         const scene = this.game.sceneManager.currentScene;
 
         if (scene) {
@@ -797,6 +798,17 @@ export class SceneEditor {
             // WorldDelta = ScreenDelta / Zoom.
             s.camera.x -= dx / s.camera.zoom;
             s.camera.y -= dy / s.camera.zoom;
+
+            // Disable Auto-Center on manual move
+            // Disable Auto-Center on manual move
+            if (s.autoCenter) {
+                s.autoCenter = false;
+                // Notify UI if we are viewing Scene properties (no selected object)
+                const store = useEditorStore.getState();
+                if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
+                    store.incrementObjectVersion();
+                }
+            }
 
             // Update UI
             const cx = document.getElementById('cam-x') as HTMLInputElement;

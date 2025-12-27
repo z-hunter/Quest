@@ -24,6 +24,12 @@ export interface SceneData {
     camera?: { x: number, y: number, zoom: number };
     autoCenter?: boolean;
     cameraSpeed?: number;
+    camDeadzoneX?: number;
+    camDeadzoneY?: number;
+    camMinX?: number;
+    camMaxX?: number;
+    camMinY?: number;
+    camMaxY?: number;
 }
 
 export class Scene {
@@ -41,6 +47,18 @@ export class Scene {
     camera: { x: number, y: number, zoom: number };
     autoCenter: boolean;
     cameraSpeed: number;
+    camDeadzoneX: number = 50;
+    camDeadzoneY: number = 30;
+
+    // Camera Bounds (undefined = infinite)
+    camMinX?: number;
+    camMaxX?: number;
+    camMinY?: number;
+    camMaxY?: number;
+
+    // Internal state for "Smart Deadzone" (Catch-up mode)
+    private _isCenteringX: boolean = false;
+    private _isCenteringY: boolean = false;
 
     // Default Camera (saved to scene file, restored on load/reset)
     defaultCamera: { x: number, y: number, zoom: number };
@@ -68,6 +86,8 @@ export class Scene {
         this.defaultCamera = { x: 0, y: 0, zoom: 1.0 };
         this.autoCenter = true; // Default to true
         this.cameraSpeed = 5.0; // Default speed
+        this.camDeadzoneX = 50;
+        this.camDeadzoneY = 30;
     }
 
     addEntity(entity: Entity): void {
@@ -218,31 +238,64 @@ export class Scene {
     }
 
     update(deltaTime: number): void {
-        // ... existing update
-        // ... existing update
+        // Update Camera
+        // 0. Update Camera Auto-Center Target
         if (this.player && this.autoCenter) {
-            // Center is simply the player's position
-            const targetX = this.player.x;
-            // Center on player's visual center (approx mid-height)
-            const pHeight = this.player.height || 0;
-            const targetY = this.player.y - pHeight / 2;
 
-            // Smooth Lerp
-            const dt = deltaTime / 1000; // Convert to seconds
+            // 1. Calculate Player Center
+
+            // 1. Calculate Player Center
+            // Entity Coords: x = Center X, y = Bottom Y (Feet)
+            const pHeight = this.player.height || 0;
+            const playerCenterX = this.player.x;
+            const playerCenterY = this.player.y - pHeight / 2;
+
+            // 2. Deadzone Logic (Hysteresis / Catch-up)
+            // If outside deadzone, START centering (target = player).
+            // Stop centering only when very close to player.
+
+            let targetX = this.camera.x;
+            let targetY = this.camera.y;
+
+            const dx = playerCenterX - this.camera.x;
+            const dy = playerCenterY - this.camera.y;
+
+            // X Axis
+            if (Math.abs(dx) > this.camDeadzoneX) this._isCenteringX = true;
+            if (this._isCenteringX) {
+                targetX = playerCenterX;
+                if (Math.abs(dx) < 2) this._isCenteringX = false;
+            }
+
+            // Y Axis
+            if (Math.abs(dy) > this.camDeadzoneY) this._isCenteringY = true;
+            if (this._isCenteringY) {
+                targetY = playerCenterY;
+                if (Math.abs(dy) < 2) this._isCenteringY = false;
+            }
+
+            // 3. Clamping (Level Bounds)
+            if (this.camMinX !== undefined) targetX = Math.max(this.camMinX, targetX);
+            if (this.camMaxX !== undefined) targetX = Math.min(this.camMaxX, targetX);
+            if (this.camMinY !== undefined) targetY = Math.max(this.camMinY, targetY);
+            if (this.camMaxY !== undefined) targetY = Math.min(this.camMaxY, targetY);
+
+            // 4. Smooth Lerp to Target
+            const dt = deltaTime / 1000;
             const speed = this.cameraSpeed || 5.0;
 
-            if (Math.abs(targetX - this.camera.x) < 1) this.camera.x = targetX;
+            if (Math.abs(targetX - this.camera.x) < 0.5) this.camera.x = targetX;
             else this.camera.x += (targetX - this.camera.x) * speed * dt;
 
-            if (Math.abs(targetY - this.camera.y) < 1) this.camera.y = targetY;
+            if (Math.abs(targetY - this.camera.y) < 0.5) this.camera.y = targetY;
             else this.camera.y += (targetY - this.camera.y) * speed * dt;
-        }
 
-        this.entities.forEach(entity => {
-            if (entity.disabled) return;
-            // @ts-ignore
-            entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
-        });
+            this.entities.forEach(entity => {
+                if (entity.disabled) return;
+                // @ts-ignore
+                entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
+            });
+        }
     }
 
     render(ctx: CanvasRenderingContext2D): void {
@@ -474,7 +527,13 @@ export class Scene {
             entities: savedEntities,
             camera: this.defaultCamera, // Save the DEFAULT settings, not the current runtime state
             autoCenter: this.autoCenter,
-            cameraSpeed: this.cameraSpeed
+            cameraSpeed: this.cameraSpeed,
+            camDeadzoneX: this.camDeadzoneX,
+            camDeadzoneY: this.camDeadzoneY,
+            camMinX: this.camMinX,
+            camMaxX: this.camMaxX,
+            camMinY: this.camMinY,
+            camMaxY: this.camMaxY
         };
     }
 }
