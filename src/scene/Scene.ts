@@ -290,12 +290,13 @@ export class Scene {
             if (Math.abs(targetY - this.camera.y) < 0.5) this.camera.y = targetY;
             else this.camera.y += (targetY - this.camera.y) * speed * dt;
 
-            this.entities.forEach(entity => {
-                if (entity.disabled) return;
-                // @ts-ignore
-                entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
-            });
         }
+
+        this.entities.forEach(entity => {
+            if (entity.disabled) return;
+            // @ts-ignore
+            entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
+        });
     }
 
     render(ctx: CanvasRenderingContext2D): void {

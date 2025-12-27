@@ -157,15 +157,15 @@
     {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 169.23829742539507,
-      "y": 266.10612134856103,
-      "width": 70.87855063272212,
-      "height": 289.4207484169487,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "spriteName": "miles_ds-idle-right.json",
+      "x": 263.08582491852263,
+      "y": 279.6719638803694,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.7383182357575222,
+      "scale": 0.74,
       "modelScale": 0.74,
       "layer": 0,
       "parallax": 1,
@@ -175,7 +175,7 @@
       "disabled": false,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -239,8 +239,10 @@
     "y": 29,
     "zoom": 0.51
   },
-  "autoCenter": false,
-  "cameraSpeed": 5,
-  "camDeadzoneX": 50,
-  "camDeadzoneY": 200
+  "autoCenter": true,
+  "cameraSpeed": 1.5,
+  "camDeadzoneX": 200,
+  "camDeadzoneY": -21,
+  "camMinX": 70,
+  "camMaxY": 35
 }
