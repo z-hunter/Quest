@@ -1,19 +1,16 @@
-import { SceneObject } from './SceneObject';
+import { PolygonObject } from './PolygonObject';
 
-export class Triggerbox extends SceneObject {
-    poly: { x: number, y: number }[];
+export class Triggerbox extends PolygonObject {
     script: string;
 
     constructor(poly: { x: number, y: number }[], name: string = 'Triggerbox', script: string = '') {
-        super(name, 'Triggerbox');
-        this.poly = poly;
+        super(poly, name, 'Triggerbox');
         this.script = script;
     }
 
     toJSON(): any {
         return {
             ...super.toJSON(),
-            poly: this.poly,
             script: this.script
         };
     }
