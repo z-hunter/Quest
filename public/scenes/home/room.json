@@ -1,89 +1,8 @@
 {
-  "id": "test_room1",
+  "id": "home\\room",
   "name": "Test Room",
-  "filename": "test_room1",
+  "filename": "home/room",
   "walkbox": [
-    {
-      "type": "Walkbox",
-      "name": "Walk_892",
-      "locked": false,
-      "disabled": false,
-      "poly": [
-        {
-          "x": -82,
-          "y": 286
-        },
-        {
-          "x": -211,
-          "y": 262
-        },
-        {
-          "x": -122,
-          "y": 244
-        },
-        {
-          "x": -110,
-          "y": 250
-        },
-        {
-          "x": 28,
-          "y": 216
-        },
-        {
-          "x": 43,
-          "y": 232
-        },
-        {
-          "x": 62,
-          "y": 253
-        },
-        {
-          "x": 122,
-          "y": 255
-        },
-        {
-          "x": 148,
-          "y": 233
-        },
-        {
-          "x": 138,
-          "y": 215
-        },
-        {
-          "x": 114,
-          "y": 207
-        },
-        {
-          "x": 67,
-          "y": 207
-        },
-        {
-          "x": 96,
-          "y": 195
-        },
-        {
-          "x": 388,
-          "y": 196
-        },
-        {
-          "x": 416,
-          "y": 204
-        },
-        {
-          "x": 476,
-          "y": 203
-        },
-        {
-          "x": 646,
-          "y": 221
-        },
-        {
-          "x": 647,
-          "y": 280
-        }
-      ],
-      "mode": "Add"
-    },
     {
       "type": "Walkbox",
       "name": "Walk_997",
@@ -91,20 +10,77 @@
       "disabled": false,
       "poly": [
         {
-          "x": -40.274509803921546,
-          "y": 356.17647058823525
+          "x": -79,
+          "y": 346
         },
         {
-          "x": -42.274509803921546,
-          "y": 279.17647058823525
+          "x": -81,
+          "y": 272
         },
         {
-          "x": 137.7254901960785,
-          "y": 282.17647058823525
+          "x": 153,
+          "y": 272
         },
         {
-          "x": 137.7254901960785,
-          "y": 356.17647058823525
+          "x": 153,
+          "y": 346
+        }
+      ],
+      "mode": "Add"
+    },
+    {
+      "type": "Walkbox",
+      "name": "Walk_176",
+      "locked": false,
+      "disabled": false,
+      "poly": [
+        {
+          "x": 81,
+          "y": 195
+        },
+        {
+          "x": 399,
+          "y": 194
+        },
+        {
+          "x": 408,
+          "y": 203
+        },
+        {
+          "x": 470,
+          "y": 207
+        },
+        {
+          "x": 596,
+          "y": 220
+        },
+        {
+          "x": 624,
+          "y": 211
+        },
+        {
+          "x": 680,
+          "y": 211
+        },
+        {
+          "x": 680,
+          "y": 297
+        },
+        {
+          "x": -234,
+          "y": 291
+        },
+        {
+          "x": -210,
+          "y": 247
+        },
+        {
+          "x": -111,
+          "y": 249
+        },
+        {
+          "x": 77,
+          "y": 194
         }
       ],
       "mode": "Add"
@@ -164,19 +140,41 @@
       "disabled": false
     },
     {
+      "type": "Entity",
+      "name": "Chair",
+      "x": 100,
+      "y": 249,
+      "width": 116.89999999999999,
+      "height": 198.79999999999998,
+      "baseWidth": 167,
+      "baseHeight": 284,
+      "colliderWidth": 78,
+      "colliderHeight": 18,
+      "spriteName": "chair.json",
+      "color": "#00ff00",
+      "scale": 0.7,
+      "modelScale": 0.7,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": false
+    },
+    {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 227.16435536197804,
-      "y": 231.67611586282524,
-      "width": 67.9000791365863,
-      "height": 277.25865647439406,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 52,
-      "colliderHeight": 10,
-      "spriteName": "miles_ds-idle-right.json",
+      "x": 208.841128618906,
+      "y": 288.3596360261379,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.7072924910061074,
+      "scale": 0.74,
       "modelScale": 0.74,
       "layer": 0,
       "parallax": 1,
@@ -186,7 +184,7 @@
       "disabled": false,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -203,28 +201,6 @@
           "right": "miles_ds-walk-right.json"
         }
       }
-    },
-    {
-      "type": "Entity",
-      "name": "Chair",
-      "x": 100,
-      "y": 249,
-      "width": 116.89999999999999,
-      "height": 198.79999999999998,
-      "baseWidth": 167,
-      "baseHeight": 284,
-      "colliderWidth": 115,
-      "colliderHeight": 20,
-      "spriteName": "chair.json",
-      "color": "#00ff00",
-      "scale": 0.7,
-      "modelScale": 0.7,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": true,
-      "disabled": false
     },
     {
       "type": "Entity",
@@ -276,7 +252,7 @@
     "y": 29,
     "zoom": 0.51
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,

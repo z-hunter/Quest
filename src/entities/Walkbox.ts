@@ -5,7 +5,7 @@ export class Walkbox extends PolygonObject {
 
     constructor(poly: { x: number, y: number }[], name: string = 'Walkbox') {
         super(poly, name, 'Walkbox');
-        this.mode = 'Invert';
+        this.mode = 'Add';
     }
 
     toJSON(): any {

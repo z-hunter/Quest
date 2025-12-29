@@ -127,6 +127,8 @@ export class Actor extends Entity {
         // Call Entity update (handles scaling etc)
         super.update(deltaTime);
 
+        // console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
+
         if (this.isPlayer) {
             this.handlePlayerInput(deltaTime, isWalkable);
         }

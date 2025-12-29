@@ -131,82 +131,130 @@ export class Scene {
         return this.scaling.min + t * (this.scaling.max - this.scaling.min);
     }
 
-    isWalkable(x: number, y: number): boolean {
+    isWalkable(x: number, y: number, sourceEntity?: Entity): boolean {
+        // console.log(`[Scene] isWalkable(${x}, ${y}) source=${sourceEntity?.name} Collider=${sourceEntity?.colliderWidth}x${sourceEntity?.colliderHeight}`);
+
+        // 0. Zero Collider / Check
+        // If entity has explicitly 0 size collider, it's a ghost.
+        if (sourceEntity && sourceEntity.colliderWidth === 0 && sourceEntity.colliderHeight === 0) {
+            // console.log("  -> Ghost (Zero Collider)");
+            return true;
+        }
+
+        let sourceRect = null;
+        if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
+            sourceRect = {
+                x: x - sourceEntity.colliderWidth / 2,
+                y: y - sourceEntity.colliderHeight / 2,
+                w: sourceEntity.colliderWidth,
+                h: sourceEntity.colliderHeight
+            };
+            // console.log(`  -> SourceRect: ${sourceRect.x},${sourceRect.y} ${sourceRect.w}x${sourceRect.h}`);
+
+            // 1. Entity vs Entity Collision
+            for (const other of this.entities) {
+                if (other === sourceEntity) continue; // Skip self
+                if (other.disabled) continue; // Skip disabled
+                if (other.colliderWidth === 0 || other.colliderHeight === 0) continue; // Skip ghosts
+
+                const otherRect = {
+                    x: other.x - other.colliderWidth / 2,
+                    y: other.y - other.colliderHeight / 2,
+                    w: other.colliderWidth,
+                    h: other.colliderHeight
+                };
+
+                if (Geometry.rectIntersectsRect(sourceRect, otherRect)) {
+                    // console.log(`  -> Collision with entity ${other.name}`);
+                    return false;
+                }
+            }
+        }
+
         // Filter out disabled walkboxes first
         const activeWalkboxes = this.walkbox ? this.walkbox.filter(wb => !wb.disabled) : [];
 
         // If no active walkboxes, everything is walkable
         if (activeWalkboxes.length === 0) return true;
 
-        // 1. Subtract (High Priority: Holes)
-        for (const wb of activeWalkboxes) {
-            if (wb.mode === 'Subtract') {
-                if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
-                    return false; // Valid "Hole"
+        if (sourceRect) {
+            // --- COLLIDER MODE ---
+
+            // 2. Subtract (Holes) - High Priority
+            for (const wb of activeWalkboxes) {
+                if (wb.mode === 'Subtract') {
+                    if (Geometry.rectIntersectsPolygon(sourceRect, wb.poly)) {
+                        console.log(`  -> Blocked by Subtract '${wb.name}'`);
+                        return false; // Hit a hole
+                    }
                 }
             }
-        }
 
-        // 2. Add (Medium Priority: Bridges)
-        for (const wb of activeWalkboxes) {
-            if (wb.mode === 'Add') {
-                if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
-                    return true; // Forced Walkable
+            // 3. Positive Constraints (Add + Invert)
+            // If ANY 'Invert' or 'Add' boxes exist, the default for the world becomes BLOCKED
+            // unless we are inside at least one of them.
+            const positives = activeWalkboxes.filter(wb => wb.mode === 'Add' || wb.mode === 'Invert' || !wb.mode);
+
+            if (positives.length > 0) {
+                let safe = false;
+
+                // Check simple containment in ANY positive box
+                for (const wb of positives) {
+                    if (Geometry.rectInsidePolygon(sourceRect, wb.poly)) {
+                        console.log(`  -> Safe in Positive Box '${wb.name}' (${wb.mode || 'Invert'})`);
+                        safe = true;
+                        break;
+                    }
+                }
+
+                if (!safe) {
+                    console.log('  -> Blocked: Not inside any active Invert/Add box');
+                    return false;
                 }
             }
-        }
 
-        // 3. Invert (Low Priority: Standard Even-Odd)
-        let inclusionCount = 0;
-        let hasInvert = false;
-        for (const wb of activeWalkboxes) {
-            // Default to 'Invert' if mode is undefined or explicitly set
-            if (!wb.mode || wb.mode === 'Invert') {
-                hasInvert = true;
-                if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
-                    inclusionCount++;
-                }
-            }
-        }
+            return true;
 
-        // If there are NO Invert boxes, and we passed Subtract/Add checks,
-        // it means we are in "open space" not covered by any base logic.
-        // However, usually if we have *any* walkboxes, the default is "not walkable unless inside".
-        // But if we ONLY have 'Subtract' boxes (and no Invert/Add), the check at the top
-        // "if activeWalkboxes.length === 0" handles the "no walkboxes" case.
-        // If we have ONLY 'Subtract' boxes, we implicitly have a "World is Walkable" base? 
-        // Or "World is NOT Walkable"?
-        // Standard Adventure Game Logic:
-        // - If NO walkboxes defined -> Walkable everywhere.
-        // - If ANY walkboxes defined -> Walkable ONLY inside them.
+            return true;
 
-        if (hasInvert) {
-            // Odd count = Inside (Walkable)
-            return inclusionCount % 2 !== 0;
         } else {
-            // If we have active walkboxes but NONE are 'Invert' (e.g. only Subtract or only Add),
-            // What is the base state?
-            // If we only have 'Subtract', it implies we started with "Walkable Everywhere".
-            // If we only have 'Add', it implies we started with "Walkable Nowhere".
+            // --- POINT MODE (Legacy/Mouse/ZeroCollider) ---
 
-            // Simplest assumption: If there are ANY walkboxes, we assume "Walkable Nowhere" is the base,
-            // UNLESS all walkboxes are 'Subtract', in which case maybe we want "Walkable Everywhere"?
+            // 1. Subtract
+            for (const wb of activeWalkboxes) {
+                if (wb.mode === 'Subtract') {
+                    if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+                        return false;
+                    }
+                }
+            }
 
-            // Let's stick to the requested logic:
-            // "Invert: works like current implementation" (which builds the walkable area from scratch).
-            // "Subtract: cuts hole".
+            // 2. Add
+            for (const wb of activeWalkboxes) {
+                if (wb.mode === 'Add') {
+                    if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+                        return true;
+                    }
+                }
+            }
 
-            // If I have 1 Subtract box and nothing else.
-            // Step 1: Inside Subtract -> Return False.
-            // Step 2: Outside Subtract.
-            // Step 3: hasInvert = false.
-            // Returns... False? That means the whole world is unwalkable except... nowhere?
-            // That seems wrong if the user just wants to cut a hole in a default-walkable world.
-            // BUT, the current engine logic is: "If walkbox exists, you can ONLY walk inside it".
-            // So if you add a Subtract box, you need a Base Invert box to subtract FROM.
-            // This is consistent. You can't just have a Subtract box.
+            // 3. Invert (Standard Even-Odd)
+            let inclusionCount = 0;
+            let hasInvert = false;
+            for (const wb of activeWalkboxes) {
+                if (!wb.mode || wb.mode === 'Invert') {
+                    hasInvert = true;
+                    if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+                        inclusionCount++;
+                    }
+                }
+            }
 
-            return false;
+            if (hasInvert) {
+                return inclusionCount % 2 !== 0; // Odd = Inside
+            } else {
+                return false;
+            }
         }
     }
 
@@ -222,11 +270,14 @@ export class Scene {
         const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
         const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
 
-        console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
+        // console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
 
         if (this.player) {
             // @ts-ignore
-            if (typeof this.player.moveTo === 'function') {
+            if (typeof this.player.walkTo === 'function') {
+                // @ts-ignore
+                this.player.walkTo(worldX, worldY);
+            } else if (typeof this.player.moveTo === 'function') {
                 // @ts-ignore
                 this.player.moveTo(worldX, worldY);
             }

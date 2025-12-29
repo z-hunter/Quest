@@ -1497,6 +1497,7 @@ export class SceneEditor {
                 }
 
                 newObj = new Walkbox(poly, data.name);
+                if (data.mode) newObj.mode = data.mode;
             } else if (type === 'Triggerbox') {
                 // Same logic as Walkbox for poly
                 let poly = data.poly || [];

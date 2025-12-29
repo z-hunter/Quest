@@ -235,8 +235,8 @@ export class Entity extends SceneObject {
             ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
         }
 
-        // Draw Collider if active
-        if (this.colliderWidth > 0 && this.colliderHeight > 0) {
+        // Draw Collider if active AND Editor is enabled
+        if (Game.instance?.editor?.enabled && this.colliderWidth > 0 && this.colliderHeight > 0) {
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 2; // Make it visible
             ctx.strokeRect(

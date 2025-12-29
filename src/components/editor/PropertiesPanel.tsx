@@ -399,6 +399,18 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Colliders */}
+                        <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                            <div>
+                                <label className="e-label">Collider W</label>
+                                <input type="number" className="e-input" value={obj.colliderWidth ?? 0} onChange={(e) => handleChange('colliderWidth', e.target.value, true)} />
+                            </div>
+                            <div>
+                                <label className="e-label">Collider H</label>
+                                <input type="number" className="e-input" value={obj.colliderHeight ?? 0} onChange={(e) => handleChange('colliderHeight', e.target.value, true)} />
+                            </div>
+                        </div>
+
                         <div className="e-row">
                             <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
                                 <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.ignoreScaling} onChange={(e) => handleChange('ignoreScaling', e.target.checked)} />

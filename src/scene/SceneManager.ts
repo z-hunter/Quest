@@ -124,6 +124,7 @@ export class SceneManager {
                 newScene.walkbox = (data.walkbox || []).map((wb: any) => {
                     const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
                     const w = new Walkbox(poly, wb.name || 'Walkbox');
+                    if (wb.mode) w.mode = wb.mode;
                     if (wb.locked) w.locked = true;
                     return w;
                 });
