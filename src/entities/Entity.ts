@@ -10,6 +10,8 @@ export interface EntityData {
     height: number;
     baseWidth?: number;  // Added
     baseHeight?: number; // Added
+    colliderWidth?: number; // Added: Collision Box Width
+    colliderHeight?: number; // Added: Collision Box Height
     spriteName: string | null;
     color: string;
     scale: number;
@@ -44,6 +46,8 @@ export class Entity extends SceneObject {
     layer: number;
     baseWidth: number;
     baseHeight: number;
+    colliderWidth: number;
+    colliderHeight: number;
     animator: Animator | null;
     flipX: boolean;
     scene: any; // Reference to the scene this entity belongs to
@@ -94,6 +98,8 @@ export class Entity extends SceneObject {
 
         this.baseWidth = this.width;
         this.baseHeight = this.height;
+        this.colliderWidth = 0;
+        this.colliderHeight = 0;
         this.animator = null;
         this.flipX = false;
         this.scene = null;
@@ -277,6 +283,18 @@ export class Entity extends SceneObject {
             ctx.fillStyle = '#00ff00';
             ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
         }
+
+        // Draw Collider if active
+        if (this.colliderWidth > 0 && this.colliderHeight > 0) {
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2; // Make it visible
+            ctx.strokeRect(
+                this.x - this.colliderWidth / 2,
+                this.y - this.colliderHeight / 2,
+                this.colliderWidth,
+                this.colliderHeight
+            );
+        }
     }
 
     toJSON(): EntityData {
@@ -289,6 +307,8 @@ export class Entity extends SceneObject {
             height: this.height,
             baseWidth: this.baseWidth,
             baseHeight: this.baseHeight,
+            colliderWidth: this.colliderWidth,
+            colliderHeight: this.colliderHeight,
             spriteName: this.spriteName,
             color: this.color,
             scale: this.scale,
@@ -325,6 +345,9 @@ export class Entity extends SceneObject {
 
             if (data.baseHeight !== undefined) this.baseHeight = data.baseHeight;
             else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
+
+            if (data.colliderWidth !== undefined) this.colliderWidth = data.colliderWidth;
+            if (data.colliderHeight !== undefined) this.colliderHeight = data.colliderHeight;
 
             this.layer = data.layer || 0;
             this.parallax = data.parallax !== undefined ? data.parallax : 1.0;

@@ -205,17 +205,16 @@ export class Scene {
         console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
 
         if (this.player) {
-            if (this.isWalkable(worldX, worldY)) {
+            // @ts-ignore
+            if (typeof this.player.moveTo === 'function') {
                 // @ts-ignore
-                if (typeof this.player.moveTo === 'function') {
-                    // @ts-ignore
-                    this.player.moveTo(worldX, worldY);
-                }
-            } else {
-                console.log("Cannot walk there!");
+                this.player.moveTo(worldX, worldY);
             }
+        } else {
+            console.log("Cannot walk there!");
         }
     }
+
 
     update(deltaTime: number): void {
         // ... existing update
@@ -241,7 +240,7 @@ export class Scene {
         this.entities.forEach(entity => {
             if (entity.disabled) return;
             // @ts-ignore
-            entity.update(deltaTime, (x, y) => this.isWalkable(x, y));
+            entity.update(deltaTime, (x, y) => this.isWalkable(x, y, entity));
         });
     }
 

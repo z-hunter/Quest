@@ -97,7 +97,7 @@ export class Actor extends Entity {
     walkTo(x: number, y: number): void {
         // Validation: Check if destination is walkable using the Scene's logic
         if (this.scene && typeof this.scene.isWalkable === 'function') {
-            if (!this.scene.isWalkable(x, y)) {
+            if (!this.scene.isWalkable(x, y, this)) {
                 console.warn(`[Actor] walkTo destination ${x},${y} is not walkable.`);
                 return;
             }
