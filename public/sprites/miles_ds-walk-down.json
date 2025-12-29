@@ -1,8 +1,8 @@
 {
-  "id": "new_sprite",
+  "id": "miles_ds-walk-down",
   "imageFile": "public/assets/Miles2_ds.png",
   "x": 0,
-  "y": 397,
+  "y": 395,
   "width": 152,
   "height": 397,
   "frames": 27

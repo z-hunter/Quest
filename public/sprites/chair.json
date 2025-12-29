@@ -1,6 +1,6 @@
 {
-  "id": "new_sprite",
-  "imageFile": "public/assets/chair1.png",
+  "id": "chair",
+  "imageFile": "public/assets/chair.png",
   "x": 0,
   "y": 0,
   "width": 167,

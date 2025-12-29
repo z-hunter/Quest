@@ -17,7 +17,7 @@ export const PropertiesPanel: React.FC = () => {
             setObj(Game.instance.settings);
         } else if (sel === 'SCENE') {
             // Special case: Bind to Current Scene
-            setObj(Game.instance.sceneManager.currentScene);
+            setObj({ ...Game.instance.sceneManager.currentScene });
         } else if (editor.selectedObject) {
             setObj(editor.selectedObject);
             // Force update to read new values
@@ -51,16 +51,19 @@ export const PropertiesPanel: React.FC = () => {
 
         // 1. Identify Real Object
         let realObj: any = null;
-        if (Game.instance && Game.instance.editor) {
-            const sel = Game.instance.editor.selectedObject as any;
-            if (sel === 'SETTINGS') realObj = Game.instance.settings;
-            else if (sel === 'SCENE') realObj = Game.instance.sceneManager.currentScene;
-            else realObj = Game.instance.editor.selectedObject;
+        if (selectedObjectId === 'SCENE') {
+            realObj = Game.instance?.sceneManager?.currentScene;
+        } else if (selectedObjectId === 'SETTINGS') {
+            realObj = Game.instance?.settings;
+        } else if (Game.instance && Game.instance.editor) {
+            realObj = Game.instance.editor.selectedObject;
         }
 
         // 2. Apply to Real Object
         if (realObj) {
             realObj[field] = value;
+        } else {
+            console.error(`[PropertiesPanel] Failed to find Real Object for ID: ${selectedObjectId}`);
         }
 
         // 3. Update Local State
@@ -152,7 +155,7 @@ export const PropertiesPanel: React.FC = () => {
 
                         {/* Common: Name -> ID */}
                         <div className="e-row">
-                            <label className="e-label">ID</label>
+                            <label className="e-label">{selectedObjectType === 'SCENE' ? 'ID/File' : 'ID'}</label>
                             <input
                                 type="text"
                                 className="e-input"
@@ -219,6 +222,19 @@ export const PropertiesPanel: React.FC = () => {
                     <>
                         <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
                             <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>ACTOR PROPERTIES</div>
+                        </div>
+
+                        {/* Is Player */}
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#aaf' }}>
+                                <input
+                                    type="checkbox"
+                                    style={{ marginRight: '5px' }}
+                                    checked={!!obj.isPlayer}
+                                    onChange={(e) => handleChange('isPlayer', e.target.checked)}
+                                />
+                                Is Player
+                            </label>
                         </div>
 
                         {/* Direction */}
@@ -469,10 +485,7 @@ export const PropertiesPanel: React.FC = () => {
                                             type="checkbox"
                                             style={{ marginRight: '5px' }}
                                             checked={!!obj.autoCenter}
-                                            onChange={(e) => {
-                                                obj.autoCenter = e.target.checked;
-                                                setObj({ ...obj });
-                                            }}
+                                            onChange={(e) => handleChange('autoCenter', e.target.checked)}
                                         />
                                         Auto-Center on Player
                                     </label>
@@ -484,12 +497,76 @@ export const PropertiesPanel: React.FC = () => {
                                         step="0.1"
                                         className="e-input"
                                         value={obj.cameraSpeed || 5}
-                                        onChange={(e) => {
-                                            obj.cameraSpeed = parseFloat(e.target.value);
-                                            setObj({ ...obj });
-                                        }}
+                                        onChange={(e) => handleChange('cameraSpeed', parseFloat(e.target.value), true)}
                                     />
                                 </div>
+                                <>
+                                    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                        <div>
+                                            <label className="e-label">Deadzone X</label>
+                                            <input
+                                                type="number"
+                                                className="e-input"
+                                                value={obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50}
+                                                onChange={(e) => handleChange('camDeadzoneX', parseFloat(e.target.value), true)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="e-label">Deadzone Y</label>
+                                            <input
+                                                type="number"
+                                                className="e-input"
+                                                value={obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30}
+                                                onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="e-row" style={{ marginTop: '5px' }}>
+                                        <div className="e-label" style={{ color: '#aaf' }}>Camera Bounds (Min/Max)</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                                            <div>
+                                                <label className="e-label">Min X</label>
+                                                <input
+                                                    type="number"
+                                                    className="e-input"
+                                                    placeholder="None"
+                                                    value={obj.camMinX !== undefined ? obj.camMinX : ''}
+                                                    onChange={(e) => handleChange('camMinX', e.target.value === '' ? undefined : parseFloat(e.target.value), false)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="e-label">Max X</label>
+                                                <input
+                                                    type="number"
+                                                    className="e-input"
+                                                    placeholder="None"
+                                                    value={obj.camMaxX !== undefined ? obj.camMaxX : ''}
+                                                    onChange={(e) => handleChange('camMaxX', e.target.value === '' ? undefined : parseFloat(e.target.value), false)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="e-label">Min Y</label>
+                                                <input
+                                                    type="number"
+                                                    className="e-input"
+                                                    placeholder="None"
+                                                    value={obj.camMinY !== undefined ? obj.camMinY : ''}
+                                                    onChange={(e) => handleChange('camMinY', e.target.value === '' ? undefined : parseFloat(e.target.value), false)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="e-label">Max Y</label>
+                                                <input
+                                                    type="number"
+                                                    className="e-input"
+                                                    placeholder="None"
+                                                    value={obj.camMaxY !== undefined ? obj.camMaxY : ''}
+                                                    onChange={(e) => handleChange('camMaxY', e.target.value === '' ? undefined : parseFloat(e.target.value), false)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
                             </div>
                         )}
 

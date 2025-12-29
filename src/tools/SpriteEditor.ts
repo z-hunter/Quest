@@ -30,6 +30,12 @@ export class SpriteEditor {
     // Rendering State
     checkerboardPattern: CanvasPattern | null = null;
 
+    // Preview Settings
+    previewSpeed: number = 200; // ms
+    isPlaying: boolean = true;
+    previewBg: 'black' | 'checker' | 'pink' = 'black';
+    showRulers: boolean = false;
+
     constructor(game: Game) {
         this.game = game;
 
@@ -77,7 +83,13 @@ export class SpriteEditor {
             if (this.game.editor && this.game.editor.enabled) {
                 this.game.editor.toggle();
             }
+
             this.updateUI();
+
+            // Force immediate render after UI is mounted/visible (next tick)
+            setTimeout(() => {
+                this.updatePreviewCanvas();
+            }, 50);
         } else {
             console.log('[SpriteEditor] Deactivated');
             // Re-enable Parser
@@ -127,7 +139,14 @@ export class SpriteEditor {
         let handled = false;
 
         if (e.key === 'F1') { this.switchToSceneEditor(); handled = true; }
-        else if (e.key === 'F2') { this.saveSprite(); handled = true; }
+        else if (e.key === 'F2') {
+            if (e.shiftKey) {
+                this.saveSprite(true); // Shift+F2 = Save As
+            } else {
+                this.saveSprite(false); // F2 = Smart Save
+            }
+            handled = true;
+        }
         else if (e.key === 'F3') { this.loadSprite(); handled = true; }
         else if (e.key === 'F4') { this.newSprite(); handled = true; }
         else if (e.key === 'F5') { this.toggle(false); handled = true; }
@@ -154,7 +173,7 @@ export class SpriteEditor {
     }
 
     // Animation State
-    private currentFrame: number = 0;
+    public currentFrame: number = 0;
     private lastFrameTime: number = 0;
     private animationInterval: number | null = null;
 
@@ -167,18 +186,41 @@ export class SpriteEditor {
                 return;
             }
 
-            // Always request next frame
+            // Always request next frame to keep loop alive
             this.animationInterval = requestAnimationFrame(loop);
 
-            // Update Frame every 400ms (Reduced speed)
-            if (timestamp - this.lastFrameTime > 400) {
-                this.currentFrame = (this.currentFrame + 1) % (this.sprite.frames || 1);
-                this.lastFrameTime = timestamp;
-                this.updatePreviewCanvas();
+            if (this.isPlaying) {
+                // Update Frame based on variable speed
+                if (timestamp - this.lastFrameTime > this.previewSpeed) {
+                    this.currentFrame = (this.currentFrame + 1) % (this.sprite.frames || 1);
+                    this.lastFrameTime = timestamp;
+                    this.updatePreviewCanvas();
+                    // Sync UI slider if needed? Usually controlled components update from Model.
+                    // We might need to force UI update if Slider needs to move automatically.
+                    // But for performance, maybe just let Canvas update.
+                    // If user wants to see Slider move, we need to trigger React update.
+                    // Let's rely on Canvas for playback visualization, Slider for manual control.
+                    useEditorStore.getState().incrementSpriteVersion();
+                }
             }
         };
 
         this.animationInterval = requestAnimationFrame(loop);
+    }
+
+    togglePlay(playing?: boolean): void {
+        this.isPlaying = playing !== undefined ? playing : !this.isPlaying;
+        if (this.isPlaying) {
+            this.startPreviewLoop();
+        }
+        // If paused, we don't kill the loop necessarily, but logic inside stops updating.
+        this.updateUI();
+    }
+
+    setFrame(frame: number): void {
+        this.currentFrame = Math.max(0, Math.min(frame, (this.sprite.frames || 1) - 1));
+        this.updatePreviewCanvas();
+        this.updateUI();
     }
 
     stopPreviewLoop(): void {
@@ -205,15 +247,48 @@ export class SpriteEditor {
     updatePreviewCanvas(): void {
         const canvas = document.getElementById('se-preview-canvas') as HTMLCanvasElement;
         if (canvas) {
-            // Force 200x200 to ensure buffer matches visual size
-            if (canvas.width !== 200) canvas.width = 200;
-            if (canvas.height !== 200) canvas.height = 200;
+            // Force 250x250 to ensure buffer matches visual size
+            if (canvas.width !== 250) canvas.width = 250;
+            if (canvas.height !== 250) canvas.height = 250;
 
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
             // Clear
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Background
+            if (this.previewBg === 'black') {
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else if (this.previewBg === 'pink') {
+                ctx.fillStyle = '#ff00ff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else if (this.previewBg === 'checker') {
+                if (!this.checkerboardPattern) this.createCheckerboard();
+                if (this.checkerboardPattern) {
+                    ctx.fillStyle = this.checkerboardPattern;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            // Draw Rulers (Behind Sprite)
+            if (this.showRulers) {
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2;
+                ctx.strokeStyle = '#00ffff'; // Cyan
+                ctx.lineWidth = 1;
+
+                ctx.beginPath();
+                ctx.moveTo(cx, 0);
+                ctx.lineTo(cx, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, cy);
+                ctx.lineTo(canvas.width, cy);
+                ctx.stroke();
+            }
 
             if (this.sourceImage && this.sourceImage.src) {
 
@@ -232,7 +307,7 @@ export class SpriteEditor {
                 // Use the SMALLER scale to ensure entire sprite fits (Letterboxing)
                 let scale = Math.min(scaleW, scaleH);
 
-                // Center the sprite in the canvas (200x200)
+                // Center the sprite in the canvas (250x250)
                 const drawW = this.sprite.width * scale;
                 const drawH = this.sprite.height * scale;
 
@@ -319,6 +394,12 @@ export class SpriteEditor {
                     this.sourceImage && (this.sprite.width = this.sourceImage.width);
                     this.sourceImage && (this.sprite.height = this.sourceImage.height);
                 }
+
+                // Update ID to match filename (without extension)
+                // e.g. /assets/hero.png -> hero
+                const filename = src.split('/').pop() || 'sprite';
+                const id = filename.split('.')[0];
+                this.sprite.id = id;
             }
 
             this.updateUI();
@@ -328,9 +409,39 @@ export class SpriteEditor {
         };
     }
 
-    saveSprite(): void {
+    saveSprite(forceSaveAs: boolean = false): void {
+        // Validation:
+        // If forceSaveAs is FALSE and I have a valid ID, save directly.
+        // Allow backslashes in ID now
+        const id = this.sprite.id.trim();
+        const isValidId = id && id !== 'new_sprite' && !id.includes('.');
+
+        if (!forceSaveAs && isValidId) {
+            // Smart Save
+            // Convert ID to filename path: chars\hero -> chars/hero.json
+            const filename = `${id.replace(/\\/g, '/')}.json`;
+            this.doSave(filename);
+            return;
+        }
+
+        // Save As / Fallback
         this.game.openFileBrowser('save', 'public/sprites', (file) => {
+            // Derive ID from path: chars/hero.json -> chars\hero
+            const name = file.split(/[\\/]/).pop() || 'sprite.json';
+            // Wait, file from browser might be "chars/hero.json" if we navigated. 
+            // We need to respect the full relative path returned.
+
+            // Check if file contains separate path parts
+            // FileBrowser returns relative path from 'public/sprites' if we are deeper?
+            // Actually FileBrowser logic constructs relative path from root of search.
+
+            // Let's assume 'file' is the relative path we want to save to.
             this.doSave(file);
+
+            // Update ID to match the save path
+            const newId = file.replace('.json', '').replace(/\//g, '\\');
+            this.sprite.id = newId;
+            this.updateUI();
         });
     }
 
@@ -338,9 +449,10 @@ export class SpriteEditor {
         // Ensure filename has .json
         if (!filename.toLowerCase().endsWith('.json')) filename += '.json';
 
-        // Remove path if user picked one (FileBrowser returns just name usually)
-        const name = filename.split(/[\\/]/).pop() || 'sprite.json';
-        const filePath = `public/sprites/${name}`;
+        // Normalize path separators
+        const normalizedFilename = filename.replace(/\\/g, '/');
+
+        const filePath = `public/sprites/${normalizedFilename}`;
 
         const data = JSON.stringify(this.sprite, null, 2);
 
@@ -353,20 +465,20 @@ export class SpriteEditor {
 
             if (response.ok) {
                 console.log(`[SpriteEditor] Saved to server: ${filePath}`);
-                alert(`Sprite saved: ${name}`);
+                // Use Toast Message instead of Alert
+                this.game.showMessage(`Sprite saved as ${normalizedFilename}`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('[SpriteEditor] Failed to save sprite:', e);
-            alert(`Error saving sprite: ${e}`);
+            this.game.showMessage(`Error saving sprite: ${e}`);
         }
     }
 
     loadSprite(): void {
         this.game.openFileBrowser('load', 'public/sprites', (file) => {
-            // Construct path. FileBrowser returns name.
-            // We need to fetch from server relative path
+            // Construct path. FileBrowser returns relative path like "sub/file.json"
             const dir = 'public/sprites';
             const path = `/${dir.replace('public/', '')}/${file}`;
 
@@ -375,6 +487,11 @@ export class SpriteEditor {
                 return res.json();
             }).then(data => {
                 this.sprite = data;
+
+                // Sync ID with filename path (sub/file -> sub\file)
+                const id = file.replace('.json', '').replace(/\//g, '\\');
+                this.sprite.id = id;
+
                 if (this.sprite.imageFile) {
                     // PASS TRUE to preserve dimensions from JSON
                     this.loadImage(this.sprite.imageFile, true);

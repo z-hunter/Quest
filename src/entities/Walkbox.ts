@@ -1,19 +1,16 @@
-import { SceneObject } from './SceneObject';
+import { PolygonObject } from './PolygonObject';
 
-export class Walkbox extends SceneObject {
-    poly: { x: number, y: number }[];
+export class Walkbox extends PolygonObject {
     mode: 'Invert' | 'Add' | 'Subtract';
 
     constructor(poly: { x: number, y: number }[], name: string = 'Walkbox') {
-        super(name, 'Walkbox');
-        this.poly = poly;
+        super(poly, name, 'Walkbox');
         this.mode = 'Invert';
     }
 
     toJSON(): any {
         return {
             ...super.toJSON(),
-            poly: this.poly,
             mode: this.mode
         };
     }

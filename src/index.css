@@ -138,7 +138,7 @@ canvas {
 /* Right Panel - Properties */
 #editor-panel,
 #se-panel {
-  width: 250px;
+  width: 300px;
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid #00ff00;
   color: #00ff00;
@@ -171,8 +171,8 @@ canvas {
 }
 
 #se-preview-canvas {
-  width: 200px !important;
-  height: 200px !important;
+  width: 250px !important;
+  height: 250px !important;
   background: #000;
 }
 
@@ -340,45 +340,42 @@ input[type="file"] {
 }
 
 /* Message Box */
-#message-box {
+/* Notification Toast */
+.notification-toast {
   position: absolute;
-  top: 50%;
+  bottom: 40px;
+  /* Above the command bar */
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: 300px;
-  background-color: #fff;
-  color: #000;
-  border: 4px double #000;
-  padding: 15px;
-  z-index: 200;
-  /* Above everything including CRT overlay */
-  text-align: center;
-  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.5);
-  image-rendering: pixelated;
-}
-
-#message-text {
-  margin: 0 0 15px 0;
-  font-size: 16px;
+  transform: translateX(-50%);
+  background-color: #000;
+  color: #fff;
+  border: 2px solid #00ff00;
+  padding: 5px 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
   font-weight: bold;
-  line-height: 1.4;
+  z-index: 200;
+  pointer-events: none;
+  animation: fadeOut 2.5s forwards;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
-.message-footer {
-  font-size: 12px;
-  color: #555;
-  text-transform: uppercase;
-  animation: blink 1s infinite;
-}
+@keyframes fadeOut {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
 
-@keyframes blink {
+  10% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 
-  0%,
-  100% {
+  80% {
     opacity: 1;
   }
 
-  50% {
+  100% {
     opacity: 0;
   }
 }
