@@ -329,8 +329,18 @@ export class SceneEditor {
 
 
             // Creation Hotkeys
-            case 's': this.startCreating('Static'); break;
-            case 'a': this.startCreating('Actor'); break;
+            case 's':
+                {
+                    const pos = this.getMouseWorldPosIfOverCanvas();
+                    this.startCreating('Static', pos?.x, pos?.y);
+                }
+                break;
+            case 'a':
+                {
+                    const pos = this.getMouseWorldPosIfOverCanvas();
+                    this.startCreating('Actor', pos?.x, pos?.y);
+                }
+                break;
             case 'w': this.startCreating('Walkbox'); break;
             case 't': this.startCreating('Triggerbox'); break;
 
@@ -372,7 +382,31 @@ export class SceneEditor {
         }
     }
 
-    startCreating(type: string): void {
+    // Helper to get World Pos from last mouse pos if inside canvas
+    getMouseWorldPosIfOverCanvas(): { x: number, y: number } | null {
+        const mx = this.lastMousePos.x;
+        const my = this.lastMousePos.y;
+
+        // Basic check if inside canvas
+        if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+            const scene = this.game.sceneManager.currentScene;
+            if (scene) {
+                const camX = scene.camera.x;
+                const camY = scene.camera.y;
+                const zoom = scene.camera.zoom;
+                const halfW = this.game.canvas.width / 2;
+                const halfH = this.game.canvas.height / 2;
+
+                return {
+                    x: (mx - halfW) / zoom + camX,
+                    y: (my - halfH) / zoom + camY
+                };
+            }
+        }
+        return null;
+    }
+
+    startCreating(type: string, x?: number, y?: number): void {
         if (!this.game.sceneManager.currentScene) return;
 
         this.saveUndoState(); // Save before creation
@@ -394,16 +428,16 @@ export class SceneEditor {
                 // Use Prefab Data
                 const data = JSON.parse(JSON.stringify(DefaultActorData));
                 data.name = name;
-                data.x = 160;
-                data.y = 100;
+                data.x = x !== undefined ? x : 160;
+                data.y = y !== undefined ? y : 100;
                 data.color = '#0000ff'; // Override default green?
                 ent = Actor.fromJSON(data);
             } else {
                 // Use Prefab Data
                 const data = JSON.parse(JSON.stringify(DefaultEntityData));
                 data.name = name;
-                data.x = 160;
-                data.y = 100;
+                data.x = x !== undefined ? x : 160;
+                data.y = y !== undefined ? y : 100;
                 data.color = '#00ff00';
                 ent = Entity.fromJSON(data);
             }
