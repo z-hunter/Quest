@@ -166,6 +166,18 @@ export const PropertiesPanel: React.FC = () => {
                     </>
                 )}
 
+                {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
+                    <div className="e-row">
+                        <label className="e-label">Group ID</label>
+                        <input
+                            type="text"
+                            className="e-input"
+                            value={obj.groupID || ''}
+                            onChange={(e) => handleChange('groupID', e.target.value)}
+                        />
+                    </div>
+                )}
+
                 {/* Walkbox/Triggerbox Properties */}
                 {(selectedObjectType === 'Walkbox' || selectedObjectType === 'Triggerbox') && (
                     <div className="e-row">
@@ -215,6 +227,59 @@ export const PropertiesPanel: React.FC = () => {
                                 Disabled (Hidden in Game)
                             </label>
                         </div>
+                    </div>
+                )}
+
+                {/* Trigger Components */}
+                {selectedObjectType === 'Triggerbox' && (
+                    <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}>
+                        <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>COMPONENTS</span>
+                            <button className="e-btn" style={{ padding: '0 5px', fontSize: '10px' }} onClick={() => {
+                                if (!obj.components) obj.components = [];
+                                // Add Subscene Component
+                                obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                                // Sync real object
+                                if (Game.instance.editor.selectedObject) {
+                                    (Game.instance.editor.selectedObject as any).components = obj.components;
+                                }
+                                setObj({ ...obj });
+                            }}>+ Subscene</button>
+                        </div>
+
+                        {obj.components && obj.components.map((comp: any, idx: number) => (
+                            <div key={idx} style={{ background: '#332', padding: '5px', marginBottom: '5px', borderRadius: '4px', border: '1px solid #553' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#fb8' }}>{comp.type}</span>
+                                    <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
+                                        obj.components.splice(idx, 1);
+                                        if (Game.instance.editor.selectedObject) {
+                                            (Game.instance.editor.selectedObject as any).components = obj.components;
+                                        }
+                                        setObj({ ...obj });
+                                    }}>x</button>
+                                </div>
+
+                                {comp.type === 'Subscene' && (
+                                    <>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Group ID</label>
+                                            <input type="text" className="e-input" value={comp.targetGroupId || ''} onChange={(e) => {
+                                                comp.targetGroupId = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
+                                        </div>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Name (Optional)</label>
+                                            <input type="text" className="e-input" value={comp.name || ''} onChange={(e) => {
+                                                comp.name = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 )}
 

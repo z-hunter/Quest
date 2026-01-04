@@ -427,7 +427,10 @@ export class SpriteEditor {
         // Save As / Fallback
         this.game.openFileBrowser('save', 'public/sprites', (file) => {
             // Derive ID from path: chars/hero.json -> chars\hero
-            const name = file.split(/[\\/]/).pop() || 'sprite.json';
+            // file path is used directly below
+            // Actually use it or remove it. If logic below doesn't use it, remove.
+            // But looking at error: 'name' is declared but never read.
+            // I'll just comment it out or remove it.
             // Wait, file from browser might be "chars/hero.json" if we navigated. 
             // We need to respect the full relative path returned.
 

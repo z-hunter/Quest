@@ -63,8 +63,12 @@ export class Scene {
     // Default Camera (saved to scene file, restored on load/reset)
     defaultCamera: { x: number, y: number, zoom: number };
 
+    // Subscene State
+    activeSubscene: string | null = null;
+
     // Offscreen canvas for walkbox visualization
     private _walkboxCanvas: HTMLCanvasElement | null = null;
+    private _blurCanvas: HTMLCanvasElement | null = null;
 
     constructor(id: string, name: string) {
         this.id = id;
@@ -270,7 +274,133 @@ export class Scene {
         const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
         const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
 
-        // console.log(`[Scene] onClick Screen: ${Math.round(x)},${Math.round(y)} -> World: ${Math.round(worldX)},${Math.round(worldY)}`);
+        console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
+
+        // 1. Subscene Active? Check for "Close" or "Interact with Subscene Entity"
+        if (this.activeSubscene) {
+            // Check if we clicked ON any entity in the active group
+            // For now, if we click ANYWHERE outside a specialized subscene entity (which we don't distinguish interactively yet except by presence),
+            // we close it. 
+            // Better: Check collision with visible entities in the group.
+
+            // For this iteration: Just "Close on Click" is fine, assuming entities absorb clicks if they are interactive.
+            // But we don't have interactive entities yet (Clickable).
+            // Let's implement: Click anywhere -> Close.
+            // Unless we want to support clicking buttons INSIDE the subscene?
+            // "For exit... player must click outside."
+
+            // To detect "Outside", we need to know the bounds of the "Inside".
+            // If the subscene is just a bunch of objects, "Inside" = Union of their colliders?
+            // Or is the Subscene effectively a modal and ANY click works?
+            // GDD says: "Untuk vyhod... click outside objects of this group."
+
+            let hitGroupObject = false;
+            const currentSubsceneID = this.activeSubscene.trim();
+
+            // Iterate reverse to match render order (top first)
+            for (let i = this.entities.length - 1; i >= 0; i--) {
+                const ent = this.entities[i];
+                if (ent.disabled) continue;
+
+                const gID = ent.groupID ? ent.groupID.trim() : '';
+                if (gID !== currentSubsceneID) continue;
+
+                // Simple Box Check
+                if (Math.abs(worldX - ent.x) < ent.width / 2 &&
+                    Math.abs(worldY - (ent.y - ent.height / 2)) < ent.height / 2) {
+                    // Approximation (Centering might vary, Entity is bottom-center pivot usually?)
+                    // Entity.ts: render uses x,y as bottom-center? 
+                    // Code says: ctx.strokeRect(entity.x - w/2, entity.y - h, ...)
+
+                    if (worldX >= ent.x - ent.width / 2 && worldX <= ent.x + ent.width / 2 &&
+                        worldY >= ent.y - ent.height && worldY <= ent.y) {
+                        hitGroupObject = true;
+                        console.log(`  -> Clicked Subscene Object: ${ent.name} (Group: ${ent.groupID})`);
+                        // TODO: trigger object interaction if any
+                        break;
+                    }
+                }
+            }
+
+            if (!hitGroupObject) {
+                console.log("  -> Clicked outside Subscene entities. Closing.");
+                // Re-enable/Update visibility? 
+                // We rely on render/update to check activeSubscene. 
+                // Actually, we should probably toggle .disabled or .visible flags? 
+                // GDD: "Enable group of objects". 
+                // So they were likely DISABLED before?
+                // If we disable them now, they vanish.
+                // We should probably loop and disable them?
+                this.entities.forEach(e => {
+                    if (e.groupID === this.activeSubscene) {
+                        // e.disabled = true; // Wait, if we disable them, future lookups fail?
+                        // If the trigger Enables them, then we should Disable them here.
+                    }
+                });
+                // Re-Disable group members?
+                // Let's assume the System manages visibility based on activeSubscene OR they are manually managed.
+                // Simple approach: When activeSubscene = null, we technically "exit" that mode.
+                // Should we hide them? 
+                // Implementer choice: Let's toggle 'disabled' state for robustness if that's the flow.
+                // But simply clearing `activeSubscene` removes the Dimmer.
+                // If the objects remain visible, that might be weird.
+                // Let's Disable them.
+                const groupID = this.activeSubscene; // Capture before nulling if needed, but we already nulled it? No.
+                this.activeSubscene = null;
+
+                // Find objects of that group and disable them?
+                // "Group enabled over dimmed scene". Implies they are usually disabled.
+                this.entities.forEach(e => {
+                    const eGID = e.groupID ? e.groupID.trim() : '';
+                    if (eGID === groupID) e.disabled = true;
+                });
+
+            }
+            return; // Consume click
+        }
+
+
+        // 2. Check Triggers (if no subscene active)
+        if (this.triggerboxes) {
+            for (const tb of this.triggerboxes) {
+                if (tb.disabled) continue;
+                if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, tb.poly)) {
+                    console.log(`Hit Triggerbox: ${tb.name} `);
+
+                    // Check Components
+                    if (tb.components) {
+                        for (const comp of tb.components) {
+                            if (comp.type === 'Subscene') {
+                                const sub = comp as any; // Cast to SubsceneTrigger
+                                const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
+                                if (!targetID) return; // Skip empty configs
+
+                                console.log(`  -> Activating Subscene Group: '${targetID}'`);
+                                this.activeSubscene = targetID;
+
+                                // Enable Objects in this Group
+                                let count = 0;
+                                this.entities.forEach(e => {
+                                    const eGID = e.groupID ? e.groupID.trim() : '';
+                                    if (eGID === targetID) {
+                                        e.disabled = false;
+                                        count++;
+                                    }
+                                });
+                                console.log(`  -> Enabled ${count} entities for group '${targetID}'`);
+                                return; // Stop walking
+                            }
+                        }
+                    }
+
+                    // Legacy Script check (optional)
+                    if (tb.script) {
+                        console.log("Run Script:", tb.script);
+                        // Helper to run script?
+                    }
+                }
+            }
+        }
 
         if (this.player) {
             // @ts-ignore
@@ -366,12 +496,85 @@ export class Scene {
         const halfW = ctx.canvas.width / 2;
         const halfH = ctx.canvas.height / 2;
 
+        // SPLIT RENDER: Background/Normal vs Subscene
+        const subsceneLayer: Entity[] = [];
+        const normalLayer: Entity[] = [];
+
         this.entities.forEach(entity => {
+            // If we have an active subscene, and this entity belongs to it, it goes to top
+            // Robust check: Trim both
+            const gID = entity.groupID ? entity.groupID.trim() : null;
+            const target = this.activeSubscene ? this.activeSubscene.trim() : null;
+
+            if (target && gID === target) {
+                subsceneLayer.push(entity);
+            } else {
+                normalLayer.push(entity);
+            }
+        });
+
+        // 1. Render Normal Layer
+        normalLayer.forEach(entity => {
             if (entity.disabled) return;
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;
             ctx.save();
 
             // Center Pivot Transform
+            ctx.translate(halfW, halfH);
+            ctx.scale(this.camera.zoom, this.camera.zoom);
+            ctx.translate(-this.camera.x * p, -this.camera.y * p);
+
+            entity.render(ctx);
+            ctx.restore();
+        });
+
+        // 2. Dimmer / Blur (if active)
+        if (this.activeSubscene) {
+            // Setup Blur Canvas if needed
+            if (!this._blurCanvas) {
+                this._blurCanvas = document.createElement('canvas');
+            }
+
+            // Downsample Factor: 0.1 = 1/10th resolution (Strong Blur)
+            const downsample = 0.1;
+            const targetW = Math.floor(ctx.canvas.width * downsample);
+            const targetH = Math.floor(ctx.canvas.height * downsample);
+
+            if (this._blurCanvas.width !== targetW || this._blurCanvas.height !== targetH) {
+                this._blurCanvas.width = targetW;
+                this._blurCanvas.height = targetH;
+            }
+
+            const bCtx = this._blurCanvas.getContext('2d');
+            if (bCtx) {
+                // 1. Draw current screen (Normal Layer) into tiny canvas
+                // Note: 'ctx' currently has the full resolution normal layer rendered.
+                bCtx.imageSmoothingEnabled = true; // Smooth during downsample?
+                bCtx.drawImage(ctx.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height, 0, 0, targetW, targetH);
+
+                // 2. Clear Screen and Draw Stretched result back
+                ctx.save();
+                ctx.globalAlpha = 1.0;
+                ctx.imageSmoothingEnabled = true; // CRITICAL: Smooth pixelation to create blur
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform ensures we cover screen
+                ctx.drawImage(this._blurCanvas, 0, 0, targetW, targetH, 0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.restore();
+            }
+
+            // Optional: Keep the Dimmer on top for contrast? User asked for "Blur", usually implies dimming too.
+            // Let's keep a lighter dimmer (30%) to ensure text/foreground pops.
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+
+        // 3. Render Subscene Layer
+        subsceneLayer.forEach(entity => {
+            if (entity.disabled) return; // Should be enabled by onClick
+            // Subscene objects usually don't parallax, or parallax relative to center?
+            // Assuming normal camera transform for now, but they are "on top".
+            const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+            ctx.save();
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
             ctx.translate(-this.camera.x * p, -this.camera.y * p);
@@ -505,7 +708,7 @@ export class Scene {
 
         // Correction: If we want to use an offscreen buffer matching screen size, we should draw it at Identity.
         // Since `ctx` passed to us is transformed, we should assume Identity for `drawImage`?
-        // No, `renderWalkbox` is called inside a `ctx.save()... ctx.restore()` block where transform is applied.
+        // No, `renderWalkbox` is called inside a `ctx.save()...ctx.restore()` block where transform is applied.
 
         // To draw the screen-sized buffer, we need to invert the transform or reset it.
         // It's safer to just POP the transform, draw 1:1, then push it back? No, we can't pop what we didn't push.

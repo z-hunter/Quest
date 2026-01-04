@@ -1,50 +1,155 @@
 {
+  "id": "test_room",
   "name": "Test Room",
   "filename": "test_room",
+  "walkbox": [],
+  "triggerboxes": [
+    {
+      "type": "Triggerbox",
+      "name": "Trig_201",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "poly": [
+        {
+          "x": 185,
+          "y": 123
+        },
+        {
+          "x": 204,
+          "y": 121
+        },
+        {
+          "x": 202,
+          "y": 92
+        },
+        {
+          "x": 185,
+          "y": 90
+        }
+      ],
+      "script": "",
+      "components": [
+        {
+          "type": "Subscene",
+          "targetGroupId": "k",
+          "name": ""
+        }
+      ]
+    }
+  ],
   "scaling": {
     "enabled": false,
     "min": 0.5,
-    "max": 1.0,
+    "max": 1,
     "horizon": 100,
     "front": 300
   },
   "entities": [
     {
+      "type": "Entity",
+      "name": "Static_208",
+      "x": 191,
+      "y": 120,
+      "width": 18.4058769878213,
+      "height": 27.762172361705353,
+      "baseWidth": 18.4058769878213,
+      "baseHeight": 27.762172361705353,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ff00",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "groupID": null
+    },
+    {
       "type": "Actor",
       "name": "Hero",
-      "x": 160,
-      "y": 100,
+      "x": 223.87283806622165,
+      "y": 128.07261921245345,
       "width": 30,
       "height": 50,
+      "baseWidth": 30,
+      "baseHeight": 50,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
       "color": "#00ffff",
       "scale": 1,
+      "modelScale": 1,
       "layer": 0,
-      "spriteName": "hero",
-      "isPlayer": true
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "left",
+      "animSets": {}
     },
     {
-      "type": "Static",
+      "type": "Entity",
       "name": "Pillar",
-      "x": 180,
-      "y": 110,
-      "width": 20,
-      "height": 40,
+      "x": 190,
+      "y": 131,
+      "width": 41.98426481045766,
+      "height": 63.2022437232591,
+      "baseWidth": 41.98426481045766,
+      "baseHeight": 63.2022437232591,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
       "color": "#888888",
-      "interactions": {
-        "KEY": "interaction.pillar.key"
-      },
-      "description": "It's an ancient stone pillar. It looks very heavy."
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "groupID": "k"
     },
     {
-      "type": "Static",
+      "type": "Entity",
       "name": "Key",
       "x": 200,
       "y": 150,
       "width": 10,
       "height": 10,
+      "baseWidth": 10,
+      "baseHeight": 10,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
       "color": "#ffff00",
-      "description": "A small golden key.",
-      "isTakeable": true
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "groupID": null
     }
-  ]
+  ],
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "autoCenter": true,
+  "cameraSpeed": 5,
+  "camDeadzoneX": 50,
+  "camDeadzoneY": 30
 }

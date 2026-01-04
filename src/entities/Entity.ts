@@ -5,6 +5,7 @@ import { SceneObject } from './SceneObject';
 export interface EntityData {
     type: string;
     name: string;
+    groupID?: string | null;
     x: number;
     y: number;
     width: number;
@@ -269,7 +270,8 @@ export class Entity extends SceneObject {
             ignoreScaling: this.ignoreScaling,
             animationSpeed: this.animationSpeed,
             locked: this.locked, // Added Locked Property
-            disabled: this.disabled
+            disabled: this.disabled,
+            groupID: this.groupID
         };
     }
 
@@ -281,6 +283,7 @@ export class Entity extends SceneObject {
             this.width = data.width;
             this.height = data.height;
             this.name = data.name; // SceneObject property
+            this.groupID = data.groupID || null; // SceneObject property
 
             this.color = data.color || '#ff0000';
             this.scale = data.scale || 1.0;

@@ -8,6 +8,7 @@
       "name": "Walk_997",
       "locked": false,
       "disabled": false,
+      "groupID": null,
       "poly": [
         {
           "x": -79,
@@ -33,6 +34,7 @@
       "name": "Walk_176",
       "locked": false,
       "disabled": false,
+      "groupID": null,
       "poly": [
         {
           "x": 81,
@@ -86,7 +88,57 @@
       "mode": "Add"
     }
   ],
-  "triggerboxes": [],
+  "triggerboxes": [
+    {
+      "type": "Triggerbox",
+      "name": "drawers",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "poly": [
+        {
+          "x": 33,
+          "y": 205
+        },
+        {
+          "x": 29,
+          "y": 105
+        },
+        {
+          "x": 81,
+          "y": 91
+        },
+        {
+          "x": 85,
+          "y": 130
+        },
+        {
+          "x": 54,
+          "y": 142
+        },
+        {
+          "x": 54,
+          "y": 158
+        },
+        {
+          "x": 81,
+          "y": 166
+        },
+        {
+          "x": 79,
+          "y": 188
+        }
+      ],
+      "script": "",
+      "components": [
+        {
+          "type": "Subscene",
+          "targetGroupId": "drawers",
+          "name": "Table drawers"
+        }
+      ]
+    }
+  ],
   "scaling": {
     "enabled": true,
     "min": 0.91,
@@ -115,7 +167,8 @@
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": true,
-      "disabled": false
+      "disabled": false,
+      "groupID": null
     },
     {
       "type": "Entity",
@@ -137,7 +190,8 @@
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": true,
-      "disabled": false
+      "disabled": false,
+      "groupID": null
     },
     {
       "type": "Entity",
@@ -159,7 +213,8 @@
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": true,
-      "disabled": false
+      "disabled": false,
+      "groupID": null
     },
     {
       "type": "Actor",
@@ -182,6 +237,7 @@
       "animationSpeed": 30,
       "locked": false,
       "disabled": false,
+      "groupID": null,
       "isPlayer": true,
       "speed": 0.24,
       "direction": "down",
@@ -222,7 +278,31 @@
       "ignoreScaling": false,
       "animationSpeed": 150,
       "locked": false,
-      "disabled": false
+      "disabled": false,
+      "groupID": null
+    },
+    {
+      "type": "Entity",
+      "name": "Static_200",
+      "x": 124,
+      "y": 195,
+      "width": 188.31792376090766,
+      "height": 263.6007272858577,
+      "baseWidth": 206.40556974082753,
+      "baseHeight": 288.919170373885,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ff00",
+      "scale": 0.9123684210526316,
+      "modelScale": 1,
+      "layer": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "groupID": "drawers"
     },
     {
       "type": "Entity",
@@ -244,7 +324,8 @@
       "ignoreScaling": false,
       "animationSpeed": 150,
       "locked": false,
-      "disabled": false
+      "disabled": false,
+      "groupID": null
     }
   ],
   "camera": {

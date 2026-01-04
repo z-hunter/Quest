@@ -179,6 +179,9 @@ export class Actor extends Entity {
         // Block input if mouse is over UI
         if (game?.isMouseOverUI) return;
 
+        // Block input if Subscene is active
+        if (this.scene && this.scene.activeSubscene) return;
+
         if (input) {
             let dx = 0;
             let dy = 0;

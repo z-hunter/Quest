@@ -272,7 +272,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                         return (
                             <div
                                 key={item.name + (item.isUp ? '_up' : '')}
-                                ref={el => itemRefs.current[index] = el}
+                                ref={el => { itemRefs.current[index] = el; }}
                                 onClick={() => {
                                     setSelectedIndex(index);
                                     if (item.isUp) return;

@@ -126,6 +126,7 @@ export class SceneManager {
                     const w = new Walkbox(poly, wb.name || 'Walkbox');
                     if (wb.mode) w.mode = wb.mode;
                     if (wb.locked) w.locked = true;
+                    if (wb.groupID) w.groupID = wb.groupID;
                     return w;
                 });
             }
@@ -136,6 +137,8 @@ export class SceneManager {
                     const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
                     const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
                     if (t.locked) tb.locked = true;
+                    if (t.groupID) tb.groupID = t.groupID;
+                    if (t.components) tb.components = t.components;
                     return tb;
                 });
             }

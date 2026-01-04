@@ -5,6 +5,7 @@ export class SceneObject {
 
     locked: boolean = false;
     disabled: boolean = false;
+    groupID: string | null = null;
 
     constructor(name: string, type: string) {
         this.name = name;
@@ -18,7 +19,8 @@ export class SceneObject {
             type: this.type,
             name: this.name,
             locked: this.locked,
-            disabled: this.disabled
+            disabled: this.disabled,
+            groupID: this.groupID
         };
     }
 }
