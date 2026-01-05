@@ -99,8 +99,22 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
     const handleConfirm = () => {
         if (!filename) return;
         let finalName = filename;
-        if (!finalName.endsWith(extension)) {
-            finalName += extension;
+
+        // Handle comma-separated extensions (e.g. ".mp3,.wav")
+        const allowedExtensions = extension.split(',').map(e => e.trim().toLowerCase()).filter(e => e);
+
+        let hasValidExt = false;
+        for (const ext of allowedExtensions) {
+            if (finalName.toLowerCase().endsWith(ext)) {
+                hasValidExt = true;
+                break;
+            }
+        }
+
+        // If no valid extension found, append the first one (default behavior)
+        // But only if we have strict extensions defined.
+        if (!hasValidExt && allowedExtensions.length > 0) {
+            finalName += allowedExtensions[0];
         }
 
         const exists = items.some(i => !i.isDir && i.name === finalName);

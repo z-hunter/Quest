@@ -12,28 +12,65 @@
       "groupID": null,
       "poly": [
         {
-          "x": 185,
-          "y": 123
+          "x": 182.5,
+          "y": 124
         },
         {
-          "x": 204,
-          "y": 121
+          "x": 201.5,
+          "y": 122
         },
         {
-          "x": 202,
-          "y": 92
+          "x": 199.5,
+          "y": 93
         },
         {
-          "x": 185,
-          "y": 90
+          "x": 182.5,
+          "y": 91
         }
       ],
       "script": "",
       "components": [
         {
           "type": "Subscene",
-          "targetGroupId": "k",
+          "targetGroupId": "g1",
           "name": ""
+        }
+      ]
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_222",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "poly": [
+        {
+          "x": 33,
+          "y": 147
+        },
+        {
+          "x": 109,
+          "y": 145
+        },
+        {
+          "x": 105,
+          "y": 205
+        },
+        {
+          "x": 33,
+          "y": 205
+        }
+      ],
+      "script": "",
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "g1",
+          "groupId2": "g2",
+          "state": 2,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
         }
       ]
     }
@@ -46,6 +83,33 @@
     "front": 300
   },
   "entities": [
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": 172.66990093648093,
+      "y": 109.7371187638438,
+      "width": 30,
+      "height": 50,
+      "baseWidth": 30,
+      "baseHeight": 50,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ffff",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "left",
+      "animSets": {}
+    },
     {
       "type": "Entity",
       "name": "Static_208",
@@ -68,33 +132,6 @@
       "locked": false,
       "disabled": false,
       "groupID": null
-    },
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": 223.87283806622165,
-      "y": 128.07261921245345,
-      "width": 30,
-      "height": 50,
-      "baseWidth": 30,
-      "baseHeight": 50,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#00ffff",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "left",
-      "animSets": {}
     },
     {
       "type": "Entity",
@@ -141,6 +178,52 @@
       "locked": false,
       "disabled": false,
       "groupID": null
+    },
+    {
+      "type": "Entity",
+      "name": "Static_1 ",
+      "x": 68,
+      "y": 190,
+      "width": 30,
+      "height": 30,
+      "baseWidth": 30,
+      "baseHeight": 30,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ff00",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "groupID": "g1"
+    },
+    {
+      "type": "Entity",
+      "name": "Static_1 _1 _1 ",
+      "x": 71,
+      "y": 195,
+      "width": 30,
+      "height": 30,
+      "baseWidth": 30,
+      "baseHeight": 30,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#eeff00",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "groupID": "g2"
     }
   ],
   "camera": {

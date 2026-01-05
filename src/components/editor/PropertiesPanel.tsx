@@ -233,18 +233,42 @@ export const PropertiesPanel: React.FC = () => {
                 {/* Trigger Components */}
                 {selectedObjectType === 'Triggerbox' && (
                     <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}>
-                        <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                        <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>COMPONENTS</span>
-                            <button className="e-btn" style={{ padding: '0 5px', fontSize: '10px' }} onClick={() => {
-                                if (!obj.components) obj.components = [];
-                                // Add Subscene Component
-                                obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
-                                // Sync real object
-                                if (Game.instance.editor.selectedObject) {
-                                    (Game.instance.editor.selectedObject as any).components = obj.components;
-                                }
-                                setObj({ ...obj });
-                            }}>+ Subscene</button>
+                            <div>
+                                <select
+                                    className="e-input"
+                                    style={{ width: '100px', fontSize: '10px' }}
+                                    value={""}
+                                    onChange={(e) => {
+                                        const type = e.target.value;
+                                        if (!type) return;
+                                        if (!obj.components) obj.components = [];
+
+                                        if (type === 'Subscene') {
+                                            obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                                        } else if (type === 'Switch') {
+                                            obj.components.push({
+                                                type: 'Switch',
+                                                groupId1: '', groupId2: '',
+                                                state: 1,
+                                                idKey: '',
+                                                sound1: '', sound2: ''
+                                            });
+                                        }
+
+                                        if (Game.instance.editor.selectedObject) {
+                                            (Game.instance.editor.selectedObject as any).components = obj.components;
+                                        }
+                                        setObj({ ...obj });
+                                        e.target.value = ""; // Reset
+                                    }}
+                                >
+                                    <option value="" disabled>+ Add Component</option>
+                                    <option value="Subscene">Subscene</option>
+                                    <option value="Switch">Switch</option>
+                                </select>
+                            </div>
                         </div>
 
                         {obj.components && obj.components.map((comp: any, idx: number) => (
@@ -275,6 +299,85 @@ export const PropertiesPanel: React.FC = () => {
                                                 comp.name = e.target.value;
                                                 setObj({ ...obj });
                                             }} />
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'Switch' && (
+                                    <>
+                                        <div className="e-row" style={{ display: 'flex', gap: '2px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 1</label>
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId1 || ''} onChange={(e) => { comp.groupId1 = e.target.value; setObj({ ...obj }); }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 2</label>
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId2 || ''} onChange={(e) => { comp.groupId2 = e.target.value; setObj({ ...obj }); }} />
+                                            </div>
+                                        </div>
+
+                                        <div className="e-row" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <label className="e-label" style={{ fontSize: '10px', marginRight: '5px' }}>State:</label>
+                                                <select className="e-input" style={{ width: '40px' }} value={comp.state} onChange={(e) => { comp.state = parseInt(e.target.value); setObj({ ...obj }); }}>
+                                                    <option value={1}>1</option>
+                                                    <option value={2}>2</option>
+                                                </select>
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Key Item ID</label>
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.idKey || ''} onChange={(e) => { comp.idKey = e.target.value; setObj({ ...obj }); }} />
+                                            </div>
+                                        </div>
+
+                                        <div className="e-row" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Sound 1</label>
+                                                <div style={{ display: 'flex' }}>
+                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound1 || ''} onChange={(e) => { comp.sound1 = e.target.value; setObj({ ...obj }); }} />
+                                                    <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
+                                                        const game = Game.instance;
+                                                        if (game) {
+                                                            game.openFileBrowser('load', 'public/sounds', (file) => {
+                                                                // Strip 'public/sounds/' prefix if present? Or keeps relative?
+                                                                // AssetLoader handles 'public/' prefix. 
+                                                                // Let's store just the filename if it's in public/sounds, or relative path.
+                                                                // FileBrowser usually returns full path relative to project root or something?
+                                                                // Game.ts: openFileBrowser ... onConfirm: (f) => ...
+                                                                // Let's assume f is the filename if we are in that dir?
+                                                                // Usually FileBrowser returns what's clicked.
+                                                                // Let's just use the basename if possible, or relative path.
+                                                                // Actually FileBrowser return value depends on implementation.
+                                                                // Let's assume it returns relative path 'public/sounds/file.mp3'
+                                                                let val = file;
+                                                                if (val.startsWith('public/sounds/')) val = val.replace('public/sounds/', '');
+                                                                if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
+
+                                                                comp.sound1 = val;
+                                                                setObj({ ...obj });
+                                                            }, '.mp3,.wav'); // Pass multiple extensions if supported?
+                                                        }
+                                                    }}>...</button>
+                                                </div>
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Sound 2</label>
+                                                <div style={{ display: 'flex' }}>
+                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound2 || ''} onChange={(e) => { comp.sound2 = e.target.value; setObj({ ...obj }); }} />
+                                                    <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
+                                                        const game = Game.instance;
+                                                        if (game) {
+                                                            game.openFileBrowser('load', 'public/sounds', (file) => {
+                                                                let val = file;
+                                                                if (val.startsWith('public/sounds/')) val = val.replace('public/sounds/', '');
+                                                                if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
+                                                                comp.sound2 = val;
+                                                                setObj({ ...obj });
+                                                            }, '.mp3,.wav');
+                                                        }
+                                                    }}>...</button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </>
                                 )}

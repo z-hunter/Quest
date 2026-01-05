@@ -8,6 +8,7 @@ import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
+import { AudioManager } from './AudioManager';
 
 export class Game {
     public static instance: Game;
@@ -24,10 +25,18 @@ export class Game {
     lastTime: number;
     isRunning: boolean;
     inventory: Entity[];
+
+    playSound(name: string): void {
+        if (this.audio) {
+            this.audio.playSound(name);
+        }
+    }
+
     input: Input;
     parser: Parser;
     sceneManager: SceneManager;
     assets: AssetLoader;
+    audio: AudioManager;
     editor: SceneEditor;
     spriteEditor: SpriteEditor;
     score: number = 0;
@@ -103,9 +112,11 @@ export class Game {
         if (this.ctx) this.ctx.imageSmoothingEnabled = false;
         if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
 
+        // (Previously corrupted lines removed)
         this.input = new Input(this);
         this.parser = new Parser(this);
         this.assets = new AssetLoader();
+        this.audio = new AudioManager();
         this.sceneManager = new SceneManager(this);
         this.editor = new SceneEditor(this);
         this.spriteEditor = new SpriteEditor(this);

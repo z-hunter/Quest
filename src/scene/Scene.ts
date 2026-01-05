@@ -65,6 +65,7 @@ export class Scene {
 
     // Subscene State
     activeSubscene: string | null = null;
+    private subsceneEntities: Set<Entity | Triggerbox> = new Set();
 
     // Offscreen canvas for walkbox visualization
     private _walkboxCanvas: HTMLCanvasElement | null = null;
@@ -276,91 +277,8 @@ export class Scene {
 
         console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
 
-        // 1. Subscene Active? Check for "Close" or "Interact with Subscene Entity"
-        if (this.activeSubscene) {
-            // Check if we clicked ON any entity in the active group
-            // For now, if we click ANYWHERE outside a specialized subscene entity (which we don't distinguish interactively yet except by presence),
-            // we close it. 
-            // Better: Check collision with visible entities in the group.
-
-            // For this iteration: Just "Close on Click" is fine, assuming entities absorb clicks if they are interactive.
-            // But we don't have interactive entities yet (Clickable).
-            // Let's implement: Click anywhere -> Close.
-            // Unless we want to support clicking buttons INSIDE the subscene?
-            // "For exit... player must click outside."
-
-            // To detect "Outside", we need to know the bounds of the "Inside".
-            // If the subscene is just a bunch of objects, "Inside" = Union of their colliders?
-            // Or is the Subscene effectively a modal and ANY click works?
-            // GDD says: "Untuk vyhod... click outside objects of this group."
-
-            let hitGroupObject = false;
-            const currentSubsceneID = this.activeSubscene.trim();
-
-            // Iterate reverse to match render order (top first)
-            for (let i = this.entities.length - 1; i >= 0; i--) {
-                const ent = this.entities[i];
-                if (ent.disabled) continue;
-
-                const gID = ent.groupID ? ent.groupID.trim() : '';
-                if (gID !== currentSubsceneID) continue;
-
-                // Simple Box Check
-                if (Math.abs(worldX - ent.x) < ent.width / 2 &&
-                    Math.abs(worldY - (ent.y - ent.height / 2)) < ent.height / 2) {
-                    // Approximation (Centering might vary, Entity is bottom-center pivot usually?)
-                    // Entity.ts: render uses x,y as bottom-center? 
-                    // Code says: ctx.strokeRect(entity.x - w/2, entity.y - h, ...)
-
-                    if (worldX >= ent.x - ent.width / 2 && worldX <= ent.x + ent.width / 2 &&
-                        worldY >= ent.y - ent.height && worldY <= ent.y) {
-                        hitGroupObject = true;
-                        console.log(`  -> Clicked Subscene Object: ${ent.name} (Group: ${ent.groupID})`);
-                        // TODO: trigger object interaction if any
-                        break;
-                    }
-                }
-            }
-
-            if (!hitGroupObject) {
-                console.log("  -> Clicked outside Subscene entities. Closing.");
-                // Re-enable/Update visibility? 
-                // We rely on render/update to check activeSubscene. 
-                // Actually, we should probably toggle .disabled or .visible flags? 
-                // GDD: "Enable group of objects". 
-                // So they were likely DISABLED before?
-                // If we disable them now, they vanish.
-                // We should probably loop and disable them?
-                this.entities.forEach(e => {
-                    if (e.groupID === this.activeSubscene) {
-                        // e.disabled = true; // Wait, if we disable them, future lookups fail?
-                        // If the trigger Enables them, then we should Disable them here.
-                    }
-                });
-                // Re-Disable group members?
-                // Let's assume the System manages visibility based on activeSubscene OR they are manually managed.
-                // Simple approach: When activeSubscene = null, we technically "exit" that mode.
-                // Should we hide them? 
-                // Implementer choice: Let's toggle 'disabled' state for robustness if that's the flow.
-                // But simply clearing `activeSubscene` removes the Dimmer.
-                // If the objects remain visible, that might be weird.
-                // Let's Disable them.
-                const groupID = this.activeSubscene; // Capture before nulling if needed, but we already nulled it? No.
-                this.activeSubscene = null;
-
-                // Find objects of that group and disable them?
-                // "Group enabled over dimmed scene". Implies they are usually disabled.
-                this.entities.forEach(e => {
-                    const eGID = e.groupID ? e.groupID.trim() : '';
-                    if (eGID === groupID) e.disabled = true;
-                });
-
-            }
-            return; // Consume click
-        }
-
-
-        // 2. Check Triggers (if no subscene active)
+        // 1. Check Triggers FIRST
+        // Triggers take precedence. If we hit a trigger (Switch, etc.), we process it and do NOT close the subscene yet.
         if (this.triggerboxes) {
             for (const tb of this.triggerboxes) {
                 if (tb.disabled) continue;
@@ -371,35 +289,107 @@ export class Scene {
                     if (tb.components) {
                         for (const comp of tb.components) {
                             if (comp.type === 'Subscene') {
-                                const sub = comp as any; // Cast to SubsceneTrigger
+                                const sub = comp as any;
                                 const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-                                if (!targetID) return; // Skip empty configs
+                                if (!targetID) continue;
 
                                 console.log(`  -> Activating Subscene Group: '${targetID}'`);
                                 this.activeSubscene = targetID;
+                                this.subsceneEntities.clear(); // Reset tracking
 
-                                // Enable Objects in this Group
+                                // Enable Objects in this Group and Track them
                                 let count = 0;
                                 this.entities.forEach(e => {
                                     const eGID = e.groupID ? e.groupID.trim() : '';
                                     if (eGID === targetID) {
                                         e.disabled = false;
+                                        this.subsceneEntities.add(e);
                                         count++;
                                     }
                                 });
                                 console.log(`  -> Enabled ${count} entities for group '${targetID}'`);
+                                return; // Turn ended
+                            } else if (comp.type === 'Switch') {
+                                const sw = comp as any;
+
+                                // 1. Check Key
+                                if (sw.idKey) {
+                                    // @ts-ignore
+                                    const game = window.game;
+                                    if (game && game.inventory) {
+                                        const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
+                                        if (!hasKey) {
+                                            console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
+                                            game.showMessage(`Locked. Needs ${sw.idKey}`);
+                                            return;
+                                        }
+                                    }
+                                }
+
+                                // 2. Toggle State
+                                const nextState = sw.state === 1 ? 2 : 1;
+                                sw.state = nextState;
+                                console.log(`[Switch] Toggling to State ${nextState}`);
+
+                                // 3. Audio
+                                // @ts-ignore
+                                const game = window.game;
+                                if (game) {
+                                    if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
+                                    if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
+                                }
+
+                                // 4. Update Groups
+                                const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
+                                const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
+
+                                let count = 0;
+                                this.entities.forEach(e => {
+                                    const eGID = e.groupID ? e.groupID.trim() : '';
+                                    if (eGID === groupToShow) {
+                                        e.disabled = false;
+                                        if (this.activeSubscene) this.subsceneEntities.add(e); // Track new appearance
+                                        count++;
+                                    } else if (eGID === groupToHide) {
+                                        e.disabled = true;
+                                        if (this.activeSubscene) this.subsceneEntities.delete(e); // Stop tracking hidden
+                                    }
+                                });
+                                console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
                                 return; // Stop walking
                             }
                         }
                     }
 
-                    // Legacy Script check (optional)
+                    // Legacy Script check
                     if (tb.script) {
                         console.log("Run Script:", tb.script);
-                        // Helper to run script?
                     }
+
+                    // If we hit any trigger, consuming the click is usually safest to prevent "closing" immediately after.
+                    return;
                 }
             }
+        }
+
+        // 2. Subscene Logic (If NO trigger hit)
+        if (this.activeSubscene) {
+            // If we are here, we clicked outside any trigger.
+            // Check if we hit a "background" interactive object? (Not implemented)
+            // Default behavior: Close Subscene.
+
+            console.log("  -> Clicked outside Subscene triggers. Closing.");
+
+            // Clean up ALL tracked entities
+            let disabledCount = 0;
+            this.subsceneEntities.forEach(e => {
+                e.disabled = true;
+                disabledCount++;
+            });
+            this.subsceneEntities.clear();
+            this.activeSubscene = null;
+            console.log(`  -> Disabled ${disabledCount} tracked subscene entities.`);
+            return;
         }
 
         if (this.player) {
@@ -501,12 +491,12 @@ export class Scene {
         const normalLayer: Entity[] = [];
 
         this.entities.forEach(entity => {
-            // If we have an active subscene, and this entity belongs to it, it goes to top
+            // If we have an active subscene, and this entity belongs to it OR is tracked as part of it
             // Robust check: Trim both
             const gID = entity.groupID ? entity.groupID.trim() : null;
             const target = this.activeSubscene ? this.activeSubscene.trim() : null;
 
-            if (target && gID === target) {
+            if (target && (gID === target || this.subsceneEntities.has(entity))) {
                 subsceneLayer.push(entity);
             } else {
                 normalLayer.push(entity);
