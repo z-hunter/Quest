@@ -19,9 +19,16 @@ export const PropertiesPanel: React.FC = () => {
             // Special case: Bind to Current Scene
             setObj({ ...Game.instance.sceneManager.currentScene });
         } else if (editor.selectedObject) {
-            setObj(editor.selectedObject);
-            // Force update to read new values
-            setObj({ ...editor.selectedObject });
+            // Clone object for local UI state
+            // NOTE: Spread {...obj} does NOT copy class getters (like Entity.width/height)
+            // So we must manually ensure they are copied over for the UI to see them.
+            const source = editor.selectedObject as any;
+            const clone = { ...source };
+
+            if (clone.width === undefined && source.width !== undefined) clone.width = source.width;
+            if (clone.height === undefined && source.height !== undefined) clone.height = source.height;
+
+            setObj(clone);
         } else {
             setObj(null);
         }

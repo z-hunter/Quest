@@ -17,4 +17,9 @@ export function registerDemoScripts() {
     ScriptRegistry.register('interaction.pillar.look', ({ game, entity }) => {
         game.showMessage(entity.description);
     });
+
+    ScriptRegistry.register('test.audio', ({ game }) => {
+        game.showMessage("Playing test sound...");
+        game.playSound('click.mp3'); // Ensure click.mp3 exists in public/sounds
+    });
 }

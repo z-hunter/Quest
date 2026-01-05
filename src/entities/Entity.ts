@@ -33,8 +33,24 @@ export interface EntityData {
 export class Entity extends SceneObject {
     x: number;
     y: number;
-    width: number;
-    height: number;
+
+    // Smart Properties: Width/Height are derived from Base * Scale
+    get width(): number {
+        return this.baseWidth * this.scale;
+    }
+    set width(value: number) {
+        const s = this.scale !== 0 ? this.scale : 1;
+        this.baseWidth = value / s;
+    }
+
+    get height(): number {
+        return this.baseHeight * this.scale;
+    }
+    set height(value: number) {
+        const s = this.scale !== 0 ? this.scale : 1;
+        this.baseHeight = value / s;
+    }
+
     // name: string; // Inherited from SceneObject
     description: string;
     interactions: Record<string, string>; // Maps VERB -> ScriptID
@@ -78,8 +94,13 @@ export class Entity extends SceneObject {
         super(name, 'Static');
         this.x = x;
         this.y = y;
-        this.width = width;
-        this.height = height;
+
+        // Initialize defaults BEFORE setting width/height (which now rely on scale)
+        this.scale = 1.0;
+        this.baseWidth = width;
+        this.baseHeight = height;
+
+        // this.width = width; // No longer needed directly if base set above, but setter works too
         // this.name = name; // Super handles it
 
         this.description = "You see nothing special.";
@@ -90,7 +111,6 @@ export class Entity extends SceneObject {
         this.visible = true;
         this.spriteName = null;
         this.image = null;
-        this.scale = 1.0;
         this.modelScale = 1.0;
         this.layer = 0;
         this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
@@ -98,8 +118,8 @@ export class Entity extends SceneObject {
         this.animationSpeed = 150; // Default 150ms
         // this.locked = false; // Inherited
 
-        this.baseWidth = this.width;
-        this.baseHeight = this.height;
+        // this.baseWidth = this.width; // Handled above
+        // this.baseHeight = this.height; // Handled above
         this.colliderWidth = 0;
         this.colliderHeight = 0;
         this.animator = null;
@@ -158,9 +178,9 @@ export class Entity extends SceneObject {
                 } else {
                     this.baseWidth = newBaseWidth;
                     this.baseHeight = newBaseHeight;
-                    // Force immediate update
-                    this.width = this.baseWidth * this.scale;
-                    this.height = this.baseHeight * this.scale;
+                    // Force immediate update - No longer needed, getters handle it
+                    // this.width = this.baseWidth * this.scale;
+                    // this.height = this.baseHeight * this.scale;
                 }
 
                 this.image = image;
@@ -189,9 +209,9 @@ export class Entity extends SceneObject {
         // Final Scale = User Model Scale * Depth Factor
         this.scale = this.modelScale * depthFactor;
 
-        // Update Hitbox Dims
-        this.width = this.baseWidth * this.scale;
-        this.height = this.baseHeight * this.scale;
+        // Update Hitbox Dims - REMOVED (Handled by Getter)
+        // this.width = this.baseWidth * this.scale;
+        // this.height = this.baseHeight * this.scale;
 
         if (this.animator) {
             this.animator.update(deltaTime);
