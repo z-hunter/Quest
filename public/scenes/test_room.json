@@ -41,24 +41,24 @@
       "type": "Triggerbox",
       "name": "Trig_222",
       "locked": false,
-      "disabled": false,
-      "groupID": null,
+      "disabled": true,
+      "groupID": "g1",
       "poly": [
         {
           "x": 33,
-          "y": 147
+          "y": 148
         },
         {
           "x": 109,
-          "y": 145
+          "y": 146
         },
         {
           "x": 105,
-          "y": 205
+          "y": 206
         },
         {
           "x": 33,
-          "y": 205
+          "y": 206
         }
       ],
       "script": "",
@@ -67,12 +67,35 @@
           "type": "Switch",
           "groupId1": "g1",
           "groupId2": "g2",
-          "state": 2,
+          "state": 1,
           "idKey": "",
           "sound1": "drawer_open.wav",
           "sound2": "drawer_close.wav"
         }
       ]
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_137",
+      "locked": false,
+      "disabled": true,
+      "groupID": "g1",
+      "poly": [
+        {
+          "x": 40.5,
+          "y": 137.5
+        },
+        {
+          "x": 104.5,
+          "y": 137.5
+        },
+        {
+          "x": 70.5,
+          "y": 86.5
+        }
+      ],
+      "script": "",
+      "components": []
     }
   ],
   "scaling": {
@@ -83,33 +106,6 @@
     "front": 300
   },
   "entities": [
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": 172.66990093648093,
-      "y": 109.7371187638438,
-      "width": 30,
-      "height": 50,
-      "baseWidth": 30,
-      "baseHeight": 50,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#00ffff",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "left",
-      "animSets": {}
-    },
     {
       "type": "Entity",
       "name": "Static_208",
@@ -159,12 +155,12 @@
     {
       "type": "Entity",
       "name": "Key",
-      "x": 200,
-      "y": 150,
-      "width": 10,
-      "height": 10,
-      "baseWidth": 10,
-      "baseHeight": 10,
+      "x": 72,
+      "y": 159,
+      "width": 20.305625379124052,
+      "height": 5,
+      "baseWidth": 20.305625379124052,
+      "baseHeight": 5,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
@@ -178,6 +174,33 @@
       "locked": false,
       "disabled": false,
       "groupID": null
+    },
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": 148.12418332244386,
+      "y": 175.23149434285753,
+      "width": 30,
+      "height": 50,
+      "baseWidth": 30,
+      "baseHeight": 50,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ffff",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "down",
+      "animSets": {}
     },
     {
       "type": "Entity",

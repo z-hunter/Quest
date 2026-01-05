@@ -281,6 +281,7 @@ export class Scene {
         // Triggers take precedence. If we hit a trigger (Switch, etc.), we process it and do NOT close the subscene yet.
         if (this.triggerboxes) {
             for (const tb of this.triggerboxes) {
+                // if (tb.disabled) console.log(`  -> Skipping disabled trigger '${tb.name}'`);
                 if (tb.disabled) continue;
                 if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, tb.poly)) {
                     console.log(`Hit Triggerbox: ${tb.name} `);
@@ -297,7 +298,7 @@ export class Scene {
                                 this.activeSubscene = targetID;
                                 this.subsceneEntities.clear(); // Reset tracking
 
-                                // Enable Objects in this Group and Track them
+                                // 1. Enable Objects in this Group
                                 let count = 0;
                                 this.entities.forEach(e => {
                                     const eGID = e.groupID ? e.groupID.trim() : '';
@@ -307,7 +308,22 @@ export class Scene {
                                         count++;
                                     }
                                 });
-                                console.log(`  -> Enabled ${count} entities for group '${targetID}'`);
+
+                                // 2. Enable Triggerboxes in this Group (Switches, etc.)
+                                if (this.triggerboxes) {
+                                    this.triggerboxes.forEach(tb => {
+                                        const tbGID = tb.groupID ? tb.groupID.trim() : '';
+                                        // console.log(`  -> Activating Check: Trigger '${tb.name}' GroupID: '${tbGID}' vs Target: '${targetID}'`);
+                                        if (tbGID === targetID) {
+                                            // console.log(`  -> Enabling Subscene Trigger: '${tb.name}'`);
+                                            tb.disabled = false;
+                                            this.subsceneEntities.add(tb);
+                                            count++;
+                                        }
+                                    });
+                                }
+
+                                // console.log(`  -> Enabled ${count} entities/triggers for group '${targetID}'`);
                                 return; // Turn ended
                             } else if (comp.type === 'Switch') {
                                 const sw = comp as any;
@@ -355,6 +371,22 @@ export class Scene {
                                         if (this.activeSubscene) this.subsceneEntities.delete(e); // Stop tracking hidden
                                     }
                                 });
+
+                                // 5. Update Triggerboxes (Prevent Ghost Triggers)
+                                if (this.triggerboxes) {
+                                    this.triggerboxes.forEach(t => {
+                                        if (t === tb) return; // CRITICAL: Do NOT disable self (the Switch)!
+
+                                        const tGID = t.groupID ? t.groupID.trim() : '';
+                                        if (tGID === groupToShow) {
+                                            t.disabled = false;
+                                            if (this.activeSubscene) this.subsceneEntities.add(t);
+                                        } else if (tGID === groupToHide) {
+                                            t.disabled = true;
+                                            if (this.activeSubscene) this.subsceneEntities.delete(t);
+                                        }
+                                    });
+                                }
                                 console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
                                 return; // Stop walking
                             }
@@ -380,6 +412,32 @@ export class Scene {
 
             console.log("  -> Clicked outside Subscene triggers. Closing.");
 
+            // Auto-Reset Switches inside this subscene to State 1
+            // Improved Logic: Iterate tracked entities (which now includes Triggerboxes)
+            // console.log(`[Subscene Close] Closing '${this.activeSubscene?.trim()}'. Resetting Switches...`);
+            this.subsceneEntities.forEach(e => {
+                // Check if it's a Triggerbox (has components)
+                // We stored it as Entity | Triggerbox. Triggerbox has components.
+                const tb = e as any;
+                if (tb.components) {
+                    for (const comp of tb.components) {
+                        if (comp.type === 'Switch') {
+                            const sw = comp as any;
+                            // If Open (State 2), reset to Closed (State 1)
+                            if (sw.state === 2) {
+                                // console.log(`  -> Resetting Switch in '${tb.name}' to State 1`);
+                                sw.state = 1;
+                                // Play Close Sound
+                                if (sw.sound1) {
+                                    // @ts-ignore
+                                    if (window.game) window.game.playSound(sw.sound1);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
             // Clean up ALL tracked entities
             let disabledCount = 0;
             this.subsceneEntities.forEach(e => {
@@ -388,7 +446,6 @@ export class Scene {
             });
             this.subsceneEntities.clear();
             this.activeSubscene = null;
-            console.log(`  -> Disabled ${disabledCount} tracked subscene entities.`);
             return;
         }
 
