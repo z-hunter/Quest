@@ -10,6 +10,8 @@
       "locked": false,
       "disabled": false,
       "groupID": null,
+      "customName": "",
+      "interactions": {},
       "poly": [
         {
           "x": 182.5,
@@ -41,8 +43,10 @@
       "type": "Triggerbox",
       "name": "Trig_222",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": "g1",
+      "customName": "",
+      "interactions": {},
       "poly": [
         {
           "x": 33,
@@ -78,8 +82,10 @@
       "type": "Triggerbox",
       "name": "Trig_137",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": "g1",
+      "customName": "",
+      "interactions": {},
       "poly": [
         {
           "x": 40.5,

@@ -238,7 +238,7 @@ export const PropertiesPanel: React.FC = () => {
                 )}
 
                 {/* Trigger Components */}
-                {selectedObjectType === 'Triggerbox' && (
+                {(selectedObjectType === 'Triggerbox' || selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static') && (
                     <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}>
                         <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>COMPONENTS</span>
@@ -254,6 +254,8 @@ export const PropertiesPanel: React.FC = () => {
 
                                         if (type === 'Subscene') {
                                             obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                                        } else if (type === 'Item') {
+                                            obj.components.push({ type: 'Item' });
                                         } else if (type === 'Switch') {
                                             obj.components.push({
                                                 type: 'Switch',
@@ -272,6 +274,7 @@ export const PropertiesPanel: React.FC = () => {
                                     }}
                                 >
                                     <option value="" disabled>+ Add Component</option>
+                                    <option value="Item">Item (Pickup)</option>
                                     <option value="Subscene">Subscene</option>
                                     <option value="Switch">Switch</option>
                                 </select>
@@ -290,6 +293,12 @@ export const PropertiesPanel: React.FC = () => {
                                         setObj({ ...obj });
                                     }}>x</button>
                                 </div>
+
+                                {comp.type === 'Item' && (
+                                    <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
+                                        Can be picked up by player.
+                                    </div>
+                                )}
 
                                 {comp.type === 'Subscene' && (
                                     <>
@@ -532,6 +541,11 @@ export const PropertiesPanel: React.FC = () => {
                 {/* Entity Transforms */}
                 {(selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static') && (
                     <>
+                        <div className="e-row">
+                            <label className="e-label">Display Name</label>
+                            <input type="text" className="e-input" placeholder="e.g. Pillar (for Parser)" value={obj.customName || ''} onChange={(e) => handleChange('customName', e.target.value)} />
+                        </div>
+
                         <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                             <div>
                                 <label className="e-label">X</label>
@@ -604,6 +618,71 @@ export const PropertiesPanel: React.FC = () => {
                                 <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.disabled} onChange={(e) => handleChange('disabled', e.target.checked)} />
                                 Disabled (Hidden in Game)
                             </label>
+                        </div>
+
+                        {/* Interactions */}
+                        <div className="e-row" style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: '5px' }}>
+                            <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>INTERACTIONS</span>
+                                <select
+                                    className="e-input"
+                                    style={{ width: '80px', fontSize: '10px' }}
+                                    value=""
+                                    onChange={(e) => {
+                                        const verb = e.target.value;
+                                        if (!verb) return;
+                                        if (!obj.interactions) obj.interactions = {};
+                                        if (!obj.interactions[verb]) {
+                                            obj.interactions[verb] = '';
+                                            // Sync to real object
+                                            if (Game.instance.editor.selectedObject) {
+                                                if (!(Game.instance.editor.selectedObject as any).interactions) (Game.instance.editor.selectedObject as any).interactions = {};
+                                                (Game.instance.editor.selectedObject as any).interactions[verb] = '';
+                                            }
+                                            setObj({ ...obj });
+                                        }
+                                    }}
+                                >
+                                    <option value="">+ ADD</option>
+                                    <option value="look">Look</option>
+                                    <option value="use">Use</option>
+                                    <option value="talk">Talk</option>
+                                    <option value="pickup">Pickup</option>
+                                </select>
+                            </div>
+
+                            {obj.interactions && Object.keys(obj.interactions).map(verb => (
+                                <div key={verb} style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}>
+                                    <div style={{ width: '40px', fontSize: '10px', color: '#ccc' }}>{verb.toUpperCase()}</div>
+                                    <input
+                                        type="text"
+                                        className="e-input"
+                                        style={{ flex: 1, fontSize: '10px' }}
+                                        placeholder="Script ID"
+                                        value={obj.interactions[verb]}
+                                        onChange={(e) => {
+                                            obj.interactions[verb] = e.target.value;
+                                            // Sync to real object
+                                            if (Game.instance.editor.selectedObject) {
+                                                (Game.instance.editor.selectedObject as any).interactions[verb] = e.target.value;
+                                            }
+                                            setObj({ ...obj });
+                                        }}
+                                    />
+                                    <button
+                                        className="e-btn e-btn-red"
+                                        style={{ marginLeft: '2px', padding: '0 4px', fontSize: '10px' }}
+                                        onClick={() => {
+                                            delete obj.interactions[verb];
+                                            // Sync to real object
+                                            if (Game.instance.editor.selectedObject) {
+                                                delete (Game.instance.editor.selectedObject as any).interactions[verb];
+                                            }
+                                            setObj({ ...obj });
+                                        }}
+                                    >x</button>
+                                </div>
+                            ))}
                         </div>
                     </>
                 )}

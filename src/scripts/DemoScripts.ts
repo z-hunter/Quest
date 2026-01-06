@@ -20,6 +20,6 @@ export function registerDemoScripts() {
 
     ScriptRegistry.register('test.audio', ({ game }) => {
         game.showMessage("Playing test sound...");
-        game.playSound('click.mp3'); // Ensure click.mp3 exists in public/sounds
+        game.playSound('drawer_open.wav'); // Ensure it exists in public/sounds
     });
 }

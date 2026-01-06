@@ -116,7 +116,10 @@ export class Scene {
     }
 
     findEntity(name: string): Entity | undefined {
-        return this.entities.find(e => e.name.toUpperCase() === name.toUpperCase());
+        return this.entities.find(e =>
+            e.name.toUpperCase() === name.toUpperCase() ||
+            (e.customName && e.customName.toUpperCase() === name.toUpperCase())
+        );
     }
 
     getScaling(y: number): number {

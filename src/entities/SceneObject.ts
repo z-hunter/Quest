@@ -7,11 +7,23 @@ export class SceneObject {
     disabled: boolean = false;
     groupID: string | null = null;
 
+    // User-facing name for parser (e.g. "Pillar" instead of "Pillar_01")
+    customName: string = "";
+
+    // Script bindings for verbs: { "LOOK": "script.id", "USE": "script.id" }
+    interactions: Record<string, string> = {};
+
+    // Components (e.g. { type: 'Item' }, { type: 'Switch', ... })
+    components: any[] = [];
+
     constructor(name: string, type: string) {
         this.name = name;
         this.type = type;
         this.locked = false;
         this.disabled = false;
+        this.customName = "";
+        this.interactions = {};
+        this.components = [];
     }
 
     toJSON(): any {
@@ -20,7 +32,10 @@ export class SceneObject {
             name: this.name,
             locked: this.locked,
             disabled: this.disabled,
-            groupID: this.groupID
+            groupID: this.groupID,
+            customName: this.customName,
+            interactions: this.interactions,
+            components: this.components
         };
     }
 }
