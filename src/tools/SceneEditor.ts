@@ -281,6 +281,13 @@ export class SceneEditor {
             e.preventDefault();
             this.selectObject('SETTINGS');
         } else if (e.key === 'Delete') {
+            // Prevent if user is typing or Mouse is over UI
+            if (document.activeElement instanceof HTMLInputElement ||
+                document.activeElement instanceof HTMLTextAreaElement ||
+                this.game.isMouseOverUI) {
+                return;
+            }
+
             if (this.selectedObject) {
                 this.deleteSelectedObject();
             }
@@ -1532,6 +1539,12 @@ export class SceneEditor {
 
                 newObj = new Walkbox(poly, data.name);
                 if (data.mode) newObj.mode = data.mode;
+                // Restore SceneObject properties
+                if (data.groupID) newObj.groupID = data.groupID;
+                if (data.locked) newObj.locked = data.locked;
+                if (data.disabled) newObj.disabled = data.disabled;
+                if (data.customName) newObj.customName = data.customName;
+                if (data.interactions) newObj.interactions = data.interactions;
             } else if (type === 'Triggerbox') {
                 // Same logic as Walkbox for poly
                 let poly = data.poly || [];
@@ -1551,6 +1564,13 @@ export class SceneEditor {
                     poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
                 }
                 newObj = new Triggerbox(poly, data.name, data.script || '');
+                // Restore SceneObject properties
+                if (data.groupID) newObj.groupID = data.groupID;
+                if (data.components) newObj.components = JSON.parse(JSON.stringify(data.components)); // Deep copy components
+                if (data.locked) newObj.locked = data.locked;
+                if (data.disabled) newObj.disabled = data.disabled;
+                if (data.customName) newObj.customName = data.customName;
+                if (data.interactions) newObj.interactions = data.interactions;
 
             } else if (type === 'Actor') {
                 newObj = Actor.fromJSON(data);
@@ -2161,6 +2181,7 @@ export class SceneEditor {
             scene.triggerboxes.forEach((trigger: any) => {
                 const poly = trigger.poly;
                 if (!poly || poly.length === 0) return;
+                if (trigger.disabled) return; // Skip disabled triggers
 
                 // Draw Trigger (World Space)
                 ctx.save();

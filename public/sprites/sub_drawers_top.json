@@ -1,0 +1,9 @@
+{
+  "id": "sub_drawers_top",
+  "imageFile": "public/assets/sub_drawers_top.png",
+  "x": 0,
+  "y": 0,
+  "width": 1024,
+  "height": 216,
+  "frames": 1
+}

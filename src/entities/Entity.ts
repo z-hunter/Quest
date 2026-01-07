@@ -28,6 +28,8 @@ export interface EntityData {
     animationSpeed?: number;
     locked?: boolean;
     disabled?: boolean;
+    components?: any[];
+    interactions?: Record<string, string>;
 }
 
 export class Entity extends SceneObject {
@@ -291,7 +293,9 @@ export class Entity extends SceneObject {
             animationSpeed: this.animationSpeed,
             locked: this.locked, // Added Locked Property
             disabled: this.disabled,
-            groupID: this.groupID
+            groupID: this.groupID,
+            components: this.components,
+            interactions: this.interactions
         };
     }
 
@@ -309,8 +313,8 @@ export class Entity extends SceneObject {
             this.scale = data.scale || 1.0;
             if (data.modelScale !== undefined) this.modelScale = data.modelScale;
 
-            // Restore base dimensions
             console.log(`[Entity.load] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale} ModelScale:${data.modelScale} Sprite:${data.spriteName}`);
+
             if (data.baseWidth !== undefined) {
                 this.baseWidth = data.baseWidth;
             } else {
@@ -338,6 +342,14 @@ export class Entity extends SceneObject {
 
             if (data.disabled !== undefined) {
                 this.disabled = data.disabled;
+            }
+
+            if (data.components) {
+                this.components = JSON.parse(JSON.stringify(data.components));
+            }
+
+            if (data.interactions) {
+                this.interactions = JSON.parse(JSON.stringify(data.interactions));
             }
 
             if (data.spriteName) {

@@ -64,8 +64,79 @@ export class Scene {
     defaultCamera: { x: number, y: number, zoom: number };
 
     // Subscene State
-    activeSubscene: string | null = null;
+    private _activeSubscene: string | null = null;
     private subsceneEntities: Set<Entity | Triggerbox> = new Set();
+
+    get activeSubscene(): string | null {
+        return this._activeSubscene;
+    }
+
+    set activeSubscene(value: string | null) {
+        // If changing from a valid subscene to something else (or null), perform cleanup
+        if (this._activeSubscene && this._activeSubscene !== value) {
+            console.log(`[Scene] Closing Subscene: '${this._activeSubscene}' -> '${value}'`);
+
+            const closingSubsceneID = this._activeSubscene;
+
+            // Strategy 1 (Robust): Scan ALL triggers for Switches belonging to this subscene
+            if (this.triggerboxes) {
+                this.triggerboxes.forEach(tb => {
+                    const tbGID = tb.groupID ? tb.groupID.trim() : '';
+
+                    if (tbGID === closingSubsceneID) {
+                        if (tb.components) {
+                            for (const comp of tb.components) {
+                                if (comp.type === 'Switch') {
+                                    const sw = comp as any;
+                                    // Soft check for state (handle "2" vs 2)
+                                    // @ts-ignore
+                                    if (sw.state == 2) {
+                                        console.log(`  -> [RobustScan] Resetting Switch in '${tb.name}' to State 1`);
+                                        sw.state = 1;
+                                        if (sw.sound1 && typeof window !== 'undefined') {
+                                            // @ts-ignore
+                                            if (window.game) window.game.playSound(sw.sound1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Strategy 2: Reset Switches in tracked entities (Nested groups or non-triggered)
+            this.subsceneEntities.forEach(e => {
+                const tb = e as any;
+                if (tb.components) {
+                    for (const comp of tb.components) {
+                        if (comp.type === 'Switch') {
+                            const sw = comp as any;
+                            // Check if ALREADY reset by strategy 1
+                            // @ts-ignore
+                            if (sw.state == 2) {
+                                console.log(`  -> [TrackedScan] Resetting Switch in '${tb.name}' to State 1`);
+                                sw.state = 1;
+                                if (sw.sound1 && typeof window !== 'undefined') {
+                                    // @ts-ignore
+                                    if (window.game) window.game.playSound(sw.sound1);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 3. Disable All Tracked Entities
+            console.log(`  -> Disabling ${this.subsceneEntities.size} subscene entities.`);
+            this.subsceneEntities.forEach(e => {
+                e.disabled = true;
+            });
+            this.subsceneEntities.clear();
+        }
+
+        this._activeSubscene = value;
+    }
 
     // Offscreen canvas for walkbox visualization
     private _walkboxCanvas: HTMLCanvasElement | null = null;
@@ -409,45 +480,48 @@ export class Scene {
 
         // 2. Subscene Logic (If NO trigger hit)
         if (this.activeSubscene) {
+            // Check if we hit any object visible in the subscene?
+            // User requested: "Close if clicking OUTSIDE all objects in the subscene"
+            let hitSubsceneObj = false;
+
+            for (const obj of this.subsceneEntities) {
+                if (obj.disabled) continue;
+
+                if (obj instanceof Triggerbox) {
+                    if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, obj.poly)) {
+                        hitSubsceneObj = true;
+                        break;
+                    }
+                } else if (obj instanceof Entity) {
+                    // Entity Pivot is Bottom-Center
+                    const left = obj.x - obj.width / 2;
+                    const right = obj.x + obj.width / 2;
+                    const top = obj.y - obj.height;
+                    const bottom = obj.y;
+
+                    if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
+                        hitSubsceneObj = true;
+                        console.log(`[Subscene] Clicked on entity '${obj.name}' (Keep Open)`);
+                        break;
+                    }
+                }
+            }
+
+            if (hitSubsceneObj) {
+                return;
+            }
+
             // If we are here, we clicked outside any trigger.
             // Check if we hit a "background" interactive object? (Not implemented)
             // Default behavior: Close Subscene.
 
-            console.log("  -> Clicked outside Subscene triggers. Closing.");
+            // If we are here, we clicked outside any trigger.
+            // Check if we hit a "background" interactive object? (Not implemented)
+            // Default behavior: Close Subscene.
 
-            // Auto-Reset Switches inside this subscene to State 1
-            // Improved Logic: Iterate tracked entities (which now includes Triggerboxes)
-            // console.log(`[Subscene Close] Closing '${this.activeSubscene?.trim()}'. Resetting Switches...`);
-            this.subsceneEntities.forEach(e => {
-                // Check if it's a Triggerbox (has components)
-                // We stored it as Entity | Triggerbox. Triggerbox has components.
-                const tb = e as any;
-                if (tb.components) {
-                    for (const comp of tb.components) {
-                        if (comp.type === 'Switch') {
-                            const sw = comp as any;
-                            // If Open (State 2), reset to Closed (State 1)
-                            if (sw.state === 2) {
-                                // console.log(`  -> Resetting Switch in '${tb.name}' to State 1`);
-                                sw.state = 1;
-                                // Play Close Sound
-                                if (sw.sound1) {
-                                    // @ts-ignore
-                                    if (window.game) window.game.playSound(sw.sound1);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            console.log("  -> Clicked outside Subscene triggers/entities. Closing.");
 
-            // Clean up ALL tracked entities
-            let disabledCount = 0;
-            this.subsceneEntities.forEach(e => {
-                e.disabled = true;
-                disabledCount++;
-            });
-            this.subsceneEntities.clear();
+            // Setting this to null will trigger the Setter, which handles cleanup (Switches, Entities)
             this.activeSubscene = null;
             return;
         }
