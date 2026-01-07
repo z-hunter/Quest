@@ -269,11 +269,22 @@ button:hover {
 }
 
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+.e-input,
+select {
   background: #222;
   border: 1px solid #555;
   color: #fff;
   box-sizing: border-box;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.e-input:focus {
+  border-color: #00ff00;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
 }
 
 .file-upload {

@@ -639,7 +639,7 @@ export const PropertiesPanel: React.FC = () => {
                         {/* Interactions */}
                         <div className="e-row" style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: '5px' }}>
                             <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>INTERACTIONS</span>
+                                <span>SCRIPT EVENTS</span>
                                 <select
                                     className="e-input"
                                     style={{ width: '80px', fontSize: '10px' }}
