@@ -19,7 +19,7 @@
 
 1.  Clone this repository.
 2.  Open the project folder.
-3.  Double-click `setup.cmd` (if provided) or run `setup.cmd` from the command line. This script will install dependencies and start the game in your default browser at `http://localhost:5173`.
+3.  Run `setup.cmd`. This will install dependencies and start the game in your default browser at `http://localhost:5173`.
 
 ## Hosting on a Web Server (Linux)
 
