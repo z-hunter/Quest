@@ -273,13 +273,14 @@ export const HierarchyPanel: React.FC = () => {
                             onClick={() => Game.instance.editor.selectObject(ent)}
                             onDoubleClick={() => centerCameraOn(ent)}
                         >
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', opacity: ent.disabled ? 0.5 : 1.0 }}>
                                 <span style={{
                                     filter: isSelected
                                         ? 'grayscale(100%) brightness(0)'
                                         : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
                                     marginRight: '6px',
-                                    display: 'inline-block'
+                                    display: 'inline-block',
+                                    textDecoration: ent.disabled ? 'line-through' : 'none'
                                 }}>
                                     {ent.type === 'Actor' ? '👤' : '📦'}
                                 </span>
@@ -306,13 +307,14 @@ export const HierarchyPanel: React.FC = () => {
                             onClick={() => Game.instance.editor.selectObject(wb)}
                             onDoubleClick={() => centerCameraOn(wb)}
                         >
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', opacity: wb.disabled ? 0.5 : 1.0 }}>
                                 <span style={{
                                     filter: isSelected
                                         ? 'grayscale(100%) brightness(0)'
                                         : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
                                     marginRight: '6px',
-                                    display: 'inline-block'
+                                    display: 'inline-block',
+                                    textDecoration: wb.disabled ? 'line-through' : 'none'
                                 }}>
                                     👣
                                 </span>
@@ -339,13 +341,14 @@ export const HierarchyPanel: React.FC = () => {
                             onClick={() => Game.instance.editor.selectObject(tb)}
                             onDoubleClick={() => centerCameraOn(tb)}
                         >
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', opacity: tb.disabled ? 0.5 : 1.0 }}>
                                 <span style={{
                                     filter: isSelected
                                         ? 'grayscale(100%) brightness(0)'
                                         : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
                                     marginRight: '6px',
-                                    display: 'inline-block'
+                                    display: 'inline-block',
+                                    textDecoration: tb.disabled ? 'line-through' : 'none'
                                 }}>
                                     ⚡
                                 </span>

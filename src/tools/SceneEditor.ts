@@ -240,6 +240,20 @@ export class SceneEditor {
             return;
         }
 
+        // Alt+D: Toggle Disabled State
+        if (this.enabled && e.altKey && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            if (this.selectedObject) {
+                this.selectedObject.disabled = !this.selectedObject.disabled;
+                console.log(`[Editor] Object ${this.selectedObject.name} disabled: ${this.selectedObject.disabled}`);
+
+                // Force UI Update
+                useEditorStore.getState().incrementObjectVersion();
+                useEditorStore.getState().incrementHierarchyVersion();
+            }
+            return;
+        }
+
         // Ctrl+Z: Undo
         if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'z') {
             e.preventDefault();
@@ -621,7 +635,9 @@ export class SceneEditor {
 
             // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
             if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
+                if (this.selectedObject.disabled) return; // Prevent interaction if disabled
                 // Center-Based: World = (Screen - Center) / Zoom + Camera
+
                 const worldPos = {
                     x: (pos.x - halfW) / zoom + camX,
                     y: (pos.y - halfH) / zoom + camY
@@ -665,7 +681,9 @@ export class SceneEditor {
 
             // 0.5 CHECK SELECTED ENTITY (High Priority - Exclusive Interaction)
             if (this.selectedObject && this.selectedObject instanceof Entity) {
+                if (this.selectedObject.disabled) return; // Prevent interaction if disabled
                 const entity = this.selectedObject;
+
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
                 // Entity Screen Rect Calculation
@@ -720,7 +738,10 @@ export class SceneEditor {
             // Iterate reverse to select top-most
             for (let i = entities.length - 1; i >= 0; i--) {
                 const entity = entities[i];
+                if (entity.disabled) continue;
+
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+
 
                 // Entity Screen Rect (With Zoom and Center Pivot)
                 // Render Logic:
@@ -790,8 +811,10 @@ export class SceneEditor {
 
             if (scene.walkbox) {
                 for (const wb of scene.walkbox) {
+                    if (wb.disabled) continue;
                     if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
                         this.selectObject(wb);
+
                         this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = -1;
@@ -805,8 +828,10 @@ export class SceneEditor {
             // 3. Check Triggerboxes
             if (scene.triggerboxes) {
                 for (const tb of scene.triggerboxes) {
+                    if (tb.disabled) continue;
                     if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
                         this.selectObject(tb);
+
                         this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = -1;
