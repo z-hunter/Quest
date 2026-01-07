@@ -38,4 +38,12 @@ export class SceneObject {
             components: this.components
         };
     }
+
+    /**
+     * Checks if a World Coordinate point hits this object.
+     * Base implementation returns false. Subclasses should override.
+     */
+    hitTest(_x: number, _y: number): boolean {
+        return false;
+    }
 }

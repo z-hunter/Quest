@@ -503,23 +503,12 @@ export class Scene {
             for (const obj of this.subsceneEntities) {
                 if (obj.disabled) continue;
 
-                if (obj instanceof Triggerbox) {
-                    if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, obj.poly)) {
-                        hitSubsceneObj = true;
-                        break;
-                    }
-                } else if (obj instanceof Entity) {
-                    // Entity Pivot is Bottom-Center
-                    const left = obj.x - obj.width / 2;
-                    const right = obj.x + obj.width / 2;
-                    const top = obj.y - obj.height;
-                    const bottom = obj.y;
+                if (obj.disabled) continue;
 
-                    if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-                        hitSubsceneObj = true;
-                        console.log(`[Subscene] Clicked on entity '${obj.name}' (Keep Open)`);
-                        break;
-                    }
+                if (obj.hitTest(worldX, worldY)) {
+                    hitSubsceneObj = true;
+                    console.log(`[Subscene] Clicked on object '${obj.name}' (Keep Open)`);
+                    break;
                 }
             }
 

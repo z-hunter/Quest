@@ -374,4 +374,84 @@ export class Entity extends SceneObject {
         entity.load(data);
         return entity;
     }
+
+    // Shared Canvas for Hit Testing (Lazy Initialized)
+    private static _hitTestCanvas: HTMLCanvasElement | null = null;
+    private static _hitTestCtx: CanvasRenderingContext2D | null = null;
+
+    hitTest(x: number, y: number): boolean {
+        if (this.disabled || !this.visible) return false;
+
+        // 1. Initial AABB Check (World Space)
+        // Entity Pivot is Bottom-Center
+        const left = this.x - this.width / 2;
+        const right = this.x + this.width / 2;
+        const top = this.y - this.height;
+        const bottom = this.y;
+
+        // Fast Fail
+        if (x < left || x > right || y < top || y > bottom) return false;
+
+        // 2. Pixel Perfect Check (if Image available)
+        if (this.image && this.image.complete && this.image.naturalWidth > 0) {
+            // Lazy Init Shared Canvas
+            if (!Entity._hitTestCanvas) {
+                Entity._hitTestCanvas = document.createElement('canvas');
+                Entity._hitTestCanvas.width = 1;
+                Entity._hitTestCanvas.height = 1;
+                Entity._hitTestCtx = Entity._hitTestCanvas.getContext('2d', { willReadFrequently: true });
+            }
+            const ctx = Entity._hitTestCtx;
+            if (!ctx) return true; // Fallback to AABB if no context
+
+            // Calculate Local Coordinates (0,0 to Width,Height)
+            // World X -> Local X
+            // Local X = (WorldX - Left) / Scale
+            // But we need to map to Image Coordinates (Source Sprite)
+
+            // Determine Source Rect (Sprite Frame)
+            let srcX = 0, srcY = 0, srcW = this.image.naturalWidth, srcH = this.image.naturalHeight;
+
+            if (this.animator) {
+                const frame = this.animator.getCurrentFrame();
+                if (frame) {
+                    srcX = frame.x;
+                    srcY = frame.y;
+                    srcW = frame.w;
+                    srcH = frame.h;
+                }
+            }
+
+            // Map World Point to Normalized Local (0..1)
+            // Do NOT use this.scale here directly, use this.width/height which includes scale
+            // normalizedX = (x - left) / this.width
+            const normX = (x - left) / this.width;
+            const normY = (y - top) / this.height; // Top is y - height, Bottom is y. So (y - (this.y - h)) / h
+
+            // Flip X Support
+            const finalNormX = this.flipX ? (1 - normX) : normX;
+
+            // Map to Source Image Pixels
+            const pixelX = Math.floor(srcX + finalNormX * srcW);
+            const pixelY = Math.floor(srcY + normY * srcH);
+
+            // Bounds Safety Check (in case of rounding errors)
+            if (pixelX < srcX || pixelX >= srcX + srcW || pixelY < srcY || pixelY >= srcY + srcH) return false;
+
+            // Read Alpha
+            // We clear and draw only the 1x1 pixel we need?
+            // No, drawImage can draw a 1x1 slice of source to 1x1 dest.
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.drawImage(this.image, pixelX, pixelY, 1, 1, 0, 0, 1, 1);
+
+            const pixelData = ctx.getImageData(0, 0, 1, 1).data;
+            const alpha = pixelData[3];
+
+            // Threshold: 10/255 (approx 4%) - allow very faint shadows to be "empty"
+            return alpha > 10;
+        }
+
+        // If no image, AABB is the hit
+        return true;
+    }
 }

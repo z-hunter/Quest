@@ -761,8 +761,11 @@ export class SceneEditor {
                 // Rect: Left = screenX - W/2, Top = screenY - H
                 // (Note: in Render we do ctx.strokeRect(entity.x - w/2...))
 
-                if (pos.x >= screenX - screenW / 2 && pos.x <= screenX + screenW / 2 &&
-                    pos.y >= screenY - screenH && pos.y <= screenY) {
+                // Mouse World Pos for this entity layer
+                const worldX = (pos.x - halfW) / zoom + camX * p;
+                const worldY = (pos.y - halfH) / zoom + camY * p;
+
+                if (entity.hitTest(worldX, worldY)) {
 
                     // HIT! Entity: ${entity.name}
                     this.selectObject(entity);
