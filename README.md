@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# Quest: AI-Enhanced Retro-Vibe Adventure Engine [WIP]
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Quest** is a 2D third-person adventure game engine inspired by 80s classics (like early Sierra and LukasArt games) with a modern twist. It combines traditional Point-n-Click mechanics for movement and inspection with a _text parser_ for interactions.
 
-Currently, two official plugins are available:
+## Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+*   **Hybrid Controls**: Point-n-Click for navigation + Text Parser for actions. No more "scroll and click everything" pixel hunting.
+*   **AI Game Master**: An AI (LLM) acts as the bridge between the player and the game engine. It parses natural language commands, generates descriptions, and drives dynamic conversations with NPCs.
+*   **Retro Aesthetics**: Pixel art style, CRT shader effects, and a command-line interface.
+*   **Integrated Editor**: Built-in tools for editing scenes, defining sprites and game logic (polygonal walkboxes, triggers).
 
-## React Compiler
+## Installation and Run (Windows)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Prerequisites
 
-## Expanding the ESLint configuration
+*   **Node.js**: You need to have Node.js installed. You can download it from [nodejs.org](https://nodejs.org/).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Quick Start (Windows)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+1.  Clone this repository.
+2.  Open the project folder.
+3.  Double-click `setup.cmd` (if provided) or run `setup.cmd` from the command line. This script will install dependencies and start the game in your default browser at `http://localhost:5173`.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Hosting on a Web Server (Linux)
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+To run the game on a Linux web server (e.g., Nginx or Apache):
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+1.  Build the project for production:
+    ```bash
+    npm run build
+    ```
+2.  This will create a `dist` directory containing the static files.
+3.  Upload the contents of the `dist` directory to your web server's public folder.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+> **Note**: The integrated **Scene Editor** and **Sprite Editor** features rely on a local backend to save files directly to local disk. These features will **not** work when hosted as a static site. The game itself can be played if all necessary assets are pre-built.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Project Structure
+
+*   `src/` - Source code (React, TypeScript).
+*   `public/` - Static assets (sprites, sounds, scenes).
+*   `GDD.md` - Game Design Document (Russian).
+
+## License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license. You are free to share and adapt the material for non-commercial purposes, provided you give appropriate credit. See the `LICENSE` file for details.
