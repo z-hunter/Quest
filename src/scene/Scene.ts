@@ -368,6 +368,22 @@ export class Scene {
                                 const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
                                 if (!targetID) continue;
 
+                                // PROXIMITY CHECK
+                                if (this.player) {
+                                    const dist = Math.hypot(this.player.x - worldX, this.player.y - worldY);
+                                    const allowedDist = (this.player.width || 30) * 3; // Tolerance: 3x Player Width
+
+                                    if (dist > allowedDist) {
+                                        console.log(`[Scene] Subscene click too far: ${dist.toFixed(1)} > ${allowedDist}`);
+                                        // @ts-ignore
+                                        if (typeof window.game?.showMessage === 'function') {
+                                            // @ts-ignore
+                                            window.game.showMessage("You are too far away.");
+                                        }
+                                        return;
+                                    }
+                                }
+
                                 console.log(`  -> Activating Subscene Group: '${targetID}'`);
                                 this.activeSubscene = targetID;
                                 this.subsceneEntities.clear(); // Reset tracking

@@ -73,9 +73,13 @@ export class Parser {
                         if (isItem || entity.isTakeable) { // Support legacy isTakeable too if present (though we are moving to components)
                             // PROXIMITY CHECK
                             const player = scene.entities.find((e: any) => e.isPlayer);
-                            if (player) {
+                            // Check for ignoreDistance flag
+                            const itemComp = entity.components && entity.components.find((c: any) => c.type === 'Item');
+                            const ignoreDist = itemComp && itemComp.ignoreDistance;
+
+                            if (player && !ignoreDist) {
                                 const dist = Math.hypot(player.x - entity.x, player.y - entity.y);
-                                const allowedDist = (player.width || 32) * 2; // Tolerance: 2x Player Width
+                                const allowedDist = (player.width || 32) * 3; // Tolerance: 3x Player Width
 
                                 if (dist > allowedDist) {
                                     this.game.showMessage(`You are too far away from the ${entity.name}.`);

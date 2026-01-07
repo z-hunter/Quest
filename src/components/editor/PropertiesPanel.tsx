@@ -295,9 +295,25 @@ export const PropertiesPanel: React.FC = () => {
                                 </div>
 
                                 {comp.type === 'Item' && (
-                                    <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
-                                        Can be picked up by player.
-                                    </div>
+                                    <>
+                                        <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                            Can be picked up by player.
+                                        </div>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#aaf', fontSize: '10px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    style={{ marginRight: '5px' }}
+                                                    checked={!!comp.ignoreDistance}
+                                                    onChange={(e) => {
+                                                        comp.ignoreDistance = e.target.checked;
+                                                        setObj({ ...obj });
+                                                    }}
+                                                />
+                                                Ignore Distance (Always Pickup)
+                                            </label>
+                                        </div>
+                                    </>
                                 )}
 
                                 {comp.type === 'Subscene' && (

@@ -28,6 +28,7 @@ export interface EntityData {
     animationSpeed?: number;
     locked?: boolean;
     disabled?: boolean;
+    customName?: string; // Display Name for Parser/UI
     components?: any[];
     interactions?: Record<string, string>;
 }
@@ -293,6 +294,7 @@ export class Entity extends SceneObject {
             animationSpeed: this.animationSpeed,
             locked: this.locked, // Added Locked Property
             disabled: this.disabled,
+            customName: this.customName,
             groupID: this.groupID,
             components: this.components,
             interactions: this.interactions
@@ -342,6 +344,10 @@ export class Entity extends SceneObject {
 
             if (data.disabled !== undefined) {
                 this.disabled = data.disabled;
+            }
+
+            if (data.customName !== undefined) {
+                this.customName = data.customName;
             }
 
             if (data.components) {
