@@ -8,6 +8,7 @@ import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
+import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 
 export class Game {
@@ -129,6 +130,9 @@ export class Game {
 
         // Register default scripts
         registerDemoScripts();
+
+        // Register user scripts (from src/scripts/main.ts)
+        registerUserScripts();
 
         console.log('Game initialized');
     }
