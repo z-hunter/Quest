@@ -1,4 +1,4 @@
-# Scanline: AI-Powered Retro-Vibe Adventure game Engine [WIP]
+# Scanline: AI-Powered Retro-Vibe Adventure game engine [WIP]
 
 ![logo](public/assets/scanline_logo.png)
 
