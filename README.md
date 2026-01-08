@@ -1,6 +1,7 @@
 # Scanline: AI-Powered Retro-Vibe Adventure game Engine [WIP]
 
 ![logo](public/assets/logo.png)
+
 **Scanline** is a 2D third-person adventure game engine inspired by 80s classics (like early Sierra and LukasArt games) with a modern twist. It combines traditional Point-n-Click mechanics for movement and inspection with a _text parser_ for interactions.
 
 ## Key Features
