@@ -43,12 +43,12 @@
       "components": [],
       "poly": [
         {
-          "x": 81,
-          "y": 195
+          "x": 82,
+          "y": 192
         },
         {
-          "x": 399,
-          "y": 194
+          "x": 407,
+          "y": 195
         },
         {
           "x": 408,
@@ -157,7 +157,58 @@
       "components": [
         {
           "type": "Switch",
-          "groupId1": "null",
+          "groupId1": "nil",
+          "groupId2": "D1",
+          "state": 1,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
+        }
+      ],
+      "poly": [
+        {
+          "x": -156.29411764705887,
+          "y": -171.3529411764706
+        },
+        {
+          "x": 425,
+          "y": -171
+        },
+        {
+          "x": 414,
+          "y": -95
+        },
+        {
+          "x": -143,
+          "y": -95
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_834",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "poly": [],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "sub_sw_d2 ",
+      "locked": false,
+      "disabled": true,
+      "groupID": "D",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "nil",
           "groupId2": "D2",
           "state": 1,
           "idKey": "",
@@ -167,20 +218,20 @@
       ],
       "poly": [
         {
-          "x": -171,
-          "y": -144.88235294117646
+          "x": -156.29411764705878,
+          "y": -87.03921568627447
         },
         {
-          "x": 321,
-          "y": -145.88235294117646
+          "x": 424.9999999999999,
+          "y": -86.68627450980387
         },
         {
-          "x": 313,
-          "y": -81.88235294117646
+          "x": 413.9999999999999,
+          "y": -10.68627450980393
         },
         {
-          "x": -162,
-          "y": -79.88235294117646
+          "x": -142.99999999999994,
+          "y": -10.68627450980393
         }
       ],
       "script": ""
@@ -215,7 +266,10 @@
       "animationSpeed": 150,
       "locked": true,
       "disabled": false,
-      "groupID": null
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -238,49 +292,10 @@
       "animationSpeed": 150,
       "locked": true,
       "disabled": false,
-      "groupID": null
-    },
-    {
-      "type": "Actor",
-      "name": "Hero_1",
-      "x": 24.850336611893937,
-      "y": 224.2887712016697,
-      "width": 117.73756583185846,
-      "height": 274.72098694100305,
-      "baseWidth": 168,
-      "baseHeight": 392,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-up.json",
-      "color": "#00ffff",
-      "scale": 0.7008188442372527,
-      "modelScale": 0.74,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
+      "customName": "",
       "groupID": null,
-      "isPlayer": true,
-      "speed": 0.24,
-      "direction": "up",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -303,7 +318,55 @@
       "animationSpeed": 150,
       "locked": true,
       "disabled": false,
-      "groupID": null
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Actor",
+      "name": "Hero_1",
+      "x": 196.28432091757907,
+      "y": 260.8863323736504,
+      "width": 70.35742703505488,
+      "height": 287.29282705980745,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.7328898649484884,
+      "modelScale": 0.74,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.24,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Entity",
@@ -324,32 +387,12 @@
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
-      "locked": false,
+      "locked": true,
       "disabled": false,
-      "groupID": null
-    },
-    {
-      "type": "Entity",
-      "name": "n",
-      "x": 20,
-      "y": 355,
-      "width": 41.356474601335044,
-      "height": 48.71794871794796,
-      "baseWidth": 41.356474601335044,
-      "baseHeight": 48.71794871794796,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#00ff00",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": true,
-      "groupID": "null"
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -372,7 +415,10 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": false,
-      "groupID": null
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -395,7 +441,36 @@
       "animationSpeed": 150,
       "locked": true,
       "disabled": true,
-      "groupID": "D"
+      "customName": "",
+      "groupID": "D",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D2_body ",
+      "x": 134,
+      "y": 311,
+      "width": 614.4,
+      "height": 407.4,
+      "baseWidth": 1024,
+      "baseHeight": 679,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d2.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 4,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "",
+      "groupID": "D2",
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -412,82 +487,73 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "layer": 4,
+      "layer": 5,
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "D2"
+      "customName": "",
+      "groupID": "D1",
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
       "name": "sub_D1_id",
-      "x": 85,
-      "y": 9,
-      "width": 188.5,
-      "height": 113.1,
+      "x": 91,
+      "y": -1,
+      "width": 156,
+      "height": 93.6,
       "baseWidth": 325,
       "baseHeight": 195,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#00ff00",
-      "scale": 0.58,
-      "modelScale": 0.58,
-      "layer": 4,
+      "scale": 0.48,
+      "modelScale": 0.48,
+      "layer": 5,
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "D2"
+      "customName": "id",
+      "groupID": "D1",
+      "components": [
+        {
+          "type": "Item",
+          "ignoreDistance": true
+        }
+      ],
+      "interactions": {}
     },
     {
       "type": "Entity",
       "name": "sub_D1_stuff",
-      "x": 144,
-      "y": 13,
-      "width": 567.8199999999999,
-      "height": 238.95999999999998,
+      "x": 320,
+      "y": 184,
+      "width": 979,
+      "height": 412,
       "baseWidth": 979,
       "baseHeight": 412,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_items.json",
       "color": "#00ff00",
-      "scale": 0.58,
-      "modelScale": 0.58,
-      "layer": 4,
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 5,
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "D2"
-    },
-    {
-      "type": "Entity",
-      "name": "sub_D2_fasade",
-      "x": 135,
-      "y": 64,
-      "width": 614.4,
-      "height": 105.6,
-      "baseWidth": 1024,
-      "baseHeight": 176,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "sub_drawers_d1_facade.json",
-      "color": "#00ff00",
-      "scale": 0.6,
-      "modelScale": 0.6,
-      "layer": 4,
-      "parallax": 1,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": true,
-      "groupID": "D2"
+      "customName": "",
+      "groupID": "D1",
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -504,13 +570,42 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "layer": 5,
+      "layer": 6,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": true,
+      "customName": "",
+      "groupID": "D",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D1_fasade",
+      "x": 135,
+      "y": 66,
+      "width": 614.4,
+      "height": 105.6,
+      "baseWidth": 1024,
+      "baseHeight": 176,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_facade.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 6,
       "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "D"
+      "customName": "",
+      "groupID": "D1",
+      "components": [],
+      "interactions": {}
     }
   ],
   "camera": {
