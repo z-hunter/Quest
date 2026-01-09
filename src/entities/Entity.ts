@@ -1,6 +1,7 @@
 import { Animator } from '../core/Animator';
 import { Game } from '../core/Game';
 import { SceneObject } from './SceneObject';
+import { Theme } from '../utils/Theme';
 
 export interface EntityData {
     type: string;
@@ -255,13 +256,13 @@ export class Entity extends SceneObject {
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
 
-            ctx.fillStyle = '#00ff00';
+            ctx.fillStyle = Theme.mainColor;
             ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
         }
 
         // Draw Collider if active AND Editor is enabled
         if (Game.instance?.editor?.enabled && this.colliderWidth > 0 && this.colliderHeight > 0) {
-            ctx.strokeStyle = '#00ff00';
+            ctx.strokeStyle = Theme.mainColor;
             ctx.lineWidth = 2; // Make it visible
             ctx.strokeRect(
                 this.x - this.colliderWidth / 2,

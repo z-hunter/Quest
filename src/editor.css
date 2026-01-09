@@ -63,12 +63,12 @@
 }
 
 .editor-sidebar.left {
-    border-right: 1px solid #0f0;
+    border-right: 1px solid var(--ui-main-color);
     /* Retro Green accent */
 }
 
 .editor-sidebar.right {
-    border-left: 1px solid #0f0;
+    border-left: 1px solid var(--ui-main-color);
 }
 
 .editor-center-spacer {
@@ -82,7 +82,7 @@
     background: #222;
     border-bottom: 1px solid #444;
     font-weight: bold;
-    color: #0f0;
+    color: var(--ui-main-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -108,7 +108,7 @@
 
 .e-btn:hover {
     background: #333;
-    border-color: #0f0;
+    border-color: var(--ui-main-color);
     color: #fff;
 }
 
@@ -132,9 +132,9 @@
 }
 
 .e-input {
-    background: #000;
-    border: 1px solid #444;
-    color: #0f0;
+    background: var(--ui-input-bg);
+    border: 1px solid var(--ui-input-border);
+    color: var(--ui-input-text);
     padding: 4px;
     width: 100%;
     box-sizing: border-box;
@@ -142,9 +142,9 @@
 }
 
 .e-select {
-    background: #000;
-    border: 1px solid #444;
-    color: #0f0;
+    background: var(--ui-dropdown-bg);
+    border: 1px solid var(--ui-input-border);
+    color: var(--ui-dropdown-text);
     padding: 4px;
     width: 100%;
     margin-bottom: 5px;
@@ -156,7 +156,7 @@
 
 .e-label {
     display: block;
-    color: #888;
+    color: var(--ui-label-color);
     font-size: 11px;
     margin-bottom: 2px;
 }
@@ -165,7 +165,7 @@
 .editor-bottom-menu {
     height: 32px;
     background: #111;
-    border-top: 1px solid #0f0;
+    border-top: 1px solid var(--ui-main-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -182,7 +182,7 @@
 .e-menu-btn {
     background: transparent;
     border: none;
-    color: #0f0;
+    color: var(--ui-main-color);
     cursor: pointer;
     font-size: 12px;
     text-transform: uppercase;
@@ -197,7 +197,7 @@
 }
 
 .e-menu-btn:hover {
-    background: #0f0;
+    background: var(--ui-main-color);
     color: #000;
 }
 
@@ -216,18 +216,18 @@
 }
 
 .entity-item:hover {
-    background: rgba(0, 255, 0, 0.2);
-    border-bottom: 1px solid #0f0;
+    background: var(--ui-selection-item-hover-bg);
+    border-bottom: 1px solid var(--ui-main-color);
 }
 
 .entity-item.selected {
-    background-color: #0f0;
-    color: #000;
+    background-color: var(--ui-selection-bg);
+    color: var(--ui-selection-text);
 }
 
 /* Global Checkbox Style */
 input[type="checkbox"] {
-    accent-color: #0f0;
+    accent-color: var(--ui-main-color);
     cursor: pointer;
 }
 

@@ -1,6 +1,7 @@
 
 import { Game } from '../core/Game';
 import { useEditorStore } from '../store/editorStore';
+import { Theme } from '../utils/Theme';
 
 export interface SpriteData {
     id: string; // Filename without extension
@@ -259,7 +260,7 @@ export class SpriteEditor {
 
             // Draw Background
             if (this.previewBg === 'black') {
-                ctx.fillStyle = '#000000';
+                ctx.fillStyle = Theme.backgroundColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             } else if (this.previewBg === 'pink') {
                 ctx.fillStyle = '#ff00ff';
@@ -627,7 +628,7 @@ export class SpriteEditor {
             ctx.drawImage(this.sourceImage, imgX, imgY, drawW, drawH);
 
             // Draw Frame Rects (Scaled)
-            ctx.strokeStyle = '#00ff00';
+            ctx.strokeStyle = Theme.mainColor;
             ctx.lineWidth = 1;
 
             // Frame visualization needs to respect scale
@@ -645,7 +646,7 @@ export class SpriteEditor {
                 ctx.strokeRect(sx, sy, sw, sh);
 
                 // Frame Number
-                ctx.fillStyle = '#00ff00';
+                ctx.fillStyle = Theme.mainColor;
                 ctx.font = '10px monospace';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'alphabetic';

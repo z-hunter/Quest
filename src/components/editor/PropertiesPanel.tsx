@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { Game } from '../../core/Game';
+import { Select } from '../../components/common/Select';
 
 export const PropertiesPanel: React.FC = () => {
     const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode } = useEditorStore();
@@ -191,15 +192,16 @@ export const PropertiesPanel: React.FC = () => {
                         {selectedObjectType === 'Walkbox' && (
                             <div className="e-row">
                                 <label className="e-label">Mode</label>
-                                <select
-                                    className="e-input"
+                                <Select
                                     value={obj.mode || 'Invert'}
-                                    onChange={(e) => handleChange('mode', e.target.value)}
-                                >
-                                    <option value="Invert">Invert (Standard)</option>
-                                    <option value="Add">Add (Bridge)</option>
-                                    <option value="Subtract">Subtract (Hole)</option>
-                                </select>
+                                    onChange={(value) => handleChange('mode', value)}
+                                    options={[
+                                        { value: 'Invert', label: 'Invert (Standard)' },
+                                        { value: 'Add', label: 'Add (Bridge)' },
+                                        { value: 'Subtract', label: 'Subtract (Hole)' },
+                                    ]}
+                                    style={{ width: '100%', marginBottom: '5px' }}
+                                />
                             </div>
                         )}
                         <button
@@ -243,12 +245,16 @@ export const PropertiesPanel: React.FC = () => {
                         <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>COMPONENTS</span>
                             <div>
-                                <select
-                                    className="e-input"
-                                    style={{ width: '100px', fontSize: '10px' }}
-                                    value={""}
-                                    onChange={(e) => {
-                                        const type = e.target.value;
+                                <Select
+                                    options={[
+                                        { value: 'Item', label: 'Item (Pickup)' },
+                                        { value: 'Subscene', label: 'Subscene' },
+                                        { value: 'Subtrigger', label: 'Subtrigger' },
+                                        { value: 'Switch', label: 'Switch' },
+                                    ]}
+                                    placeholder="+ Add Component"
+                                    onChange={(value) => {
+                                        const type = value;
                                         if (!type) return;
                                         if (!obj.components) obj.components = [];
 
@@ -272,15 +278,11 @@ export const PropertiesPanel: React.FC = () => {
                                             (Game.instance.editor.selectedObject as any).components = obj.components;
                                         }
                                         setObj({ ...obj });
-                                        e.target.value = ""; // Reset
+                                        // No need to reset value as Select component handles it or we pass empty value
                                     }}
-                                >
-                                    <option value="" disabled>+ Add Component</option>
-                                    <option value="Item">Item (Pickup)</option>
-                                    <option value="Subscene">Subscene</option>
-                                    <option value="Subtrigger">Subtrigger</option>
-                                    <option value="Switch">Switch</option>
-                                </select>
+                                    style={{ width: '100px', fontSize: '10px' }}
+                                    value=""
+                                />
                             </div>
                         </div>
 
@@ -369,10 +371,15 @@ export const PropertiesPanel: React.FC = () => {
                                         <div className="e-row" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                                 <label className="e-label" style={{ fontSize: '10px', marginRight: '5px' }}>State:</label>
-                                                <select className="e-input" style={{ width: '40px' }} value={comp.state} onChange={(e) => { comp.state = parseInt(e.target.value); setObj({ ...obj }); }}>
-                                                    <option value={1}>1</option>
-                                                    <option value={2}>2</option>
-                                                </select>
+                                                <Select
+                                                    value={String(comp.state)}
+                                                    onChange={(value) => { comp.state = parseInt(value); setObj({ ...obj }); }}
+                                                    options={[
+                                                        { value: '1', label: '1' },
+                                                        { value: '2', label: '2' },
+                                                    ]}
+                                                    style={{ width: '40px' }}
+                                                />
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Key Item ID</label>
@@ -458,21 +465,22 @@ export const PropertiesPanel: React.FC = () => {
                         {/* Direction */}
                         <div className="e-row">
                             <label className="e-label">Direction</label>
-                            <select
-                                className="e-input"
+                            <Select
                                 value={obj.direction || 'down'}
-                                onChange={(e) => {
-                                    handleChange('direction', e.target.value);
-                                    // Also trigger sprite update on the real object immediately
+                                onChange={(value) => {
+                                    handleChange('direction', value);
                                     if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).setDirection) {
-                                        (Game.instance.editor.selectedObject as any).setDirection(e.target.value);
+                                        (Game.instance.editor.selectedObject as any).setDirection(value);
                                     }
                                 }}
-                            >
-                                <option value="down">Down</option>
-                                <option value="up">Up</option>
-                                <option value="left">Left</option>
-                            </select>
+                                options={[
+                                    { value: 'down', label: 'Down' },
+                                    { value: 'up', label: 'Up' },
+                                    { value: 'left', label: 'Left' },
+                                    { value: 'right', label: 'Right' },
+                                ]}
+                                style={{ width: '100%', marginBottom: '5px' }}
+                            />
                         </div>
 
                         {/* Speed */}
@@ -658,12 +666,11 @@ export const PropertiesPanel: React.FC = () => {
                         <div className="e-row" style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: '5px' }}>
                             <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
                                 <span>SCRIPT EVENTS</span>
-                                <select
-                                    className="e-input"
-                                    style={{ width: '80px', fontSize: '10px' }}
+                                <Select
                                     value=""
-                                    onChange={(e) => {
-                                        const verb = e.target.value;
+                                    placeholder="+ ADD"
+                                    onChange={(value) => {
+                                        const verb = value;
                                         if (!verb) return;
                                         if (!obj.interactions) obj.interactions = {};
                                         if (!obj.interactions[verb]) {
@@ -676,13 +683,14 @@ export const PropertiesPanel: React.FC = () => {
                                             setObj({ ...obj });
                                         }
                                     }}
-                                >
-                                    <option value="">+ ADD</option>
-                                    <option value="look">Look</option>
-                                    <option value="use">Use</option>
-                                    <option value="talk">Talk</option>
-                                    <option value="pickup">Pickup</option>
-                                </select>
+                                    options={[
+                                        { value: 'look', label: 'Look' },
+                                        { value: 'use', label: 'Use' },
+                                        { value: 'talk', label: 'Talk' },
+                                        { value: 'pickup', label: 'Pickup' },
+                                    ]}
+                                    style={{ width: '80px', fontSize: '10px' }}
+                                />
                             </div>
 
                             {obj.interactions && Object.keys(obj.interactions).map(verb => (
@@ -990,7 +998,7 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedObjectType === 'SETTINGS' && (
                     <>
                         <div className="e-row">
-                            <label className="e-label" style={{ color: '#0f0', fontWeight: 'bold', marginBottom: '10px' }}>CRT EFFECT SETTINGS</label>
+                            <label className="e-label" style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}>CRT EFFECT SETTINGS</label>
                         </div>
 
                         {/* Enabled Toggle */}

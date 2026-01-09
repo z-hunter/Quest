@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { Game } from '../../core/Game';
+import { Select } from '../../components/common/Select';
 
 export const HierarchyPanel: React.FC = () => {
     const { hierarchyVersion, selectedObjectId } = useEditorStore();
@@ -215,22 +216,19 @@ export const HierarchyPanel: React.FC = () => {
                         </button>
                     </div>
 
-                    <select
-                        className="e-select"
-                        style={{ width: '100%' }}
-                        onChange={(e) => {
-                            if (e.target.value) {
-                                handleAdd(e.target.value);
-                                e.target.value = ''; // Reset
-                            }
-                        }}
-                    >
-                        <option value="">+ Add Object</option>
-                        <option value="Static">Static (S)</option>
-                        <option value="Actor">Actor (A)</option>
-                        <option value="Walkbox">Walkbox (W)</option>
-                        <option value="Triggerbox">Triggerbox (T)</option>
-                    </select>
+                    <div style={{ marginTop: '5px' }}>
+                        <Select
+                            options={[
+                                { value: 'Static', label: 'Static (S)' },
+                                { value: 'Actor', label: 'Actor (A)' },
+                                { value: 'Walkbox', label: 'Walkbox (W)' },
+                                { value: 'Triggerbox', label: 'Triggerbox (T)' },
+                            ]}
+                            placeholder="+ Add Object"
+                            onChange={(value) => handleAdd(value)}
+                            style={{ width: '100%', fontSize: '12px' }}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -240,8 +238,8 @@ export const HierarchyPanel: React.FC = () => {
                     className="e-list-item"
                     style={{
                         padding: '4px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                        background: isItemSelected('SCENE') ? '#0f0' : 'transparent',
-                        color: isItemSelected('SCENE') ? '#000' : '#aaa'
+                        background: isItemSelected('SCENE') ? 'var(--ui-selection-bg)' : 'transparent',
+                        color: isItemSelected('SCENE') ? 'var(--ui-selection-text)' : '#aaa'
                     }}
                     onClick={() => Game.instance.editor.selectObject('SCENE')}
                     onDoubleClick={() => centerCameraOn('SCENE')}
@@ -266,8 +264,8 @@ export const HierarchyPanel: React.FC = () => {
                             key={ent.name}
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                                background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa',
+                                background: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
+                                color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(ent)}
@@ -300,8 +298,8 @@ export const HierarchyPanel: React.FC = () => {
                             key={wb.name || i}
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                                background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa',
+                                background: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
+                                color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(wb)}
@@ -334,8 +332,8 @@ export const HierarchyPanel: React.FC = () => {
                             key={tb.name || i}
                             style={{
                                 padding: '4px', paddingLeft: '15px', marginBottom: '2px', cursor: 'pointer', borderRadius: '4px',
-                                background: isSelected ? '#0f0' : 'transparent',
-                                color: isSelected ? '#000' : '#aaa',
+                                background: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
+                                color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
                             onClick={() => Game.instance.editor.selectObject(tb)}
@@ -359,7 +357,7 @@ export const HierarchyPanel: React.FC = () => {
                     );
                 })}
             </div>
-        </div>
+        </div >
     );
 };
 

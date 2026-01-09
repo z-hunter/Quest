@@ -239,16 +239,16 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 10000,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'monospace', color: '#0f0'
+            fontFamily: 'monospace', color: 'var(--ui-main-color)'
         }}>
             <div ref={modalRef} className="file-browser" style={{
                 width: '500px', maxWidth: '95vw',
                 height: '600px', maxHeight: '90vh',
                 backgroundColor: '#000',
-                border: '2px solid #0f0', display: 'flex', flexDirection: 'column',
+                border: '2px solid var(--ui-main-color)', display: 'flex', flexDirection: 'column',
                 padding: '10px'
             }}>
-                <div className="browser-header" style={{ borderBottom: '1px solid #0f0', marginBottom: '10px', paddingBottom: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="browser-header" style={{ borderBottom: '1px solid var(--ui-main-color)', marginBottom: '10px', paddingBottom: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                         <h3 style={{ margin: 0 }}>{title || (mode === 'save' ? 'Save File' : 'Load File')}</h3>
                         <span style={{ fontSize: '12px', color: '#888' }}>{currentPath}</span>
@@ -263,7 +263,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                         }}
                         title="Open in System Explorer"
                         style={{
-                            background: 'transparent', border: '1px solid #0f0', color: '#0f0', cursor: 'pointer',
+                            background: 'transparent', border: '1px solid var(--ui-btn-border)', color: 'var(--ui-btn-text)', cursor: 'pointer',
                             fontSize: '12px', padding: '2px 6px', marginLeft: '10px'
                         }}
                     >
@@ -299,9 +299,9 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                                 style={{
                                     padding: '5px',
                                     cursor: 'pointer',
-                                    backgroundColor: isSelected ? '#003300' : 'transparent',
-                                    color: item.isDir ? '#ffff00' : (isSelected ? '#fff' : '#0f0'),
-                                    border: isSelected ? '1px solid #00ff00' : '1px solid transparent'
+                                    backgroundColor: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
+                                    color: item.isDir ? '#ffff00' : (isSelected ? 'var(--ui-selection-text)' : 'var(--ui-main-color)'),
+                                    border: isSelected ? '1px solid var(--ui-selection-bg)' : '1px solid transparent'
                                 }}
                             >
                                 {item.isDir ? '📁' : '📄'} {item.name}
@@ -324,7 +324,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                     </div>
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                         <button onClick={onCancel} style={{ padding: '5px 15px', cursor: 'pointer', background: '#333', color: '#fff', border: '1px solid #666' }}>Cancel</button>
-                        <button onClick={handleConfirm} style={{ padding: '5px 15px', cursor: 'pointer', background: '#006600', color: '#fff', border: '1px solid #0f0' }}>
+                        <button onClick={handleConfirm} style={{ padding: '5px 15px', cursor: 'pointer', background: 'var(--ui-selection-bg)', color: 'var(--ui-selection-text)', border: '1px solid var(--ui-main-color)' }}>
                             {mode === 'save' ? 'Save' : 'Load'}
                         </button>
                     </div>

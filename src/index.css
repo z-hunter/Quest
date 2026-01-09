@@ -10,6 +10,58 @@ body {
   width: 100vw;
 }
 
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ui-bg-color);
+  border-left: 1px solid #222;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border: 1px solid var(--ui-bg-color);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+  border-color: var(--ui-main-color);
+}
+
+:root {
+  /* Main UI Color (Frames, Headers, Labels) */
+  --ui-main-color: #79EFA4;
+  --ui-bg-color: #000000;
+  --ui-panel-header-bg: #222222;
+  --ui-label-color: #888888;
+
+  /* Selection & Active States */
+  --ui-selection-bg: #79EFA4;
+  --ui-selection-text: #000000;
+  --ui-selection-item-hover-bg: rgba(121, 239, 164, 0.2);
+
+  /* Input Fields */
+  --ui-input-bg: #000000;
+  --ui-input-text: #79EFA4;
+  --ui-input-border: #444444;
+  --ui-input-focus-border: #79EFA4;
+
+  /* Dropdowns */
+  --ui-dropdown-bg: #000000;
+  --ui-dropdown-text: #79EFA4;
+  --ui-dropdown-selection-bg: #204638;
+  /* Optional specific */
+
+  /* Buttons */
+  --ui-btn-bg: #000000;
+  --ui-btn-text: #79EFA4;
+  --ui-btn-border: #79EFA4;
+}
+
 #root {
   width: 100%;
   height: 100%;
@@ -128,8 +180,8 @@ canvas {
 #hierarchy-panel {
   width: 200px;
   background: rgba(0, 0, 0, 0.8);
-  border: 2px solid #00ff00;
-  color: #00ff00;
+  border: 2px solid var(--ui-main-color);
+  color: var(--ui-main-color);
   display: flex;
   flex-direction: column;
   pointer-events: auto;
@@ -140,8 +192,8 @@ canvas {
 #se-panel {
   width: 300px;
   background: rgba(0, 0, 0, 0.8);
-  border: 2px solid #00ff00;
-  color: #00ff00;
+  border: 2px solid var(--ui-main-color);
+  color: var(--ui-main-color);
   padding: 10px;
   overflow-y: auto;
   pointer-events: auto;
@@ -155,12 +207,12 @@ canvas {
 
 /* Bottom Bar - F-Keys */
 .editor-bottom-bar {
-  background: #000;
-  color: #00ff00;
+  background: var(--ui-panel-header-bg);
+  color: var(--ui-main-color);
   display: flex;
   justify-content: space-around;
   padding: 5px;
-  border-top: 2px solid #00ff00;
+  border-top: 2px solid var(--ui-main-color);
   font-family: monospace;
   pointer-events: auto;
 }
@@ -180,14 +232,14 @@ canvas {
   background: transparent;
   width: auto;
   border: none;
-  color: #00ff00;
+  color: var(--ui-main-color);
   cursor: pointer;
   font-family: inherit;
   font-size: 14px;
 }
 
 .f-key-btn:hover {
-  background: #00ff00;
+  background: var(--ui-main-color);
   color: #000;
 }
 
@@ -209,26 +261,26 @@ canvas {
 }
 
 .entity-item:hover {
-  background: rgba(0, 255, 0, 0.2);
+  background: var(--ui-selection-item-hover-bg);
 }
 
 .entity-item.selected {
-  background: #00ff00;
-  color: #000;
+  background: var(--ui-selection-bg);
+  color: var(--ui-selection-text);
 }
 
 /* Scene Prop Item */
 .scene-prop-item {
   padding: 2px 5px;
   cursor: pointer;
-  border-bottom: 1px dashed #00ff00;
+  border-bottom: 1px dashed var(--ui-main-color);
   margin-bottom: 5px;
   font-weight: bold;
 }
 
 .scene-prop-item.selected {
-  background: #00ff00;
-  color: #000;
+  background: var(--ui-selection-bg);
+  color: var(--ui-selection-text);
 }
 
 .hidden {
@@ -239,7 +291,7 @@ canvas {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #0f0;
+  border-bottom: 1px solid var(--ui-main-color);
   margin-bottom: 10px;
 }
 
@@ -255,16 +307,16 @@ canvas {
 }
 
 button {
-  background: #000;
-  border: 1px solid #0f0;
-  color: #0f0;
+  background: var(--ui-btn-bg);
+  border: 1px solid var(--ui-btn-border);
+  color: var(--ui-btn-text);
   cursor: pointer;
   padding: 2px 5px;
   font-family: monospace;
 }
 
 button:hover {
-  background: #0f0;
+  background: var(--ui-main-color);
   color: #000;
 }
 
@@ -272,24 +324,69 @@ input[type="text"],
 input[type="number"],
 .e-input,
 select {
-  background: #222;
-  border: 1px solid #555;
-  color: #fff;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-input-text);
   box-sizing: border-box;
+  color-scheme: dark;
 }
+
+
 
 input:focus,
 select:focus,
 textarea:focus,
 .e-input:focus {
-  border-color: #00ff00;
+  border-color: var(--ui-input-focus-border);
   outline: none;
-  box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+  box-shadow: 0 0 5px rgba(121, 239, 164, 0.3);
+}
+
+/* Custom Select Styles */
+/* Custom Select Styles */
+.custom-select-container {
+  background: var(--ui-dropdown-bg);
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-dropdown-text);
+  box-sizing: border-box;
+  box-sizing: border-box;
+  font-family: sans-serif;
+}
+
+.custom-select-container:focus,
+.custom-select-container:hover {
+  border-color: var(--ui-input-focus-border);
+  box-shadow: 0 0 5px rgba(121, 239, 164, 0.3);
+}
+
+.custom-select-options {
+  background: var(--ui-dropdown-bg);
+  border: 1px solid var(--ui-main-color);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  font-size: 11px;
+}
+
+.custom-option:hover,
+.custom-option.focused {
+  background: var(--ui-dropdown-selection-bg);
+  color: #fff;
+}
+
+.custom-option.selected {
+  /* background: var(--ui-dropdown-selection-bg); REMOVED to avoid confusion */
+  color: #fff;
+  font-weight: bold;
+}
+
+.custom-option.selected::before {
+  content: '✓';
+  margin-right: 5px;
+  color: var(--ui-main-color);
 }
 
 .file-upload {
   display: inline-block;
-  border: 1px solid #0f0;
+  border: 1px solid var(--ui-main-color);
   padding: 2px 5px;
   cursor: pointer;
 }
@@ -311,13 +408,13 @@ input[type="file"] {
 }
 
 .entity-item:hover {
-  background-color: #222;
-  border-bottom: 1px solid #0f0;
+  background-color: var(--ui-panel-header-bg);
+  border-bottom: 1px solid var(--ui-main-color);
 }
 
 .entity-item.selected {
-  background-color: #0f0;
-  color: #000;
+  background-color: var(--ui-selection-bg);
+  color: var(--ui-selection-text);
 }
 
 /* CRT Overlay Fallback */
@@ -358,9 +455,9 @@ input[type="file"] {
   /* Above the command bar */
   left: 50%;
   transform: translateX(-50%);
-  background-color: #000;
+  background-color: var(--ui-bg-color);
   color: #fff;
-  border: 2px solid #00ff00;
+  border: 2px solid var(--ui-main-color);
   padding: 5px 10px;
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;
