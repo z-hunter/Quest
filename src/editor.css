@@ -255,3 +255,11 @@ input[type="checkbox"] {
     display: flex;
     justify-content: space-between;
 }
+
+.editor-center-column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    height: 100%;
+}

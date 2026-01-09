@@ -26,13 +26,21 @@ function App() {
           editorEnabled && !spriteEditorEnabled ? <HierarchyPanel /> : null // TODO: Sprite List?
         )}
 
-        {/* Center Game Area */}
-        <div className="game-wrapper">
-          <div id="game-container">
-            <GameCanvas onGameInit={setGame} />
-            {/* UIOverlay sits ABSOLUTELY on top of the GameCanvas inside this wrapper */}
-            <UIOverlay game={game} />
+        {/* Center Column: Game + Bottom Menu */}
+        <div className="editor-center-column">
+          {/* Center Game Area */}
+          <div className="game-wrapper">
+            <div id="game-container">
+              <GameCanvas onGameInit={setGame} />
+              {/* UIOverlay sits ABSOLUTELY on top of the GameCanvas inside this wrapper */}
+              <UIOverlay game={game} />
+            </div>
           </div>
+
+          {/* Bottom Bar - moved INSIDE the center column */}
+          {showLayout && (
+            spriteEditorEnabled ? <SpriteBottomMenu /> : (editorEnabled ? <EditorBottomMenu /> : null)
+          )}
         </div>
 
         {/* Right Panel - Properties */}
@@ -40,11 +48,6 @@ function App() {
           spriteEditorEnabled ? <SpritePropertiesPanel /> : (editorEnabled ? <PropertiesPanel /> : null)
         )}
       </div>
-
-      {/* Bottom Bar */}
-      {showLayout && (
-        spriteEditorEnabled ? <SpriteBottomMenu /> : (editorEnabled ? <EditorBottomMenu /> : null)
-      )}
     </div>
   );
 }
