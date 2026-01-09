@@ -110,7 +110,7 @@ export class Entity extends SceneObject {
         this.interactions = {};
         this.isTakeable = false;
 
-        this.color = '#ff0000'; // Debug color
+        this.color = '#AAAAAA'; // Default Neutral Gray
         this.visible = true;
         this.spriteName = null;
         this.image = null;
@@ -265,7 +265,7 @@ export class Entity extends SceneObject {
             ctx.lineWidth = 2; // Make it visible
             ctx.strokeRect(
                 this.x - this.colliderWidth / 2,
-                this.y - this.colliderHeight / 2,
+                this.y - this.colliderHeight,
                 this.colliderWidth,
                 this.colliderHeight
             );

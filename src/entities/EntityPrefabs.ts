@@ -8,7 +8,7 @@ export const DefaultEntityData: EntityData = {
     y: 100,
     width: 30,
     height: 30,
-    color: '#00ff00',
+    color: '#AAAAAA',
     scale: 1.0,
     modelScale: 1.0,
     layer: 0,

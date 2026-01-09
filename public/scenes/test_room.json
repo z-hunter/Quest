@@ -12,6 +12,13 @@
       "groupID": null,
       "customName": "",
       "interactions": {},
+      "components": [
+        {
+          "type": "Subscene",
+          "targetGroupId": "g1",
+          "name": ""
+        }
+      ],
       "poly": [
         {
           "x": 182.5,
@@ -30,14 +37,7 @@
           "y": 91
         }
       ],
-      "script": "",
-      "components": [
-        {
-          "type": "Subscene",
-          "targetGroupId": "g1",
-          "name": ""
-        }
-      ]
+      "script": ""
     },
     {
       "type": "Triggerbox",
@@ -47,6 +47,17 @@
       "groupID": "g1",
       "customName": "",
       "interactions": {},
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "g1",
+          "groupId2": "g2",
+          "state": 1,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
+        }
+      ],
       "poly": [
         {
           "x": 33,
@@ -65,18 +76,7 @@
           "y": 206
         }
       ],
-      "script": "",
-      "components": [
-        {
-          "type": "Switch",
-          "groupId1": "g1",
-          "groupId2": "g2",
-          "state": 1,
-          "idKey": "",
-          "sound1": "drawer_open.wav",
-          "sound2": "drawer_close.wav"
-        }
-      ]
+      "script": ""
     },
     {
       "type": "Triggerbox",
@@ -86,6 +86,7 @@
       "groupID": "g1",
       "customName": "",
       "interactions": {},
+      "components": [],
       "poly": [
         {
           "x": 40.5,
@@ -100,8 +101,7 @@
           "y": 86.5
         }
       ],
-      "script": "",
-      "components": []
+      "script": ""
     }
   ],
   "scaling": {
@@ -112,29 +112,6 @@
     "front": 300
   },
   "entities": [
-    {
-      "type": "Entity",
-      "name": "Static_208",
-      "x": 191,
-      "y": 120,
-      "width": 18.4058769878213,
-      "height": 27.762172361705353,
-      "baseWidth": 18.4058769878213,
-      "baseHeight": 27.762172361705353,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#00ff00",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "groupID": null
-    },
     {
       "type": "Entity",
       "name": "Pillar",
@@ -156,7 +133,10 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "k"
+      "customName": "",
+      "groupID": "k",
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -179,34 +159,10 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": false,
-      "groupID": null
-    },
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": 148.12418332244386,
-      "y": 175.23149434285753,
-      "width": 30,
-      "height": 50,
-      "baseWidth": 30,
-      "baseHeight": 50,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#00ffff",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
+      "customName": "",
       "groupID": null,
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "down",
-      "animSets": {}
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -228,8 +184,11 @@
       "ignoreScaling": false,
       "animationSpeed": 150,
       "locked": false,
-      "disabled": true,
-      "groupID": "g1"
+      "disabled": false,
+      "customName": "",
+      "groupID": "g1",
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -252,7 +211,66 @@
       "animationSpeed": 150,
       "locked": false,
       "disabled": true,
-      "groupID": "g2"
+      "customName": "",
+      "groupID": "g2",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "Logo",
+      "x": 5,
+      "y": 206,
+      "width": 526.5,
+      "height": 537.3000000000001,
+      "baseWidth": 585,
+      "baseHeight": 597,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "scanline_logo.json",
+      "color": "#00ff00",
+      "scale": 0.9,
+      "modelScale": 0.9,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": -78.68883922692297,
+      "y": 241.4659230038129,
+      "width": 30,
+      "height": 50,
+      "baseWidth": 30,
+      "baseHeight": 50,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#00ffff",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "down",
+      "animSets": {}
     }
   ],
   "camera": {
@@ -260,7 +278,7 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 5,
   "camDeadzoneX": 50,
   "camDeadzoneY": 30

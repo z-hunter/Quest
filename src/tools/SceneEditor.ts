@@ -451,7 +451,7 @@ export class SceneEditor {
                 data.name = name;
                 data.x = x !== undefined ? x : 160;
                 data.y = y !== undefined ? y : 100;
-                data.color = '#0000ff'; // Override default green?
+                // data.color = '#0000ff'; // Override removed
                 ent = Actor.fromJSON(data);
             } else {
                 // Use Prefab Data
@@ -459,7 +459,7 @@ export class SceneEditor {
                 data.name = name;
                 data.x = x !== undefined ? x : 160;
                 data.y = y !== undefined ? y : 100;
-                data.color = '#00ff00';
+                // data.color = '#00ff00'; // Removed override, use prefab default
                 ent = Entity.fromJSON(data);
             }
 

@@ -224,7 +224,7 @@ export class Scene {
         if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
             sourceRect = {
                 x: x - sourceEntity.colliderWidth / 2,
-                y: y - sourceEntity.colliderHeight / 2,
+                y: y - sourceEntity.colliderHeight,
                 w: sourceEntity.colliderWidth,
                 h: sourceEntity.colliderHeight
             };
@@ -238,7 +238,7 @@ export class Scene {
 
                 const otherRect = {
                     x: other.x - other.colliderWidth / 2,
-                    y: other.y - other.colliderHeight / 2,
+                    y: other.y - other.colliderHeight,
                     w: other.colliderWidth,
                     h: other.colliderHeight
                 };

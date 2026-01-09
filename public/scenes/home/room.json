@@ -235,6 +235,40 @@
         }
       ],
       "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_495",
+      "locked": false,
+      "disabled": true,
+      "groupID": "D1",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Subtrigger",
+          "target": "sub_sw_d1"
+        }
+      ],
+      "poly": [
+        {
+          "x": -165,
+          "y": 63
+        },
+        {
+          "x": -165,
+          "y": -37
+        },
+        {
+          "x": 438,
+          "y": -39
+        },
+        {
+          "x": 439,
+          "y": 65
+        }
+      ],
+      "script": ""
     }
   ],
   "scaling": {
@@ -613,7 +647,7 @@
     "y": 29,
     "zoom": 0.51
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,
