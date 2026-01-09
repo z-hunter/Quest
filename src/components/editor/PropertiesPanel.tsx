@@ -254,6 +254,8 @@ export const PropertiesPanel: React.FC = () => {
 
                                         if (type === 'Subscene') {
                                             obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                                        } else if (type === 'Subtrigger') {
+                                            obj.components.push({ type: 'Subtrigger', target: '' });
                                         } else if (type === 'Item') {
                                             obj.components.push({ type: 'Item' });
                                         } else if (type === 'Switch') {
@@ -276,6 +278,7 @@ export const PropertiesPanel: React.FC = () => {
                                     <option value="" disabled>+ Add Component</option>
                                     <option value="Item">Item (Pickup)</option>
                                     <option value="Subscene">Subscene</option>
+                                    <option value="Subtrigger">Subtrigger</option>
                                     <option value="Switch">Switch</option>
                                 </select>
                             </div>
@@ -329,6 +332,21 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '10px' }}>Name (Optional)</label>
                                             <input type="text" className="e-input" value={comp.name || ''} onChange={(e) => {
                                                 comp.name = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'Subtrigger' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                Delegates click to another Triggerbox.
+                                            </div>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Trigger (Name/ID)</label>
+                                            <input type="text" className="e-input" value={comp.target || ''} onChange={(e) => {
+                                                comp.target = e.target.value;
                                                 setObj({ ...obj });
                                             }} />
                                         </div>

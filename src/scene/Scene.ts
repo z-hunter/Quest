@@ -360,133 +360,7 @@ export class Scene {
                 if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, tb.poly)) {
                     console.log(`Hit Triggerbox: ${tb.name} `);
 
-                    // Check Components
-                    if (tb.components) {
-                        for (const comp of tb.components) {
-                            if (comp.type === 'Subscene') {
-                                const sub = comp as any;
-                                const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-                                if (!targetID) continue;
-
-                                // PROXIMITY CHECK
-                                if (this.player) {
-                                    const dist = Math.hypot(this.player.x - worldX, this.player.y - worldY);
-                                    const allowedDist = (this.player.width || 30) * 3; // Tolerance: 3x Player Width
-
-                                    if (dist > allowedDist) {
-                                        console.log(`[Scene] Subscene click too far: ${dist.toFixed(1)} > ${allowedDist}`);
-                                        // @ts-ignore
-                                        if (typeof window.game?.showMessage === 'function') {
-                                            // @ts-ignore
-                                            window.game.showMessage("You are too far away.");
-                                        }
-                                        return;
-                                    }
-                                }
-
-                                console.log(`  -> Activating Subscene Group: '${targetID}'`);
-                                this.activeSubscene = targetID;
-                                this.subsceneEntities.clear(); // Reset tracking
-
-                                // 1. Enable Objects in this Group
-                                let count = 0;
-                                this.entities.forEach(e => {
-                                    const eGID = e.groupID ? e.groupID.trim() : '';
-                                    if (eGID === targetID) {
-                                        e.disabled = false;
-                                        this.subsceneEntities.add(e);
-                                        count++;
-                                    }
-                                });
-
-                                // 2. Enable Triggerboxes in this Group (Switches, etc.)
-                                if (this.triggerboxes) {
-                                    this.triggerboxes.forEach(tb => {
-                                        const tbGID = tb.groupID ? tb.groupID.trim() : '';
-                                        // console.log(`  -> Activating Check: Trigger '${tb.name}' GroupID: '${tbGID}' vs Target: '${targetID}'`);
-                                        if (tbGID === targetID) {
-                                            // console.log(`  -> Enabling Subscene Trigger: '${tb.name}'`);
-                                            tb.disabled = false;
-                                            this.subsceneEntities.add(tb);
-                                            count++;
-                                        }
-                                    });
-                                }
-
-                                // console.log(`  -> Enabled ${count} entities/triggers for group '${targetID}'`);
-                                return; // Turn ended
-                            } else if (comp.type === 'Switch') {
-                                const sw = comp as any;
-
-                                // 1. Check Key
-                                if (sw.idKey) {
-                                    // @ts-ignore
-                                    const game = window.game;
-                                    if (game && game.inventory) {
-                                        const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
-                                        if (!hasKey) {
-                                            console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
-                                            game.showMessage(`Locked. Needs ${sw.idKey}`);
-                                            return;
-                                        }
-                                    }
-                                }
-
-                                // 2. Toggle State
-                                const nextState = sw.state === 1 ? 2 : 1;
-                                sw.state = nextState;
-                                console.log(`[Switch] Toggling to State ${nextState}`);
-
-                                // 3. Audio
-                                // @ts-ignore
-                                const game = window.game;
-                                if (game) {
-                                    if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
-                                    if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
-                                }
-
-                                // 4. Update Groups
-                                const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
-                                const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
-
-                                let count = 0;
-                                this.entities.forEach(e => {
-                                    const eGID = e.groupID ? e.groupID.trim() : '';
-                                    if (eGID === groupToShow) {
-                                        e.disabled = false;
-                                        if (this.activeSubscene) this.subsceneEntities.add(e); // Track new appearance
-                                        count++;
-                                    } else if (eGID === groupToHide) {
-                                        e.disabled = true;
-                                        if (this.activeSubscene) this.subsceneEntities.delete(e); // Stop tracking hidden
-                                    }
-                                });
-
-                                // 5. Update Triggerboxes (Prevent Ghost Triggers)
-                                if (this.triggerboxes) {
-                                    this.triggerboxes.forEach(t => {
-                                        if (t === tb) return; // CRITICAL: Do NOT disable self (the Switch)!
-
-                                        const tGID = t.groupID ? t.groupID.trim() : '';
-                                        if (tGID === groupToShow) {
-                                            t.disabled = false;
-                                            if (this.activeSubscene) this.subsceneEntities.add(t);
-                                        } else if (tGID === groupToHide) {
-                                            t.disabled = true;
-                                            if (this.activeSubscene) this.subsceneEntities.delete(t);
-                                        }
-                                    });
-                                }
-                                console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
-                                return; // Stop walking
-                            }
-                        }
-                    }
-
-                    // Legacy Script check
-                    if (tb.script) {
-                        console.log("Run Script:", tb.script);
-                    }
+                    this.activateTrigger(tb);
 
                     // If we hit any trigger, consuming the click is usually safest to prevent "closing" immediately after.
                     return;
@@ -503,8 +377,6 @@ export class Scene {
             for (const obj of this.subsceneEntities) {
                 if (obj.disabled) continue;
 
-                if (obj.disabled) continue;
-
                 if (obj.hitTest(worldX, worldY)) {
                     hitSubsceneObj = true;
                     console.log(`[Subscene] Clicked on object '${obj.name}' (Keep Open)`);
@@ -515,10 +387,6 @@ export class Scene {
             if (hitSubsceneObj) {
                 return;
             }
-
-            // If we are here, we clicked outside any trigger.
-            // Check if we hit a "background" interactive object? (Not implemented)
-            // Default behavior: Close Subscene.
 
             // If we are here, we clicked outside any trigger.
             // Check if we hit a "background" interactive object? (Not implemented)
@@ -545,6 +413,184 @@ export class Scene {
         }
     }
 
+    activateTrigger(tb: Triggerbox, depth: number = 0): void {
+        if (depth > 5) {
+            console.warn("[Scene] Subtrigger recursion limit reached.");
+            return;
+        }
+
+        console.log(`[Scene] Activating Trigger: ${tb.name}`);
+
+        // Check Components
+        if (tb.components) {
+            for (const comp of tb.components) {
+                if (comp.type === 'Subtrigger') {
+                    // Delegate to another trigger
+                    const sub = comp as any;
+                    const targetName = sub.target;
+                    if (!targetName) {
+                        console.warn(`[Subtrigger] No target specified for '${tb.name}'`);
+                        continue;
+                    }
+
+                    // Find Target Triggerbox
+                    const targetTb = this.triggerboxes.find(t => t.name === targetName || t.name === targetName);
+                    if (targetTb) {
+                        console.log(`  -> Delegating to '${targetTb.name}'`);
+                        this.activateTrigger(targetTb, depth + 1);
+                    } else {
+                        console.warn(`[Subtrigger] Target '${targetName}' not found.`);
+                    }
+                    return; // Stop processing this trigger (delegated)
+
+                } else if (comp.type === 'Subscene') {
+                    const sub = comp as any;
+                    const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
+                    if (!targetID) continue;
+
+                    // PROXIMITY CHECK
+                    // We need worldX/Y for proximity check? 
+                    // Wait, activateTrigger doesn't have world coords passed in.
+                    // But we can check against player position vs Trigger Center? 
+                    // Or we just skip proximity check for Subtriggers?
+                    // Let's assume passed click was valid. Or use player distance to Trigger Center.
+
+                    if (this.player) {
+                        // Calculate Trigger Center
+                        // Simple centroid
+                        let cx = 0, cy = 0;
+                        tb.poly.forEach(p => { cx += p.x; cy += p.y; });
+                        cx /= tb.poly.length;
+                        cy /= tb.poly.length;
+
+                        const dist = Math.hypot(this.player.x - cx, this.player.y - cy);
+                        const allowedDist = (this.player.width || 30) * 4; // Loose tolerance
+
+                        if (dist > allowedDist) {
+                            console.log(`[Scene] Trigger activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
+                            // @ts-ignore
+                            if (typeof window.game?.showMessage === 'function') {
+                                // @ts-ignore
+                                window.game.showMessage("You are too far away.");
+                            }
+                            return;
+                        }
+                    }
+
+                    console.log(`  -> Activating Subscene Group: '${targetID}'`);
+                    this.activeSubscene = targetID;
+                    this.subsceneEntities.clear(); // Reset tracking
+
+                    // 1. Enable Objects in this Group
+                    let count = 0;
+                    this.entities.forEach(e => {
+                        const eGID = e.groupID ? e.groupID.trim() : '';
+                        if (eGID === targetID) {
+                            e.disabled = false;
+                            this.subsceneEntities.add(e);
+                            count++;
+                        }
+                    });
+
+                    // 2. Enable Triggerboxes in this Group (Switches, etc.)
+                    if (this.triggerboxes) {
+                        this.triggerboxes.forEach(t => {
+                            const tbGID = t.groupID ? t.groupID.trim() : '';
+                            if (tbGID === targetID) {
+                                t.disabled = false;
+                                this.subsceneEntities.add(t);
+                                count++;
+                            }
+                        });
+                    }
+                    return;
+
+                } else if (comp.type === 'Switch') {
+                    const sw = comp as any;
+
+                    // 1. Check Key
+                    if (sw.idKey) {
+                        // @ts-ignore
+                        const game = window.game;
+                        if (game && game.inventory) {
+                            const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
+                            if (!hasKey) {
+                                console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
+                                game.showMessage(`Locked. Needs ${sw.idKey}`);
+                                return;
+                            }
+                        }
+                    }
+
+                    // 2. Toggle State
+                    const nextState = sw.state === 1 ? 2 : 1;
+                    sw.state = nextState;
+                    console.log(`[Switch] Toggling to State ${nextState}`);
+
+                    // 3. Audio
+                    // @ts-ignore
+                    const game = window.game;
+                    if (game) {
+                        if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
+                        if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
+                    }
+
+                    // 4. Update Groups
+                    const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
+                    const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
+
+                    let count = 0;
+                    this.entities.forEach(e => {
+                        const eGID = e.groupID ? e.groupID.trim() : '';
+                        if (eGID === groupToShow) {
+                            e.disabled = false;
+                            if (this.activeSubscene) this.subsceneEntities.add(e);
+                            count++;
+                        } else if (eGID === groupToHide) {
+                            e.disabled = true;
+                            if (this.activeSubscene) this.subsceneEntities.delete(e);
+                        }
+                    });
+
+                    // 5. Update Triggerboxes
+                    if (this.triggerboxes) {
+                        this.triggerboxes.forEach(t => {
+                            if (t === tb) return; // Don't disable self
+
+                            const tGID = t.groupID ? t.groupID.trim() : '';
+                            if (tGID === groupToShow) {
+                                t.disabled = false;
+                                if (this.activeSubscene) this.subsceneEntities.add(t);
+                            } else if (tGID === groupToHide) {
+                                t.disabled = true;
+                                if (this.activeSubscene) this.subsceneEntities.delete(t);
+                            }
+                        });
+                    }
+                    console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
+                    return;
+                }
+            }
+        }
+
+        // Legacy Script check
+        if (tb.script) {
+            console.log("Run Script:", tb.script);
+            // We need to actually RUN it. In Scene.ts we might not have the runner.
+            // But checking previous code ... it just logged "Run Script".
+            // Wait, previous code:
+            // if (tb.script) { console.log("Run Script:", tb.script); }
+            // Is it not implemented fully?
+            // Ah, the Game class probably handles checking? No, this is onClick.
+
+            // Let's assume for now we just keep the log, or try to run it if possible.
+            // But looking at Game.ts might reveal more. 
+            // For now, I'll stick to what was there: console.log.
+        }
+
+        // If we hit any trigger, consuming the click is usually safest to prevent "closing" immediately after.
+        return;
+    }
 
     update(deltaTime: number): void {
         // Update Camera

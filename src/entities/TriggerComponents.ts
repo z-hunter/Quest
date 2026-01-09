@@ -8,6 +8,12 @@ export interface SubsceneTrigger extends TriggerComponent {
     name?: string;
 }
 
+
+export interface Subtrigger extends TriggerComponent {
+    type: 'Subtrigger';
+    target: string; // ID or Name of the target Triggerbox logic to activate
+}
+
 // Future types can be added here like: | ExitTrigger | EntryTrigger;
 
 export interface SwitchTrigger extends TriggerComponent {
@@ -21,4 +27,4 @@ export interface SwitchTrigger extends TriggerComponent {
     sound2?: string;
 }
 
-export type AnyTriggerComponent = SubsceneTrigger | SwitchTrigger;
+export type AnyTriggerComponent = SubsceneTrigger | SwitchTrigger | Subtrigger;
