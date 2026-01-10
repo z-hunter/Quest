@@ -65,7 +65,7 @@ export class Entity extends SceneObject {
     image: HTMLImageElement | null;
     scale: number;
     modelScale: number;
-    layer: number;
+    // layer: number; // Inherited
     baseWidth: number;
     baseHeight: number;
     colliderWidth: number;
@@ -116,7 +116,7 @@ export class Entity extends SceneObject {
         this.spriteName = null;
         this.image = null;
         this.modelScale = 1.0;
-        this.layer = 0;
+        // this.layer = 0; // Inherited
         this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
         this.ignoreScaling = false;
         this.animationSpeed = 150; // Default 150ms
@@ -328,6 +328,8 @@ export class Entity extends SceneObject {
             else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
 
             if (data.colliderWidth !== undefined) this.colliderWidth = data.colliderWidth;
+            if (data.colliderHeight !== undefined) this.colliderHeight = data.colliderHeight;
+
             if (data.colliderHeight !== undefined) this.colliderHeight = data.colliderHeight;
 
             this.layer = data.layer || 0;

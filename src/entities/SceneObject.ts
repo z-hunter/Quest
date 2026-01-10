@@ -16,11 +16,14 @@ export class SceneObject {
     // Components (e.g. { type: 'Item' }, { type: 'Switch', ... })
     components: any[] = [];
 
+    layer: number = 0;
+
     constructor(name: string, type: string) {
         this.name = name;
         this.type = type;
         this.locked = false;
         this.disabled = false;
+        this.layer = 0;
         this.customName = "";
         this.interactions = {};
         this.components = [];
@@ -32,6 +35,7 @@ export class SceneObject {
             name: this.name,
             locked: this.locked,
             disabled: this.disabled,
+            layer: this.layer,
             groupID: this.groupID,
             customName: this.customName,
             interactions: this.interactions,

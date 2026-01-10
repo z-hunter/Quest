@@ -1,14 +1,13 @@
 {
-  "id": "home\\room",
+  "id": "test1",
   "name": "Test Room",
-  "filename": "home/room",
+  "filename": "test1",
   "walkbox": [
     {
       "type": "Walkbox",
       "name": "Walk_997",
       "locked": false,
       "disabled": false,
-      "layer": 0,
       "groupID": null,
       "customName": "",
       "interactions": {},
@@ -38,7 +37,6 @@
       "name": "Walk_176",
       "locked": false,
       "disabled": false,
-      "layer": 0,
       "groupID": null,
       "customName": "",
       "interactions": {},
@@ -102,7 +100,6 @@
       "name": "Trig_sub_D",
       "locked": false,
       "disabled": false,
-      "layer": 0,
       "groupID": null,
       "customName": "",
       "interactions": {},
@@ -154,7 +151,6 @@
       "name": "sub_sw_d1",
       "locked": false,
       "disabled": true,
-      "layer": 0,
       "groupID": "D",
       "customName": "",
       "interactions": {},
@@ -194,7 +190,6 @@
       "name": "Trig_834",
       "locked": false,
       "disabled": false,
-      "layer": 0,
       "groupID": null,
       "customName": "",
       "interactions": {},
@@ -207,7 +202,6 @@
       "name": "sub_sw_d2 ",
       "locked": false,
       "disabled": true,
-      "layer": 0,
       "groupID": "D",
       "customName": "",
       "interactions": {},
@@ -238,6 +232,40 @@
         {
           "x": -142.99999999999994,
           "y": -10.68627450980393
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_495",
+      "locked": false,
+      "disabled": true,
+      "groupID": "D1",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Subtrigger",
+          "target": "sub_sw_d1"
+        }
+      ],
+      "poly": [
+        {
+          "x": -165,
+          "y": 63
+        },
+        {
+          "x": -165,
+          "y": -37
+        },
+        {
+          "x": 438,
+          "y": -39
+        },
+        {
+          "x": 439,
+          "y": 65
         }
       ],
       "script": ""
@@ -288,7 +316,7 @@
       "baseHeight": 848,
       "colliderWidth": 0,
       "colliderHeight": 0,
-      "spriteName": "room.json",
+      "spriteName": "",
       "color": "#888888",
       "scale": 0.7,
       "modelScale": 0.7,
@@ -332,17 +360,17 @@
     {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 196.28432091757907,
-      "y": 260.8863323736504,
-      "width": 70.35742703505488,
-      "height": 287.29282705980745,
-      "baseWidth": 96,
-      "baseHeight": 392,
+      "x": 191.24783791311737,
+      "y": 284.22156355599486,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-right.json",
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.7328898649484884,
+      "scale": 0.74,
       "modelScale": 0.74,
       "layer": 0,
       "parallax": 1,
@@ -356,7 +384,7 @@
       "interactions": {},
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -506,37 +534,6 @@
     },
     {
       "type": "Entity",
-      "name": "sub_D1_id",
-      "x": 91,
-      "y": -1,
-      "width": 156,
-      "height": 93.6,
-      "baseWidth": 325,
-      "baseHeight": 195,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "sub_drawers_d1_id.json",
-      "color": "#00ff00",
-      "scale": 0.48,
-      "modelScale": 0.48,
-      "layer": 5,
-      "parallax": 1,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": true,
-      "customName": "id",
-      "groupID": "D1",
-      "components": [
-        {
-          "type": "Item",
-          "ignoreDistance": true
-        }
-      ],
-      "interactions": {}
-    },
-    {
-      "type": "Entity",
       "name": "sub_D1_stuff",
       "x": 320,
       "y": 184,
@@ -610,12 +607,7 @@
       "disabled": true,
       "customName": "",
       "groupID": "D1",
-      "components": [
-        {
-          "type": "Subtrigger",
-          "target": "sub_sw_d1"
-        }
-      ],
+      "components": [],
       "interactions": {}
     }
   ],

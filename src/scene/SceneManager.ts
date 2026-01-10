@@ -145,6 +145,7 @@ export class SceneManager {
                     if (t.customName) tb.customName = t.customName;
                     if (t.interactions) tb.interactions = t.interactions;
                     if (t.components) tb.components = t.components;
+                    if (t.layer !== undefined) tb.layer = t.layer;
                     return tb;
                 });
             }

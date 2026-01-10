@@ -31,6 +31,10 @@ body {
   background: #555;
 }
 
+::-webkit-scrollbar-corner {
+  background: var(--ui-bg-color);
+}
+
 :root {
   /* Main UI Color (Frames, Headers, Labels) */
   --ui-main-color: #4aa07f;
@@ -57,7 +61,7 @@ body {
 
   /* Buttons */
   --ui-btn-bg: #000000;
-  --ui-btn-text: #79EFA4;
+  --ui-btn-text: #52c966;
   --ui-btn-border: #79EFA4;
 
   /* F-Keys */

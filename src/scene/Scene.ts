@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
@@ -65,7 +66,7 @@ export class Scene {
 
     // Subscene State
     private _activeSubscene: string | null = null;
-    private subsceneEntities: Set<Entity | Triggerbox> = new Set();
+    private subsceneEntities: Set<SceneObject> = new Set();
 
     get activeSubscene(): string | null {
         return this._activeSubscene;
@@ -351,50 +352,90 @@ export class Scene {
 
         console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
 
-        // 1. Check Triggers FIRST
-        // Triggers take precedence. If we hit a trigger (Switch, etc.), we process it and do NOT close the subscene yet.
+        // 1. Gather Candidates
+        let candidates: SceneObject[] = [];
+        this.entities.forEach(e => {
+            if (!e.disabled) candidates.push(e);
+        });
         if (this.triggerboxes) {
-            for (const tb of this.triggerboxes) {
-                // if (tb.disabled) console.log(`  -> Skipping disabled trigger '${tb.name}'`);
-                if (tb.disabled) continue;
-                if (Geometry.isPointInPolygon({ x: worldX, y: worldY }, tb.poly)) {
-                    console.log(`Hit Triggerbox: ${tb.name} `);
+            this.triggerboxes.forEach(t => {
+                if (!t.disabled) candidates.push(t);
+            });
+        }
 
-                    this.activateTrigger(tb);
+        // 2. Sort Candidates
+        // Primary: Layer (High to Low)
+        // Secondary: Type Priority (Entity > Triggerbox) 
+        // Note: Interactive check is done AFTER hitTest to determine if we block or pass-through.
+        // But for sorting "on the same layer", Entity is usually visually "above" a Triggerbox area if we consider them equal.
+        // The user specified: "Hits on Entities take precedence over hits on Trigger Boxes in the same layer."
+        candidates.sort((a, b) => {
+            const layerA = a.layer || 0;
+            const layerB = b.layer || 0;
+            if (layerA !== layerB) {
+                return layerB - layerA; // Descending
+            }
 
-                    // If we hit any trigger, consuming the click is usually safest to prevent "closing" immediately after.
-                    return;
+            const isEntityA = a instanceof Entity;
+            const isEntityB = b instanceof Entity;
+
+            if (isEntityA && !isEntityB) return -1; // A comes first (higher priority in iteration?) 
+            // Wait, we iterate 0..N. If we want A to be checked FIRST, it should be at index 0.
+            // So -1 puts A before B.
+            if (!isEntityA && isEntityB) return 1;
+
+            return 0;
+        });
+
+        // 3. Iterate & Hit Test
+        for (const obj of candidates) {
+            if (obj.hitTest(worldX, worldY)) {
+                // Check Interactivity
+                const hasComponents = obj.components && obj.components.length > 0;
+                const isTrigger = obj instanceof Triggerbox && (hasComponents || (obj.script && obj.script.length > 0));
+
+                // If Entity has components, it's interactive.
+                const isInteractiveEntity = (obj instanceof Entity) && hasComponents;
+
+                if (isInteractiveEntity || isTrigger) {
+                    console.log(`[Scene] Hit Interactive Object: ${obj.name}`);
+                    this.activateObject(obj);
+                    return; // Consume Click
                 }
+
+                // If it's a Passive Entity (no components), we fall through (continue loop)
+                // "Passive Entities (no components) will NOT consume the click"
+                // If it's a Triggerbox with NO components/script... well, Triggerboxes are usually triggers.
+                // But if it has none, it's just a zone?
+                // Assuming Triggerbox always "counts" if it's in the list? 
+                // Wait, if a Triggerbox has no components and no script, what is it? Just a polygon?
+                // Ideally we shouldn't have empty triggerboxes consuming clicks either.
+                // The logic above `isTrigger` handles this: needs components or script.
+
+                console.log(`[Scene] Hit Passive Object: ${obj.name} (Ignored)`);
+                // Continue to next candidate
             }
         }
 
-        // 2. Subscene Logic (If NO trigger hit)
+        // 4. Subscene Logic (If NO trigger/entity hit)
         if (this.activeSubscene) {
-            // Check if we hit any object visible in the subscene?
-            // User requested: "Close if clicking OUTSIDE all objects in the subscene"
-            let hitSubsceneObj = false;
+            // ... existing Close Subscene logic checks "if we clicked outside"
+            // But we just checked ALL objects. If we are here, we hit nothing interactive.
+            // Did we hit ANY object belonging to the subscene?
+            // "Close if clicking OUTSIDE all objects in the subscene"
+            // We need to know if we 'hit' a passive subscene object to keep it open?
+            // Re-check candidates for ANY subscene membership?
+            // This is getting tricky because we "Ignored" passive hits above.
 
+            // Let's simplify: If we are here, just check subscene entities.
             for (const obj of this.subsceneEntities) {
-                if (obj.disabled) continue;
-
                 if (obj.hitTest(worldX, worldY)) {
-                    hitSubsceneObj = true;
-                    console.log(`[Subscene] Clicked on object '${obj.name}' (Keep Open)`);
-                    break;
+                    console.log(`[Subscene] Clicked on passive object '${obj.name}' (Keep Open)`);
+                    return;
                 }
             }
 
-            if (hitSubsceneObj) {
-                return;
-            }
-
-            // If we are here, we clicked outside any trigger.
-            // Check if we hit a "background" interactive object? (Not implemented)
-            // Default behavior: Close Subscene.
-
             console.log("  -> Clicked outside Subscene triggers/entities. Closing.");
-
-            // Setting this to null will trigger the Setter, which handles cleanup (Switches, Entities)
             this.activeSubscene = null;
             return;
         }
@@ -413,61 +454,62 @@ export class Scene {
         }
     }
 
-    activateTrigger(tb: Triggerbox, depth: number = 0): void {
+    activateObject(obj: SceneObject, depth: number = 0): void {
         if (depth > 5) {
-            console.warn("[Scene] Subtrigger recursion limit reached.");
+            console.warn("[Scene] Recursion limit reached.");
             return;
         }
 
-        console.log(`[Scene] Activating Trigger: ${tb.name}`);
+        console.log(`[Scene] Activating Object: ${obj.name} (${obj.type})`);
 
         // Check Components
-        if (tb.components) {
-            for (const comp of tb.components) {
+        if (obj.components && obj.components.length > 0) {
+            for (const comp of obj.components) {
                 if (comp.type === 'Subtrigger') {
                     // Delegate to another trigger
                     const sub = comp as any;
                     const targetName = sub.target;
                     if (!targetName) {
-                        console.warn(`[Subtrigger] No target specified for '${tb.name}'`);
+                        console.warn(`[Subtrigger] No target specified for '${obj.name}'`);
                         continue;
                     }
 
-                    // Find Target Triggerbox
-                    const targetTb = this.triggerboxes.find(t => t.name === targetName || t.name === targetName);
-                    if (targetTb) {
-                        console.log(`  -> Delegating to '${targetTb.name}'`);
-                        this.activateTrigger(targetTb, depth + 1);
+                    // Find Target Object (Entity or Triggerbox)
+                    const targetObj = this.triggerboxes.find(t => t.name === targetName) || this.entities.find(e => e.name === targetName);
+
+                    if (targetObj) {
+                        console.log(`  -> Delegating to '${targetObj.name}'`);
+                        this.activateObject(targetObj, depth + 1);
                     } else {
                         console.warn(`[Subtrigger] Target '${targetName}' not found.`);
                     }
-                    return; // Stop processing this trigger (delegated)
+                    return; // Stop processing this component (delegated)
 
                 } else if (comp.type === 'Subscene') {
                     const sub = comp as any;
                     const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
                     if (!targetID) continue;
 
-                    // PROXIMITY CHECK
-                    // We need worldX/Y for proximity check? 
-                    // Wait, activateTrigger doesn't have world coords passed in.
-                    // But we can check against player position vs Trigger Center? 
-                    // Or we just skip proximity check for Subtriggers?
-                    // Let's assume passed click was valid. Or use player distance to Trigger Center.
-
                     if (this.player) {
-                        // Calculate Trigger Center
-                        // Simple centroid
+                        // Calculate Center for Proximity Check
                         let cx = 0, cy = 0;
-                        tb.poly.forEach(p => { cx += p.x; cy += p.y; });
-                        cx /= tb.poly.length;
-                        cy /= tb.poly.length;
+
+                        if (obj instanceof Triggerbox) {
+                            // Centroid of Poly
+                            obj.poly.forEach(p => { cx += p.x; cy += p.y; });
+                            cx /= obj.poly.length;
+                            cy /= obj.poly.length;
+                        } else if (obj instanceof Entity) {
+                            // Center of Entity
+                            cx = obj.x;
+                            cy = obj.y - obj.height / 2;
+                        }
 
                         const dist = Math.hypot(this.player.x - cx, this.player.y - cy);
                         const allowedDist = (this.player.width || 30) * 4; // Loose tolerance
 
                         if (dist > allowedDist) {
-                            console.log(`[Scene] Trigger activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
+                            console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
                             // @ts-ignore
                             if (typeof window.game?.showMessage === 'function') {
                                 // @ts-ignore
@@ -492,7 +534,7 @@ export class Scene {
                         }
                     });
 
-                    // 2. Enable Triggerboxes in this Group (Switches, etc.)
+                    // 2. Enable Triggerboxes in this Group
                     if (this.triggerboxes) {
                         this.triggerboxes.forEach(t => {
                             const tbGID = t.groupID ? t.groupID.trim() : '';
@@ -539,23 +581,22 @@ export class Scene {
                     const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
                     const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
 
-                    let count = 0;
+                    // Update Entities
                     this.entities.forEach(e => {
                         const eGID = e.groupID ? e.groupID.trim() : '';
                         if (eGID === groupToShow) {
                             e.disabled = false;
                             if (this.activeSubscene) this.subsceneEntities.add(e);
-                            count++;
                         } else if (eGID === groupToHide) {
                             e.disabled = true;
                             if (this.activeSubscene) this.subsceneEntities.delete(e);
                         }
                     });
 
-                    // 5. Update Triggerboxes
+                    // Update Triggerboxes
                     if (this.triggerboxes) {
                         this.triggerboxes.forEach(t => {
-                            if (t === tb) return; // Don't disable self
+                            if (t === obj) return; // Don't disable self!
 
                             const tGID = t.groupID ? t.groupID.trim() : '';
                             if (tGID === groupToShow) {
@@ -573,22 +614,12 @@ export class Scene {
             }
         }
 
-        // Legacy Script check
-        if (tb.script) {
-            console.log("Run Script:", tb.script);
-            // We need to actually RUN it. In Scene.ts we might not have the runner.
-            // But checking previous code ... it just logged "Run Script".
-            // Wait, previous code:
-            // if (tb.script) { console.log("Run Script:", tb.script); }
-            // Is it not implemented fully?
-            // Ah, the Game class probably handles checking? No, this is onClick.
-
-            // Let's assume for now we just keep the log, or try to run it if possible.
-            // But looking at Game.ts might reveal more. 
-            // For now, I'll stick to what was there: console.log.
+        // Legacy Script check (Triggerbox specific usually)
+        if (obj instanceof Triggerbox && obj.script) {
+            console.log("Run Script:", obj.script);
+            // Implement script running here if needed
         }
 
-        // If we hit any trigger, consuming the click is usually safest to prevent "closing" immediately after.
         return;
     }
 

@@ -87,6 +87,11 @@ export const HierarchyPanel: React.FC = () => {
                     const itemToSelect = allItems[nextIndex];
                     Game.instance.editor.selectObject(itemToSelect);
                 }
+            } else if (e.key === 'Delete') {
+                if (selectedObjectId && selectedObjectId !== 'SCENE') {
+                    e.preventDefault();
+                    Game.instance.editor.deleteSelectedObject();
+                }
             }
         };
 
