@@ -2,6 +2,12 @@ import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { Game } from '../../core/Game';
 import { Select } from '../../components/common/Select';
+import undoIcon from '../../assets/arrow-counter-clockwise.svg';
+import pasteIcon from '../../assets/clipboard-text.svg';
+import copyIcon from '../../assets/copy-simple.svg';
+import saveIcon from '../../assets/floppy-disk.svg';
+import loadIcon from '../../assets/folder-open.svg';
+import deleteIcon from '../../assets/trash.svg';
 
 export const HierarchyPanel: React.FC = () => {
     const { hierarchyVersion, selectedObjectId } = useEditorStore();
@@ -167,52 +173,46 @@ export const HierarchyPanel: React.FC = () => {
                         marginBottom: '5px'
                     }}>
                         <button
-                            className="e-btn e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={() => Game.instance.editor.saveObject()}
                             title="Save Object (Ctrl+S)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            💾
+                            <img src={saveIcon} className="toolbar-icon" alt="Save" />
                         </button>
                         <button
-                            className="e-btn e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={() => Game.instance.editor.loadObject()}
                             title="Load Object (Ctrl+O)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            📂
+                            <img src={loadIcon} className="toolbar-icon" alt="Load" />
                         </button>
                         <button
-                            className="e-btn e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={() => Game.instance.editor.undo()}
                             title="Undo (Ctrl+Z)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            ↩️
+                            <img src={undoIcon} className="toolbar-icon" alt="Undo" />
                         </button>
                         <button
-                            className="e-btn e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={() => Game.instance.editor.copySelectedObjectToClipboard()}
                             title="Copy (Ctrl+C)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            📋
+                            <img src={copyIcon} className="toolbar-icon" alt="Copy" />
                         </button>
                         <button
-                            className="e-btn e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={() => Game.instance.editor.pasteObjectFromClipboard()}
                             title="Paste (Ctrl+V)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            📝
+                            <img src={pasteIcon} className="toolbar-icon" alt="Paste" />
                         </button>
                         <button
-                            className="e-btn e-btn-red e-btn-small"
+                            className="toolbar-icon-btn"
                             onClick={handleDelete}
                             title="Delete Selected (Del)"
-                            style={{ justifyContent: 'center' }}
                         >
-                            🗑️
+                            <img src={deleteIcon} className="toolbar-icon" alt="Delete" />
                         </button>
                     </div>
 

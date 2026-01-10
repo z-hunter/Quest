@@ -29,18 +29,17 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
-  border-color: var(--ui-main-color);
 }
 
 :root {
   /* Main UI Color (Frames, Headers, Labels) */
-  --ui-main-color: #79EFA4;
+  --ui-main-color: #4aa07f;
   --ui-bg-color: #000000;
   --ui-panel-header-bg: #222222;
   --ui-label-color: #888888;
 
   /* Selection & Active States */
-  --ui-selection-bg: #79EFA4;
+  --ui-selection-bg: #4ca149;
   --ui-selection-text: #000000;
   --ui-selection-item-hover-bg: rgba(121, 239, 164, 0.2);
 
@@ -60,6 +59,10 @@ body {
   --ui-btn-bg: #000000;
   --ui-btn-text: #79EFA4;
   --ui-btn-border: #79EFA4;
+
+  /* F-Keys */
+  --ui-fkey-text: #79EFA4;
+  --ui-fkey-hotkey: #468a5f;
 }
 
 #root {
@@ -228,20 +231,7 @@ canvas {
   background: #000;
 }
 
-.f-key-btn {
-  background: transparent;
-  width: auto;
-  border: none;
-  color: var(--ui-main-color);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-}
 
-.f-key-btn:hover {
-  background: var(--ui-main-color);
-  color: #000;
-}
 
 .f-num {
   font-weight: bold;

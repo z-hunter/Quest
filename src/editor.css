@@ -182,22 +182,24 @@
 .e-menu-btn {
     background: transparent;
     border: none;
-    color: var(--ui-main-color);
+    color: var(--ui-fkey-text);
     cursor: pointer;
     font-size: 12px;
     text-transform: uppercase;
     padding: 2px 6px;
 }
 
-/* Hotkey Accent Color (Darker Green) */
+/* Hotkey Accent Color */
 .hotkey-accent {
-    color: #008800;
+    color: var(--ui-fkey-hotkey);
     font-weight: bold;
     margin-right: 4px;
+    opacity: 1;
 }
 
 .e-menu-btn:hover {
     background: var(--ui-main-color);
+
     color: #000;
 }
 
@@ -262,4 +264,37 @@ input[type="checkbox"] {
     flex: 1;
     overflow: hidden;
     height: 100%;
+}
+
+/* Toolbar Icon Buttons */
+.toolbar-icon-btn {
+    background: transparent;
+    border: none;
+    padding: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    width: 100%;
+    aspect-ratio: 1;
+    color: var(--ui-main-color);
+    /* Default icon color */
+}
+
+.toolbar-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    /* SVGs are pre-colored to var(--ui-main-color) */
+}
+
+.toolbar-icon-btn:hover {
+    background-color: var(--ui-main-color);
+    /* Icon becomes black on hover */
+}
+
+.toolbar-icon-btn:hover .toolbar-icon {
+    filter: brightness(0);
+    /* Turn icon black on hover */
 }
