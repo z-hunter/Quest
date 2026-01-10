@@ -188,6 +188,18 @@ export class Game {
 
     update(deltaTime: number): void {
         this.sceneManager.update(deltaTime);
+
+        // Cursor Logic: Change to 'eye' if hovering over Subscene object in Game Mode
+        if (!this.editor.enabled && this.sceneManager.currentScene) {
+            const hovered = this.sceneManager.currentScene.checkHover(this.input.mouse.x, this.input.mouse.y);
+            if (hovered) {
+                this.canvas.classList.add('cursor-eye');
+            } else {
+                this.canvas.classList.remove('cursor-eye');
+            }
+        } else {
+            this.canvas.classList.remove('cursor-eye');
+        }
     }
 
     render(): void {

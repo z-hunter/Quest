@@ -4,6 +4,7 @@ import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import { PolygonObject } from '../entities/PolygonObject';
 import { Geometry } from '../utils/Geometry';
 
 export interface SceneScaling {
@@ -338,20 +339,11 @@ export class Scene {
         }
     }
 
-    onClick(x: number, y: number): void {
-        // Transform Screen Coordinates to World Coordinates
-        // Center-Based: World = (Screen - Center) / Zoom + Camera
-        const screenW = 420; // Internal Resolution
-        const screenH = 300;
-
-        const halfW = screenW / 2;
-        const halfH = screenH / 2;
-
-        const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
-        const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
-
-        console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
-
+    /**
+     * Finds the topmost interactive object at the given WORLD coordinates.
+     * Uses the exact logic as onClick to determine what "blocks" a click.
+     */
+    getHitObject(worldX: number, worldY: number): SceneObject | null {
         // 1. Gather Candidates
         let candidates: SceneObject[] = [];
         this.entities.forEach(e => {
@@ -363,12 +355,7 @@ export class Scene {
             });
         }
 
-        // 2. Sort Candidates
-        // Primary: Layer (High to Low)
-        // Secondary: Type Priority (Entity > Triggerbox) 
-        // Note: Interactive check is done AFTER hitTest to determine if we block or pass-through.
-        // But for sorting "on the same layer", Entity is usually visually "above" a Triggerbox area if we consider them equal.
-        // The user specified: "Hits on Entities take precedence over hits on Trigger Boxes in the same layer."
+        // 2. Sort Candidates (EXACT logic from user requirements / onClick)
         candidates.sort((a, b) => {
             const layerA = a.layer || 0;
             const layerB = b.layer || 0;
@@ -379,9 +366,7 @@ export class Scene {
             const isEntityA = a instanceof Entity;
             const isEntityB = b instanceof Entity;
 
-            if (isEntityA && !isEntityB) return -1; // A comes first (higher priority in iteration?) 
-            // Wait, we iterate 0..N. If we want A to be checked FIRST, it should be at index 0.
-            // So -1 puts A before B.
+            if (isEntityA && !isEntityB) return -1;
             if (!isEntityA && isEntityB) return 1;
 
             return 0;
@@ -393,46 +378,76 @@ export class Scene {
                 // Check Interactivity
                 const hasComponents = obj.components && obj.components.length > 0;
                 const isTrigger = obj instanceof Triggerbox && (hasComponents || (obj.script && obj.script.length > 0));
-
-                // If Entity has components, it's interactive.
                 const isInteractiveEntity = (obj instanceof Entity) && hasComponents;
 
                 if (isInteractiveEntity || isTrigger) {
-                    console.log(`[Scene] Hit Interactive Object: ${obj.name}`);
-                    this.activateObject(obj);
-                    return; // Consume Click
+                    return obj; // Found the blocking interactive object
                 }
 
-                // If it's a Passive Entity (no components), we fall through (continue loop)
-                // "Passive Entities (no components) will NOT consume the click"
-                // If it's a Triggerbox with NO components/script... well, Triggerboxes are usually triggers.
-                // But if it has none, it's just a zone?
-                // Assuming Triggerbox always "counts" if it's in the list? 
-                // Wait, if a Triggerbox has no components and no script, what is it? Just a polygon?
-                // Ideally we shouldn't have empty triggerboxes consuming clicks either.
-                // The logic above `isTrigger` handles this: needs components or script.
-
-                console.log(`[Scene] Hit Passive Object: ${obj.name} (Ignored)`);
-                // Continue to next candidate
+                // Passive -> Continue
             }
+        }
+        return null;
+    }
+
+    checkHover(x: number, y: number): boolean {
+        // Transform Screen Coordinates to World Coordinates
+        const screenW = 420;
+        const screenH = 300;
+        const halfW = screenW / 2;
+        const halfH = screenH / 2;
+        const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
+        const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
+
+        const obj = this.getHitObject(worldX, worldY);
+
+        if (obj && obj.components) {
+            const sub = obj.components.find(c => c.type === 'Subscene') as any;
+            if (sub) {
+                // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
+                if (this.activeSubscene && sub.targetGroupId === this.activeSubscene) {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    onClick(x: number, y: number): void {
+        const screenW = 420;
+        const screenH = 300;
+        const halfW = screenW / 2;
+        const halfH = screenH / 2;
+        const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
+        const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
+
+        console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
+
+        const hitObj = this.getHitObject(worldX, worldY);
+
+        if (hitObj) {
+            console.log(`[Scene] Hit Interactive Object: ${hitObj.name}`);
+            this.activateObject(hitObj);
+            return; // Consume Click
         }
 
         // 4. Subscene Logic (If NO trigger/entity hit)
         if (this.activeSubscene) {
-            // ... existing Close Subscene logic checks "if we clicked outside"
-            // But we just checked ALL objects. If we are here, we hit nothing interactive.
-            // Did we hit ANY object belonging to the subscene?
-            // "Close if clicking OUTSIDE all objects in the subscene"
-            // We need to know if we 'hit' a passive subscene object to keep it open?
-            // Re-check candidates for ANY subscene membership?
-            // This is getting tricky because we "Ignored" passive hits above.
-
-            // Let's simplify: If we are here, just check subscene entities.
+            // Check if we hit specific subscene entities to keep open?
+            // The logic from previous impl:
+            let clickedSubsceneObj = false;
             for (const obj of this.subsceneEntities) {
                 if (obj.hitTest(worldX, worldY)) {
-                    console.log(`[Subscene] Clicked on passive object '${obj.name}' (Keep Open)`);
-                    return;
+                    clickedSubsceneObj = true;
+                    break;
                 }
+            }
+
+            if (clickedSubsceneObj) {
+                console.log(`[Subscene] Clicked on passive object (Keep Open)`);
+                return;
             }
 
             console.log("  -> Clicked outside Subscene triggers/entities. Closing.");

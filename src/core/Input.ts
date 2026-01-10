@@ -14,17 +14,25 @@ export class Input {
     }
 
     setupListeners(): void {
-        this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
-            e.preventDefault(); // Prevent canvas from stealing focus
+        const updateMouse = (e: MouseEvent) => {
             const rect = this.canvas.getBoundingClientRect();
             const scaleX = this.canvas.width / rect.width;
             const scaleY = this.canvas.height / rect.height;
 
             this.mouse.x = (e.clientX - rect.left) * scaleX;
             this.mouse.y = (e.clientY - rect.top) * scaleY;
+        };
+
+        this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
+            updateMouse(e);
+        });
+
+        this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
+            e.preventDefault(); // Prevent canvas from stealing focus
+            updateMouse(e);
             this.mouse.clicked = true;
 
-            console.log(`[Input] MouseDown Raw: ${e.clientX}, ${e.clientY} -> Rect: ${rect.left}, ${rect.top} w=${rect.width} h=${rect.height} -> Scaled: ${this.mouse.x}, ${this.mouse.y}`);
+            console.log(`[Input] MouseDown: ${this.mouse.x}, ${this.mouse.y}`);
             if (this.game.onMouseClick) {
                 // Input handles mousedown, updates state.
                 // Actual 'click' logic usually happens on mouseup or here?
