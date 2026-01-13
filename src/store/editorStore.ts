@@ -27,6 +27,10 @@ interface EditorState {
     toggleSpriteEditor: (force?: boolean) => void;
     spriteVersion: number;
     incrementSpriteVersion: () => void;
+
+    // Quad Vertex Selection
+    selectedVertexIndex: number;
+    selectVertex: (index: number) => void;
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -34,6 +38,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     mode: 'SELECT',
     selectedObjectId: null,
     selectedObjectType: null,
+    selectedVertexIndex: -1,
     sceneName: '',
     sceneFilename: '',
     hierarchyVersion: 0,
@@ -43,7 +48,9 @@ export const useEditorStore = create<EditorState>((set) => ({
 
     setMode: (mode) => set({ mode }),
 
-    selectObject: (id, type) => set({ selectedObjectId: id, selectedObjectType: type }),
+    selectObject: (id, type) => set({ selectedObjectId: id, selectedObjectType: type, selectedVertexIndex: -1 }),
+
+    selectVertex: (index) => set({ selectedVertexIndex: index }),
 
     setSceneInfo: (name, filename) => set({ sceneName: name, sceneFilename: filename }),
 

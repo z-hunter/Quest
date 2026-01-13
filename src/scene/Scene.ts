@@ -4,7 +4,6 @@ import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
-import { PolygonObject } from '../entities/PolygonObject';
 import { Geometry } from '../utils/Geometry';
 
 export interface SceneScaling {
@@ -238,9 +237,22 @@ export class Scene {
                 if (other.disabled) continue; // Skip disabled
                 if (other.colliderWidth === 0 || other.colliderHeight === 0) continue; // Skip ghosts
 
+                const p = other.parallax !== undefined ? other.parallax : 1.0;
+
+                // Effective Collision Position (Visual Position)
+                // If P != 1, the object is visually shifted by -Cam * (P - 1)
+                // We collide with what we see.
+                let effX = other.x;
+                let effY = other.y;
+
+                if (p !== 1.0 && this.camera) {
+                    effX = other.x - this.camera.x * (p - 1.0);
+                    effY = other.y - this.camera.y * (p - 1.0);
+                }
+
                 const otherRect = {
-                    x: other.x - other.colliderWidth / 2,
-                    y: other.y - other.colliderHeight,
+                    x: effX - other.colliderWidth / 2,
+                    y: effY - other.colliderHeight,
                     w: other.colliderWidth,
                     h: other.colliderHeight
                 };
@@ -706,12 +718,68 @@ export class Scene {
         // ctx.fillStyle = '#000'; // Removed: Game.ts clears the screen.
         // ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+        // Capture Camera Y for Parallax Sorting
+        const camY = this.camera ? this.camera.y : 0;
+
         this.entities.sort((a, b) => {
-            const pA = a.parallax !== undefined ? a.parallax : 1.0;
-            const pB = b.parallax !== undefined ? b.parallax : 1.0;
-            if (pA !== pB) return pA - pB;
+            // Sorting Order:
+            // 1. Layer (Explicit user control)
+            // 2. Y-Position (Depth) - includes custom Quad logic
+
             if (a.layer !== b.layer) return a.layer - b.layer;
-            return a.y - b.y;
+
+            // Handle Quad custom sorting
+            let yA = a.y;
+            let yB = b.y;
+            let ignoreA = false;
+            let ignoreB = false;
+
+            if (a.type === 'Quad') {
+                const qA = a as any;
+                if (qA.sortMode === 'ignore') {
+                    ignoreA = true;
+                } else {
+                    // Start with object origin as fallback
+                    yA = qA.y;
+                    let sortP = qA.parallax || 1.0;
+
+                    if (qA.sortMode === 'v0' && qA.vertices[0]) { yA = qA.vertices[0].y; sortP = qA.vertices[0].p; }
+                    else if (qA.sortMode === 'v1' && qA.vertices[1]) { yA = qA.vertices[1].y; sortP = qA.vertices[1].p; }
+                    else if (qA.sortMode === 'v2' && qA.vertices[2]) { yA = qA.vertices[2].y; sortP = qA.vertices[2].p; }
+                    else if (qA.sortMode === 'v3' && qA.vertices[3]) { yA = qA.vertices[3].y; sortP = qA.vertices[3].p; }
+
+                    // Apply Parallax Correction to Sorting Y
+                    // Visual Offset Y = -CamY * (P - 1.0)
+                    // Visual Y = BaseY + Visual Offset Y
+                    // We sort by Visual Y because that determines screen position depth
+                    yA = yA - camY * (sortP - 1.0);
+                }
+            }
+
+            if (b.type === 'Quad') {
+                const qB = b as any;
+                if (qB.sortMode === 'ignore') {
+                    ignoreB = true;
+                } else {
+                    yB = qB.y;
+                    let sortP = qB.parallax || 1.0;
+
+                    if (qB.sortMode === 'v0' && qB.vertices[0]) { yB = qB.vertices[0].y; sortP = qB.vertices[0].p; }
+                    else if (qB.sortMode === 'v1' && qB.vertices[1]) { yB = qB.vertices[1].y; sortP = qB.vertices[1].p; }
+                    else if (qB.sortMode === 'v2' && qB.vertices[2]) { yB = qB.vertices[2].y; sortP = qB.vertices[2].p; }
+                    else if (qB.sortMode === 'v3' && qB.vertices[3]) { yB = qB.vertices[3].y; sortP = qB.vertices[3].p; }
+
+                    yB = yB - camY * (sortP - 1.0);
+                }
+            }
+
+            if (ignoreA && ignoreB) return 0; // Both ignore? Stable.
+            if (ignoreA) return -1; // A ignores -> Draw First (Background)? OR Last? 
+            // "Ignore Y Sorting" usually implies it's a floor/bg, so it should be drawn BELOW everything else on the same layer?
+            // If return -1, A comes before B. A is drawn first. A is behind B. Correct.
+            if (ignoreB) return 1;
+
+            return yA - yB;
         });
 
         const halfW = ctx.canvas.width / 2;

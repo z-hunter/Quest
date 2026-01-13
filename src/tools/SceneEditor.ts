@@ -4,6 +4,7 @@ import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import { QuadObject } from '../entities/QuadObject';
 import { DefaultActorData, DefaultEntityData } from '../entities/EntityPrefabs';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
@@ -364,6 +365,12 @@ export class SceneEditor {
                 break;
             case 'w': this.startCreating('Walkbox'); break;
             case 't': this.startCreating('Triggerbox'); break;
+            case 'q':
+                {
+                    const pos = this.getMouseWorldPosIfOverCanvas();
+                    this.startCreating('Quad', pos?.x, pos?.y);
+                }
+                break;
 
             // Camera Hotkeys
             case '+': case '=':
@@ -435,7 +442,7 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
 
 
-        if (type === 'Static' || type === 'Actor') {
+        if (type === 'Static' || type === 'Actor' || type === 'Quad') {
             const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
             let name = nameInput ? nameInput.value : '';
 
@@ -453,6 +460,19 @@ export class SceneEditor {
                 data.y = y !== undefined ? y : 100;
                 // data.color = '#0000ff'; // Override removed
                 ent = Actor.fromJSON(data);
+            } else if (type === 'Quad') {
+                ent = new QuadObject(name);
+                if (x !== undefined && y !== undefined) {
+                    // Offset vertices to position
+                    (ent as QuadObject).vertices = [
+                        { x: x, y: y, p: 1.0 },
+                        { x: x + 100, y: y, p: 1.0 },
+                        { x: x + 100, y: y + 100, p: 1.0 },
+                        { x: x, y: y + 100, p: 1.0 }
+                    ];
+                    ent.x = x + 50; // Pivot center
+                    ent.y = y + 100;
+                }
             } else {
                 // Use Prefab Data
                 const data = JSON.parse(JSON.stringify(DefaultEntityData));
@@ -634,15 +654,29 @@ export class SceneEditor {
             const halfH = this.game.canvas.height / 2;
 
             // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
-            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
+            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox || (this.selectedObject as any).type === 'Quad')) {
                 if (this.selectedObject.disabled) return; // Prevent interaction if disabled
                 // Center-Based: World = (Screen - Center) / Zoom + Camera
+
+                // For QuadObject, World Position of Vertex depends on Parallax.
+                // We need to check against "Visible World Position" (P=1 space).
 
                 const worldPos = {
                     x: (pos.x - halfW) / zoom + camX,
                     y: (pos.y - halfH) / zoom + camY
                 };
-                const poly = this.selectedObject.poly;
+
+                let poly;
+                if ((this.selectedObject as any).type === 'Quad') {
+                    // Project Quad Vertices to World P=1 for Hit Test
+                    poly = (this.selectedObject as QuadObject).vertices.map((v: any) => ({
+                        x: v.x - camX * (v.p - 1.0),
+                        y: v.y - camY * (v.p - 1.0)
+                    }));
+                } else {
+                    poly = (this.selectedObject as any).poly;
+                }
+
                 const vertexRadius = 6 / zoom; // Hit radius
 
                 // Check vertices
@@ -657,6 +691,7 @@ export class SceneEditor {
                         this.saveUndoState();
                         this.isDragging = true;
                         this.draggingVertexIndex = i;
+                        useEditorStore.getState().selectVertex(i); // Sync UI
                         e.stopPropagation();
                         return;
                     }
@@ -666,21 +701,23 @@ export class SceneEditor {
                 if (Geometry.isPointInPolygon(worldPos, poly)) {
                     if (this.selectedObject.locked) {
                         console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
-                        // Still consume event? if we clicked ON it, maybe we want to select it (it is already selected here).
-                        // Just don't drag.
+                        // Still consume event?
                         return;
                     }
                     this.saveUndoState();
                     this.isDragging = true;
                     this.draggingVertexIndex = -1; // Drag Whole Body
+
+                    // For QuadObject, DragOffset should be relative to P=1 World Pos
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                    useEditorStore.getState().selectVertex(-1); // Deselect vertex when body dragging
                     e.stopPropagation();
                     return;
                 }
             }
 
             // 0.5 CHECK SELECTED ENTITY (High Priority - Exclusive Interaction)
-            if (this.selectedObject && this.selectedObject instanceof Entity) {
+            if (this.selectedObject && this.selectedObject instanceof Entity && (this.selectedObject as any).type !== 'Quad') {
                 if (this.selectedObject.disabled) return; // Prevent interaction if disabled
                 const entity = this.selectedObject;
 
@@ -898,28 +935,106 @@ export class SceneEditor {
         const halfW = this.game.canvas.width / 2;
         const halfH = this.game.canvas.height / 2;
 
-        // Polygon Dragging (Walkbox/Triggerbox)
-        if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
+        // Polygon Dragging (Walkbox/Triggerbox/Rect)
+        if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox || (this.selectedObject as any).type === 'Quad') {
             const worldPos = {
                 x: (pos.x - halfW) / zoom + camX,
                 y: (pos.y - halfH) / zoom + camY
             };
 
-            const poly = this.selectedObject.poly;
-
             if (this.draggingVertexIndex >= 0) {
-                // Drag Vertex
-                if (e.shiftKey) {
-                    // Logic: Snap relative to PREVIOUS vertex in the loop
-                    // (i - 1 + length) % length
-                    const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
-                    const anchor = poly[prevIndex];
-                    const snapped = this.getSnappedPos(worldPos, anchor);
-                    poly[this.draggingVertexIndex].x = snapped.x;
-                    poly[this.draggingVertexIndex].y = snapped.y;
+                // Drag Vertex (with Parallax compensation for Rects)
+                if ((this.selectedObject as any).type === 'Quad') {
+                    const verts = (this.selectedObject as any).vertices; // QuadObject
+                    const v = verts[this.draggingVertexIndex];
+
+                    // Basic Position
+                    // For Quads, vertices store world pos directly (including parallax offset?)
+                    // wait, render applies parallax: v.x + offX
+                    // So v.x is the "base" world pos?
+                    // Previous logic (not visible here but standard):
+                    // We need to inverse the parallax to find the True World Pos?
+                    // "QuadObject.ts": render uses: x = v.x - camX*(v.p-1).
+                    // So if we are dragging at MouseWorldPos, we need to set v.x such that:
+                    // MouseWorldPos = v.x - camX*(v.p-1)
+                    // v.x = MouseWorldPos + camX*(v.p-1)
+
+                    const p = v.p || 1.0;
+                    const offX = -camX * (p - 1.0);
+                    const offY = -camY * (p - 1.0);
+
+                    // Inverse Logic: v.x = WorldPos - Offset
+                    v.x = worldPos.x - offX;
+                    v.y = worldPos.y - offY;
+
+                    // SNAP Logic (Alt Key)
+                    if (e.altKey) {
+                        const snapDist = 50 / zoom; // 50 screen pixels? User said "50 pixels". Assuming screen or world? Usually screen makes sense for UI.
+                        // Let's assume 50 "World Units" if zoom is 1? Or 50 screen pixels.
+                        // "closer than 50 pixels" usually implies screen distance visually.
+
+                        let closestDist = snapDist;
+                        let snapTarget: { x: number, y: number } | null = null;
+
+                        // Check other Quads
+                        const scene = this.game.sceneManager.currentScene;
+                        if (scene) {
+                            scene.entities.forEach(ent => {
+                                if (ent === this.selectedObject) return; // Skip self
+                                if (ent.type === 'Quad') {
+                                    const q = ent as any;
+                                    if (q.vertices) {
+                                        q.vertices.forEach((qv: any) => {
+                                            // We need to compare "Visual Positions" or "Base Positions"?
+                                            // Snapping usually visually aligns things.
+                                            // So we should compare Render Position of Target vs Render Position of Current.
+                                            // Target Render Pos: qv.x + (-camX * (qv.p - 1))
+                                            const qP = qv.p || 1.0;
+                                            const qOffX = -camX * (qP - 1.0);
+                                            const qOffY = -camY * (qP - 1.0);
+                                            const qVisualX = qv.x + qOffX;
+                                            const qVisualY = qv.y + qOffY;
+
+                                            // Current Visual Pos (Mouse): worldPos.x, worldPos.y
+                                            const dist = Math.sqrt(Math.pow(qVisualX - worldPos.x, 2) + Math.pow(qVisualY - worldPos.y, 2));
+
+                                            if (dist < closestDist) {
+                                                closestDist = dist;
+                                                snapTarget = { x: qVisualX, y: qVisualY };
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        }
+
+                        if (snapTarget) {
+                            // snapTarget is the VISUAL position we want to be at.
+                            // We need to convert back to Base Pos for our vertex.
+                            // v.x = VisualX - Offset
+                            v.x = snapTarget.x - offX;
+                            v.y = snapTarget.y - offY;
+                        }
+                    }
+
+                    // Sync UI
+                    useEditorStore.getState().incrementObjectVersion();
+
                 } else {
-                    poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
-                    poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
+                    // Walkbox/Triggerbox (Standard)
+                    const poly = (this.selectedObject as any).poly || (this.selectedObject as any).vertices;
+
+
+                    if (e.shiftKey) {
+                        const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
+                        const anchor = poly[prevIndex];
+                        const snapped = this.getSnappedPos(worldPos, anchor);
+                        poly[this.draggingVertexIndex].x = snapped.x;
+                        poly[this.draggingVertexIndex].y = snapped.y;
+                    } else {
+                        poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
+                        poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
+                    }
                 }
             } else {
                 // Drag Whole Body
@@ -927,9 +1042,19 @@ export class SceneEditor {
                 const dy = worldPos.y - this.dragOffset.y;
 
                 if (dx !== 0 || dy !== 0) {
-                    for (const pt of poly) {
-                        pt.x += dx;
-                        pt.y += dy;
+                    if ((this.selectedObject as any).type === 'Quad') {
+                        const quad = this.selectedObject as QuadObject;
+                        for (const v of quad.vertices) {
+                            v.x += dx;
+                            v.y += dy;
+                        }
+                        this.selectedObject.x += dx;
+                        this.selectedObject.y += dy;
+                    } else {
+                        for (const pt of this.selectedObject.poly) {
+                            pt.x += dx;
+                            pt.y += dy;
+                        }
                     }
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
                 }
@@ -1098,12 +1223,19 @@ export class SceneEditor {
         let type: string | null = null;
         let id: string | null = null;
 
-        if (obj === 'SCENE') {
+        if (obj === null || obj === undefined) {
+            // Deselect
+            type = null;
+            id = null;
+        } else if (obj === 'SCENE') {
             type = 'SCENE';
             id = 'SCENE';
         } else if (obj === 'SETTINGS') {
             type = 'SETTINGS';
             id = 'SETTINGS';
+        } else if (obj.type === 'Quad') {
+            type = 'Quad';
+            id = obj.name;
         } else if (obj instanceof Actor) {
             type = 'Actor';
             id = obj.name;
@@ -1600,6 +1732,25 @@ export class SceneEditor {
                 if (data.customName) newObj.customName = data.customName;
                 if (data.interactions) newObj.interactions = data.interactions;
 
+            } else if (type === 'Quad') {
+                newObj = QuadObject.fromJSON(data);
+                // Handle Paste Position Override
+                if (overrideX !== undefined && overrideY !== undefined) {
+                    const oldX = data.x || 0;
+                    const oldY = data.y || 0;
+                    const dx = overrideX - oldX;
+                    const dy = overrideY - oldY;
+
+                    newObj.x = overrideX;
+                    newObj.y = overrideY;
+
+                    if (newObj.vertices) {
+                        newObj.vertices.forEach((v: any) => {
+                            v.x += dx;
+                            v.y += dy;
+                        });
+                    }
+                }
             } else if (type === 'Actor') {
                 newObj = Actor.fromJSON(data);
             } else if (type === 'Player') {
@@ -2239,53 +2390,117 @@ export class SceneEditor {
             const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
             if (this.selectedObject instanceof Entity) {
-                const entity = this.selectedObject as Entity;
-                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+                if ((this.selectedObject as any).type === 'Quad') {
+                    // ** QUAD SELECTION RENDERING **
+                    const quad = this.selectedObject as QuadObject;
 
-                ctx.translate(halfW, halfH);
-                ctx.scale(zoom, zoom);
-                ctx.translate(-camX * p, -camY * p);
+                    ctx.save();
+                    ctx.translate(halfW, halfH);
+                    ctx.scale(zoom, zoom);
+                    // Do NOT apply global camera translate here the same way, 
+                    // because each vertex has its own parallax.
+                    // We need to project each vertex to "Screen Space relative to Zoom Center"
+                    // ScreenX = (Vx - CamX * Vp) * Zoom + HalfW
+                    // Here we are in "Zoom Space" (Scale applied).
+                    // So we draw at (Vx - CamX * Vp)
 
-                if (entity.locked) {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                    ctx.lineWidth = 1 / zoom;
-                    ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed, thin line
+                    ctx.beginPath();
+                    // Draw Outline
+                    const verts = quad.vertices;
+                    if (verts.length > 0) {
+                        // V_visual = V_world - Cam * (p - 1) - Cam <-- Wait.
+                        // Standard Entity: ctx.translate(-camX * p, -camY * p). Draw at 0,0 relative to entity.
+                        // Entity Pos on Screen: (Ex - CamX * p)
+
+                        // Quad Vertex:
+                        // VisualPos = Vx - CamX * (p - 1)  (This IS the visual world position at P=1 plane)
+                        // Then we apply standard Camera P=1 offset: - CamX
+                        // Total: Vx - CamX*p + CamX - CamX = Vx - CamX * p
+
+                        const getDrawPos = (v: any) => ({
+                            x: v.x - camX * v.p,
+                            y: v.y - camY * v.p
+                        });
+
+                        const p0 = getDrawPos(verts[0]);
+                        ctx.moveTo(p0.x, p0.y);
+                        for (let i = 1; i < verts.length; i++) {
+                            const pi = getDrawPos(verts[i]);
+                            ctx.lineTo(pi.x, pi.y);
+                        }
+                        ctx.closePath();
+
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 2 / zoom;
+                        ctx.stroke();
+
+                        // Draw Vertices
+                        ctx.fillStyle = '#00ff00';
+                        const handleSize = 6 / zoom;
+                        verts.forEach((v: any, i: number) => {
+                            const p = getDrawPos(v);
+                            // Highlight dragging vertex
+                            if (this.isDragging && this.draggingVertexIndex === i) {
+                                ctx.fillStyle = '#ffff00';
+                                ctx.fillRect(p.x - handleSize, p.y - handleSize, handleSize * 2, handleSize * 2);
+                                ctx.fillStyle = '#00ff00';
+                            } else {
+                                ctx.fillRect(p.x - handleSize / 2, p.y - handleSize / 2, handleSize, handleSize);
+                            }
+                        });
+                    }
+                    ctx.restore();
+
                 } else {
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2 / zoom;
-                    ctx.setLineDash([4 / zoom, 4 / zoom]);
-                }
+                    // ** STANDARD ENTITY SELECTION **
+                    const entity = this.selectedObject as Entity;
+                    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
-                // Entity Anchor is Bottom-Center
-                // We draw the rect starting at Top-Left relative to that anchor
-                const drawX = entity.x;
-                const drawY = entity.y;
+                    ctx.translate(halfW, halfH);
+                    ctx.scale(zoom, zoom);
+                    ctx.translate(-camX * p, -camY * p);
 
-                ctx.strokeRect(
-                    drawX - entity.width / 2,
-                    drawY - entity.height,
-                    entity.width,
-                    entity.height
-                );
+                    if (entity.locked) {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.lineWidth = 1 / zoom;
+                        ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed, thin line
+                    } else {
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 2 / zoom;
+                        ctx.setLineDash([4 / zoom, 4 / zoom]);
+                    }
 
-                // Draw Resize Handles (Only if NOT locked)
-                if (!entity.locked) {
-                    ctx.fillStyle = '#ffffff';
-                    const hSize = 6 / zoom; // Handle size
+                    // Entity Anchor is Bottom-Center
+                    // We draw the rect starting at Top-Left relative to that anchor
+                    const drawX = entity.x;
+                    const drawY = entity.y;
 
-                    const l = drawX - entity.width / 2;
-                    const r = drawX + entity.width / 2;
-                    const t = drawY - entity.height;
-                    const b = drawY;
+                    ctx.strokeRect(
+                        drawX - entity.width / 2,
+                        drawY - entity.height,
+                        entity.width,
+                        entity.height
+                    );
 
-                    // NW
-                    ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
-                    // NE
-                    ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
-                    // SW
-                    ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
-                    // SE
-                    ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+                    // Draw Resize Handles (Only if NOT locked)
+                    if (!entity.locked) {
+                        ctx.fillStyle = '#ffffff';
+                        const hSize = 6 / zoom; // Handle size
+
+                        const l = drawX - entity.width / 2;
+                        const r = drawX + entity.width / 2;
+                        const t = drawY - entity.height;
+                        const b = drawY;
+
+                        // NW
+                        ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
+                        // NE
+                        ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
+                        // SW
+                        ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
+                        // SE
+                        ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+                    }
                 }
 
                 ctx.restore();

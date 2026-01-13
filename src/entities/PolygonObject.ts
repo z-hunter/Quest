@@ -12,7 +12,7 @@ export class PolygonObject extends SceneObject {
     toJSON(): any {
         return {
             ...super.toJSON(),
-            poly: this.poly
+            poly: this.poly.map(p => ({ ...p }))
         };
     }
 

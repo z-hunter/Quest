@@ -226,6 +226,7 @@ export const HierarchyPanel: React.FC = () => {
                             options={[
                                 { value: 'Static', label: 'Static (S)' },
                                 { value: 'Actor', label: 'Actor (A)' },
+                                { value: 'Quad', label: 'Quad (Q)' },
                                 { value: 'Walkbox', label: 'Walkbox (W)' },
                                 { value: 'Triggerbox', label: 'Triggerbox (T)' },
                             ]}
@@ -285,7 +286,7 @@ export const HierarchyPanel: React.FC = () => {
                                     display: 'inline-block',
                                     textDecoration: ent.disabled ? 'line-through' : 'none'
                                 }}>
-                                    {ent.type === 'Actor' ? '👤' : '📦'}
+                                    {ent.type === 'Actor' ? '👤' : ent.type === 'Quad' ? '🟦' : '📦'}
                                 </span>
                                 {ent.name}
                             </div>

@@ -4,7 +4,7 @@ import { Game } from '../../core/Game';
 import { Select } from '../../components/common/Select';
 
 export const PropertiesPanel: React.FC = () => {
-    const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode } = useEditorStore();
+    const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode, selectedVertexIndex } = useEditorStore();
     const [obj, setObj] = useState<any>(null);
 
     // Refresh local object reference when selection or hierarchy changes
@@ -242,6 +242,140 @@ export const PropertiesPanel: React.FC = () => {
                             <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#faa' }}>
                                 <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.disabled} onChange={(e) => handleChange('disabled', e.target.checked)} />
                                 Disabled (Hidden in Game)
+                            </label>
+                        </div>
+                    </div>
+                )}
+
+                {/* Quad Properties */}
+                {selectedObjectType === 'Quad' && (
+                    <div className="e-row">
+                        <div className="e-row">
+                            <label className="e-label">Color</label>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <input type="color" className="e-input" style={{ width: '30px', padding: 0, height: '20px' }} value={obj.color || '#888888'} onChange={(e) => handleChange('color', e.target.value)} />
+                                <input type="text" className="e-input" style={{ flex: 1 }} value={obj.color || ''} onChange={(e) => handleChange('color', e.target.value)} />
+                            </div>
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Layer</label>
+                            <input type="number" className="e-input" value={obj.layer || 0} onChange={(e) => handleChange('layer', e.target.value, true)} />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)</label>
+                            <input
+                                type="range"
+                                className="e-input"
+                                style={{ width: '100%' }}
+                                min="0" max="1" step="0.05"
+                                value={obj.opacity !== undefined ? obj.opacity : 1.0}
+                                onChange={(e) => handleChange('opacity', e.target.value, true)}
+                            />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Blend Mode</label>
+                            <Select
+                                value={obj.blendMode || 'source-over'}
+                                onChange={(value) => handleChange('blendMode', value)}
+                                options={[
+                                    { value: 'source-over', label: 'Normal' },
+                                    { value: 'multiply', label: 'Multiply' },
+                                    { value: 'screen', label: 'Screen' },
+                                    { value: 'overlay', label: 'Overlay' },
+                                    { value: 'lighter', label: 'Add (Lighter)' },
+                                    { value: 'difference', label: 'Difference' },
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Sort Mode</label>
+                            <Select
+                                value={obj.sortMode || 'ignore'}
+                                onChange={(value) => handleChange('sortMode', value)}
+                                options={[
+                                    { value: 'ignore', label: 'Ignore Y (Manual Layer)' },
+                                    { value: 'v0', label: 'By Vertex 0 (TL)' },
+                                    { value: 'v1', label: 'By Vertex 1 (TR)' },
+                                    { value: 'v2', label: 'By Vertex 2 (BR)' },
+                                    { value: 'v3', label: 'By Vertex 3 (BL)' },
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div className="e-label" style={{ marginTop: '5px', borderBottom: '1px solid #444', marginBottom: '5px' }}>VERTICES (X / Y / P)</div>
+                        {obj.vertices && obj.vertices.map((v: any, i: number) => {
+                            const isSelected = selectedVertexIndex === i;
+                            return (
+                                <div key={i} style={{
+                                    marginBottom: '5px',
+                                    background: '#222',
+                                    padding: '4px',
+                                    borderRadius: '4px',
+                                    border: isSelected ? '1px solid yellow' : '1px solid transparent'
+                                }}>
+                                    <div style={{ fontSize: '9px', color: '#888', marginBottom: '2px' }}>Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}</div>
+                                    <div style={{ display: 'flex', gap: '2px' }}>
+                                        <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
+                                            v.x = parseFloat(e.target.value);
+                                            setObj({ ...obj });
+                                            if (Game.instance.editor.selectedObject) {
+                                                (Game.instance.editor.selectedObject as any).vertices[i].x = v.x;
+                                            }
+                                        }} />
+                                        <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.y)} onChange={(e) => {
+                                            v.y = parseFloat(e.target.value);
+                                            setObj({ ...obj });
+                                            if (Game.instance.editor.selectedObject) {
+                                                (Game.instance.editor.selectedObject as any).vertices[i].y = v.y;
+                                            }
+                                        }} />
+                                        <input type="number" className="e-input" style={{ width: '33%' }} step="0.1" value={v.p} onChange={(e) => {
+                                            const newP = parseFloat(e.target.value);
+                                            const oldP = v.p;
+
+                                            // Auto-Correct Position to prevent visual jump
+                                            // NewPos = OldPos + Cam * (NewP - OldP)
+                                            const scene = Game.instance.sceneManager.currentScene;
+                                            if (scene) {
+                                                const camX = scene.camera.x;
+                                                const camY = scene.camera.y;
+                                                v.x += camX * (newP - oldP);
+                                                v.y += camY * (newP - oldP);
+                                            }
+
+                                            v.p = newP;
+                                            setObj({ ...obj });
+                                            if (Game.instance.editor.selectedObject) {
+                                                const sel = Game.instance.editor.selectedObject as any;
+                                                sel.vertices[i].p = v.p;
+                                                sel.vertices[i].x = v.x;
+                                                sel.vertices[i].y = v.y;
+
+                                                // Trigger update
+                                                Game.instance.editor.saveUndoState(); // Maybe too frequent?
+                                            }
+                                        }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.locked} onChange={(e) => handleChange('locked', e.target.checked)} />
+                                Lock Object
+                            </label>
+                        </div>
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#faa' }}>
+                                <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.disabled} onChange={(e) => handleChange('disabled', e.target.checked)} />
+                                Disabled
                             </label>
                         </div>
                     </div>

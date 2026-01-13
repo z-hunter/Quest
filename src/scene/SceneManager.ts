@@ -3,6 +3,7 @@ import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import { QuadObject } from '../entities/QuadObject';
 
 export class SceneManager {
     game: any;
@@ -160,6 +161,8 @@ export class SceneManager {
                     } else if (entityData.type === 'Actor') {
                         entity = Actor.fromJSON(entityData);
                         if (entityData.isPlayer) (entity as Actor).isPlayer = true;
+                    } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
+                        entity = QuadObject.fromJSON(entityData);
                     } else {
                         entity = Entity.fromJSON(entityData);
                     }
