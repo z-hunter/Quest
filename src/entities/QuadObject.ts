@@ -32,6 +32,11 @@ export class QuadObject extends Entity {
     opacity: number = 1.0;
     blendMode: GlobalCompositeOperation = 'source-over';
 
+    // Retro Grid Props
+    isGrid: boolean = false;
+    gridLines: number = 5;
+    lineWidth: number = 1.0;
+
     // Override render to handle per-vertex parallax
     render(ctx: CanvasRenderingContext2D): void {
         // Need access to Camera Position
@@ -42,26 +47,100 @@ export class QuadObject extends Entity {
         const camX = scene.camera.x;
         const camY = scene.camera.y;
 
-        ctx.save(); // Save context state
+        ctx.save();
         ctx.globalAlpha = this.opacity;
         ctx.globalCompositeOperation = this.blendMode;
 
-        ctx.fillStyle = this.color;
-
-        ctx.beginPath();
-
-        this.vertices.forEach((v, i) => {
-            // Apply parallax offset relative to P=1.0 base
-            // Offset = -Cam * (V.p - 1.0)
+        // Calculate Screen Positions of Vertices
+        // Apply parallax offset relative to P=1.0 base
+        // Offset = -Cam * (V.p - 1.0)
+        const screenVerts = this.vertices.map(v => {
             const offX = -camX * (v.p - 1.0);
             const offY = -camY * (v.p - 1.0);
-
-            if (i === 0) ctx.moveTo(v.x + offX, v.y + offY);
-            else ctx.lineTo(v.x + offX, v.y + offY);
+            return { x: v.x + offX, y: v.y + offY };
         });
 
-        ctx.closePath();
-        ctx.fill();
+        if (this.isGrid) {
+            // WIREFRAME / GRID MODE
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = this.lineWidth;
+
+            // 1. Draw Outline
+            ctx.beginPath();
+            screenVerts.forEach((v, i) => {
+                if (i === 0) ctx.moveTo(v.x, v.y);
+                else ctx.lineTo(v.x, v.y);
+            });
+            ctx.closePath();
+            ctx.stroke();
+
+            // 2. Draw Internal Lines
+            // Rows (Top to Bottom)
+            // If gridLines = 1, we want 1 line in middle. So steps = 2. t = 0.5.
+            // i=1 to lines.
+
+            // Horizontal Interpolation (Left Edge to Right Edge)
+            // L0->L3, L1->L2
+            const v0 = screenVerts[0]; // TL
+            const v1 = screenVerts[1]; // TR
+            const v2 = screenVerts[2]; // BR
+            const v3 = screenVerts[3]; // BL
+
+            ctx.beginPath();
+
+            // Horizontal Cuts (Down the shape)
+            // Left Edge: v0 -> v3
+            // Right Edge: v1 -> v2
+            for (let i = 1; i <= this.gridLines; i++) {
+                const t = i / (this.gridLines + 1);
+
+                // Left Point
+                const lx = v0.x + (v3.x - v0.x) * t;
+                const ly = v0.y + (v3.y - v0.y) * t;
+
+                // Right Point
+                const rx = v1.x + (v2.x - v1.x) * t;
+                const ry = v1.y + (v2.y - v1.y) * t;
+
+                ctx.moveTo(lx, ly);
+                ctx.lineTo(rx, ry);
+            }
+
+            // Vertical Cuts (Across the shape)
+            // Top Edge: v0 -> v1
+            // Bottom Edge: v3 -> v2
+            for (let i = 1; i <= this.gridLines; i++) {
+                const t = i / (this.gridLines + 1);
+
+                // Top Point
+                const tx = v0.x + (v1.x - v0.x) * t;
+                const ty = v0.y + (v1.y - v0.y) * t;
+
+                // Bottom Point
+                const bx = v3.x + (v2.x - v3.x) * t;
+                const by = v3.y + (v2.y - v3.y) * t;
+
+                ctx.moveTo(tx, ty);
+                ctx.lineTo(bx, by);
+            }
+
+            ctx.stroke();
+
+        } else {
+            // SOLID MODE
+            ctx.fillStyle = this.color;
+
+            ctx.beginPath();
+
+            screenVerts.forEach((v, i) => {
+                if (i === 0) ctx.moveTo(v.x, v.y);
+                else ctx.lineTo(v.x, v.y);
+            });
+
+            ctx.closePath();
+            ctx.fill();
+        }
+
         ctx.restore(); // Restore context state
 
         // Draw Collider if active AND Editor is enabled
@@ -97,7 +176,12 @@ export class QuadObject extends Entity {
             color: this.color,
             sortMode: this.sortMode,
             opacity: this.opacity,
-            blendMode: this.blendMode
+            blendMode: this.blendMode,
+
+            // Retro Grid
+            isGrid: this.isGrid,
+            gridLines: this.gridLines,
+            lineWidth: this.lineWidth
         };
     }
 
@@ -119,8 +203,6 @@ export class QuadObject extends Entity {
         if (data.sortMode) {
             obj.sortMode = data.sortMode;
         } else if (data.ignoreYSorting !== undefined) {
-            obj.sortMode = data.ignoreYSorting ? 'ignore' : 'v0'; // Default to v0 if not ignoring? Or just 'ignore'? 
-            // Previous logic: ignoreYSorting=false => use standard sorting. 
             // Standard sorting uses this.y. v0 is roughly top-left?
             // Actually, if ignoreYSorting was false, it fell back to Entity.y.
             // QuadObject usually has y=0? No, checking SceneEditor, we might set y?
@@ -139,6 +221,11 @@ export class QuadObject extends Entity {
 
         if (data.opacity !== undefined) obj.opacity = data.opacity;
         if (data.blendMode !== undefined) obj.blendMode = data.blendMode;
+
+        // Retro Grid
+        if (data.isGrid !== undefined) obj.isGrid = data.isGrid;
+        if (data.gridLines !== undefined) obj.gridLines = data.gridLines;
+        if (data.lineWidth !== undefined) obj.lineWidth = data.lineWidth;
 
         return obj;
     }

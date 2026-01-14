@@ -1,0 +1,1043 @@
+{
+  "id": "quad2",
+  "name": "Test Room",
+  "filename": "quad2",
+  "walkbox": [],
+  "triggerboxes": [
+    {
+      "type": "Triggerbox",
+      "name": "Trig_201",
+      "locked": false,
+      "disabled": false,
+      "layer": 0,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Subscene",
+          "targetGroupId": "g1",
+          "name": ""
+        }
+      ],
+      "poly": [
+        {
+          "x": 182.5,
+          "y": 124
+        },
+        {
+          "x": 201.5,
+          "y": 122
+        },
+        {
+          "x": 199.5,
+          "y": 93
+        },
+        {
+          "x": 182.5,
+          "y": 91
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_222",
+      "locked": false,
+      "disabled": false,
+      "layer": 0,
+      "groupID": "g1",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "g1",
+          "groupId2": "g2",
+          "state": 1,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
+        }
+      ],
+      "poly": [
+        {
+          "x": 33,
+          "y": 148
+        },
+        {
+          "x": 109,
+          "y": 146
+        },
+        {
+          "x": 105,
+          "y": 206
+        },
+        {
+          "x": 33,
+          "y": 206
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_137",
+      "locked": false,
+      "disabled": false,
+      "layer": 0,
+      "groupID": "g1",
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "poly": [
+        {
+          "x": 40.5,
+          "y": 137.5
+        },
+        {
+          "x": 104.5,
+          "y": 137.5
+        },
+        {
+          "x": 70.5,
+          "y": 86.5
+        }
+      ],
+      "script": ""
+    }
+  ],
+  "scaling": {
+    "enabled": true,
+    "min": 0.7,
+    "max": 0.9,
+    "horizon": 65,
+    "front": 128
+  },
+  "entities": [
+    {
+      "type": "Entity",
+      "name": "bg",
+      "x": 21,
+      "y": 307,
+      "width": 910.0800000000002,
+      "height": 610.5600000000001,
+      "baseWidth": 1264,
+      "baseHeight": 848,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "window-view.json",
+      "color": "#AAAAAA",
+      "scale": 0.7200000000000001,
+      "modelScale": 0.8,
+      "layer": -3,
+      "parallax": 0.1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "interactions": {}
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_600",
+      "x": 65,
+      "y": -1222.75,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#38bc2f",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": -2,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -28,
+          "y": -1360.75,
+          "p": 1
+        },
+        {
+          "x": 143.5,
+          "y": -1364.75,
+          "p": 1
+        },
+        {
+          "x": 177,
+          "y": -1171.75,
+          "p": 1
+        },
+        {
+          "x": -77,
+          "y": -1170.75,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLines": 13,
+      "lineWidth": 1.4
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_2 _1 ",
+      "x": 175.5,
+      "y": -1331.75,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#38bc2f",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": -2,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": 8,
+          "y": -1454.75,
+          "p": 1
+        },
+        {
+          "x": 107,
+          "y": -1421.25,
+          "p": 1
+        },
+        {
+          "x": 141,
+          "y": -1368.25,
+          "p": 1
+        },
+        {
+          "x": -30.5,
+          "y": -1364.25,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLines": 13,
+      "lineWidth": 1.4
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_2 _1 _1 ",
+      "x": 186.5,
+      "y": -1401.25,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#38bc2f",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": -2,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": 41,
+          "y": -1476.25,
+          "p": 1
+        },
+        {
+          "x": 119,
+          "y": -1451.75,
+          "p": 1
+        },
+        {
+          "x": 107,
+          "y": -1421.25,
+          "p": 1
+        },
+        {
+          "x": 8,
+          "y": -1454.75,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLines": 13,
+      "lineWidth": 1.4
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_3 ",
+      "x": -35,
+      "y": -2562.5,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#0f2b0d",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -128,
+          "y": -2700.5,
+          "p": 1
+        },
+        {
+          "x": 43.5,
+          "y": -2704.5,
+          "p": 1
+        },
+        {
+          "x": 77,
+          "y": -2511.5,
+          "p": 1
+        },
+        {
+          "x": -177,
+          "y": -2510.5,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 0.85,
+      "blendMode": "overlay",
+      "isGrid": false,
+      "gridLines": 16,
+      "lineWidth": 1.4
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_239",
+      "x": -171.63562539184403,
+      "y": 225.29174183594387,
+      "width": 90,
+      "height": 90,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#0a0a0a",
+      "scale": 0.9,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -349.05679812942253,
+          "y": 128.05718906574896,
+          "p": 1
+        },
+        {
+          "x": 247.30813318154418,
+          "y": 124.5955827138588,
+          "p": 1
+        },
+        {
+          "x": 247.50017707729168,
+          "y": 179.47555527901653,
+          "p": 1
+        },
+        {
+          "x": -350,
+          "y": 184,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_702",
+      "x": 50.35518543794477,
+      "y": 56.98544526105304,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -156.20307420017252,
+          "y": -56.941958750948174,
+          "p": 0.65
+        },
+        {
+          "x": 150.1,
+          "y": -56.5,
+          "p": 0.65
+        },
+        {
+          "x": 149.07213391703658,
+          "y": 63.58946296044775,
+          "p": 0.65
+        },
+        {
+          "x": -154.81332792282168,
+          "y": 62.046897164306344,
+          "p": 0.65
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 0.65,
+      "blendMode": "screen",
+      "isGrid": true,
+      "gridLines": 3,
+      "lineWidth": 2
+    },
+    {
+      "type": "Actor",
+      "name": "miles_ds",
+      "x": 304.6119999999924,
+      "y": -1177.4339999999854,
+      "width": 38.808,
+      "height": 90.55199999999999,
+      "baseWidth": 168,
+      "baseHeight": 392,
+      "colliderWidth": 32,
+      "colliderHeight": 6,
+      "spriteName": "miles_ds-idle-up.json",
+      "color": "#00ffff",
+      "scale": 0.23099999999999998,
+      "modelScale": 0.33,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.16,
+      "direction": "up",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_72",
+      "x": -91.63369640031912,
+      "y": -66.45591650446437,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#c29494",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -156.2030742001725,
+          "y": -56.94195875094817,
+          "p": 0.65
+        },
+        {
+          "x": 150.1,
+          "y": -56.5,
+          "p": 0.65
+        },
+        {
+          "x": 201.75257762598838,
+          "y": -110,
+          "p": 1
+        },
+        {
+          "x": -238.5,
+          "y": -106.75,
+          "p": 1
+        }
+      ],
+      "sortMode": "v1",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "wall_2",
+      "x": 1.5,
+      "y": -5.5,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": 201.75257762598838,
+          "y": -110,
+          "p": 1
+        },
+        {
+          "x": 150.1,
+          "y": -56.5,
+          "p": 0.65
+        },
+        {
+          "x": 150.1,
+          "y": 61.8,
+          "p": 0.65
+        },
+        {
+          "x": 199,
+          "y": 126,
+          "p": 1
+        }
+      ],
+      "sortMode": "v1",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_561",
+      "x": 0.5995731785992522,
+      "y": 18.686447655482453,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#7e7b67",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -238.19200743179016,
+          "y": 62.8,
+          "p": 0.65
+        },
+        {
+          "x": 150.1,
+          "y": 61.8,
+          "p": 0.65
+        },
+        {
+          "x": 199,
+          "y": 126,
+          "p": 1
+        },
+        {
+          "x": -349.05679812942253,
+          "y": 128.05718906574896,
+          "p": 1
+        }
+      ],
+      "sortMode": "v1",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_1 ",
+      "x": -391.5,
+      "y": 119.5,
+      "width": 87.3015873015873,
+      "height": 87.3015873015873,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.873015873015873,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -350,
+          "y": 127,
+          "p": 1
+        },
+        {
+          "x": -238.19200743179013,
+          "y": 62.8,
+          "p": 0.65
+        },
+        {
+          "x": -235.3927812004629,
+          "y": 117.95,
+          "p": 0.65
+        },
+        {
+          "x": -350,
+          "y": 184,
+          "p": 1
+        }
+      ],
+      "sortMode": "v1",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Entity",
+      "name": "pillar",
+      "x": -14,
+      "y": 60,
+      "width": 18.549937575370755,
+      "height": 122.14999999999999,
+      "baseWidth": 26.499910821958224,
+      "baseHeight": 174.5,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 0.7,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_303",
+      "x": 181.47444229637748,
+      "y": 65.98012041511447,
+      "width": 70.31114933813157,
+      "height": 70.31114933813157,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#1d2272",
+      "scale": 0.7031114933813157,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": 155.662541981541,
+          "y": -26.904257168590128,
+          "p": 0.67
+        },
+        {
+          "x": 179.11987433214696,
+          "y": -37.1397436230848,
+          "p": 0.8
+        },
+        {
+          "x": 173.46379974629514,
+          "y": 90.89321745665244,
+          "p": 0.8
+        },
+        {
+          "x": 154.38118483729278,
+          "y": 72.57066913858243,
+          "p": 0.67
+        }
+      ],
+      "sortMode": "v3",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_891",
+      "x": -210,
+      "y": 77.75,
+      "width": 74.04761904761904,
+      "height": 74.04761904761904,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#474747",
+      "scale": 0.7404761904761904,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -176.58337199313024,
+          "y": -69.49141310177984,
+          "p": 0.75
+        },
+        {
+          "x": -162.5,
+          "y": -68.25,
+          "p": 0.75
+        },
+        {
+          "x": -164,
+          "y": 78.75,
+          "p": 0.75
+        },
+        {
+          "x": -178.5,
+          "y": 79.75,
+          "p": 0.75
+        }
+      ],
+      "sortMode": "v2",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_204",
+      "x": -209.35853348512467,
+      "y": 68.91314101289895,
+      "width": 71.24226698822189,
+      "height": 71.24226698822189,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#888888",
+      "scale": 0.7124226698822188,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -176.58337199313024,
+          "y": -69.49141310177984,
+          "p": 0.75
+        },
+        {
+          "x": -156.2030742001725,
+          "y": -56.94195875094817,
+          "p": 0.65
+        },
+        {
+          "x": -155.4,
+          "y": 58.9,
+          "p": 0.65
+        },
+        {
+          "x": -178.5,
+          "y": 79.75,
+          "p": 0.75
+        }
+      ],
+      "sortMode": "v3",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    },
+    {
+      "type": "Entity",
+      "name": "Static_854",
+      "x": -67,
+      "y": 91,
+      "width": 39.205238095238094,
+      "height": 66.67238095238095,
+      "baseWidth": 167,
+      "baseHeight": 284,
+      "colliderWidth": 33,
+      "colliderHeight": 9,
+      "spriteName": "chair",
+      "color": "#AAAAAA",
+      "scale": 0.23476190476190475,
+      "modelScale": 0.3,
+      "layer": 0,
+      "parallax": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "Key",
+      "x": 93,
+      "y": 117,
+      "width": 13.823727407962934,
+      "height": 13.409458639585635,
+      "baseWidth": 15.979721590856235,
+      "baseHeight": 15.500842097135687,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#ffff00",
+      "scale": 0.8650793650793651,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "key",
+      "groupID": null,
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "interactions": {}
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_997",
+      "x": 251.2525776259888,
+      "y": -6.459972841696704,
+      "width": 70,
+      "height": 70,
+      "baseWidth": 100,
+      "baseHeight": 100,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#0a0a0a",
+      "scale": 0.7,
+      "modelScale": 1,
+      "layer": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": 201.75257762598838,
+          "y": -110,
+          "p": 1
+        },
+        {
+          "x": 247,
+          "y": -109.25,
+          "p": 1
+        },
+        {
+          "x": 246.5,
+          "y": 126.25,
+          "p": 1
+        },
+        {
+          "x": 199,
+          "y": 126,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1
+    }
+  ],
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "autoCenter": false,
+  "cameraSpeed": 5,
+  "camDeadzoneX": 50,
+  "camDeadzoneY": 30,
+  "camMaxX": 14,
+  "camMaxY": 12
+}

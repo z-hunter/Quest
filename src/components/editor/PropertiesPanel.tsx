@@ -308,6 +308,46 @@ export const PropertiesPanel: React.FC = () => {
                             />
                         </div>
 
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                                <input
+                                    type="checkbox"
+                                    style={{ marginRight: '5px' }}
+                                    checked={obj.isGrid || false}
+                                    onChange={(e) => handleChange('isGrid', e.target.checked)}
+                                />
+                                Retro Grid
+                            </label>
+                        </div>
+
+                        {obj.isGrid && (
+                            <>
+                                <div className="e-row">
+                                    <label className="e-label">Grid Lines</label>
+                                    <input
+                                        type="number"
+                                        className="e-input"
+                                        value={obj.gridLines ?? 5}
+                                        onChange={(e) => handleChange('gridLines', parseInt(e.target.value))}
+                                        min={1}
+                                        max={50}
+                                    />
+                                </div>
+                                <div className="e-row">
+                                    <label className="e-label">Line Width</label>
+                                    <input
+                                        type="number"
+                                        className="e-input"
+                                        value={obj.lineWidth ?? 1.0}
+                                        onChange={(e) => handleChange('lineWidth', parseFloat(e.target.value))}
+                                        step={0.1}
+                                        min={0.1}
+                                        max={10}
+                                    />
+                                </div>
+                            </>
+                        )}
+
                         <div className="e-label" style={{ marginTop: '5px', borderBottom: '1px solid #444', marginBottom: '5px' }}>VERTICES (X / Y / P)</div>
                         {obj.vertices && obj.vertices.map((v: any, i: number) => {
                             const isSelected = selectedVertexIndex === i;
