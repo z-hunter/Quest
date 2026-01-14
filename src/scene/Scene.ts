@@ -723,10 +723,13 @@ export class Scene {
 
         this.entities.sort((a, b) => {
             // Sorting Order:
-            // 1. Layer (Explicit user control)
+            // 1. Layer (Explicit user control) - Support 'renderLayer' override
             // 2. Y-Position (Depth) - includes custom Quad logic
 
-            if (a.layer !== b.layer) return a.layer - b.layer;
+            const layerA = (a as any).renderLayer !== undefined ? (a as any).renderLayer : a.layer;
+            const layerB = (b as any).renderLayer !== undefined ? (b as any).renderLayer : b.layer;
+
+            if (layerA !== layerB) return layerA - layerB;
 
             // Handle Quad custom sorting
             let yA = a.y;

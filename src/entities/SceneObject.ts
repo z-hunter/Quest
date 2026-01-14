@@ -19,7 +19,7 @@ export class SceneObject {
     layer: number = 0;
 
     constructor(name: string, type: string) {
-        this.name = name;
+        this.name = name.trim();
         this.type = type;
         this.locked = false;
         this.disabled = false;

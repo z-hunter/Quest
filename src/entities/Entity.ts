@@ -225,6 +225,44 @@ export class Entity extends SceneObject {
     render(ctx: CanvasRenderingContext2D): void {
         if (!this.visible) return;
 
+        // Viewport Culling
+        if (this.scene && this.scene.camera && ctx.canvas) {
+            const cam = this.scene.camera;
+            const zoom = cam.zoom;
+            // Parallax P
+            const p = this.parallax !== undefined ? this.parallax : 1.0;
+
+            // Viewport in World Space for this Parallax Layer
+            // Center is (CamX * P, CamY * P)
+            // Dimensions are Canvas / Zoom
+            const vHW = (ctx.canvas.width / 2) / zoom;
+            const vHH = (ctx.canvas.height / 2) / zoom;
+
+            const cX = cam.x * p;
+            const cY = cam.y * p;
+
+            const vL = cX - vHW;
+            const vR = cX + vHW;
+            const vT = cY - vHH;
+            const vB = cY + vHH;
+
+            // Entity Bounds
+            // Drawn at x - w/2, y - h
+            const halfW = this.width / 2;
+            const eL = this.x - halfW;
+            const eR = this.x + halfW;
+            const eT = this.y - this.height;
+            const eB = this.y;
+
+            // Safety Padding (Shadows, Particles, etc)
+            const pad = 100;
+
+            // Check Disjoint
+            if (eR + pad < vL || eL - pad > vR || eB + pad < vT || eT - pad > vB) {
+                return;
+            }
+        }
+
         if (this.animator && this.animator.getCurrentFrame()) {
             const frame = this.animator.getCurrentFrame();
             if (frame && this.image && this.image.complete) {
@@ -309,8 +347,8 @@ export class Entity extends SceneObject {
             this.y = data.y;
             this.width = data.width;
             this.height = data.height;
-            this.name = data.name; // SceneObject property
-            this.groupID = data.groupID || null; // SceneObject property
+            this.name = data.name ? data.name.trim() : 'Entity'; // SceneObject property
+            this.groupID = data.groupID ? data.groupID.trim() : null; // SceneObject property
 
             this.color = data.color || '#ff0000';
             this.scale = data.scale || 1.0;

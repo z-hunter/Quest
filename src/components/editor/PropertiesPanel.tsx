@@ -169,6 +169,7 @@ export const PropertiesPanel: React.FC = () => {
                                 className="e-input"
                                 value={selectedObjectType === 'SCENE' ? (obj.id || '') : (obj.name || '')}
                                 onChange={(e) => handleChange(selectedObjectType === 'SCENE' ? 'id' : 'name', e.target.value)}
+                                onBlur={(e) => handleChange(selectedObjectType === 'SCENE' ? 'id' : 'name', e.target.value.trim())}
                             />
                         </div>
                     </>
@@ -251,11 +252,21 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedObjectType === 'Quad' && (
                     <div className="e-row">
                         <div className="e-row">
-                            <label className="e-label">Color</label>
-                            <div style={{ display: 'flex', gap: '5px' }}>
-                                <input type="color" className="e-input" style={{ width: '30px', padding: 0, height: '20px' }} value={obj.color || '#888888'} onChange={(e) => handleChange('color', e.target.value)} />
-                                <input type="text" className="e-input" style={{ flex: 1 }} value={obj.color || ''} onChange={(e) => handleChange('color', e.target.value)} />
-                            </div>
+                            <label className="e-label" style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                                <input
+                                    type="checkbox"
+                                    style={{ marginRight: '5px' }}
+                                    checked={obj.filled !== false}
+                                    onChange={(e) => handleChange('filled', e.target.checked)}
+                                />
+                                Fill Color
+                            </label>
+                            {(obj.filled !== false) && (
+                                <div style={{ display: 'flex', gap: '5px' }}>
+                                    <input type="color" className="e-input" style={{ width: '30px', padding: 0, height: '20px' }} value={obj.color || '#888888'} onChange={(e) => handleChange('color', e.target.value)} />
+                                    <input type="text" className="e-input" style={{ flex: 1 }} value={obj.color || ''} onChange={(e) => handleChange('color', e.target.value)} />
+                                </div>
+                            )}
                         </div>
 
                         <div className="e-row">
@@ -272,6 +283,18 @@ export const PropertiesPanel: React.FC = () => {
                                 min="0" max="1" step="0.05"
                                 value={obj.opacity !== undefined ? obj.opacity : 1.0}
                                 onChange={(e) => handleChange('opacity', e.target.value, true)}
+                            />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Blur ({obj.blur || 0}px)</label>
+                            <input
+                                type="range"
+                                className="e-input"
+                                style={{ width: '100%' }}
+                                min="0" max="50" step="1"
+                                value={obj.blur || 0}
+                                onChange={(e) => handleChange('blur', parseInt(e.target.value))}
                             />
                         </div>
 
@@ -344,6 +367,13 @@ export const PropertiesPanel: React.FC = () => {
                                         min={0.1}
                                         max={10}
                                     />
+                                </div>
+                                <div className="e-row">
+                                    <label className="e-label">Grid Color</label>
+                                    <div style={{ display: 'flex', gap: '5px' }}>
+                                        <input type="color" className="e-input" style={{ width: '30px', padding: 0, height: '20px' }} value={obj.gridColor || '#ffffff'} onChange={(e) => handleChange('gridColor', e.target.value)} />
+                                        <input type="text" className="e-input" style={{ flex: 1 }} value={obj.gridColor || ''} onChange={(e) => handleChange('gridColor', e.target.value)} />
+                                    </div>
                                 </div>
                             </>
                         )}
@@ -422,7 +452,7 @@ export const PropertiesPanel: React.FC = () => {
                 )}
 
                 {/* Trigger Components */}
-                {(selectedObjectType === 'Triggerbox' || selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static') && (
+                {(selectedObjectType === 'Triggerbox' || selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static' || selectedObjectType === 'Quad') && (
                     <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}>
                         <div className="e-label" style={{ color: '#faa', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>COMPONENTS</span>
@@ -433,6 +463,7 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Subscene', label: 'Subscene' },
                                         { value: 'Subtrigger', label: 'Subtrigger' },
                                         { value: 'Switch', label: 'Switch' },
+                                        { value: 'Backface', label: 'Backface' },
                                     ]}
                                     placeholder="+ Add Component"
                                     onChange={(value) => {
@@ -453,6 +484,15 @@ export const PropertiesPanel: React.FC = () => {
                                                 state: 1,
                                                 idKey: '',
                                                 sound1: '', sound2: ''
+                                            });
+                                        } else if (type === 'Backface') {
+                                            obj.components.push({
+                                                type: 'Backface',
+                                                vertexA: 0,
+                                                vertexB: 1,
+                                                axis: 'x',
+                                                op: '>',
+                                                targetId: ''
                                             });
                                         }
 
@@ -480,6 +520,54 @@ export const PropertiesPanel: React.FC = () => {
                                         setObj({ ...obj });
                                     }}>x</button>
                                 </div>
+
+                                {comp.type === 'Backface' && (
+                                    <>
+                                        <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                            Lowers Layer if A [op] B (e.g. A.x &gt; B.x).
+                                        </div>
+                                        <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Vert A (0-3)</label>
+                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexA} onChange={(e) => { comp.vertexA = parseInt(e.target.value); setObj({ ...obj }); }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Vert B (0-3)</label>
+                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexB} onChange={(e) => { comp.vertexB = parseInt(e.target.value); setObj({ ...obj }); }} />
+                                            </div>
+                                        </div>
+                                        <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Axis</label>
+                                                <Select
+                                                    value={comp.axis}
+                                                    onChange={(value) => { comp.axis = value; setObj({ ...obj }); }}
+                                                    options={[
+                                                        { value: 'x', label: 'X' },
+                                                        { value: 'y', label: 'Y' },
+                                                    ]}
+                                                    style={{ width: '40px' }}
+                                                />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Op</label>
+                                                <Select
+                                                    value={comp.op}
+                                                    onChange={(value) => { comp.op = value; setObj({ ...obj }); }}
+                                                    options={[
+                                                        { value: '>', label: '>' },
+                                                        { value: '<', label: '<' },
+                                                    ]}
+                                                    style={{ width: '40px' }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Quad ID (Optional)</label>
+                                            <input type="text" className="e-input" value={comp.targetId || ''} onChange={(e) => { comp.targetId = e.target.value; setObj({ ...obj }); }} />
+                                        </div>
+                                    </>
+                                )}
 
                                 {comp.type === 'Item' && (
                                     <>
