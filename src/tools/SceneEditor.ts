@@ -977,25 +977,28 @@ export class SceneEditor {
                         let snapTarget: { x: number, y: number } | null = null;
 
                         // Check other Quads
+                        // Check other Quads
                         const scene = this.game.sceneManager.currentScene;
                         if (scene) {
-                            scene.entities.forEach(ent => {
+                            scene.entities.forEach((ent: any) => {
                                 if (ent === this.selectedObject) return; // Skip self
                                 if (ent.type === 'Quad') {
                                     const q = ent as any;
+                                    // Quads usually store parallax per vertex or global? 
+                                    // QuadObject.ts has 'parallax' property, but vertices have 'p'. 
+                                    // Editor usually edits vertices[i].p. 
+                                    // If we are snapping to a generated grid, that grid lies on the surface.
+                                    // A bilinear patch interpolates World X, World Y, AND Parallax P.
+
                                     if (q.vertices) {
+                                        // 1. Vertex Snapping
                                         q.vertices.forEach((qv: any) => {
-                                            // We need to compare "Visual Positions" or "Base Positions"?
-                                            // Snapping usually visually aligns things.
-                                            // So we should compare Render Position of Target vs Render Position of Current.
-                                            // Target Render Pos: qv.x + (-camX * (qv.p - 1))
-                                            const qP = qv.p || 1.0;
-                                            const qOffX = -camX * (qP - 1.0);
-                                            const qOffY = -camY * (qP - 1.0);
+                                            const vP = qv.p !== undefined ? qv.p : 1.0;
+                                            const qOffX = -camX * (vP - 1.0);
+                                            const qOffY = -camY * (vP - 1.0);
                                             const qVisualX = qv.x + qOffX;
                                             const qVisualY = qv.y + qOffY;
 
-                                            // Current Visual Pos (Mouse): worldPos.x, worldPos.y
                                             const dist = Math.sqrt(Math.pow(qVisualX - worldPos.x, 2) + Math.pow(qVisualY - worldPos.y, 2));
 
                                             if (dist < closestDist) {
@@ -1003,6 +1006,53 @@ export class SceneEditor {
                                                 snapTarget = { x: qVisualX, y: qVisualY };
                                             }
                                         });
+
+                                        // 2. Retro Grid Snapping
+                                        if (q.isGrid && q.gridLines > 0) {
+                                            const STEPS = q.gridLines + 1;
+                                            const v0 = q.vertices[0];
+                                            const v1 = q.vertices[1];
+                                            const v2 = q.vertices[2]; // BR
+                                            const v3 = q.vertices[3]; // BL
+
+                                            if (v0 && v1 && v2 && v3) {
+                                                for (let i = 0; i <= STEPS; i++) {
+                                                    const u = i / STEPS;
+                                                    for (let j = 0; j <= STEPS; j++) {
+                                                        const v = j / STEPS;
+
+                                                        // Bilinear Interpolation
+                                                        // Top: v0 -> v1
+                                                        const tx = v0.x + (v1.x - v0.x) * u;
+                                                        const ty = v0.y + (v1.y - v0.y) * u;
+                                                        const tp = (v0.p || 1) + ((v1.p || 1) - (v0.p || 1)) * u;
+
+                                                        // Bottom: v3 -> v2
+                                                        const bx = v3.x + (v2.x - v3.x) * u;
+                                                        const by = v3.y + (v2.y - v3.y) * u;
+                                                        const bp = (v3.p || 1) + ((v2.p || 1) - (v3.p || 1)) * u;
+
+                                                        // Surface
+                                                        const px = tx + (bx - tx) * v;
+                                                        const py = ty + (by - ty) * v;
+                                                        const pp = tp + (bp - tp) * v;
+
+                                                        // Visual Pos
+                                                        const offX = -camX * (pp - 1.0);
+                                                        const offY = -camY * (pp - 1.0);
+                                                        const VisX = px + offX;
+                                                        const VisY = py + offY;
+
+                                                        const dist = Math.sqrt(Math.pow(VisX - worldPos.x, 2) + Math.pow(VisY - worldPos.y, 2));
+
+                                                        if (dist < closestDist) {
+                                                            closestDist = dist;
+                                                            snapTarget = { x: VisX, y: VisY };
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             });
@@ -1048,12 +1098,16 @@ export class SceneEditor {
                             v.x += dx;
                             v.y += dy;
                         }
-                        this.selectedObject.x += dx;
-                        this.selectedObject.y += dy;
+                        quad.x += dx;
+                        quad.y += dy;
                     } else {
-                        for (const pt of this.selectedObject.poly) {
-                            pt.x += dx;
-                            pt.y += dy;
+                        // Cast to any to access poly
+                        const obj = this.selectedObject as any;
+                        if (obj.poly) {
+                            for (const pt of obj.poly) {
+                                pt.x += dx;
+                                pt.y += dy;
+                            }
                         }
                     }
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
@@ -1593,7 +1647,7 @@ export class SceneEditor {
         const prefix = match ? match[1] : baseName;
 
         let counter = 1;
-        let newName = `${prefix}_${counter} `;
+        let newName = `${prefix}_${counter}`;
 
         // Check collision in entire scene
         // We can reuse a helper or just do it here
@@ -1605,7 +1659,7 @@ export class SceneEditor {
         const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
         while (isNameTaken(newName)) {
             counter++;
-            newName = `${prefix}_${counter} `;
+            newName = `${prefix}_${counter}`;
         }
         data.name = newName;
 
@@ -1859,7 +1913,7 @@ export class SceneEditor {
                 const prefix = match ? match[1] : baseName;
 
                 let counter = 1;
-                let newName = `${prefix}_${counter} `;
+                let newName = `${prefix}_${counter}`;
                 const allObjects = [
                     ...(scene.entities || []),
                     ...(scene.walkbox || []),
@@ -1868,7 +1922,7 @@ export class SceneEditor {
                 const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
                 while (isNameTaken(newName)) {
                     counter++;
-                    newName = `${prefix}_${counter} `;
+                    newName = `${prefix}_${counter}`;
                 }
                 data.name = newName;
             }

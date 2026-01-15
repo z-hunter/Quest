@@ -168,8 +168,50 @@ export const PropertiesPanel: React.FC = () => {
                                 type="text"
                                 className="e-input"
                                 value={selectedObjectType === 'SCENE' ? (obj.id || '') : (obj.name || '')}
-                                onChange={(e) => handleChange(selectedObjectType === 'SCENE' ? 'id' : 'name', e.target.value)}
-                                onBlur={(e) => handleChange(selectedObjectType === 'SCENE' ? 'id' : 'name', e.target.value.trim())}
+                                onChange={(e) => {
+                                    // Local update only
+                                    const val = e.target.value;
+                                    if (selectedObjectType === 'SCENE') obj.id = val; else obj.name = val;
+                                    setObj({ ...obj });
+                                }}
+                                onBlur={(e) => {
+                                    // Commit with Validation
+                                    const rawVal = e.target.value;
+                                    const finalVal = rawVal.trim();
+                                    const field = selectedObjectType === 'SCENE' ? 'id' : 'name';
+
+                                    // Validation (Only for Name/ID)
+                                    let isValid = true;
+                                    const scene = Game.instance?.sceneManager?.currentScene;
+
+                                    if (selectedObjectType !== 'SCENE' && scene) {
+                                        // Check duplicates
+                                        // Check Entities
+                                        const dupEntity = scene.entities.find(ent => ent.name === finalVal && ent !== Game.instance?.editor?.selectedObject);
+                                        // Check Triggerboxes
+                                        const dupTrigger = scene.triggerboxes ? scene.triggerboxes.find(tb => tb.name === finalVal && tb !== Game.instance?.editor?.selectedObject) : null;
+
+                                        if (dupEntity || dupTrigger) {
+                                            console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
+                                            // @ts-ignore
+                                            if (Game.instance.showMessage) Game.instance.showMessage(`Name '${finalVal}' already exists!`);
+                                            isValid = false;
+                                        }
+                                    }
+
+                                    if (isValid) {
+                                        handleChange(field, finalVal);
+                                    } else {
+                                        // Revert to original from real object
+                                        let realObj: any = null;
+                                        if (Game.instance?.editor) realObj = Game.instance.editor.selectedObject;
+
+                                        if (realObj) {
+                                            if (selectedObjectType === 'SCENE') obj.id = realObj.id; else obj.name = realObj.name;
+                                            setObj({ ...obj });
+                                        }
+                                    }
+                                }}
                             />
                         </div>
                     </>
