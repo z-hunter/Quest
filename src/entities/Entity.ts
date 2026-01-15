@@ -32,6 +32,7 @@ export interface EntityData {
     customName?: string; // Display Name for Parser/UI
     components?: any[];
     interactions?: Record<string, string>;
+    visible?: boolean;
 }
 
 export class Entity extends SceneObject {
@@ -385,6 +386,10 @@ export class Entity extends SceneObject {
 
             if (data.disabled !== undefined) {
                 this.disabled = data.disabled;
+            }
+
+            if (data.visible !== undefined) {
+                this.visible = data.visible;
             }
 
             if (data.customName !== undefined) {

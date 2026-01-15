@@ -17,6 +17,7 @@ export class SceneObject {
     components: any[] = [];
 
     layer: number = 0;
+    visible: boolean = true; // Controls rendering only (optimization/culling)
 
     constructor(name: string, type: string) {
         this.name = name.trim();
@@ -24,6 +25,7 @@ export class SceneObject {
         this.locked = false;
         this.disabled = false;
         this.layer = 0;
+        this.visible = true;
         this.customName = "";
         this.interactions = {};
         this.components = [];
@@ -39,7 +41,8 @@ export class SceneObject {
             groupID: this.groupID,
             customName: this.customName,
             interactions: this.interactions,
-            components: this.components
+            components: this.components,
+            visible: this.visible
         };
     }
 

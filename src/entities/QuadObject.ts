@@ -202,8 +202,22 @@ export class QuadObject extends Entity {
 
     // Serialization
     toJSON(): any {
+        const data = super.toJSON() as any;
+
+        // Remove redundant Entity fields for Quad
+        delete data.width;
+        delete data.height;
+        delete data.baseWidth;
+        delete data.baseHeight;
+        delete data.colliderWidth;
+        delete data.colliderHeight;
+        delete data.spriteName;
+        delete data.scale;
+        delete data.modelScale;
+        delete data.animationSpeed;
+
         return {
-            ...super.toJSON(),
+            ...data,
             type: 'Quad', // Force Type
             vertices: this.vertices.map(v => ({ ...v })),
             color: this.color,
@@ -233,6 +247,7 @@ export class QuadObject extends Entity {
         if (data.layer !== undefined) obj.layer = data.layer;
         if (data.locked) obj.locked = data.locked;
         if (data.disabled) obj.disabled = data.disabled;
+        if (data.visible !== undefined) obj.visible = data.visible;
         if (data.groupID) obj.groupID = data.groupID;
 
         // Custom Props
@@ -334,19 +349,36 @@ export class QuadObject extends Entity {
                 let target: QuadObject | null = this;
                 if (bf.targetId) {
                     const searchId = bf.targetId.trim();
-                    // Find by Name or GroupID
-                    // @ts-ignore
-                    const found = scene.entities.find(e => e.name.trim() === searchId && e.type === 'Quad');
-                    target = found ? (found as QuadObject) : null;
+                    if (searchId === this.name.trim()) {
+                        target = this;
+                    } else {
+                        // Find by Name or GroupID
+                        // @ts-ignore
+                        const found = scene.entities.find(e => e.name.trim() === searchId && e.type === 'Quad');
+                        target = found ? (found as QuadObject) : null;
+                    }
                 }
 
                 if (target) {
+                    const cullingType = bf.cullingType || 'layer';
+
+                    // Debug Log
+                    // console.log(`[Backface] Match:${match} Type:${cullingType} Visible:${target.visible}`);
+
                     if (match) {
-                        // Hide (Lower Layer) - "not should be displayed"
-                        // Use renderLayer to avoid persistent serialization changes
-                        (target as any).renderLayer = target.layer - 1;
+                        // Hide (Backface Culling)
+                        if (cullingType === 'render') {
+                            target.visible = false;
+                            // Ensure layer is reset if we switched modes
+                            (target as any).renderLayer = undefined;
+                        } else {
+                            // Layer Mode
+                            (target as any).renderLayer = target.layer - 1;
+                            target.visible = true;
+                        }
                     } else {
-                        // Restore
+                        // Restore (Show)
+                        target.visible = true;
                         (target as any).renderLayer = undefined;
                     }
                 }

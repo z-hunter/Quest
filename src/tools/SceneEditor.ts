@@ -974,7 +974,7 @@ export class SceneEditor {
                         // "closer than 50 pixels" usually implies screen distance visually.
 
                         let closestDist = snapDist;
-                        let snapTarget: { x: number, y: number } | null = null;
+                        let snapTarget: { x: number, y: number, p?: number } | null = null;
 
                         // Check other Quads
                         // Check other Quads
@@ -1047,7 +1047,7 @@ export class SceneEditor {
 
                                                         if (dist < closestDist) {
                                                             closestDist = dist;
-                                                            snapTarget = { x: VisX, y: VisY };
+                                                            snapTarget = { x: VisX, y: VisY, p: pp };
                                                         }
                                                     }
                                                 }
@@ -1059,11 +1059,33 @@ export class SceneEditor {
                         }
 
                         if (snapTarget) {
-                            // snapTarget is the VISUAL position we want to be at.
-                            // We need to convert back to Base Pos for our vertex.
+                            // Apply Snapped Parallax (Z-Depth) if available
+                            if (snapTarget.p !== undefined) {
+                                v.p = snapTarget.p;
+                            }
+
+                            // Recalculate Offset with (possibly new) P to find correct Base World Pos
+                            const newP = v.p || 1.0;
+                            const newOffX = -camX * (newP - 1.0);
+                            const newOffY = -camY * (newP - 1.0);
+
                             // v.x = VisualX - Offset
-                            v.x = snapTarget.x - offX;
-                            v.y = snapTarget.y - offY;
+                            v.x = snapTarget.x - newOffX;
+                            v.y = snapTarget.y - newOffY;
+                        }
+
+                    } else if (e.shiftKey) {
+                        // ** Angle Snapping (Shift) **
+                        const verts = (this.selectedObject as any).vertices; // We know it's a Quad
+                        if (verts && verts.length > 0) {
+                            const prevIndex = (this.draggingVertexIndex - 1 + verts.length) % verts.length;
+                            const anchor = verts[prevIndex];
+
+                            // Snap current v (Base Pos) to Anchor (Base Pos)
+                            const snapped = this.getSnappedPos({ x: v.x, y: v.y }, anchor);
+
+                            v.x = snapped.x;
+                            v.y = snapped.y;
                         }
                     }
 
@@ -1635,7 +1657,8 @@ export class SceneEditor {
 
         let data: any;
         if (this.selectedObject.toJSON) {
-            data = this.selectedObject.toJSON();
+            // Deep Clone to prevent reference mutation of Original Object components
+            data = JSON.parse(JSON.stringify(this.selectedObject.toJSON()));
         } else {
             return;
         }
@@ -1662,6 +1685,18 @@ export class SceneEditor {
             newName = `${prefix}_${counter}`;
         }
         data.name = newName;
+
+        // Fix Component References (Self-Targeting)
+        if (data.components) {
+            data.components.forEach((comp: any) => {
+                // If Backface component targets the original object (self), update to new name
+                if (comp.type === 'Backface' && comp.targetId === baseName) {
+                    comp.targetId = newName;
+                }
+                // Handle Subscene references? Usually Subscene targets a GroupID or separate object.
+                // If it targets THIS object's name (unlikely for Subscene), we might need to update.
+            });
+        }
 
         // Use unified creation
         const newObj = this.createObjectFromData(data);
@@ -1925,6 +1960,27 @@ export class SceneEditor {
                     newName = `${prefix}_${counter}`;
                 }
                 data.name = newName;
+
+                // Fix Component References (Self-Targeting)
+                if (data.components) {
+                    const baseName = match ? match[1] + '_' + match[2] : data.name; // Logic here is a bit tricky if we stripped suffix
+                    // Wait, match was done on 'data.name' (Incoming 'Entity_1').
+                    // match[1] = 'Entity'.
+                    // baseName used above was 'Entity_1'.
+                    // If we paste 'Entity_1', we generate 'Entity_2'.
+                    // We need to check if component targets 'Entity_1'.
+
+                    const srcName = (scene.entities.find((e: any) => e.name === data.name)) ? data.name : data.name;
+
+                    data.components.forEach((comp: any) => {
+                        if (comp.type === 'Backface') {
+                            // Heuristic: If targetId equals the original name of the pasted data, update it.
+                            if (comp.targetId === srcName || comp.targetId === data.name) {
+                                comp.targetId = newName;
+                            }
+                        }
+                    });
+                }
             }
 
             const newObj = this.createObjectFromData(data, worldPos.x, worldPos.y);

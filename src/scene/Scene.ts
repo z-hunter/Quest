@@ -808,6 +808,7 @@ export class Scene {
         // 1. Render Normal Layer
         normalLayer.forEach(entity => {
             if (entity.disabled) return;
+            if (entity.visible === false) return; // Optimization/Culling
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;
             ctx.save();
 
@@ -862,6 +863,7 @@ export class Scene {
         // 3. Render Subscene Layer
         subsceneLayer.forEach(entity => {
             if (entity.disabled) return; // Should be enabled by onClick
+            if (entity.visible === false) return; // Optimization/Culling
             // Subscene objects usually don't parallax, or parallax relative to center?
             // Assuming normal camera transform for now, but they are "on top".
             const p = entity.parallax !== undefined ? entity.parallax : 1.0;

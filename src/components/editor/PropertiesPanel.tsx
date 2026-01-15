@@ -534,7 +534,8 @@ export const PropertiesPanel: React.FC = () => {
                                                 vertexB: 1,
                                                 axis: 'x',
                                                 op: '>',
-                                                targetId: ''
+                                                targetId: obj.name, // Auto-fill with self
+                                                cullingType: 'layer' // Default
                                             });
                                         }
 
@@ -603,6 +604,19 @@ export const PropertiesPanel: React.FC = () => {
                                                     style={{ width: '40px' }}
                                                 />
                                             </div>
+                                        </div>
+
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '9px' }}>Culling Type</label>
+                                            <Select
+                                                value={comp.cullingType || 'layer'}
+                                                onChange={(value) => { comp.cullingType = value; setObj({ ...obj }); }}
+                                                options={[
+                                                    { value: 'layer', label: 'Change Layer' },
+                                                    { value: 'render', label: 'Disable Render' },
+                                                ]}
+                                                style={{ width: '100%' }}
+                                            />
                                         </div>
                                         <div className="e-row">
                                             <label className="e-label" style={{ fontSize: '10px' }}>Target Quad ID (Optional)</label>
