@@ -941,6 +941,14 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
                         </div>
 
+                        <div className="e-row">
+                            <label className="e-label">Color</label>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <input type="color" className="e-input" style={{ width: '30px', padding: 0, height: '20px', cursor: 'pointer' }} value={obj.color || '#AAAAAA'} onChange={(e) => handleChange('color', e.target.value)} />
+                                <input type="text" className="e-input" style={{ flex: 1 }} value={obj.color || ''} onChange={(e) => handleChange('color', e.target.value)} />
+                            </div>
+                        </div>
+
                         <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
                             <div>
                                 <label className="e-label">Scale</label>
