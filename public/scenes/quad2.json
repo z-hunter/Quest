@@ -674,8 +674,8 @@
           "p": 0.75
         },
         {
-          "x": -144.20307420017255,
-          "y": -60.441958750948174,
+          "x": -145,
+          "y": -54,
           "p": 0.65
         },
         {
@@ -1182,51 +1182,6 @@
       "blur": 0
     },
     {
-      "type": "Actor",
-      "name": "miles_ds",
-      "x": 49.10165384674954,
-      "y": 99.6140310814078,
-      "width": 25.657182554473017,
-      "height": 104.76682876409815,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 32,
-      "colliderHeight": 6,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.2672623182757606,
-      "modelScale": 0.33,
-      "layer": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "isPlayer": true,
-      "speed": 0.14,
-      "direction": "left",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
-    },
-    {
       "type": "Quad",
       "name": "Quad_5",
       "x": -207.71706697024933,
@@ -1282,6 +1237,51 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 0
+    },
+    {
+      "type": "Actor",
+      "name": "miles_ds",
+      "x": -114.91017220076465,
+      "y": 104.22544074113691,
+      "width": 26.12095861168006,
+      "height": 106.66058099769357,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 32,
+      "colliderHeight": 6,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.27209331887166727,
+      "modelScale": 0.33,
+      "layer": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.14,
+      "direction": "right",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Quad",
@@ -1550,18 +1550,18 @@
           "p": 1
         },
         {
-          "x": -141.2856722405093,
-          "y": -54.16666666666667,
+          "x": -145,
+          "y": -54,
           "p": 0.65
         },
         {
-          "x": -141.2856722405093,
-          "y": -54.166666666666664,
+          "x": -143.72301846812314,
+          "y": -43.86662932038122,
           "p": 0.65
         },
         {
-          "x": -210.74363560429927,
-          "y": -39.590909090909086,
+          "x": -210.77559877626368,
+          "y": -27.692389048704882,
           "p": 1
         }
       ],
