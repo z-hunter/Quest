@@ -787,16 +787,18 @@ export class SceneEditor {
                 // ctx.translate(-camX * p, -camY * p);
                 // Entity draws at x, y
 
+                // Entity Screen Rect (With Zoom and Center Pivot)
+                // Render Logic:
+                // ctx.translate(halfW, halfH);
+                // ctx.scale(zoom, zoom);
+                // ctx.translate(-camX * p, -camY * p);
+                // Entity draws at x, y
+
                 // So ScreenX = (EntityX - CamX*p) * Zoom + HalfW
                 const screenX = (entity.x - camX * p) * zoom + halfW;
                 const screenY = (entity.y - camY * p) * zoom + halfH;
-
                 const screenW = entity.width * zoom;
                 const screenH = entity.height * zoom;
-
-                // Entity pivot is Bottom-Center. 
-                // Rect: Left = screenX - W/2, Top = screenY - H
-                // (Note: in Render we do ctx.strokeRect(entity.x - w/2...))
 
                 // Mouse World Pos for this entity layer
                 const worldX = (pos.x - halfW) / zoom + camX * p;
@@ -807,37 +809,8 @@ export class SceneEditor {
                     // HIT! Entity: ${entity.name}
                     this.selectObject(entity);
 
-                    // Check Object Lock
-                    if (entity.locked) {
-                        console.log(`[Editor] Object ${entity.name} is locked.`);
-                        this.resizingHandle = null;
-                        this.isDragging = false;
-                        // Still allow selection, so we stop propagation, but don't start drag
-                        e.stopPropagation();
-                        return;
-                    }
-
-                    // Check Handles logic ( Screen Space )
-                    const hSize = 8; // Screen pixels tolerance
-                    const sl = screenX - screenW / 2;
-                    const sr = screenX + screenW / 2;
-                    const st = screenY - screenH;
-                    const sb = screenY;
-
-                    if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - st) < hSize) this.resizingHandle = 'nw';
-                    else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - st) < hSize) this.resizingHandle = 'ne';
-                    else if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - sb) < hSize) this.resizingHandle = 'sw';
-                    else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - sb) < hSize) this.resizingHandle = 'se';
-                    else this.resizingHandle = null;
-
-                    this.saveUndoState();
-                    this.isDragging = true;
-                    this.draggingVertexIndex = -1;
-
-                    // Offset in Screen Space is easiest for Entities??
-                    // Or maintain World Offset?
-                    // Let's use Screen Offset to avoid complex reverse-projections during drag
-                    this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
+                    // Stop propagation to prevent deselection, but DO NOT start drag yet.
+                    // User must click again on the selected object to drag.
                     e.stopPropagation();
                     return;
                 }
@@ -854,11 +827,7 @@ export class SceneEditor {
                     if (wb.disabled) continue;
                     if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
                         this.selectObject(wb);
-
-                        this.saveUndoState();
-                        this.isDragging = true;
-                        this.draggingVertexIndex = -1;
-                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                        // Selection Only
                         e.stopPropagation();
                         return;
                     }
@@ -871,11 +840,7 @@ export class SceneEditor {
                     if (tb.disabled) continue;
                     if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
                         this.selectObject(tb);
-
-                        this.saveUndoState();
-                        this.isDragging = true;
-                        this.draggingVertexIndex = -1;
-                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                        // Selection Only
                         e.stopPropagation();
                         return;
                     }

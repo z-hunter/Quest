@@ -142,6 +142,9 @@ export class Entity extends SceneObject {
         const requestName = filename;
         console.log(`[Entity] Requesting sprite: ${requestName}`);
 
+        // Update spriteName immediately so other systems (SceneManager) know what we are loading
+        this.spriteName = filename;
+
         // Capture current dimensions target if we need to preserve them
 
         Game.instance.assets.loadSprite(filename)
