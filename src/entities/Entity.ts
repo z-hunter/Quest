@@ -295,8 +295,10 @@ export class Entity extends SceneObject {
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
 
-            ctx.fillStyle = Theme.mainColor;
-            ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
+            if (Game.instance?.editor?.enabled) {
+                ctx.fillStyle = Theme.mainColor;
+                ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
+            }
         }
 
         // Draw Collider if active AND Editor is enabled
