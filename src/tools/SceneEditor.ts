@@ -677,13 +677,38 @@ export class SceneEditor {
                     poly = (this.selectedObject as any).poly;
                 }
 
-                const vertexRadius = 6 / zoom; // Hit radius
+                const vertexRadius = 6 / zoom; // Hit radius - Match Handle Size roughly (Visualization is hSize=6)
+
+                // Calculate Centroid of Projected Poly for Quad "Inside" shift
+                let cx = 0, cy = 0;
+                // We need to calc centroid of VISUAL points for Quads
+                if ((this.selectedObject as any).type === 'Quad') {
+                    poly.forEach((p: any) => { cx += p.x; cy += p.y; });
+                    cx /= poly.length;
+                    cy /= poly.length;
+                }
 
                 // Check vertices
                 for (let i = 0; i < poly.length; i++) {
-                    const vx = poly[i].x;
-                    const vy = poly[i].y;
-                    if (Math.abs(worldPos.x - vx) < vertexRadius && Math.abs(worldPos.y - vy) < vertexRadius) {
+                    let vx = poly[i].x;
+                    let vy = poly[i].y;
+
+                    // Apply Quad Shift for Hit Test
+                    if ((this.selectedObject as any).type === 'Quad') {
+                        const dx = cx - vx;
+                        const dy = cy - vy;
+                        const len = Math.sqrt(dx * dx + dy * dy);
+                        if (len > 0) {
+                            const shiftDist = (vertexRadius / 2) + (2 / zoom);
+                            vx += (dx / len) * shiftDist;
+                            vy += (dy / len) * shiftDist;
+                        }
+                    }
+
+                    // Strict Hit Test on the Handle Box? 
+                    // Visualization is a rect: x-h/2, y-h/2, w=h, h=h.
+                    // Math.abs(worldPos.x - vx) < h/2
+                    if (Math.abs(worldPos.x - vx) < vertexRadius / 2 && Math.abs(worldPos.y - vy) < vertexRadius / 2) {
                         if (this.selectedObject.locked) {
                             console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
                             return;
@@ -735,13 +760,19 @@ export class SceneEditor {
                 const sb = screenY;
 
                 // Check Handles (Screen Space)
-                const hSize = 8;
+                // Check Handles (Screen Space)
+
+                const exactHSize = 6;
                 let hitHandle = null;
 
-                if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - st) < hSize) hitHandle = 'nw';
-                else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - st) < hSize) hitHandle = 'ne';
-                else if (Math.abs(pos.x - sl) < hSize && Math.abs(pos.y - sb) < hSize) hitHandle = 'sw';
-                else if (Math.abs(pos.x - sr) < hSize && Math.abs(pos.y - sb) < hSize) hitHandle = 'se';
+                // NW: (sl, st)
+                if (pos.x >= sl && pos.x <= sl + exactHSize && pos.y >= st && pos.y <= st + exactHSize) hitHandle = 'nw';
+                // NE: (sr - size, st)
+                else if (pos.x >= sr - exactHSize && pos.x <= sr && pos.y >= st && pos.y <= st + exactHSize) hitHandle = 'ne';
+                // SW: (sl, sb - size)
+                else if (pos.x >= sl && pos.x <= sl + exactHSize && pos.y >= sb - exactHSize && pos.y <= sb) hitHandle = 'sw';
+                // SE: (sr - size, sb - size)
+                else if (pos.x >= sr - exactHSize && pos.x <= sr && pos.y >= sb - exactHSize && pos.y <= sb) hitHandle = 'se';
 
                 const hitBody = (pos.x >= sl && pos.x <= sr && pos.y >= st && pos.y <= sb);
 
@@ -2517,11 +2548,42 @@ export class SceneEditor {
                             // Highlight dragging vertex
                             if (this.isDragging && this.draggingVertexIndex === i) {
                                 ctx.fillStyle = '#ffff00';
-                                ctx.fillRect(p.x - handleSize, p.y - handleSize, handleSize * 2, handleSize * 2);
-                                ctx.fillStyle = '#00ff00';
                             } else {
-                                ctx.fillRect(p.x - handleSize / 2, p.y - handleSize / 2, handleSize, handleSize);
+                                ctx.fillStyle = '#00ff00';
                             }
+
+                            // Calculate Centroid for Quad "Inside" shift
+                            // Simple average
+                            let cx = 0, cy = 0;
+                            verts.forEach((vv: any) => {
+                                const vp = getDrawPos(vv);
+                                cx += vp.x;
+                                cy += vp.y;
+                            });
+                            cx /= verts.length;
+                            cy /= verts.length;
+
+                            // Vector from Vertex to Centroid
+                            const dx = cx - p.x;
+                            const dy = cy - p.y;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+
+                            let shiftX = 0;
+                            let shiftY = 0;
+
+                            if (len > 0) {
+                                // Shift by half handle size + padding?
+                                // handleSize is 6. We want to be "inside".
+                                const shiftDist = (handleSize / 2) + (2 / zoom); // Slight offset
+                                shiftX = (dx / len) * shiftDist;
+                                shiftY = (dy / len) * shiftDist;
+                            }
+
+                            // Draw Handle Centered at Shifted Pos
+                            // ctx.fillRect(p.x - handleSize/2 + shiftX, p.y - handleSize/2 + shiftY, handleSize, handleSize);
+
+                            // Actually, let's just draw it.
+                            ctx.fillRect(p.x - handleSize / 2 + shiftX, p.y - handleSize / 2 + shiftY, handleSize, handleSize);
                         });
                     }
                     ctx.restore();
@@ -2567,14 +2629,18 @@ export class SceneEditor {
                         const t = drawY - entity.height;
                         const b = drawY;
 
-                        // NW
-                        ctx.fillRect(l - hSize / 2, t - hSize / 2, hSize, hSize);
-                        // NE
-                        ctx.fillRect(r - hSize / 2, t - hSize / 2, hSize, hSize);
-                        // SW
-                        ctx.fillRect(l - hSize / 2, b - hSize / 2, hSize, hSize);
-                        // SE
-                        ctx.fillRect(r - hSize / 2, b - hSize / 2, hSize, hSize);
+                        // NW - Top Left Corner -> Draw Inside (Top-Left of Rect is top-left of handle)
+                        ctx.fillRect(l, t, hSize, hSize);
+
+                        // NE - Top Right Corner -> Draw Inside (Shift Left)
+                        ctx.fillRect(r - hSize, t, hSize, hSize);
+
+                        // SW - Bottom Left Corner -> Draw Inside (Shift Up - wait, bottom is positive Y)
+                        // b is bottom Y. we want to draw above it.
+                        ctx.fillRect(l, b - hSize, hSize, hSize);
+
+                        // SE - Bottom Right Corner -> Draw Inside
+                        ctx.fillRect(r - hSize, b - hSize, hSize, hSize);
                     }
                 }
 
