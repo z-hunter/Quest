@@ -25,6 +25,26 @@ export interface BackfaceComponent {
     cullingType?: 'layer' | 'render';
 }
 
+export interface SubsceneComponent {
+    type: 'Subscene';
+    targetGroupId: string;
+}
+
+export interface SwitchComponent {
+    type: 'Switch';
+    idKey: string;
+}
+
+export interface SubtriggerComponent {
+    type: 'Subtrigger';
+    target: string;
+}
+
+export interface ItemComponent {
+    type: 'Item';
+    ignoreDistance?: boolean;
+}
+
 export class ComponentSystem {
 
     static update(entity: SceneObject, dt: number) {
@@ -237,5 +257,146 @@ export class ComponentSystem {
                 }
             });
         }
+    }
+
+    // Called on Interaction/Activation (Click or Trigger)
+    // Returns TRUE if component handled the activation (blocking default)
+    static handleActivation(entity: SceneObject, scene: any): boolean {
+        if (!entity.components) return false;
+
+        for (const comp of entity.components) {
+            if (comp.type === 'Subtrigger') {
+                return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene);
+            } else if (comp.type === 'Subscene') {
+                return this.handleSubscene(entity, comp as SubsceneComponent, scene);
+            } else if (comp.type === 'Switch') {
+                return this.handleSwitch(entity, comp as SwitchComponent, scene);
+            }
+        }
+        return false;
+    }
+
+    // Called when trying to TAKE an item
+    // Returns string (error message) or null (success)
+    static canTakeItem(entity: SceneObject, player: Actor): string | null {
+        if (!entity.components) return 'You cannot take that.';
+
+        const itemComp = entity.components.find((c: any) => c.type === 'Item') as ItemComponent | undefined;
+        // Legacy fallback: entity.isTakeable? We'll assume caller checked legacy flags if this returns 'not an item'.
+        // But here we strictly check component.
+
+        if (!itemComp) return null; // Not an item component, let caller handle legacy or fail
+
+        // Check Proximity
+        if (!itemComp.ignoreDistance && player) {
+            const dist = Math.hypot(player.x - entity.x, player.y - entity.y);
+            const allowedDist = (player.width || 30) * 4; // Tolerance
+
+            if (dist > allowedDist) {
+                return `You are too far away from the ${entity.name}.`;
+            }
+        }
+
+        return null; // OK
+    }
+
+    private static handleSubtrigger(entity: SceneObject, sub: SubtriggerComponent, scene: any): boolean {
+        const targetName = sub.target;
+        if (!targetName) {
+            console.warn(`[Subtrigger] No target specified for '${entity.name}'`);
+            return false;
+        }
+
+        // Find Target Object (Entity or Triggerbox)
+        // @ts-ignore
+        const targetObj = (scene.triggerboxes || []).find(t => t.name === targetName) || (scene.entities || []).find(e => e.name === targetName);
+
+        if (targetObj) {
+            console.log(`  -> Delegating to '${targetObj.name}'`);
+            // Recursive call to scene activation
+            if (scene.activateObject) {
+                scene.activateObject(targetObj, (scene._depth || 0) + 1);
+            }
+        } else {
+            console.warn(`[Subtrigger] Target '${targetName}' not found.`);
+        }
+        return true; // Hanlded
+    }
+
+    private static handleSubscene(entity: SceneObject, sub: SubsceneComponent, scene: any): boolean {
+        const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
+        if (!targetStr) return false;
+
+        // Proximity Check (if player exists)
+        // @ts-ignore
+        const player = scene.player;
+        if (player) {
+            let cx = 0, cy = 0;
+            if (entity.type === 'Triggerbox') {
+                // @ts-ignore
+                const poly = (entity as any).poly;
+                if (poly) {
+                    // @ts-ignore
+                    poly.forEach(p => { cx += p.x; cy += p.y; });
+                    cx /= poly.length;
+                    cy /= poly.length;
+                }
+            } else {
+                cx = entity.x;
+                cy = entity.y - (entity.height || 0) / 2;
+            }
+
+            const dist = Math.hypot(player.x - cx, player.y - cy);
+            const allowedDist = (player.width || 30) * 4;
+
+            if (dist > allowedDist) {
+                console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
+                // @ts-ignore
+                const game = window.game;
+                if (game && typeof game.showMessage === 'function') {
+                    game.showMessage("You are too far away.");
+                }
+                return true; // Blocked
+            }
+        }
+
+        console.log(`  -> Activating Subscene Target: '${targetStr}'`);
+        // We need to manipulate scene state. 
+        // Ideally ComponentSystem shouldn't mutate Scene direct internals if possible, but here we must.
+        // @ts-ignore
+        scene.activeSubscene = targetStr;
+        // @ts-ignore
+        if (scene.subsceneEntities) scene.subsceneEntities.clear();
+
+        // @ts-ignore
+        if (scene.resolveTarget) {
+            // @ts-ignore
+            const targets = scene.resolveTarget(targetStr);
+            // @ts-ignore
+            targets.forEach(t => {
+                t.disabled = false;
+                // @ts-ignore
+                if (scene.subsceneEntities) scene.subsceneEntities.add(t);
+            });
+        }
+        return true; // Handled
+    }
+
+    private static handleSwitch(entity: SceneObject, sw: SwitchComponent, scene: any): boolean {
+        if (sw.idKey) {
+            // @ts-ignore
+            const game = window.game;
+            // @ts-ignore
+            if (game && game.inventory) {
+                // @ts-ignore
+                const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
+                if (!hasKey) {
+                    console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
+                    game.showMessage(`Locked. Needs ${sw.idKey}`);
+                    return true; // Handled (Blocked)
+                }
+            }
+        }
+        return false; // Not blocked, proceed to activate children or normal interaction
     }
 }

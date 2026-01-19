@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
