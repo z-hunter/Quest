@@ -535,7 +535,7 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Subscene', label: 'Subscene' },
                                         { value: 'Subtrigger', label: 'Subtrigger' },
                                         { value: 'Switch', label: 'Switch' },
-                                        { value: 'Backface', label: 'Backface' },
+                                        ...(selectedObjectType === 'Quad' ? [{ value: 'Backface', label: 'Backface' }] : []),
                                     ]}
                                     placeholder="+ Add Component"
                                     onChange={(value) => {
