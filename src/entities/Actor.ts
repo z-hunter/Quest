@@ -174,6 +174,8 @@ export class Actor extends Entity {
                     const checkY = ay + shiftY;
 
                     let inside = false;
+                    let hitTarget: QuadObject | undefined;
+
                     for (const t of targets) {
                         // Ensure t has hitTest
                         if (typeof t.hitTest === 'function') {
@@ -187,6 +189,7 @@ export class Actor extends Entity {
 
                             if (hit) {
                                 inside = true;
+                                hitTarget = t as QuadObject;
                                 break;
                             }
                         }
@@ -222,12 +225,53 @@ export class Actor extends Entity {
                                 // console.log(`[Shadow] ENABLED shadow for ${this.name}`);
                             }
 
-                            // 4. Parallax Sync
-                            // Ensure Shadow Vertices match Actor Parallax
+                            // 4. Parallax Sync & Dynamic Inclination
+                            let bottomParallax = pFactor;
+
+                            if (hitTarget && hitTarget.type === 'Quad') {
+                                // Attempt to calculate dynamic parallax based on position within target
+                                const tQuad = hitTarget as QuadObject;
+                                const tv1 = tQuad.vertices[1]; // TR
+                                const tv2 = tQuad.vertices[2]; // BR
+
+                                // Calculate Y-relative position (Interpolation factor)
+                                // We use Shadow's "feet" Y (which is roughly Actor.y + offsetY + height?)
+                                // Simply using Actor.y (this.y) is a good approximation for where the shadow starts.
+                                // Or we can use the midpoint of the shadow quad?
+                                // User logic: "Y coord of second vertex of Shadow" (BR).
+                                // Current Loop updates Shadow Position LATER.
+                                // So we estimate Shadow BR Y:
+                                // Assuming Shadow is ~rectangle, V2 is at bottom.
+                                // But Quad might be skewed.
+                                // Let's use the Actor's Y (this.y) as the "contact point" on the floor.
+
+                                const rangeY = tv2.y - tv1.y;
+                                if (Math.abs(rangeY) > 1) {
+                                    // 0..1 factor
+                                    const t = (this.y - tv1.y) / rangeY;
+                                    const clampedT = Math.max(0, Math.min(1, t));
+
+                                    // Lerp Parallax
+                                    bottomParallax = tv1.p + (tv2.p - tv1.p) * clampedT;
+                                    // console.log(`[Shadow] Dynamic Parallax. ActorY:${this.y.toFixed(0)} Range:${tv1.y.toFixed(0)}-${tv2.y.toFixed(0)}. T:${clampedT.toFixed(2)} => P:${bottomParallax.toFixed(2)}`);
+                                }
+                            }
+
+                            // Apply Parallax
                             if (qObj.vertices) {
-                                qObj.vertices.forEach(v => {
-                                    v.p = pFactor;
-                                });
+                                // V0, V1 (Top) match Actor (or Target Top P?)
+                                // User said: "set vertices 2 and 3 (bottom face) to this value" in the experiment.
+                                // Let's keep Top vertices at Actor P (or 1.0?) 
+                                // Actually, if it's a shadow ON the floor, all vertices should probably match the floor's P at that point?
+                                // But usually shadows are flat projections.
+                                // If we set V2/V3 to 'bottomLike' P, and V0/V1 to 'topLike' P?
+                                // User request specific: "Set vertices 2 and 3... to this value".
+                                // Inferring V0/V1 stay with Actor P (pFactor).
+
+                                qObj.vertices[0].p = pFactor;
+                                qObj.vertices[1].p = pFactor;
+                                qObj.vertices[2].p = bottomParallax;
+                                qObj.vertices[3].p = bottomParallax;
                             }
 
                             // 5. Move Shadow

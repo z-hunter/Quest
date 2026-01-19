@@ -458,22 +458,22 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -349.05679812942253,
+          "x": -449,
           "y": 128.05718906574896,
           "p": 1
         },
         {
-          "x": -238.19200743179013,
+          "x": -338,
           "y": 62.3,
           "p": 0.65
         },
         {
-          "x": -235.3927812004629,
-          "y": 117.95,
+          "x": -335,
+          "y": 113,
           "p": 0.65
         },
         {
-          "x": -350,
+          "x": -450,
           "y": 184,
           "p": 1
         }
@@ -497,7 +497,7 @@
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
-      "locked": true,
+      "locked": false,
       "disabled": false,
       "customName": "",
       "groupID": null,
@@ -505,7 +505,7 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -238.19200743179016,
+          "x": -338,
           "y": 62.3,
           "p": 0.65
         },
@@ -520,8 +520,8 @@
           "p": 1
         },
         {
-          "x": -349.05679812942253,
-          "y": 127.55718906574896,
+          "x": -449,
+          "y": 128.05718906574896,
           "p": 1
         }
       ],
@@ -585,7 +585,7 @@
     {
       "type": "Quad",
       "name": "lightspot1_1",
-      "x": -241.3500728070692,
+      "x": -240.8500728070692,
       "y": 132.71254989539653,
       "color": "#c95618",
       "layer": 0,
@@ -599,24 +599,24 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -237.2571943130142,
-          "y": 63.38,
+          "x": -301.38414142840855,
+          "y": 62.6781264262859,
           "p": 0.65
         },
         {
-          "x": -159.2571943130142,
-          "y": 62.800000000000004,
+          "x": -161.21342806089132,
+          "y": 60.6,
           "p": 0.65
         },
         {
-          "x": -282.7941910775559,
-          "y": 91.4,
-          "p": 0.8
+          "x": -154.16795574987285,
+          "y": 57.791000000000004,
+          "p": 0.65
         },
         {
-          "x": -283.75067098061106,
-          "y": 90.9,
-          "p": 0.8
+          "x": -364.5641370516125,
+          "y": 123.26668975721083,
+          "p": 0.88
         }
       ],
       "sortMode": "v0",
@@ -698,13 +698,13 @@
           "p": 0.64
         },
         {
-          "x": -13.1244512869619,
+          "x": -12.219765268971267,
           "y": 63.76143450593196,
           "p": 0.64
         },
         {
-          "x": -106.0133401758508,
-          "y": 123.71254989539645,
+          "x": -106,
+          "y": 124,
           "p": 1
         },
         {
@@ -722,6 +722,32 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 2
+    },
+    {
+      "type": "Entity",
+      "name": "plant",
+      "x": -121,
+      "y": 69,
+      "width": 61.577142857142846,
+      "height": 64.14285714285714,
+      "baseWidth": 432,
+      "baseHeight": 450,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "office-plant",
+      "color": "#AAAAAA",
+      "scale": 0.14253968253968252,
+      "modelScale": 0.2,
+      "layer": 1,
+      "parallax": 0.648,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Quad",
@@ -1016,6 +1042,15 @@
           "op": "<",
           "targetId": "Quad_204",
           "cullingType": "render"
+        },
+        {
+          "type": "Backface",
+          "vertexA": 0,
+          "vertexB": 1,
+          "axis": "x",
+          "op": ">",
+          "targetId": "plant",
+          "cullingType": "layer"
         }
       ],
       "interactions": {},
@@ -1111,42 +1146,42 @@
     {
       "type": "Quad",
       "name": "shadow_hero",
-      "x": -230.23362135517195,
-      "y": 193.49509253715914,
+      "x": -296.95688358742177,
+      "y": 182.7356589986722,
       "color": "#535246",
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "customName": "",
       "groupID": null,
       "components": [],
       "interactions": {},
       "vertices": [
         {
-          "x": -227.71114165271547,
-          "y": 92.3171517986491,
-          "p": 1
+          "x": -294.4344038849655,
+          "y": 81.55771826016185,
+          "p": 0.7
         },
         {
-          "x": -203.0877031454806,
-          "y": 92.40289354701139,
-          "p": 1
+          "x": -269.8109653777307,
+          "y": 81.64346000852413,
+          "p": 0.7
         },
         {
-          "x": -242.87759982987197,
-          "y": 129.07316667120284,
-          "p": 1
+          "x": -309.6008620621224,
+          "y": 118.31373313271573,
+          "p": 0.65
         },
         {
-          "x": -250.3775998298715,
-          "y": 118.073166671203,
-          "p": 1
+          "x": -317.1008620621218,
+          "y": 107.31373313271585,
+          "p": 0.65
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
+      "opacity": 0.5,
       "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
@@ -1154,6 +1189,53 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 5
+    },
+    {
+      "type": "Quad",
+      "name": "lightspot1_2",
+      "x": -301.8500728070692,
+      "y": 146.21254989539653,
+      "color": "#c95618",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -446.06674998967605,
+          "y": 124.5,
+          "p": 1
+        },
+        {
+          "x": -337.19729374328944,
+          "y": 60.95,
+          "p": 0.65
+        },
+        {
+          "x": -301.38414142840855,
+          "y": 62.6781264262859,
+          "p": 0.65
+        },
+        {
+          "x": -367.0801896253018,
+          "y": 123.38668975721083,
+          "p": 0.89
+        }
+      ],
+      "sortMode": "v0",
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 2
     },
     {
       "type": "Quad",
@@ -1635,32 +1717,6 @@
     },
     {
       "type": "Entity",
-      "name": "plant",
-      "x": -121,
-      "y": 69,
-      "width": 61.577142857142846,
-      "height": 64.14285714285714,
-      "baseWidth": 432,
-      "baseHeight": 450,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "office-plant",
-      "color": "#AAAAAA",
-      "scale": 0.14253968253968252,
-      "modelScale": 0.2,
-      "layer": 1,
-      "parallax": 0.648,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {}
-    },
-    {
-      "type": "Entity",
       "name": "chair",
       "x": 58,
       "y": 77,
@@ -1688,20 +1744,20 @@
     {
       "type": "Actor",
       "name": "miles_ds",
-      "x": -325.72514165270366,
-      "y": 95.3171517986491,
-      "width": 25.225039266607,
-      "height": 103.00224367197859,
+      "x": -281.4344038849655,
+      "y": 84.55771826016185,
+      "width": 24.142947665021993,
+      "height": 98.58370296550648,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.2627608256938229,
+      "scale": 0.25148903817731244,
       "modelScale": 0.33,
       "layer": 1,
-      "parallax": 1,
+      "parallax": 0.7,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "locked": false,
@@ -1712,7 +1768,7 @@
         {
           "type": "Shadow",
           "shadowQuadId": "shadow_hero",
-          "offsetX": -14,
+          "offsetX": -13,
           "offsetY": -3,
           "triggerId": "#lightSpots"
         }
@@ -1963,8 +2019,8 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -351.29130253329345,
-          "y": 126.65938193656524,
+          "x": -449,
+          "y": 128.05718906574896,
           "p": 1
         },
         {
@@ -1978,8 +2034,8 @@
           "p": 1
         },
         {
-          "x": -352.2345044038709,
-          "y": 183.10219287081628,
+          "x": -450,
+          "y": 184,
           "p": 1
         }
       ],
