@@ -101,7 +101,8 @@
     color: #eee;
     padding: 4px 8px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: inherit;
+    /* WAS: 12px */
     cursor: pointer;
     margin-right: 5px;
 }
@@ -128,7 +129,8 @@
 
 .e-btn-small {
     padding: 2px 4px;
-    font-size: 10px;
+    font-size: 0.85em;
+    /* WAS: 10px */
 }
 
 .e-input {
@@ -157,7 +159,8 @@
 .e-label {
     display: block;
     color: var(--ui-label-color);
-    font-size: 11px;
+    font-size: 0.9em;
+    /* WAS: 11px */
     margin-bottom: 2px;
 }
 
@@ -184,7 +187,8 @@
     border: none;
     color: var(--ui-fkey-text);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 1em;
+    /* WAS: 12px */
     text-transform: uppercase;
     padding: 2px 6px;
 }
@@ -231,6 +235,9 @@
 input[type="checkbox"] {
     accent-color: var(--ui-main-color);
     cursor: pointer;
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
 }
 
 .sprite-panel {
@@ -240,8 +247,10 @@ input[type="checkbox"] {
     top: 50px;
     left: 50%;
     transform: translateX(-50%);
-    width: 600px;
-    height: 500px;
+    width: 65em;
+    /* WAS: 600px - approx 600/9.2... let's say 50em? 12px base. 600/12 = 50. */
+    height: 50em;
+    /* WAS: 500px - 500/12 = 41.6. Let's start with proper conversion */
     z-index: 2000;
     display: flex;
     flex-direction: column;

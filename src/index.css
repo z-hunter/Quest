@@ -185,7 +185,8 @@ canvas {
 
 /* Left Panel - Hierarchy */
 #hierarchy-panel {
-  width: 200px;
+  width: 17em;
+  /* approx 200px at 12px font */
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid var(--ui-main-color);
   color: var(--ui-main-color);
@@ -197,7 +198,8 @@ canvas {
 /* Right Panel - Properties */
 #editor-panel,
 #se-panel {
-  width: 300px;
+  width: 25em;
+  /* approx 300px at 12px font */
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid var(--ui-main-color);
   color: var(--ui-main-color);
@@ -314,6 +316,19 @@ button:hover {
   color: #000;
 }
 
+.toolbar-icon {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: middle;
+}
+
+.toolbar-icon-btn {
+  padding: 0.2em 0.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 input[type="text"],
 input[type="number"],
 .e-input,
@@ -334,6 +349,15 @@ textarea:focus,
   border-color: var(--ui-input-focus-border);
   outline: none;
   box-shadow: 0 0 5px rgba(121, 239, 164, 0.3);
+}
+
+/* Ensure inputs/buttons inherit font size for scaling */
+button,
+input,
+select,
+textarea,
+.e-input {
+  font-size: inherit !important;
 }
 
 /* Custom Select Styles */
@@ -357,7 +381,7 @@ textarea:focus,
   background: var(--ui-dropdown-bg);
   border: 1px solid var(--ui-main-color);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-  font-size: 11px;
+  font-size: 0.9em;
 }
 
 .custom-option:hover,
@@ -481,6 +505,7 @@ input[type="file"] {
     opacity: 0;
   }
 }
+
 .cursor-eye {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z%22/><circle cx=%2212%22 cy=%2212%22 r=%223%22/></svg>') 16 16, pointer;
 }

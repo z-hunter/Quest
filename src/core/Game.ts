@@ -53,6 +53,9 @@ export class Game {
 
     settings: {
         crt: CRTSettings & { enabled: boolean };
+        editor: {
+            uiScale: number;
+        };
     };
 
     openFileBrowser(mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string): void {
@@ -96,6 +99,9 @@ export class Game {
                 phosphor: 0.0,
                 bezelGlow: false,
                 bloom: 0.0
+            },
+            editor: {
+                uiScale: 1.0
             }
         };
 
@@ -392,6 +398,9 @@ export class Game {
                 // Merge loaded settings with defaults (simple shallow merge for crt)
                 if (loaded.crt) {
                     this.settings.crt = { ...this.settings.crt, ...loaded.crt };
+                }
+                if (loaded.editor) {
+                    this.settings.editor = { ...this.settings.editor, ...loaded.editor };
                 }
                 console.log('[Game] Settings loaded from LocalStorage');
             }

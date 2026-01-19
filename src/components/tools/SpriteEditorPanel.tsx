@@ -3,14 +3,15 @@ import { Game } from '../../core/Game';
 import { useEditorStore } from '../../store/editorStore';
 
 export const SpriteEditorPanel: React.FC = () => {
-    const { spriteVersion, toggleSpriteEditor, incrementSpriteVersion } = useEditorStore();
+    const { spriteVersion, hierarchyVersion, toggleSpriteEditor, incrementSpriteVersion } = useEditorStore();
     const spriteEditor = Game.instance.spriteEditor;
+    const uiScale = Game.instance.settings.editor?.uiScale || 1.0;
 
     // Force re-render when spriteVersion changes
     const [, setTick] = useState(0);
     useEffect(() => {
         setTick(v => v + 1);
-    }, [spriteVersion]);
+    }, [spriteVersion, hierarchyVersion]);
 
     const handlePropChange = (field: string, value: any) => {
         (spriteEditor.sprite as any)[field] = value;
@@ -20,9 +21,9 @@ export const SpriteEditorPanel: React.FC = () => {
 
     return (
 
-        <div className="sprite-panel" style={{ zIndex: 2000 }}>
+        <div className="sprite-panel" style={{ zIndex: 2000, fontSize: `${12 * uiScale}px` }}>
             <div className="sprite-panel-header">
-                <span className="font-bold text-yellow-500">SPRITE EDITOR</span>
+                <span className="font-bold text-yellow-500">SPRITE EDITOR ({uiScale.toFixed(1)}x)</span>
                 <button
                     className="e-btn e-btn-red e-btn-small"
                     onClick={() => toggleSpriteEditor(false)}
