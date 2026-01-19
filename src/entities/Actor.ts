@@ -1,4 +1,5 @@
 import { Entity, type EntityData } from './Entity';
+import { QuadObject } from './QuadObject';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 // import { Game } from '../core/Game';
@@ -12,6 +13,15 @@ export interface AnimationSet {
     down: string | null;
     left: string | null;
     right: string | null;
+}
+
+export interface ShadowComponent {
+    type: 'Shadow';
+    id: string; // Component ID
+    shadowQuadId: string;
+    offsetX: number;
+    offsetY: number;
+    triggerId: string;
 }
 
 export interface ActorData extends EntityData {
@@ -127,7 +137,134 @@ export class Actor extends Entity {
         // Call Entity update (handles scaling etc)
         super.update(deltaTime);
 
-        // console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
+        // Shadow Component Logic
+        if (this.components && this.scene) {
+            for (const comp of this.components) {
+                if (comp.type === 'Shadow') {
+                    const shadow = comp as ShadowComponent;
+                    if (!shadow.shadowQuadId || !shadow.triggerId) continue;
+
+                    // 1. Resolve Targets (Triggers)
+                    // @ts-ignore
+                    const targets = this.scene.resolveTarget ? this.scene.resolveTarget(shadow.triggerId) : [];
+
+                    // console.log(`[Shadow] TriggerID: '${shadow.triggerId}'. Targets: ${targets.length}`);
+
+                    // 2. Check if Actor Center is inside any target (Visual/Parallax Corrected)
+                    // We need to compare "Visual Position" because hitTest() of QuadObject (Target)
+                    // checks against its own Parallax-Shifted vertices.
+
+                    // @ts-ignore
+                    const camX = this.scene.camera ? this.scene.camera.x : 0;
+                    // @ts-ignore
+                    const camY = this.scene.camera ? this.scene.camera.y : 0;
+
+                    // Actor Base World Pos
+                    const ax = this.x;
+                    const ay = this.y; // Feet
+
+                    // Actor Visual Pos (Shifted by its Parallax)
+                    // Shift = -Cam * (P - 1)
+                    // Visual = Base + Shift
+                    const pFactor = this.parallax !== undefined ? this.parallax : 1.0;
+                    const shiftX = -camX * (pFactor - 1.0);
+                    const shiftY = -camY * (pFactor - 1.0);
+
+                    const checkX = ax + shiftX;
+                    const checkY = ay + shiftY;
+
+                    let inside = false;
+                    for (const t of targets) {
+                        // Ensure t has hitTest
+                        if (typeof t.hitTest === 'function') {
+                            // hitTest expectation:
+                            // QuadObject.hitTest(x,y) checks if (x,y) is in ProjectedPoly.
+                            // ProjectedPoly is in "Shifted World Space".
+                            // So we pass our CheckX/Y (Shifted World Pos).
+                            const hit = t.hitTest(checkX, checkY);
+
+                            // console.log(`[Shadow] Checking '${t.name}': inside=${hit}`);
+
+                            if (hit) {
+                                inside = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 3. Find Shadow Quad
+                    let qObj: QuadObject | undefined;
+
+                    // Use Scene's findEntity (search by Name) because UI "ID" binds to Name.
+                    // @ts-ignore
+                    if (this.scene.findEntity) {
+                        // @ts-ignore
+                        qObj = this.scene.findEntity(shadow.shadowQuadId) as QuadObject;
+                    }
+
+                    if (!qObj) {
+                        // Fallback: Case-insensitive search manually if findEntity strict failed, 
+                        // or if findEntity is missing (unlikely, but safe)
+                        // @ts-ignore
+                        if (this.scene.entities) {
+                            // @ts-ignore
+                            qObj = this.scene.entities.find(e => e.name.toLowerCase() === shadow.shadowQuadId.toLowerCase());
+                        }
+                    }
+
+                    // console.log(`[Shadow] Found ShadowQuad: ${qObj ? qObj.name : 'NULL'}. Inside Trigger: ${inside}`);
+
+                    if (qObj && qObj.type === 'Quad') {
+                        if (inside) {
+                            if (!qObj.visible || qObj.disabled) {
+                                qObj.visible = true;
+                                qObj.disabled = false;
+                                // console.log(`[Shadow] ENABLED shadow for ${this.name}`);
+                            }
+
+                            // 4. Parallax Sync
+                            // Ensure Shadow Vertices match Actor Parallax
+                            if (qObj.vertices) {
+                                qObj.vertices.forEach(v => {
+                                    v.p = pFactor;
+                                });
+                            }
+
+                            // 5. Move Shadow
+                            // Target V0 position (Base World Space)
+                            const targetX = this.x + (shadow.offsetX || 0);
+                            const targetY = this.y + (shadow.offsetY || 0);
+
+                            // Delta
+                            const v0 = qObj.vertices[0];
+                            const dx = targetX - v0.x;
+                            const dy = targetY - v0.y;
+
+                            if (dx !== 0 || dy !== 0) {
+                                qObj.vertices.forEach(v => {
+                                    v.x += dx;
+                                    v.y += dy;
+                                });
+                                // Also update main X/Y for sorting/logic? 
+                                // QuadObject logic usually relies on vertices, but Entity.x/y might be used for sorting fallback.
+                                // Let's update them too to keep bounding box consistent approx?
+                                qObj.x += dx;
+                                qObj.y += dy;
+                            }
+
+                        } else {
+                            if (qObj.visible) {
+                                qObj.visible = false;
+                                qObj.disabled = true; // Or just visible? GDD says "tjen budet disabled"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
+        console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
 
         if (this.isPlayer) {
             this.handlePlayerInput(deltaTime, isWalkable);

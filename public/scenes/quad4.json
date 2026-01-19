@@ -1110,39 +1110,39 @@
     },
     {
       "type": "Quad",
-      "name": "shadow_4",
-      "x": -105.82429801438221,
-      "y": 183.32192586595625,
+      "name": "shadow_hero",
+      "x": -230.23362135517195,
+      "y": 193.49509253715914,
       "color": "#535246",
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "customName": "",
       "groupID": null,
       "components": [],
       "interactions": {},
       "vertices": [
         {
-          "x": -103.30181831192573,
-          "y": 82.1439851274461,
-          "p": 0.645
+          "x": -227.71114165271547,
+          "y": 92.3171517986491,
+          "p": 1
         },
         {
-          "x": -78.67837980469093,
-          "y": 82.22972687580838,
-          "p": 0.645
+          "x": -203.0877031454806,
+          "y": 92.40289354701139,
+          "p": 1
         },
         {
-          "x": -118.4682764890822,
-          "y": 118.9,
-          "p": 0.7
+          "x": -242.87759982987197,
+          "y": 129.07316667120284,
+          "p": 1
         },
         {
-          "x": -125.9682764890822,
-          "y": 107.9,
-          "p": 0.7
+          "x": -250.3775998298715,
+          "y": 118.073166671203,
+          "p": 1
         }
       ],
       "sortMode": "v2",
@@ -1688,17 +1688,17 @@
     {
       "type": "Actor",
       "name": "miles_ds",
-      "x": -123.48288658293099,
-      "y": 94.1644104982435,
-      "width": 25.10910642725192,
-      "height": 102.528851244612,
+      "x": -325.72514165270366,
+      "y": 95.3171517986491,
+      "width": 25.225039266607,
+      "height": 103.00224367197859,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.26155319195054083,
+      "scale": 0.2627608256938229,
       "modelScale": 0.33,
       "layer": 1,
       "parallax": 1,
@@ -1708,11 +1708,19 @@
       "disabled": false,
       "customName": "",
       "groupID": null,
-      "components": [],
+      "components": [
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow_hero",
+          "offsetX": -14,
+          "offsetY": -3,
+          "triggerId": "#lightSpots"
+        }
+      ],
       "interactions": {},
       "isPlayer": true,
       "speed": 0.14,
-      "direction": "right",
+      "direction": "left",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -2142,7 +2150,7 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5,
   "camDeadzoneX": 50,
   "camDeadzoneY": 30,

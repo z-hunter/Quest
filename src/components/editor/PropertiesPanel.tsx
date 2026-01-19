@@ -536,6 +536,7 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Subtrigger', label: 'Subtrigger' },
                                         { value: 'Switch', label: 'Switch' },
                                         ...(selectedObjectType === 'Quad' ? [{ value: 'Backface', label: 'Backface' }] : []),
+                                        ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
                                     ]}
                                     placeholder="+ Add Component"
                                     onChange={(value) => {
@@ -566,6 +567,14 @@ export const PropertiesPanel: React.FC = () => {
                                                 op: '>',
                                                 targetId: obj.name, // Auto-fill with self
                                                 cullingType: 'layer' // Default
+                                            });
+                                        } else if (type === 'Shadow') {
+                                            obj.components.push({
+                                                type: 'Shadow',
+                                                shadowQuadId: '',
+                                                offsetX: 0,
+                                                offsetY: 0,
+                                                triggerId: ''
                                             });
                                         }
 
@@ -791,6 +800,44 @@ export const PropertiesPanel: React.FC = () => {
                                                     }}>...</button>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'Shadow' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                Controls a shadow quad based on trigger zones.
+                                            </div>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Shadow Quad ID</label>
+                                            <input type="text" className="e-input" value={comp.shadowQuadId || ''} onChange={(e) => {
+                                                comp.shadowQuadId = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
+                                        </div>
+                                        <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '10px' }}>Offset X</label>
+                                                <input type="number" className="e-input" value={comp.offsetX || 0} onChange={(e) => {
+                                                    comp.offsetX = parseFloat(e.target.value);
+                                                    setObj({ ...obj });
+                                                }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '10px' }}>Offset Y</label>
+                                                <input type="number" className="e-input" value={comp.offsetY || 0} onChange={(e) => {
+                                                    comp.offsetY = parseFloat(e.target.value);
+                                                    setObj({ ...obj });
+                                                }} />
+                                            </div>
+                                        </div>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Trigger ID(s) (Zone)</label>
+                                            <input type="text" className="e-input" value={comp.triggerId || ''} onChange={(e) => {
+                                                comp.triggerId = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
                                         </div>
                                     </>
                                 )}
