@@ -5,6 +5,7 @@ export class SceneObject {
 
     locked: boolean = false;
     disabled: boolean = false;
+    // Comma-separated list of group IDs (each starting with #).
     groupID: string | null = null;
 
     // User-facing name for parser (e.g. "Pillar" instead of "Pillar_01")

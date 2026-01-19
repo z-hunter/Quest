@@ -345,42 +345,50 @@ export class QuadObject extends Entity {
                 // console.log(`[Backface] A(${idxA}):${valA.toFixed(1)} vs B(${idxB}):${valB.toFixed(1)} match=${match}`);
 
 
-                // Resolve Target
-                let target: QuadObject | null = this;
-                if (bf.targetId) {
-                    const searchId = bf.targetId.trim();
-                    if (searchId === this.name.trim()) {
-                        target = this;
-                    } else {
-                        // Find by Name or GroupID
+                // Resolve Targets (Unified)
+                // Default to self if no targetId specified
+                let targets: any[] = [];
+                if (!bf.targetId) {
+                    targets.push(this);
+                } else {
+                    // Use Scene Helper
+                    // @ts-ignore
+                    if (scene.resolveTarget) {
                         // @ts-ignore
-                        const found = scene.entities.find(e => e.name.trim() === searchId && e.type === 'Quad');
-                        target = found ? (found as QuadObject) : null;
+                        targets = scene.resolveTarget(bf.targetId);
+                    } else {
+                        // Fallback (if resolveTarget missing or circular dep issue?)
+                        // Should function if Scene.ts is loaded.
+                        // @ts-ignore
+                        const found = scene.entities.find(e => e.name === bf.targetId.trim());
+                        if (found) targets.push(found);
                     }
                 }
 
-                if (target) {
+                if (targets.length > 0) {
                     const cullingType = bf.cullingType || 'layer';
 
-                    // Debug Log
-                    // console.log(`[Backface] Match:${match} Type:${cullingType} Visible:${target.visible}`);
-
-                    if (match) {
-                        // Hide (Backface Culling)
-                        if (cullingType === 'render') {
-                            target.visible = false;
-                            // Ensure layer is reset if we switched modes
-                            (target as any).renderLayer = undefined;
+                    targets.forEach(target => {
+                        if (match) {
+                            // Hide (Backface Culling)
+                            if (cullingType === 'render') {
+                                target.visible = false;
+                                // Ensure layer is reset if we switched modes
+                                // @ts-ignore
+                                target.renderLayer = undefined;
+                            } else {
+                                // Layer Mode
+                                // @ts-ignore
+                                target.renderLayer = target.layer - 1;
+                                target.visible = true;
+                            }
                         } else {
-                            // Layer Mode
-                            (target as any).renderLayer = target.layer - 1;
+                            // Restore (Show)
                             target.visible = true;
+                            // @ts-ignore
+                            target.renderLayer = undefined;
                         }
-                    } else {
-                        // Restore (Show)
-                        target.visible = true;
-                        (target as any).renderLayer = undefined;
-                    }
+                    });
                 }
             }
         }

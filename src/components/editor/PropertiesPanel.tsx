@@ -233,7 +233,28 @@ export const PropertiesPanel: React.FC = () => {
                             type="text"
                             className="e-input"
                             value={obj.groupID || ''}
-                            onChange={(e) => handleChange('groupID', e.target.value)}
+                            onChange={(e) => {
+                                let val = e.target.value;
+                                // Auto-format: Ensure every token starts with #
+                                // 1. Split by comma
+                                const tokens = val.split(',');
+                                const newTokens = tokens.map((t, index) => {
+                                    // Don't auto-add to the very last token if it's empty (user just typed comma)
+                                    if (t.length === 0) return '';
+
+                                    let clean = t;
+                                    // If this is a new char entry (not just backspace), check prefix
+                                    const trimmed = t.trimStart();
+                                    if (trimmed.length > 0 && !trimmed.startsWith('#')) {
+                                        // Find where the white space ends to insert #
+                                        const firstCharIdx = t.length - trimmed.length;
+                                        clean = t.substring(0, firstCharIdx) + '#' + trimmed;
+                                    }
+                                    return clean;
+                                });
+
+                                handleChange('groupID', newTokens.join(','));
+                            }}
                         />
                     </div>
                 )}
@@ -628,7 +649,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="e-row">
-                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Quad ID (Optional)</label>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s) (Optional)</label>
                                             <input type="text" className="e-input" value={comp.targetId || ''} onChange={(e) => { comp.targetId = e.target.value; setObj({ ...obj }); }} />
                                         </div>
                                     </>
@@ -659,7 +680,7 @@ export const PropertiesPanel: React.FC = () => {
                                 {comp.type === 'Subscene' && (
                                     <>
                                         <div className="e-row">
-                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Group ID</label>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s)</label>
                                             <input type="text" className="e-input" value={comp.targetGroupId || ''} onChange={(e) => {
                                                 comp.targetGroupId = e.target.value;
                                                 setObj({ ...obj });
@@ -694,11 +715,11 @@ export const PropertiesPanel: React.FC = () => {
                                     <>
                                         <div className="e-row" style={{ display: 'flex', gap: '2px' }}>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 1</label>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 1</label>
                                                 <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId1 || ''} onChange={(e) => { comp.groupId1 = e.target.value; setObj({ ...obj }); }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 2</label>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 2</label>
                                                 <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId2 || ''} onChange={(e) => { comp.groupId2 = e.target.value; setObj({ ...obj }); }} />
                                             </div>
                                         </div>

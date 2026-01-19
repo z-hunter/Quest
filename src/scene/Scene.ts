@@ -72,51 +72,74 @@ export class Scene {
         return this._activeSubscene;
     }
 
+    // Unified Target Resolution (Groups & Objects)
+    resolveTarget(targetStr: string): SceneObject[] {
+        if (!targetStr) return [];
+
+        const targets = new Set<SceneObject>();
+        const tokens = targetStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+        tokens.forEach(token => {
+            if (token.startsWith('#')) {
+                // Group Target
+                // Match: Object's groupID contains this token
+                // NOTE: Object's groupID is now a CSV string.
+                this.entities.forEach(e => {
+                    if (e.groupID) {
+                        const groups = e.groupID.split(',').map(g => g.trim());
+                        if (groups.includes(token)) targets.add(e);
+                    }
+                });
+                if (this.triggerboxes) {
+                    this.triggerboxes.forEach(t => {
+                        if (t.groupID) {
+                            const groups = t.groupID.split(',').map(g => g.trim());
+                            if (groups.includes(token)) targets.add(t);
+                        }
+                    });
+                }
+            } else {
+                // Individual Object Target
+                const obj = this.findEntity(token);
+                if (obj) targets.add(obj);
+
+                // Also check Triggerboxes by name
+                if (this.triggerboxes) {
+                    const tb = this.triggerboxes.find(t => t.name === token);
+                    if (tb) targets.add(tb);
+                }
+            }
+        });
+
+        return Array.from(targets);
+    }
+
     set activeSubscene(value: string | null) {
         // If changing from a valid subscene to something else (or null), perform cleanup
         if (this._activeSubscene && this._activeSubscene !== value) {
             console.log(`[Scene] Closing Subscene: '${this._activeSubscene}' -> '${value}'`);
 
-            const closingSubsceneID = this._activeSubscene;
+            // 1. Reset Switches (Robust Scan)
+            // We scan ALL triggers because any switch could have been part of the "State" of this subscene
+            // Resolving *state* is tricky with mixed targets. 
+            // Assumption: If a Switch was activated by this subscene, it should probably reset? 
+            // OR: We only reset switches that are *literally* in the group?
+            // Existing logic: "Scan ALL triggers for Switches belonging to this subscene"
+            // With mixed targets, "belonging" is fuzzy.
+            // Let's stick to: If a switch is IN the closing group (via resolveTarget), reset it?
+            // Actually, the previous logic scanned triggers to see if their groupID matched the subscene.
 
-            // Strategy 1 (Robust): Scan ALL triggers for Switches belonging to this subscene
-            if (this.triggerboxes) {
-                this.triggerboxes.forEach(tb => {
-                    const tbGID = tb.groupID ? tb.groupID.trim() : '';
+            const closingTargets = this.resolveTarget(this._activeSubscene);
 
-                    if (tbGID === closingSubsceneID) {
-                        if (tb.components) {
-                            for (const comp of tb.components) {
-                                if (comp.type === 'Switch') {
-                                    const sw = comp as any;
-                                    // Soft check for state (handle "2" vs 2)
-                                    // @ts-ignore
-                                    if (sw.state == 2) {
-                                        console.log(`  -> [RobustScan] Resetting Switch in '${tb.name}' to State 1`);
-                                        sw.state = 1;
-                                        if (sw.sound1 && typeof window !== 'undefined') {
-                                            // @ts-ignore
-                                            if (window.game) window.game.playSound(sw.sound1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Strategy 2: Reset Switches in tracked entities (Nested groups or non-triggered)
-            this.subsceneEntities.forEach(e => {
-                const tb = e as any;
-                if (tb.components) {
-                    for (const comp of tb.components) {
+            // Check for switches within the closing targets
+            closingTargets.forEach(obj => {
+                if (obj.components) {
+                    for (const comp of obj.components) {
                         if (comp.type === 'Switch') {
                             const sw = comp as any;
-                            // Check if ALREADY reset by strategy 1
                             // @ts-ignore
                             if (sw.state == 2) {
-                                console.log(`  -> [TrackedScan] Resetting Switch in '${tb.name}' to State 1`);
+                                console.log(`  -> [AutoReset] Resetting Switch in '${obj.name}' to State 1`);
                                 sw.state = 1;
                                 if (sw.sound1 && typeof window !== 'undefined') {
                                     // @ts-ignore
@@ -128,7 +151,7 @@ export class Scene {
                 }
             });
 
-            // 3. Disable All Tracked Entities
+            // 2. Disable All Tracked Entities
             console.log(`  -> Disabling ${this.subsceneEntities.size} subscene entities.`);
             this.subsceneEntities.forEach(e => {
                 e.disabled = true;
@@ -514,8 +537,8 @@ export class Scene {
 
                 } else if (comp.type === 'Subscene') {
                     const sub = comp as any;
-                    const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-                    if (!targetID) continue;
+                    const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
+                    if (!targetStr) continue;
 
                     if (this.player) {
                         // Calculate Center for Proximity Check
@@ -546,32 +569,16 @@ export class Scene {
                         }
                     }
 
-                    console.log(`  -> Activating Subscene Group: '${targetID}'`);
-                    this.activeSubscene = targetID;
+                    console.log(`  -> Activating Subscene Target: '${targetStr}'`);
+                    this.activeSubscene = targetStr; // Set string identifier (for cleanup)
                     this.subsceneEntities.clear(); // Reset tracking
 
-                    // 1. Enable Objects in this Group
-                    let count = 0;
-                    this.entities.forEach(e => {
-                        const eGID = e.groupID ? e.groupID.trim() : '';
-                        if (eGID === targetID) {
-                            e.disabled = false;
-                            this.subsceneEntities.add(e);
-                            count++;
-                        }
+                    const targets = this.resolveTarget(targetStr);
+                    targets.forEach(t => {
+                        t.disabled = false;
+                        this.subsceneEntities.add(t);
                     });
 
-                    // 2. Enable Triggerboxes in this Group
-                    if (this.triggerboxes) {
-                        this.triggerboxes.forEach(t => {
-                            const tbGID = t.groupID ? t.groupID.trim() : '';
-                            if (tbGID === targetID) {
-                                t.disabled = false;
-                                this.subsceneEntities.add(t);
-                                count++;
-                            }
-                        });
-                    }
                     return;
 
                 } else if (comp.type === 'Switch') {
@@ -604,38 +611,29 @@ export class Scene {
                         if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
                     }
 
-                    // 4. Update Groups
-                    const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
-                    const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
+                    // 4. Update Targets
+                    const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
+                    const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
 
-                    // Update Entities
-                    this.entities.forEach(e => {
-                        const eGID = e.groupID ? e.groupID.trim() : '';
-                        if (eGID === groupToShow) {
-                            e.disabled = false;
-                            if (this.activeSubscene) this.subsceneEntities.add(e);
-                        } else if (eGID === groupToHide) {
-                            e.disabled = true;
-                            if (this.activeSubscene) this.subsceneEntities.delete(e);
-                        }
+                    // Resolve
+                    const toShow = this.resolveTarget(targetStrShow);
+                    const toHide = this.resolveTarget(targetStrHide);
+
+                    // Apply
+                    toShow.forEach(t => {
+                        t.disabled = false;
+                        if (this.activeSubscene) this.subsceneEntities.add(t);
                     });
 
-                    // Update Triggerboxes
-                    if (this.triggerboxes) {
-                        this.triggerboxes.forEach(t => {
-                            if (t === obj) return; // Don't disable self!
+                    toHide.forEach(t => {
+                        // Don't disable self if self is in target list (safety)
+                        if (t === obj) return;
 
-                            const tGID = t.groupID ? t.groupID.trim() : '';
-                            if (tGID === groupToShow) {
-                                t.disabled = false;
-                                if (this.activeSubscene) this.subsceneEntities.add(t);
-                            } else if (tGID === groupToHide) {
-                                t.disabled = true;
-                                if (this.activeSubscene) this.subsceneEntities.delete(t);
-                            }
-                        });
-                    }
-                    console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
+                        t.disabled = true;
+                        if (this.activeSubscene) this.subsceneEntities.delete(t);
+                    });
+
+                    console.log(`[Switch] Updated Targets. Enabled '${targetStrShow}', Disabled '${targetStrHide}'`);
                     return;
                 }
             }
