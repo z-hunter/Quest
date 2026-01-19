@@ -1,4 +1,5 @@
 import { Entity } from './Entity';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import { Geometry } from '../utils/Geometry';
 
 export interface QuadVertex {
@@ -302,95 +303,7 @@ export class QuadObject extends Entity {
 
         if (!this.components) return;
 
-        // @ts-ignore
-        const scene = this.scene;
-        if (!scene) return;
-
-        for (const comp of this.components) {
-            if (comp.type === 'Backface') {
-                const bf = comp as any;
-                // Props: vertexA (0-3), vertexB (0-3), axis ('x'|'y'), op ('>'|'<'), targetId (opt)
-
-                const idxA = bf.vertexA || 0;
-                const idxB = bf.vertexB || 1;
-                const axis = bf.axis || 'x'; // 'x' or 'y'
-                const op = bf.op || '>'; // '>' or '<'
-
-                const vA = this.vertices[idxA];
-                const vB = this.vertices[idxB];
-
-                if (!vA || !vB) continue;
-
-                // Compare VISUAL (Screen) positions
-                // Visual Pos = World Pos - Camera Pos * Parallax
-                // (Ignoring Zoom and Center offset as they cancel out in comparison A > B)
-
-                // Ensure Parallax is defined (Default 1.0)
-                const pA = vA.p !== undefined ? vA.p : 1.0;
-                const pB = vB.p !== undefined ? vB.p : 1.0;
-
-                const camX = scene.camera.x;
-                const camY = scene.camera.y;
-
-                // Calculate Visual Coordinate
-                const valA = (axis === 'x' ? vA.x : vA.y) - (axis === 'x' ? camX : camY) * pA;
-                const valB = (axis === 'x' ? vB.x : vB.y) - (axis === 'x' ? camX : camY) * pB;
-
-                // Condition
-                let match = false;
-                if (op === '>') match = valA > valB;
-                else if (op === '<') match = valA < valB;
-
-                // Debug Log (Throttle?)
-                // console.log(`[Backface] A(${idxA}):${valA.toFixed(1)} vs B(${idxB}):${valB.toFixed(1)} match=${match}`);
-
-
-                // Resolve Targets (Unified)
-                // Default to self if no targetId specified
-                let targets: any[] = [];
-                if (!bf.targetId) {
-                    targets.push(this);
-                } else {
-                    // Use Scene Helper
-                    // @ts-ignore
-                    if (scene.resolveTarget) {
-                        // @ts-ignore
-                        targets = scene.resolveTarget(bf.targetId);
-                    } else {
-                        // Fallback (if resolveTarget missing or circular dep issue?)
-                        // Should function if Scene.ts is loaded.
-                        // @ts-ignore
-                        const found = scene.entities.find(e => e.name === bf.targetId.trim());
-                        if (found) targets.push(found);
-                    }
-                }
-
-                if (targets.length > 0) {
-                    const cullingType = bf.cullingType || 'layer';
-
-                    targets.forEach(target => {
-                        if (match) {
-                            // Hide (Backface Culling)
-                            if (cullingType === 'render') {
-                                target.visible = false;
-                                // Ensure layer is reset if we switched modes
-                                // @ts-ignore
-                                target.renderLayer = undefined;
-                            } else {
-                                // Layer Mode
-                                // @ts-ignore
-                                target.renderLayer = target.layer - 1;
-                                target.visible = true;
-                            }
-                        } else {
-                            // Restore (Show)
-                            target.visible = true;
-                            // @ts-ignore
-                            target.renderLayer = undefined;
-                        }
-                    });
-                }
-            }
-        }
+        // Update Components (via System)
+        ComponentSystem.update(this, dt);
     }
 }

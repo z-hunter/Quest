@@ -604,9 +604,9 @@
           "p": 0.65
         },
         {
-          "x": -161.21342806089132,
-          "y": 60.6,
-          "p": 0.65
+          "x": -134.4671155211256,
+          "y": 59.39999999999999,
+          "p": 0.55
         },
         {
           "x": -154.16795574987285,
@@ -1145,53 +1145,6 @@
     },
     {
       "type": "Quad",
-      "name": "shadow_hero",
-      "x": -296.95688358742177,
-      "y": 182.7356589986722,
-      "color": "#535246",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "vertices": [
-        {
-          "x": -294.4344038849655,
-          "y": 81.55771826016185,
-          "p": 0.7
-        },
-        {
-          "x": -269.8109653777307,
-          "y": 81.64346000852413,
-          "p": 0.7
-        },
-        {
-          "x": -309.6008620621224,
-          "y": 118.31373313271573,
-          "p": 0.65
-        },
-        {
-          "x": -317.1008620621218,
-          "y": 107.31373313271585,
-          "p": 0.65
-        }
-      ],
-      "sortMode": "v2",
-      "opacity": 0.5,
-      "blendMode": "multiply",
-      "isGrid": false,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
-    },
-    {
-      "type": "Quad",
       "name": "lightspot1_2",
       "x": -301.8500728070692,
       "y": 146.21254989539653,
@@ -1236,6 +1189,53 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 2
+    },
+    {
+      "type": "Quad",
+      "name": "shadow_hero",
+      "x": -313.4006454021943,
+      "y": 91.76698091864361,
+      "color": "#535246",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -313.4006454021943,
+          "y": 91.76698091864361,
+          "p": 0.7
+        },
+        {
+          "x": -288.7772068949594,
+          "y": 91.85272266700589,
+          "p": 0.7
+        },
+        {
+          "x": -328.56710357935106,
+          "y": 128.52299579119753,
+          "p": 0.55
+        },
+        {
+          "x": -336.0671035793504,
+          "y": 117.52299579119762,
+          "p": 0.55
+        }
+      ],
+      "sortMode": "v2",
+      "opacity": 0.5,
+      "blendMode": "multiply",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 5
     },
     {
       "type": "Quad",
@@ -1744,17 +1744,17 @@
     {
       "type": "Actor",
       "name": "miles_ds",
-      "x": -281.4344038849655,
-      "y": 84.55771826016185,
-      "width": 24.142947665021993,
-      "height": 98.58370296550648,
+      "x": -300.4006454021943,
+      "y": 94.76698091864361,
+      "width": 25.169707795246445,
+      "height": 102.77630683058965,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.25148903817731244,
+      "scale": 0.2621844562004838,
       "modelScale": 0.33,
       "layer": 1,
       "parallax": 0.7,
@@ -1831,14 +1831,14 @@
           "p": 0.85
         },
         {
-          "x": -210.41666666666723,
-          "y": 93.88333333333331,
+          "x": -207.8732138749097,
+          "y": 93.00054537111298,
           "p": 0.85
         },
         {
-          "x": -224,
-          "y": 127,
-          "p": 0.9650000000000001
+          "x": -238.79623723463973,
+          "y": 127.42,
+          "p": 1
         }
       ],
       "sortMode": "v2",
