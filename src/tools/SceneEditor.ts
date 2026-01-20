@@ -748,9 +748,12 @@ export class SceneEditor {
 
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
+                const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+                const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+
                 // Entity Screen Rect Calculation
-                const screenX = (entity.x - camX * p) * zoom + halfW;
-                const screenY = (entity.y - camY * p) * zoom + halfH;
+                const screenX = (entity.x - camX * p + vOx) * zoom + halfW;
+                const screenY = (entity.y - camY * p + vOy) * zoom + halfH;
                 const screenW = entity.width * zoom;
                 const screenH = entity.height * zoom;
 
@@ -826,14 +829,18 @@ export class SceneEditor {
                 // Entity draws at x, y
 
                 // So ScreenX = (EntityX - CamX*p) * Zoom + HalfW
-                const screenX = (entity.x - camX * p) * zoom + halfW;
-                const screenY = (entity.y - camY * p) * zoom + halfH;
+
+                const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+                const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+
+                const screenX = (entity.x - camX * p + vOx) * zoom + halfW;
+                const screenY = (entity.y - camY * p + vOy) * zoom + halfH;
                 const screenW = entity.width * zoom;
                 const screenH = entity.height * zoom;
 
                 // Mouse World Pos for this entity layer
-                const worldX = (pos.x - halfW) / zoom + camX * p;
-                const worldY = (pos.y - halfH) / zoom + camY * p;
+                const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
+                const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
 
                 if (entity.hitTest(worldX, worldY)) {
 
@@ -1141,8 +1148,12 @@ export class SceneEditor {
         if (this.resizingHandle) {
             // 1. Calculate Mouse World Position (at entity depth p)
             // WorldX = ((ScreenX - HalfW) / Zoom) + CamX * p
-            const mouseWorldX = (pos.x - halfW) / zoom + camX * p;
-            const mouseWorldY = (pos.y - halfH) / zoom + camY * p;
+
+            const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+            const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+
+            const mouseWorldX = (pos.x - halfW) / zoom + camX * p - vOx;
+            const mouseWorldY = (pos.y - halfH) / zoom + camY * p - vOy;
 
             // Current Edges
             const currentL = entity.x - entity.width / 2;
@@ -1276,8 +1287,11 @@ export class SceneEditor {
         const unzoomedX = (targetScreenX - halfW) / zoom;
         const unzoomedY = (targetScreenY - halfH) / zoom;
 
-        entity.x = Math.round(unzoomedX + camX * p);
-        entity.y = Math.round(unzoomedY + camY * p);
+        const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+        const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+
+        entity.x = Math.round(unzoomedX + camX * p - vOx);
+        entity.y = Math.round(unzoomedY + camY * p - vOy);
 
         this.updateUIFromObject();
     }
@@ -2593,9 +2607,12 @@ export class SceneEditor {
                     const entity = this.selectedObject as Entity;
                     const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
+                    const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+                    const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+
                     ctx.translate(halfW, halfH);
                     ctx.scale(zoom, zoom);
-                    ctx.translate(-camX * p, -camY * p);
+                    ctx.translate(-camX * p + vOx, -camY * p + vOy);
 
                     if (entity.locked) {
                         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';

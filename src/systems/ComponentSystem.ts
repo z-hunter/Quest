@@ -49,6 +49,11 @@ export interface ThreeDParallaxComponent {
     type: '3d-parallax';
 }
 
+export interface WalkBoxComponent {
+    type: 'WalkBox';
+    mode?: 'Invert' | 'Add' | 'Subtract';
+}
+
 export class ComponentSystem {
 
     static update(entity: SceneObject, dt: number) {

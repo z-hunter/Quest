@@ -537,7 +537,8 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Switch', label: 'Switch' },
                                         ...(selectedObjectType === 'Quad' ? [
                                             { value: 'Backface', label: 'Backface' },
-                                            { value: '3d-parallax', label: '3d-parallax' }
+                                            { value: '3d-parallax', label: '3d-parallax' },
+                                            { value: 'WalkBox', label: 'WalkBox (Collider)' }
                                         ] : []),
                                         ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
                                     ]}
@@ -581,6 +582,8 @@ export const PropertiesPanel: React.FC = () => {
                                             });
                                         } else if (type === '3d-parallax') {
                                             obj.components.push({ type: '3d-parallax' });
+                                        } else if (type === 'WalkBox') {
+                                            obj.components.push({ type: 'WalkBox', mode: 'Invert' });
                                         }
 
                                         if (Game.instance.editor.selectedObject) {
@@ -730,6 +733,29 @@ export const PropertiesPanel: React.FC = () => {
                                         <div className="e-row">
                                             <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
                                                 Interpolates Actor Parallax based on slope (Right Edge).
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'WalkBox' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '5px' }}>
+                                                Treats this Quad as a Walkbox collider.
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <label className="e-label" style={{ marginRight: '5px' }}>Mode:</label>
+                                                <Select
+                                                    value={comp.mode || 'Invert'}
+                                                    onChange={(value) => { comp.mode = value; setObj({ ...obj }); }}
+                                                    options={[
+                                                        { value: 'Invert', label: 'Invert (Walk Inside)' },
+                                                        { value: 'Add', label: 'Add (Walk Inside)' },
+                                                        { value: 'Subtract', label: 'Subtract (Hole)' },
+                                                    ]}
+                                                    style={{ width: '120px' }}
+                                                />
                                             </div>
                                         </div>
                                     </>

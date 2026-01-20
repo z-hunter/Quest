@@ -247,9 +247,27 @@ export class Scene {
 
         let sourceRect = null;
         if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
+            // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
+            const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
+            const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
+            const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
+
+            // Source is currently at 'x, y' proposed world pos.
+            // Effective Visual X = ProposedWorldX - CamX * (P - 1) + vOx
+            let sEffX = x;
+            let sEffY = y;
+
+            if (sp !== 1.0 && this.camera) {
+                sEffX = x - this.camera.x * (sp - 1.0) + svOx;
+                sEffY = y - this.camera.y * (sp - 1.0) + svOy;
+            } else {
+                sEffX = x + svOx;
+                sEffY = y + svOy;
+            }
+
             sourceRect = {
-                x: x - sourceEntity.colliderWidth / 2,
-                y: y - sourceEntity.colliderHeight,
+                x: sEffX - sourceEntity.colliderWidth / 2,
+                y: sEffY - sourceEntity.colliderHeight,
                 w: sourceEntity.colliderWidth,
                 h: sourceEntity.colliderHeight
             };
@@ -269,9 +287,15 @@ export class Scene {
                 let effX = other.x;
                 let effY = other.y;
 
+                const vOx = (other as any).visualOffset ? (other as any).visualOffset.x : 0;
+                const vOy = (other as any).visualOffset ? (other as any).visualOffset.y : 0;
+
                 if (p !== 1.0 && this.camera) {
-                    effX = other.x - this.camera.x * (p - 1.0);
-                    effY = other.y - this.camera.y * (p - 1.0);
+                    effX = other.x - this.camera.x * (p - 1.0) + vOx;
+                    effY = other.y - this.camera.y * (p - 1.0) + vOy;
+                } else {
+                    effX = other.x + vOx;
+                    effY = other.y + vOy;
                 }
 
                 const otherRect = {
@@ -290,6 +314,35 @@ export class Scene {
 
         // Filter out disabled walkboxes first
         const activeWalkboxes = this.walkbox ? this.walkbox.filter(wb => !wb.disabled) : [];
+
+        // Integrated WalkBox Components (Quads)
+        // We look for entities with 'WalkBox' component and treat them as walkboxes
+        // Optimization: In a large scene, we might want to cache this list.
+        this.entities.forEach(entity => {
+            if (entity.disabled) return;
+            if (entity.components) {
+                const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
+                if (wbComp && (entity as any).vertices) {
+                    const vertices = (entity as any).vertices.map((v: any) => {
+                        const p = v.p !== undefined ? v.p : ((entity as any).parallax || 1.0);
+                        let vx = v.x;
+                        let vy = v.y;
+                        if (this.camera && p !== 1.0) {
+                            vx = v.x - this.camera.x * (p - 1.0);
+                            vy = v.y - this.camera.y * (p - 1.0);
+                        }
+                        return { x: vx, y: vy };
+                    });
+
+                    activeWalkboxes.push({
+                        name: entity.name,
+                        poly: vertices, // Corrected Visual Vertices
+                        mode: wbComp.mode || 'Invert',
+                        disabled: false
+                    } as any);
+                }
+            }
+        });
 
         // If no active walkboxes, everything is walkable
         if (activeWalkboxes.length === 0) return true;
