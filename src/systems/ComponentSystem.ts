@@ -32,7 +32,12 @@ export interface SubsceneComponent {
 
 export interface SwitchComponent {
     type: 'Switch';
-    idKey: string;
+    idKey?: string;
+    state?: number;
+    sound1?: string;
+    sound2?: string;
+    groupId1?: string;
+    groupId2?: string;
 }
 
 export interface SubtriggerComponent {
@@ -375,7 +380,8 @@ export class ComponentSystem {
 
         // Check Proximity
         if (!itemComp.ignoreDistance && player) {
-            const dist = Math.hypot(player.x - entity.x, player.y - entity.y);
+            const e = entity as any;
+            const dist = Math.hypot(player.x - e.x, player.y - e.y);
             const allowedDist = (player.width || 30) * 4; // Tolerance
 
             if (dist > allowedDist) {
@@ -428,8 +434,9 @@ export class ComponentSystem {
                     cy /= poly.length;
                 }
             } else {
-                cx = entity.x;
-                cy = entity.y - (entity.height || 0) / 2;
+                const e = entity as any;
+                cx = e.x || 0;
+                cy = (e.y || 0) - (e.height || 0) / 2;
             }
 
             const dist = Math.hypot(player.x - cx, player.y - cy);
@@ -469,6 +476,7 @@ export class ComponentSystem {
     }
 
     private static handleSwitch(entity: SceneObject, sw: SwitchComponent, scene: any): boolean {
+        // 1. Check Key
         if (sw.idKey) {
             // @ts-ignore
             const game = window.game;
@@ -483,6 +491,50 @@ export class ComponentSystem {
                 }
             }
         }
-        return false; // Not blocked, proceed to activate children or normal interaction
+
+        // 2. Toggle State
+        // Default to state 1 if undefined
+        const currentState = sw.state || 1;
+        const nextState = currentState === 1 ? 2 : 1;
+        sw.state = nextState;
+        console.log(`[Switch] Toggling to State ${nextState}`);
+
+        // 3. Audio
+        // @ts-ignore
+        const game = window.game;
+        if (game) {
+            if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
+            if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
+        }
+
+        // 4. Update Targets
+        const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
+        const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
+
+        // Resolve
+        if (scene.resolveTarget) {
+            const toShow = scene.resolveTarget(targetStrShow || '');
+            const toHide = scene.resolveTarget(targetStrHide || '');
+
+            // Apply
+            // @ts-ignore
+            toShow.forEach((t: any) => {
+                t.disabled = false;
+                if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(t);
+            });
+
+            // @ts-ignore
+            toHide.forEach((t: any) => {
+                // Don't disable self if self is in target list (safety)
+                if (t === entity) return;
+
+                t.disabled = true;
+                if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(t);
+            });
+
+            console.log(`[Switch] Updated Targets. Enabled '${targetStrShow}', Disabled '${targetStrHide}'`);
+        }
+
+        return true; // Handled
     }
 }
