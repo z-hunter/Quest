@@ -535,7 +535,10 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Subscene', label: 'Subscene' },
                                         { value: 'Subtrigger', label: 'Subtrigger' },
                                         { value: 'Switch', label: 'Switch' },
-                                        ...(selectedObjectType === 'Quad' ? [{ value: 'Backface', label: 'Backface' }] : []),
+                                        ...(selectedObjectType === 'Quad' ? [
+                                            { value: 'Backface', label: 'Backface' },
+                                            { value: '3d-parallax', label: '3d-parallax' }
+                                        ] : []),
                                         ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
                                     ]}
                                     placeholder="+ Add Component"
@@ -576,6 +579,8 @@ export const PropertiesPanel: React.FC = () => {
                                                 offsetY: 0,
                                                 triggerId: ''
                                             });
+                                        } else if (type === '3d-parallax') {
+                                            obj.components.push({ type: '3d-parallax' });
                                         }
 
                                         if (Game.instance.editor.selectedObject) {
@@ -716,6 +721,16 @@ export const PropertiesPanel: React.FC = () => {
                                                 comp.target = e.target.value;
                                                 setObj({ ...obj });
                                             }} />
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === '3d-parallax' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
+                                                Interpolates Actor Parallax based on slope (Right Edge).
+                                            </div>
                                         </div>
                                     </>
                                 )}

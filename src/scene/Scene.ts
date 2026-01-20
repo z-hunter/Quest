@@ -814,7 +814,9 @@ export class Scene {
             // Center Pivot Transform
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x * p, -this.camera.y * p);
+            const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+            const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+            ctx.translate(-this.camera.x * p + vOx, -this.camera.y * p + vOy);
 
             entity.render(ctx);
             ctx.restore();

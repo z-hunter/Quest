@@ -45,6 +45,10 @@ export interface ItemComponent {
     ignoreDistance?: boolean;
 }
 
+export interface ThreeDParallaxComponent {
+    type: '3d-parallax';
+}
+
 export class ComponentSystem {
 
     static update(entity: SceneObject, dt: number) {
@@ -61,6 +65,69 @@ export class ComponentSystem {
             } else if (comp.type === 'Backface') {
                 if (entity.type === 'Quad') {
                     this.handleBackface(entity as unknown as QuadObject, comp as BackfaceComponent);
+                }
+            } else if (comp.type === '3d-parallax') {
+                if (entity.type === 'Quad') {
+                    this.handleThreeDParallax(entity as unknown as QuadObject, comp as ThreeDParallaxComponent);
+                }
+            }
+        }
+    }
+
+    private static handleThreeDParallax(quad: QuadObject, comp: ThreeDParallaxComponent) {
+        // @ts-ignore
+        const scene = quad.scene;
+        if (!scene || !scene.entities) return;
+
+        // Iterate over all Actors in the scene
+        // @ts-ignore
+        const actors = scene.entities.filter((e: any) => e.type === 'Actor' || e.type === 'Player') as Actor[];
+
+        // @ts-ignore
+        const camX = scene.camera ? scene.camera.x : 0;
+        // @ts-ignore
+        const camY = scene.camera ? scene.camera.y : 0;
+
+        for (const actor of actors) {
+            // Constraint: Only update if moving
+            if (actor.state !== 'walk') continue;
+
+            // Check if Actor is ON this Quad
+            // Use Visual Position for hitTest
+            const pFactor = actor.parallax !== undefined ? actor.parallax : 1.0;
+            const shiftX = -camX * (pFactor - 1.0);
+            const shiftY = -camY * (pFactor - 1.0);
+
+            const checkX = actor.x + shiftX;
+            const checkY = actor.y + shiftY;
+
+            if (quad.hitTest(checkX, checkY)) {
+                // Calculate new Parallax based on Right Edge (V1 -> V2)
+                // V1: Top-Right, V2: Bottom-Right
+                if (!quad.vertices || quad.vertices.length < 3) continue;
+
+                const v1 = quad.vertices[1];
+                const v2 = quad.vertices[2];
+
+                const rangeY = v2.y - v1.y;
+                if (Math.abs(rangeY) > 1) {
+                    // Interpolate
+                    // t = 0 at V1 (Top), t = 1 at V2 (Bottom)
+                    const t = (actor.y - v1.y) / rangeY;
+                    const clampedT = Math.max(0, Math.min(1, t));
+
+                    const newP = v1.p + (v2.p - v1.p) * clampedT;
+
+                    // Apply
+                    // Apply
+                    actor.parallax = newP;
+
+                    // Correction: Counteract horizontal drift caused by Parallax Perspective
+                    // VisualX = WorldX - CamX * P. We want VisualX to mimic P=1 behavior (Orthographic X).
+                    // Offset = CamX * (P - 1.0)
+                    if (!actor.visualOffset) actor.visualOffset = { x: 0, y: 0 };
+                    actor.visualOffset.x = camX * (newP - 1.0);
+                    // console.log(`[3D-Parallax] Actor ${actor.name} P updated to ${newP.toFixed(3)} (T=${clampedT.toFixed(2)})`);
                 }
             }
         }
@@ -92,8 +159,11 @@ export class ComponentSystem {
         const shiftX = -camX * (pFactor - 1.0);
         const shiftY = -camY * (pFactor - 1.0);
 
-        const checkX = ax + shiftX;
-        const checkY = ay + shiftY;
+        const vOx = actor.visualOffset ? actor.visualOffset.x : 0;
+        const vOy = actor.visualOffset ? actor.visualOffset.y : 0;
+
+        const checkX = ax + shiftX + vOx;
+        const checkY = ay + shiftY + vOy;
 
         let inside = false;
         let hitTarget: QuadObject | undefined;
@@ -175,6 +245,17 @@ export class ComponentSystem {
                     });
                     qObj.x = targetX;
                     qObj.y = targetY;
+                }
+
+                // Sync Visual Offset (For 3D Parallax Correction)
+                if (actor.visualOffset) {
+                    if (!qObj.visualOffset) qObj.visualOffset = { x: 0, y: 0 };
+                    qObj.visualOffset.x = actor.visualOffset.x;
+                    qObj.visualOffset.y = actor.visualOffset.y;
+                } else if (qObj.visualOffset) {
+                    // Reset if actor has no offset
+                    qObj.visualOffset.x = 0;
+                    qObj.visualOffset.y = 0;
                 }
 
             } else {
