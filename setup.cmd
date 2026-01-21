@@ -30,5 +30,6 @@ echo The game will open in your browser shortly.
 echo Press Ctrl+C in this window to stop the server.
 echo.
 
+start "" "http://localhost:5173/"
 call npm run dev
 pause
