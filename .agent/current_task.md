@@ -1,29 +1,22 @@
-# Current Task: Notifications & Smart Save (Completed)
+# Current Task: Unified Object and Group Referencing (Completed)
 
-**Objective:** Enhance the editor experience by adding non-blocking "Toast" notifications and streamlining the save workflow with "Smart Save" functionality.
+**Objective:** Unify the referencing system so components can target both individual objects and groups simultaneously using a unified syntax (`#group` vs `objectID`).
 
 ## Status
 
-- [x] **Walkbox Modes (Previous Task):**
-  - [x] Implemented Add, Subtract, Invert modes.
-  - [x] Updated rendering logic for proper composition.
-  - [x] Added UI controls to Properties Panel.
-- [x] **Notifications:**
-  - [x] Replaced blocking `alert` and "Click to continue" modal with non-blocking Toast UI.
-  - [x] Implemented `showMessage` in `Game.ts` to trigger toasts.
-  - [x] Styled toasts to match retro aesthetic (Green border, fade out).
-- [x] **Sprite Editor Improvements:**
-  - [x] **Smart Save (F2):** Saves directly if `sprite.id` is valid.
-  - [x] **Save As (Shift+F2):** Always prompts file browser.
-  - [x] **Visualization:** Added background options (Black/Pink/Checker) and Rulers.
-  - [x] Fixed "Empty Preview" bug.
-- [x] **Scene Editor Improvements:**
-  - [x] **Smart Save (F2):** Saves directly if `scene.id` is valid.
-  - [x] **Save As (Shift+F2):** Always prompts file browser.
-  - [x] Renamed "ID" label to "ID/File" for clarity.
+- [x] **Core Reference Logic:**
+  - [x] Implemented `resolveTarget` in `Scene.ts` to handle mixed lists of Groups (#) and Object IDs.
+  - [x] Updated `SceneObject` to support multiple Group IDs (comma-separated).
+- [x] **Editor Support:**
+  - [x] Properties Panel now auto-prefixes `#` for Group ID entries.
+  - [x] Updated UI labels to "Target ID(s)" for clarity.
+- [x] **Component Updates:**
+  - [x] **Subscene:** Now accepts mixed targets.
+  - [x] **Switch:** Now accepts mixed targets for State 1 / State 2 groups.
+  - [x] **Backface:** Refactored to use `resolveTarget` and work on ANY object type (not just Quads).
 
 ## Notes
 
-- The blocking interaction flow has been removed, making the editor feel much faster.
-- "Smart Save" significantly reduces friction for iterative updates.
-- Walkbox modes allow for complex navigation meshes (bridges, holes).
+- `Scene.resolveTarget` is the central helper for resolving string inputs to object lists.
+- Group IDs must strictly start with `#`.
+- Components can now affect arbitrary combinations of objects.

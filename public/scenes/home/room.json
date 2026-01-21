@@ -13,6 +13,7 @@
       "customName": "",
       "interactions": {},
       "components": [],
+      "visible": true,
       "poly": [
         {
           "x": -79,
@@ -43,6 +44,7 @@
       "customName": "",
       "interactions": {},
       "components": [],
+      "visible": true,
       "poly": [
         {
           "x": 82,
@@ -109,10 +111,11 @@
       "components": [
         {
           "type": "Subscene",
-          "targetGroupId": "D",
+          "targetGroupId": "#D",
           "name": ""
         }
       ],
+      "visible": true,
       "poly": [
         {
           "x": 27,
@@ -155,20 +158,21 @@
       "locked": false,
       "disabled": true,
       "layer": 0,
-      "groupID": "D",
+      "groupID": "#D ",
       "customName": "",
       "interactions": {},
       "components": [
         {
           "type": "Switch",
           "groupId1": "nil",
-          "groupId2": "D1",
+          "groupId2": "#D1",
           "state": 1,
           "idKey": "",
           "sound1": "drawer_open.wav",
           "sound2": "drawer_close.wav"
         }
       ],
+      "visible": true,
       "poly": [
         {
           "x": -156.29411764705887,
@@ -199,29 +203,31 @@
       "customName": "",
       "interactions": {},
       "components": [],
+      "visible": true,
       "poly": [],
       "script": ""
     },
     {
       "type": "Triggerbox",
-      "name": "sub_sw_d2 ",
+      "name": "sub_sw_d2",
       "locked": false,
       "disabled": true,
       "layer": 0,
-      "groupID": "D",
+      "groupID": "#D ",
       "customName": "",
       "interactions": {},
       "components": [
         {
           "type": "Switch",
           "groupId1": "nil",
-          "groupId2": "D2",
+          "groupId2": "#D2",
           "state": 1,
           "idKey": "",
           "sound1": "drawer_open.wav",
           "sound2": "drawer_close.wav"
         }
       ],
+      "visible": true,
       "poly": [
         {
           "x": -156.29411764705878,
@@ -266,7 +272,7 @@
       "color": "#00ff00",
       "scale": 0.65,
       "modelScale": 0.65,
-      "layer": 0,
+      "layer": -2,
       "parallax": 0.2,
       "ignoreScaling": true,
       "animationSpeed": 150,
@@ -376,7 +382,7 @@
     },
     {
       "type": "Entity",
-      "name": "Black_1 ",
+      "name": "Black_1",
       "x": -328,
       "y": 307,
       "width": 171.2340644206598,
@@ -448,13 +454,13 @@
       "locked": true,
       "disabled": true,
       "customName": "",
-      "groupID": "D",
+      "groupID": "#D ",
       "components": [],
       "interactions": {}
     },
     {
       "type": "Entity",
-      "name": "sub_D2_body ",
+      "name": "sub_D2_body",
       "x": 134,
       "y": 311,
       "width": 614.4,
@@ -474,7 +480,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "D2",
+      "groupID": "#D2 ",
       "components": [],
       "interactions": {}
     },
@@ -500,7 +506,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "D1",
+      "groupID": "#D1 ",
       "components": [],
       "interactions": {}
     },
@@ -526,7 +532,7 @@
       "locked": false,
       "disabled": true,
       "customName": "id",
-      "groupID": "D1",
+      "groupID": "#D1 ",
       "components": [
         {
           "type": "Item",
@@ -557,7 +563,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "D1",
+      "groupID": "#D1 ",
       "components": [],
       "interactions": {}
     },
@@ -583,7 +589,7 @@
       "locked": true,
       "disabled": true,
       "customName": "",
-      "groupID": "D",
+      "groupID": "#D ",
       "components": [],
       "interactions": {}
     },
@@ -609,7 +615,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "D1",
+      "groupID": "#D1 ",
       "components": [
         {
           "type": "Subtrigger",
@@ -624,7 +630,7 @@
     "y": 29,
     "zoom": 0.51
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,

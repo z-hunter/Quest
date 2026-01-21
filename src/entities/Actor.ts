@@ -14,6 +14,11 @@ export interface AnimationSet {
     right: string | null;
 }
 
+import { ComponentSystem } from '../systems/ComponentSystem';
+
+// Interfaces for State/Anim are kept here or moved if generic.
+// ShadowComponent interface moved to ComponentSystem.
+
 export interface ActorData extends EntityData {
     direction: ActorDirection;
     animSets: Record<string, AnimationSet>;
@@ -127,7 +132,10 @@ export class Actor extends Entity {
         // Call Entity update (handles scaling etc)
         super.update(deltaTime);
 
-        // console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
+        // Update Components
+        ComponentSystem.update(this, deltaTime);
+
+        console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
 
         if (this.isPlayer) {
             this.handlePlayerInput(deltaTime, isWalkable);

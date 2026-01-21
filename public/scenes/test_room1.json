@@ -5,112 +5,250 @@
   "walkbox": [
     {
       "type": "Walkbox",
-      "name": "Walk_892",
+      "name": "Walk_997",
       "locked": false,
       "disabled": false,
+      "layer": 0,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "visible": true,
       "poly": [
         {
-          "x": -82,
-          "y": 286
+          "x": -79,
+          "y": 346
         },
         {
-          "x": -211,
-          "y": 262
+          "x": -81,
+          "y": 272
         },
         {
-          "x": -122,
-          "y": 244
+          "x": 153,
+          "y": 272
         },
         {
-          "x": -110,
-          "y": 250
-        },
-        {
-          "x": 28,
-          "y": 216
-        },
-        {
-          "x": 43,
-          "y": 232
-        },
-        {
-          "x": 62,
-          "y": 253
-        },
-        {
-          "x": 122,
-          "y": 255
-        },
-        {
-          "x": 148,
-          "y": 233
-        },
-        {
-          "x": 138,
-          "y": 215
-        },
-        {
-          "x": 114,
-          "y": 207
-        },
-        {
-          "x": 67,
-          "y": 207
-        },
-        {
-          "x": 96,
-          "y": 195
-        },
-        {
-          "x": 388,
-          "y": 196
-        },
-        {
-          "x": 416,
-          "y": 204
-        },
-        {
-          "x": 476,
-          "y": 203
-        },
-        {
-          "x": 646,
-          "y": 221
-        },
-        {
-          "x": 647,
-          "y": 280
+          "x": 153,
+          "y": 346
         }
       ],
       "mode": "Add"
     },
     {
       "type": "Walkbox",
-      "name": "Walk_997",
+      "name": "Walk_176",
       "locked": false,
       "disabled": false,
+      "layer": 0,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "visible": true,
       "poly": [
         {
-          "x": -40.274509803921546,
-          "y": 356.17647058823525
+          "x": 82,
+          "y": 192
         },
         {
-          "x": -42.274509803921546,
-          "y": 279.17647058823525
+          "x": 407,
+          "y": 195
         },
         {
-          "x": 137.7254901960785,
-          "y": 282.17647058823525
+          "x": 408,
+          "y": 203
         },
         {
-          "x": 137.7254901960785,
-          "y": 356.17647058823525
+          "x": 470,
+          "y": 207
+        },
+        {
+          "x": 596,
+          "y": 220
+        },
+        {
+          "x": 624,
+          "y": 211
+        },
+        {
+          "x": 680,
+          "y": 211
+        },
+        {
+          "x": 680,
+          "y": 297
+        },
+        {
+          "x": -234,
+          "y": 291
+        },
+        {
+          "x": -210,
+          "y": 247
+        },
+        {
+          "x": -111,
+          "y": 249
+        },
+        {
+          "x": 77,
+          "y": 194
         }
       ],
       "mode": "Add"
     }
   ],
-  "triggerboxes": [],
+  "triggerboxes": [
+    {
+      "type": "Triggerbox",
+      "name": "Trig_sub_D",
+      "locked": false,
+      "disabled": false,
+      "layer": 0,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Subscene",
+          "targetGroupId": "#D",
+          "name": ""
+        }
+      ],
+      "visible": true,
+      "poly": [
+        {
+          "x": 27,
+          "y": 210
+        },
+        {
+          "x": 28,
+          "y": 104
+        },
+        {
+          "x": 84,
+          "y": 94
+        },
+        {
+          "x": 83,
+          "y": 136
+        },
+        {
+          "x": 54,
+          "y": 145
+        },
+        {
+          "x": 50,
+          "y": 160
+        },
+        {
+          "x": 76,
+          "y": 170
+        },
+        {
+          "x": 79,
+          "y": 194
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "sub_sw_d1",
+      "locked": false,
+      "disabled": true,
+      "layer": 0,
+      "groupID": "#D ",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "nil",
+          "groupId2": "#D1",
+          "state": 1,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
+        }
+      ],
+      "visible": true,
+      "poly": [
+        {
+          "x": -156.29411764705887,
+          "y": -171.3529411764706
+        },
+        {
+          "x": 425,
+          "y": -171
+        },
+        {
+          "x": 414,
+          "y": -95
+        },
+        {
+          "x": -143,
+          "y": -95
+        }
+      ],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "Trig_834",
+      "locked": false,
+      "disabled": false,
+      "layer": 0,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "visible": true,
+      "poly": [],
+      "script": ""
+    },
+    {
+      "type": "Triggerbox",
+      "name": "sub_sw_d2",
+      "locked": false,
+      "disabled": true,
+      "layer": 0,
+      "groupID": "#D ",
+      "customName": "",
+      "interactions": {},
+      "components": [
+        {
+          "type": "Switch",
+          "groupId1": "nil",
+          "groupId2": "#D2",
+          "state": 1,
+          "idKey": "",
+          "sound1": "drawer_open.wav",
+          "sound2": "drawer_close.wav"
+        }
+      ],
+      "visible": true,
+      "poly": [
+        {
+          "x": -156.29411764705878,
+          "y": -87.03921568627447
+        },
+        {
+          "x": 424.9999999999999,
+          "y": -86.68627450980387
+        },
+        {
+          "x": 413.9999999999999,
+          "y": -10.68627450980393
+        },
+        {
+          "x": -142.99999999999994,
+          "y": -10.68627450980393
+        }
+      ],
+      "script": ""
+    }
+  ],
   "scaling": {
     "enabled": true,
     "min": 0.91,
@@ -134,12 +272,16 @@
       "color": "#00ff00",
       "scale": 0.65,
       "modelScale": 0.65,
-      "layer": 0,
+      "layer": -2,
       "parallax": 0.2,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": true,
-      "disabled": false
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -161,22 +303,52 @@
       "ignoreScaling": true,
       "animationSpeed": 150,
       "locked": true,
-      "disabled": false
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "Chair",
+      "x": 100,
+      "y": 249,
+      "width": 116.89999999999999,
+      "height": 198.79999999999998,
+      "baseWidth": 167,
+      "baseHeight": 284,
+      "colliderWidth": 78,
+      "colliderHeight": 18,
+      "spriteName": "chair.json",
+      "color": "#00ff00",
+      "scale": 0.7,
+      "modelScale": 0.7,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Actor",
       "name": "Hero_1",
-      "x": 227.16435536197804,
-      "y": 231.67611586282524,
-      "width": 67.9000791365863,
-      "height": 277.25865647439406,
+      "x": 196.28432091757907,
+      "y": 260.8863323736504,
+      "width": 70.35742703505488,
+      "height": 287.29282705980745,
       "baseWidth": 96,
       "baseHeight": 392,
-      "colliderWidth": 52,
-      "colliderHeight": 10,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.7072924910061074,
+      "scale": 0.7328898649484884,
       "modelScale": 0.74,
       "layer": 0,
       "parallax": 1,
@@ -184,6 +356,10 @@
       "animationSpeed": 30,
       "locked": false,
       "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
       "isPlayer": true,
       "speed": 0.24,
       "direction": "left",
@@ -206,29 +382,7 @@
     },
     {
       "type": "Entity",
-      "name": "Chair",
-      "x": 100,
-      "y": 249,
-      "width": 116.89999999999999,
-      "height": 198.79999999999998,
-      "baseWidth": 167,
-      "baseHeight": 284,
-      "colliderWidth": 115,
-      "colliderHeight": 20,
-      "spriteName": "chair.json",
-      "color": "#00ff00",
-      "scale": 0.7,
-      "modelScale": 0.7,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": true,
-      "animationSpeed": 150,
-      "locked": true,
-      "disabled": false
-    },
-    {
-      "type": "Entity",
-      "name": "Black_1 ",
+      "name": "Black_1",
       "x": -328,
       "y": 307,
       "width": 171.2340644206598,
@@ -245,8 +399,12 @@
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
-      "locked": false,
-      "disabled": false
+      "locked": true,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
     },
     {
       "type": "Entity",
@@ -268,7 +426,203 @@
       "ignoreScaling": false,
       "animationSpeed": 150,
       "locked": false,
-      "disabled": false
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D_main",
+      "x": 135,
+      "y": 310,
+      "width": 614.4,
+      "height": 484.79999999999995,
+      "baseWidth": 1024,
+      "baseHeight": 808,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_main",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 3,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": true,
+      "customName": "",
+      "groupID": "#D ",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D2_body",
+      "x": 134,
+      "y": 311,
+      "width": 614.4,
+      "height": 407.4,
+      "baseWidth": 1024,
+      "baseHeight": 679,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d2.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 4,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "",
+      "groupID": "#D2 ",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D1_body",
+      "x": 136,
+      "y": -4,
+      "width": 614.4,
+      "height": 177.6,
+      "baseWidth": 1024,
+      "baseHeight": 296,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_body.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 5,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "",
+      "groupID": "#D1 ",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D1_id",
+      "x": 91,
+      "y": -1,
+      "width": 156,
+      "height": 93.6,
+      "baseWidth": 325,
+      "baseHeight": 195,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_id.json",
+      "color": "#00ff00",
+      "scale": 0.48,
+      "modelScale": 0.48,
+      "layer": 5,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "id",
+      "groupID": "#D1 ",
+      "components": [
+        {
+          "type": "Item",
+          "ignoreDistance": true
+        }
+      ],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D1_stuff",
+      "x": 320,
+      "y": 184,
+      "width": 979,
+      "height": 412,
+      "baseWidth": 979,
+      "baseHeight": 412,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_items.json",
+      "color": "#00ff00",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 5,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "",
+      "groupID": "#D1 ",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D_main_top",
+      "x": 135,
+      "y": -176,
+      "width": 614.4,
+      "height": 129.6,
+      "baseWidth": 1024,
+      "baseHeight": 216,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_top.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 6,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": true,
+      "disabled": true,
+      "customName": "",
+      "groupID": "#D ",
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
+      "name": "sub_D1_fasade",
+      "x": 135,
+      "y": 66,
+      "width": 614.4,
+      "height": 105.6,
+      "baseWidth": 1024,
+      "baseHeight": 176,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_facade.json",
+      "color": "#00ff00",
+      "scale": 0.6,
+      "modelScale": 0.6,
+      "layer": 6,
+      "parallax": 1,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": true,
+      "customName": "",
+      "groupID": "D1",
+      "components": [
+        {
+          "type": "Subtrigger",
+          "target": "sub_sw_d1"
+        }
+      ],
+      "interactions": {}
     }
   ],
   "camera": {
@@ -280,6 +634,6 @@
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,
-  "camMinX": 70,
-  "camMaxY": 35
+  "camMinX": 143,
+  "camMaxY": 4
 }

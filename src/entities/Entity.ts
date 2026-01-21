@@ -131,7 +131,10 @@ export class Entity extends SceneObject {
         this.flipX = false;
         this.scene = null;
         this.loadingRefCount = 0;
+        this.visualOffset = { x: 0, y: 0 };
     }
+
+    visualOffset: { x: number; y: number };
 
     setSprite(filename: string, keepSize: boolean = false): void {
         // Auto-detect loading state if not explicitly set
@@ -141,6 +144,9 @@ export class Entity extends SceneObject {
         // Note: AssetLoader handles extension and path resolution
         const requestName = filename;
         console.log(`[Entity] Requesting sprite: ${requestName}`);
+
+        // Update spriteName immediately so other systems (SceneManager) know what we are loading
+        this.spriteName = filename;
 
         // Capture current dimensions target if we need to preserve them
 

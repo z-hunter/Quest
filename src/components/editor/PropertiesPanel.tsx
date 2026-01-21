@@ -35,16 +35,23 @@ export const PropertiesPanel: React.FC = () => {
         }
     }, [selectedObjectId, hierarchyVersion, objectVersion]);
 
+    const uiScale = Game.instance?.settings?.editor?.uiScale || 1.0;
+
     if (!obj && selectedObjectId !== 'SETTINGS') {
         return (
             <div
                 id="editor-panel"
-                className="bg-gray-900 border-l border-gray-700 h-full p-2 text-sm text-gray-400"
+                className="editor-sidebar right"
                 onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
                 onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+                style={{ fontSize: `${12 * uiScale}px` }}
             >
-                <div className="font-bold border-b border-gray-700 mb-2 pb-1">PROPERTIES</div>
-                No Selection
+                <div className="editor-header">
+                    <span>PROPERTIES</span>
+                </div>
+                <div className="editor-content" style={{ color: '#888', fontStyle: 'italic' }}>
+                    No Selection
+                </div>
             </div>
         );
     }
@@ -140,6 +147,7 @@ export const PropertiesPanel: React.FC = () => {
         }
     };
 
+
     return (
 
         <div
@@ -147,6 +155,7 @@ export const PropertiesPanel: React.FC = () => {
             className="editor-sidebar right"
             onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
             onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+            style={{ fontSize: `${12 * uiScale}px` }}
         >
             <div className="editor-header">
                 <span>{selectedObjectType === 'SETTINGS' ? 'SETTINGS' : 'PROPERTIES'}</span>
@@ -224,7 +233,28 @@ export const PropertiesPanel: React.FC = () => {
                             type="text"
                             className="e-input"
                             value={obj.groupID || ''}
-                            onChange={(e) => handleChange('groupID', e.target.value)}
+                            onChange={(e) => {
+                                let val = e.target.value;
+                                // Auto-format: Ensure every token starts with #
+                                // 1. Split by comma
+                                const tokens = val.split(',');
+                                const newTokens = tokens.map((t, index) => {
+                                    // Don't auto-add to the very last token if it's empty (user just typed comma)
+                                    if (t.length === 0) return '';
+
+                                    let clean = t;
+                                    // If this is a new char entry (not just backspace), check prefix
+                                    const trimmed = t.trimStart();
+                                    if (trimmed.length > 0 && !trimmed.startsWith('#')) {
+                                        // Find where the white space ends to insert #
+                                        const firstCharIdx = t.length - trimmed.length;
+                                        clean = t.substring(0, firstCharIdx) + '#' + trimmed;
+                                    }
+                                    return clean;
+                                });
+
+                                handleChange('groupID', newTokens.join(','));
+                            }}
                         />
                     </div>
                 )}
@@ -431,7 +461,7 @@ export const PropertiesPanel: React.FC = () => {
                                     borderRadius: '4px',
                                     border: isSelected ? '1px solid yellow' : '1px solid transparent'
                                 }}>
-                                    <div style={{ fontSize: '9px', color: '#888', marginBottom: '2px' }}>Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}</div>
+                                    <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}</div>
                                     <div style={{ display: 'flex', gap: '2px' }}>
                                         <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
                                             v.x = parseFloat(e.target.value);
@@ -505,7 +535,12 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'Subscene', label: 'Subscene' },
                                         { value: 'Subtrigger', label: 'Subtrigger' },
                                         { value: 'Switch', label: 'Switch' },
-                                        { value: 'Backface', label: 'Backface' },
+                                        ...(selectedObjectType === 'Quad' ? [
+                                            { value: 'Backface', label: 'Backface' },
+                                            { value: '3d-parallax', label: '3d-parallax' },
+                                            { value: 'WalkBox', label: 'WalkBox (Collider)' }
+                                        ] : []),
+                                        ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
                                     ]}
                                     placeholder="+ Add Component"
                                     onChange={(value) => {
@@ -537,6 +572,18 @@ export const PropertiesPanel: React.FC = () => {
                                                 targetId: obj.name, // Auto-fill with self
                                                 cullingType: 'layer' // Default
                                             });
+                                        } else if (type === 'Shadow') {
+                                            obj.components.push({
+                                                type: 'Shadow',
+                                                shadowQuadId: '',
+                                                offsetX: 0,
+                                                offsetY: 0,
+                                                triggerId: ''
+                                            });
+                                        } else if (type === '3d-parallax') {
+                                            obj.components.push({ type: '3d-parallax' });
+                                        } else if (type === 'WalkBox') {
+                                            obj.components.push({ type: 'WalkBox', mode: 'Invert' });
                                         }
 
                                         if (Game.instance.editor.selectedObject) {
@@ -545,7 +592,7 @@ export const PropertiesPanel: React.FC = () => {
                                         setObj({ ...obj });
                                         // No need to reset value as Select component handles it or we pass empty value
                                     }}
-                                    style={{ width: '100px', fontSize: '10px' }}
+                                    style={{ width: '100px', fontSize: '0.8em' }}
                                     value=""
                                 />
                             </div>
@@ -566,22 +613,22 @@ export const PropertiesPanel: React.FC = () => {
 
                                 {comp.type === 'Backface' && (
                                     <>
-                                        <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                        <div style={{ fontSize: '0.8em', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
                                             Lowers Layer if A [op] B (e.g. A.x &gt; B.x).
                                         </div>
                                         <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Vert A (0-3)</label>
+                                                <label className="e-label" style={{ fontSize: '0.75em' }}>Vert A (0-3)</label>
                                                 <input type="number" className="e-input" min="0" max="3" value={comp.vertexA} onChange={(e) => { comp.vertexA = parseInt(e.target.value); setObj({ ...obj }); }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Vert B (0-3)</label>
+                                                <label className="e-label" style={{ fontSize: '0.75em' }}>Vert B (0-3)</label>
                                                 <input type="number" className="e-input" min="0" max="3" value={comp.vertexB} onChange={(e) => { comp.vertexB = parseInt(e.target.value); setObj({ ...obj }); }} />
                                             </div>
                                         </div>
                                         <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Axis</label>
+                                                <label className="e-label" style={{ fontSize: '0.75em' }}>Axis</label>
                                                 <Select
                                                     value={comp.axis}
                                                     onChange={(value) => { comp.axis = value; setObj({ ...obj }); }}
@@ -593,7 +640,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 />
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Op</label>
+                                                <label className="e-label" style={{ fontSize: '0.75em' }}>Op</label>
                                                 <Select
                                                     value={comp.op}
                                                     onChange={(value) => { comp.op = value; setObj({ ...obj }); }}
@@ -619,7 +666,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="e-row">
-                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Quad ID (Optional)</label>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s) (Optional)</label>
                                             <input type="text" className="e-input" value={comp.targetId || ''} onChange={(e) => { comp.targetId = e.target.value; setObj({ ...obj }); }} />
                                         </div>
                                     </>
@@ -650,7 +697,7 @@ export const PropertiesPanel: React.FC = () => {
                                 {comp.type === 'Subscene' && (
                                     <>
                                         <div className="e-row">
-                                            <label className="e-label" style={{ fontSize: '10px' }}>Target Group ID</label>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s)</label>
                                             <input type="text" className="e-input" value={comp.targetGroupId || ''} onChange={(e) => {
                                                 comp.targetGroupId = e.target.value;
                                                 setObj({ ...obj });
@@ -681,15 +728,48 @@ export const PropertiesPanel: React.FC = () => {
                                     </>
                                 )}
 
+                                {comp.type === '3d-parallax' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
+                                                Interpolates Actor Parallax based on slope (Right Edge).
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'WalkBox' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '5px' }}>
+                                                Treats this Quad as a Walkbox collider.
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <label className="e-label" style={{ marginRight: '5px' }}>Mode:</label>
+                                                <Select
+                                                    value={comp.mode || 'Invert'}
+                                                    onChange={(value) => { comp.mode = value; setObj({ ...obj }); }}
+                                                    options={[
+                                                        { value: 'Invert', label: 'Invert (Walk Inside)' },
+                                                        { value: 'Add', label: 'Add (Walk Inside)' },
+                                                        { value: 'Subtract', label: 'Subtract (Hole)' },
+                                                    ]}
+                                                    style={{ width: '120px' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
                                 {comp.type === 'Switch' && (
                                     <>
                                         <div className="e-row" style={{ display: 'flex', gap: '2px' }}>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 1</label>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 1</label>
                                                 <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId1 || ''} onChange={(e) => { comp.groupId1 = e.target.value; setObj({ ...obj }); }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <label className="e-label" style={{ fontSize: '9px' }}>Group 2</label>
+                                                <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 2</label>
                                                 <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId2 || ''} onChange={(e) => { comp.groupId2 = e.target.value; setObj({ ...obj }); }} />
                                             </div>
                                         </div>
@@ -761,6 +841,44 @@ export const PropertiesPanel: React.FC = () => {
                                                     }}>...</button>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {comp.type === 'Shadow' && (
+                                    <>
+                                        <div className="e-row">
+                                            <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                Controls a shadow quad based on trigger zones.
+                                            </div>
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Shadow Quad ID</label>
+                                            <input type="text" className="e-input" value={comp.shadowQuadId || ''} onChange={(e) => {
+                                                comp.shadowQuadId = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
+                                        </div>
+                                        <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '10px' }}>Offset X</label>
+                                                <input type="number" className="e-input" value={comp.offsetX || 0} onChange={(e) => {
+                                                    comp.offsetX = parseFloat(e.target.value);
+                                                    setObj({ ...obj });
+                                                }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className="e-label" style={{ fontSize: '10px' }}>Offset Y</label>
+                                                <input type="number" className="e-input" value={comp.offsetY || 0} onChange={(e) => {
+                                                    comp.offsetY = parseFloat(e.target.value);
+                                                    setObj({ ...obj });
+                                                }} />
+                                            </div>
+                                        </div>
+                                        <div className="e-row">
+                                            <label className="e-label" style={{ fontSize: '10px' }}>Trigger ID(s) (Zone)</label>
+                                            <input type="text" className="e-input" value={comp.triggerId || ''} onChange={(e) => {
+                                                comp.triggerId = e.target.value;
+                                                setObj({ ...obj });
+                                            }} />
                                         </div>
                                     </>
                                 )}
@@ -1023,17 +1141,17 @@ export const PropertiesPanel: React.FC = () => {
                                         { value: 'talk', label: 'Talk' },
                                         { value: 'pickup', label: 'Pickup' },
                                     ]}
-                                    style={{ width: '80px', fontSize: '10px' }}
+                                    style={{ width: '80px', fontSize: '0.85em' }}
                                 />
                             </div>
 
                             {obj.interactions && Object.keys(obj.interactions).map(verb => (
                                 <div key={verb} style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}>
-                                    <div style={{ width: '40px', fontSize: '10px', color: '#ccc' }}>{verb.toUpperCase()}</div>
+                                    <div style={{ width: '40px', fontSize: '0.85em', color: '#ccc' }}>{verb.toUpperCase()}</div>
                                     <input
                                         type="text"
                                         className="e-input"
-                                        style={{ flex: 1, fontSize: '10px' }}
+                                        style={{ flex: 1, fontSize: '0.85em' }}
                                         placeholder="Script ID"
                                         value={obj.interactions[verb]}
                                         onChange={(e) => {
@@ -1047,7 +1165,7 @@ export const PropertiesPanel: React.FC = () => {
                                     />
                                     <button
                                         className="e-btn e-btn-red"
-                                        style={{ marginLeft: '2px', padding: '0 4px', fontSize: '10px' }}
+                                        style={{ marginLeft: '2px', padding: '0 4px', fontSize: '0.85em' }}
                                         onClick={() => {
                                             delete obj.interactions[verb];
                                             // Sync to real object
@@ -1332,6 +1450,28 @@ export const PropertiesPanel: React.FC = () => {
                 {selectedObjectType === 'SETTINGS' && (
                     <>
                         <div className="e-row">
+                            <label className="e-label" style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}>EDITOR SETTINGS</label>
+                        </div>
+
+                        {/* UI Scale */}
+                        <div className="e-row">
+                            <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                UI Scale <span>{(obj.editor?.uiScale || 1.0).toFixed(1)}x</span>
+                            </label>
+                            <input type="number" className="e-input" min="0.5" max="2.0" step="0.1"
+                                value={obj.editor?.uiScale || 1.0}
+                                onChange={(e) => {
+                                    if (!obj.editor) obj.editor = { uiScale: 1.0 };
+                                    obj.editor.uiScale = parseFloat(e.target.value);
+                                    setObj({ ...obj });
+                                    // Trigger re-render of other panels that might depend on this?
+                                    // Hierarchy panel subscribes to hierarchyVersion, but maybe we need a global UI version?
+                                    // For now, let's just force update via state.
+                                    useEditorStore.getState().incrementHierarchyVersion();
+                                }} />
+                        </div>
+
+                        <div className="e-row" style={{ marginTop: '10px' }}>
                             <label className="e-label" style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}>CRT EFFECT SETTINGS</label>
                         </div>
 

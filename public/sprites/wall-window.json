@@ -1,0 +1,9 @@
+{
+  "id": "wall-window",
+  "imageFile": "public/assets/wall-window.png",
+  "x": 0,
+  "y": 0,
+  "width": 1170,
+  "height": 799,
+  "frames": 1
+}

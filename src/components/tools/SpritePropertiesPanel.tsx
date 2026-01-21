@@ -5,6 +5,7 @@ import { useEditorStore } from '../../store/editorStore';
 export const SpritePropertiesPanel: React.FC = () => {
     const { spriteVersion, incrementSpriteVersion, toggleSpriteEditor } = useEditorStore();
     const spriteEditor = Game.instance.spriteEditor;
+    const uiScale = Game.instance.settings.editor?.uiScale || 1.0;
 
     // Force re-render when spriteVersion changes
     const [, setTick] = useState(0);
@@ -25,7 +26,7 @@ export const SpritePropertiesPanel: React.FC = () => {
     };
 
     return (
-        <div id="editor-panel" className="editor-sidebar right">
+        <div id="editor-panel" className="editor-sidebar right" style={{ fontSize: `${12 * uiScale}px` }}>
             <div className="editor-header">
                 <span>SPRITE PROPERTIES</span>
                 <button className="e-btn" onClick={() => toggleSpriteEditor(false)}>X</button>

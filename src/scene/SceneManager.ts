@@ -197,7 +197,7 @@ export class SceneManager {
                     }
 
                     if (entityData.spriteName && !skipSprite) {
-                        entity.setSprite(entityData.spriteName);
+                        entity.setSprite(entityData.spriteName, true);
                     }
 
                     // Restore Actor specific properties if needed (state, direction)

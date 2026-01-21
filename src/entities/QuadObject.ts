@@ -1,4 +1,5 @@
 import { Entity } from './Entity';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import { Geometry } from '../utils/Geometry';
 
 export interface QuadVertex {
@@ -302,87 +303,7 @@ export class QuadObject extends Entity {
 
         if (!this.components) return;
 
-        // @ts-ignore
-        const scene = this.scene;
-        if (!scene) return;
-
-        for (const comp of this.components) {
-            if (comp.type === 'Backface') {
-                const bf = comp as any;
-                // Props: vertexA (0-3), vertexB (0-3), axis ('x'|'y'), op ('>'|'<'), targetId (opt)
-
-                const idxA = bf.vertexA || 0;
-                const idxB = bf.vertexB || 1;
-                const axis = bf.axis || 'x'; // 'x' or 'y'
-                const op = bf.op || '>'; // '>' or '<'
-
-                const vA = this.vertices[idxA];
-                const vB = this.vertices[idxB];
-
-                if (!vA || !vB) continue;
-
-                // Compare VISUAL (Screen) positions
-                // Visual Pos = World Pos - Camera Pos * Parallax
-                // (Ignoring Zoom and Center offset as they cancel out in comparison A > B)
-
-                // Ensure Parallax is defined (Default 1.0)
-                const pA = vA.p !== undefined ? vA.p : 1.0;
-                const pB = vB.p !== undefined ? vB.p : 1.0;
-
-                const camX = scene.camera.x;
-                const camY = scene.camera.y;
-
-                // Calculate Visual Coordinate
-                const valA = (axis === 'x' ? vA.x : vA.y) - (axis === 'x' ? camX : camY) * pA;
-                const valB = (axis === 'x' ? vB.x : vB.y) - (axis === 'x' ? camX : camY) * pB;
-
-                // Condition
-                let match = false;
-                if (op === '>') match = valA > valB;
-                else if (op === '<') match = valA < valB;
-
-                // Debug Log (Throttle?)
-                // console.log(`[Backface] A(${idxA}):${valA.toFixed(1)} vs B(${idxB}):${valB.toFixed(1)} match=${match}`);
-
-
-                // Resolve Target
-                let target: QuadObject | null = this;
-                if (bf.targetId) {
-                    const searchId = bf.targetId.trim();
-                    if (searchId === this.name.trim()) {
-                        target = this;
-                    } else {
-                        // Find by Name or GroupID
-                        // @ts-ignore
-                        const found = scene.entities.find(e => e.name.trim() === searchId && e.type === 'Quad');
-                        target = found ? (found as QuadObject) : null;
-                    }
-                }
-
-                if (target) {
-                    const cullingType = bf.cullingType || 'layer';
-
-                    // Debug Log
-                    // console.log(`[Backface] Match:${match} Type:${cullingType} Visible:${target.visible}`);
-
-                    if (match) {
-                        // Hide (Backface Culling)
-                        if (cullingType === 'render') {
-                            target.visible = false;
-                            // Ensure layer is reset if we switched modes
-                            (target as any).renderLayer = undefined;
-                        } else {
-                            // Layer Mode
-                            (target as any).renderLayer = target.layer - 1;
-                            target.visible = true;
-                        }
-                    } else {
-                        // Restore (Show)
-                        target.visible = true;
-                        (target as any).renderLayer = undefined;
-                    }
-                }
-            }
-        }
+        // Update Components (via System)
+        ComponentSystem.update(this, dt);
     }
 }

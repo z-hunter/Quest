@@ -152,6 +152,8 @@ export const HierarchyPanel: React.FC = () => {
         return normalize(id) === normalize(selectedObjectId);
     };
 
+    const uiScale = Game.instance?.settings?.editor?.uiScale || 1.0;
+
     return (
 
         <div
@@ -165,6 +167,7 @@ export const HierarchyPanel: React.FC = () => {
                 isHovered.current = false;
                 if (Game.instance) Game.instance.isMouseOverUI = false;
             }}
+            style={{ fontSize: `${12 * uiScale}px` }}
         >
             <div className="editor-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -177,47 +180,24 @@ export const HierarchyPanel: React.FC = () => {
                         gap: '2px',
                         marginBottom: '5px'
                     }}>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={() => Game.instance.editor.saveObject()}
-                            title="Save Object (Ctrl+S)"
-                        >
-                            <img src={saveIcon} className="toolbar-icon" alt="Save" />
+                        {/* Toolbar Icons - explicit px scaling */}
+                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.saveObject()} title="Save Object (Ctrl+S)">
+                            <img src={saveIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Save" />
                         </button>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={() => Game.instance.editor.loadObject()}
-                            title="Load Object (Ctrl+O)"
-                        >
-                            <img src={loadIcon} className="toolbar-icon" alt="Load" />
+                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.loadObject()} title="Load Object (Ctrl+O)">
+                            <img src={loadIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Load" />
                         </button>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={() => Game.instance.editor.undo()}
-                            title="Undo (Ctrl+Z)"
-                        >
-                            <img src={undoIcon} className="toolbar-icon" alt="Undo" />
+                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.undo()} title="Undo (Ctrl+Z)">
+                            <img src={undoIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Undo" />
                         </button>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={() => Game.instance.editor.copySelectedObjectToClipboard()}
-                            title="Copy (Ctrl+C)"
-                        >
-                            <img src={copyIcon} className="toolbar-icon" alt="Copy" />
+                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.copySelectedObjectToClipboard()} title="Copy (Ctrl+C)">
+                            <img src={copyIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Copy" />
                         </button>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={() => Game.instance.editor.pasteObjectFromClipboard()}
-                            title="Paste (Ctrl+V)"
-                        >
-                            <img src={pasteIcon} className="toolbar-icon" alt="Paste" />
+                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.pasteObjectFromClipboard()} title="Paste (Ctrl+V)">
+                            <img src={pasteIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Paste" />
                         </button>
-                        <button
-                            className="toolbar-icon-btn"
-                            onClick={handleDelete}
-                            title="Delete Selected (Del)"
-                        >
-                            <img src={deleteIcon} className="toolbar-icon" alt="Delete" />
+                        <button className="toolbar-icon-btn" onClick={handleDelete} title="Delete Selected (Del)">
+                            <img src={deleteIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Delete" />
                         </button>
                     </div>
 

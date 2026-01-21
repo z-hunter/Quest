@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
@@ -72,51 +73,74 @@ export class Scene {
         return this._activeSubscene;
     }
 
+    // Unified Target Resolution (Groups & Objects)
+    resolveTarget(targetStr: string): SceneObject[] {
+        if (!targetStr) return [];
+
+        const targets = new Set<SceneObject>();
+        const tokens = targetStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+        tokens.forEach(token => {
+            if (token.startsWith('#')) {
+                // Group Target
+                // Match: Object's groupID contains this token
+                // NOTE: Object's groupID is now a CSV string.
+                this.entities.forEach(e => {
+                    if (e.groupID) {
+                        const groups = e.groupID.split(',').map(g => g.trim());
+                        if (groups.includes(token)) targets.add(e);
+                    }
+                });
+                if (this.triggerboxes) {
+                    this.triggerboxes.forEach(t => {
+                        if (t.groupID) {
+                            const groups = t.groupID.split(',').map(g => g.trim());
+                            if (groups.includes(token)) targets.add(t);
+                        }
+                    });
+                }
+            } else {
+                // Individual Object Target
+                const obj = this.findEntity(token);
+                if (obj) targets.add(obj);
+
+                // Also check Triggerboxes by name
+                if (this.triggerboxes) {
+                    const tb = this.triggerboxes.find(t => t.name === token);
+                    if (tb) targets.add(tb);
+                }
+            }
+        });
+
+        return Array.from(targets);
+    }
+
     set activeSubscene(value: string | null) {
         // If changing from a valid subscene to something else (or null), perform cleanup
         if (this._activeSubscene && this._activeSubscene !== value) {
             console.log(`[Scene] Closing Subscene: '${this._activeSubscene}' -> '${value}'`);
 
-            const closingSubsceneID = this._activeSubscene;
+            // 1. Reset Switches (Robust Scan)
+            // We scan ALL triggers because any switch could have been part of the "State" of this subscene
+            // Resolving *state* is tricky with mixed targets. 
+            // Assumption: If a Switch was activated by this subscene, it should probably reset? 
+            // OR: We only reset switches that are *literally* in the group?
+            // Existing logic: "Scan ALL triggers for Switches belonging to this subscene"
+            // With mixed targets, "belonging" is fuzzy.
+            // Let's stick to: If a switch is IN the closing group (via resolveTarget), reset it?
+            // Actually, the previous logic scanned triggers to see if their groupID matched the subscene.
 
-            // Strategy 1 (Robust): Scan ALL triggers for Switches belonging to this subscene
-            if (this.triggerboxes) {
-                this.triggerboxes.forEach(tb => {
-                    const tbGID = tb.groupID ? tb.groupID.trim() : '';
+            const closingTargets = this.resolveTarget(this._activeSubscene);
 
-                    if (tbGID === closingSubsceneID) {
-                        if (tb.components) {
-                            for (const comp of tb.components) {
-                                if (comp.type === 'Switch') {
-                                    const sw = comp as any;
-                                    // Soft check for state (handle "2" vs 2)
-                                    // @ts-ignore
-                                    if (sw.state == 2) {
-                                        console.log(`  -> [RobustScan] Resetting Switch in '${tb.name}' to State 1`);
-                                        sw.state = 1;
-                                        if (sw.sound1 && typeof window !== 'undefined') {
-                                            // @ts-ignore
-                                            if (window.game) window.game.playSound(sw.sound1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Strategy 2: Reset Switches in tracked entities (Nested groups or non-triggered)
-            this.subsceneEntities.forEach(e => {
-                const tb = e as any;
-                if (tb.components) {
-                    for (const comp of tb.components) {
+            // Check for switches within the closing targets
+            closingTargets.forEach(obj => {
+                if (obj.components) {
+                    for (const comp of obj.components) {
                         if (comp.type === 'Switch') {
                             const sw = comp as any;
-                            // Check if ALREADY reset by strategy 1
                             // @ts-ignore
                             if (sw.state == 2) {
-                                console.log(`  -> [TrackedScan] Resetting Switch in '${tb.name}' to State 1`);
+                                console.log(`  -> [AutoReset] Resetting Switch in '${obj.name}' to State 1`);
                                 sw.state = 1;
                                 if (sw.sound1 && typeof window !== 'undefined') {
                                     // @ts-ignore
@@ -128,7 +152,7 @@ export class Scene {
                 }
             });
 
-            // 3. Disable All Tracked Entities
+            // 2. Disable All Tracked Entities
             console.log(`  -> Disabling ${this.subsceneEntities.size} subscene entities.`);
             this.subsceneEntities.forEach(e => {
                 e.disabled = true;
@@ -223,9 +247,27 @@ export class Scene {
 
         let sourceRect = null;
         if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
+            // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
+            const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
+            const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
+            const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
+
+            // Source is currently at 'x, y' proposed world pos.
+            // Effective Visual X = ProposedWorldX - CamX * (P - 1) + vOx
+            let sEffX = x;
+            let sEffY = y;
+
+            if (sp !== 1.0 && this.camera) {
+                sEffX = x - this.camera.x * (sp - 1.0) + svOx;
+                sEffY = y - this.camera.y * (sp - 1.0) + svOy;
+            } else {
+                sEffX = x + svOx;
+                sEffY = y + svOy;
+            }
+
             sourceRect = {
-                x: x - sourceEntity.colliderWidth / 2,
-                y: y - sourceEntity.colliderHeight,
+                x: sEffX - sourceEntity.colliderWidth / 2,
+                y: sEffY - sourceEntity.colliderHeight,
                 w: sourceEntity.colliderWidth,
                 h: sourceEntity.colliderHeight
             };
@@ -245,9 +287,15 @@ export class Scene {
                 let effX = other.x;
                 let effY = other.y;
 
+                const vOx = (other as any).visualOffset ? (other as any).visualOffset.x : 0;
+                const vOy = (other as any).visualOffset ? (other as any).visualOffset.y : 0;
+
                 if (p !== 1.0 && this.camera) {
-                    effX = other.x - this.camera.x * (p - 1.0);
-                    effY = other.y - this.camera.y * (p - 1.0);
+                    effX = other.x - this.camera.x * (p - 1.0) + vOx;
+                    effY = other.y - this.camera.y * (p - 1.0) + vOy;
+                } else {
+                    effX = other.x + vOx;
+                    effY = other.y + vOy;
                 }
 
                 const otherRect = {
@@ -266,6 +314,35 @@ export class Scene {
 
         // Filter out disabled walkboxes first
         const activeWalkboxes = this.walkbox ? this.walkbox.filter(wb => !wb.disabled) : [];
+
+        // Integrated WalkBox Components (Quads)
+        // We look for entities with 'WalkBox' component and treat them as walkboxes
+        // Optimization: In a large scene, we might want to cache this list.
+        this.entities.forEach(entity => {
+            if (entity.disabled) return;
+            if (entity.components) {
+                const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
+                if (wbComp && (entity as any).vertices) {
+                    const vertices = (entity as any).vertices.map((v: any) => {
+                        const p = v.p !== undefined ? v.p : ((entity as any).parallax || 1.0);
+                        let vx = v.x;
+                        let vy = v.y;
+                        if (this.camera && p !== 1.0) {
+                            vx = v.x - this.camera.x * (p - 1.0);
+                            vy = v.y - this.camera.y * (p - 1.0);
+                        }
+                        return { x: vx, y: vy };
+                    });
+
+                    activeWalkboxes.push({
+                        name: entity.name,
+                        poly: vertices, // Corrected Visual Vertices
+                        mode: wbComp.mode || 'Invert',
+                        disabled: false
+                    } as any);
+                }
+            }
+        });
 
         // If no active walkboxes, everything is walkable
         if (activeWalkboxes.length === 0) return true;
@@ -489,156 +566,12 @@ export class Scene {
 
         console.log(`[Scene] Activating Object: ${obj.name} (${obj.type})`);
 
-        // Check Components
-        if (obj.components && obj.components.length > 0) {
-            for (const comp of obj.components) {
-                if (comp.type === 'Subtrigger') {
-                    // Delegate to another trigger
-                    const sub = comp as any;
-                    const targetName = sub.target;
-                    if (!targetName) {
-                        console.warn(`[Subtrigger] No target specified for '${obj.name}'`);
-                        continue;
-                    }
+        // Delegate Component Logic to System
+        // Store depth on scene for ComponentSystem to access during recursion (Subtrigger)
+        (this as any)._depth = depth;
 
-                    // Find Target Object (Entity or Triggerbox)
-                    const targetObj = this.triggerboxes.find(t => t.name === targetName) || this.entities.find(e => e.name === targetName);
-
-                    if (targetObj) {
-                        console.log(`  -> Delegating to '${targetObj.name}'`);
-                        this.activateObject(targetObj, depth + 1);
-                    } else {
-                        console.warn(`[Subtrigger] Target '${targetName}' not found.`);
-                    }
-                    return; // Stop processing this component (delegated)
-
-                } else if (comp.type === 'Subscene') {
-                    const sub = comp as any;
-                    const targetID = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-                    if (!targetID) continue;
-
-                    if (this.player) {
-                        // Calculate Center for Proximity Check
-                        let cx = 0, cy = 0;
-
-                        if (obj instanceof Triggerbox) {
-                            // Centroid of Poly
-                            obj.poly.forEach(p => { cx += p.x; cy += p.y; });
-                            cx /= obj.poly.length;
-                            cy /= obj.poly.length;
-                        } else if (obj instanceof Entity) {
-                            // Center of Entity
-                            cx = obj.x;
-                            cy = obj.y - obj.height / 2;
-                        }
-
-                        const dist = Math.hypot(this.player.x - cx, this.player.y - cy);
-                        const allowedDist = (this.player.width || 30) * 4; // Loose tolerance
-
-                        if (dist > allowedDist) {
-                            console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
-                            // @ts-ignore
-                            if (typeof window.game?.showMessage === 'function') {
-                                // @ts-ignore
-                                window.game.showMessage("You are too far away.");
-                            }
-                            return;
-                        }
-                    }
-
-                    console.log(`  -> Activating Subscene Group: '${targetID}'`);
-                    this.activeSubscene = targetID;
-                    this.subsceneEntities.clear(); // Reset tracking
-
-                    // 1. Enable Objects in this Group
-                    let count = 0;
-                    this.entities.forEach(e => {
-                        const eGID = e.groupID ? e.groupID.trim() : '';
-                        if (eGID === targetID) {
-                            e.disabled = false;
-                            this.subsceneEntities.add(e);
-                            count++;
-                        }
-                    });
-
-                    // 2. Enable Triggerboxes in this Group
-                    if (this.triggerboxes) {
-                        this.triggerboxes.forEach(t => {
-                            const tbGID = t.groupID ? t.groupID.trim() : '';
-                            if (tbGID === targetID) {
-                                t.disabled = false;
-                                this.subsceneEntities.add(t);
-                                count++;
-                            }
-                        });
-                    }
-                    return;
-
-                } else if (comp.type === 'Switch') {
-                    const sw = comp as any;
-
-                    // 1. Check Key
-                    if (sw.idKey) {
-                        // @ts-ignore
-                        const game = window.game;
-                        if (game && game.inventory) {
-                            const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
-                            if (!hasKey) {
-                                console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
-                                game.showMessage(`Locked. Needs ${sw.idKey}`);
-                                return;
-                            }
-                        }
-                    }
-
-                    // 2. Toggle State
-                    const nextState = sw.state === 1 ? 2 : 1;
-                    sw.state = nextState;
-                    console.log(`[Switch] Toggling to State ${nextState}`);
-
-                    // 3. Audio
-                    // @ts-ignore
-                    const game = window.game;
-                    if (game) {
-                        if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
-                        if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
-                    }
-
-                    // 4. Update Groups
-                    const groupToShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
-                    const groupToHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
-
-                    // Update Entities
-                    this.entities.forEach(e => {
-                        const eGID = e.groupID ? e.groupID.trim() : '';
-                        if (eGID === groupToShow) {
-                            e.disabled = false;
-                            if (this.activeSubscene) this.subsceneEntities.add(e);
-                        } else if (eGID === groupToHide) {
-                            e.disabled = true;
-                            if (this.activeSubscene) this.subsceneEntities.delete(e);
-                        }
-                    });
-
-                    // Update Triggerboxes
-                    if (this.triggerboxes) {
-                        this.triggerboxes.forEach(t => {
-                            if (t === obj) return; // Don't disable self!
-
-                            const tGID = t.groupID ? t.groupID.trim() : '';
-                            if (tGID === groupToShow) {
-                                t.disabled = false;
-                                if (this.activeSubscene) this.subsceneEntities.add(t);
-                            } else if (tGID === groupToHide) {
-                                t.disabled = true;
-                                if (this.activeSubscene) this.subsceneEntities.delete(t);
-                            }
-                        });
-                    }
-                    console.log(`[Switch] Updated Groups. Enabled '${groupToShow}', Disabled '${groupToHide}'`);
-                    return;
-                }
-            }
+        if (ComponentSystem.handleActivation(obj, this)) {
+            return;
         }
 
         // Legacy Script check (Triggerbox specific usually)
@@ -815,7 +748,9 @@ export class Scene {
             // Center Pivot Transform
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x * p, -this.camera.y * p);
+            const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+            const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+            ctx.translate(-this.camera.x * p + vOx, -this.camera.y * p + vOy);
 
             entity.render(ctx);
             ctx.restore();

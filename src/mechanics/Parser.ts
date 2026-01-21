@@ -1,4 +1,5 @@
 import { ScriptRegistry } from '../core/ScriptRegistry';
+import { ComponentSystem } from '../systems/ComponentSystem';
 
 export class Parser {
     game: any;
@@ -68,25 +69,22 @@ export class Parser {
                         }
 
                         // Check for Item Component
+                        // Refactored to ComponentSystem
+                        const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+                        if (errorMsg) {
+                            this.game.showMessage(errorMsg);
+                            return;
+                        }
+
+                        // Legacy Check (isTakeable or Item Component Existence is implicit if we want to allow taking)
+                        // But ComponentSystem.canTakeItem returns null for "Component Checks Passed". 
+                        // It returns 'null' if it's NOT an item component? Explicitly checked.
+                        // Wait, my ComponentSystem implementation returns null if it IS an item and checks pass.
+                        // It returns null if it's NOT an item?
+                        // Let's rely on component check.
+
                         const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
-
-                        if (isItem || entity.isTakeable) { // Support legacy isTakeable too if present (though we are moving to components)
-                            // PROXIMITY CHECK
-                            const player = scene.entities.find((e: any) => e.isPlayer);
-                            // Check for ignoreDistance flag
-                            const itemComp = entity.components && entity.components.find((c: any) => c.type === 'Item');
-                            const ignoreDist = itemComp && itemComp.ignoreDistance;
-
-                            if (player && !ignoreDist) {
-                                const dist = Math.hypot(player.x - entity.x, player.y - entity.y);
-                                const allowedDist = (player.width || 32) * 3; // Tolerance: 3x Player Width
-
-                                if (dist > allowedDist) {
-                                    this.game.showMessage(`You are too far away from the ${entity.name}.`);
-                                    return;
-                                }
-                            }
-
+                        if (isItem || entity.isTakeable) {
                             scene.removeEntity(entity);
                             this.game.inventory.push(entity);
                             this.game.showMessage(`You picked up the ${entity.customName || entity.name}.`);

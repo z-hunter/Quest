@@ -1,7 +1,7 @@
 {
-  "id": "quad3",
+  "id": "quad4",
   "name": "Test Room",
-  "filename": "quad3",
+  "filename": "quad4",
   "walkbox": [],
   "triggerboxes": [
     {
@@ -46,16 +46,16 @@
       "name": "bg",
       "x": 21,
       "y": 307,
-      "width": 910.0800000000002,
-      "height": 610.5600000000001,
+      "width": 796.32,
+      "height": 534.24,
       "baseWidth": 1264,
       "baseHeight": 848,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "window-view.json",
       "color": "#AAAAAA",
-      "scale": 0.7200000000000001,
-      "modelScale": 0.8,
+      "scale": 0.63,
+      "modelScale": 0.7,
       "layer": -10,
       "parallax": 0.1,
       "ignoreScaling": false,
@@ -458,22 +458,22 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -349.05679812942253,
+          "x": -449,
           "y": 128.05718906574896,
           "p": 1
         },
         {
-          "x": -238.19200743179013,
+          "x": -338,
           "y": 62.3,
           "p": 0.65
         },
         {
-          "x": -235.3927812004629,
-          "y": 117.95,
+          "x": -335,
+          "y": 113,
           "p": 0.65
         },
         {
-          "x": -350,
+          "x": -450,
           "y": 184,
           "p": 1
         }
@@ -497,15 +497,19 @@
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
-      "locked": true,
+      "locked": false,
       "disabled": false,
       "customName": "",
       "groupID": null,
-      "components": [],
+      "components": [
+        {
+          "type": "3d-parallax"
+        }
+      ],
       "interactions": {},
       "vertices": [
         {
-          "x": -238.19200743179016,
+          "x": -338,
           "y": 62.3,
           "p": 0.65
         },
@@ -520,8 +524,8 @@
           "p": 1
         },
         {
-          "x": -349.05679812942253,
-          "y": 127.55718906574896,
+          "x": -449,
+          "y": 128.05718906574896,
           "p": 1
         }
       ],
@@ -584,6 +588,53 @@
     },
     {
       "type": "Quad",
+      "name": "lightspot1_1",
+      "x": -240.8500728070692,
+      "y": 132.71254989539653,
+      "color": "#c95618",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": "#lightSpots",
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -301.38414142840855,
+          "y": 62.6781264262859,
+          "p": 0.65
+        },
+        {
+          "x": -125.52489943201934,
+          "y": 59.1,
+          "p": 0.55
+        },
+        {
+          "x": -161.61181296511376,
+          "y": 54.3,
+          "p": 0.65
+        },
+        {
+          "x": -364.5641370516125,
+          "y": 123.26668975721083,
+          "p": 0.88
+        }
+      ],
+      "sortMode": "v0",
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 2
+    },
+    {
+      "type": "Quad",
       "name": "lightspot2",
       "x": 55.331970640694806,
       "y": 141.72490207880932,
@@ -594,7 +645,7 @@
       "locked": true,
       "disabled": false,
       "customName": "",
-      "groupID": null,
+      "groupID": "#lightSpots",
       "components": [],
       "interactions": {},
       "vertices": [
@@ -604,8 +655,8 @@
           "p": 0.65
         },
         {
-          "x": 125,
-          "y": 63.52490207880892,
+          "x": 136,
+          "y": 64,
           "p": 0.65
         },
         {
@@ -641,7 +692,7 @@
       "locked": true,
       "disabled": false,
       "customName": "",
-      "groupID": null,
+      "groupID": "#lightSpots",
       "components": [],
       "interactions": {},
       "vertices": [
@@ -651,13 +702,13 @@
           "p": 0.64
         },
         {
-          "x": -13.1244512869619,
+          "x": -12.219765268971267,
           "y": 63.76143450593196,
           "p": 0.64
         },
         {
-          "x": -106.0133401758508,
-          "y": 123.71254989539645,
+          "x": -106,
+          "y": 124,
           "p": 1
         },
         {
@@ -995,6 +1046,15 @@
           "op": "<",
           "targetId": "Quad_204",
           "cullingType": "render"
+        },
+        {
+          "type": "Backface",
+          "vertexA": 0,
+          "vertexB": 1,
+          "axis": "x",
+          "op": ">",
+          "targetId": "plant",
+          "cullingType": "layer"
         }
       ],
       "interactions": {},
@@ -1015,9 +1075,9 @@
           "p": 0.65
         },
         {
-          "x": -184.20715571286385,
-          "y": 81.61372537577975,
-          "p": 0.755
+          "x": -182.52092248737912,
+          "y": 81.61872537577975,
+          "p": 0.75
         }
       ],
       "sortMode": "v3",
@@ -1086,6 +1146,100 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 0
+    },
+    {
+      "type": "Quad",
+      "name": "lightspot1_2",
+      "x": -301.8500728070692,
+      "y": 146.21254989539653,
+      "color": "#c95618",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -446.06674998967605,
+          "y": 124.5,
+          "p": 1
+        },
+        {
+          "x": -337.19729374328944,
+          "y": 60.95,
+          "p": 0.65
+        },
+        {
+          "x": -301.38414142840855,
+          "y": 62.6781264262859,
+          "p": 0.65
+        },
+        {
+          "x": -367.0801896253018,
+          "y": 123.38668975721083,
+          "p": 0.89
+        }
+      ],
+      "sortMode": "v0",
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 2
+    },
+    {
+      "type": "Quad",
+      "name": "shadow_hero",
+      "x": -380.8070709767808,
+      "y": 94.14528243384419,
+      "color": "#535246",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "vertices": [
+        {
+          "x": -380.8070709767808,
+          "y": 94.14528243384419,
+          "p": 0.8454182064150384
+        },
+        {
+          "x": -356.1836324695459,
+          "y": 94.23102418220647,
+          "p": 0.8454182064150384
+        },
+        {
+          "x": -395.97352915393765,
+          "y": 130.90129730639825,
+          "p": 0.55
+        },
+        {
+          "x": -403.47352915393685,
+          "y": 119.90129730639815,
+          "p": 0.55
+        }
+      ],
+      "sortMode": "v2",
+      "opacity": 0.5,
+      "blendMode": "multiply",
+      "isGrid": false,
+      "gridLines": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 5
     },
     {
       "type": "Quad",
@@ -1628,14 +1782,14 @@
           "p": 0.85
         },
         {
-          "x": -210.41666666666723,
-          "y": 93.88333333333331,
+          "x": -207.8732138749097,
+          "y": 93.00054537111298,
           "p": 0.85
         },
         {
-          "x": -224,
-          "y": 127,
-          "p": 0.9650000000000001
+          "x": -238.79623723463973,
+          "y": 127.42,
+          "p": 1
         }
       ],
       "sortMode": "v2",
@@ -1647,6 +1801,59 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 0
+    },
+    {
+      "type": "Actor",
+      "name": "miles_ds",
+      "x": -367.8070709767808,
+      "y": 97.14528243384419,
+      "width": 25.40889697620376,
+      "height": 103.75299598616536,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 32,
+      "colliderHeight": 6,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.26467601016878917,
+      "modelScale": 0.33,
+      "layer": 1,
+      "parallax": 0.8454182064150384,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow_hero",
+          "offsetX": -13,
+          "offsetY": -3,
+          "triggerId": "#lightSpots"
+        }
+      ],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.14,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Quad",
@@ -1704,51 +1911,6 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 0
-    },
-    {
-      "type": "Actor",
-      "name": "miles_ds",
-      "x": -97.71569767911816,
-      "y": 124.63559940217442,
-      "width": 28.17363742559012,
-      "height": 115.04235282115965,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 32,
-      "colliderHeight": 6,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.2934753898498971,
-      "modelScale": 0.33,
-      "layer": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "isPlayer": true,
-      "speed": 0.14,
-      "direction": "right",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
     },
     {
       "type": "Quad",
@@ -1861,8 +2023,8 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -351.29130253329345,
-          "y": 126.65938193656524,
+          "x": -449,
+          "y": 128.05718906574896,
           "p": 1
         },
         {
@@ -1876,8 +2038,8 @@
           "p": 1
         },
         {
-          "x": -352.2345044038709,
-          "y": 183.10219287081628,
+          "x": -450,
+          "y": 184,
           "p": 1
         }
       ],
