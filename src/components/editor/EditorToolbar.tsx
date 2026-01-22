@@ -1,24 +1,23 @@
 import React from 'react';
-import { Game } from '../../core/Game';
-// import { useEditorStore } from '../../store/editorStore';
+import { useEditor } from '../../hooks/useGame';
 
 export const EditorToolbar: React.FC = () => {
-    // const { selectObject } = useEditorStore();
+    const editor = useEditor();
 
     const handleAdd = (type: string) => {
-        Game.instance.editor.startCreating(type);
+        editor.startCreating(type);
     };
 
     const handleDelete = () => {
-        Game.instance.editor.deleteSelectedObject();
+        editor.deleteSelectedObject();
     };
 
     const handleQuickSave = () => {
-        Game.instance.editor.saveScene(false);
+        editor.saveScene(false);
     };
 
     const handleQuickLoad = () => {
-        Game.instance.editor.promptLoadScene();
+        editor.promptLoadScene();
     };
 
     return (
@@ -33,7 +32,7 @@ export const EditorToolbar: React.FC = () => {
             <div className="w-px h-4 bg-gray-600 mx-1"></div>
 
             <button className="bg-red-900 hover:bg-red-700 text-white px-2 py-1 rounded" onClick={handleDelete}>Del</button>
-            <button className="bg-gray-800 hover:bg-gray-700 text-white px-2 py-1 rounded" onClick={() => Game.instance.editor.duplicateSelectedObject()}>Dup</button>
+            <button className="bg-gray-800 hover:bg-gray-700 text-white px-2 py-1 rounded" onClick={() => editor.duplicateSelectedObject()}>Dup</button>
 
             <div className="flex-1"></div>
 

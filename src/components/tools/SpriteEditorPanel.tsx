@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Game } from '../../core/Game';
+import { useGame } from '../../hooks/useGame';
 import { useEditorStore } from '../../store/editorStore';
 
 export const SpriteEditorPanel: React.FC = () => {
     const { spriteVersion, hierarchyVersion, toggleSpriteEditor, incrementSpriteVersion } = useEditorStore();
-    const spriteEditor = Game.instance.spriteEditor;
-    const uiScale = Game.instance.settings.editor?.uiScale || 1.0;
+    const game = useGame();
+    const spriteEditor = game.spriteEditor;
+    const uiScale = game.settings.editor?.uiScale || 1.0;
 
     // Force re-render when spriteVersion changes
     const [, setTick] = useState(0);

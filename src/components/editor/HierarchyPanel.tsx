@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
-import { Game } from '../../core/Game';
+import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import undoIcon from '../../assets/arrow-counter-clockwise.svg';
 import pasteIcon from '../../assets/clipboard-text.svg';
@@ -10,6 +10,7 @@ import loadIcon from '../../assets/folder-open.svg';
 import deleteIcon from '../../assets/trash.svg';
 
 export const HierarchyPanel: React.FC = () => {
+    const game = useGame();
     const { hierarchyVersion, selectedObjectId } = useEditorStore();
 
     // Force re-render on hierarchy version change (subscription)
@@ -18,14 +19,14 @@ export const HierarchyPanel: React.FC = () => {
     }, [hierarchyVersion]);
 
     const handleAdd = (type: string) => {
-        Game.instance.editor.startCreating(type);
+        game.editor.startCreating(type);
     };
 
     const handleDelete = () => {
-        Game.instance.editor.deleteSelectedObject();
+        game.editor.deleteSelectedObject();
     };
 
-    const scene = Game.instance?.sceneManager?.currentScene;
+    const scene = game?.sceneManager?.currentScene;
 
     if (!scene) return <div className="p-2 text-gray-500">No Scene</div>;
 
@@ -85,12 +86,12 @@ export const HierarchyPanel: React.FC = () => {
                 // Only select if the next index is valid and different from the current one
                 if (nextIndex !== -1 && nextIndex !== currentIndex) {
                     const itemToSelect = allItems[nextIndex];
-                    Game.instance.editor.selectObject(itemToSelect);
+                    game.editor.selectObject(itemToSelect);
                 }
             } else if (e.key === 'Delete') {
                 if (selectedObjectId && selectedObjectId !== 'SCENE') {
                     e.preventDefault();
-                    Game.instance.editor.deleteSelectedObject();
+                    game.editor.deleteSelectedObject();
                 }
             }
         };
@@ -100,7 +101,7 @@ export const HierarchyPanel: React.FC = () => {
     }, [allItems, selectedObjectId]);
 
     const centerCameraOn = (item: any) => {
-        const scene = Game.instance?.sceneManager?.currentScene;
+        const scene = game?.sceneManager?.currentScene;
         if (!scene) return;
 
         let targetX = 0;
@@ -152,7 +153,7 @@ export const HierarchyPanel: React.FC = () => {
         return normalize(id) === normalize(selectedObjectId);
     };
 
-    const uiScale = Game.instance?.settings?.editor?.uiScale || 1.0;
+    const uiScale = game?.settings?.editor?.uiScale || 1.0;
 
     return (
 
@@ -161,11 +162,11 @@ export const HierarchyPanel: React.FC = () => {
             className="editor-sidebar left"
             onMouseEnter={() => {
                 isHovered.current = true;
-                if (Game.instance) Game.instance.isMouseOverUI = true;
+                if (game) game.isMouseOverUI = true;
             }}
             onMouseLeave={() => {
                 isHovered.current = false;
-                if (Game.instance) Game.instance.isMouseOverUI = false;
+                if (game) game.isMouseOverUI = false;
             }}
             style={{ fontSize: `${12 * uiScale}px` }}
         >
@@ -181,19 +182,19 @@ export const HierarchyPanel: React.FC = () => {
                         marginBottom: '5px'
                     }}>
                         {/* Toolbar Icons - explicit px scaling */}
-                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.saveObject()} title="Save Object (Ctrl+S)">
+                        <button className="toolbar-icon-btn" onClick={() => game.editor.saveObject()} title="Save Object (Ctrl+S)">
                             <img src={saveIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Save" />
                         </button>
-                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.loadObject()} title="Load Object (Ctrl+O)">
+                        <button className="toolbar-icon-btn" onClick={() => game.editor.loadObject()} title="Load Object (Ctrl+O)">
                             <img src={loadIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Load" />
                         </button>
-                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.undo()} title="Undo (Ctrl+Z)">
+                        <button className="toolbar-icon-btn" onClick={() => game.editor.undo()} title="Undo (Ctrl+Z)">
                             <img src={undoIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Undo" />
                         </button>
-                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.copySelectedObjectToClipboard()} title="Copy (Ctrl+C)">
+                        <button className="toolbar-icon-btn" onClick={() => game.editor.copySelectedObjectToClipboard()} title="Copy (Ctrl+C)">
                             <img src={copyIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Copy" />
                         </button>
-                        <button className="toolbar-icon-btn" onClick={() => Game.instance.editor.pasteObjectFromClipboard()} title="Paste (Ctrl+V)">
+                        <button className="toolbar-icon-btn" onClick={() => game.editor.pasteObjectFromClipboard()} title="Paste (Ctrl+V)">
                             <img src={pasteIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Paste" />
                         </button>
                         <button className="toolbar-icon-btn" onClick={handleDelete} title="Delete Selected (Del)">
@@ -227,7 +228,7 @@ export const HierarchyPanel: React.FC = () => {
                         background: isItemSelected('SCENE') ? 'var(--ui-selection-bg)' : 'transparent',
                         color: isItemSelected('SCENE') ? 'var(--ui-selection-text)' : '#aaa'
                     }}
-                    onClick={() => Game.instance.editor.selectObject('SCENE')}
+                    onClick={() => game.editor.selectObject('SCENE')}
                     onDoubleClick={() => centerCameraOn('SCENE')}
                 >
                     <span style={{
@@ -254,7 +255,7 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => Game.instance.editor.selectObject(ent)}
+                            onClick={() => game.editor.selectObject(ent)}
                             onDoubleClick={() => centerCameraOn(ent)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: ent.disabled ? 0.5 : 1.0 }}>
@@ -288,7 +289,7 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => Game.instance.editor.selectObject(wb)}
+                            onClick={() => game.editor.selectObject(wb)}
                             onDoubleClick={() => centerCameraOn(wb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: wb.disabled ? 0.5 : 1.0 }}>
@@ -322,7 +323,7 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => Game.instance.editor.selectObject(tb)}
+                            onClick={() => game.editor.selectObject(tb)}
                             onDoubleClick={() => centerCameraOn(tb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: tb.disabled ? 0.5 : 1.0 }}>

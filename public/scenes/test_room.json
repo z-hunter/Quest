@@ -9,6 +9,7 @@
       "name": "Trig_201",
       "locked": false,
       "disabled": false,
+      "layer": 0,
       "groupID": null,
       "customName": "",
       "interactions": {},
@@ -19,6 +20,7 @@
           "name": ""
         }
       ],
+      "visible": true,
       "poly": [
         {
           "x": 182.5,
@@ -44,6 +46,7 @@
       "name": "Trig_222",
       "locked": false,
       "disabled": false,
+      "layer": 0,
       "groupID": "g1",
       "customName": "",
       "interactions": {},
@@ -58,6 +61,7 @@
           "sound2": "drawer_close.wav"
         }
       ],
+      "visible": true,
       "poly": [
         {
           "x": 33,
@@ -83,10 +87,12 @@
       "name": "Trig_137",
       "locked": false,
       "disabled": false,
+      "layer": 0,
       "groupID": "g1",
       "customName": "",
       "interactions": {},
       "components": [],
+      "visible": true,
       "poly": [
         {
           "x": 40.5,
@@ -166,7 +172,7 @@
     },
     {
       "type": "Entity",
-      "name": "Static_1 ",
+      "name": "Static_1",
       "x": 68,
       "y": 190,
       "width": 30,
@@ -192,7 +198,7 @@
     },
     {
       "type": "Entity",
-      "name": "Static_1 _1 _1 ",
+      "name": "Static_1 _1 _1",
       "x": 71,
       "y": 195,
       "width": 30,

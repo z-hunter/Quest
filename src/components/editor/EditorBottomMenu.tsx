@@ -1,12 +1,13 @@
 import React from 'react';
-import { Game } from '../../core/Game';
+import { useGame } from '../../hooks/useGame';
 import { useEditorStore } from '../../store/editorStore';
 
 export const EditorBottomMenu: React.FC = () => {
+    const game = useGame();
     const { toggle, toggleSpriteEditor } = useEditorStore();
 
     const handleAction = (action: string) => {
-        const editor = Game.instance.editor;
+        const editor = game.editor;
 
         switch (action) {
             case 'F1': toggle(false); break; // Close Editor
