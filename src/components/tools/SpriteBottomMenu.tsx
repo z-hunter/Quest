@@ -1,10 +1,11 @@
 import React from 'react';
-import { Game } from '../../core/Game';
+import { useGame } from '../../hooks/useGame';
 import { useEditorStore } from '../../store/editorStore';
 
 export const SpriteBottomMenu: React.FC = () => {
     const { toggleSpriteEditor } = useEditorStore();
-    const spriteEditor = Game.instance.spriteEditor;
+    const game = useGame();
+    const spriteEditor = game.spriteEditor;
 
     return (
         <div className="editor-bottom-menu">

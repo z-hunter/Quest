@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useEditorStore } from '../../store/editorStore';
-import { Game } from '../../core/Game';
+import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 
 export const PropertiesPanel: React.FC = () => {
+    const game = useGame();
     const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode, selectedVertexIndex } = useEditorStore();
     const [obj, setObj] = useState<any>(null);
 
     // Refresh local object reference when selection or hierarchy changes
     useEffect(() => {
-        const editor = Game.instance?.editor;
+        const editor = game?.editor;
         if (!editor) return;
 
         const sel = editor.selectedObject as any;
         if (sel === 'SETTINGS') {
             // Special case: Bind to Global Settings
-            setObj(Game.instance.settings);
+            setObj(game.settings);
         } else if (sel === 'SCENE') {
             // Special case: Bind to Current Scene
-            setObj({ ...Game.instance.sceneManager.currentScene });
+            setObj({ ...game.sceneManager.currentScene });
         } else if (editor.selectedObject) {
             // Clone object for local UI state
             // NOTE: Spread {...obj} does NOT copy class getters (like Entity.width/height)
@@ -35,22 +36,25 @@ export const PropertiesPanel: React.FC = () => {
         }
     }, [selectedObjectId, hierarchyVersion, objectVersion]);
 
-    const uiScale = Game.instance?.settings?.editor?.uiScale || 1.0;
+    const uiScale = game?.settings?.editor?.uiScale || 1.0;
 
-    if (!obj && selectedObjectId !== 'SETTINGS') {
+    // Fix: If obj is null, we must wait for the useEffect to populate it,
+    // EVEN IF selectedObjectId is 'SETTINGS'.
+    // Otherwise we render with obj=null and crash.
+    if (!obj) {
         return (
             <div
                 id="editor-panel"
                 className="editor-sidebar right"
-                onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
-                onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+                onMouseEnter={() => { if (game) game.isMouseOverUI = true; }}
+                onMouseLeave={() => { if (game) game.isMouseOverUI = false; }}
                 style={{ fontSize: `${12 * uiScale}px` }}
             >
                 <div className="editor-header">
-                    <span>PROPERTIES</span>
+                    <span>{selectedObjectId === 'SETTINGS' ? 'SETTINGS (Loading...)' : 'PROPERTIES'}</span>
                 </div>
                 <div className="editor-content" style={{ color: '#888', fontStyle: 'italic' }}>
-                    No Selection
+                    {selectedObjectId === 'SETTINGS' ? 'Loading Settings...' : 'No Selection'}
                 </div>
             </div>
         );
@@ -67,11 +71,11 @@ export const PropertiesPanel: React.FC = () => {
         // 1. Identify Real Object
         let realObj: any = null;
         if (selectedObjectId === 'SCENE') {
-            realObj = Game.instance?.sceneManager?.currentScene;
+            realObj = game?.sceneManager?.currentScene;
         } else if (selectedObjectId === 'SETTINGS') {
-            realObj = Game.instance?.settings;
-        } else if (Game.instance && Game.instance.editor) {
-            realObj = Game.instance.editor.selectedObject;
+            realObj = game?.settings;
+        } else if (game && game.editor) {
+            realObj = game.editor.selectedObject;
         }
 
         // 2. Apply to Real Object
@@ -101,7 +105,7 @@ export const PropertiesPanel: React.FC = () => {
         // Special handling for Ignore Scaling (preserve visual size)
         if (field === 'ignoreScaling') {
             const isIgnored = value;
-            const scene = Game.instance.sceneManager.currentScene;
+            const scene = game.sceneManager.currentScene;
             if (scene && realObj && (selectedObjectType === 'Static' || selectedObjectType === 'Actor' || selectedObjectType === 'Entity')) {
                 const ent = realObj; // Use Real Object
                 const currentVisW = ent.width;
@@ -153,8 +157,8 @@ export const PropertiesPanel: React.FC = () => {
         <div
             id="editor-panel"
             className="editor-sidebar right"
-            onMouseEnter={() => { if (Game.instance) Game.instance.isMouseOverUI = true; }}
-            onMouseLeave={() => { if (Game.instance) Game.instance.isMouseOverUI = false; }}
+            onMouseEnter={() => { if (game) game.isMouseOverUI = true; }}
+            onMouseLeave={() => { if (game) game.isMouseOverUI = false; }}
             style={{ fontSize: `${12 * uiScale}px` }}
         >
             <div className="editor-header">
@@ -191,19 +195,19 @@ export const PropertiesPanel: React.FC = () => {
 
                                     // Validation (Only for Name/ID)
                                     let isValid = true;
-                                    const scene = Game.instance?.sceneManager?.currentScene;
+                                    const scene = game?.sceneManager?.currentScene;
 
                                     if (selectedObjectType !== 'SCENE' && scene) {
                                         // Check duplicates
                                         // Check Entities
-                                        const dupEntity = scene.entities.find(ent => ent.name === finalVal && ent !== Game.instance?.editor?.selectedObject);
+                                        const dupEntity = scene.entities.find(ent => ent.name === finalVal && ent !== game?.editor?.selectedObject);
                                         // Check Triggerboxes
-                                        const dupTrigger = scene.triggerboxes ? scene.triggerboxes.find(tb => tb.name === finalVal && tb !== Game.instance?.editor?.selectedObject) : null;
+                                        const dupTrigger = scene.triggerboxes ? scene.triggerboxes.find(tb => tb.name === finalVal && tb !== game?.editor?.selectedObject) : null;
 
                                         if (dupEntity || dupTrigger) {
                                             console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
                                             // @ts-ignore
-                                            if (Game.instance.showMessage) Game.instance.showMessage(`Name '${finalVal}' already exists!`);
+                                            if (game.showMessage) game.showMessage(`Name '${finalVal}' already exists!`);
                                             isValid = false;
                                         }
                                     }
@@ -213,7 +217,7 @@ export const PropertiesPanel: React.FC = () => {
                                     } else {
                                         // Revert to original from real object
                                         let realObj: any = null;
-                                        if (Game.instance?.editor) realObj = Game.instance.editor.selectedObject;
+                                        if (game?.editor) realObj = game.editor.selectedObject;
 
                                         if (realObj) {
                                             if (selectedObjectType === 'SCENE') obj.id = realObj.id; else obj.name = realObj.name;
@@ -283,7 +287,7 @@ export const PropertiesPanel: React.FC = () => {
                             onClick={(e) => {
                                 if (confirm("Redraw polygon? Current points will be cleared.")) {
                                     // Clean Redraw Logic: Editor handles clearing and mode setting
-                                    Game.instance.editor.redrawSelected();
+                                    game.editor.redrawSelected();
                                     // Blur the button so hitting Enter doesn't re-trigger it
                                     (e.target as HTMLElement).blur();
                                 }
@@ -466,15 +470,15 @@ export const PropertiesPanel: React.FC = () => {
                                         <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
                                             v.x = parseFloat(e.target.value);
                                             setObj({ ...obj });
-                                            if (Game.instance.editor.selectedObject) {
-                                                (Game.instance.editor.selectedObject as any).vertices[i].x = v.x;
+                                            if (game.editor.selectedObject) {
+                                                (game.editor.selectedObject as any).vertices[i].x = v.x;
                                             }
                                         }} />
                                         <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.y)} onChange={(e) => {
                                             v.y = parseFloat(e.target.value);
                                             setObj({ ...obj });
-                                            if (Game.instance.editor.selectedObject) {
-                                                (Game.instance.editor.selectedObject as any).vertices[i].y = v.y;
+                                            if (game.editor.selectedObject) {
+                                                (game.editor.selectedObject as any).vertices[i].y = v.y;
                                             }
                                         }} />
                                         <input type="number" className="e-input" style={{ width: '33%' }} step="0.1" value={v.p} onChange={(e) => {
@@ -483,7 +487,7 @@ export const PropertiesPanel: React.FC = () => {
 
                                             // Auto-Correct Position to prevent visual jump
                                             // NewPos = OldPos + Cam * (NewP - OldP)
-                                            const scene = Game.instance.sceneManager.currentScene;
+                                            const scene = game.sceneManager.currentScene;
                                             if (scene) {
                                                 const camX = scene.camera.x;
                                                 const camY = scene.camera.y;
@@ -493,14 +497,14 @@ export const PropertiesPanel: React.FC = () => {
 
                                             v.p = newP;
                                             setObj({ ...obj });
-                                            if (Game.instance.editor.selectedObject) {
-                                                const sel = Game.instance.editor.selectedObject as any;
+                                            if (game.editor.selectedObject) {
+                                                const sel = game.editor.selectedObject as any;
                                                 sel.vertices[i].p = v.p;
                                                 sel.vertices[i].x = v.x;
                                                 sel.vertices[i].y = v.y;
 
                                                 // Trigger update
-                                                Game.instance.editor.saveUndoState(); // Maybe too frequent?
+                                                game.editor.saveUndoState(); // Maybe too frequent?
                                             }
                                         }} />
                                     </div>
@@ -586,8 +590,8 @@ export const PropertiesPanel: React.FC = () => {
                                             obj.components.push({ type: 'WalkBox', mode: 'Invert' });
                                         }
 
-                                        if (Game.instance.editor.selectedObject) {
-                                            (Game.instance.editor.selectedObject as any).components = obj.components;
+                                        if (game.editor.selectedObject) {
+                                            (game.editor.selectedObject as any).components = obj.components;
                                         }
                                         setObj({ ...obj });
                                         // No need to reset value as Select component handles it or we pass empty value
@@ -604,8 +608,8 @@ export const PropertiesPanel: React.FC = () => {
                                     <span style={{ fontWeight: 'bold', color: '#fb8' }}>{comp.type}</span>
                                     <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
                                         obj.components.splice(idx, 1);
-                                        if (Game.instance.editor.selectedObject) {
-                                            (Game.instance.editor.selectedObject as any).components = obj.components;
+                                        if (game.editor.selectedObject) {
+                                            (game.editor.selectedObject as any).components = obj.components;
                                         }
                                         setObj({ ...obj });
                                     }}>x</button>
@@ -799,7 +803,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <div style={{ display: 'flex' }}>
                                                     <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound1 || ''} onChange={(e) => { comp.sound1 = e.target.value; setObj({ ...obj }); }} />
                                                     <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
-                                                        const game = Game.instance;
+
                                                         if (game) {
                                                             game.openFileBrowser('load', 'public/sounds', (file) => {
                                                                 // Strip 'public/sounds/' prefix if present? Or keeps relative?
@@ -828,7 +832,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <div style={{ display: 'flex' }}>
                                                     <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound2 || ''} onChange={(e) => { comp.sound2 = e.target.value; setObj({ ...obj }); }} />
                                                     <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
-                                                        const game = Game.instance;
+
                                                         if (game) {
                                                             game.openFileBrowser('load', 'public/sounds', (file) => {
                                                                 let val = file;
@@ -913,8 +917,8 @@ export const PropertiesPanel: React.FC = () => {
                                 value={obj.direction || 'down'}
                                 onChange={(value) => {
                                     handleChange('direction', value);
-                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).setDirection) {
-                                        (Game.instance.editor.selectedObject as any).setDirection(value);
+                                    if (game.editor.selectedObject && (game.editor.selectedObject as any).setDirection) {
+                                        (game.editor.selectedObject as any).setDirection(value);
                                     }
                                 }}
                                 options={[
@@ -966,8 +970,8 @@ export const PropertiesPanel: React.FC = () => {
                                     obj.animSets[newId] = { id: newId, up: null, down: null, left: null, right: null };
 
                                     // Add to real obj
-                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).addAnimSet) {
-                                        (Game.instance.editor.selectedObject as any).addAnimSet(newId);
+                                    if (game.editor.selectedObject && (game.editor.selectedObject as any).addAnimSet) {
+                                        (game.editor.selectedObject as any).addAnimSet(newId);
                                     }
                                     setObj({ ...obj });
                                 }}>+ ADD</button>
@@ -984,8 +988,8 @@ export const PropertiesPanel: React.FC = () => {
                                         <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
                                             if (confirm(`Delete animation set '${setId}'?`)) {
                                                 delete obj.animSets[setId];
-                                                if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).removeAnimSet) {
-                                                    (Game.instance.editor.selectedObject as any).removeAnimSet(setId);
+                                                if (game.editor.selectedObject && (game.editor.selectedObject as any).removeAnimSet) {
+                                                    (game.editor.selectedObject as any).removeAnimSet(setId);
                                                 }
                                                 setObj({ ...obj });
                                             }
@@ -1004,14 +1008,14 @@ export const PropertiesPanel: React.FC = () => {
                                                 readOnly
                                             />
                                             <button className="e-btn" style={{ padding: '0 5px' }} onClick={() => {
-                                                Game.instance.openFileBrowser('load', 'public/sprites', (f) => {
+                                                game.openFileBrowser('load', 'public/sprites', (f) => {
                                                     set[dir] = f;
                                                     // Sync to real object
-                                                    if (Game.instance.editor.selectedObject && (Game.instance.editor.selectedObject as any).animSets) {
-                                                        const realSet = (Game.instance.editor.selectedObject as any).animSets[setId];
+                                                    if (game.editor.selectedObject && (game.editor.selectedObject as any).animSets) {
+                                                        const realSet = (game.editor.selectedObject as any).animSets[setId];
                                                         if (realSet) realSet[dir] = f;
                                                         // If this is the current state, update sprite immediately
-                                                        (Game.instance.editor.selectedObject as any).updateSpriteForState();
+                                                        (game.editor.selectedObject as any).updateSpriteForState();
                                                     }
                                                     setObj({ ...obj });
                                                 });
@@ -1055,7 +1059,7 @@ export const PropertiesPanel: React.FC = () => {
                             <label className="e-label">Sprite</label>
                             <div style={{ display: 'flex', gap: '5px' }}>
                                 <input type="text" className="e-input" style={{ flex: 1 }} value={obj.spriteName || ''} onChange={(e) => handleChange('spriteName', e.target.value)} />
-                                <button className="e-btn" onClick={() => Game.instance.openFileBrowser('load', 'public/sprites', (f) => handleChange('spriteName', f))}>...</button>
+                                <button className="e-btn" onClick={() => game.openFileBrowser('load', 'public/sprites', (f) => handleChange('spriteName', f))}>...</button>
                             </div>
                         </div>
 
@@ -1128,9 +1132,9 @@ export const PropertiesPanel: React.FC = () => {
                                         if (!obj.interactions[verb]) {
                                             obj.interactions[verb] = '';
                                             // Sync to real object
-                                            if (Game.instance.editor.selectedObject) {
-                                                if (!(Game.instance.editor.selectedObject as any).interactions) (Game.instance.editor.selectedObject as any).interactions = {};
-                                                (Game.instance.editor.selectedObject as any).interactions[verb] = '';
+                                            if (game.editor.selectedObject) {
+                                                if (!(game.editor.selectedObject as any).interactions) (game.editor.selectedObject as any).interactions = {};
+                                                (game.editor.selectedObject as any).interactions[verb] = '';
                                             }
                                             setObj({ ...obj });
                                         }
@@ -1157,8 +1161,8 @@ export const PropertiesPanel: React.FC = () => {
                                         onChange={(e) => {
                                             obj.interactions[verb] = e.target.value;
                                             // Sync to real object
-                                            if (Game.instance.editor.selectedObject) {
-                                                (Game.instance.editor.selectedObject as any).interactions[verb] = e.target.value;
+                                            if (game.editor.selectedObject) {
+                                                (game.editor.selectedObject as any).interactions[verb] = e.target.value;
                                             }
                                             setObj({ ...obj });
                                         }}
@@ -1169,8 +1173,8 @@ export const PropertiesPanel: React.FC = () => {
                                         onClick={() => {
                                             delete obj.interactions[verb];
                                             // Sync to real object
-                                            if (Game.instance.editor.selectedObject) {
-                                                delete (Game.instance.editor.selectedObject as any).interactions[verb];
+                                            if (game.editor.selectedObject) {
+                                                delete (game.editor.selectedObject as any).interactions[verb];
                                             }
                                             setObj({ ...obj });
                                         }}
@@ -1393,11 +1397,11 @@ export const PropertiesPanel: React.FC = () => {
                         )}
 
                         {/* Scaling Settings */}
-                        {Game.instance.sceneManager.currentScene && (
+                        {game.sceneManager.currentScene && (
                             <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
                                 <div className="e-label" style={{ color: '#ffaa00', fontWeight: 'bold' }}>SCALING</div>
                                 {(() => {
-                                    const s = Game.instance.sceneManager.currentScene.scaling;
+                                    const s = game.sceneManager.currentScene.scaling;
                                     return (
                                         <>
                                             <div className="e-row">
@@ -1407,7 +1411,7 @@ export const PropertiesPanel: React.FC = () => {
                                                         style={{ marginRight: '5px' }}
                                                         checked={s.enabled}
                                                         onChange={(e) => {
-                                                            Game.instance.editor.setScalingEnabled(e.target.checked);
+                                                            game.editor.setScalingEnabled(e.target.checked);
                                                             setObj({ ...obj });
                                                         }}
                                                     />
@@ -1571,8 +1575,8 @@ export const PropertiesPanel: React.FC = () => {
                                 className="e-btn"
                                 style={{ width: '100%', padding: '8px' }}
                                 onClick={() => {
-                                    if (Game.instance && Game.instance.saveSettings) {
-                                        Game.instance.saveSettings();
+                                    if (game && game.saveSettings) {
+                                        game.saveSettings();
                                     }
                                 }}
                             >
