@@ -44,5 +44,4 @@ To run the game on a Linux web server (e.g., Nginx or Apache):
 
 ## License
 
-This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license. You are free to share and adapt the material for non-commercial purposes, provided you give appropriate credit. See the `LICENSE` file for details.
- 
+Dual-licensed under GPL-3.0 or a commercial license; commercial terms: see COMMERCIAL.md
