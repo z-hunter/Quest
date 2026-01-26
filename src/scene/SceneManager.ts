@@ -74,7 +74,7 @@ export class SceneManager {
             this.loadSceneData(data, idFromPath);
         } catch (e) {
             console.error(e);
-            this.game.showMessage("Failed to load scene");
+            this.game.showNotification("Failed to load scene");
         }
     }
 
@@ -224,9 +224,12 @@ export class SceneManager {
             }
 
             console.log('Scene loaded successfully!');
+            // Only notify if explicit? Or maybe "Scene loaded" is good debug.
+            // But GDD implies "Scene saved..." is notification. "Scene loaded..." might be noise or notification.
+            // Let's use notification.
         } catch (e) {
             console.error('Failed to load scene:', e);
-            if (this.game.showMessage) this.game.showMessage('Error loading JSON');
+            if (this.game.showNotification) this.game.showNotification('Error loading JSON');
         }
     }
 }

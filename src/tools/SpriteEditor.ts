@@ -470,13 +470,13 @@ export class SpriteEditor {
             if (response.ok) {
                 console.log(`[SpriteEditor] Saved to server: ${filePath}`);
                 // Use Toast Message instead of Alert
-                this.game.showMessage(`Sprite saved as ${normalizedFilename}`);
+                this.game.showNotification(`Sprite saved as ${normalizedFilename}`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('[SpriteEditor] Failed to save sprite:', e);
-            this.game.showMessage(`Error saving sprite: ${e}`);
+            this.game.showNotification(`Error saving sprite: ${e}`);
         }
     }
 

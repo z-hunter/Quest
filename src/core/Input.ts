@@ -13,6 +13,8 @@ export class Input {
         this.setupListeners();
     }
 
+
+
     setupListeners(): void {
         const updateMouse = (e: MouseEvent) => {
             const rect = this.canvas.getBoundingClientRect();
@@ -48,6 +50,25 @@ export class Input {
         window.addEventListener('keydown', (e: KeyboardEvent) => {
             this.keys[e.key] = true;
             // console.log(`[Input] KeyDown: ${e.key}`);
+
+            // Global Tilde (~) to toggle Console
+            if (e.key === '`' || e.key === '~') {
+                e.preventDefault();
+                if (this.game.console) {
+                    this.game.console.toggle();
+                    // Force React UI update (if needed, but polling might handle it or we use callback)
+                    // We might need to expose an OnConsoleToggle event or similar if React doesn't pick it up via polling.
+                    // For now, let's assume UIOverlay or ConsoleOverlay will poll or we add a callback.
+                    // Actually, simpler: toggle() changes state, React component should ideally observe this.
+                    // Since we don't have MobX/Redux signals effectively from Game -> React without forceUpdate,
+                    // we might need a generic onUIChange callback or similar.
+                    // Let's add a quick hack if needed or rely on refresh.
+                    // Better: call a method on Game that triggers listeners.
+
+                    // Actually, Game loop renders 60fps. The React overlay might not re-render unless state changes.
+                    // We should add a listener for console toggle.
+                }
+            }
         });
 
         window.addEventListener('keyup', (e: KeyboardEvent) => {

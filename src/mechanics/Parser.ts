@@ -36,7 +36,7 @@ export class Parser {
             case 'EXAMINE':
             case 'X': // Common shortcut
                 if (!noun) {
-                    this.game.showMessage(`You are in ${scene.name}.`);
+                    this.game.log(`You are in ${scene.name}.`);
                 } else {
                     const entity = scene.findEntity(noun);
                     if (entity) {
@@ -46,10 +46,10 @@ export class Parser {
                             ScriptRegistry.execute(interactionId, { game: this.game, entity: entity });
                         } else {
                             // Fallback to description
-                            this.game.showMessage(entity.description || `You see nothing special about the ${noun}.`);
+                            this.game.log(entity.description || `You see nothing special about the ${noun}.`);
                         }
                     } else {
-                        this.game.showMessage(`You don't see any ${noun} here.`);
+                        this.game.log(`You don't see any ${noun} here.`);
                     }
                 }
                 break;
@@ -57,7 +57,7 @@ export class Parser {
             case 'GET':
             case 'PICKUP':
                 if (!noun) {
-                    this.game.showMessage('Take what?');
+                    this.game.log('Take what?');
                 } else {
                     const entity = scene.findEntity(noun);
                     if (entity) {
@@ -72,7 +72,7 @@ export class Parser {
                         // Refactored to ComponentSystem
                         const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
                         if (errorMsg) {
-                            this.game.showMessage(errorMsg);
+                            this.game.log(errorMsg);
                             return;
                         }
 
@@ -87,12 +87,12 @@ export class Parser {
                         if (isItem || entity.isTakeable) {
                             scene.removeEntity(entity);
                             this.game.inventory.push(entity);
-                            this.game.showMessage(`You picked up the ${entity.customName || entity.name}.`);
+                            this.game.log(`You picked up the ${entity.customName || entity.name}.`);
                         } else {
-                            this.game.showMessage('You cannot take that.');
+                            this.game.log('You cannot take that.');
                         }
                     } else {
-                        this.game.showMessage(`You don't see any ${noun} here.`);
+                        this.game.log(`You don't see any ${noun} here.`);
                     }
                 }
                 break;
@@ -100,22 +100,22 @@ export class Parser {
             case 'INVENTORY':
             case 'I':
                 if (this.game.inventory.length === 0) {
-                    this.game.showMessage("You are not carrying anything.");
+                    this.game.log("You are not carrying anything.");
                 } else {
                     const items = this.game.inventory.map((e: any) => e.customName || e.name).join(', ');
-                    this.game.showMessage(`You are carrying: ${items}`);
+                    this.game.log(`You are carrying: ${items}`);
                 }
                 break;
             case 'USE':
                 if (!noun) {
-                    this.game.showMessage('Use what?');
+                    this.game.log('Use what?');
                 } else {
                     // Check if it's "USE [ID] ON [ID]" vs "USE [ID]"
                     if (noun.includes(' ON ')) {
                         // Parse "USE X ON Y"
                         const parts = noun.split(' ON ');
                         if (parts.length !== 2) {
-                            this.game.showMessage('Use what on what? (Format: USE ITEM ON TARGET)');
+                            this.game.log('Use what on what? (Format: USE ITEM ON TARGET)');
                         } else {
                             const itemName = parts[0].trim();
                             const targetName = parts[1].trim();
@@ -123,7 +123,7 @@ export class Parser {
                             // Check if player has the item
                             const item = this.game.inventory.find((i: any) => (i.customName || i.name).toUpperCase() === itemName.toUpperCase());
                             if (!item) {
-                                this.game.showMessage(`You don't have the ${itemName}.`);
+                                this.game.log(`You don't have the ${itemName}.`);
                             } else {
                                 // Check if target is in the scene
                                 const target = scene.findEntity(targetName);
@@ -136,10 +136,10 @@ export class Parser {
                                     if (interactionId) {
                                         ScriptRegistry.execute(interactionId, { game: this.game, entity: target });
                                     } else {
-                                        this.game.showMessage(`Using the ${itemName} on the ${targetName} does nothing.`);
+                                        this.game.log(`Using the ${itemName} on the ${targetName} does nothing.`);
                                     }
                                 } else {
-                                    this.game.showMessage(`You don't see any ${targetName} here.`);
+                                    this.game.log(`You don't see any ${targetName} here.`);
                                 }
                             }
                         }
@@ -151,16 +151,16 @@ export class Parser {
                             if (interactionId) {
                                 ScriptRegistry.execute(interactionId, { game: this.game, entity: entity });
                             } else {
-                                this.game.showMessage(`You try to use the ${noun}, but nothing happens.`);
+                                this.game.log(`You try to use the ${noun}, but nothing happens.`);
                             }
                         } else {
-                            this.game.showMessage(`You don't see any ${noun} here.`);
+                            this.game.log(`You don't see any ${noun} here.`);
                         }
                     }
                 }
                 break;
             default:
-                this.game.showMessage("I don't understand.");
+                this.game.log("I don't understand.");
         }
     }
 }

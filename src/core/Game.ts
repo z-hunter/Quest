@@ -11,6 +11,8 @@ import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 
+import { Console } from './Console';
+
 export class Game {
     public static instance: Game;
 
@@ -40,6 +42,7 @@ export class Game {
     audio: AudioManager;
     editor: SceneEditor;
     spriteEditor: SpriteEditor;
+    console: Console; // Virtual Console
     score: number = 0;
     cursorBlink: number = 0;
 
@@ -121,6 +124,7 @@ export class Game {
 
         // (Previously corrupted lines removed)
         this.input = new Input(this);
+        this.console = new Console(); // Init Console
         this.parser = new Parser(this);
         this.assets = new AssetLoader();
         this.audio = new AudioManager();
@@ -218,7 +222,7 @@ export class Game {
             // Draw text BEHIND scene (Watermark)
             this.ctx.fillStyle = '#666';
             this.ctx.font = '10px monospace';
-            this.ctx.fillText('Quest Engine v0.1                                           F1=Menu', 10, 10);
+            this.ctx.fillText('Scanline engine v0.1                                           F1=Menu', 10, 10);
 
             this.sceneManager.render(this.ctx);
 
@@ -279,38 +283,48 @@ export class Game {
     renderUI(ctx: CanvasRenderingContext2D): void {
         const w = this.bufferCanvas.width;
         const h = this.bufferCanvas.height;
-        const barHeight = 14;
+        // Use a fixed height for the closed console area (last 2 lines + input)
+        // 3 lines * 10px = 30px? GDD says "2 last lines ... and under them input".
+        // Let's allocate roughly 3 lines of text height.
+        const lineHeight = 10;
+        const consoleHeight = lineHeight * 3 + 4; // 3 lines + padding
 
         ctx.font = '10px monospace';
-        ctx.textBaseline = 'middle';
+        ctx.textBaseline = 'top';
 
-        // --- TOP BAR (Status) ---
+        // --- CLOSED CONSOLE (Bottom Only) ---
+        // Replacing Status Bar (Top) with nothing as per GDD ("we clean up status bar").
+
+        // Draw Background for Console Area
+        const consoleY = h - consoleHeight;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Semi-transparent black backing? Or solid for readability?
+        // GDD: "In closed state... integrated into game picture... drawn on low-res 2d canvas".
+        // Let's use solid black for the bottom strip to ensure text readability.
         ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, w, barHeight);
+        ctx.fillRect(0, consoleY, w, consoleHeight);
 
-        // Separator Line
+
+
+        // --- Draw Last 2 Lines of Buffer ---
         ctx.fillStyle = '#fff';
-        ctx.fillRect(0, barHeight, w, 1);
+        const buffer = this.console.buffer;
+        const lastIndex = buffer.length - 1;
 
-        // Text
-        ctx.fillStyle = '#fff';
-        ctx.fillText(`Score: ${this.score} of 100`, 10, barHeight / 2);
+        // Show last 2 lines above input
+        // Line -2
+        if (lastIndex >= 1) {
+            const line = buffer[lastIndex - 1];
+            ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
+            ctx.fillText(line.text, 2, consoleY + 2);
+        }
+        // Line -1
+        if (lastIndex >= 0) {
+            const line = buffer[lastIndex];
+            ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
+            ctx.fillText(line.text, 2, consoleY + 2 + lineHeight);
+        }
 
-        const sceneName = this.sceneManager.currentScene ? this.sceneManager.currentScene.name : 'Title';
-        const titleWidth = ctx.measureText(sceneName).width;
-        ctx.fillText(sceneName, w / 2 - titleWidth / 2, barHeight / 2);
-
-        // --- BOTTOM BAR (Command Line) ---
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, h - barHeight, w, barHeight);
-
-        // Separator Line
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, h - (barHeight + 1), w, 1);
-
-        // Command Prompt
-        ctx.fillStyle = '#fff';
-
+        // --- INPUT LINE ---
         // Read Input from Hidden DOM Element
         const input = document.getElementById('parser-input') as HTMLInputElement;
         const inputText = input ? input.value : '';
@@ -325,7 +339,8 @@ export class Game {
             }
         }
 
-        ctx.fillText(`> ${inputText}${cursor}`, 10, h - barHeight / 2);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + (lineHeight * 2));
     }
 
     disableCRT(): void {
@@ -355,14 +370,21 @@ export class Game {
         }
     }
 
-    showMessage(text: string): void {
-        console.log(`[MESSAGE] ${text}`);
+    // --- Message API ---
+    log(text: string): void {
+        console.log(`[GAME LOG] ${text}`);
+        this.console.log(text);
+    }
+
+    showNotification(text: string): void {
+        console.log(`[SYSTEM NOTIFICATION] ${text}`);
         if (this.onMessage) {
             this.onMessage(text);
-        } else {
-            // Fallback if no UI hooked up
-            alert(text);
         }
+    }
+
+    showMessage(text: string): void {
+        this.log(text);
     }
 
     bindUI(): void {
@@ -384,7 +406,7 @@ export class Game {
             const json = JSON.stringify(this.settings);
             localStorage.setItem('quest_settings', json);
             console.log('[Game] Settings saved to LocalStorage');
-            this.showMessage("Settings Saved!");
+            this.showNotification("Settings Saved!");
         } catch (e) {
             console.error("Failed to save settings:", e);
         }

@@ -191,6 +191,9 @@ export class Actor extends Entity {
         if (this.scene && this.scene.activeSubscene) return;
 
         if (input) {
+            // Prevent movement if Control is held (e.g. for Console History)
+            if (input.isDown('Control')) return;
+
             let dx = 0;
             let dy = 0;
 

@@ -728,32 +728,6 @@
       "blur": 2
     },
     {
-      "type": "Entity",
-      "name": "plant",
-      "x": -121,
-      "y": 69,
-      "width": 61.577142857142846,
-      "height": 64.14285714285714,
-      "baseWidth": 432,
-      "baseHeight": 450,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "office-plant",
-      "color": "#AAAAAA",
-      "scale": 0.14253968253968252,
-      "modelScale": 0.2,
-      "layer": 1,
-      "parallax": 0.648,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {}
-    },
-    {
       "type": "Quad",
       "name": "Quad_303",
       "x": 181.47444229637748,
@@ -1197,8 +1171,8 @@
     {
       "type": "Quad",
       "name": "shadow_hero",
-      "x": -380.8070709767808,
-      "y": 94.14528243384419,
+      "x": -124.08107388211424,
+      "y": 112.05876916815667,
       "color": "#535246",
       "layer": 0,
       "parallax": 1,
@@ -1211,24 +1185,24 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -380.8070709767808,
-          "y": 94.14528243384419,
-          "p": 0.8454182064150384
+          "x": -124.08107388211424,
+          "y": 112.05876916815667,
+          "p": 0.9430774020070847
         },
         {
-          "x": -356.1836324695459,
-          "y": 94.23102418220647,
-          "p": 0.8454182064150384
+          "x": -99.4576353748793,
+          "y": 112.14451091651895,
+          "p": 0.9430774020070847
         },
         {
-          "x": -395.97352915393765,
-          "y": 130.90129730639825,
-          "p": 0.55
+          "x": -139.24753205927118,
+          "y": 148.81478404071078,
+          "p": 0.9465650771550898
         },
         {
-          "x": -403.47352915393685,
-          "y": 119.90129730639815,
-          "p": 0.55
+          "x": -146.74753205927027,
+          "y": 137.81478404071066,
+          "p": 0.9465650771550898
         }
       ],
       "sortMode": "v2",
@@ -1498,36 +1472,6 @@
     },
     {
       "type": "Entity",
-      "name": "Key",
-      "x": 29,
-      "y": 34,
-      "width": 12.770674274561742,
-      "height": 2.82612551898476,
-      "baseWidth": 18.24382039223106,
-      "baseHeight": 4.0373221699782285,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#ffff00",
-      "scale": 0.7,
-      "modelScale": 1,
-      "layer": 1,
-      "parallax": 0.69,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "key",
-      "groupID": null,
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "interactions": {}
-    },
-    {
-      "type": "Entity",
       "name": "Static_1",
       "x": 65,
       "y": 40,
@@ -1721,6 +1665,32 @@
     },
     {
       "type": "Entity",
+      "name": "plant",
+      "x": -121,
+      "y": 69,
+      "width": 61.577142857142846,
+      "height": 64.14285714285714,
+      "baseWidth": 432,
+      "baseHeight": 450,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "office-plant",
+      "color": "#AAAAAA",
+      "scale": 0.14253968253968252,
+      "modelScale": 0.2,
+      "layer": 1,
+      "parallax": 0.648,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {}
+    },
+    {
+      "type": "Entity",
       "name": "chair",
       "x": 58,
       "y": 77,
@@ -1803,59 +1773,6 @@
       "blur": 0
     },
     {
-      "type": "Actor",
-      "name": "miles_ds",
-      "x": -367.8070709767808,
-      "y": 97.14528243384419,
-      "width": 25.40889697620376,
-      "height": 103.75299598616536,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 32,
-      "colliderHeight": 6,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.26467601016878917,
-      "modelScale": 0.33,
-      "layer": 1,
-      "parallax": 0.8454182064150384,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow_hero",
-          "offsetX": -13,
-          "offsetY": -3,
-          "triggerId": "#lightSpots"
-        }
-      ],
-      "interactions": {},
-      "isPlayer": true,
-      "speed": 0.14,
-      "direction": "left",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
-    },
-    {
       "type": "Quad",
       "name": "Quad_5",
       "x": -207.71706697024933,
@@ -1911,6 +1828,59 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 0
+    },
+    {
+      "type": "Actor",
+      "name": "miles_ds",
+      "x": -111.08107388211424,
+      "y": 115.05876916815667,
+      "width": 27.210481927768896,
+      "height": 111.109467871723,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 32,
+      "colliderHeight": 6,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.283442520080926,
+      "modelScale": 0.33,
+      "layer": 1,
+      "parallax": 0.9430774020070847,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow_hero",
+          "offsetX": -13,
+          "offsetY": -3,
+          "triggerId": "#lightSpots"
+        }
+      ],
+      "interactions": {},
+      "isPlayer": true,
+      "speed": 0.14,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Quad",

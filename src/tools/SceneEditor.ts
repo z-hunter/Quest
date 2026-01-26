@@ -2181,13 +2181,13 @@ export class SceneEditor {
             if (response.ok) {
                 console.log('Scene saved to server:', filePath);
                 // Use Toast Message
-                this.game.showMessage(`Scene saved as ${normalizedPath}.json`);
+                this.game.showNotification(`Scene saved as ${normalizedPath}.json`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('Failed to save scene:', e);
-            this.game.showMessage(`Error saving scene: ${e}`);
+            this.game.showNotification(`Error saving scene: ${e}`);
         }
     }
 
@@ -2206,7 +2206,7 @@ export class SceneEditor {
 
     async saveObject(): Promise<void> {
         if (!this.selectedObject || !(this.selectedObject instanceof Entity)) {
-            this.game.showMessage("Select an Object to Save");
+            this.game.showNotification("Select an Object to Save");
             return;
         }
 
@@ -2247,13 +2247,13 @@ export class SceneEditor {
 
             if (response.ok) {
                 console.log('Prefab saved to server:', filePath);
-                this.game.showMessage(`Prefab Saved: ${filename} `);
+                this.game.showNotification(`Prefab Saved: ${filename} `);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('Failed to save prefab:', e);
-            this.game.showMessage(`Error: ${e} `);
+            this.game.showNotification(`Error: ${e} `);
         }
     }
 
@@ -2331,7 +2331,7 @@ export class SceneEditor {
 
         } catch (e) {
             console.error(e);
-            this.game.showMessage("Failed to load prefab");
+            this.game.showNotification("Failed to load prefab");
         }
     }
 
