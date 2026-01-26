@@ -466,12 +466,33 @@ export class Scene {
             if (obj.hitTest(worldX, worldY)) {
                 // Check Interactivity
                 const hasComponents = obj.components && obj.components.length > 0;
-                const isTrigger = obj instanceof Triggerbox && (hasComponents || (obj.script && obj.script.length > 0));
-                const isInteractiveEntity = (obj instanceof Entity) && hasComponents;
 
-                if (isInteractiveEntity || isTrigger) {
+                // Unified Interactivity Check (Entity or Triggerbox)
+                // Only Specific Components are considered "Interactive" (blocking clicks)
+                // Items (pickups) are Passive for clicking - you walk to them.
+                // WalkBox IS interactive because it must catch the click (layer blocking)
+                const interactiveTypes = ['Switch', 'Subscene', 'Subtrigger', 'WalkBox'];
+                let isComponentInteractive = false;
+
+                if (hasComponents) {
+                    isComponentInteractive = obj.components!.some(c => c && interactiveTypes.includes(c.type));
+                }
+
+                // Triggerboxes are also interactive if they have a script
+                // Note: Triggerboxes with WalkBox ONLY should now NOT block (Fixed)
+                const isScriptTrigger = (obj instanceof Triggerbox) && (obj.script && obj.script.length > 0);
+
+                const hasInteractions = obj.interactions && Object.keys(obj.interactions).length > 0;
+                const isInteractive = isComponentInteractive || isScriptTrigger || hasInteractions;
+
+                if (isInteractive) {
                     return obj; // Found the blocking interactive object
                 }
+
+                // Debugging "Absorbed Click" false positives
+                // if (hasComponents) {
+                //    console.log(`[Scene] PASSTHROUGH ${obj.name} (${obj.type}). Components: ${obj.components.map(c=>c.type).join(',')}`);
+                // }
 
                 // Passive -> Continue
             }
@@ -518,8 +539,21 @@ export class Scene {
 
         if (hitObj) {
             console.log(`[Scene] Hit Interactive Object: ${hitObj.name}`);
-            this.activateObject(hitObj);
-            return; // Consume Click
+
+            // Check if it's a WalkBox (Movement Command, not Interaction)
+            const isWalkBox = hitObj.components && hitObj.components.some(c => c.type === 'WalkBox');
+            // If it has OTHER interactive components (Switch, Subscene), they take precedence over WalkBox
+            const isMechanism = hitObj.components && hitObj.components.some(c => ['Switch', 'Subscene', 'Subtrigger'].includes(c.type));
+            const hasScript = (hitObj instanceof Triggerbox) && (hitObj.script && hitObj.script.length > 0);
+
+            if (isWalkBox && !isMechanism && !hasScript) {
+                // It's just a floor/walkbox. Treat as movement content.
+                console.log(`  -> Object is WalkBox. Proceeding to WalkTo.`);
+                // Fallthrough to movement logic below
+            } else {
+                this.activateObject(hitObj);
+                return; // Consume Click
+            }
         }
 
         // 4. Subscene Logic (If NO trigger/entity hit)
