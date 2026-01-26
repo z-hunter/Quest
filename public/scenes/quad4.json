@@ -64,11 +64,7 @@
       "disabled": false,
       "customName": "",
       "groupID": null,
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
+      "components": [],
       "interactions": {}
     },
     {
@@ -370,7 +366,7 @@
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
-      "color": "#381a1a",
+      "color": "#4a1215",
       "scale": 0.7,
       "modelScale": 1,
       "layer": 0,
@@ -504,6 +500,10 @@
       "components": [
         {
           "type": "3d-parallax"
+        },
+        {
+          "type": "WalkBox",
+          "mode": "Invert"
         }
       ],
       "interactions": {},
@@ -777,18 +777,18 @@
     {
       "type": "Entity",
       "name": "Static_231",
-      "x": 17,
+      "x": 15,
       "y": 78,
-      "width": 20.920544322071677,
-      "height": 25.380695507219393,
-      "baseWidth": 28.222575852045306,
-      "baseHeight": 34.23948216177349,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
+      "width": 28.342303561858316,
+      "height": 24.774,
+      "baseWidth": 382.3479923762471,
+      "baseHeight": 334.210278372591,
+      "colliderWidth": 32,
+      "colliderHeight": 38,
+      "spriteName": "weird.json",
       "color": "#381a1a",
-      "scale": 0.7412698412698412,
-      "modelScale": 1,
+      "scale": 0.07412698412698412,
+      "modelScale": 0.1,
       "layer": 0,
       "parallax": 0.748,
       "ignoreScaling": false,
@@ -1029,6 +1029,10 @@
           "op": ">",
           "targetId": "plant",
           "cullingType": "layer"
+        },
+        {
+          "type": "WalkBox",
+          "mode": "Subtract"
         }
       ],
       "interactions": {},
@@ -1171,8 +1175,8 @@
     {
       "type": "Quad",
       "name": "shadow_hero",
-      "x": -124.08107388211424,
-      "y": 112.05876916815667,
+      "x": -113.66822126357384,
+      "y": 101.52658983240858,
       "color": "#535246",
       "layer": 0,
       "parallax": 1,
@@ -1185,24 +1189,24 @@
       "interactions": {},
       "vertices": [
         {
-          "x": -124.08107388211424,
-          "y": 112.05876916815667,
-          "p": 0.9430774020070847
+          "x": -113.66822126357384,
+          "y": 101.52658983240858,
+          "p": 0.8856589788371184
         },
         {
-          "x": -99.4576353748793,
-          "y": 112.14451091651895,
-          "p": 0.9430774020070847
+          "x": -89.0447827563387,
+          "y": 101.61233158077086,
+          "p": 0.8856589788371184
         },
         {
-          "x": -139.24753205927118,
-          "y": 148.81478404071078,
-          "p": 0.9465650771550898
+          "x": -128.83467944073058,
+          "y": 138.28260470496252,
+          "p": 0.8836222675152638
         },
         {
-          "x": -146.74753205927027,
-          "y": 137.81478404071066,
-          "p": 0.9465650771550898
+          "x": -136.3346794407295,
+          "y": 127.28260470496265,
+          "p": 0.8836222675152638
         }
       ],
       "sortMode": "v2",
@@ -1832,20 +1836,20 @@
     {
       "type": "Actor",
       "name": "miles_ds",
-      "x": -111.08107388211424,
-      "y": 115.05876916815667,
-      "width": 27.210481927768896,
-      "height": 111.109467871723,
+      "x": -100.66822126357384,
+      "y": 104.52658983240858,
+      "width": 26.151245606002234,
+      "height": 106.7842528911758,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.283442520080926,
+      "scale": 0.2724088083958566,
       "modelScale": 0.33,
       "layer": 1,
-      "parallax": 0.9430774020070847,
+      "parallax": 0.8856589788371184,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "locked": false,
@@ -1864,7 +1868,7 @@
       "interactions": {},
       "isPlayer": true,
       "speed": 0.14,
-      "direction": "left",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",

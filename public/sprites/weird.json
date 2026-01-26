@@ -1,0 +1,9 @@
+{
+  "id": "weird",
+  "imageFile": "public/assets/weird.png",
+  "x": 0,
+  "y": 0,
+  "width": 145,
+  "height": 150,
+  "frames": 1
+}
