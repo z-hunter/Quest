@@ -27,7 +27,7 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
 
 ## Features Implemented
 
-- **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation.
+- **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation. Optimized rendering context management to prevent stack leaks.
 - **Scene Editor (F1):**
   - Object placement (Static, Actor, WalkBox, TriggerBox, Quad).
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
@@ -38,8 +38,8 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
 - **Sprite Editor (F5):**
   - Frame/Animation definition, loading images (atlases), and interactive preview.
   - Integration with Scene Editor for quick asset iteration.
-- **Entity Collision:**
-  - `Collider Width` and `Height` for Static/Actor objects.
+- **Entity Visuals:**
+  - **Visual Effects:** Opacity, Blur, and Blend Mode support for all Entity-derived objects (Static, Actor).
   - **Alignment:** Colliders are bottom-aligned to the object's base.
 - **Advanced Trigger Components:**
   - **Subscene:** Modal "close-up" view with auto-close logic.

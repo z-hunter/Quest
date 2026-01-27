@@ -142,6 +142,7 @@ export class SceneEditor {
         scene.walkbox = [];
         scene.triggerboxes = [];
         scene.player = null;
+        scene.activeSubscene = null;
 
         // Restore Entities
         if (data.entities) {

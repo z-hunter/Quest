@@ -282,6 +282,7 @@ export class Entity extends SceneObject {
 
             // Check Disjoint
             if (eR + pad < vL || eL - pad > vR || eB + pad < vT || eT - pad > vB) {
+                ctx.restore();
                 return;
             }
         }

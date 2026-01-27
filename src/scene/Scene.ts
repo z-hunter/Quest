@@ -825,8 +825,11 @@ export class Scene {
 
             // Optional: Keep the Dimmer on top for contrast? User asked for "Blur", usually implies dimming too.
             // Let's keep a lighter dimmer (30%) to ensure text/foreground pops.
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Ensure dimmer covers full screen regardless of transform state
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.restore();
         }
 
         // 3. Render Subscene Layer
@@ -840,7 +843,9 @@ export class Scene {
             ctx.save();
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x * p, -this.camera.y * p);
+            const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+            const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+            ctx.translate(-this.camera.x * p + vOx, -this.camera.y * p + vOy);
 
             entity.render(ctx);
             ctx.restore();
@@ -1038,8 +1043,8 @@ export class Scene {
             id: this.id,
             name: this.name,
             filename: this.filename,
-            walkbox: this.walkbox,
-            triggerboxes: this.triggerboxes,
+            walkbox: this.walkbox.map(wb => wb.toJSON()),
+            triggerboxes: this.triggerboxes.map(tb => tb.toJSON()),
             scaling: this.scaling,
             entities: savedEntities,
             camera: this.defaultCamera, // Save the DEFAULT settings, not the current runtime state
