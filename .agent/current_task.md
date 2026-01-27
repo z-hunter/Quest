@@ -1,22 +1,19 @@
-# Current Task: Unified Object and Group Referencing (Completed)
+# Current Status: Maintenance & Refinement
 
-**Objective:** Unify the referencing system so components can target both individual objects and groups simultaneously using a unified syntax (`#group` vs `objectID`).
+**Overview:** The core architecture for scenes, actors, and unified referencing is stable. Current efforts focus on refining the editor experience and expanding scriptable interactions.
 
-## Status
+## Recently Completed
+- [x] **Object Locking:** Implemented `Alt+L` hotkey and click-through logic for locked objects in Scene Editor.
+- [x] **Unified Object and Group Referencing:** Integrated `#group` syntax across all components.
+- [x] **UI Layout Refinement:** Panel resizing, grouped properties, and SVG icons.
+- [x] **Quad Object Documentation:** Added comprehensive details to `GDD.md`.
+- [x] **Sprite Editor Fixes:** Resolved issues with saving and path handling.
 
-- [x] **Core Reference Logic:**
-  - [x] Implemented `resolveTarget` in `Scene.ts` to handle mixed lists of Groups (#) and Object IDs.
-  - [x] Updated `SceneObject` to support multiple Group IDs (comma-separated).
-- [x] **Editor Support:**
-  - [x] Properties Panel now auto-prefixes `#` for Group ID entries.
-  - [x] Updated UI labels to "Target ID(s)" for clarity.
-- [x] **Component Updates:**
-  - [x] **Subscene:** Now accepts mixed targets.
-  - [x] **Switch:** Now accepts mixed targets for State 1 / State 2 groups.
-  - [x] **Backface:** Refactored to use `resolveTarget` and work on ANY object type (not just Quads).
+## Active/Pending Tasks
+- [ ] **Interaction Scripting:** Implement more complex demo scripts in `src/scripts/main.ts` to test `Subscene`, `Switch`, and `Subtrigger`.
+- [ ] **Inventory System:** Basic logic for picking up items (currently `Item` component exists but full inventory UI/logic is minimal).
+- [ ] **Click Occlusion Logic:** Further refine cursor behavior when multiple interactive objects overlap.
 
 ## Notes
-
-- `Scene.resolveTarget` is the central helper for resolving string inputs to object lists.
-- Group IDs must strictly start with `#`.
-- Components can now affect arbitrary combinations of objects.
+- `context.md` has been updated to reflect the new architecture.
+- Follow the **Serialization Standard** when adding new properties.

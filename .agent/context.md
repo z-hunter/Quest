@@ -2,55 +2,63 @@
 
 ## Current Focus
 
-We have successfully implemented **Actor Animation Sets** and **Directional Sprites**. The focus is now shifting towards **Game Logic & Scripting** to utilize these new capabilities effectively (e.g. interacting with triggers, changing states via script).
+We have successfully implemented **Actor Animation Sets**, **Directional Sprites**, and a **Unified Referencing System**. The focus is now on **Game Logic & High-Level Mechanics**, including complex interactions via components like **Subscene**, **Switch**, and **Backface Culling**, as well as refining the **Scripting API** for more dynamic gameplay.
 
 ## Architectural Decisions
 
 - **Framework:** React + Vite.
 - **Rendering:** Hybrid approach.
-  - **Game View:** HTML5 Canvas for performance (pixel manipulation, CRT effects).
-  - **Editor UI:** React components overlaying the canvas (simulating retro UI).
-    - **Notifications:** Non-blocking "Toast" notifications for feedback (e.g. "Saved successfully").
-- **State Management:** Currently local component state + direct manipulation of Game singleton. We may need to standardize this (Zustand mentioned in discussions).
-- **File Format:**
-  - Scenes: `.json` files.
-  - Sprites: `.json` files (referencing `.png` assets).
-- **Styling:** Vanilla CSS for maximum control over the retro aesthetic (pixel sorting, CRT simulation).
+- **Game View:** HTML5 Canvas for performance (pixel manipulation, CRT effects).
+- **Editor UI:** React components overlaying the canvas (simulating retro UI).
+- **State Management:** Direct manipulation of Game singleton + local React state for UI. Standardized via `toJSON`/`load` patterns.
 - **Serialization Standard:**
   - **Single Source of Truth:** `fromJSON` / `toJSON` in the Class.
   - **Factory Pattern:** Editors/Loaders must use `Class.fromJSON(data)` instead of manual reconstruction.
   - **Extension Rule:** Adding a property requires updates to: Class, Constructor, `toJSON`, `fromJSON`, and Editor UI.
+- **Unified Referencing System:**
+  - Components (Subscene, Switch, etc.) use a unified syntax for targeting objects: `objectID` or `#groupID`.
+  - `Scene.resolveTarget(query)` is the central utility for resolving IDs and Groups into object lists.
+  - Group IDs must start with `#`.
+- **Component-Based Logic:** Objects like `TriggerBox` or `Quad` can have optional components (e.g., `SubsceneComponent`, `BackfaceComponent`) that encapsulate behavior.
+- **Scripting:**
+  - Simplified registration in `src/scripts/main.ts`.
+  - Event-based triggers: `LOOK`, `TAKE`, `USE`, `USE <ITEMID>`.
+  - Global `ScriptRegistry` for user-defined logic.
 
 ## Features Implemented
 
 - **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation.
 - **Scene Editor (F1):**
-  - Object placement (Static, Actor, WalkBox, TriggerBox).
+  - Object placement (Static, Actor, WalkBox, TriggerBox, Quad).
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
-  - Properties panel with **Smart Save (F2)** and **Save As (Shift+F2)**.
-  - Camera control (panning, zooming).
-  - Depth scaling (pseudo-3D perspective).
-  - Parallax scrolling support.
-  - **Actor Animation Sets:**
-    - Directional sprites (Up, Down, Left, Right).
-    - State management (Idle, Walk, Custom).
-    - UI for managing Animation Sets.
+  - **Quad Objects:** 4-vertex primitives with vertex-specific Parallax, Retro-Grid mode, and Sorting modes.
+  - **Unified Properties Panel:** Dynamic fields based on object type and components.
+  - **UI Layout:** Resizable panels (extending to bottom), grouped camera/depth settings, and SVG icons.
+  - **F-Key Menu:** Retro style (F1-F9) with dynamic color styling support.
 - **Sprite Editor (F5):**
-  - Basic UI structure.
-  - Loading images.
-  - Defining frames/animations.
-  - Preview window with backgrounds and rulers.
-  - **Smart Save (F2)** integration.
-  - Integration with Scene Editor (switching context).
+  - Frame/Animation definition, loading images (atlases), and interactive preview.
+  - Integration with Scene Editor for quick asset iteration.
+- **Entity Collision:**
+  - `Collider Width` and `Height` for Static/Actor objects.
+  - **Alignment:** Colliders are bottom-aligned to the object's base.
+- **Advanced Trigger Components:**
+  - **Subscene:** Modal "close-up" view with auto-close logic.
+  - **Switch:** Toggling between two groups/states with sound and key requirements.
+  - **Subtrigger:** External click area for triggering other objects.
+  - **Backface Culling:** Hiding or layering objects based on owner vertex orientation.
 
 ## Known Issues / Technical Debt
 
-- **Hotkeys:** Conflicts between browser defaults and editor shortcuts (F1, F5, Ctrl+S) need careful handling.
-- **Performance:** Need to keep an eye on re-renders when overlaying complex React UI over the Game Loop.
-- **Scaling:** Depth scaling logic is complex; `baseWidth`/`baseHeight` recalculations when disabling depth-scaling need to be precise to avoid "popping" artifacts.
+- **Click Occlusion:** Refinement needed for nested components or overlapping interactive areas (Cursor logic refined but complex).
+- **Hotkeys:** Potential conflicts between browser and editor shortcuts; `Alt+D` implemented for toggling "Disabled" state.
+- **Reference Integrity:** Deleting objects/groups does not automatically clean up references in other components (e.g., TargetID).
 
-## Navigation
+## Navigation & Hotkeys
 
-- **Game Mode:** The actual gameplay loop.
-- **Scene Editor Mode:** Triggered by F1.
-- **Sprite Editor Mode:** Triggered by F5 (accessible from Scene Editor).
+- **F1:** Scene Editor
+- **F5:** Sprite Editor
+- **F9:** Settings
+- **Alt + D:** Toggle "Disabled" state for selected objects (Hierarchy/Canvas).
+- **Ctrl + C / V:** Copy/Paste objects.
+- **Del:** Delete selected object.
+- **Space:** Select Scene (when over canvas).

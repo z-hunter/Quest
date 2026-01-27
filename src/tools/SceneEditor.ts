@@ -255,6 +255,20 @@ export class SceneEditor {
             return;
         }
 
+        // Alt+L: Toggle Locked State
+        if (this.enabled && e.altKey && e.key.toLowerCase() === 'l') {
+            e.preventDefault();
+            if (this.selectedObject) {
+                this.selectedObject.locked = !this.selectedObject.locked;
+                console.log(`[Editor] Object ${this.selectedObject.name} locked: ${this.selectedObject.locked}`);
+
+                // Force UI Update
+                useEditorStore.getState().incrementObjectVersion();
+                useEditorStore.getState().incrementHierarchyVersion();
+            }
+            return;
+        }
+
         // Ctrl+Z: Undo
         if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'z') {
             e.preventDefault();
@@ -709,35 +723,30 @@ export class SceneEditor {
                     // Visualization is a rect: x-h/2, y-h/2, w=h, h=h.
                     // Math.abs(worldPos.x - vx) < h/2
                     if (Math.abs(worldPos.x - vx) < vertexRadius / 2 && Math.abs(worldPos.y - vy) < vertexRadius / 2) {
-                        if (this.selectedObject.locked) {
-                            console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
+                        if (!this.selectedObject.locked) {
+                            this.saveUndoState();
+                            this.isDragging = true;
+                            this.draggingVertexIndex = i;
+                            useEditorStore.getState().selectVertex(i); // Sync UI
+                            e.stopPropagation();
                             return;
                         }
-                        this.saveUndoState();
-                        this.isDragging = true;
-                        this.draggingVertexIndex = i;
-                        useEditorStore.getState().selectVertex(i); // Sync UI
-                        e.stopPropagation();
-                        return;
                     }
                 }
 
                 // Check Polygon Body
                 if (Geometry.isPointInPolygon(worldPos, poly)) {
-                    if (this.selectedObject.locked) {
-                        console.log(`[Editor] Object ${this.selectedObject.name} is locked.`);
-                        // Still consume event?
+                    if (!this.selectedObject.locked) {
+                        this.saveUndoState();
+                        this.isDragging = true;
+                        this.draggingVertexIndex = -1; // Drag Whole Body
+
+                        // For QuadObject, DragOffset should be relative to P=1 World Pos
+                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                        useEditorStore.getState().selectVertex(-1); // Deselect vertex when body dragging
+                        e.stopPropagation();
                         return;
                     }
-                    this.saveUndoState();
-                    this.isDragging = true;
-                    this.draggingVertexIndex = -1; // Drag Whole Body
-
-                    // For QuadObject, DragOffset should be relative to P=1 World Pos
-                    this.dragOffset = { x: worldPos.x, y: worldPos.y };
-                    useEditorStore.getState().selectVertex(-1); // Deselect vertex when body dragging
-                    e.stopPropagation();
-                    return;
                 }
             }
 
@@ -780,26 +789,22 @@ export class SceneEditor {
                 const hitBody = (pos.x >= sl && pos.x <= sr && pos.y >= st && pos.y <= sb);
 
                 if (hitHandle || hitBody) {
-                    if (entity.locked) {
-                        console.log(`[Editor] Object ${entity.name} is locked.`);
+                    if (!entity.locked) {
+                        this.saveUndoState();
+                        this.isDragging = true;
+                        this.draggingVertexIndex = -1;
+
+                        if (hitHandle) {
+                            this.resizingHandle = hitHandle;
+                        } else {
+                            // Body Drag
+                            this.resizingHandle = null;
+                            this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
+                        }
+
                         e.stopPropagation();
                         return;
                     }
-
-                    this.saveUndoState();
-                    this.isDragging = true;
-                    this.draggingVertexIndex = -1;
-
-                    if (hitHandle) {
-                        this.resizingHandle = hitHandle;
-                    } else {
-                        // Body Drag
-                        this.resizingHandle = null;
-                        this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
-                    }
-
-                    e.stopPropagation();
-                    return;
                 }
             }
 
@@ -810,6 +815,7 @@ export class SceneEditor {
             for (let i = entities.length - 1; i >= 0; i--) {
                 const entity = entities[i];
                 if (entity.disabled) continue;
+                if (entity.locked) continue;
 
                 const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
@@ -863,6 +869,7 @@ export class SceneEditor {
             if (scene.walkbox) {
                 for (const wb of scene.walkbox) {
                     if (wb.disabled) continue;
+                    if (wb.locked) continue;
                     if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
                         this.selectObject(wb);
                         // Selection Only
@@ -876,6 +883,7 @@ export class SceneEditor {
             if (scene.triggerboxes) {
                 for (const tb of scene.triggerboxes) {
                     if (tb.disabled) continue;
+                    if (tb.locked) continue;
                     if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
                         this.selectObject(tb);
                         // Selection Only
