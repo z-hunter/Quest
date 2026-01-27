@@ -1082,7 +1082,38 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
                             <div>
                                 <label className="e-label">Parallax</label>
-                                <input type="number" step="0.1" className="e-input" value={obj.parallax ?? 1} onChange={(e) => handleChange('parallax', e.target.value, true)} />
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    className="e-input"
+                                    value={obj.parallax ?? 1}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        const newP = isNaN(val) ? 1.0 : val;
+                                        const oldP = obj.parallax !== undefined ? obj.parallax : 1.0;
+
+                                        // Auto-Correct Position to prevent visual jump
+                                        // NewPos = OldPos + Cam * (NewP - OldP)
+                                        const scene = game.sceneManager.currentScene;
+                                        if (scene && game.editor.selectedObject) {
+                                            const camX = scene.camera.x;
+                                            const camY = scene.camera.y;
+
+                                            const dx = camX * (newP - oldP);
+                                            const dy = camY * (newP - oldP);
+
+                                            // Apply to Local
+                                            obj.x += dx;
+                                            obj.y += dy;
+
+                                            // Apply to Real (Must do this manually as handleChange only does the targeting field)
+                                            game.editor.selectedObject.x = obj.x;
+                                            game.editor.selectedObject.y = obj.y;
+                                        }
+
+                                        handleChange('parallax', newP, true);
+                                    }}
+                                />
                             </div>
                         </div>
 

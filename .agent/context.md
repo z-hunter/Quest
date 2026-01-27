@@ -46,6 +46,10 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - **Switch:** Toggling between two groups/states with sound and key requirements.
   - **Subtrigger:** External click area for triggering other objects.
   - **Backface Culling:** Hiding or layering objects based on owner vertex orientation.
+- **Object Locking:**
+  - Ability to lock/unlock objects via `Alt+L` (hotkey) or Property Panel (checkbox).
+  - Locked objects are transparent to mouse clicks in the Scene Editor but selectble in Hierarchy.
+  - Locking only affects the editor; objects behave normally in-game.
 
 ## Known Issues / Technical Debt
 
@@ -58,7 +62,8 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
 - **F1:** Scene Editor
 - **F5:** Sprite Editor
 - **F9:** Settings
-- **Alt + D:** Toggle "Disabled" state for selected objects (Hierarchy/Canvas).
+- **Alt + D:** Toggle "Disabled" state for selected objects.
+- **Alt + L:** Toggle "Locked" state (Prevents selection in Canvas).
 - **Ctrl + C / V:** Copy/Paste objects.
 - **Del:** Delete selected object.
 - **Space:** Select Scene (when over canvas).
