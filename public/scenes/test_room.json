@@ -119,36 +119,6 @@
   },
   "entities": [
     {
-      "type": "Actor",
-      "name": "Hero",
-      "x": -26.510728474472945,
-      "y": 23.833465453195974,
-      "width": 97.5,
-      "height": 58.5,
-      "baseWidth": 325,
-      "baseHeight": 195,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "sub_drawers_d1_id.json",
-      "color": "#00ffff",
-      "scale": 0.3,
-      "modelScale": 0.3,
-      "layer": -3,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "down",
-      "animSets": {}
-    },
-    {
       "type": "Quad",
       "name": "Quad_876",
       "x": -14.495437011995929,
@@ -163,6 +133,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.9,
+      "blendMode": "screen",
+      "blur": 5,
       "vertices": [
         {
           "x": -91.20434275633781,
@@ -186,20 +159,17 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.9,
-      "blendMode": "screen",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
       "name": "Quad_70",
       "x": -93.20165444660321,
-      "y": 88.97773425887672,
+      "y": 106.47773425887672,
       "color": "#888888",
       "layer": 0,
       "parallax": 1,
@@ -210,37 +180,37 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -177.34294388418894,
-          "y": 55.02883165256675,
+          "y": 72.52883165256675,
           "p": 1
         },
         {
           "x": 163.65705611581106,
-          "y": 55.02883165256675,
+          "y": 72.52883165256675,
           "p": 1
         },
         {
           "x": 372.58657359080007,
-          "y": 137.50190967235358,
+          "y": 155.00190967235358,
           "p": 1
         },
         {
           "x": -391,
-          "y": 138,
+          "y": 155.5,
           "p": 1
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 13,
       "lineWidth": 1,
       "gridColor": "#135317",
-      "filled": false,
-      "blur": 0
+      "filled": false
     },
     {
       "type": "Quad",
@@ -257,6 +227,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.15,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 25.062936087564026,
@@ -280,14 +253,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.15,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#103713",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -304,6 +274,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.15,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -84.8571722052854,
@@ -327,14 +300,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.15,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": false,
-      "blur": 0
+      "filled": false
     },
     {
       "type": "Quad",
@@ -351,6 +321,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.15,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -92.64524998327005,
@@ -374,14 +347,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.15,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": false,
-      "blur": 0
+      "filled": false
     },
     {
       "type": "Quad",
@@ -398,6 +368,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "overlay",
+      "blur": 16,
       "vertices": [
         {
           "x": -59.616073197465084,
@@ -421,14 +394,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "overlay",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 16
+      "filled": true
     },
     {
       "type": "Quad",
@@ -445,6 +415,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "lighter",
+      "blur": 16,
       "vertices": [
         {
           "x": 15.521169491667504,
@@ -468,20 +441,17 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 16
+      "filled": true
     },
     {
       "type": "Quad",
       "name": "Quad_6",
       "x": -88.20554008787711,
-      "y": -45.10088707482781,
+      "y": -67.10088707482781,
       "color": "#888888",
       "layer": 0,
       "parallax": 1,
@@ -492,37 +462,193 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -172.34682952546285,
-          "y": -79.04978968113778,
+          "y": -101.04978968113778,
           "p": 1
         },
         {
           "x": 168.65317047453715,
-          "y": -79.04978968113778,
+          "y": -101.04978968113778,
           "p": 1
         },
         {
           "x": 359.0890178956769,
-          "y": -181.01657973117193,
+          "y": -203.01657973117193,
           "p": 1
         },
         {
           "x": -361.75561999117247,
-          "y": -179.9143708047394,
+          "y": -201.9143708047394,
           "p": 1
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 13,
       "lineWidth": 1,
       "gridColor": "#135317",
-      "filled": false,
+      "filled": false
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_8",
+      "x": -93.20165444660321,
+      "y": 106.47773425887672,
+      "color": "#888888",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 2,
+      "vertices": [
+        {
+          "x": -177.34294388418894,
+          "y": 72.52883165256675,
+          "p": 1
+        },
+        {
+          "x": 163.65705611581106,
+          "y": 72.52883165256675,
+          "p": 1
+        },
+        {
+          "x": 372.58657359080007,
+          "y": 155.00190967235358,
+          "p": 1
+        },
+        {
+          "x": -391,
+          "y": 155.5,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "isGrid": true,
+      "gridLines": 13,
+      "lineWidth": 1,
+      "gridColor": "#135317",
+      "filled": false
+    },
+    {
+      "type": "Quad",
+      "name": "Quad_9",
+      "x": -88.20554008787711,
+      "y": -67.10088707482781,
+      "color": "#888888",
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 2,
+      "vertices": [
+        {
+          "x": -172.34682952546285,
+          "y": -101.04978968113778,
+          "p": 1
+        },
+        {
+          "x": 168.65317047453715,
+          "y": -101.04978968113778,
+          "p": 1
+        },
+        {
+          "x": 359.0890178956769,
+          "y": -203.01657973117193,
+          "p": 1
+        },
+        {
+          "x": -361.75561999117247,
+          "y": -201.9143708047394,
+          "p": 1
+        }
+      ],
+      "sortMode": "ignore",
+      "isGrid": true,
+      "gridLines": 13,
+      "lineWidth": 1,
+      "gridColor": "#135317",
+      "filled": false
+    },
+    {
+      "type": "Entity",
+      "name": "Static_70",
+      "x": 80,
+      "y": 9,
+      "width": 30,
+      "height": 30,
+      "baseWidth": 30,
+      "baseHeight": 30,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 1,
+      "modelScale": 1,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "overlay",
       "blur": 0
+    },
+    {
+      "type": "Actor",
+      "name": "Hero",
+      "x": -23.226115338953502,
+      "y": 23.265809919639196,
+      "width": 97.5,
+      "height": 58.5,
+      "baseWidth": 325,
+      "baseHeight": 195,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_id.json",
+      "color": "#00ffff",
+      "scale": 0.3,
+      "modelScale": 0.3,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "lighter",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.1,
+      "direction": "right",
+      "animSets": {}
     },
     {
       "type": "Entity",
@@ -548,7 +674,10 @@
       "customName": "",
       "groupID": "k",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -574,7 +703,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -600,7 +732,10 @@
       "customName": "",
       "groupID": "g1",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -626,7 +761,10 @@
       "customName": "",
       "groupID": "g2",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -643,6 +781,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.15,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -92.45689576203424,
@@ -666,14 +807,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.15,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#0b0e0b",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -690,6 +828,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 17,
       "vertices": [
         {
           "x": -58.117696823285996,
@@ -713,14 +854,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 17
+      "filled": true
     }
   ],
   "camera": {

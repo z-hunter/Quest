@@ -33,6 +33,9 @@ export interface EntityData {
     components?: any[];
     interactions?: Record<string, string>;
     visible?: boolean;
+    opacity?: number; // Added
+    blendMode?: string; // Added
+    blur?: number; // Added
 }
 
 export class Entity extends SceneObject {
@@ -88,6 +91,11 @@ export class Entity extends SceneObject {
     startLoading() {
         this.loadingRefCount++;
     }
+
+    // Visual Properties
+    opacity: number = 1.0;
+    blendMode: GlobalCompositeOperation = 'source-over';
+    blur: number = 0;
 
     endLoading() {
         if (this.loadingRefCount > 0) this.loadingRefCount--;
@@ -232,6 +240,14 @@ export class Entity extends SceneObject {
     render(ctx: CanvasRenderingContext2D): void {
         if (!this.visible) return;
 
+        // Save Context State
+        ctx.save();
+
+        // Apply Visual Properties
+        if (this.opacity < 1.0) ctx.globalAlpha = this.opacity;
+        if (this.blendMode !== 'source-over') ctx.globalCompositeOperation = this.blendMode;
+        if (this.blur > 0) ctx.filter = `blur(${this.blur}px)`;
+
         // Viewport Culling
         if (this.scene && this.scene.camera && ctx.canvas) {
             const cam = this.scene.camera;
@@ -307,6 +323,9 @@ export class Entity extends SceneObject {
             }
         }
 
+        // Restore Context State (resets alpha, blend, filter)
+        ctx.restore();
+
         // Draw Collider if active AND Editor is enabled
         if (Game.instance?.editor?.enabled && this.colliderWidth > 0 && this.colliderHeight > 0) {
             ctx.strokeStyle = Theme.mainColor;
@@ -345,7 +364,12 @@ export class Entity extends SceneObject {
             customName: this.customName,
             groupID: this.groupID,
             components: this.components,
-            interactions: this.interactions
+            interactions: this.interactions,
+
+            // New Visual Properties
+            opacity: this.opacity,
+            blendMode: this.blendMode,
+            blur: this.blur
         };
     }
 
@@ -416,6 +440,12 @@ export class Entity extends SceneObject {
                 // Pass isLoading (true) explicitly, or rely on internal flag
                 this.setSprite(data.spriteName, true);
             }
+
+            // Restore Visual Properties
+            if (data.opacity !== undefined) this.opacity = data.opacity;
+            if (data.blendMode !== undefined) this.blendMode = data.blendMode as GlobalCompositeOperation;
+            if (data.blur !== undefined) this.blur = data.blur;
+
         } finally {
             this.endLoading();
         }

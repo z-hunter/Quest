@@ -281,7 +281,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -307,52 +310,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
-    },
-    {
-      "type": "Actor",
-      "name": "Hero_1",
-      "x": 122.13292337004687,
-      "y": 197.82098745204755,
-      "width": 65.05197191280804,
-      "height": 265.6288853106328,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.6776247074250837,
-      "modelScale": 0.74,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
       "interactions": {},
-      "isPlayer": true,
-      "speed": 0.24,
-      "direction": "left",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -378,7 +339,58 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "type": "Actor",
+      "name": "Hero_1",
+      "x": 190.75771978135336,
+      "y": 255.02787403588582,
+      "width": 69.86457651889262,
+      "height": 285.28035411881154,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.7277560054051315,
+      "modelScale": 0.74,
+      "layer": 0,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Entity",
@@ -404,7 +416,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -430,7 +445,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -456,23 +474,26 @@
       "customName": "",
       "groupID": "#D",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
       "name": "sub_D2_body",
       "x": 134,
       "y": 311,
-      "width": 614.4,
-      "height": 407.4,
+      "width": 716.8,
+      "height": 475.29999999999995,
       "baseWidth": 1024,
       "baseHeight": 679,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d2.json",
       "color": "#00ff00",
-      "scale": 0.6,
-      "modelScale": 0.6,
+      "scale": 0.7,
+      "modelScale": 0.7,
       "layer": 4,
       "parallax": 1,
       "ignoreScaling": true,
@@ -482,7 +503,10 @@
       "customName": "",
       "groupID": "#D2",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -508,7 +532,10 @@
       "customName": "",
       "groupID": "#D1",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -539,7 +566,10 @@
           "ignoreDistance": true
         }
       ],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -565,7 +595,10 @@
       "customName": "",
       "groupID": "#D1",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -591,7 +624,10 @@
       "customName": "",
       "groupID": "#D",
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -622,7 +658,10 @@
           "target": "sub_sw_d1"
         }
       ],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     }
   ],
   "camera": {

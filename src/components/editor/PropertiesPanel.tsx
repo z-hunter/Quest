@@ -1117,6 +1117,48 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Visual Effects */}
+                        <div className="e-row">
+                            <label className="e-label">Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)</label>
+                            <input
+                                type="range"
+                                className="e-input"
+                                style={{ width: '100%' }}
+                                min="0" max="1" step="0.05"
+                                value={obj.opacity !== undefined ? obj.opacity : 1.0}
+                                onChange={(e) => handleChange('opacity', e.target.value, true)}
+                            />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Blur ({obj.blur || 0}px)</label>
+                            <input
+                                type="range"
+                                className="e-input"
+                                style={{ width: '100%' }}
+                                min="0" max="50" step="1"
+                                value={obj.blur || 0}
+                                onChange={(e) => handleChange('blur', parseInt(e.target.value))}
+                            />
+                        </div>
+
+                        <div className="e-row">
+                            <label className="e-label">Blend Mode</label>
+                            <Select
+                                value={obj.blendMode || 'source-over'}
+                                onChange={(value) => handleChange('blendMode', value)}
+                                options={[
+                                    { value: 'source-over', label: 'Normal' },
+                                    { value: 'multiply', label: 'Multiply' },
+                                    { value: 'screen', label: 'Screen' },
+                                    { value: 'overlay', label: 'Overlay' },
+                                    { value: 'lighter', label: 'Add (Lighter)' },
+                                    { value: 'difference', label: 'Difference' },
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
                         {/* Colliders */}
                         <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                             <div>
