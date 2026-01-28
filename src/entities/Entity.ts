@@ -139,10 +139,7 @@ export class Entity extends SceneObject {
         this.flipX = false;
         this.scene = null;
         this.loadingRefCount = 0;
-        this.visualOffset = { x: 0, y: 0 };
     }
-
-    visualOffset: { x: number; y: number };
 
     setSprite(filename: string, keepSize: boolean = false): void {
         // Auto-detect loading state if not explicitly set

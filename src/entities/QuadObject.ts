@@ -245,7 +245,7 @@ export class QuadObject extends Entity {
         // Standard Props
         if (data.x !== undefined) obj.x = data.x;
         if (data.y !== undefined) obj.y = data.y;
-        if (data.layer !== undefined) obj.layer = data.layer;
+        obj.layer = (data.layer !== undefined && Number.isFinite(Number(data.layer))) ? Number(data.layer) : 0;
         if (data.locked) obj.locked = data.locked;
         if (data.disabled) obj.disabled = data.disabled;
         if (data.visible !== undefined) obj.visible = data.visible;

@@ -65,7 +65,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -82,6 +85,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.1,
+      "blendMode": "lighter",
+      "blur": 0,
       "vertices": [
         {
           "x": 2.34,
@@ -105,14 +111,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.1,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Entity",
@@ -138,7 +141,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -164,7 +170,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -181,6 +190,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.9,
+      "blendMode": "overlay",
+      "blur": 0,
       "vertices": [
         {
           "x": -161.15,
@@ -204,14 +216,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.9,
-      "blendMode": "overlay",
       "isGrid": false,
       "gridLines": 2,
       "lineWidth": 1.6,
       "gridColor": "#1d1616",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -228,6 +237,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -199.36280668861116,
@@ -251,14 +263,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": true,
       "gridLines": 5,
       "lineWidth": 0.5,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -275,6 +284,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 201.75257762598838,
@@ -298,14 +310,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -322,6 +331,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.1,
+      "blendMode": "lighter",
+      "blur": 0,
       "vertices": [
         {
           "x": 98.68,
@@ -345,14 +357,11 @@
         }
       ],
       "sortMode": "v0",
-      "opacity": 0.1,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Entity",
@@ -378,7 +387,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -395,6 +407,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -1.8424309747189085,
@@ -418,14 +433,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -452,6 +464,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -449,
@@ -475,14 +490,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -507,6 +519,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -338,
@@ -530,14 +545,11 @@
         }
       ],
       "sortMode": "v0",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 9,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -554,6 +566,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "multiply",
+      "blur": 5,
       "vertices": [
         {
           "x": 48.23546261048095,
@@ -577,14 +592,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 1,
-      "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
@@ -601,6 +613,9 @@
       "groupID": "#lightSpots",
       "components": [],
       "interactions": {},
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "blur": 2,
       "vertices": [
         {
           "x": -301.38414142840855,
@@ -624,14 +639,11 @@
         }
       ],
       "sortMode": "v0",
-      "opacity": 0.2,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
+      "filled": true
     },
     {
       "type": "Quad",
@@ -648,6 +660,9 @@
       "groupID": "#lightSpots",
       "components": [],
       "interactions": {},
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "blur": 2,
       "vertices": [
         {
           "x": 6,
@@ -671,14 +686,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 0.2,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
+      "filled": true
     },
     {
       "type": "Quad",
@@ -695,6 +707,9 @@
       "groupID": "#lightSpots",
       "components": [],
       "interactions": {},
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "blur": 2,
       "vertices": [
         {
           "x": -139.12445128696197,
@@ -718,14 +733,11 @@
         }
       ],
       "sortMode": "v0",
-      "opacity": 0.2,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
+      "filled": true
     },
     {
       "type": "Quad",
@@ -742,6 +754,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 155.662541981541,
@@ -765,14 +780,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Entity",
@@ -798,7 +810,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -815,6 +830,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "multiply",
+      "blur": 5,
       "vertices": [
         {
           "x": -132.80181831192573,
@@ -838,14 +856,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
@@ -862,6 +877,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "multiply",
+      "blur": 5,
       "vertices": [
         {
           "x": 32.248250068332126,
@@ -885,14 +903,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
@@ -919,6 +934,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -164.72899239988428,
@@ -942,14 +960,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -966,6 +981,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -182.04473703579987,
@@ -989,14 +1007,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1036,6 +1051,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -181.59999999999997,
@@ -1059,14 +1077,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1093,6 +1108,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -212,
@@ -1116,14 +1134,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1140,6 +1155,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.2,
+      "blendMode": "lighter",
+      "blur": 2,
       "vertices": [
         {
           "x": -446.06674998967605,
@@ -1163,20 +1181,17 @@
         }
       ],
       "sortMode": "v0",
-      "opacity": 0.2,
-      "blendMode": "lighter",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
+      "filled": true
     },
     {
       "type": "Quad",
       "name": "shadow_hero",
-      "x": -113.66822126357384,
-      "y": 101.52658983240858,
+      "x": 14.071001446420272,
+      "y": 94.93352620462608,
       "color": "#535246",
       "layer": 0,
       "parallax": 1,
@@ -1187,37 +1202,37 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.5,
+      "blendMode": "multiply",
+      "blur": 5,
       "vertices": [
         {
-          "x": -113.66822126357384,
-          "y": 101.52658983240858,
-          "p": 0.8856589788371184
+          "x": 14.071001446420272,
+          "y": 94.93352620462608,
+          "p": 0.8497154855392388
         },
         {
-          "x": -89.0447827563387,
-          "y": 101.61233158077086,
-          "p": 0.8856589788371184
+          "x": 38.69443995365543,
+          "y": 95.01926795298836,
+          "p": 0.8497154855392388
         },
         {
-          "x": -128.83467944073058,
-          "y": 138.28260470496252,
-          "p": 0.8836222675152638
+          "x": -1.0954567307364549,
+          "y": 131.68954107718002,
+          "p": 0.865940621302166
         },
         {
-          "x": -136.3346794407295,
-          "y": 127.28260470496265,
-          "p": 0.8836222675152638
+          "x": -8.595456730735375,
+          "y": 120.68954107718015,
+          "p": 0.865940621302166
         }
       ],
       "sortMode": "v2",
-      "opacity": 0.5,
-      "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1244,6 +1259,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -183.61963904840187,
@@ -1267,14 +1285,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1301,6 +1316,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -208.61963904840184,
@@ -1324,14 +1342,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1348,6 +1363,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -211.45932857364383,
@@ -1371,14 +1389,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1395,6 +1410,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 154.162541981541,
@@ -1418,14 +1436,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1442,6 +1457,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 10,
@@ -1465,14 +1483,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Entity",
@@ -1498,7 +1513,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -1515,6 +1533,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 35,
@@ -1538,14 +1559,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Entity",
@@ -1571,7 +1589,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -1588,6 +1609,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.2,
+      "blendMode": "screen",
+      "blur": 5,
       "vertices": [
         {
           "x": -137.70178586019702,
@@ -1611,14 +1635,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 0.2,
-      "blendMode": "screen",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1635,6 +1656,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "multiply",
+      "blur": 5,
       "vertices": [
         {
           "x": 10.235462610480951,
@@ -1658,14 +1682,11 @@
         }
       ],
       "sortMode": "v1",
-      "opacity": 1,
-      "blendMode": "multiply",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 5
+      "filled": true
     },
     {
       "type": "Entity",
@@ -1691,7 +1712,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Entity",
@@ -1717,7 +1741,10 @@
       "customName": "",
       "groupID": null,
       "components": [],
-      "interactions": {}
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     },
     {
       "type": "Quad",
@@ -1744,6 +1771,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -238.11111111111117,
@@ -1767,14 +1797,67 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
+    },
+    {
+      "type": "Actor",
+      "name": "miles_ds",
+      "x": 27.071001446420272,
+      "y": 97.93352620462608,
+      "width": 25.488171778293825,
+      "height": 104.07670142803312,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "colliderWidth": 32,
+      "colliderHeight": 6,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.26550178935722735,
+      "modelScale": 0.33,
+      "layer": 1,
+      "parallax": 0.8497154855392388,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "locked": false,
+      "disabled": false,
+      "customName": "",
+      "groupID": null,
+      "components": [
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow_hero",
+          "offsetX": -13,
+          "offsetY": -3,
+          "triggerId": "#lightSpots"
+        }
+      ],
+      "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.14,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      }
     },
     {
       "type": "Quad",
@@ -1801,6 +1884,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -212,
@@ -1824,67 +1910,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
-    },
-    {
-      "type": "Actor",
-      "name": "miles_ds",
-      "x": -100.66822126357384,
-      "y": 104.52658983240858,
-      "width": 26.151245606002234,
-      "height": 106.7842528911758,
-      "baseWidth": 96,
-      "baseHeight": 392,
-      "colliderWidth": 32,
-      "colliderHeight": 6,
-      "spriteName": "miles_ds-idle-right.json",
-      "color": "#00ffff",
-      "scale": 0.2724088083958566,
-      "modelScale": 0.33,
-      "layer": 1,
-      "parallax": 0.8856589788371184,
-      "ignoreScaling": false,
-      "animationSpeed": 30,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow_hero",
-          "offsetX": -13,
-          "offsetY": -3,
-          "triggerId": "#lightSpots"
-        }
-      ],
-      "interactions": {},
-      "isPlayer": true,
-      "speed": 0.14,
-      "direction": "right",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1901,6 +1931,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -241,
@@ -1924,14 +1957,11 @@
         }
       ],
       "sortMode": "v2",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1948,6 +1978,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -289,
@@ -1971,14 +2004,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#1c9245",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -1995,6 +2025,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": -449,
@@ -2018,14 +2051,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -2042,6 +2072,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
           "x": 201.75257762598838,
@@ -2065,14 +2098,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 0
+      "filled": true
     },
     {
       "type": "Quad",
@@ -2099,6 +2129,9 @@
         }
       ],
       "interactions": {},
+      "opacity": 0.75,
+      "blendMode": "source-over",
+      "blur": 2,
       "vertices": [
         {
           "x": -210.302895196638,
@@ -2122,14 +2155,11 @@
         }
       ],
       "sortMode": "ignore",
-      "opacity": 0.75,
-      "blendMode": "source-over",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
+      "filled": true
     },
     {
       "type": "Quad",
@@ -2146,6 +2176,9 @@
       "groupID": null,
       "components": [],
       "interactions": {},
+      "opacity": 0.5,
+      "blendMode": "screen",
+      "blur": 10,
       "vertices": [
         {
           "x": 88.25,
@@ -2169,14 +2202,11 @@
         }
       ],
       "sortMode": "v3",
-      "opacity": 0.5,
-      "blendMode": "screen",
       "isGrid": false,
       "gridLines": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 10
+      "filled": true
     }
   ],
   "camera": {
@@ -2184,7 +2214,7 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5,
   "camDeadzoneX": 50,
   "camDeadzoneY": 30,

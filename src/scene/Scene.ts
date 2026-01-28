@@ -693,8 +693,12 @@ export class Scene {
             // 1. Layer (Explicit user control) - Support 'renderLayer' override
             // 2. Y-Position (Depth) - includes custom Quad logic
 
-            const layerA = (a as any).renderLayer !== undefined ? (a as any).renderLayer : a.layer;
-            const layerB = (b as any).renderLayer !== undefined ? (b as any).renderLayer : b.layer;
+            const rawLayerA = (a as any).renderLayer !== undefined ? (a as any).renderLayer : a.layer;
+            const rawLayerB = (b as any).renderLayer !== undefined ? (b as any).renderLayer : b.layer;
+
+            // Robust Parse
+            const layerA = Number.isFinite(Number(rawLayerA)) ? Number(rawLayerA) : 0;
+            const layerB = Number.isFinite(Number(rawLayerB)) ? Number(rawLayerB) : 0;
 
             if (layerA !== layerB) return layerA - layerB;
 
@@ -782,9 +786,14 @@ export class Scene {
             // Center Pivot Transform
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
-            const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
-            const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-            ctx.translate(-this.camera.x * p + vOx, -this.camera.y * p + vOy);
+            ctx.translate(-this.camera.x * p, -this.camera.y * p);
+
+            // DEBUG TRACE
+            if (this.entities.length > 0 && Math.random() < 0.005) {
+                if (entity.name === 'Quad_102' || entity.name === 'Quad_70') {
+                    console.log(`[RenderTrace] Drawing ${entity.name} (L:${entity.layer})`);
+                }
+            }
 
             entity.render(ctx);
             ctx.restore();
@@ -843,9 +852,7 @@ export class Scene {
             ctx.save();
             ctx.translate(halfW, halfH);
             ctx.scale(this.camera.zoom, this.camera.zoom);
-            const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
-            const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-            ctx.translate(-this.camera.x * p + vOx, -this.camera.y * p + vOy);
+            ctx.translate(-this.camera.x * p, -this.camera.y * p);
 
             entity.render(ctx);
             ctx.restore();

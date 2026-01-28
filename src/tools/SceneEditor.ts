@@ -1296,11 +1296,8 @@ export class SceneEditor {
         const unzoomedX = (targetScreenX - halfW) / zoom;
         const unzoomedY = (targetScreenY - halfH) / zoom;
 
-        const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-        const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-
-        entity.x = Math.round(unzoomedX + camX * p - vOx);
-        entity.y = Math.round(unzoomedY + camY * p - vOy);
+        entity.x = Math.round(unzoomedX + camX * p);
+        entity.y = Math.round(unzoomedY + camY * p);
 
         this.updateUIFromObject();
     }
