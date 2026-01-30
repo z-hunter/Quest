@@ -10,6 +10,7 @@
 - [x] **Entity Visual Properties:** Added Opacity, Blur, and Blend Mode support to Entity, Static, and Actor classes.
 - [x] **Sprite Editor Fixes:** Resolved issues with saving and path handling.
 - [x] **Subscene & Undo Fixes:** Resolved rendering context leaks and deep serialization issues for Undo.
+- [x] **Anchor-Based Parallax:** Removed `visualOffset` and replaced it with Editor-side coordinate compensation for a smoother workflow.
 
 ## Active/Pending Tasks
 - [ ] **Interaction Scripting:** Implement more complex demo scripts in `src/scripts/main.ts` to test `Subscene`, `Switch`, and `Subtrigger`.

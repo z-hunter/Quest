@@ -19,6 +19,9 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - Components (Subscene, Switch, etc.) use a unified syntax for targeting objects: `objectID` or `#groupID`.
   - `Scene.resolveTarget(query)` is the central utility for resolving IDs and Groups into object lists.
   - Group IDs must start with `#`.
+- **Anchor-Based Parallax:**
+  - Logic shifted from runtime `visualOffset` to editor-side coordinate compensation.
+  - When an object's parallax changes, the editor automatically adjusts its X/Y coordinates to keep it visually stationary relative to the camera anchor.
 - **Component-Based Logic:** Objects like `TriggerBox` or `Quad` can have optional components (e.g., `SubsceneComponent`, `BackfaceComponent`) that encapsulate behavior.
 - **Scripting:**
   - Simplified registration in `src/scripts/main.ts`.

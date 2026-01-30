@@ -133,10 +133,11 @@ export class ComponentSystem {
                     actor.parallax = newP;
 
                     // Correction: Counteract horizontal drift caused by Parallax Perspective
-                    // VisualX = WorldX - CamX * P. We want VisualX to mimic P=1 behavior (Orthographic X).
-                    // Offset = CamX * (P - 1.0)
-                    if (!actor.visualOffset) actor.visualOffset = { x: 0, y: 0 };
-                    actor.visualOffset.x = camX * (newP - 1.0);
+                    // Move the entity in World Space so its Visual Position remains constant
+                    const dP = newP - pFactor; // pFactor is the old parallax
+                    actor.x += camX * dP;
+                    actor.y += camY * dP;
+
                     // console.log(`[3D-Parallax] Actor ${actor.name} P updated to ${newP.toFixed(3)} (T=${clampedT.toFixed(2)})`);
                 }
             }
@@ -169,8 +170,8 @@ export class ComponentSystem {
         const shiftX = -camX * (pFactor - 1.0);
         const shiftY = -camY * (pFactor - 1.0);
 
-        const vOx = actor.visualOffset ? actor.visualOffset.x : 0;
-        const vOy = actor.visualOffset ? actor.visualOffset.y : 0;
+        const vOx = 0;
+        const vOy = 0;
 
         const checkX = ax + shiftX + vOx;
         const checkY = ay + shiftY + vOy;
@@ -257,16 +258,7 @@ export class ComponentSystem {
                     qObj.y = targetY;
                 }
 
-                // Sync Visual Offset (For 3D Parallax Correction)
-                if (actor.visualOffset) {
-                    if (!qObj.visualOffset) qObj.visualOffset = { x: 0, y: 0 };
-                    qObj.visualOffset.x = actor.visualOffset.x;
-                    qObj.visualOffset.y = actor.visualOffset.y;
-                } else if (qObj.visualOffset) {
-                    // Reset if actor has no offset
-                    qObj.visualOffset.x = 0;
-                    qObj.visualOffset.y = 0;
-                }
+
 
             } else {
                 // Outside
