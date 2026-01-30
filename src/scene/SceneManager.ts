@@ -1,4 +1,5 @@
 import { Scene } from './Scene';
+import type { IGame } from '../core/IGame';
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { Walkbox } from '../entities/Walkbox';
@@ -6,11 +7,11 @@ import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
 
 export class SceneManager {
-    game: any;
+    game: IGame;
     currentScene: Scene | null;
     scenes: Map<string, Scene>;
 
-    constructor(game: any) {
+    constructor(game: IGame) {
         this.game = game;
         this.currentScene = null;
         this.scenes = new Map();
@@ -85,7 +86,7 @@ export class SceneManager {
             // 2. data.id (from json)
             // 3. Fallback
             const sceneId = filename || data.id || 'loaded_scene';
-            const newScene = new Scene(sceneId, data.name || 'Untitled');
+            const newScene = new Scene(this.game, sceneId, data.name || 'Untitled');
 
             if (filename) {
                 // Determine filename for saving (forward slashes)
@@ -157,14 +158,14 @@ export class SceneManager {
 
                     if (entityData.type === 'Player') {
                         // Legacy: Convert Player to Actor
-                        entity = Actor.fromJSON({ ...entityData, type: 'Actor', isPlayer: true });
+                        entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
                     } else if (entityData.type === 'Actor') {
-                        entity = Actor.fromJSON(entityData);
+                        entity = Actor.fromJSON(this.game, entityData);
                         if (entityData.isPlayer) (entity as Actor).isPlayer = true;
                     } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
-                        entity = QuadObject.fromJSON(entityData);
+                        entity = QuadObject.fromJSON(this.game, entityData);
                     } else {
-                        entity = Entity.fromJSON(entityData);
+                        entity = Entity.fromJSON(this.game, entityData);
                     }
 
                     // Restore common properties

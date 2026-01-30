@@ -13,7 +13,9 @@ import { AudioManager } from './AudioManager';
 
 import { Console } from './Console';
 
-export class Game {
+import type { IGame } from './IGame';
+
+export class Game implements IGame {
     public static instance: Game;
 
     canvas: HTMLCanvasElement; // UI Canvas
@@ -50,7 +52,8 @@ export class Game {
     public isMouseOverUI: boolean = false;
 
     // Callbacks for React
-    onSceneChange: ((title: string) => void) | null = null;
+    // Callbacks for React
+    onSceneChange: ((sceneName: string) => void) | undefined;
     onMessage: ((text: string) => void) | null = null;
     onRequestFileBrowser: ((mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string) => void) | null = null;
 
@@ -280,6 +283,8 @@ export class Game {
         }
     }
 
+    consoleInput: HTMLInputElement | null = null; // Cache DOM element
+
     renderUI(ctx: CanvasRenderingContext2D): void {
         const w = this.bufferCanvas.width;
         const h = this.bufferCanvas.height;
@@ -326,9 +331,12 @@ export class Game {
 
         // --- INPUT LINE ---
         // Read Input from Hidden DOM Element
-        const input = document.getElementById('parser-input') as HTMLInputElement;
-        const inputText = input ? input.value : '';
-        const isFocused = document.activeElement === input;
+        if (!this.consoleInput) {
+            this.consoleInput = document.getElementById('parser-input') as HTMLInputElement;
+        }
+
+        const inputText = this.consoleInput ? this.consoleInput.value : '';
+        const isFocused = document.activeElement === this.consoleInput;
 
         // Cursor Blink (Only if focused)
         let cursor = '';

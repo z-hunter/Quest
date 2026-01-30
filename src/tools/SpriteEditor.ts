@@ -1,5 +1,5 @@
 
-import { Game } from '../core/Game';
+import type { IGame } from '../core/IGame';
 import { useEditorStore } from '../store/editorStore';
 import { Theme } from '../utils/Theme';
 
@@ -14,7 +14,7 @@ export interface SpriteData {
 }
 
 export class SpriteEditor {
-    game: Game;
+    game: IGame;
 
     get active(): boolean {
         return useEditorStore.getState().spriteEditorEnabled;
@@ -37,7 +37,7 @@ export class SpriteEditor {
     previewBg: 'black' | 'checker' | 'pink' = 'black';
     showRulers: boolean = false;
 
-    constructor(game: Game) {
+    constructor(game: IGame) {
         this.game = game;
 
         // Default Sprite
@@ -106,7 +106,8 @@ export class SpriteEditor {
     handleKey(e: KeyboardEvent): void {
         // HMR/Reload Protection:
         // If this editor belongs to an old Game instance (zombie), kill the listener.
-        if (this.game !== Game.instance) {
+        const globalGame = (window as any).game;
+        if (globalGame && this.game !== globalGame) {
             console.warn('[SpriteEditor] Detected Zombie Instance - Removing Listener');
             document.removeEventListener('keydown', this.boundKeyHandler, true);
             return;

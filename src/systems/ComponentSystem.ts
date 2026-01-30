@@ -59,6 +59,8 @@ export interface WalkBoxComponent {
     mode?: 'Invert' | 'Add' | 'Subtract';
 }
 
+import type { IGame } from '../core/IGame';
+
 export class ComponentSystem {
 
     static update(entity: SceneObject, dt: number) {
@@ -437,7 +439,7 @@ export class ComponentSystem {
             if (dist > allowedDist) {
                 console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
                 // @ts-ignore
-                const game = window.game;
+                const game = scene.game as IGame;
                 if (game && typeof game.showMessage === 'function') {
                     game.showMessage("You are too far away.");
                 }
@@ -471,7 +473,7 @@ export class ComponentSystem {
         // 1. Check Key
         if (sw.idKey) {
             // @ts-ignore
-            const game = window.game;
+            const game = scene.game as IGame;
             // @ts-ignore
             if (game && game.inventory) {
                 // @ts-ignore
@@ -493,7 +495,7 @@ export class ComponentSystem {
 
         // 3. Audio
         // @ts-ignore
-        const game = window.game;
+        const game = scene.game as IGame;
         if (game) {
             if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
             if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);

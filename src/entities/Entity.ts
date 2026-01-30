@@ -1,5 +1,5 @@
 import { Animator } from '../core/Animator';
-import { Game } from '../core/Game';
+import type { IGame } from '../core/IGame';
 import { SceneObject } from './SceneObject';
 import { Theme } from '../utils/Theme';
 
@@ -102,9 +102,11 @@ export class Entity extends SceneObject {
     }
 
     animationSpeed: number; // Added
+    game: IGame;
 
-    constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
+    constructor(game: IGame, x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         super(name, 'Static');
+        this.game = game;
         this.x = x;
         this.y = y;
 
@@ -155,7 +157,9 @@ export class Entity extends SceneObject {
 
         // Capture current dimensions target if we need to preserve them
 
-        Game.instance.assets.loadSprite(filename)
+        // Capture current dimensions target if we need to preserve them
+
+        this.game.assets.loadSprite(filename)
             .then(data => {
                 const { json, image } = data;
 
@@ -187,7 +191,7 @@ export class Entity extends SceneObject {
                 newAnimator.play('default');
 
                 // 3. Apply
-                console.log(`[Entity] Applying sprite: ${filename} | keepSize: ${keepSize}`);
+                // console.log(`[Entity] Applying sprite: ${filename} | keepSize: ${keepSize}`);
 
                 if (keepSize) {
                     // Preserve existing visual dimensions
@@ -214,8 +218,8 @@ export class Entity extends SceneObject {
         if (!this.ignoreScaling) {
             if (this.scene && this.scene.scaling && this.scene.scaling.enabled) {
                 depthFactor = this.scene.getScaling(this.y);
-            } else if (Game.instance && Game.instance.sceneManager && Game.instance.sceneManager.currentScene) {
-                const scene = Game.instance.sceneManager.currentScene;
+            } else if (this.game && this.game.sceneManager && this.game.sceneManager.currentScene) {
+                const scene = this.game.sceneManager.currentScene;
                 if (scene.scaling && scene.scaling.enabled) {
                     depthFactor = scene.getScaling(this.y);
                 }
@@ -315,7 +319,7 @@ export class Entity extends SceneObject {
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
 
-            if (Game.instance?.editor?.enabled) {
+            if (this.game.editor && this.game.editor.enabled) {
                 ctx.fillStyle = Theme.mainColor;
                 ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
             }
@@ -325,7 +329,7 @@ export class Entity extends SceneObject {
         ctx.restore();
 
         // Draw Collider if active AND Editor is enabled
-        if (Game.instance?.editor?.enabled && this.colliderWidth > 0 && this.colliderHeight > 0) {
+        if (this.game.editor && this.game.editor.enabled && this.colliderWidth > 0 && this.colliderHeight > 0) {
             ctx.strokeStyle = Theme.mainColor;
             ctx.lineWidth = 2; // Make it visible
             ctx.strokeRect(
@@ -449,10 +453,10 @@ export class Entity extends SceneObject {
         }
     }
 
-    static fromJSON(data: EntityData): Entity {
+    static fromJSON(game: IGame, data: EntityData): Entity {
         // Factory pattern should be used here or by caller, but for backward compatibility:
         // Use the instance load method.
-        const entity = new Entity(data.x, data.y, data.width, data.height, data.name);
+        const entity = new Entity(game, data.x, data.y, data.width, data.height, data.name);
         entity.load(data);
         return entity;
     }

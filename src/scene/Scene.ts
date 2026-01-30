@@ -6,6 +6,7 @@ import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
+import type { IGame } from '../core/IGame';
 
 export interface SceneScaling {
     enabled: boolean;
@@ -35,6 +36,8 @@ export interface SceneData {
 }
 
 export class Scene {
+    game: IGame;
+
     id: string;
     name: string;
     filename: string;
@@ -142,9 +145,8 @@ export class Scene {
                             if (sw.state == 2) {
                                 console.log(`  -> [AutoReset] Resetting Switch in '${obj.name}' to State 1`);
                                 sw.state = 1;
-                                if (sw.sound1 && typeof window !== 'undefined') {
-                                    // @ts-ignore
-                                    if (window.game) window.game.playSound(sw.sound1);
+                                if (sw.sound1) {
+                                    this.game.playSound(sw.sound1);
                                 }
                             }
                         }
@@ -167,7 +169,8 @@ export class Scene {
     private _walkboxCanvas: HTMLCanvasElement | null = null;
     private _blurCanvas: HTMLCanvasElement | null = null;
 
-    constructor(id: string, name: string) {
+    constructor(game: IGame, id: string, name: string) {
+        this.game = game;
         this.id = id;
         this.name = name;
         this.filename = ''; // Default empty

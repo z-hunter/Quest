@@ -1,7 +1,7 @@
 import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
-// import { Game } from '../core/Game';
+import type { IGame } from '../core/IGame';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -38,8 +38,8 @@ export class Actor extends Entity {
 
     isPlayer: boolean = false;
 
-    constructor(x: number, y: number, width: number = 30, height: number = 30, name: string = 'Actor') {
-        super(x, y, width, height, name);
+    constructor(game: IGame, x: number, y: number, width: number = 30, height: number = 30, name: string = 'Actor') {
+        super(game, x, y, width, height, name);
         this.direction = 'down';
         this.state = 'idle';
         this.speed = 0.1;
@@ -55,8 +55,7 @@ export class Actor extends Entity {
 
     notifyEditor() {
         // If this object is currently selected in the editor, notify the UI to refresh
-        const game = (window as any).game;
-        if (game && game.editor && game.editor.selectedObject === this) {
+        if (this.game && this.game.editor && this.game.editor.selectedObject === this) {
             useEditorStore.getState().incrementObjectVersion();
         }
     }
@@ -135,7 +134,7 @@ export class Actor extends Entity {
         // Update Components
         ComponentSystem.update(this, deltaTime);
 
-        console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
+        // console.log(`[Actor] update state=${this.state} target=${this.target ? 'YES' : 'NO'} isWalkable=${!!isWalkable}`);
 
         if (this.isPlayer) {
             this.handlePlayerInput(deltaTime, isWalkable);
@@ -180,8 +179,7 @@ export class Actor extends Entity {
     }
 
     handlePlayerInput(deltaTime: number, isWalkable?: (x: number, y: number) => boolean) {
-        // @ts-ignore
-        const game = window.game;
+        const game = this.game;
         const input = game?.input;
 
         // Block input if mouse is over UI
@@ -336,8 +334,8 @@ export class Actor extends Entity {
         }
     }
 
-    static override fromJSON(data: ActorData): Actor {
-        const actor = new Actor(data.x, data.y, data.width, data.height, data.name);
+    static override fromJSON(game: IGame, data: ActorData): Actor {
+        const actor = new Actor(game, data.x, data.y, data.width, data.height, data.name);
         actor.load(data);
         return actor;
     }

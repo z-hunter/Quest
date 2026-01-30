@@ -1,4 +1,5 @@
 import { Entity } from './Entity';
+import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { Geometry } from '../utils/Geometry';
 
@@ -14,8 +15,8 @@ export class QuadObject extends Entity {
     vertices: QuadVertex[];
     color: string;
 
-    constructor(name: string) {
-        super(0, 0, 100, 100, name);
+    constructor(game: IGame, name: string) {
+        super(game, 0, 0, 100, 100, name);
         this.type = 'Quad';
         this.color = '#888888'; // Default Gray
 
@@ -179,7 +180,7 @@ export class QuadObject extends Entity {
 
         // Draw Collider if active AND Editor is enabled
         // @ts-ignore
-        if (window.game?.editor?.enabled && this.selected) {
+        if (this.game && this.game.editor && this.game.editor.enabled && this.selected) {
             // Selection outline? Handled by Editor usually?
             // Editor draws handles. We don't need to draw extra stuff here.
         }
@@ -240,8 +241,8 @@ export class QuadObject extends Entity {
         };
     }
 
-    static fromJSON(data: any): QuadObject {
-        const obj = new QuadObject(data.name);
+    static fromJSON(game: IGame, data: any): QuadObject {
+        const obj = new QuadObject(game, data.name);
         // Standard Props
         if (data.x !== undefined) obj.x = data.x;
         if (data.y !== undefined) obj.y = data.y;
