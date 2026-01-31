@@ -180,6 +180,7 @@
     width: 100%;
     box-sizing: border-box;
     z-index: 200;
+    position: relative;
 }
 
 .e-menu-btn {
@@ -213,11 +214,11 @@
 }
 
 .fps-counter {
-    margin-left: auto;
+    position: absolute;
+    right: 10px;
     font-family: monospace;
     font-weight: bold;
     color: var(--ui-text-dim, #666);
-    padding-right: 10px;
 }
 
 /* ... existing code ... */
