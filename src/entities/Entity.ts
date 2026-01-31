@@ -39,8 +39,25 @@ export interface EntityData {
 }
 
 export class Entity extends SceneObject {
-    x: number;
-    y: number;
+    private _x: number = 0;
+    get x(): number { return this._x; }
+    set x(val: number) {
+        if (this._x === val) return;
+        this._x = val;
+        if (this.game.editor && this.game.editor.enabled) {
+            this.game.editor.selectionManager.notifyObjectChanged(this);
+        }
+    }
+
+    private _y: number = 0;
+    get y(): number { return this._y; }
+    set y(val: number) {
+        if (this._y === val) return;
+        this._y = val;
+        if (this.game.editor && this.game.editor.enabled) {
+            this.game.editor.selectionManager.notifyObjectChanged(this);
+        }
+    }
 
     // Smart Properties: Width/Height are derived from Base * Scale
     get width(): number {
@@ -77,7 +94,16 @@ export class Entity extends SceneObject {
     animator: Animator | null;
     flipX: boolean;
     scene: any; // Reference to the scene this entity belongs to
-    parallax: number;
+
+    private _parallax: number = 1.0;
+    get parallax(): number { return this._parallax; }
+    set parallax(val: number) {
+        if (this._parallax === val) return;
+        this._parallax = val;
+        if (this.game.editor && this.game.editor.enabled) {
+            this.game.editor.selectionManager.notifyObjectChanged(this);
+        }
+    }
     ignoreScaling: boolean;
     // locked: boolean; // Inherited from SceneObject
     // readonly type: string = 'Static'; // Inherited
@@ -100,6 +126,15 @@ export class Entity extends SceneObject {
     endLoading() {
         if (this.loadingRefCount > 0) this.loadingRefCount--;
     }
+
+    // Layer needs accessors too since it's common
+    // Note: Layer is on SceneObject base, but usually safe to override or we should update SceneObject?
+    // SceneObject defines: layer: number; 
+    // To override as accessor, we need to change SceneObject OR just use defineProperty in constructor?
+    // Actually typescript allows override if compatible.
+    // But to keep it simple, let's start with x, y, parallax.
+    // If we need layer reactive, we should move it to SceneObject accessor or override here.
+    // Let's stick to x,y,parallax,width,height for now.
 
     animationSpeed: number; // Added
     game: IGame;
@@ -127,8 +162,9 @@ export class Entity extends SceneObject {
         this.spriteName = null;
         this.image = null;
         this.modelScale = 1.0;
+        this.opacity = 1.0;
         // this.layer = 0; // Inherited
-        this.parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
+        this._parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
         this.ignoreScaling = false;
         this.animationSpeed = 150; // Default 150ms
         // this.locked = false; // Inherited

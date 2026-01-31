@@ -1,13 +1,11 @@
 
 import { SceneEditor } from '../SceneEditor';
 import { SceneObject } from '../../entities/SceneObject';
-import { QuadObject } from '../../entities/QuadObject';
 import { Actor } from '../../entities/Actor';
 import { Entity } from '../../entities/Entity';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { useEditorStore } from '../../store/editorStore';
-import { Scene } from '../../scene/Scene';
 
 export class EditorSelectionManager {
     private editor: SceneEditor;
@@ -186,14 +184,6 @@ export class EditorSelectionManager {
             }
 
             // Helper to get World Coords - delegating to Editor for now
-            // Or implementing localized version if simple?
-            // SceneEditor has `getMouseWorldPosIfOverCanvas` but that uses current mouse from Store/Event?
-            // `this.editor.lastMousePos` is screen coords.
-            // We need screen -> world.
-            // Let's assume SceneEditor exposes a helper or we implement one.
-            // Looking at original code, it called `this.convertScreenToWorld`.
-            // We will assume/ensure SceneEditor has this method public.
-
             // @ts-ignore
             const worldPos = this.editor.convertScreenToWorld(this.editor.lastMousePos.x, this.editor.lastMousePos.y);
 
@@ -240,6 +230,25 @@ export class EditorSelectionManager {
 
         } catch (e) {
             console.error("Paste Failed:", e);
+        }
+    }
+
+    private dirty = false;
+    private _selectedObject: SceneObject | null = null;
+
+    get selectedObject(): SceneObject | null { return this._selectedObject; }
+    set selectedObject(val: SceneObject | null) { this._selectedObject = val; }
+
+    notifyObjectChanged(obj: SceneObject): void {
+        // Only update UI if the changed object is the currently selected one
+        if (obj !== this._selectedObject) return;
+
+        if (!this.dirty) {
+            this.dirty = true;
+            requestAnimationFrame(() => {
+                useEditorStore.getState().incrementObjectVersion();
+                this.dirty = false;
+            });
         }
     }
 }
