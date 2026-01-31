@@ -6,6 +6,15 @@ export const EditorBottomMenu: React.FC = () => {
     const game = useGame();
     const { toggle, toggleSpriteEditor } = useEditorStore();
 
+    const [fps, setFps] = React.useState(0);
+
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            setFps(game.fps);
+        }, 500);
+        return () => clearInterval(interval);
+    }, [game]);
+
     const handleAction = (action: string) => {
         const editor = game.editor;
 
@@ -41,6 +50,9 @@ export const EditorBottomMenu: React.FC = () => {
                     {k.label.split(' ').slice(1).join(' ')}
                 </button>
             ))}
+            <div className="fps-counter">
+                FPS: {fps}
+            </div>
         </div>
     );
 };

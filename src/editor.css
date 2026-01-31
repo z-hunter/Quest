@@ -212,6 +212,14 @@
     /* reset on hover */
 }
 
+.fps-counter {
+    margin-left: auto;
+    font-family: monospace;
+    font-weight: bold;
+    color: var(--ui-text-dim, #666);
+    padding-right: 10px;
+}
+
 /* ... existing code ... */
 
 /* Entity List Items */

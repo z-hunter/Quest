@@ -48,6 +48,11 @@ export class Game implements IGame {
     score: number = 0;
     cursorBlink: number = 0;
 
+    // FPS Counter
+    fps: number = 0;
+    frameCount: number = 0;
+    lastFpsTime: number = 0;
+
     // UI State
     public isMouseOverUI: boolean = false;
 
@@ -180,6 +185,14 @@ export class Game implements IGame {
         try {
             let deltaTime = timestamp - this.lastTime;
             this.lastTime = timestamp;
+
+            // FPS Calculation
+            this.frameCount++;
+            if (timestamp - this.lastFpsTime >= 1000) {
+                this.fps = this.frameCount;
+                this.frameCount = 0;
+                this.lastFpsTime = timestamp;
+            }
 
             // Cap delta time to prevent spiraling or fast-forwarding after backgrounding
             // If the game was in the background, this prevents animations from trying to "catch up"
