@@ -10,25 +10,24 @@ import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
+import { EditorUndoManager } from './editor/EditorUndoManager';
+import { EditorSelectionManager } from './editor/EditorSelectionManager';
+import { EditorTransformManager } from './editor/EditorTransformManager';
+import { EditorUI } from './editor/EditorUI';
+
 export class SceneEditor {
+    undoManager: EditorUndoManager;
+    selectionManager: EditorSelectionManager;
+    transformManager: EditorTransformManager;
+    ui: EditorUI;
+
     game: any;
     enabled: boolean;
     // State Properties
-    currentPolygon: { x: number, y: number }[];
-    selectedObject: SceneObject | null;
-    isDragging: boolean;
-    dragOffset: { x: number, y: number };
-    isPanning: boolean;
+    get selectedObject(): SceneObject | null { return this.selectionManager.selectedObject; }
+    set selectedObject(val: SceneObject | null) { this.selectionManager.selectedObject = val; }
     lastMousePos: { x: number, y: number };
-    lastPanPos: { x: number, y: number };
-    creationType: 'Walkbox' | 'Triggerbox' = 'Walkbox';
-    draggingVertexIndex: number = -1;
-    undoBuffer: any = null; // Stores SceneData for Undo
-    drawMode: boolean = false;
 
-    resizingHandle: string | null = null;
-
-    // Callbacks
     // Callbacks
     // Refactored: Use this.game.openFileBrowser instead of local property
 
@@ -41,16 +40,14 @@ export class SceneEditor {
 
     constructor(game: any) {
         this.game = game;
+        this.undoManager = new EditorUndoManager(this);
+        this.selectionManager = new EditorSelectionManager(this);
+        this.transformManager = new EditorTransformManager(this);
+        this.ui = new EditorUI(this);
         this.enabled = false;
 
-        this.currentPolygon = [];
-        this.selectedObject = null;
-        this.isDragging = false;
-        this.dragOffset = { x: 0, y: 0 };
-        this.isPanning = false;
+        this.selectionManager.selectedObject = null;
         this.lastMousePos = { x: 0, y: 0 };
-        this.lastPanPos = { x: 0, y: 0 };
-        this.drawMode = false;
 
         // Bind handlers once for cleanup
 
@@ -64,55 +61,19 @@ export class SceneEditor {
     private uiInitialized = false;
 
     initUI(): void {
-        if (this.uiInitialized) return;
-
-        console.log('[SceneEditor] Initializing UI...');
-        // Event delegation or static binding for non-React elements?
-        // Note: React manages creation of elements, so we should bind events dynamically or use delegation.
-        // However, for input fields, we can bind 'oninput' if we can find them.
-
-        // We will bind 'change' / 'input' events to the document or specific container if possible, 
-        // OR we just re-bind them when we find them (e.g. in setupUI, called once).
-        // Since React might re-render, binding once in initUI is risky if elements are replaced.
-        // But for unchecked inputs (Scene title, etc), they might persist.
-
-        // Let's rely on setupUI to bind what it can find AT THAT MOMENT.
-        // Ideally, we'd use event delegation on a static parent.
-        this.setupListeners();
-        this.setupUI();
-
-        this.uiInitialized = true;
-        console.log('[SceneEditor] UI Initialized');
+        this.ui.initUI();
     }
 
-
-
     onAddObjectClick(): void {
-        const select = document.getElementById('add-object-type') as HTMLSelectElement;
-        const type = select ? select.value : 'Static';
-        this.startCreating(type);
+        this.ui.onAddObjectClick();
     }
 
     destroy(): void {
-        console.log('[SceneEditor] Destroying, removing listeners...');
-        document.removeEventListener('keydown', this.boundKeyHandler, { capture: true });
-
-        this.game.canvas.removeEventListener('mousedown', this.boundMouseDownHandler);
-        window.removeEventListener('mousemove', this.boundMouseMoveHandler);
-        window.removeEventListener('mouseup', this.boundMouseUpHandler);
-
-        this.uiInitialized = false;
+        this.ui.destroy();
     }
 
     setupListeners(): void {
-        // Canvas Interaction Listeners
-        this.game.canvas.addEventListener('mousedown', this.boundMouseDownHandler);
-        window.addEventListener('mousemove', this.boundMouseMoveHandler);
-        window.addEventListener('mouseup', this.boundMouseUpHandler);
-        window.addEventListener('paste', this.boundPasteHandler);
-
-        // Global Key Handler (Shortcuts) - Still valid as it targets document body
-        document.addEventListener('keydown', this.boundKeyHandler, { capture: true });
+        this.ui.setupListeners();
     }
 
     /* Event Handlers extracted for cleanup */
@@ -127,75 +88,16 @@ export class SceneEditor {
     /* handleGlobalChange Removed */
 
     saveUndoState(): void {
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-        this.undoBuffer = scene.toJSON();
-        console.log('[Editor] Undo State Saved');
+        this.undoManager.saveUndoState();
     }
 
+    // Keep public for compatibility if needed, but implementation is in manager
     restoreSceneState(data: any): void {
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-
-        // Clear existing
-        scene.entities = [];
-        scene.walkbox = [];
-        scene.triggerboxes = [];
-        scene.player = null;
-        scene.activeSubscene = null;
-
-        // Restore Entities
-        if (data.entities) {
-            data.entities.forEach((eData: any) => {
-                this.createObjectFromData(eData);
-            });
-        }
-
-        // Restore Walkboxes
-        if (data.walkbox) {
-            data.walkbox.forEach((wData: any) => {
-                this.createObjectFromData({ ...wData, type: 'Walkbox' });
-            });
-        }
-
-        // Restore Triggerboxes
-        if (data.triggerboxes) {
-            data.triggerboxes.forEach((tData: any) => {
-                this.createObjectFromData({ ...tData, type: 'Triggerbox' });
-            });
-        }
-
-        // Restore Scene Settings
-        if (data.scaling) scene.scaling = { ...data.scaling };
-        // We do NOT restore cameraX/Y to allow keeping view focused
-
-        this.selectObject(null);
-        this.drawMode = false;
-        this.refreshHierarchy();
+        this.undoManager.restoreSceneState(data);
     }
 
     undo(): void {
-        if (!this.undoBuffer) {
-            console.log("[Editor] Nothing to undo.");
-            return;
-        }
-
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-
-        console.log("[Editor] Performing Undo...");
-
-        // 1. Capture CURRENT state
-        const currentState = scene.toJSON();
-
-        // 2. Restore BACKUP state
-        const backupState = this.undoBuffer;
-        this.restoreSceneState(backupState);
-
-        // 3. Swap: Backup becomes what was 'Current'
-        this.undoBuffer = currentState;
-
-        console.log("[Editor] Undo Complete. State Swapped.");
+        this.undoManager.undo();
     }
 
     handleGlobalKey(e: KeyboardEvent): void {
@@ -432,21 +334,24 @@ export class SceneEditor {
 
         // Basic check if inside canvas
         if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
-            const scene = this.game.sceneManager.currentScene;
-            if (scene) {
-                const camX = scene.camera.x;
-                const camY = scene.camera.y;
-                const zoom = scene.camera.zoom;
-                const halfW = this.game.canvas.width / 2;
-                const halfH = this.game.canvas.height / 2;
-
-                return {
-                    x: (mx - halfW) / zoom + camX,
-                    y: (my - halfH) / zoom + camY
-                };
-            }
+            return this.convertScreenToWorld(mx, my);
         }
         return null;
+    }
+
+    convertScreenToWorld(screenX: number, screenY: number): { x: number, y: number } {
+        const scene = this.game.sceneManager.currentScene;
+        const camX = scene && scene.camera ? scene.camera.x : 0;
+        const camY = scene && scene.camera ? scene.camera.y : 0;
+        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
+
+        const halfW = this.game.canvas.width / 2;
+        const halfH = this.game.canvas.height / 2;
+
+        return {
+            x: (screenX - halfW) / zoom + camX,
+            y: (screenY - halfH) / zoom + camY
+        };
     }
 
     startCreating(type: string, x?: number, y?: number): void {
@@ -457,86 +362,11 @@ export class SceneEditor {
         const scene = this.game.sceneManager.currentScene;
 
 
-        if (type === 'Static' || type === 'Actor' || type === 'Quad') {
-            const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
-            let name = nameInput ? nameInput.value : '';
-
-            if (!name) {
-                name = type + '_' + Math.floor(Math.random() * 1000);
-                if (nameInput) nameInput.value = name; // Feedback to user
-            }
-
-            let ent: Entity;
-            if (type === 'Actor') {
-                // Use Prefab Data
-                const data = JSON.parse(JSON.stringify(DefaultActorData));
-                data.name = name;
-                data.x = x !== undefined ? x : 160;
-                data.y = y !== undefined ? y : 100;
-                // data.color = '#0000ff'; // Override removed
-                ent = Actor.fromJSON(this.game, data);
-            } else if (type === 'Quad') {
-                const data = JSON.parse(JSON.stringify(DefaultQuadData));
-                data.name = name;
-
-                if (x !== undefined && y !== undefined) {
-                    // Offset vertices to position
-                    data.vertices = [
-                        { x: x, y: y, p: 1.0 },
-                        { x: x + 100, y: y, p: 1.0 },
-                        { x: x + 100, y: y + 100, p: 1.0 },
-                        { x: x, y: y + 100, p: 1.0 }
-                    ];
-                    data.x = x + 50;
-                    data.y = y + 100;
-                } else {
-                    // Default center
-                    data.x = 160;
-                    data.y = 100;
-                }
-
-                ent = QuadObject.fromJSON(this.game, data);
-            } else {
-                // Use Prefab Data
-                const data = JSON.parse(JSON.stringify(DefaultEntityData));
-                data.name = name;
-                data.x = x !== undefined ? x : 160;
-                data.y = y !== undefined ? y : 100;
-                // data.color = '#00ff00'; // Removed override, use prefab default
-                ent = Entity.fromJSON(this.game, data);
-            }
-
-            scene.addEntity(ent);
-            this.selectObject(ent);
-            this.drawMode = false;
-        } else if (type === 'Walkbox') {
-            // New Flow: Create Object First
-            if (!scene.walkbox) scene.walkbox = [];
-            const newWalkbox = new Walkbox([], 'Walk_' + Math.floor(Math.random() * 1000));
-            scene.walkbox.push(newWalkbox);
-            console.log('Walkbox object added to scene (Empty)');
-            this.selectObject(newWalkbox);
-
-            // Now start drawing for this object
-            this.redrawSelected();
-
-        } else if (type === 'Triggerbox') {
-            // New Flow: Create Object First
-            if (!scene.triggerboxes) scene.triggerboxes = [];
-            const newTrigger = new Triggerbox([], 'Trig_' + Math.floor(Math.random() * 1000));
-            scene.triggerboxes.push(newTrigger);
-            console.log('Triggerbox object added to scene (Empty)');
-            this.selectObject(newTrigger);
-
-            // Now start drawing for this object
-            this.redrawSelected();
-        }
+        this.transformManager.startCreating(type, x, y);
     }
 
     setupUI(): void {
-        console.log('[SceneEditor] Setting up UI Listeners (Delegation)');
-        // All event listeners are now handled by the bound handlers in setupListeners()
-        // This method remains for any initial UI setup that isn't event binding.
+        this.ui.setupUI();
     }
 
     setScalingEnabled(isEnabled: boolean): void {
@@ -594,726 +424,27 @@ export class SceneEditor {
     }
 
     toggle(): void {
-        this.enabled = !this.enabled;
-
-        const parserInput = document.getElementById('parser-input') as HTMLInputElement;
-        const editorWrapper = document.getElementById('editor-wrapper');
-
-        if (this.enabled) {
-            if (editorWrapper) editorWrapper.classList.remove('hidden');
-            this.syncUI();
-            this.refreshHierarchy();
-            this.selectObject('SCENE');
-
-            // Block Parser
-            if (parserInput) {
-                parserInput.blur();
-                parserInput.disabled = true;
-            }
-        } else {
-            if (editorWrapper) editorWrapper.classList.add('hidden');
-            // Restore Parser
-            if (parserInput) {
-                parserInput.disabled = false;
-                parserInput.focus();
-            }
-        }
-        // Update Store
-        useEditorStore.getState().toggle(this.enabled);
+        this.ui.toggle();
     }
 
     syncUI(): void {
-        const scene = this.game.sceneManager.currentScene;
-        if (scene) {
-            useEditorStore.getState().setSceneInfo(scene.name, scene.filename || '');
-            useEditorStore.getState().incrementObjectVersion();
-        }
+        this.ui.syncUI();
     }
 
 
-    getMousePos(e: MouseEvent): { x: number, y: number } {
-        const rect = this.game.canvas.getBoundingClientRect();
-        const scaleX = this.game.canvas.width / rect.width;
-        const scaleY = this.game.canvas.height / rect.height;
-        return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
-        };
-    }
 
     onMouseDown(e: MouseEvent): void {
-        if (!this.enabled) return;
-
-        // Right Click Panning
-        if (e.button === 2) {
-            this.isPanning = true;
-            this.lastPanPos = { x: e.clientX, y: e.clientY };
-
-            // Disable Auto-Center automatically
-            if (this.game.sceneManager.currentScene) {
-                this.game.sceneManager.currentScene.autoCenter = false;
-
-                // Notify UI immediately
-                const store = useEditorStore.getState();
-                if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-                    store.incrementObjectVersion();
-                }
-            }
-            e.preventDefault();
-            return;
-        }
-
-        if (this.drawMode) return;
-
-        const pos = this.getMousePos(e); // Screen Coords
-        const scene = this.game.sceneManager.currentScene;
-
-        if (scene) {
-            const camX = scene.camera ? scene.camera.x : 0;
-            const camY = scene.camera ? scene.camera.y : 0;
-            const zoom = scene.camera ? scene.camera.zoom : 1.0;
-
-            const halfW = this.game.canvas.width / 2;
-            const halfH = this.game.canvas.height / 2;
-
-            // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
-            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox || (this.selectedObject as any).type === 'Quad')) {
-                if (this.selectedObject.disabled) return; // Prevent interaction if disabled
-                // Center-Based: World = (Screen - Center) / Zoom + Camera
-
-                // For QuadObject, World Position of Vertex depends on Parallax.
-                // We need to check against "Visible World Position" (P=1 space).
-
-                const worldPos = {
-                    x: (pos.x - halfW) / zoom + camX,
-                    y: (pos.y - halfH) / zoom + camY
-                };
-
-                let poly;
-                if ((this.selectedObject as any).type === 'Quad') {
-                    // Project Quad Vertices to World P=1 for Hit Test
-                    poly = (this.selectedObject as QuadObject).vertices.map((v: any) => ({
-                        x: v.x - camX * (v.p - 1.0),
-                        y: v.y - camY * (v.p - 1.0)
-                    }));
-                } else {
-                    poly = (this.selectedObject as any).poly;
-                }
-
-                const vertexRadius = 6 / zoom; // Hit radius - Match Handle Size roughly (Visualization is hSize=6)
-
-                // Calculate Centroid of Projected Poly for Quad "Inside" shift
-                let cx = 0, cy = 0;
-                // We need to calc centroid of VISUAL points for Quads
-                if ((this.selectedObject as any).type === 'Quad') {
-                    poly.forEach((p: any) => { cx += p.x; cy += p.y; });
-                    cx /= poly.length;
-                    cy /= poly.length;
-                }
-
-                // Check vertices
-                for (let i = 0; i < poly.length; i++) {
-                    let vx = poly[i].x;
-                    let vy = poly[i].y;
-
-                    // Apply Quad Shift for Hit Test
-                    if ((this.selectedObject as any).type === 'Quad') {
-                        const dx = cx - vx;
-                        const dy = cy - vy;
-                        const len = Math.sqrt(dx * dx + dy * dy);
-                        if (len > 0) {
-                            const shiftDist = (vertexRadius / 2) + (2 / zoom);
-                            vx += (dx / len) * shiftDist;
-                            vy += (dy / len) * shiftDist;
-                        }
-                    }
-
-                    // Strict Hit Test on the Handle Box? 
-                    // Visualization is a rect: x-h/2, y-h/2, w=h, h=h.
-                    // Math.abs(worldPos.x - vx) < h/2
-                    if (Math.abs(worldPos.x - vx) < vertexRadius / 2 && Math.abs(worldPos.y - vy) < vertexRadius / 2) {
-                        if (!this.selectedObject.locked) {
-                            this.saveUndoState();
-                            this.isDragging = true;
-                            this.draggingVertexIndex = i;
-                            useEditorStore.getState().selectVertex(i); // Sync UI
-                            e.stopPropagation();
-                            return;
-                        }
-                    }
-                }
-
-                // Check Polygon Body
-                if (Geometry.isPointInPolygon(worldPos, poly)) {
-                    if (!this.selectedObject.locked) {
-                        this.saveUndoState();
-                        this.isDragging = true;
-                        this.draggingVertexIndex = -1; // Drag Whole Body
-
-                        // For QuadObject, DragOffset should be relative to P=1 World Pos
-                        this.dragOffset = { x: worldPos.x, y: worldPos.y };
-                        useEditorStore.getState().selectVertex(-1); // Deselect vertex when body dragging
-                        e.stopPropagation();
-                        return;
-                    }
-                }
-            }
-
-            // 0.5 CHECK SELECTED ENTITY (High Priority - Exclusive Interaction)
-            if (this.selectedObject && this.selectedObject instanceof Entity && (this.selectedObject as any).type !== 'Quad') {
-                if (this.selectedObject.disabled) return; // Prevent interaction if disabled
-                const entity = this.selectedObject;
-
-                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
-                const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
-                const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-
-                // Entity Screen Rect Calculation
-                const screenX = (entity.x - camX * p + vOx) * zoom + halfW;
-                const screenY = (entity.y - camY * p + vOy) * zoom + halfH;
-                const screenW = entity.width * zoom;
-                const screenH = entity.height * zoom;
-
-                const sl = screenX - screenW / 2;
-                const sr = screenX + screenW / 2;
-                const st = screenY - screenH;
-                const sb = screenY;
-
-                // Check Handles (Screen Space)
-                // Check Handles (Screen Space)
-
-                const exactHSize = 6;
-                let hitHandle = null;
-
-                // NW: (sl, st)
-                if (pos.x >= sl && pos.x <= sl + exactHSize && pos.y >= st && pos.y <= st + exactHSize) hitHandle = 'nw';
-                // NE: (sr - size, st)
-                else if (pos.x >= sr - exactHSize && pos.x <= sr && pos.y >= st && pos.y <= st + exactHSize) hitHandle = 'ne';
-                // SW: (sl, sb - size)
-                else if (pos.x >= sl && pos.x <= sl + exactHSize && pos.y >= sb - exactHSize && pos.y <= sb) hitHandle = 'sw';
-                // SE: (sr - size, sb - size)
-                else if (pos.x >= sr - exactHSize && pos.x <= sr && pos.y >= sb - exactHSize && pos.y <= sb) hitHandle = 'se';
-
-                const hitBody = (pos.x >= sl && pos.x <= sr && pos.y >= st && pos.y <= sb);
-
-                if (hitHandle || hitBody) {
-                    if (!entity.locked) {
-                        this.saveUndoState();
-                        this.isDragging = true;
-                        this.draggingVertexIndex = -1;
-
-                        if (hitHandle) {
-                            this.resizingHandle = hitHandle;
-                        } else {
-                            // Body Drag
-                            this.resizingHandle = null;
-                            this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
-                        }
-
-                        e.stopPropagation();
-                        return;
-                    }
-                }
-            }
-
-
-            // 1. Check Entities
-            const entities = scene.entities;
-            // Iterate reverse to select top-most
-            for (let i = entities.length - 1; i >= 0; i--) {
-                const entity = entities[i];
-                if (entity.disabled) continue;
-                if (entity.locked) continue;
-
-                const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
-
-                // Entity Screen Rect (With Zoom and Center Pivot)
-                // Render Logic:
-                // ctx.translate(halfW, halfH);
-                // ctx.scale(zoom, zoom);
-                // ctx.translate(-camX * p, -camY * p);
-                // Entity draws at x, y
-
-                // Entity Screen Rect (With Zoom and Center Pivot)
-                // Render Logic:
-                // ctx.translate(halfW, halfH);
-                // ctx.scale(zoom, zoom);
-                // ctx.translate(-camX * p, -camY * p);
-                // Entity draws at x, y
-
-                // So ScreenX = (EntityX - CamX*p) * Zoom + HalfW
-
-                const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-                const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-
-                const screenX = (entity.x - camX * p + vOx) * zoom + halfW;
-                const screenY = (entity.y - camY * p + vOy) * zoom + halfH;
-                const screenW = entity.width * zoom;
-                const screenH = entity.height * zoom;
-
-                // Mouse World Pos for this entity layer
-                const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-                const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
-
-                if (entity.hitTest(worldX, worldY)) {
-
-                    // HIT! Entity: ${entity.name}
-                    this.selectObject(entity);
-
-                    // Stop propagation to prevent deselection, but DO NOT start drag yet.
-                    // User must click again on the selected object to drag.
-                    e.stopPropagation();
-                    return;
-                }
-            }
-
-            // 2. Check Walkboxes (World Space, Parallax 1.0)
-            const worldPos = {
-                x: (pos.x - halfW) / zoom + camX,
-                y: (pos.y - halfH) / zoom + camY
-            };
-
-            if (scene.walkbox) {
-                for (const wb of scene.walkbox) {
-                    if (wb.disabled) continue;
-                    if (wb.locked) continue;
-                    if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
-                        this.selectObject(wb);
-                        // Selection Only
-                        e.stopPropagation();
-                        return;
-                    }
-                }
-            }
-
-            // 3. Check Triggerboxes
-            if (scene.triggerboxes) {
-                for (const tb of scene.triggerboxes) {
-                    if (tb.disabled) continue;
-                    if (tb.locked) continue;
-                    if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
-                        this.selectObject(tb);
-                        // Selection Only
-                        e.stopPropagation();
-                        return;
-                    }
-                }
-            }
-        }
-
-        this.selectObject(null);
+        this.transformManager.onMouseDown(e);
     }
 
 
     onMouseMove(e: MouseEvent): void {
-        this.lastMousePos = this.getMousePos(e); // Track for Paste
-
-        if (!this.enabled) return;
-
-        // PANNING LOGIC
-        if (this.isPanning && this.game.sceneManager.currentScene) {
-            const dx = e.clientX - this.lastPanPos.x;
-            const dy = e.clientY - this.lastPanPos.y;
-            this.lastPanPos = { x: e.clientX, y: e.clientY };
-
-            const s = this.game.sceneManager.currentScene;
-            // Move camera opposite to mouse drag
-            // Adjust for Zoom? Panning 10 screen pixels should move 10 screen pixels worth of world.
-            // WorldDelta = ScreenDelta / Zoom.
-            s.camera.x -= dx / s.camera.zoom;
-            s.camera.y -= dy / s.camera.zoom;
-
-            // Disable Auto-Center on manual move
-            // Disable Auto-Center on manual move
-            if (s.autoCenter) {
-                s.autoCenter = false;
-                // Notify UI if we are viewing Scene properties (no selected object)
-                const store = useEditorStore.getState();
-                if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-                    store.incrementObjectVersion();
-                }
-            }
-
-            // Update UI
-            const cx = document.getElementById('cam-x') as HTMLInputElement;
-            const cy = document.getElementById('cam-y') as HTMLInputElement;
-            if (cx) cx.value = Math.round(s.camera.x).toString();
-            if (cy) cy.value = Math.round(s.camera.y).toString();
-            return;
-        }
-
-        if (!this.isDragging || !this.selectedObject) return;
-
-        const pos = this.getMousePos(e);
-        const scene = this.game.sceneManager.currentScene;
-        const camX = scene && scene.camera ? scene.camera.x : 0;
-        const camY = scene && scene.camera ? scene.camera.y : 0;
-        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
-
-        const halfW = this.game.canvas.width / 2;
-        const halfH = this.game.canvas.height / 2;
-
-        // Polygon Dragging (Walkbox/Triggerbox/Rect)
-        if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox || (this.selectedObject as any).type === 'Quad') {
-            const worldPos = {
-                x: (pos.x - halfW) / zoom + camX,
-                y: (pos.y - halfH) / zoom + camY
-            };
-
-            if (this.draggingVertexIndex >= 0) {
-                // Drag Vertex (with Parallax compensation for Rects)
-                if ((this.selectedObject as any).type === 'Quad') {
-                    const verts = (this.selectedObject as any).vertices; // QuadObject
-                    const v = verts[this.draggingVertexIndex];
-
-                    // Basic Position
-                    // For Quads, vertices store world pos directly (including parallax offset?)
-                    // wait, render applies parallax: v.x + offX
-                    // So v.x is the "base" world pos?
-                    // Previous logic (not visible here but standard):
-                    // We need to inverse the parallax to find the True World Pos?
-                    // "QuadObject.ts": render uses: x = v.x - camX*(v.p-1).
-                    // So if we are dragging at MouseWorldPos, we need to set v.x such that:
-                    // MouseWorldPos = v.x - camX*(v.p-1)
-                    // v.x = MouseWorldPos + camX*(v.p-1)
-
-                    const p = v.p || 1.0;
-                    const offX = -camX * (p - 1.0);
-                    const offY = -camY * (p - 1.0);
-
-                    // Inverse Logic: v.x = WorldPos - Offset
-                    v.x = worldPos.x - offX;
-                    v.y = worldPos.y - offY;
-
-                    // SNAP Logic (Alt Key)
-                    if (e.altKey) {
-                        const snapDist = 50 / zoom; // 50 screen pixels? User said "50 pixels". Assuming screen or world? Usually screen makes sense for UI.
-                        // Let's assume 50 "World Units" if zoom is 1? Or 50 screen pixels.
-                        // "closer than 50 pixels" usually implies screen distance visually.
-
-                        let closestDist = snapDist;
-                        let snapTarget: { x: number, y: number, p?: number } | null = null;
-
-                        // Check other Quads
-                        // Check other Quads
-                        const scene = this.game.sceneManager.currentScene;
-                        if (scene) {
-                            scene.entities.forEach((ent: any) => {
-                                if (ent === this.selectedObject) return; // Skip self
-                                if (ent.type === 'Quad') {
-                                    const q = ent as any;
-                                    // Quads usually store parallax per vertex or global? 
-                                    // QuadObject.ts has 'parallax' property, but vertices have 'p'. 
-                                    // Editor usually edits vertices[i].p. 
-                                    // If we are snapping to a generated grid, that grid lies on the surface.
-                                    // A bilinear patch interpolates World X, World Y, AND Parallax P.
-
-                                    if (q.vertices) {
-                                        // 1. Vertex Snapping
-                                        q.vertices.forEach((qv: any) => {
-                                            const vP = qv.p !== undefined ? qv.p : 1.0;
-                                            const qOffX = -camX * (vP - 1.0);
-                                            const qOffY = -camY * (vP - 1.0);
-                                            const qVisualX = qv.x + qOffX;
-                                            const qVisualY = qv.y + qOffY;
-
-                                            const dist = Math.sqrt(Math.pow(qVisualX - worldPos.x, 2) + Math.pow(qVisualY - worldPos.y, 2));
-
-                                            if (dist < closestDist) {
-                                                closestDist = dist;
-                                                snapTarget = { x: qVisualX, y: qVisualY };
-                                            }
-                                        });
-
-                                        // 2. Retro Grid Snapping
-                                        if (q.isGrid && q.gridLines > 0) {
-                                            const STEPS = q.gridLines + 1;
-                                            const v0 = q.vertices[0];
-                                            const v1 = q.vertices[1];
-                                            const v2 = q.vertices[2]; // BR
-                                            const v3 = q.vertices[3]; // BL
-
-                                            if (v0 && v1 && v2 && v3) {
-                                                for (let i = 0; i <= STEPS; i++) {
-                                                    const u = i / STEPS;
-                                                    for (let j = 0; j <= STEPS; j++) {
-                                                        const v = j / STEPS;
-
-                                                        // Bilinear Interpolation
-                                                        // Top: v0 -> v1
-                                                        const tx = v0.x + (v1.x - v0.x) * u;
-                                                        const ty = v0.y + (v1.y - v0.y) * u;
-                                                        const tp = (v0.p || 1) + ((v1.p || 1) - (v0.p || 1)) * u;
-
-                                                        // Bottom: v3 -> v2
-                                                        const bx = v3.x + (v2.x - v3.x) * u;
-                                                        const by = v3.y + (v2.y - v3.y) * u;
-                                                        const bp = (v3.p || 1) + ((v2.p || 1) - (v3.p || 1)) * u;
-
-                                                        // Surface
-                                                        const px = tx + (bx - tx) * v;
-                                                        const py = ty + (by - ty) * v;
-                                                        const pp = tp + (bp - tp) * v;
-
-                                                        // Visual Pos
-                                                        const offX = -camX * (pp - 1.0);
-                                                        const offY = -camY * (pp - 1.0);
-                                                        const VisX = px + offX;
-                                                        const VisY = py + offY;
-
-                                                        const dist = Math.sqrt(Math.pow(VisX - worldPos.x, 2) + Math.pow(VisY - worldPos.y, 2));
-
-                                                        if (dist < closestDist) {
-                                                            closestDist = dist;
-                                                            snapTarget = { x: VisX, y: VisY, p: pp };
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        if (snapTarget) {
-                            // Apply Snapped Parallax (Z-Depth) if available
-                            if (snapTarget.p !== undefined) {
-                                v.p = snapTarget.p;
-                            }
-
-                            // Recalculate Offset with (possibly new) P to find correct Base World Pos
-                            const newP = v.p || 1.0;
-                            const newOffX = -camX * (newP - 1.0);
-                            const newOffY = -camY * (newP - 1.0);
-
-                            // v.x = VisualX - Offset
-                            v.x = snapTarget.x - newOffX;
-                            v.y = snapTarget.y - newOffY;
-                        }
-
-                    } else if (e.shiftKey) {
-                        // ** Angle Snapping (Shift) **
-                        const verts = (this.selectedObject as any).vertices; // We know it's a Quad
-                        if (verts && verts.length > 0) {
-                            const prevIndex = (this.draggingVertexIndex - 1 + verts.length) % verts.length;
-                            const anchor = verts[prevIndex];
-
-                            // Snap current v (Base Pos) to Anchor (Base Pos)
-                            const snapped = this.getSnappedPos({ x: v.x, y: v.y }, anchor);
-
-                            v.x = snapped.x;
-                            v.y = snapped.y;
-                        }
-                    }
-
-                    // Sync UI
-                    useEditorStore.getState().incrementObjectVersion();
-
-                } else {
-                    // Walkbox/Triggerbox (Standard)
-                    const poly = (this.selectedObject as any).poly || (this.selectedObject as any).vertices;
-
-
-                    if (e.shiftKey) {
-                        const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
-                        const anchor = poly[prevIndex];
-                        const snapped = this.getSnappedPos(worldPos, anchor);
-                        poly[this.draggingVertexIndex].x = snapped.x;
-                        poly[this.draggingVertexIndex].y = snapped.y;
-                    } else {
-                        poly[this.draggingVertexIndex].x = Math.round(worldPos.x);
-                        poly[this.draggingVertexIndex].y = Math.round(worldPos.y);
-                    }
-                }
-            } else {
-                // Drag Whole Body
-                const dx = worldPos.x - this.dragOffset.x;
-                const dy = worldPos.y - this.dragOffset.y;
-
-                if (dx !== 0 || dy !== 0) {
-                    if ((this.selectedObject as any).type === 'Quad') {
-                        const quad = this.selectedObject as QuadObject;
-                        for (const v of quad.vertices) {
-                            v.x += dx;
-                            v.y += dy;
-                        }
-                        quad.x += dx;
-                        quad.y += dy;
-                    } else {
-                        // Cast to any to access poly
-                        const obj = this.selectedObject as any;
-                        if (obj.poly) {
-                            for (const pt of obj.poly) {
-                                pt.x += dx;
-                                pt.y += dy;
-                            }
-                        }
-                    }
-                    this.dragOffset = { x: worldPos.x, y: worldPos.y };
-                }
-            }
-            return;
-        }
-        if (!(this.selectedObject instanceof Entity)) return;
-        const entity = this.selectedObject as Entity;
-        const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
-        // ** ENTITY RESIZING LOGIC **
-        if (this.resizingHandle) {
-            // 1. Calculate Mouse World Position (at entity depth p)
-            // WorldX = ((ScreenX - HalfW) / Zoom) + CamX * p
-
-            const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-            const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-
-            const mouseWorldX = (pos.x - halfW) / zoom + camX * p - vOx;
-            const mouseWorldY = (pos.y - halfH) / zoom + camY * p - vOy;
-
-            // Current Edges
-            const currentL = entity.x - entity.width / 2;
-            const currentR = entity.x + entity.width / 2;
-            const currentT = entity.y - entity.height;
-            const currentB = entity.y;
-
-            let newL = currentL;
-            let newR = currentR;
-            let newT = currentT;
-            let newB = currentB;
-
-            // Assume symmetric width resizing if dragging corners?
-            // Actually, standard behavior is opposite corner fixed.
-
-            if (this.resizingHandle === 'nw') {
-                // Fixed: Bottom-Right
-                newL = mouseWorldX;
-                newT = mouseWorldY;
-            } else if (this.resizingHandle === 'ne') {
-                // Fixed: Bottom-Left
-                newR = mouseWorldX;
-                newT = mouseWorldY;
-            } else if (this.resizingHandle === 'sw') {
-                // Fixed: Top-Right
-                newL = mouseWorldX;
-                newB = mouseWorldY;
-            } else if (this.resizingHandle === 'se') {
-                // Fixed: Top-Left
-                newR = mouseWorldX;
-                newB = mouseWorldY;
-            }
-
-            // 2. Proportional Scaling (Shift Key)
-            if (e.shiftKey) {
-                const startW = currentR - currentL;
-                const startH = currentB - currentT;
-                // Avoid division by zero
-                if (startH !== 0) {
-                    const aspect = startW / startH;
-
-                    // Calculate proposed dimensions based on mouse move
-                    let propW = Math.abs(newR - newL);
-                    let propH = Math.abs(newB - newT);
-
-                    // Use the larger relative change or just Width as master?
-                    // Simple "Width drives Height" is predictable for corner drags.
-                    // But if dragging more vertically, might feel weird.
-                    // Let's use the larger dimension to drive.
-
-                    if (propW > propH * aspect) {
-                        // Width is dominant
-                        propH = propW / aspect;
-                    } else {
-                        // Height is dominant
-                        propW = propH * aspect;
-                    }
-
-                    // Re-apply to edges based on fixed corner
-                    if (this.resizingHandle === 'nw') {
-                        // Fixed: BR
-                        newL = newR - propW;
-                        newT = newB - propH;
-                    } else if (this.resizingHandle === 'ne') {
-                        // Fixed: BL
-                        newR = newL + propW;
-                        newT = newB - propH;
-                    } else if (this.resizingHandle === 'sw') {
-                        // Fixed: TR
-                        newL = newR - propW;
-                        newB = newT + propH;
-                    } else if (this.resizingHandle === 'se') {
-                        // Fixed: TL
-                        newR = newL + propW;
-                        newB = newT + propH;
-                    }
-                }
-            }
-
-            // Enforce Min Size
-            if (newR - newL < 5) {
-                if (this.resizingHandle.includes('w')) newL = newR - 5;
-                else newR = newL + 5;
-            }
-            if (newB - newT < 5) {
-                if (this.resizingHandle.includes('n')) newT = newB - 5;
-                else newB = newT + 5;
-            }
-
-            // Apply new dimensions
-            const newW = newR - newL;
-            const newH = newB - newT;
-            const newX = newL + newW / 2; // Center
-            const newY = newB; // Bottom
-
-            // Update Visuals
-            entity.x = Math.round(newX);
-            entity.y = Math.round(newY);
-            entity.width = newW;
-            entity.height = newH;
-
-            // Update Base Dimensions so this persists across scales
-            // base = visual / scale. Scale is current (model * depth).
-            if (entity.scale !== 0) {
-                entity.baseWidth = entity.width / entity.scale;
-                entity.baseHeight = entity.height / entity.scale;
-            } else {
-                entity.baseWidth = entity.width;
-                entity.baseHeight = entity.height;
-            }
-
-            this.updateUIFromObject();
-            return;
-        }
-
-        // Entity Drag Logic (Standard Move)
-
-        // We stored dragOffset as (MouseScreen - EntityScreenCenter)
-        // NewScreenX = MouseX - OffsetX
-        // NewScreenY = MouseY - OffsetY
-
-        const targetScreenX = pos.x - this.dragOffset.x;
-        const targetScreenY = pos.y - this.dragOffset.y;
-
-        // Reverse Project to World:
-        // ScreenX = (WorldX - CamX*p) * Zoom + HalfW
-        // WorldX = (ScreenX - HalfW) / Zoom + CamX*p   <-- Wait, +CamX*p?
-        // (WorldX - CamX*p) = (ScreenX - HalfW) / Zoom
-        // WorldX = ((ScreenX - HalfW) / Zoom) + CamX*p
-
-        const unzoomedX = (targetScreenX - halfW) / zoom;
-        const unzoomedY = (targetScreenY - halfH) / zoom;
-
-        entity.x = Math.round(unzoomedX + camX * p);
-        entity.y = Math.round(unzoomedY + camY * p);
-
-        this.updateUIFromObject();
+        this.lastMousePos = this.getMousePos(e);
+        this.transformManager.onMouseMove(e);
     }
 
     onMouseUp(): void {
-        this.isDragging = false;
-        this.resizingHandle = null;
-        this.isPanning = false;
+        this.transformManager.onMouseUp();
     }
 
     selectObject(obj: any): void {
@@ -1511,253 +642,20 @@ export class SceneEditor {
 
 
     updateUIFromObject(): void {
-        useEditorStore.getState().incrementObjectVersion();
+        this.ui.updateUIFromObject();
     }
 
     updateEntityFromUI(triggerId?: string): void {
-        if (!this.selectedObject || !(this.selectedObject instanceof Entity)) return;
-
-        this.saveUndoState(); // Save before modification
-
-        const ent = this.selectedObject as Entity;
-
-        const propName = document.getElementById('prop-name') as HTMLInputElement;
-        const propX = document.getElementById('prop-x') as HTMLInputElement;
-        const propY = document.getElementById('prop-y') as HTMLInputElement;
-        const propWidth = document.getElementById('prop-width') as HTMLInputElement;
-        const propHeight = document.getElementById('prop-height') as HTMLInputElement;
-        const propScale = document.getElementById('prop-scale') as HTMLInputElement;
-        const propLayer = document.getElementById('prop-layer') as HTMLInputElement;
-        const propDirection = document.getElementById('prop-direction') as HTMLSelectElement;
-        const propState = document.getElementById('prop-state') as HTMLInputElement;
-        const propNoScale = document.getElementById('prop-no-scaling') as HTMLInputElement;
-        const propParallax = document.getElementById('prop-parallax') as HTMLInputElement;
-
-        if (propName) ent.name = propName.value || 'Unnamed';
-        if (propX) ent.x = parseInt(propX.value) || 0;
-        if (propY) ent.y = parseInt(propY.value) || 0;
-
-        // SCALE & DIMENSIONS LOGIC
-        // Case 1: Model Scale changed (multiplier for depth scaling)
-        if (triggerId === 'prop-scale') {
-            const newModelScale = parseFloat(propScale.value) || 1.0;
-            ent.modelScale = newModelScale;
-
-            // Note: final 'ent.scale' will be updated in next game loop tick based on depth.
-            // But we can estimate it here for immediate visual feedback if we wanted, 
-            // though it's safer to let the loop handle it to avoid drift.
-
-            // However, we DO need to update the visual width/height in UI immediately to reflect the change?
-            // Actually, if we change modelScale, the size on screen changes.
-            // Let's force an update tick or manually calc:
-            let depthFactor = 1.0;
-            if (!ent.ignoreScaling) {
-                // We can't easily access Scene.getScaling here without referencing scene
-                // But we can trust the loop or just update the UI values on next frame.
-                // For immediate feedback, let's try to grab current depth scale if possible.
-                if (this.game.sceneManager.currentScene && this.game.sceneManager.currentScene.scaling.enabled) {
-                    depthFactor = this.game.sceneManager.currentScene.getScaling(ent.y);
-                }
-            }
-
-            ent.scale = ent.modelScale * depthFactor;
-            ent.width = ent.baseWidth * ent.scale;
-            ent.height = ent.baseHeight * ent.scale;
-
-            // Sync UI Dims
-            if (propWidth) propWidth.value = Math.round(ent.width).toString();
-            if (propHeight) propHeight.value = Math.round(ent.height).toString();
-
-        } else {
-            // Case 2: Visual Width/Height changed.
-            // We want to force the visual size to match input.
-            // width = baseWidth * (modelScale * depthFactor)
-            // so baseWidth = width / (modelScale * depthFactor) => width / ent.scale
-
-            if (propWidth) {
-                const requestedLocalW = parseInt(propWidth.value) || 1;
-                ent.width = requestedLocalW;
-                ent.baseWidth = (ent.scale !== 0) ? ent.width / ent.scale : ent.width;
-            }
-            if (propHeight) {
-                const requestedLocalH = parseInt(propHeight.value) || 1;
-                ent.height = requestedLocalH;
-                ent.baseHeight = (ent.scale !== 0) ? ent.height / ent.scale : ent.height;
-            }
-
-            // In this case, ModelScale likely remains unchanged, we are changing the base sprite size/box size.
-            // Ensure UI shows current Model Scale
-            if (propScale) propScale.value = ent.modelScale.toString();
-        }
-
-
-        if (propLayer) ent.layer = parseInt(propLayer.value) || 0;
-        // Allow parallax to be 0
-        if (propParallax) {
-            const val = parseFloat(propParallax.value);
-            const newVal = isNaN(val) ? 1.0 : val;
-
-            // Auto-adjust coordinates to keep object visually stationary if Parallax changed
-            if (ent.parallax !== undefined && ent.parallax !== newVal) {
-                const scene = this.game.sceneManager.currentScene;
-                if (scene) {
-                    const camX = scene.camera.x;
-                    const camY = scene.camera.y;
-
-                    const oldP = ent.parallax;
-                    const dx = camX * (newVal - oldP);
-                    const dy = camY * (newVal - oldP);
-
-                    ent.x = Math.round(ent.x + dx);
-                    ent.y = Math.round(ent.y + dy);
-
-                    // Update UI inputs
-                    if (propX) propX.value = ent.x.toString();
-                    if (propY) propY.value = ent.y.toString();
-                }
-            }
-            ent.parallax = newVal;
-        }
-        if (propNoScale) {
-            const wasIgnored = ent.ignoreScaling;
-            const isIgnored = propNoScale.checked;
-
-            if (wasIgnored !== isIgnored) {
-                // Toggle happened. We need to normalize dimensions to keep VISUAL size constant.
-                // Current Visual Size is ent.width / ent.height (already up to date)
-                const currentVisW = ent.width;
-                const currentVisH = ent.height;
-
-                // Calculate Target Factor
-                let targetFactor = ent.modelScale; // If ignored, scale = modelScale
-
-                if (!isIgnored) {
-                    // We are ENABLING depth scaling.
-                    // Scale will become: modelScale * depthFactor
-                    let depthFactor = 1.0;
-                    if (this.game.sceneManager.currentScene && this.game.sceneManager.currentScene.scaling.enabled) {
-                        depthFactor = this.game.sceneManager.currentScene.getScaling(ent.y);
-                    }
-                    targetFactor = ent.modelScale * depthFactor;
-                }
-
-                // Recalculate Base Dimensions
-                // Visual = Base * Factor
-                // Base = Visual / Factor
-                if (targetFactor !== 0) {
-                    ent.baseWidth = currentVisW / targetFactor;
-                    ent.baseHeight = currentVisH / targetFactor;
-                } else {
-                    ent.baseWidth = currentVisW;
-                    ent.baseHeight = currentVisH;
-                }
-
-                // Apply new state
-                ent.ignoreScaling = isIgnored;
-
-                // Force immediate update of 'scale' prop so next render is correct right away
-                ent.scale = targetFactor;
-                // ent.width/height is technically derived, should match currentVisW/H exactly roughly
-            }
-        }
-
-        if (ent instanceof Actor) {
-            if (propDirection) ent.setDirection(propDirection.value as any);
-            if (propState) ent.setState(propState.value as any);
-            const propActorSpeed = document.getElementById('prop-actor-speed') as HTMLInputElement;
-            if (propActorSpeed) ent.speed = parseFloat(propActorSpeed.value) || 0.1;
-        }
-
-
-
-        this.refreshHierarchy();
+        this.ui.updateEntityFromUI(triggerId);
     }
 
     duplicateSelectedObject(): void {
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene || !this.selectedObject) return;
-
-        this.saveUndoState(); // Save before duplication
-
-        let data: any;
-        if (this.selectedObject.toJSON) {
-            // Deep Clone to prevent reference mutation of Original Object components
-            data = JSON.parse(JSON.stringify(this.selectedObject.toJSON()));
-        } else {
-            return;
-        }
-
-        // Generate Unique Name for Duplicate
-        const baseName = data.name;
-        // Strip _\d+ suffix
-        const match = baseName.match(/^(.*?)_\d+$/);
-        const prefix = match ? match[1] : baseName;
-
-        let counter = 1;
-        let newName = `${prefix}_${counter}`;
-
-        // Check collision in entire scene
-        // We can reuse a helper or just do it here
-        const allObjects = [
-            ...(scene.entities || []),
-            ...(scene.walkbox || []),
-            ...(scene.triggerboxes || [])
-        ];
-        const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
-        while (isNameTaken(newName)) {
-            counter++;
-            newName = `${prefix}_${counter}`;
-        }
-        data.name = newName;
-
-        // Fix Component References (Self-Targeting)
-        if (data.components) {
-            data.components.forEach((comp: any) => {
-                // If Backface component targets the original object (self), update to new name
-                if (comp.type === 'Backface' && comp.targetId === baseName) {
-                    comp.targetId = newName;
-                }
-                // Handle Subscene references? Usually Subscene targets a GroupID or separate object.
-                // If it targets THIS object's name (unlikely for Subscene), we might need to update.
-            });
-        }
-
-        // Use unified creation
-        const newObj = this.createObjectFromData(data);
-        if (newObj) {
-            console.log(`Duplicated: ${baseName} -> ${newName} `);
-            this.selectObject(newObj);
-            this.refreshHierarchy();
-        }
+        this.selectionManager.duplicateSelectedObject();
     }
 
 
     setActorIsPlayer(actor: Actor, value: boolean): void {
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-
-        console.log(`[Editor] Setting isPlayer for ${actor.name} to ${value} `);
-
-        if (value) {
-            // Unset others
-            scene.entities.forEach((e: Entity) => {
-                if (e instanceof Actor && e !== actor && e.isPlayer) {
-                    e.isPlayer = false;
-                    console.log(`[Editor] Unset isPlayer for ${e.name}`);
-                }
-            });
-            actor.isPlayer = true;
-            scene.player = actor;
-        } else {
-            actor.isPlayer = false;
-            // If we are unchecking the current player, clear the reference
-            if (scene.player === actor) {
-                scene.player = null;
-            }
-        }
-        // Force UI update to reflect changes on other objects (if selected, though usually only one selected)
-        // But mainly to reflect THIS object's state correctly.
-        this.updateUIFromObject();
+        this.ui.setActorIsPlayer(actor, value);
     }
 
     // Unified Object Creation Logic
@@ -1902,123 +800,22 @@ export class SceneEditor {
     }
 
     handleGlobalPaste(e: ClipboardEvent): void {
-        if (!this.enabled) return;
-        if (document.activeElement instanceof HTMLInputElement) return;
-
-        // Use clipboard data from event if available (Synchronous and reliable)
-        const text = e.clipboardData?.getData('text');
-        if (text) {
-            e.preventDefault();
-            console.log("Paste Event Captured. Text length:", text.length);
-            this.processPasteData(text);
-        } else {
-            // Fallback to async read if needed, or just standard action
-        }
+        this.selectionManager.handleGlobalPaste(e);
     }
 
     async pasteObjectFromClipboard(): Promise<void> {
-        // Kept for manual call if needed, but Event is preferred
-        try {
-            // This method previously contained the logic for reading from clipboard and processing.
-            // Now, it should ideally call processPasteData after reading from clipboard.
-            // However, the instruction implies it should be mostly empty or just a fallback.
-            // The primary paste mechanism is now `handleGlobalPaste` which uses `e.clipboardData`.
-            // If this method is still called, it would use `navigator.clipboard.readText()`.
-            const text = await navigator.clipboard.readText();
-            if (text) {
-                console.log("pasteObjectFromClipboard (fallback) called. Text length:", text.length);
-                this.processPasteData(text);
-            }
-        } catch (e) {
-            console.error("Manual pasteObjectFromClipboard failed:", e);
+        const text = await navigator.clipboard.readText();
+        if (text) {
+            this.selectionManager.processPasteData(text);
         }
     }
 
-    async processPasteData(text: string): Promise<void> {
-        try {
-            console.log("Processing Paste Data...");
-            this.saveUndoState(); // Save before paste
-            let data: any;
-            try {
-                data = JSON.parse(text);
-                console.log("JSON Parsed:", data);
-            } catch (e) {
-                console.warn("Clipboard does not contain valid JSON");
-                return;
-            }
-
-            // Basic Validation
-            if (!data || typeof data !== 'object') {
-                console.warn("Clipboard data is not an object");
-                return;
-            }
-
-            // Check Mouse Pos
-            if (!this.lastMousePos) {
-                console.log("Mouse position unknown, cannot paste at cursor.");
-                return;
-            }
-            console.log("Paste Position (Screen):", this.lastMousePos);
-
-            // Helper to get World Coords
-            const worldPos = this.convertScreenToWorld(this.lastMousePos.x, this.lastMousePos.y);
-            console.log("Paste Position (World):", worldPos);
-
-            // Ensure unique name for Paste as well
-            const scene = this.game.sceneManager.currentScene;
-            if (scene) {
-                const baseName = data.name || 'Object';
-                const match = baseName.match(/^(.*?)_\d+$/);
-                const prefix = match ? match[1] : baseName;
-
-                let counter = 1;
-                let newName = `${prefix}_${counter}`;
-                const allObjects = [
-                    ...(scene.entities || []),
-                    ...(scene.walkbox || []),
-                    ...(scene.triggerboxes || [])
-                ];
-                const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
-                while (isNameTaken(newName)) {
-                    counter++;
-                    newName = `${prefix}_${counter}`;
-                }
-                data.name = newName;
-
-                // Fix Component References (Self-Targeting)
-                if (data.components) {
-                    const baseName = match ? match[1] + '_' + match[2] : data.name; // Logic here is a bit tricky if we stripped suffix
-                    // Wait, match was done on 'data.name' (Incoming 'Entity_1').
-                    // match[1] = 'Entity'.
-                    // baseName used above was 'Entity_1'.
-                    // If we paste 'Entity_1', we generate 'Entity_2'.
-                    // We need to check if component targets 'Entity_1'.
-
-                    const srcName = (scene.entities.find((e: any) => e.name === data.name)) ? data.name : data.name;
-
-                    data.components.forEach((comp: any) => {
-                        if (comp.type === 'Backface') {
-                            // Heuristic: If targetId equals the original name of the pasted data, update it.
-                            if (comp.targetId === srcName || comp.targetId === data.name) {
-                                comp.targetId = newName;
-                            }
-                        }
-                    });
-                }
-            }
-
-            const newObj = this.createObjectFromData(data, worldPos.x, worldPos.y);
-            if (newObj) {
-                console.log("Pasted object successfully:", newObj.name);
-                this.selectObject(newObj);
-                this.refreshHierarchy();
-            } else {
-                console.warn("Failed to create object from data.");
-            }
-
-        } catch (e) {
-            console.error("Paste failed:", e);
-        }
+    getMousePos(e: MouseEvent): { x: number, y: number } {
+        const rect = this.game.canvas.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left) * (this.game.canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (this.game.canvas.height / rect.height)
+        };
     }
 
     // New Helper: Convert Screen to World
@@ -2041,27 +838,6 @@ export class SceneEditor {
 
     // Existing mouse move needs to update this
 
-    getMouseWorldPos(): { x: number, y: number } {
-        if (this.lastMousePos) return this.convertScreenToWorld(this.lastMousePos.x, this.lastMousePos.y);
-        return { x: 0, y: 0 };
-    }
-
-    getSnappedPos(current: { x: number, y: number }, anchor: { x: number, y: number }): { x: number, y: number } {
-        const dx = current.x - anchor.x;
-        const dy = current.y - anchor.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist === 0) return anchor;
-
-        const angle = Math.atan2(dy, dx);
-        const snapAngle = Math.PI / 8; // 22.5 degrees
-        const snappedAngle = Math.round(angle / snapAngle) * snapAngle;
-
-        return {
-            x: Math.round(anchor.x + Math.cos(snappedAngle) * dist),
-            y: Math.round(anchor.y + Math.sin(snappedAngle) * dist)
-        };
-    }
 
 
     copySelectedObjectToClipboard(): void {
@@ -2120,9 +896,9 @@ export class SceneEditor {
                 (this.selectedObject as any).poly = [];
             }
 
-            this.currentPolygon = [];
-            this.creationType = type as any;
-            this.drawMode = true;
+            this.transformManager.currentPolygon = [];
+            this.transformManager.creationType = type as any;
+            this.transformManager.drawMode = true;
 
             // UI Feedback
             const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
@@ -2353,71 +1129,11 @@ export class SceneEditor {
 
 
     onClick(x: number, y: number): boolean {
-        console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.enabled}, DrawMode: ${this.drawMode} `);
-        if (!this.enabled) return false;
-
-        // If in Draw Mode, add points
-        if (this.drawMode) {
-            console.log(`OnClick in DrawMode: ${x}, ${y} `);
-
-            // Convert Screen X/Y to World X/Y for storage
-            const scene = this.game.sceneManager.currentScene;
-            const camX = scene && scene.camera ? scene.camera.x : 0;
-            const camY = scene && scene.camera ? scene.camera.y : 0;
-            const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
-
-            // Mouse (Screen) -> World
-            // Center-Based: World = (Screen - Center) / Zoom + Camera
-            const halfW = this.game.canvas.width / 2;
-            const halfH = this.game.canvas.height / 2;
-
-            const worldX = (x - halfW) / zoom + camX;
-            const worldY = (y - halfH) / zoom + camY;
-
-            if (!this.currentPolygon) this.currentPolygon = [];
-
-            // SNAP LOGIC
-            let finalX = Math.round(worldX);
-            let finalY = Math.round(worldY);
-
-            if (this.game.input.isDown('Shift') && this.currentPolygon.length > 0) {
-                const anchor = this.currentPolygon[this.currentPolygon.length - 1];
-                const snapped = this.getSnappedPos({ x: worldX, y: worldY }, anchor);
-                finalX = snapped.x;
-                finalY = snapped.y;
-            }
-
-            this.currentPolygon.push({ x: finalX, y: finalY });
-            console.log(`Point Added: ${finalX},${finalY}.Total: ${this.currentPolygon.length} `);
-        }
-
-        // ALWAYS consume click if editor is enabled to prevent Game/Player interaction
-        return true;
+        return this.transformManager.onClick(x, y);
     }
 
     finishPolygon(): void {
-        console.log('finishPolygon called');
-        if (this.currentPolygon && this.currentPolygon.length > 2) {
-            // Instead of creating NEW object, assign to SELECTED object (if valid)
-            if (this.selectedObject && (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox)) {
-                this.selectedObject.poly = [...this.currentPolygon];
-                console.log("Polygon updated for " + this.selectedObject.name);
-            } else {
-                // Fallback if somehow lost selection (shouldn't happen with new flow, but good safety)
-                console.warn("No valid object selected for polygon completion!");
-            }
-
-            this.currentPolygon = [];
-            this.drawMode = false;
-
-            const chk = document.getElementById('chk-draw-mode') as HTMLInputElement;
-            if (chk) chk.checked = false;
-
-            // Reset Mode string
-            useEditorStore.getState().setMode('SELECT');
-
-            this.refreshHierarchy();
-        }
+        this.transformManager.finishPolygon();
     }
 
     render(ctx: CanvasRenderingContext2D): void {
@@ -2470,7 +1186,7 @@ export class SceneEditor {
         const halfH = this.game.canvas.height / 2;
 
         // Render current polygon (World Space)
-        if (this.currentPolygon && this.currentPolygon.length > 0) {
+        if (this.transformManager.currentPolygon && this.transformManager.currentPolygon.length > 0) {
             ctx.save();
             ctx.translate(halfW, halfH);
             ctx.scale(scene && scene.camera ? scene.camera.zoom : 1, scene && scene.camera ? scene.camera.zoom : 1);
@@ -2479,13 +1195,13 @@ export class SceneEditor {
             ctx.strokeStyle = '#ffff00';
             ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1);
             ctx.beginPath();
-            ctx.moveTo(this.currentPolygon[0].x, this.currentPolygon[0].y);
-            for (let i = 1; i < this.currentPolygon.length; i++) {
-                ctx.lineTo(this.currentPolygon[i].x, this.currentPolygon[i].y);
+            ctx.moveTo(this.transformManager.currentPolygon[0].x, this.transformManager.currentPolygon[0].y);
+            for (let i = 1; i < this.transformManager.currentPolygon.length; i++) {
+                ctx.lineTo(this.transformManager.currentPolygon[i].x, this.transformManager.currentPolygon[i].y);
             }
             ctx.stroke();
             ctx.fillStyle = '#ffff00';
-            this.currentPolygon.forEach(p => ctx.fillRect(p.x - 2, p.y - 2, 4, 4));
+            this.transformManager.currentPolygon.forEach(p => ctx.fillRect(p.x - 2, p.y - 2, 4, 4));
             ctx.restore();
         }
 
@@ -2574,7 +1290,7 @@ export class SceneEditor {
                         verts.forEach((v: any, i: number) => {
                             const p = getDrawPos(v);
                             // Highlight dragging vertex
-                            if (this.isDragging && this.draggingVertexIndex === i) {
+                            if (this.transformManager.isDragging && this.transformManager.draggingVertexIndex === i) {
                                 ctx.fillStyle = '#ffff00';
                             } else {
                                 ctx.fillStyle = '#00ff00';
