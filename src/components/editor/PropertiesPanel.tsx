@@ -5,43 +5,24 @@ import { Select } from '../../components/common/Select';
 
 export const PropertiesPanel: React.FC = () => {
     const game = useGame();
-    const { selectedObjectId, selectedObjectType, hierarchyVersion, incrementHierarchyVersion, objectVersion, incrementObjectVersion, mode, selectedVertexIndex } = useEditorStore();
-    const [obj, setObj] = useState<any>(null);
+    const { selectedObjectId, selectedObjectType, incrementHierarchyVersion, incrementObjectVersion, objectVersion, selectedVertexIndex } = useEditorStore();
 
-    // Refresh local object reference when selection or hierarchy changes
-    useEffect(() => {
-        const editor = game?.editor;
-        if (!editor) return;
-
-        const sel = editor.selectedObject as any;
-        if (sel === 'SETTINGS') {
-            // Special case: Bind to Global Settings
-            setObj(game.settings);
-        } else if (sel === 'SCENE') {
-            // Special case: Bind to Current Scene
-            setObj({ ...game.sceneManager.currentScene });
-        } else if (editor.selectedObject) {
-            // Clone object for local UI state
-            // NOTE: Spread {...obj} does NOT copy class getters (like Entity.width/height)
-            // So we must manually ensure they are copied over for the UI to see them.
-            const source = editor.selectedObject as any;
-            const clone = { ...source };
-
-            if (clone.width === undefined && source.width !== undefined) clone.width = source.width;
-            if (clone.height === undefined && source.height !== undefined) clone.height = source.height;
-
-            setObj(clone);
-        } else {
-            setObj(null);
+    // Derived Object Binding (Source of Truth)
+    // We re-render whenever objectVersion changes (subscribed via store hook)
+    let obj: any = null;
+    if (game) {
+        if (selectedObjectId === 'SETTINGS') {
+            obj = game.settings;
+        } else if (selectedObjectId === 'SCENE') {
+            obj = game.sceneManager.currentScene;
+        } else if (game.editor && game.editor.selectedObject) {
+            obj = game.editor.selectedObject;
         }
-    }, [selectedObjectId, hierarchyVersion, objectVersion]);
+    }
 
     const uiScale = game?.settings?.editor?.uiScale || 1.0;
 
-    // Fix: If obj is null, we must wait for the useEffect to populate it,
-    // EVEN IF selectedObjectId is 'SETTINGS'.
-    // Otherwise we render with obj=null and crash.
-    if (!obj) {
+    if (!obj || !game) {
         return (
             <div
                 id="editor-panel"
@@ -63,33 +44,16 @@ export const PropertiesPanel: React.FC = () => {
     const handleChange = (field: string, value: any, enforceNumber = false) => {
         if (!obj) return;
 
+        let finalVal = value;
         if (enforceNumber) {
-            value = parseFloat(value);
-            if (isNaN(value)) value = 0;
+            finalVal = parseFloat(value);
+            if (isNaN(finalVal)) finalVal = 0;
         }
 
-        // 1. Identify Real Object
-        let realObj: any = null;
-        if (selectedObjectId === 'SCENE') {
-            realObj = game?.sceneManager?.currentScene;
-        } else if (selectedObjectId === 'SETTINGS') {
-            realObj = game?.settings;
-        } else if (game && game.editor) {
-            realObj = game.editor.selectedObject;
-        }
+        // Apply directly to the source of truth
+        obj[field] = finalVal;
 
-        // 2. Apply to Real Object
-        if (realObj) {
-            realObj[field] = value;
-        } else {
-            console.error(`[PropertiesPanel] Failed to find Real Object for ID: ${selectedObjectId}`);
-        }
-
-        // 3. Update Local State
-        obj[field] = value;
-        setObj({ ...obj }); // Force re-render
-
-        // Signal update back to store/game loop if needed
+        // Signal update
         incrementObjectVersion();
 
         // Special handling for Name changes (needs hierarchy refresh)
@@ -99,15 +63,15 @@ export const PropertiesPanel: React.FC = () => {
 
         // Special handling for Sprite changes (reload)
         if (field === 'spriteName') {
-            if (realObj && realObj.setSprite) realObj.setSprite(value);
+            if (obj.setSprite) obj.setSprite(finalVal);
         }
 
         // Special handling for Ignore Scaling (preserve visual size)
         if (field === 'ignoreScaling') {
-            const isIgnored = value;
+            const isIgnored = finalVal;
             const scene = game.sceneManager.currentScene;
-            if (scene && realObj && (selectedObjectType === 'Static' || selectedObjectType === 'Actor' || selectedObjectType === 'Entity')) {
-                const ent = realObj; // Use Real Object
+            if (scene && (selectedObjectType === 'Static' || selectedObjectType === 'Actor' || selectedObjectType === 'Entity')) {
+                const ent = obj;
                 const currentVisW = ent.width;
                 const currentVisH = ent.height;
                 const modelScale = ent.modelScale || 1.0;
@@ -115,7 +79,6 @@ export const PropertiesPanel: React.FC = () => {
                 let targetFactor = modelScale;
 
                 if (!isIgnored) {
-                    // Enable Depth Scaling: Scale = Model * Depth
                     let depthFactor = 1.0;
                     if (scene.scaling && scene.scaling.enabled) {
                         depthFactor = scene.getScaling(ent.y);
@@ -123,7 +86,6 @@ export const PropertiesPanel: React.FC = () => {
                     targetFactor = modelScale * depthFactor;
                 }
 
-                // Recalculate Base Dimensions to maintain Visual Size
                 if (targetFactor !== 0) {
                     ent.baseWidth = currentVisW / targetFactor;
                     ent.baseHeight = currentVisH / targetFactor;
@@ -132,21 +94,15 @@ export const PropertiesPanel: React.FC = () => {
                     ent.baseHeight = currentVisH;
                 }
 
-                // Apply immediate scale to prevent jitter
                 ent.scale = targetFactor;
-
-                // Sync to local object
-                obj.baseWidth = ent.baseWidth;
-                obj.baseHeight = ent.baseHeight;
-                obj.scale = ent.scale;
-                setObj({ ...obj });
+                // No need to setObj, direct mod is done.
             }
         }
 
         // Special handling for Animation Speed (Live Update)
         if (field === 'animationSpeed') {
-            if (realObj && realObj.animator) {
-                realObj.animator.frameDuration = value;
+            if (obj.animator) {
+                obj.animator.frameDuration = finalVal;
             }
         }
     };
@@ -185,7 +141,7 @@ export const PropertiesPanel: React.FC = () => {
                                     // Local update only
                                     const val = e.target.value;
                                     if (selectedObjectType === 'SCENE') obj.id = val; else obj.name = val;
-                                    setObj({ ...obj });
+                                    incrementObjectVersion();
                                 }}
                                 onBlur={(e) => {
                                     // Commit with Validation
@@ -221,7 +177,7 @@ export const PropertiesPanel: React.FC = () => {
 
                                         if (realObj) {
                                             if (selectedObjectType === 'SCENE') obj.id = realObj.id; else obj.name = realObj.name;
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                         }
                                     }
                                 }}
@@ -469,14 +425,14 @@ export const PropertiesPanel: React.FC = () => {
                                     <div style={{ display: 'flex', gap: '2px' }}>
                                         <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
                                             v.x = parseFloat(e.target.value);
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                             if (game.editor.selectedObject) {
                                                 (game.editor.selectedObject as any).vertices[i].x = v.x;
                                             }
                                         }} />
                                         <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.y)} onChange={(e) => {
                                             v.y = parseFloat(e.target.value);
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                             if (game.editor.selectedObject) {
                                                 (game.editor.selectedObject as any).vertices[i].y = v.y;
                                             }
@@ -496,7 +452,7 @@ export const PropertiesPanel: React.FC = () => {
                                             }
 
                                             v.p = newP;
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                             if (game.editor.selectedObject) {
                                                 const sel = game.editor.selectedObject as any;
                                                 sel.vertices[i].p = v.p;
@@ -593,7 +549,7 @@ export const PropertiesPanel: React.FC = () => {
                                         if (game.editor.selectedObject) {
                                             (game.editor.selectedObject as any).components = obj.components;
                                         }
-                                        setObj({ ...obj });
+                                        incrementObjectVersion();
                                         // No need to reset value as Select component handles it or we pass empty value
                                     }}
                                     style={{ width: '100px', fontSize: '0.8em' }}
@@ -611,7 +567,7 @@ export const PropertiesPanel: React.FC = () => {
                                         if (game.editor.selectedObject) {
                                             (game.editor.selectedObject as any).components = obj.components;
                                         }
-                                        setObj({ ...obj });
+                                        incrementObjectVersion();
                                     }}>x</button>
                                 </div>
 
@@ -623,11 +579,11 @@ export const PropertiesPanel: React.FC = () => {
                                         <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '0.75em' }}>Vert A (0-3)</label>
-                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexA} onChange={(e) => { comp.vertexA = parseInt(e.target.value); setObj({ ...obj }); }} />
+                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexA} onChange={(e) => { comp.vertexA = parseInt(e.target.value); incrementObjectVersion(); }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '0.75em' }}>Vert B (0-3)</label>
-                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexB} onChange={(e) => { comp.vertexB = parseInt(e.target.value); setObj({ ...obj }); }} />
+                                                <input type="number" className="e-input" min="0" max="3" value={comp.vertexB} onChange={(e) => { comp.vertexB = parseInt(e.target.value); incrementObjectVersion(); }} />
                                             </div>
                                         </div>
                                         <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
@@ -635,7 +591,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <label className="e-label" style={{ fontSize: '0.75em' }}>Axis</label>
                                                 <Select
                                                     value={comp.axis}
-                                                    onChange={(value) => { comp.axis = value; setObj({ ...obj }); }}
+                                                    onChange={(value) => { comp.axis = value; incrementObjectVersion(); }}
                                                     options={[
                                                         { value: 'x', label: 'X' },
                                                         { value: 'y', label: 'Y' },
@@ -647,7 +603,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <label className="e-label" style={{ fontSize: '0.75em' }}>Op</label>
                                                 <Select
                                                     value={comp.op}
-                                                    onChange={(value) => { comp.op = value; setObj({ ...obj }); }}
+                                                    onChange={(value) => { comp.op = value; incrementObjectVersion(); }}
                                                     options={[
                                                         { value: '>', label: '>' },
                                                         { value: '<', label: '<' },
@@ -661,7 +617,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '9px' }}>Culling Type</label>
                                             <Select
                                                 value={comp.cullingType || 'layer'}
-                                                onChange={(value) => { comp.cullingType = value; setObj({ ...obj }); }}
+                                                onChange={(value) => { comp.cullingType = value; incrementObjectVersion(); }}
                                                 options={[
                                                     { value: 'layer', label: 'Change Layer' },
                                                     { value: 'render', label: 'Disable Render' },
@@ -671,7 +627,7 @@ export const PropertiesPanel: React.FC = () => {
                                         </div>
                                         <div className="e-row">
                                             <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s) (Optional)</label>
-                                            <input type="text" className="e-input" value={comp.targetId || ''} onChange={(e) => { comp.targetId = e.target.value; setObj({ ...obj }); }} />
+                                            <input type="text" className="e-input" value={comp.targetId || ''} onChange={(e) => { comp.targetId = e.target.value; incrementObjectVersion(); }} />
                                         </div>
                                     </>
                                 )}
@@ -689,7 +645,7 @@ export const PropertiesPanel: React.FC = () => {
                                                     checked={!!comp.ignoreDistance}
                                                     onChange={(e) => {
                                                         comp.ignoreDistance = e.target.checked;
-                                                        setObj({ ...obj });
+                                                        incrementObjectVersion();
                                                     }}
                                                 />
                                                 Ignore Distance (Always Pickup)
@@ -704,14 +660,14 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '10px' }}>Target ID(s)</label>
                                             <input type="text" className="e-input" value={comp.targetGroupId || ''} onChange={(e) => {
                                                 comp.targetGroupId = e.target.value;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }} />
                                         </div>
                                         <div className="e-row">
                                             <label className="e-label" style={{ fontSize: '10px' }}>Name (Optional)</label>
                                             <input type="text" className="e-input" value={comp.name || ''} onChange={(e) => {
                                                 comp.name = e.target.value;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }} />
                                         </div>
                                     </>
@@ -726,7 +682,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '10px' }}>Target Trigger (Name/ID)</label>
                                             <input type="text" className="e-input" value={comp.target || ''} onChange={(e) => {
                                                 comp.target = e.target.value;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }} />
                                         </div>
                                     </>
@@ -752,7 +708,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <label className="e-label" style={{ marginRight: '5px' }}>Mode:</label>
                                                 <Select
                                                     value={comp.mode || 'Invert'}
-                                                    onChange={(value) => { comp.mode = value; setObj({ ...obj }); }}
+                                                    onChange={(value) => { comp.mode = value; incrementObjectVersion(); }}
                                                     options={[
                                                         { value: 'Invert', label: 'Invert (Walk Inside)' },
                                                         { value: 'Add', label: 'Add (Walk Inside)' },
@@ -770,11 +726,11 @@ export const PropertiesPanel: React.FC = () => {
                                         <div className="e-row" style={{ display: 'flex', gap: '2px' }}>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 1</label>
-                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId1 || ''} onChange={(e) => { comp.groupId1 = e.target.value; setObj({ ...obj }); }} />
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId1 || ''} onChange={(e) => { comp.groupId1 = e.target.value; incrementObjectVersion(); }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Target(s) 2</label>
-                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId2 || ''} onChange={(e) => { comp.groupId2 = e.target.value; setObj({ ...obj }); }} />
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.groupId2 || ''} onChange={(e) => { comp.groupId2 = e.target.value; incrementObjectVersion(); }} />
                                             </div>
                                         </div>
 
@@ -783,7 +739,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 <label className="e-label" style={{ fontSize: '10px', marginRight: '5px' }}>State:</label>
                                                 <Select
                                                     value={String(comp.state)}
-                                                    onChange={(value) => { comp.state = parseInt(value); setObj({ ...obj }); }}
+                                                    onChange={(value) => { comp.state = parseInt(value); incrementObjectVersion(); }}
                                                     options={[
                                                         { value: '1', label: '1' },
                                                         { value: '2', label: '2' },
@@ -793,7 +749,7 @@ export const PropertiesPanel: React.FC = () => {
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Key Item ID</label>
-                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.idKey || ''} onChange={(e) => { comp.idKey = e.target.value; setObj({ ...obj }); }} />
+                                                <input type="text" className="e-input" style={{ width: '100%' }} value={comp.idKey || ''} onChange={(e) => { comp.idKey = e.target.value; incrementObjectVersion(); }} />
                                             </div>
                                         </div>
 
@@ -801,7 +757,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Sound 1</label>
                                                 <div style={{ display: 'flex' }}>
-                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound1 || ''} onChange={(e) => { comp.sound1 = e.target.value; setObj({ ...obj }); }} />
+                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound1 || ''} onChange={(e) => { comp.sound1 = e.target.value; incrementObjectVersion(); }} />
                                                     <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
 
                                                         if (game) {
@@ -821,7 +777,7 @@ export const PropertiesPanel: React.FC = () => {
                                                                 if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
 
                                                                 comp.sound1 = val;
-                                                                setObj({ ...obj });
+                                                                incrementObjectVersion();
                                                             }, '.mp3,.wav'); // Pass multiple extensions if supported?
                                                         }
                                                     }}>...</button>
@@ -830,7 +786,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '9px' }}>Sound 2</label>
                                                 <div style={{ display: 'flex' }}>
-                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound2 || ''} onChange={(e) => { comp.sound2 = e.target.value; setObj({ ...obj }); }} />
+                                                    <input type="text" className="e-input" style={{ width: '100%' }} value={comp.sound2 || ''} onChange={(e) => { comp.sound2 = e.target.value; incrementObjectVersion(); }} />
                                                     <button className="e-btn" style={{ fontSize: '10px', padding: '0 4px', marginLeft: '2px' }} onClick={() => {
 
                                                         if (game) {
@@ -839,7 +795,7 @@ export const PropertiesPanel: React.FC = () => {
                                                                 if (val.startsWith('public/sounds/')) val = val.replace('public/sounds/', '');
                                                                 if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
                                                                 comp.sound2 = val;
-                                                                setObj({ ...obj });
+                                                                incrementObjectVersion();
                                                             }, '.mp3,.wav');
                                                         }
                                                     }}>...</button>
@@ -858,7 +814,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '10px' }}>Shadow Quad ID</label>
                                             <input type="text" className="e-input" value={comp.shadowQuadId || ''} onChange={(e) => {
                                                 comp.shadowQuadId = e.target.value;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }} />
                                         </div>
                                         <div className="e-row" style={{ display: 'flex', gap: '5px' }}>
@@ -866,14 +822,14 @@ export const PropertiesPanel: React.FC = () => {
                                                 <label className="e-label" style={{ fontSize: '10px' }}>Offset X</label>
                                                 <input type="number" className="e-input" value={comp.offsetX || 0} onChange={(e) => {
                                                     comp.offsetX = parseFloat(e.target.value);
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 }} />
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <label className="e-label" style={{ fontSize: '10px' }}>Offset Y</label>
                                                 <input type="number" className="e-input" value={comp.offsetY || 0} onChange={(e) => {
                                                     comp.offsetY = parseFloat(e.target.value);
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 }} />
                                             </div>
                                         </div>
@@ -881,7 +837,7 @@ export const PropertiesPanel: React.FC = () => {
                                             <label className="e-label" style={{ fontSize: '10px' }}>Trigger ID(s) (Zone)</label>
                                             <input type="text" className="e-input" value={comp.triggerId || ''} onChange={(e) => {
                                                 comp.triggerId = e.target.value;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }} />
                                         </div>
                                     </>
@@ -973,7 +929,7 @@ export const PropertiesPanel: React.FC = () => {
                                     if (game.editor.selectedObject && (game.editor.selectedObject as any).addAnimSet) {
                                         (game.editor.selectedObject as any).addAnimSet(newId);
                                     }
-                                    setObj({ ...obj });
+                                    incrementObjectVersion();
                                 }}>+ ADD</button>
                             </div>
                         </div>
@@ -991,7 +947,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 if (game.editor.selectedObject && (game.editor.selectedObject as any).removeAnimSet) {
                                                     (game.editor.selectedObject as any).removeAnimSet(setId);
                                                 }
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }
                                         }}>x</button>
                                     </div>
@@ -1017,7 +973,7 @@ export const PropertiesPanel: React.FC = () => {
                                                         // If this is the current state, update sprite immediately
                                                         (game.editor.selectedObject as any).updateSpriteForState();
                                                     }
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 });
                                             }}>...</button>
                                         </div>
@@ -1209,7 +1165,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 if (!(game.editor.selectedObject as any).interactions) (game.editor.selectedObject as any).interactions = {};
                                                 (game.editor.selectedObject as any).interactions[verb] = '';
                                             }
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                         }
                                     }}
                                     options={[
@@ -1237,7 +1193,7 @@ export const PropertiesPanel: React.FC = () => {
                                             if (game.editor.selectedObject) {
                                                 (game.editor.selectedObject as any).interactions[verb] = e.target.value;
                                             }
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                         }}
                                     />
                                     <button
@@ -1249,7 +1205,7 @@ export const PropertiesPanel: React.FC = () => {
                                             if (game.editor.selectedObject) {
                                                 delete (game.editor.selectedObject as any).interactions[verb];
                                             }
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                         }}
                                     >x</button>
                                 </div>
@@ -1280,7 +1236,7 @@ export const PropertiesPanel: React.FC = () => {
                                             onChange={(e) => {
                                                 if (obj.camera) {
                                                     obj.camera.x = parseFloat(e.target.value);
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 }
                                             }}
                                         />
@@ -1294,7 +1250,7 @@ export const PropertiesPanel: React.FC = () => {
                                             onChange={(e) => {
                                                 if (obj.camera) {
                                                     obj.camera.y = parseFloat(e.target.value);
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 }
                                             }}
                                         />
@@ -1309,7 +1265,7 @@ export const PropertiesPanel: React.FC = () => {
                                             onChange={(e) => {
                                                 if (obj.camera) {
                                                     obj.camera.zoom = parseFloat(e.target.value);
-                                                    setObj({ ...obj });
+                                                    incrementObjectVersion();
                                                 }
                                             }}
                                         />
@@ -1420,7 +1376,7 @@ export const PropertiesPanel: React.FC = () => {
                                             value={Math.round(obj.defaultCamera.x)}
                                             onChange={(e) => {
                                                 obj.defaultCamera.x = parseFloat(e.target.value);
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }}
                                         />
                                     </div>
@@ -1432,7 +1388,7 @@ export const PropertiesPanel: React.FC = () => {
                                             value={Math.round(obj.defaultCamera.y)}
                                             onChange={(e) => {
                                                 obj.defaultCamera.y = parseFloat(e.target.value);
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }}
                                         />
                                     </div>
@@ -1445,7 +1401,7 @@ export const PropertiesPanel: React.FC = () => {
                                             value={obj.defaultCamera.zoom}
                                             onChange={(e) => {
                                                 obj.defaultCamera.zoom = parseFloat(e.target.value);
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }}
                                         />
                                     </div>
@@ -1459,7 +1415,7 @@ export const PropertiesPanel: React.FC = () => {
                                                 obj.defaultCamera.x = obj.camera.x;
                                                 obj.defaultCamera.y = obj.camera.y;
                                                 obj.defaultCamera.zoom = obj.camera.zoom;
-                                                setObj({ ...obj });
+                                                incrementObjectVersion();
                                             }
                                         }}
                                     >
@@ -1485,7 +1441,7 @@ export const PropertiesPanel: React.FC = () => {
                                                         checked={s.enabled}
                                                         onChange={(e) => {
                                                             game.editor.setScalingEnabled(e.target.checked);
-                                                            setObj({ ...obj });
+                                                            incrementObjectVersion();
                                                         }}
                                                     />
                                                     Enable Depth Scaling
@@ -1496,22 +1452,22 @@ export const PropertiesPanel: React.FC = () => {
                                                     <div>
                                                         <label className="e-label">Min</label>
                                                         <input type="number" step="0.1" className="e-input" value={s.min}
-                                                            onChange={(e) => { s.min = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                                            onChange={(e) => { s.min = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                                     </div>
                                                     <div>
                                                         <label className="e-label">Max</label>
                                                         <input type="number" step="0.1" className="e-input" value={s.max}
-                                                            onChange={(e) => { s.max = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                                            onChange={(e) => { s.max = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                                     </div>
                                                     <div>
                                                         <label className="e-label">Horizon Y</label>
                                                         <input type="number" className="e-input" value={s.horizon}
-                                                            onChange={(e) => { s.horizon = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                                            onChange={(e) => { s.horizon = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                                     </div>
                                                     <div>
                                                         <label className="e-label">Front Y</label>
                                                         <input type="number" className="e-input" value={s.front}
-                                                            onChange={(e) => { s.front = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                                            onChange={(e) => { s.front = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                                     </div>
                                                 </div>
                                             )}
@@ -1540,7 +1496,7 @@ export const PropertiesPanel: React.FC = () => {
                                 onChange={(e) => {
                                     if (!obj.editor) obj.editor = { uiScale: 1.0 };
                                     obj.editor.uiScale = parseFloat(e.target.value);
-                                    setObj({ ...obj });
+                                    incrementObjectVersion();
                                     // Trigger re-render of other panels that might depend on this?
                                     // Hierarchy panel subscribes to hierarchyVersion, but maybe we need a global UI version?
                                     // For now, let's just force update via state.
@@ -1562,7 +1518,7 @@ export const PropertiesPanel: React.FC = () => {
                                     onChange={(e) => {
                                         if (obj.crt) {
                                             obj.crt.enabled = e.target.checked;
-                                            setObj({ ...obj });
+                                            incrementObjectVersion();
                                         }
                                     }}
                                 />
@@ -1579,7 +1535,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="0.5" step="0.01"
                                         value={obj.crt.curvature}
-                                        onChange={(e) => { obj.crt.curvature = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.curvature = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1587,7 +1543,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="1" step="0.05"
                                         value={obj.crt.vignette}
-                                        onChange={(e) => { obj.crt.vignette = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.vignette = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1595,7 +1551,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="100" max="2000" step="50"
                                         value={obj.crt.scanlineCount}
-                                        onChange={(e) => { obj.crt.scanlineCount = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.scanlineCount = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1603,7 +1559,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="1" step="0.05"
                                         value={obj.crt.scanlineIntensity}
-                                        onChange={(e) => { obj.crt.scanlineIntensity = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.scanlineIntensity = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1611,7 +1567,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="5" step="0.1"
                                         value={obj.crt.aberration}
-                                        onChange={(e) => { obj.crt.aberration = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.aberration = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1619,7 +1575,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="1" step="0.05"
                                         value={obj.crt.bloom}
-                                        onChange={(e) => { obj.crt.bloom = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.bloom = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1627,7 +1583,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </label>
                                     <input type="range" className="e-input" min="0" max="1" step="0.05"
                                         value={obj.crt.phosphor || 0}
-                                        onChange={(e) => { obj.crt.phosphor = parseFloat(e.target.value); setObj({ ...obj }); }} />
+                                        onChange={(e) => { obj.crt.phosphor = parseFloat(e.target.value); incrementObjectVersion(); }} />
                                 </div>
                                 <div className="e-row">
                                     <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
@@ -1635,7 +1591,7 @@ export const PropertiesPanel: React.FC = () => {
                                             type="checkbox"
                                             style={{ marginRight: '5px' }}
                                             checked={obj.crt.bezelGlow}
-                                            onChange={(e) => { obj.crt.bezelGlow = e.target.checked; setObj({ ...obj }); }}
+                                            onChange={(e) => { obj.crt.bezelGlow = e.target.checked; incrementObjectVersion(); }}
                                         />
                                         Bezel Glow
                                     </label>

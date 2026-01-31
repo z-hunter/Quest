@@ -56,17 +56,12 @@ export class SceneEditor {
         this.boundMouseMoveHandler = this.onMouseMove.bind(this);
         this.boundMouseUpHandler = this.onMouseUp.bind(this);
         this.boundPasteHandler = this.handleGlobalPaste.bind(this);
+
+        this.ui.initUI();
     }
 
     private uiInitialized = false;
 
-    initUI(): void {
-        this.ui.initUI();
-    }
-
-    onAddObjectClick(): void {
-        this.ui.onAddObjectClick();
-    }
 
     destroy(): void {
         this.ui.destroy();
@@ -314,12 +309,12 @@ export class SceneEditor {
                 break;
 
             case 'enter':
-                if (!e.ctrlKey) this.finishPolygon();
+                if (!e.ctrlKey) this.transformManager.finishPolygon();
                 break;
 
             case 'escape':
-                this.drawMode = false;
-                this.currentPolygon = [];
+                this.transformManager.drawMode = false;
+                this.transformManager.currentPolygon = [];
                 const c = document.getElementById('chk-draw-mode') as HTMLInputElement;
                 if (c) c.checked = false;
                 console.log("[Editor] Draw Mode Cancelled");
@@ -365,9 +360,7 @@ export class SceneEditor {
         this.transformManager.startCreating(type, x, y);
     }
 
-    setupUI(): void {
-        this.ui.setupUI();
-    }
+
 
     setScalingEnabled(isEnabled: boolean): void {
         const scene = this.game.sceneManager.currentScene;
@@ -418,17 +411,19 @@ export class SceneEditor {
             }
             // Refresh properties panel calls if needed (Store update handles it via objectVersion usually, 
             // but we might want to trigger a hierarchy/object version bump since ALL entities changed)
-            useEditorStore.getState().incrementObjectVersion();
             useEditorStore.getState().incrementHierarchyVersion();
         }
     }
+
 
     toggle(): void {
         this.ui.toggle();
     }
 
     syncUI(): void {
-        this.ui.syncUI();
+        // Legacy: UI is now reactive.
+        useEditorStore.getState().incrementObjectVersion();
+        useEditorStore.getState().incrementHierarchyVersion();
     }
 
 
@@ -443,8 +438,8 @@ export class SceneEditor {
         this.transformManager.onMouseMove(e);
     }
 
-    onMouseUp(): void {
-        this.transformManager.onMouseUp();
+    onMouseUp(e: MouseEvent): void {
+        this.transformManager.onMouseUp(e);
     }
 
     selectObject(obj: any): void {
@@ -500,7 +495,7 @@ export class SceneEditor {
             this.syncUI();
         } else if ((this.selectedObject as any) === 'SETTINGS') {
             if (sectionSettingsProps) sectionSettingsProps.classList.remove('hidden');
-            this.syncSettingsUI();
+            // Settings synced via store/React
         } else if (obj instanceof SceneObject) {
             // Unified Logic for all SceneObjects
             if (obj instanceof Entity) {
@@ -519,37 +514,17 @@ export class SceneEditor {
                 if (sectionWalkboxProps) sectionWalkboxProps.classList.remove('hidden');
             }
 
-            this.updateUIFromObject();
+
         }
 
         this.refreshHierarchy();
     }
 
-    syncSettingsUI(): void {
-        const s = this.game.settings.crt;
 
-        const enabled = document.getElementById('crt-enabled') as HTMLInputElement;
-        const curve = document.getElementById('crt-curvature') as HTMLInputElement;
-        const scan = document.getElementById('crt-scanlines') as HTMLInputElement;
-        const inten = document.getElementById('crt-intensity') as HTMLInputElement;
-        const abr = document.getElementById('crt-aberration') as HTMLInputElement;
-        const vig = document.getElementById('crt-vignette') as HTMLInputElement;
-        const phos = document.getElementById('crt-phosphor') as HTMLInputElement;
-        const bloom = document.getElementById('crt-bloom') as HTMLInputElement;
-
-        if (enabled) enabled.checked = s.enabled;
-        if (curve) curve.value = s.curvature.toString();
-        if (scan) scan.value = s.scanlineCount.toString();
-        if (inten) inten.value = s.scanlineIntensity.toString();
-        if (abr) abr.value = s.aberration.toString();
-        if (vig) vig.value = s.vignette.toString();
-        if (phos) phos.value = (s.phosphor || 0).toString();
-        if (bloom) bloom.value = (s.bloom || 0).toString();
-    }
 
 
     newScene(): void {
-        const newScene = new Scene('new_scene', 'New Scene');
+        const newScene = new Scene(this.game, 'new_scene', 'New Scene');
         // Add default scale
         newScene.scaling.enabled = true;
         this.game.sceneManager.addScene(newScene);
@@ -561,102 +536,10 @@ export class SceneEditor {
     }
 
     refreshHierarchy(): void {
-        // Sync to Store
+        // Sync to Store: Signal React to re-render the hierarchy
         useEditorStore.getState().incrementHierarchyVersion();
-
-        // Sync static Scene Item selection state
-        const scenePropertiesItem = document.getElementById('scene-properties-item');
-        if (scenePropertiesItem) {
-            if ((this.selectedObject as any) === 'SCENE') {
-                scenePropertiesItem.classList.add('selected');
-            } else {
-                scenePropertiesItem.classList.remove('selected');
-            }
-        }
-
-        const entityList = document.getElementById('entity-list');
-        if (entityList) {
-            entityList.innerHTML = '';
-            const scene = this.game.sceneManager.currentScene;
-            if (scene) {
-                // Entities
-                scene.entities.forEach((entity: Entity) => {
-                    const div = document.createElement('div');
-                    div.className = 'entity-item';
-
-                    // Determine Type Char
-                    let typeChar = 'S'; // Static
-                    const isActor = entity instanceof Actor;
-                    // @ts-ignore
-                    const typeProp = entity.type;
-
-                    if (isActor || typeProp === 'Actor') typeChar = 'A';
-
-                    // [T] Name
-                    div.innerText = `${typeChar}:${entity.name} `;
-
-                    div.onclick = () => {
-                        this.selectObject(entity);
-                    };
-                    if (this.selectedObject === entity) {
-                        div.classList.add('selected');
-                    }
-                    entityList.appendChild(div);
-                });
-
-                // Walkboxes
-                if (scene.walkbox) {
-                    scene.walkbox.forEach((wb: any, i: number) => {
-                        const div = document.createElement('div');
-                        div.className = 'entity-item';
-                        div.innerText = `W:${wb.name || 'Walkbox ' + i} `;
-                        div.onclick = () => {
-                            this.selectObject(wb);
-                        };
-                        if (this.selectedObject === wb) {
-                            div.classList.add('selected');
-                        }
-                        entityList.appendChild(div);
-                    });
-                }
-
-                // Triggerboxes
-                if (scene.triggerboxes) {
-                    scene.triggerboxes.forEach((trigger: any) => {
-                        const div = document.createElement('div');
-                        div.className = 'entity-item';
-                        div.innerText = `T:${trigger.name || 'Trigger'} `;
-                        div.onclick = () => {
-                            this.selectObject(trigger);
-                        };
-                        if (this.selectedObject === trigger) {
-                            div.classList.add('selected');
-                        }
-                        entityList.appendChild(div);
-                    });
-                }
-            }
-        }
     }
 
-
-
-    updateUIFromObject(): void {
-        this.ui.updateUIFromObject();
-    }
-
-    updateEntityFromUI(triggerId?: string): void {
-        this.ui.updateEntityFromUI(triggerId);
-    }
-
-    duplicateSelectedObject(): void {
-        this.selectionManager.duplicateSelectedObject();
-    }
-
-
-    setActorIsPlayer(actor: Actor, value: boolean): void {
-        this.ui.setActorIsPlayer(actor, value);
-    }
 
     // Unified Object Creation Logic
     createObjectFromData(data: any, overrideX?: number, overrideY?: number): any {
@@ -744,7 +627,7 @@ export class SceneEditor {
                 if (data.interactions) newObj.interactions = data.interactions;
 
             } else if (type === 'Quad') {
-                newObj = QuadObject.fromJSON(data);
+                newObj = QuadObject.fromJSON(this.game, data);
                 // Handle Paste Position Override
                 if (overrideX !== undefined && overrideY !== undefined) {
                     const oldX = data.x || 0;
@@ -763,16 +646,16 @@ export class SceneEditor {
                     }
                 }
             } else if (type === 'Actor') {
-                newObj = Actor.fromJSON(data);
+                newObj = Actor.fromJSON(this.game, data);
             } else if (type === 'Player') {
-                newObj = Actor.fromJSON({ ...data, type: 'Actor', isPlayer: true });
+                newObj = Actor.fromJSON(this.game, { ...data, type: 'Actor', isPlayer: true });
             } else if (type === 'Static' || type === 'Entity') {
-                newObj = Entity.fromJSON(data);
+                newObj = Entity.fromJSON(this.game, data);
             }
             // Fallback
             if (!newObj) {
                 if (type !== 'Walkbox' && type !== 'Triggerbox') {
-                    newObj = Entity.fromJSON(data);
+                    newObj = Entity.fromJSON(this.game, data);
                 }
             }
 
@@ -818,21 +701,7 @@ export class SceneEditor {
         };
     }
 
-    // New Helper: Convert Screen to World
-    convertScreenToWorld(x: number, y: number): { x: number, y: number } {
-        const scene = this.game.sceneManager.currentScene;
-        const camX = scene && scene.camera ? scene.camera.x : 0;
-        const camY = scene && scene.camera ? scene.camera.y : 0;
-        const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-        const halfW = this.game.canvas.width / 2;
-        const halfH = this.game.canvas.height / 2;
-
-        const worldX = (x - halfW) / zoom + camX;
-        const worldY = (y - halfH) / zoom + camY;
-
-        return { x: Math.round(worldX), y: Math.round(worldY) };
-    }
 
 
 
@@ -858,6 +727,10 @@ export class SceneEditor {
         }).catch(err => {
             console.error('Failed to copy object JSON: ', err);
         });
+    }
+
+    duplicateSelectedObject(): void {
+        this.selectionManager.duplicateSelectedObject();
     }
 
     deleteSelectedObject(): void {
@@ -1066,7 +939,7 @@ export class SceneEditor {
 
             const spriteName = filename.replace('.json', '');
             ent.setSprite(spriteName);
-            this.updateUIFromObject();
+            useEditorStore.getState().incrementObjectVersion();
         });
     }
 
