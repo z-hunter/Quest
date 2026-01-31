@@ -3,7 +3,7 @@ import type { EntityData } from './Entity';
 
 export const DefaultEntityData: EntityData = {
     type: 'Static',
-    name: 'New Entity',
+    name: 'Static',
     x: 100,
     y: 100,
     width: 30,
@@ -19,8 +19,10 @@ export const DefaultEntityData: EntityData = {
 export const DefaultActorData: ActorData = {
     ...DefaultEntityData,
     type: 'Actor',
-    name: 'New Actor',
-    color: '#3333FF', // Blue for Actors
+    name: 'Actor',
+    width: 25,
+    height: 40,
+    color: '#36d87fff',
     direction: 'down',
     speed: 0.1,
     animSets: {},
