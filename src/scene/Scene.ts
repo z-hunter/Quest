@@ -6,6 +6,7 @@ import type { EntityData } from '../entities/Entity';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
+import { SceneRenderer } from '../graphics/SceneRenderer';
 import type { IGame } from '../core/IGame';
 
 export interface SceneScaling {
@@ -37,6 +38,7 @@ export interface SceneData {
 
 export class Scene {
     game: IGame;
+    renderer: SceneRenderer;
 
     id: string;
     name: string;
@@ -70,7 +72,7 @@ export class Scene {
 
     // Subscene State
     private _activeSubscene: string | null = null;
-    private subsceneEntities: Set<SceneObject> = new Set();
+    public subsceneEntities: Set<SceneObject> = new Set();
 
     get activeSubscene(): string | null {
         return this._activeSubscene;
@@ -188,6 +190,9 @@ export class Scene {
         this.player = null;
         this.camera = { x: 0, y: 0, zoom: 1.0 };
         this.defaultCamera = { x: 0, y: 0, zoom: 1.0 };
+        this.renderer = new SceneRenderer(game);
+
+        // Load Scene Data
         this.autoCenter = true; // Default to true
         this.cameraSpeed = 5.0; // Default speed
         this.camDeadzoneX = 50;
@@ -682,203 +687,13 @@ export class Scene {
         });
     }
 
+    // -----------------------------------------------------
+    // RENDER LOOP
+    // -----------------------------------------------------
+    // -----------------------------------------------------
+
     render(ctx: CanvasRenderingContext2D): void {
-        // ... existing render start
-        ctx.save();
-        // ctx.fillStyle = '#000'; // Removed: Game.ts clears the screen.
-        // ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-        // Capture Camera Y for Parallax Sorting
-        const camY = this.camera ? this.camera.y : 0;
-
-        this.entities.sort((a, b) => {
-            // Sorting Order:
-            // 1. Layer (Explicit user control) - Support 'renderLayer' override
-            // 2. Y-Position (Depth) - includes custom Quad logic
-
-            const rawLayerA = (a as any).renderLayer !== undefined ? (a as any).renderLayer : a.layer;
-            const rawLayerB = (b as any).renderLayer !== undefined ? (b as any).renderLayer : b.layer;
-
-            // Robust Parse
-            const layerA = Number.isFinite(Number(rawLayerA)) ? Number(rawLayerA) : 0;
-            const layerB = Number.isFinite(Number(rawLayerB)) ? Number(rawLayerB) : 0;
-
-            if (layerA !== layerB) return layerA - layerB;
-
-            // Handle Quad custom sorting
-            let yA = a.y;
-            let yB = b.y;
-            let ignoreA = false;
-            let ignoreB = false;
-
-            if (a.type === 'Quad') {
-                const qA = a as any;
-                if (qA.sortMode === 'ignore') {
-                    ignoreA = true;
-                } else {
-                    // Start with object origin as fallback
-                    yA = qA.y;
-                    let sortP = qA.parallax || 1.0;
-
-                    if (qA.sortMode === 'v0' && qA.vertices[0]) { yA = qA.vertices[0].y; sortP = qA.vertices[0].p; }
-                    else if (qA.sortMode === 'v1' && qA.vertices[1]) { yA = qA.vertices[1].y; sortP = qA.vertices[1].p; }
-                    else if (qA.sortMode === 'v2' && qA.vertices[2]) { yA = qA.vertices[2].y; sortP = qA.vertices[2].p; }
-                    else if (qA.sortMode === 'v3' && qA.vertices[3]) { yA = qA.vertices[3].y; sortP = qA.vertices[3].p; }
-
-                    // Apply Parallax Correction to Sorting Y
-                    // Visual Offset Y = -CamY * (P - 1.0)
-                    // Visual Y = BaseY + Visual Offset Y
-                    // We sort by Visual Y because that determines screen position depth
-                    yA = yA - camY * (sortP - 1.0);
-                }
-            }
-
-            if (b.type === 'Quad') {
-                const qB = b as any;
-                if (qB.sortMode === 'ignore') {
-                    ignoreB = true;
-                } else {
-                    yB = qB.y;
-                    let sortP = qB.parallax || 1.0;
-
-                    if (qB.sortMode === 'v0' && qB.vertices[0]) { yB = qB.vertices[0].y; sortP = qB.vertices[0].p; }
-                    else if (qB.sortMode === 'v1' && qB.vertices[1]) { yB = qB.vertices[1].y; sortP = qB.vertices[1].p; }
-                    else if (qB.sortMode === 'v2' && qB.vertices[2]) { yB = qB.vertices[2].y; sortP = qB.vertices[2].p; }
-                    else if (qB.sortMode === 'v3' && qB.vertices[3]) { yB = qB.vertices[3].y; sortP = qB.vertices[3].p; }
-
-                    yB = yB - camY * (sortP - 1.0);
-                }
-            }
-
-            if (ignoreA && ignoreB) return 0; // Both ignore? Stable.
-            if (ignoreA) return -1; // A ignores -> Draw First (Background)? OR Last? 
-            // "Ignore Y Sorting" usually implies it's a floor/bg, so it should be drawn BELOW everything else on the same layer?
-            // If return -1, A comes before B. A is drawn first. A is behind B. Correct.
-            if (ignoreB) return 1;
-
-            return yA - yB;
-        });
-
-        const halfW = ctx.canvas.width / 2;
-        const halfH = ctx.canvas.height / 2;
-
-        // SPLIT RENDER: Background/Normal vs Subscene
-        const subsceneLayer: Entity[] = [];
-        const normalLayer: Entity[] = [];
-
-        this.entities.forEach(entity => {
-            // If we have an active subscene, and this entity belongs to it OR is tracked as part of it
-            // Robust check: Trim both
-            const gID = entity.groupID ? entity.groupID.trim() : null;
-            const target = this.activeSubscene ? this.activeSubscene.trim() : null;
-
-            if (target && (gID === target || this.subsceneEntities.has(entity))) {
-                subsceneLayer.push(entity);
-            } else {
-                normalLayer.push(entity);
-            }
-        });
-
-        // 1. Render Normal Layer
-        normalLayer.forEach(entity => {
-            if (entity.disabled) return;
-            if (entity.visible === false) return; // Optimization/Culling
-            const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-            ctx.save();
-
-            // Center Pivot Transform
-            ctx.translate(halfW, halfH);
-            ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x * p, -this.camera.y * p);
-
-            // DEBUG TRACE
-            if (this.entities.length > 0 && Math.random() < 0.005) {
-                if (entity.name === 'Quad_102' || entity.name === 'Quad_70') {
-                    console.log(`[RenderTrace] Drawing ${entity.name} (L:${entity.layer})`);
-                }
-            }
-
-            entity.render(ctx);
-            ctx.restore();
-        });
-
-        // 2. Dimmer / Blur (if active)
-        if (this.activeSubscene) {
-            // Setup Blur Canvas if needed
-            if (!this._blurCanvas) {
-                this._blurCanvas = document.createElement('canvas');
-            }
-
-            // Downsample Factor: 0.1 = 1/10th resolution (Strong Blur)
-            const downsample = 0.1;
-            const targetW = Math.floor(ctx.canvas.width * downsample);
-            const targetH = Math.floor(ctx.canvas.height * downsample);
-
-            if (this._blurCanvas.width !== targetW || this._blurCanvas.height !== targetH) {
-                this._blurCanvas.width = targetW;
-                this._blurCanvas.height = targetH;
-            }
-
-            const bCtx = this._blurCanvas.getContext('2d');
-            if (bCtx) {
-                // 1. Draw current screen (Normal Layer) into tiny canvas
-                // Note: 'ctx' currently has the full resolution normal layer rendered.
-                bCtx.imageSmoothingEnabled = true; // Smooth during downsample?
-                bCtx.drawImage(ctx.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height, 0, 0, targetW, targetH);
-
-                // 2. Clear Screen and Draw Stretched result back
-                ctx.save();
-                ctx.globalAlpha = 1.0;
-                ctx.imageSmoothingEnabled = true; // CRITICAL: Smooth pixelation to create blur
-                ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform ensures we cover screen
-                ctx.drawImage(this._blurCanvas, 0, 0, targetW, targetH, 0, 0, ctx.canvas.width, ctx.canvas.height);
-                ctx.restore();
-            }
-
-            // Optional: Keep the Dimmer on top for contrast? User asked for "Blur", usually implies dimming too.
-            // Let's keep a lighter dimmer (30%) to ensure text/foreground pops.
-            ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // Ensure dimmer covers full screen regardless of transform state
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            ctx.restore();
-        }
-
-        // 3. Render Subscene Layer
-        subsceneLayer.forEach(entity => {
-            if (entity.disabled) return; // Should be enabled by onClick
-            if (entity.visible === false) return; // Optimization/Culling
-            // Subscene objects usually don't parallax, or parallax relative to center?
-            // Assuming normal camera transform for now, but they are "on top".
-            const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
-            ctx.save();
-            ctx.translate(halfW, halfH);
-            ctx.scale(this.camera.zoom, this.camera.zoom);
-            ctx.translate(-this.camera.x * p, -this.camera.y * p);
-
-            entity.render(ctx);
-            ctx.restore();
-        });
-
-        // 4. Draw Walkbox (Debug)
-        // Correctly apply Camera Zoom and Translate (Parallax 1.0)
-        // @ts-ignore
-        const editor = window.game?.editor;
-        if (editor && editor.enabled) {
-            // Only draw if a Walkbox is selected
-            if (editor.selectedObject && editor.selectedObject instanceof Walkbox) {
-                ctx.save();
-                // Center Pivot Transform
-                ctx.translate(halfW, halfH);
-                ctx.scale(this.camera.zoom, this.camera.zoom);
-                ctx.translate(-this.camera.x, -this.camera.y);
-                this.renderWalkbox(ctx);
-                ctx.restore();
-            }
-        }
-
-        ctx.restore();
+        this.renderer.render(ctx, this);
     }
 
     renderWalkbox(ctx: CanvasRenderingContext2D): void {
