@@ -5,8 +5,6 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
-import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../entities/EntityPrefabs';
-import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
@@ -32,11 +30,11 @@ export class SceneEditor {
     // Refactored: Use this.game.openFileBrowser instead of local property
 
     // Event Handlers (Bound)
-    private boundKeyHandler: (e: KeyboardEvent) => void;
-    private boundMouseDownHandler: (e: MouseEvent) => void;
-    private boundMouseMoveHandler: (e: MouseEvent) => void;
-    private boundMouseUpHandler: (e: MouseEvent) => void;
-    private boundPasteHandler: (e: ClipboardEvent) => void;
+    public boundKeyHandler: (e: KeyboardEvent) => void;
+    public boundMouseDownHandler: (e: MouseEvent) => void;
+    public boundMouseMoveHandler: (e: MouseEvent) => void;
+    public boundMouseUpHandler: (e: MouseEvent) => void;
+    public boundPasteHandler: (e: ClipboardEvent) => void;
 
     constructor(game: any) {
         this.game = game;
@@ -60,7 +58,7 @@ export class SceneEditor {
         this.ui.initUI();
     }
 
-    private uiInitialized = false;
+
 
 
     destroy(): void {
@@ -97,14 +95,14 @@ export class SceneEditor {
 
     handleGlobalKey(e: KeyboardEvent): void {
         // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'd') {
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
             e.preventDefault();
             this.duplicateSelectedObject();
             return;
         }
 
         // Ctrl+C: Copy Object
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'c') {
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) {
             // Only prevent default if we have an object selected, 
             // otherwise let normal copy work (e.g. text in inputs)
             if (this.selectedObject && !(document.activeElement instanceof HTMLInputElement)) {
@@ -115,32 +113,30 @@ export class SceneEditor {
         }
 
         // Ctrl+V: Paste Object
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'v') {
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
             if (!(document.activeElement instanceof HTMLInputElement)) {
                 // e.preventDefault(); // Don't prevent default, let 'paste' event fire
                 // We rely on the global 'paste' event listener which calls handleGlobalPaste
-                // But if we want to force it?
-                // The 'paste' event is standard.
                 return;
             }
         }
 
         // Ctrl+S: Save Object
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 's') {
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
             e.preventDefault();
             this.saveObject();
             return;
         }
 
         // Ctrl+O: Load Object
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'o') {
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'o' || e.code === 'KeyO')) {
             e.preventDefault();
             this.loadObject();
             return;
         }
 
         // Alt+D: Toggle Disabled State
-        if (this.enabled && e.altKey && e.key.toLowerCase() === 'd') {
+        if (this.enabled && e.altKey && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
             e.preventDefault();
             if (this.selectedObject) {
                 this.selectedObject.disabled = !this.selectedObject.disabled;
@@ -154,7 +150,7 @@ export class SceneEditor {
         }
 
         // Alt+L: Toggle Locked State
-        if (this.enabled && e.altKey && e.key.toLowerCase() === 'l') {
+        if (this.enabled && e.altKey && (e.key.toLowerCase() === 'l' || e.code === 'KeyL')) {
             e.preventDefault();
             if (this.selectedObject) {
                 this.selectedObject.locked = !this.selectedObject.locked;
@@ -167,8 +163,8 @@ export class SceneEditor {
             return;
         }
 
-        // Ctrl+Z: Undo
-        if (this.enabled && e.ctrlKey && e.key.toLowerCase() === 'z') {
+        // Ctrl+Z / Ctrl+Y: Undo/Redo (Toggle)
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ' || e.key.toLowerCase() === 'y' || e.code === 'KeyY')) {
             e.preventDefault();
             this.undo();
             return;
@@ -353,10 +349,6 @@ export class SceneEditor {
         if (!this.game.sceneManager.currentScene) return;
 
         this.saveUndoState(); // Save before creation
-
-        const scene = this.game.sceneManager.currentScene;
-
-
         this.transformManager.startCreating(type, x, y);
     }
 
@@ -1078,34 +1070,6 @@ export class SceneEditor {
             ctx.restore();
         }
 
-        // Check Triggerboxes
-        if (scene.triggerboxes && this.selectedObject instanceof Triggerbox) {
-            scene.triggerboxes.forEach((trigger: any) => {
-                const poly = trigger.poly;
-                if (!poly || poly.length === 0) return;
-                if (trigger.disabled) return; // Skip disabled triggers
-
-                // Draw Trigger (World Space)
-                ctx.save();
-                ctx.translate(halfW, halfH);
-                ctx.scale(scene.camera.zoom, scene.camera.zoom); // Zoom
-                ctx.translate(-camX, -camY); // Camera
-
-                ctx.beginPath();
-                ctx.moveTo(poly[0].x, poly[0].y);
-                for (let i = 1; i < poly.length; i++) {
-                    ctx.lineTo(poly[i].x, poly[i].y);
-                }
-                ctx.closePath();
-
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; // Cyan fill
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)'; // Cyan stroke
-                ctx.stroke();
-
-                ctx.restore();
-            });
-        }
 
         // Highlight selected object
         if (this.selectedObject) {

@@ -75,7 +75,7 @@ export class SceneManager {
             this.loadSceneData(data, idFromPath);
         } catch (e) {
             console.error(e);
-            this.game.showNotification("Failed to load scene");
+            this.game.showNotification?.("Failed to load scene");
         }
     }
 

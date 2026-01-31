@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 
 export const PropertiesPanel: React.FC = () => {
     const game = useGame();
-    const { selectedObjectId, selectedObjectType, incrementHierarchyVersion, incrementObjectVersion, objectVersion, selectedVertexIndex } = useEditorStore();
+    const { selectedObjectId, selectedObjectType, incrementHierarchyVersion, incrementObjectVersion, mode, selectedVertexIndex } = useEditorStore();
 
     // Derived Object Binding (Source of Truth)
     // We re-render whenever objectVersion changes (subscribed via store hook)
@@ -1063,8 +1063,10 @@ export const PropertiesPanel: React.FC = () => {
                                             obj.y += dy;
 
                                             // Apply to Real (Must do this manually as handleChange only does the targeting field)
-                                            game.editor.selectedObject.x = obj.x;
-                                            game.editor.selectedObject.y = obj.y;
+                                            if (game.editor && game.editor.selectedObject && 'x' in game.editor.selectedObject) {
+                                                (game.editor.selectedObject as any).x = obj.x;
+                                                (game.editor.selectedObject as any).y = obj.y;
+                                            }
                                         }
 
                                         handleChange('parallax', newP, true);
