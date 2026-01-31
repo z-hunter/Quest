@@ -5,7 +5,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
-import { DefaultActorData, DefaultEntityData } from '../entities/EntityPrefabs';
+import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../entities/EntityPrefabs';
 import { Geometry } from '../utils/Geometry';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
@@ -474,20 +474,28 @@ export class SceneEditor {
                 data.x = x !== undefined ? x : 160;
                 data.y = y !== undefined ? y : 100;
                 // data.color = '#0000ff'; // Override removed
-                ent = Actor.fromJSON(data);
+                ent = Actor.fromJSON(this.game, data);
             } else if (type === 'Quad') {
-                ent = new QuadObject(name);
+                const data = JSON.parse(JSON.stringify(DefaultQuadData));
+                data.name = name;
+
                 if (x !== undefined && y !== undefined) {
                     // Offset vertices to position
-                    (ent as QuadObject).vertices = [
+                    data.vertices = [
                         { x: x, y: y, p: 1.0 },
                         { x: x + 100, y: y, p: 1.0 },
                         { x: x + 100, y: y + 100, p: 1.0 },
                         { x: x, y: y + 100, p: 1.0 }
                     ];
-                    ent.x = x + 50; // Pivot center
-                    ent.y = y + 100;
+                    data.x = x + 50;
+                    data.y = y + 100;
+                } else {
+                    // Default center
+                    data.x = 160;
+                    data.y = 100;
                 }
+
+                ent = QuadObject.fromJSON(this.game, data);
             } else {
                 // Use Prefab Data
                 const data = JSON.parse(JSON.stringify(DefaultEntityData));
@@ -495,7 +503,7 @@ export class SceneEditor {
                 data.x = x !== undefined ? x : 160;
                 data.y = y !== undefined ? y : 100;
                 // data.color = '#00ff00'; // Removed override, use prefab default
-                ent = Entity.fromJSON(data);
+                ent = Entity.fromJSON(this.game, data);
             }
 
             scene.addEntity(ent);

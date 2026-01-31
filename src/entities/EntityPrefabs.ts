@@ -20,8 +20,34 @@ export const DefaultActorData: ActorData = {
     ...DefaultEntityData,
     type: 'Actor',
     name: 'New Actor',
+    color: '#3333FF', // Blue for Actors
     direction: 'down',
     speed: 0.1,
     animSets: {},
     isPlayer: false
+
+};
+
+export const DefaultQuadData: any = {
+    ...DefaultEntityData,
+    type: 'Quad',
+    name: 'New Quad',
+    width: 100,
+    height: 100,
+    color: '#888888',
+    vertices: [
+        { x: 0, y: 0, p: 1.0 },
+        { x: 100, y: 0, p: 1.0 },
+        { x: 100, y: 100, p: 1.0 },
+        { x: 0, y: 100, p: 1.0 }
+    ],
+    sortMode: 'ignore',
+    isGrid: false,
+    gridLines: 5,
+    lineWidth: 1.0,
+    gridColor: '#ffffff',
+    filled: true,
+    blur: 0,
+    opacity: 1.0,
+    blendMode: 'source-over'
 };
