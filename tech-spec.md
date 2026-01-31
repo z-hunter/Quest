@@ -11,7 +11,7 @@ The monolithic `SceneEditor` class has been decomposed into specialized managers
 *   **`EditorSelectionManager.ts`**: Handles object selection logic (Scene, Settings, Entities), exclusive selection rules, and **Reactive Notifications**.
 *   **`EditorTransformManager.ts`**: Handles mouse interaction in the canvas (Drag, Resize, Gizmos).
 *   **`EditorUndoManager.ts`**: Manages the Undo/Redo stack (Command Pattern).
-*   **`EditorUI.ts`**: Manages DOM overlays and event listeners for the non-React parts of the UI (Context menus, Hierarchy updates).
+*   **`EditorUI.ts`**: Handles DOM overlays and event listeners for the non-React parts of the UI (Context menus).
 
 ```mermaid
 classDiagram
@@ -29,6 +29,7 @@ classDiagram
     }
     class EditorUndoManager {
         +undo()
+        +redo()
         +saveState()
     }
     
@@ -42,11 +43,16 @@ Rendering logic was extracted from `Scene.ts` into a dedicated **Descriptive Ren
 
 *   **`SceneRenderer.ts`**: Stateless renderer. Receives a `Scene` and `Context` and draws the frame.
 *   **Pipeline**:
-    1.  **Background Color/Image**
-    2.  **Parallax Layers** (Sorted by Z-index/Layer ID)
-    3.  **Entities** (Sorted by Y-coordinate for pseudo-3D capability)
-    4.  **Foreground Effects** (Blur, Scanlines - via `SceneRenderer.renderBlurEffect`)
-    5.  **Debug Overlays** (Walkboxes, Colliders - only if Editor enabled)
+    1.  **Parallax Layers Setup**
+    2.  **Sorting**: Entities are sorted by Z-index (Layer), then by Y-coordinate for depth. Special handling for QuadObjects with Sort Modes.
+    3.  **Render Pass**:
+        *   **Background / Normal Layer**: Standard entities and static objects.
+        *   **Foregound Effects**: Blur (if active subscene).
+        *   **Subscene Layer**: Highlighted interactive elements.
+    4.  **Debug Overlays**:
+        *   **Walkboxes**: Invert (Green), Add (Blue), Subtract (Red/Cutout).
+        *   **Triggerboxes**: Red overlay (only when selected).
+        *   **Selection**: Magenta editing handles.
 
 ### 1.3. Reactive Data Binding (Zero-Cost Observations)
 To synchronize Game Logic (Scripts/Physics) with Editor UI without polling overhead:
@@ -64,14 +70,24 @@ To synchronize Game Logic (Scripts/Physics) with Editor UI without polling overh
     ```
 *   **Batched Updates**: `EditorSelectionManager` uses a dirty flag and `requestAnimationFrame` to coalesce multiple property changes into a single Zustand Store update per frame.
 
+### 1.4. React UI Architecture (Implemented)
+The Editor UI has been fully migrated to React + Zustand, replacing legacy DOM manipulation:
+
+*   **`HierarchyPanel.tsx`**: Renders the scene tree. Reactive to addition/deletion/renaming via `store.hierarchyVersion`.
+*   **`PropertiesPanel.tsx`**: Renders dynamic forms based on `selectedObjectType`. Usese **Controlled Components** with two-way binding to the underlying Engine Objects.
+*   **`editorStore.ts`**: Zustand store holding ephemeral editor state (Selection ID, Modes, Versions).
+
 ---
 
 ## 2. Roadmap & Future Tasks
 
 ### 2.1. Immediate Term (Editor Polish)
-*   [ ] **React-based Hierarchy**: Currently `EditorUI.refreshHierarchy` builds HTML via string concatenation. Migrate this to a pure React component (`HierarchyPanel.tsx`) consuming the `useEditorStore`.
-*   [ ] **Controlled Components for Properties**: The Properties Panel currently relies on direct DOM manipulation (`input.value = ...`). Refactor to use React Controlled Components synced with `useEditorStore` versioning for smoother two-way binding.
-*   [ ] **DOM Element Caching**: In `EditorUI`, cache references to frequently accessed DOM elements (like property inputs) to avoid `document.getElementById` thrashing.
+*   [x] **React-based Hierarchy**: Migrated to `HierarchyPanel.tsx`.
+*   [x] **Controlled Components for Properties**: Migrated to `PropertiesPanel.tsx`.
+*   [x] **DOM Element Caching**: Implemented in `EditorUI` for remaining native inputs (e.g. Parser).
+*   [x] **Undo/Redo**: Full stack implemented with keyboard shortcuts (Ctrl+Z / Ctrl+Y).
+*   [x] **Object Locking**: Alt+L toggle implemented.
+*   [ ] **Prefab System**: Save/Load object templates (Actors, Static groups) to disk for reuse.
 
 ### 2.2. Medium Term (Engine Features)
 *   [ ] **Asset Database**: Centralized manifest for all assets (sprites, sounds) to prevent duplicate loading and allow preloading strategies.
@@ -81,32 +97,30 @@ To synchronize Game Logic (Scripts/Physics) with Editor UI without polling overh
 *   [ ] **ECS Migration (Partial)**: The current `Entity` + `Components` array is a hybrid. Moving towards a stricter Entity-Component-System could improve performance for complex scenes (systems iterating over arrays of components rather than objects).
 *   [ ] **Virtual Scripting VM**: Isolate user scripts from the engine core to prevent crashes and allow for sandboxed execution (e.g., `yield` support for cutscenes).
 
-## 3. Editor Subsystems
+## 3. New Features Documentation
 
-### 3.1. Undo/Redo System
-The `EditorUndoManager` implements a stack-based history system (Command Pattern variant) to safely handle state restoration.
+### 3.1. Entity Properties
+Standard Entities (`Static`, `Actor`) now support enhanced visual properties:
+*   **Opacity**: 0.0 - 1.0 transparency.
+*   **Blend Mode**: `source-over`, `multiply`, `screen`, `overlay`, `lighter`, `difference`.
+*   **Blur**: Background blur effect (0-50px).
+*   **Parallax**: Global parallax factor affecting X/Y rendering relative to Camera.
 
-*   **State Snapshots**: The system serializes the entire scene state (`scene.toJSON()`) onto a history stack for every undoable action.
-*   **Buffer Limit**: A `MAX_HISTORY` constant (currently 10) enforces a fixed buffer size. Oldest states are shifted out when the limit is reached to manage memory.
-*   **Double-Stack**:
-    *   `undoStack`: Holds past states.
-    *   `redoStack`: Holds future states (popped from undo).
-    *   *Note*: Pushing a new state to `undoStack` automatically clears the `redoStack`.
-*   **Bug Fix (Double-Undo)**: Object creation flows must ensure `saveUndoState()` is called exactly once. Redundant calls in `EditorTransformManager` were removed in favor of the initial setup in `SceneEditor`.
+### 3.2. Quad Objects
+A generic polygon object (`QuadObject`) for creating perspective geometry (walls, floors).
+*   **Per-Vertex Parallax**: Each vertex has its own `p` factor, allowing for 2.5D perspective distortion.
+*   **Texture/Modify**: Supports color fill or retro grid rendering.
+*   **Sorting**: Can sort by average Y, or force sort based on specific vertex Y (useful for walls).
 
-### 3.2. Toolbar & UI Composition
-The Editor Toolbar is implemented as a modular React component, decoupled from specific panels.
+### 3.3. Walkbox & Triggerbox
+*   **Walkbox**: Defines walkable areas. Supports boolean operations:
+    *   `Invert` (Standard walkable area).
+    *   `Add` (Connects areas).
+    *   `Subtract` (Holes/Obstacles).
+*   **Triggerbox**: Defines event zones. Executes scripts when Player entires (`enter`, `leave`, `stay` events managed by game loop).
 
-*   **`EditorToolbar.tsx`**: A pure functional component containing actions for Save, Load, Undo, Redo, Copy, Paste, and Delete.
-*   **Integration**: Primarily rendered within `HierarchyPanel.tsx`. It connects to the `EditorFacade` methods (`game.editor.undo()`, etc.).
-*   **Redo Button**: Implemented visually using the `undoIcon` with a CSS transform (`scaleX(-1)`) to minimize asset usage.
-
-### 3.3. Notification System (Toast vs Console)
-The engine distinguishes between Editor Feedback and System Logs to prevent UI clutter.
-
-*   **Toast Notifications (`game.showNotification`)**:
-    *   **Usage**: Immediate, ephemeral feedback for editor actions (e.g., "Undo (-1)", "Saved").
-    *   **Implementation**: `UIOverlay.tsx` renders these. Crucially, messages are Objects `{ id: number, text: string }`. The unique `id` (timestamp) is used as a React `key` to force the component to re-mount. This is required to reliably restart the CSS `fadeOut` animation for sequential identical messages.
-*   **System Console (`game.onMessage`)**:
-    *   **Usage**: Persistent log for script errors, debug info, or game logic events.
-    *   **Implementation**: Renders to the scrollable Console Overlay.
+### 3.4. Parallax Auto-Correction
+The Editor implements logic to prevent visual jumping when adjusting Parallax.
+*   **Problem**: Changing `p` shifts the object's screen position if Camera != 0,0.
+*   **Solution**: `x_new = x_old + Camera * (p_new - p_old)`. This counter-adjusts the world position so the object appears stationary on screen during the edit.
+*   **Scope**: Applied to `Entity` and `Actor`.
