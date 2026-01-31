@@ -9,14 +9,10 @@ interface UIOverlayProps {
 }
 
 export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
-    const [message, setMessage] = useState<string | null>(null);
+    const [message, setMessage] = useState<{ id: number, text: string } | null>(null);
     const [fileBrowser, setFileBrowser] = useState<{ open: boolean, mode: 'save' | 'load', dir: string, onConfirm: (f: string) => void, extension?: string, title?: string } | null>(null);
 
     // Console History State
-    // -1 = new line (empty)
-    // 0 = oldest, length-1 = newest
-    // We want Up to go to newest (length-1), then backwards.
-    // Usually: index points to the command we are viewing.
     const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
     // Editor Store State
@@ -25,7 +21,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     useEffect(() => {
         if (game) {
             // Bind Game callbacks to React state
-            game.onMessage = (text) => setMessage(text);
+            game.onMessage = (text) => setMessage({ id: Date.now(), text });
 
             // Bind File Browser Request
             game.onRequestFileBrowser = (mode, dir, onConfirm, extension, title) => {
@@ -170,8 +166,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
             {/* Notification Toast - Keeping for non-game/system messages if any */}
             {message && (
-                <div className="notification-toast">
-                    {message}
+                <div key={message.id} className="notification-toast">
+                    {message.text}
                 </div>
             )}
 

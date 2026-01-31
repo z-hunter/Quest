@@ -2,12 +2,7 @@ import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
-import undoIcon from '../../assets/arrow-counter-clockwise.svg';
-import pasteIcon from '../../assets/clipboard-text.svg';
-import copyIcon from '../../assets/copy-simple.svg';
-import saveIcon from '../../assets/floppy-disk.svg';
-import loadIcon from '../../assets/folder-open.svg';
-import deleteIcon from '../../assets/trash.svg';
+import { EditorToolbar } from './EditorToolbar';
 
 export const HierarchyPanel: React.FC = () => {
     const game = useGame();
@@ -27,6 +22,7 @@ export const HierarchyPanel: React.FC = () => {
     };
 
     const scene = game?.sceneManager?.currentScene;
+
 
     if (!scene) return <div className="p-2 text-gray-500">No Scene</div>;
 
@@ -175,32 +171,7 @@ export const HierarchyPanel: React.FC = () => {
                     <div>OBJECTS</div>
                 </div>
                 <div style={{ marginBottom: '5px' }}>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(6, 1fr)',
-                        gap: '2px',
-                        marginBottom: '5px'
-                    }}>
-                        {/* Toolbar Icons - explicit px scaling */}
-                        <button className="toolbar-icon-btn" onClick={() => game.editor.saveObject()} title="Save Object (Ctrl+S)">
-                            <img src={saveIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Save" />
-                        </button>
-                        <button className="toolbar-icon-btn" onClick={() => game.editor.loadObject()} title="Load Object (Ctrl+O)">
-                            <img src={loadIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Load" />
-                        </button>
-                        <button className="toolbar-icon-btn" onClick={() => game.editor.undo()} title="Undo (Ctrl+Z)">
-                            <img src={undoIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Undo" />
-                        </button>
-                        <button className="toolbar-icon-btn" onClick={() => game.editor.copySelectedObjectToClipboard()} title="Copy (Ctrl+C)">
-                            <img src={copyIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Copy" />
-                        </button>
-                        <button className="toolbar-icon-btn" onClick={() => game.editor.pasteObjectFromClipboard()} title="Paste (Ctrl+V)">
-                            <img src={pasteIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Paste" />
-                        </button>
-                        <button className="toolbar-icon-btn" onClick={handleDelete} title="Delete Selected (Del)">
-                            <img src={deleteIcon} className="toolbar-icon" style={{ width: `${16 * uiScale}px`, height: `${16 * uiScale}px` }} alt="Delete" />
-                        </button>
-                    </div>
+                    <EditorToolbar />
 
                     <div style={{ marginTop: '5px' }}>
                         <Select

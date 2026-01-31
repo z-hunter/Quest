@@ -93,6 +93,10 @@ export class SceneEditor {
         this.undoManager.undo();
     }
 
+    redo(): void {
+        this.undoManager.redo();
+    }
+
     handleGlobalKey(e: KeyboardEvent): void {
         // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
         if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
@@ -163,10 +167,17 @@ export class SceneEditor {
             return;
         }
 
-        // Ctrl+Z / Ctrl+Y: Undo/Redo (Toggle)
-        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ' || e.key.toLowerCase() === 'y' || e.code === 'KeyY')) {
+        // Ctrl+Z: Undo
+        if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ') && !e.shiftKey) { // Ensure Shift not held for Redo in some apps
             e.preventDefault();
             this.undo();
+            return;
+        }
+
+        // Ctrl+Y or Ctrl+Shift+Z: Redo
+        if (this.enabled && e.ctrlKey && ((e.key.toLowerCase() === 'y' || e.code === 'KeyY') || (e.shiftKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ')))) {
+            e.preventDefault();
+            this.redo();
             return;
         }
 

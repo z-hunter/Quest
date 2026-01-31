@@ -80,3 +80,33 @@ To synchronize Game Logic (Scripts/Physics) with Editor UI without polling overh
 ### 2.3. Long Term (Architecture)
 *   [ ] **ECS Migration (Partial)**: The current `Entity` + `Components` array is a hybrid. Moving towards a stricter Entity-Component-System could improve performance for complex scenes (systems iterating over arrays of components rather than objects).
 *   [ ] **Virtual Scripting VM**: Isolate user scripts from the engine core to prevent crashes and allow for sandboxed execution (e.g., `yield` support for cutscenes).
+
+## 3. Editor Subsystems
+
+### 3.1. Undo/Redo System
+The `EditorUndoManager` implements a stack-based history system (Command Pattern variant) to safely handle state restoration.
+
+*   **State Snapshots**: The system serializes the entire scene state (`scene.toJSON()`) onto a history stack for every undoable action.
+*   **Buffer Limit**: A `MAX_HISTORY` constant (currently 10) enforces a fixed buffer size. Oldest states are shifted out when the limit is reached to manage memory.
+*   **Double-Stack**:
+    *   `undoStack`: Holds past states.
+    *   `redoStack`: Holds future states (popped from undo).
+    *   *Note*: Pushing a new state to `undoStack` automatically clears the `redoStack`.
+*   **Bug Fix (Double-Undo)**: Object creation flows must ensure `saveUndoState()` is called exactly once. Redundant calls in `EditorTransformManager` were removed in favor of the initial setup in `SceneEditor`.
+
+### 3.2. Toolbar & UI Composition
+The Editor Toolbar is implemented as a modular React component, decoupled from specific panels.
+
+*   **`EditorToolbar.tsx`**: A pure functional component containing actions for Save, Load, Undo, Redo, Copy, Paste, and Delete.
+*   **Integration**: Primarily rendered within `HierarchyPanel.tsx`. It connects to the `EditorFacade` methods (`game.editor.undo()`, etc.).
+*   **Redo Button**: Implemented visually using the `undoIcon` with a CSS transform (`scaleX(-1)`) to minimize asset usage.
+
+### 3.3. Notification System (Toast vs Console)
+The engine distinguishes between Editor Feedback and System Logs to prevent UI clutter.
+
+*   **Toast Notifications (`game.showNotification`)**:
+    *   **Usage**: Immediate, ephemeral feedback for editor actions (e.g., "Undo (-1)", "Saved").
+    *   **Implementation**: `UIOverlay.tsx` renders these. Crucially, messages are Objects `{ id: number, text: string }`. The unique `id` (timestamp) is used as a React `key` to force the component to re-mount. This is required to reliably restart the CSS `fadeOut` animation for sequential identical messages.
+*   **System Console (`game.onMessage`)**:
+    *   **Usage**: Persistent log for script errors, debug info, or game logic events.
+    *   **Implementation**: Renders to the scrollable Console Overlay.

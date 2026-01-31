@@ -554,7 +554,8 @@ export class EditorTransformManager {
         const editor = this.editor;
         if (!editor.game.sceneManager.currentScene) return;
 
-        editor.saveUndoState(); // Save before creation
+        // NOTE: SceneEditor.startCreating already calls saveUndoState()
+        // editor.saveUndoState(); 
 
         const scene = editor.game.sceneManager.currentScene;
 
