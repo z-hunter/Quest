@@ -200,20 +200,23 @@ export class SceneEditor {
         // F1: Toggle Scene Editor
         if (e.key === 'F1') {
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
 
             // Ensure Sprite Editor is closed if switching
             if (this.game.spriteEditor && this.game.spriteEditor.active) {
                 this.game.spriteEditor.toggle(false);
             }
             this.toggle();
+            return;
         } else if (e.key === 'F5') {
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
             this.game.spriteEditor.toggle();
+            return;
         } else if (e.key === 'F9') {
             e.preventDefault();
             this.selectObject('SETTINGS');
+            return;
         } else if (e.key === 'Delete') {
             // Prevent if user is typing or Mouse is over UI
             if (document.activeElement instanceof HTMLInputElement ||
@@ -263,10 +266,7 @@ export class SceneEditor {
                 }
                 break;
 
-            case 'f5':
-                e.preventDefault();
-                this.game.spriteEditor.toggle(true);
-                break;
+
 
 
             // Creation Hotkeys
