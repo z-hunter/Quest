@@ -36,6 +36,7 @@ export class EditorUI {
         if (this.editor.boundMouseDownHandler) this.editor.game.canvas.removeEventListener('mousedown', this.editor.boundMouseDownHandler);
         if (this.editor.boundMouseMoveHandler) window.removeEventListener('mousemove', this.editor.boundMouseMoveHandler);
         if (this.editor.boundMouseUpHandler) window.removeEventListener('mouseup', this.editor.boundMouseUpHandler);
+        if (this.editor.boundWheelHandler) this.editor.game.canvas.removeEventListener('wheel', this.editor.boundWheelHandler);
 
         this.uiInitialized = false;
         this.elParserInput = null;
@@ -44,6 +45,8 @@ export class EditorUI {
     setupListeners(): void {
         // Canvas Interaction Listeners
         this.editor.game.canvas.addEventListener('mousedown', this.editor.boundMouseDownHandler);
+        // Passive: false is required to preventDefault() on wheel events
+        this.editor.game.canvas.addEventListener('wheel', this.editor.boundWheelHandler, { passive: false });
         window.addEventListener('mousemove', this.editor.boundMouseMoveHandler);
         window.addEventListener('mouseup', this.editor.boundMouseUpHandler);
         window.addEventListener('paste', this.editor.boundPasteHandler);

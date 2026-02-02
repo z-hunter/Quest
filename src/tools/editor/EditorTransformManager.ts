@@ -5,7 +5,7 @@ import { Actor } from '../../entities/Actor';
 import { QuadObject } from '../../entities/QuadObject';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
-import { SceneObject } from '../../entities/SceneObject';
+
 import { Geometry } from '../../utils/Geometry';
 import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../../entities/EntityPrefabs';
 import { useEditorStore } from '../../store/editorStore';
@@ -464,7 +464,7 @@ export class EditorTransformManager {
                         entity.baseHeight = entity.height / entity.scale;
                     }
 
-                    editor.updateUIFromObject();
+                    editor.ui.updateUIFromObject();
 
                 } else {
                     // MOVING
@@ -493,7 +493,7 @@ export class EditorTransformManager {
                         entity.height = entity.baseHeight * factor;
                     }
 
-                    editor.updateUIFromObject();
+                    editor.ui.updateUIFromObject();
                 }
             }
         }
@@ -642,6 +642,30 @@ export class EditorTransformManager {
 
             useEditorStore.getState().setMode('SELECT');
             this.editor.refreshHierarchy();
+        }
+    }
+
+    onWheel(e: WheelEvent): void {
+        const editor = this.editor;
+        if (!editor.enabled) return;
+        if (editor.game.isMouseOverUI) return;
+
+        e.preventDefault();
+
+        const scene = editor.game.sceneManager.currentScene;
+        if (scene && scene.camera) {
+            if (e.deltaY < 0) {
+                // Zoom In
+                scene.camera.zoom *= 1.1;
+                // Clamp max zoom? Optional but good practice.
+                if (scene.camera.zoom > 10) scene.camera.zoom = 10;
+            } else if (e.deltaY > 0) {
+                // Zoom Out
+                scene.camera.zoom *= 0.9;
+                if (scene.camera.zoom < 0.1) scene.camera.zoom = 0.1;
+            }
+            // Notify UI if needed (though zoom usually doesn't need immediate inspector update unless we show zoom level)
+            // But we might want to refresh if we add a zoom slider later.
         }
     }
 }

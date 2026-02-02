@@ -35,6 +35,7 @@ export class SceneEditor {
     public boundMouseMoveHandler: (e: MouseEvent) => void;
     public boundMouseUpHandler: (e: MouseEvent) => void;
     public boundPasteHandler: (e: ClipboardEvent) => void;
+    public boundWheelHandler: (e: WheelEvent) => void;
 
     constructor(game: any) {
         this.game = game;
@@ -54,6 +55,7 @@ export class SceneEditor {
         this.boundMouseMoveHandler = this.onMouseMove.bind(this);
         this.boundMouseUpHandler = this.onMouseUp.bind(this);
         this.boundPasteHandler = this.handleGlobalPaste.bind(this);
+        this.boundWheelHandler = this.onWheel.bind(this);
 
         this.ui.initUI();
     }
@@ -443,6 +445,10 @@ export class SceneEditor {
 
     onMouseUp(e: MouseEvent): void {
         this.transformManager.onMouseUp(e);
+    }
+
+    onWheel(e: WheelEvent): void {
+        this.transformManager.onWheel(e);
     }
 
     selectObject(obj: any): void {
