@@ -36,7 +36,8 @@ export class QuadObject extends Entity {
 
     // Retro Grid Props
     isGrid: boolean = false;
-    gridLines: number = 5;
+    gridLinesX: number = 5;
+    gridLinesY: number = 5;
     lineWidth: number = 1.0;
     gridColor: string = '#ffffff';
 
@@ -141,9 +142,9 @@ export class QuadObject extends Entity {
 
             ctx.beginPath();
 
-            // Horizontal Cuts (Down the shape)
-            for (let i = 1; i <= this.gridLines; i++) {
-                const t = i / (this.gridLines + 1);
+            // Horizontal Cuts (Down the shape using Y count)
+            for (let i = 1; i <= this.gridLinesY; i++) {
+                const t = i / (this.gridLinesY + 1);
 
                 // Left Point
                 const lx = v0.x + (v3.x - v0.x) * t;
@@ -157,9 +158,9 @@ export class QuadObject extends Entity {
                 ctx.lineTo(rx, ry);
             }
 
-            // Vertical Cuts (Across the shape)
-            for (let i = 1; i <= this.gridLines; i++) {
-                const t = i / (this.gridLines + 1);
+            // Vertical Cuts (Across the shape using X count)
+            for (let i = 1; i <= this.gridLinesX; i++) {
+                const t = i / (this.gridLinesX + 1);
 
                 // Top Point
                 const tx = v0.x + (v1.x - v0.x) * t;
@@ -229,7 +230,8 @@ export class QuadObject extends Entity {
 
             // Retro Grid
             isGrid: this.isGrid,
-            gridLines: this.gridLines,
+            gridLinesX: this.gridLinesX,
+            gridLinesY: this.gridLinesY,
             lineWidth: this.lineWidth,
             gridColor: this.gridColor,
 
@@ -279,7 +281,16 @@ export class QuadObject extends Entity {
         if (data.blendMode !== undefined) obj.blendMode = data.blendMode;
 
         if (data.isGrid !== undefined) obj.isGrid = data.isGrid;
-        if (data.gridLines !== undefined) obj.gridLines = data.gridLines;
+
+        // Migrate old gridLines
+        if (data.gridLines !== undefined) {
+            obj.gridLinesX = data.gridLines;
+            obj.gridLinesY = data.gridLines;
+        }
+
+        if (data.gridLinesX !== undefined) obj.gridLinesX = data.gridLinesX;
+        if (data.gridLinesY !== undefined) obj.gridLinesY = data.gridLinesY;
+
         if (data.lineWidth !== undefined) obj.lineWidth = data.lineWidth;
         if (data.gridColor !== undefined) obj.gridColor = data.gridColor;
 
