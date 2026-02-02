@@ -18,17 +18,24 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
 
     // Selection
     const [filename, setFilename] = useState(defaultFilename);
+    // Smart Filter Term (Detached from filename)
+    const [filterText, setFilterText] = useState('');
+
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     // Initial Path Sync
     useEffect(() => {
         setCurrentPath(directory);
+        setFilterText(''); // Reset filter on dir change? Optional but good UX.
     }, [directory]);
 
     // Fetch when currentPath changes
     useEffect(() => {
         setIsLoading(true);
+        // Clear filter when changing directory
+        setFilterText('');
+
         fetch('/api/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -58,8 +65,16 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
         if (canGoUp) {
             list.push({ name: '..', isDir: true, isUp: true });
         }
-        return list.concat(items);
-    }, [items, canGoUp]);
+
+        // Smart Filter using filterText (not filename)
+        let filtered = items;
+        if (filterText && filterText.length > 0) {
+            const lower = filterText.toLowerCase();
+            filtered = items.filter(i => i.isDir || i.name.toLowerCase().includes(lower));
+        }
+
+        return list.concat(filtered);
+    }, [items, canGoUp, filterText]);
 
     // Selection Index for Keyboard Navigation
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -71,6 +86,13 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
         setSelectedIndex(0);
         if (listRef.current) listRef.current.scrollTop = 0;
     }, [currentPath]);
+
+    // Clamp selection when list changes size
+    useEffect(() => {
+        if (selectedIndex >= displayItems.length && displayItems.length > 0) {
+            setSelectedIndex(displayItems.length - 1);
+        }
+    }, [displayItems.length]);
 
     // Scroll into view when selection changes
     useEffect(() => {
@@ -88,12 +110,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                 container.scrollTop = elBottom - container.clientHeight;
             }
         }
-
-        // Sync filename if it's a file
-        const item = displayItems[selectedIndex];
-        if (item && !item.isDir) {
-            handleSelect(item);
-        }
+        // Removed auto-sync to filename to prevent filter collapse during navigation
     }, [selectedIndex, displayItems]);
 
     const handleConfirm = () => {
@@ -112,7 +129,6 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
         }
 
         // If no valid extension found, append the first one (default behavior)
-        // But only if we have strict extensions defined.
         if (!hasValidExt && allowedExtensions.length > 0) {
             finalName += allowedExtensions[0];
         }
@@ -170,7 +186,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
 
     // Action wrappers for list interaction
     const handleSelect = (item: { name: string, isDir: boolean }) => {
-        if (!item.isDir) setFilename(item.name);
+        if (!item.isDir) {
+            // Only update filename, NOT the filter!
+            setFilename(item.name);
+        }
     };
 
     const handleDoubleClick = (item: { name: string, isDir: boolean }) => {
@@ -262,12 +281,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                             });
                         }}
                         title="Open in System Explorer"
-                        style={{
-                            background: 'transparent', border: '1px solid var(--ui-btn-border)', color: 'var(--ui-btn-text)', cursor: 'pointer',
-                            fontSize: '12px', padding: '2px 6px', marginLeft: '10px'
-                        }}
+                        className="e-btn"
+                        style={{ marginLeft: '10px' }}
                     >
-                        📂 Open Folder
+                        📁 Explore
                     </button>
                 </div>
 
@@ -317,8 +334,12 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ mode, directory, defau
                         <input
                             type="text"
                             value={filename}
-                            onChange={e => setFilename(e.target.value)}
-                            style={{ flex: 1, backgroundColor: '#222', color: '#fff', border: '1px solid #666' }}
+                            className="e-input"
+                            onChange={e => {
+                                setFilename(e.target.value);
+                                setFilterText(e.target.value); // Sync filter only on manual input
+                            }}
+                            style={{ flex: 1 }}
                             autoFocus
                         />
                     </div>
