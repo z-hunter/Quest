@@ -348,21 +348,127 @@ export class EditorTransformManager {
                     // Moving a Vertex
                     const v = poly[this.draggingVertexIndex];
 
+                    // SHIFT: ANGLE SNAPPING (Fixed Steps)
+                    if (e.shiftKey) {
+                        // Snap relative to the PREVIOUS vertex in the poly as anchor
+                        const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
+                        const anchor = poly[prevIndex];
+                        const snapAnchor = { x: anchor.x, y: anchor.y };
+
+                        // Calculate vector from Anchor to Mouse
+                        const dx = worldPos.x - snapAnchor.x;
+                        const dy = worldPos.y - snapAnchor.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const angle = Math.atan2(dy, dx);
+
+                        // Snap Angle (every 22.5 deg = PI/8)
+                        const step = Math.PI / 8;
+                        const snappedAngle = Math.round(angle / step) * step;
+
+                        worldPos.x = snapAnchor.x + Math.cos(snappedAngle) * dist;
+                        worldPos.y = snapAnchor.y + Math.sin(snappedAngle) * dist;
+                    }
+
+                    // ALT: QUAD SNAP TO OTHER QUADS/GRIDS
+                    if (e.altKey && (editor.selectedObject as any).type === 'Quad') {
+                        let bestDist = 10 / zoom; // Snap threshold
+                        let snapTarget: { x: number, y: number } | null = null;
+
+                        // Iterate all OTHER entities
+                        scene.entities.forEach((ent: Entity) => {
+                            if (ent === editor.selectedObject) return;
+                            if ((ent as any).type === 'Quad') {
+                                const q = ent as QuadObject;
+                                if (q.disabled || !q.visible) return;
+
+                                // Check Vertices
+                                q.vertices.forEach(qv => {
+                                    const dx = Math.abs(qv.x - worldPos.x);
+                                    const dy = Math.abs(qv.y - worldPos.y);
+                                    if (dx < bestDist && dy < bestDist) {
+                                        snapTarget = { x: qv.x, y: qv.y };
+                                        bestDist = Math.max(dx, dy);
+                                    }
+                                });
+
+                                // Check Retro Grid Nodes
+                                if (q.isGrid) {
+                                    const v0 = q.vertices[0];
+                                    const v1 = q.vertices[1];
+                                    const v2 = q.vertices[2];
+                                    const v3 = q.vertices[3];
+
+                                    for (let i = 1; i <= q.gridLinesX; i++) {
+                                        const t = i / (q.gridLinesX + 1);
+
+                                        // Vertical Line Top/Bottom points (Edge Intersections)
+                                        const tx = v0.x + (v1.x - v0.x) * t;
+                                        const ty = v0.y + (v1.y - v0.y) * t;
+                                        const bx = v3.x + (v2.x - v3.x) * t;
+                                        const by = v3.y + (v2.y - v3.y) * t;
+
+                                        // Snap to Top Edge Point
+                                        let d = Math.abs(tx - worldPos.x);
+                                        let d2 = Math.abs(ty - worldPos.y);
+                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: tx, y: ty }; }
+
+                                        // Snap to Bottom Edge Point
+                                        d = Math.abs(bx - worldPos.x);
+                                        d2 = Math.abs(by - worldPos.y);
+                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: bx, y: by }; }
+
+                                        // Vertical Line
+                                        // Intersection with Horizontal Lines
+                                        for (let j = 1; j <= q.gridLinesY; j++) {
+                                            const ty_h = j / (q.gridLinesY + 1);
+                                            // Bilinear Interpolation
+                                            const u = t;
+                                            const v_param = ty_h;
+
+                                            const nx = (1 - u) * (1 - v_param) * v0.x + u * (1 - v_param) * v1.x + (1 - u) * v_param * v3.x + u * v_param * v2.x;
+                                            const ny = (1 - u) * (1 - v_param) * v0.y + u * (1 - v_param) * v1.y + (1 - u) * v_param * v3.y + u * v_param * v2.y;
+
+                                            const dx = Math.abs(nx - worldPos.x);
+                                            const dy = Math.abs(ny - worldPos.y);
+                                            if (dx < bestDist && dy < bestDist) {
+                                                snapTarget = { x: nx, y: ny };
+                                            }
+                                        }
+                                    }
+
+                                    // Horizontal Line Edge Points (Left/Right)
+                                    for (let j = 1; j <= q.gridLinesY; j++) {
+                                        const u = j / (q.gridLinesY + 1);
+                                        // Left Point (v0 -> v3)
+                                        const lx = v0.x + (v3.x - v0.x) * u;
+                                        const ly = v0.y + (v3.y - v0.y) * u;
+
+                                        // Right Point (v1 -> v2)
+                                        const rx = v1.x + (v2.x - v1.x) * u;
+                                        const ry = v1.y + (v2.y - v1.y) * u;
+
+                                        // Snap to Left Edge Point
+                                        let d = Math.abs(lx - worldPos.x);
+                                        let d2 = Math.abs(ly - worldPos.y);
+                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: lx, y: ly }; }
+
+                                        // Snap to Right Edge Point
+                                        d = Math.abs(rx - worldPos.x);
+                                        d2 = Math.abs(ry - worldPos.y);
+                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: rx, y: ry }; }
+                                    }
+                                }
+                            }
+                        });
+
+                        if (snapTarget) {
+                            worldPos.x = (snapTarget as any).x;
+                            worldPos.y = (snapTarget as any).y;
+                        }
+                    }
+
                     if ((editor.selectedObject as any).type === 'Quad') {
                         // Reverse Projection
-                        // WorldPos = v
-                        // v is stored in "P=1" space for Quads technically? 
-                        // Wait, Quad vertices are relative to Quad X/Y? OR absolute?
-                        // Original Editor: QuadObject creation sets vertices relative to something?
-                        // "vertices: [ {x: x, y: y...}]" -> Absolute.
-
-                        // Quad Hit Test used:
-                        // x: v.x - camX * (v.p - 1.0)
-                        // So v.x is storing absolute P=1 coord?
-                        // If we move mouse to WorldPos, we need to solve for V.x
-                        // WorldPos.x = V.x - camX * (V.p - 1.0)
-                        // V.x = WorldPos.x + camX * (V.p - 1.0)
-
                         v.x = Math.round(worldPos.x + camX * (v.p - 1.0));
                         v.y = Math.round(worldPos.y + camY * (v.p - 1.0));
 
@@ -428,14 +534,44 @@ export class EditorTransformManager {
                     let newT = entity.y - entity.height;
                     let newB = entity.y;
 
+                    // SHIFT: PROPORTIONAL SCALING
+                    // Calculate Ratio from Base Dims (preferred) or Current Dims
+                    // Ratio = Width / Height
+                    let ratio = 1.0;
+                    if (entity.baseWidth && entity.baseHeight && entity.baseHeight !== 0) {
+                        ratio = entity.baseWidth / entity.baseHeight;
+                    } else if (entity.height !== 0) {
+                        ratio = entity.width / entity.height;
+                    }
+
                     if (this.resizingHandle === 'nw') {
                         newL = wx; newT = wy;
+                        if (e.shiftKey) {
+                            const w = newR - newL;
+                            const idealH = w / ratio;
+                            newT = newB - idealH;
+                        }
                     } else if (this.resizingHandle === 'ne') {
                         newR = wx; newT = wy;
+                        if (e.shiftKey) {
+                            const w = newR - newL;
+                            const idealH = w / ratio;
+                            newT = newB - idealH;
+                        }
                     } else if (this.resizingHandle === 'sw') {
                         newL = wx; newB = wy;
+                        if (e.shiftKey) {
+                            const w = newR - newL;
+                            const idealH = w / ratio;
+                            newB = newT + idealH;
+                        }
                     } else if (this.resizingHandle === 'se') {
                         newR = wx; newB = wy;
+                        if (e.shiftKey) {
+                            const w = newR - newL;
+                            const idealH = w / ratio;
+                            newB = newT + idealH;
+                        }
                     }
 
                     // Enforce Min Size
