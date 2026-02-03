@@ -750,6 +750,10 @@ export const PropertiesPanel: React.FC = () => {
                                     Disabled
                                 </label>
                             </div>
+                            <div className="e-label" style={{ marginTop: '10px', fontSize: '10px', color: '#666', fontStyle: 'italic' }}>
+                                Drag: Hold ALT to snap to vertices/grid.<br />
+                                Drag: Hold SHIFT for angle snap.
+                            </div>
                         </div>
                     )
                 }

@@ -26,6 +26,7 @@ export class EditorTransformManager {
     drawMode: boolean = false;
     currentPolygon: { x: number, y: number }[] = [];
     currentSnapBinding: QuadVertexBinding | null = null;
+    dragStartPos: { x: number, y: number } | null = null;
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
@@ -148,8 +149,11 @@ export class EditorTransformManager {
                     if (Math.abs(worldPos.x - vx) < vertexRadius / 2 && Math.abs(worldPos.y - vy) < vertexRadius / 2) {
                         if (!editor.selectedObject.locked) {
                             editor.saveUndoState();
+                            editor.saveUndoState();
                             this.isDragging = true;
                             this.draggingVertexIndex = i;
+                            this.dragOffset = { x: worldPos.x, y: worldPos.y }; // Used for delta calc if needed
+                            this.dragStartPos = { x: worldPos.x, y: worldPos.y }; // Store initial pos for angle snap
                             useEditorStore.getState().selectVertex(i); // Sync UI
                             e.stopPropagation();
                             return;
@@ -349,25 +353,113 @@ export class EditorTransformManager {
                     // Moving a Vertex
                     const v = poly[this.draggingVertexIndex];
 
-                    // SHIFT: ANGLE SNAPPING (Fixed Steps)
+                    // SHIFT: ANGLE SNAPPING (Relative Parallax Space Dual Edge Intersection)
                     if (e.shiftKey) {
-                        // Snap relative to the PREVIOUS vertex in the poly as anchor
                         const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
-                        const anchor = poly[prevIndex];
-                        const snapAnchor = { x: anchor.x, y: anchor.y };
+                        const nextIndex = (this.draggingVertexIndex + 1) % poly.length;
 
-                        // Calculate vector from Anchor to Mouse
-                        const dx = worldPos.x - snapAnchor.x;
-                        const dy = worldPos.y - snapAnchor.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const angle = Math.atan2(dy, dx);
+                        const prevV = poly[prevIndex];
+                        const nextV = poly[nextIndex];
 
-                        // Snap Angle (every 22.5 deg = PI/8)
+                        // Helper: Resolve effective parallax (Binding Lookup)
+                        const resolveParallax = (v: any) => {
+                            if (v.binding && v.binding.targetName) {
+                                const targetName = v.binding.targetName;
+                                // Find entity by name
+                                // Check Entities
+                                const ent = scene.entities.find((e: any) => e.name === targetName);
+                                if (ent) return ent.parallax ?? 1.0;
+
+                                // Check Triggerboxes
+                                if (scene.triggerboxes) {
+                                    const tb = scene.triggerboxes.find((t: any) => t.name === targetName);
+                                    if (tb) return tb.parallax ?? 1.0;
+                                }
+                            }
+                            return v.p ?? 1.0;
+                        };
+
+                        const pCurr = resolveParallax(v);
+                        const pPrev = resolveParallax(prevV);
+                        const pNext = resolveParallax(nextV);
+
+                        // Formula: Pos_New = Pos_Old + Cam * (P_New - P_Old)
+                        // We convert everything to the "Space of Current Vertex" (pCurr)
+
+                        const transformToCurr = (pos: { x: number, y: number }, pOld: number) => ({
+                            x: pos.x + camX * (pCurr - pOld),
+                            y: pos.y + camY * (pCurr - pOld)
+                        });
+
+                        const prevTrans = transformToCurr(prevV, pPrev);
+                        const nextTrans = transformToCurr(nextV, pNext);
+
+                        // Mouse is in World Space P=1 (Layout Space)
+                        // Convert Mouse(P=1) to Mouse(P=pCurr)
+                        const mouseTrans = transformToCurr(worldPos, 1.0);
+
+                        // Helper: Get angle from A to B
+                        const getAngle = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
+
+                        // 1. Calculate angles in Local Space
+                        const rawAnglePrev = getAngle(prevTrans, mouseTrans);
+                        const rawAngleNext = getAngle(nextTrans, mouseTrans);
+
+                        // 2. Snap angles to 22.5 deg
                         const step = Math.PI / 8;
-                        const snappedAngle = Math.round(angle / step) * step;
+                        const snapAnglePrev = Math.round(rawAnglePrev / step) * step;
+                        const snapAngleNext = Math.round(rawAngleNext / step) * step;
 
-                        worldPos.x = snapAnchor.x + Math.cos(snappedAngle) * dist;
-                        worldPos.y = snapAnchor.y + Math.sin(snappedAngle) * dist;
+                        // 3. Construct Lines
+                        const getLine = (p: { x: number, y: number }, theta: number) => {
+                            const A = -Math.sin(theta);
+                            const B = Math.cos(theta);
+                            const C = A * p.x + B * p.y;
+                            return { A, B, C, p, theta };
+                        };
+
+                        const L1 = getLine(prevTrans, snapAnglePrev);
+                        const L2 = getLine(nextTrans, snapAngleNext);
+
+                        // 4. Find Intersection
+                        const det = L1.A * L2.B - L2.A * L1.B;
+
+                        let targetTrans = { x: mouseTrans.x, y: mouseTrans.y };
+
+                        const EPSILON = 0.0001;
+                        if (Math.abs(det) > EPSILON) {
+                            // Intersection exists
+                            targetTrans.x = (L2.B * L1.C - L1.B * L2.C) / det;
+                            targetTrans.y = (L1.A * L2.C - L2.A * L1.C) / det;
+                        } else {
+                            // Parallel: Project onto closest line
+                            const distToLine = (x: number, y: number, L: any) => Math.abs(L.A * x + L.B * y - L.C);
+                            const d1 = distToLine(mouseTrans.x, mouseTrans.y, L1);
+                            const d2 = distToLine(mouseTrans.x, mouseTrans.y, L2);
+
+                            const project = (start: { x: number, y: number }, theta: number, p: { x: number, y: number }) => {
+                                const ux = Math.cos(theta);
+                                const uy = Math.sin(theta);
+                                const v = { x: p.x - start.x, y: p.y - start.y };
+                                const t = v.x * ux + v.y * uy;
+                                return { x: start.x + t * ux, y: start.y + t * uy };
+                            };
+
+                            if (d1 < d2) {
+                                targetTrans = project(L1.p, L1.theta, mouseTrans);
+                            } else {
+                                targetTrans = project(L2.p, L2.theta, mouseTrans);
+                            }
+                        }
+
+                        // 5. Update WorldPos
+                        // targetTrans IS the correct Raw Coordinate for 'v' (in pCurr space)
+                        // HOWEVER, the default logic below expects worldPos to be Visual (P=1)
+                        // because it does: v.x = worldPos.x + camX * (v.p - 1.0)
+                        // So we must inverse transform it here.
+
+                        worldPos.x = targetTrans.x - camX * (pCurr - 1.0);
+                        worldPos.y = targetTrans.y - camY * (pCurr - 1.0);
                     }
 
                     // ALT: QUAD SNAP TO OTHER QUADS/GRIDS
