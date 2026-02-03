@@ -238,7 +238,7 @@ export class Game implements IGame {
             // Draw text BEHIND scene (Watermark)
             this.ctx.fillStyle = '#666';
             this.ctx.font = '10px monospace';
-            this.ctx.fillText('Scanline engine v0.1                                           F1=Menu', 10, 10);
+            this.ctx.fillText('Scanline v0.1                                                   F1=Menu', 10, 10);
 
             this.sceneManager.render(this.ctx);
 

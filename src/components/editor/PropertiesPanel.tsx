@@ -372,14 +372,14 @@ export const PropertiesPanel: React.FC = () => {
                             </div>
 
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                                     <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.ignoreScaling} onChange={(e) => handleChange('ignoreScaling', e.target.checked)} />
                                     Disable Depth Scaling
                                 </label>
                             </div>
 
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                                     <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.locked} onChange={(e) => handleChange('locked', e.target.checked)} />
                                     Lock Object
                                 </label>
@@ -507,7 +507,7 @@ export const PropertiesPanel: React.FC = () => {
                             )}
 
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                                     <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.locked} onChange={(e) => handleChange('locked', e.target.checked)} />
                                     Lock Object (Prevent Mouse Edit)
                                 </label>
@@ -560,7 +560,7 @@ export const PropertiesPanel: React.FC = () => {
 
                             {/* Fill Color */}
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', color: (obj.filled !== false) ? (obj.gridColor || '#ffffff') : 'inherit' }}>
                                     <input
                                         type="checkbox"
                                         style={{ marginRight: '5px' }}
@@ -579,7 +579,7 @@ export const PropertiesPanel: React.FC = () => {
 
                             {/* Retro Grid */}
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: (obj.isGrid) ? (obj.gridColor || '#ffffff') : 'inherit' }}>
                                     <input
                                         type="checkbox"
                                         style={{ marginRight: '5px' }}
@@ -748,7 +748,7 @@ export const PropertiesPanel: React.FC = () => {
                             })}
 
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                                     <input type="checkbox" style={{ marginRight: '5px' }} checked={!!obj.locked} onChange={(e) => handleChange('locked', e.target.checked)} />
                                     Lock Object
                                 </label>
@@ -759,10 +759,7 @@ export const PropertiesPanel: React.FC = () => {
                                     Disabled
                                 </label>
                             </div>
-                            <div className="e-label" style={{ marginTop: '10px', fontSize: '10px', color: '#666', fontStyle: 'italic' }}>
-                                Drag: Hold ALT to snap to vertices/grid.<br />
-                                Drag: Hold SHIFT for angle snap.
-                            </div>
+                            {/* Tips moved to bottom */}
                         </div>
                     )
                 }
@@ -1134,6 +1131,15 @@ export const PropertiesPanel: React.FC = () => {
                 }
 
                 {
+                    selectedObjectType === 'Quad' && (
+                        <div className="e-label" style={{ marginTop: '10px', fontSize: '10px', color: '#666', fontStyle: 'italic', borderTop: '1px solid #444', paddingTop: '5px' }}>
+                            Drag VERTEX: Hold ALT to snap to vertices/grid.<br />
+                            Hold SHIFT for angle snap.
+                        </div>
+                    )
+                }
+
+                {
                     selectedObjectType === 'Actor' && (
                         <>
                             <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
@@ -1227,7 +1233,27 @@ export const PropertiesPanel: React.FC = () => {
                                 return (
                                     <div key={setId} style={{ background: '#222', padding: '5px', marginBottom: '5px', borderRadius: '4px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                            <span style={{ fontWeight: 'bold', color: '#ddd' }}>{setId}</span>
+                                            <input
+                                                type="text"
+                                                className="e-input"
+                                                style={{ fontWeight: 'bold', color: '#ddd', background: 'transparent', border: 'none', borderBottom: '1px solid #444', maxWidth: '100px' }}
+                                                defaultValue={setId}
+                                                onBlur={(e) => {
+                                                    const newName = e.target.value.trim();
+                                                    if (newName && newName !== setId) {
+                                                        if (obj.animSets[newName]) {
+                                                            alert(`Animation set '${newName}' already exists!`);
+                                                            e.target.value = setId;
+                                                            return;
+                                                        }
+                                                        obj.animSets[newName] = obj.animSets[setId];
+                                                        if (obj.animSets[newName].id) obj.animSets[newName].id = newName;
+                                                        delete obj.animSets[setId];
+                                                        incrementObjectVersion();
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                            />
                                             <button className="e-btn e-btn-red" style={{ padding: '0 5px' }} onClick={() => {
                                                 if (confirm(`Delete animation set '${setId}'?`)) {
                                                     delete obj.animSets[setId];
@@ -1495,7 +1521,7 @@ export const PropertiesPanel: React.FC = () => {
                                         return (
                                             <>
                                                 <div className="e-row">
-                                                    <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+                                                    <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                                                         <input
                                                             type="checkbox"
                                                             style={{ marginRight: '5px' }}

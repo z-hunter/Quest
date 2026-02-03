@@ -238,7 +238,7 @@ export const HierarchyPanel: React.FC = () => {
                                     display: 'inline-block',
                                     textDecoration: ent.disabled ? 'line-through' : 'none'
                                 }}>
-                                    {ent.type === 'Actor' ? '👤' : ent.type === 'Quad' ? '🟦' : '📦'}
+                                    {ent.type === 'Actor' ? '👤' : ent.type === 'Quad' ? '▰' : '📦'}
                                 </span>
                                 {ent.name}
                             </div>
