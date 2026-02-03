@@ -366,7 +366,7 @@ export class EditorTransformManager {
                     // Moving a Vertex
                     const v = poly[this.draggingVertexIndex];
 
-                    // SHIFT: ANGLE SNAPPING (Relative Parallax Space Dual Edge Intersection)
+                    // SHIFT: ANGLE SNAPPING (Pure Visual Space)
                     if (e.shiftKey) {
                         const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
                         const nextIndex = (this.draggingVertexIndex + 1) % poly.length;
@@ -375,15 +375,26 @@ export class EditorTransformManager {
                         const nextV = poly[nextIndex];
 
                         // Helper: Resolve effective parallax (Binding Lookup)
+                        // Helper: Resolve effective parallax (Binding Lookup)
                         const resolveParallax = (v: any) => {
                             if (v.binding && v.binding.targetName) {
                                 const targetName = v.binding.targetName;
-                                // Find entity by name
-                                // Check Entities
                                 const ent = scene.entities.find((e: any) => e.name === targetName);
-                                if (ent) return ent.parallax ?? 1.0;
 
-                                // Check Triggerboxes
+                                if (ent) {
+                                    // Special handling for Quad Bindings (Per-Vertex Parallax)
+                                    if ((ent as any).type === 'Quad') {
+                                        const q = ent as QuadObject;
+                                        if (v.binding.type === 'vertex' && v.binding.index !== undefined) {
+                                            const targetV = q.vertices[v.binding.index];
+                                            if (targetV) return targetV.p;
+                                        }
+                                        // TODO: Handle Grid binding parallax interpolation if needed
+                                        // For now, grid usually shares general parallax or we'd need UV interpolation
+                                    }
+                                    return ent.parallax ?? 1.0;
+                                }
+
                                 if (scene.triggerboxes) {
                                     const tb = scene.triggerboxes.find((t: any) => t.name === targetName);
                                     if (tb) return tb.parallax ?? 1.0;
@@ -392,33 +403,30 @@ export class EditorTransformManager {
                             return v.p ?? 1.0;
                         };
 
-                        const pCurr = resolveParallax(v);
                         const pPrev = resolveParallax(prevV);
                         const pNext = resolveParallax(nextV);
 
-                        // Formula: Pos_New = Pos_Old + Cam * (P_New - P_Old)
-                        // We convert everything to the "Space of Current Vertex" (pCurr)
-
-                        const transformToCurr = (pos: { x: number, y: number }, pOld: number) => ({
-                            x: pos.x + camX * (pCurr - pOld),
-                            y: pos.y + camY * (pCurr - pOld)
+                        // Convert to Visual Space (P=1)
+                        // This ensures we snap lines based on what the user SEES.
+                        const toVisual = (raw: { x: number, y: number }, p: number) => ({
+                            x: raw.x - camX * (p - 1.0),
+                            y: raw.y - camY * (p - 1.0)
                         });
 
-                        const prevTrans = transformToCurr(prevV, pPrev);
-                        const nextTrans = transformToCurr(nextV, pNext);
+                        const prevVis = toVisual(prevV, pPrev);
+                        const nextVis = toVisual(nextV, pNext);
 
-                        // Mouse is in World Space P=1 (Layout Space)
-                        // Convert Mouse(P=1) to Mouse(P=pCurr)
-                        const mouseTrans = transformToCurr(worldPos, 1.0);
+                        // mousePos is already converted to worldPos (Visual/P=1 assumption) at start of fn
+                        const mouseVis = { x: worldPos.x, y: worldPos.y };
 
-                        // Helper: Get angle from A to B
+                        // Helper: Get angle
                         const getAngle = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
 
-                        // 1. Calculate angles in Local Space
-                        const rawAnglePrev = getAngle(prevTrans, mouseTrans);
-                        const rawAngleNext = getAngle(nextTrans, mouseTrans);
+                        // 1. Calculate angles in Visual Space
+                        const rawAnglePrev = getAngle(prevVis, mouseVis);
+                        const rawAngleNext = getAngle(nextVis, mouseVis);
 
-                        // 2. Snap angles to 22.5 deg
+                        // 2. Snap angles to 22.5 deg (PI/8)
                         const step = Math.PI / 8;
                         const snapAnglePrev = Math.round(rawAnglePrev / step) * step;
                         const snapAngleNext = Math.round(rawAngleNext / step) * step;
@@ -431,24 +439,22 @@ export class EditorTransformManager {
                             return { A, B, C, p, theta };
                         };
 
-                        const L1 = getLine(prevTrans, snapAnglePrev);
-                        const L2 = getLine(nextTrans, snapAngleNext);
+                        const L1 = getLine(prevVis, snapAnglePrev);
+                        const L2 = getLine(nextVis, snapAngleNext);
 
                         // 4. Find Intersection
                         const det = L1.A * L2.B - L2.A * L1.B;
-
-                        let targetTrans = { x: mouseTrans.x, y: mouseTrans.y };
+                        let targetVis = { x: mouseVis.x, y: mouseVis.y };
 
                         const EPSILON = 0.0001;
                         if (Math.abs(det) > EPSILON) {
-                            // Intersection exists
-                            targetTrans.x = (L2.B * L1.C - L1.B * L2.C) / det;
-                            targetTrans.y = (L1.A * L2.C - L2.A * L1.C) / det;
+                            targetVis.x = (L2.B * L1.C - L1.B * L2.C) / det;
+                            targetVis.y = (L1.A * L2.C - L2.A * L1.C) / det;
                         } else {
-                            // Parallel: Project onto closest line
+                            // Parallel: Project onto closest
                             const distToLine = (x: number, y: number, L: any) => Math.abs(L.A * x + L.B * y - L.C);
-                            const d1 = distToLine(mouseTrans.x, mouseTrans.y, L1);
-                            const d2 = distToLine(mouseTrans.x, mouseTrans.y, L2);
+                            const d1 = distToLine(mouseVis.x, mouseVis.y, L1);
+                            const d2 = distToLine(mouseVis.x, mouseVis.y, L2);
 
                             const project = (start: { x: number, y: number }, theta: number, p: { x: number, y: number }) => {
                                 const ux = Math.cos(theta);
@@ -458,21 +464,16 @@ export class EditorTransformManager {
                                 return { x: start.x + t * ux, y: start.y + t * uy };
                             };
 
-                            if (d1 < d2) {
-                                targetTrans = project(L1.p, L1.theta, mouseTrans);
-                            } else {
-                                targetTrans = project(L2.p, L2.theta, mouseTrans);
-                            }
+                            if (d1 < d2) targetVis = project(L1.p, L1.theta, mouseVis);
+                            else targetVis = project(L2.p, L2.theta, mouseVis);
                         }
 
                         // 5. Update WorldPos
-                        // targetTrans IS the correct Raw Coordinate for 'v' (in pCurr space)
-                        // HOWEVER, the default logic below expects worldPos to be Visual (P=1)
-                        // because it does: v.x = worldPos.x + camX * (v.p - 1.0)
-                        // So we must inverse transform it here.
-
-                        worldPos.x = targetTrans.x - camX * (pCurr - 1.0);
-                        worldPos.y = targetTrans.y - camY * (pCurr - 1.0);
+                        // Since downstream logic (line 612) expects worldPos to be Visual (P=1),
+                        // and we calculated targetVis (Visual), we just assign it.
+                        // The downstream code will handle conversion to Raw using v.p.
+                        worldPos.x = targetVis.x;
+                        worldPos.y = targetVis.y;
                     }
 
                     // ALT: QUAD SNAP TO OTHER QUADS/GRIDS
