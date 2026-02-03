@@ -695,16 +695,22 @@ export const PropertiesPanel: React.FC = () => {
                                         <div style={{ display: 'flex', gap: '2px' }}>
                                             <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
                                                 v.x = parseFloat(e.target.value);
+                                                if (v.binding) delete v.binding;
                                                 incrementObjectVersion();
                                                 if (game.editor.selectedObject) {
-                                                    (game.editor.selectedObject as any).vertices[i].x = v.x;
+                                                    const sel = game.editor.selectedObject as any;
+                                                    sel.vertices[i].x = v.x;
+                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
                                                 }
                                             }} />
                                             <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.y)} onChange={(e) => {
                                                 v.y = parseFloat(e.target.value);
+                                                if (v.binding) delete v.binding;
                                                 incrementObjectVersion();
                                                 if (game.editor.selectedObject) {
-                                                    (game.editor.selectedObject as any).vertices[i].y = v.y;
+                                                    const sel = game.editor.selectedObject as any;
+                                                    sel.vertices[i].y = v.y;
+                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
                                                 }
                                             }} />
                                             <input type="number" className="e-input" style={{ width: '33%' }} step="0.1" value={v.p} onChange={(e) => {
@@ -722,15 +728,18 @@ export const PropertiesPanel: React.FC = () => {
                                                 }
 
                                                 v.p = newP;
+                                                if (v.binding) delete v.binding;
+
                                                 incrementObjectVersion();
                                                 if (game.editor.selectedObject) {
                                                     const sel = game.editor.selectedObject as any;
                                                     sel.vertices[i].p = v.p;
                                                     sel.vertices[i].x = v.x;
                                                     sel.vertices[i].y = v.y;
+                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
 
                                                     // Trigger update
-                                                    game.editor.saveUndoState(); // Maybe too frequent?
+                                                    game.editor.saveUndoState();
                                                 }
                                             }} />
                                         </div>
