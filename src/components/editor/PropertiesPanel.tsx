@@ -684,7 +684,14 @@ export const PropertiesPanel: React.FC = () => {
                                         borderRadius: '4px',
                                         border: isSelected ? '1px solid yellow' : '1px solid transparent'
                                     }}>
-                                        <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}</div>
+                                        <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>
+                                            Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}
+                                            {v.binding && (
+                                                <span style={{ color: '#00FFFF', marginLeft: '5px' }}>
+                                                    L:{v.binding.targetName.length > 8 ? v.binding.targetName.slice(0, 8) + '..' : v.binding.targetName}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div style={{ display: 'flex', gap: '2px' }}>
                                             <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
                                                 v.x = parseFloat(e.target.value);

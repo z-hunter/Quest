@@ -1146,6 +1146,10 @@ export class SceneEditor {
                             // Highlight dragging vertex
                             if (this.transformManager.isDragging && this.transformManager.draggingVertexIndex === i) {
                                 ctx.fillStyle = '#ffff00';
+                            } else if (v.binding) {
+                                ctx.fillStyle = '#00FFFF'; // Bound = Cyan
+                            } else if (useEditorStore.getState().selectedVertexIndex === i) {
+                                ctx.fillStyle = '#ffff00';
                             } else {
                                 ctx.fillStyle = '#00ff00';
                             }

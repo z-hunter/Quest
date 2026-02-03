@@ -2,7 +2,7 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { Actor } from '../../entities/Actor';
-import { QuadObject } from '../../entities/QuadObject';
+import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 
@@ -25,6 +25,7 @@ export class EditorTransformManager {
     resizingHandle: string | null = null;
     drawMode: boolean = false;
     currentPolygon: { x: number, y: number }[] = [];
+    currentSnapBinding: QuadVertexBinding | null = null;
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
@@ -383,20 +384,37 @@ export class EditorTransformManager {
 
                                 // Check Vertices
                                 q.vertices.forEach(qv => {
-                                    const dx = Math.abs(qv.x - worldPos.x);
-                                    const dy = Math.abs(qv.y - worldPos.y);
+                                    // Visual Position = Raw - Camera * (P - 1)
+                                    // Note: Editor stores standard camera as camX, camY.
+                                    // We must match the visual projection logic used elsewhere.
+                                    const vx = Math.round(qv.x - camX * (qv.p - 1.0));
+                                    const vy = Math.round(qv.y - camY * (qv.p - 1.0));
+
+                                    const dx = Math.abs(vx - worldPos.x);
+                                    const dy = Math.abs(vy - worldPos.y);
                                     if (dx < bestDist && dy < bestDist) {
-                                        snapTarget = { x: qv.x, y: qv.y };
+                                        snapTarget = { x: vx, y: vy };
                                         bestDist = Math.max(dx, dy);
+                                        this.currentSnapBinding = {
+                                            targetName: q.name,
+                                            type: 'vertex',
+                                            index: q.vertices.indexOf(qv) // Assuming reference identity, else use loop index
+                                        };
                                     }
                                 });
 
                                 // Check Retro Grid Nodes
                                 if (q.isGrid) {
-                                    const v0 = q.vertices[0];
-                                    const v1 = q.vertices[1];
-                                    const v2 = q.vertices[2];
-                                    const v3 = q.vertices[3];
+                                    // Calculate Visual Positions of Corners
+                                    const visualVerts = q.vertices.map(v => ({
+                                        x: Math.round(v.x - camX * (v.p - 1.0)),
+                                        y: Math.round(v.y - camY * (v.p - 1.0))
+                                    }));
+
+                                    const v0 = visualVerts[0];
+                                    const v1 = visualVerts[1];
+                                    const v2 = visualVerts[2];
+                                    const v3 = visualVerts[3];
 
                                     for (let i = 1; i <= q.gridLinesX; i++) {
                                         const t = i / (q.gridLinesX + 1);
@@ -410,12 +428,18 @@ export class EditorTransformManager {
                                         // Snap to Top Edge Point
                                         let d = Math.abs(tx - worldPos.x);
                                         let d2 = Math.abs(ty - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: tx, y: ty }; }
+                                        if (d < bestDist && d2 < bestDist) {
+                                            snapTarget = { x: tx, y: ty };
+                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: t, gridV: 0 };
+                                        }
 
                                         // Snap to Bottom Edge Point
                                         d = Math.abs(bx - worldPos.x);
                                         d2 = Math.abs(by - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: bx, y: by }; }
+                                        if (d < bestDist && d2 < bestDist) {
+                                            snapTarget = { x: bx, y: by };
+                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: t, gridV: 1 };
+                                        }
 
                                         // Vertical Line
                                         // Intersection with Horizontal Lines
@@ -432,6 +456,7 @@ export class EditorTransformManager {
                                             const dy = Math.abs(ny - worldPos.y);
                                             if (dx < bestDist && dy < bestDist) {
                                                 snapTarget = { x: nx, y: ny };
+                                                this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: u, gridV: v_param };
                                             }
                                         }
                                     }
@@ -450,12 +475,18 @@ export class EditorTransformManager {
                                         // Snap to Left Edge Point
                                         let d = Math.abs(lx - worldPos.x);
                                         let d2 = Math.abs(ly - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: lx, y: ly }; }
+                                        if (d < bestDist && d2 < bestDist) {
+                                            snapTarget = { x: lx, y: ly };
+                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: 0, gridV: u };
+                                        }
 
                                         // Snap to Right Edge Point
                                         d = Math.abs(rx - worldPos.x);
                                         d2 = Math.abs(ry - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) { snapTarget = { x: rx, y: ry }; }
+                                        if (d < bestDist && d2 < bestDist) {
+                                            snapTarget = { x: rx, y: ry };
+                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: 1, gridV: u };
+                                        }
                                     }
                                 }
                             }
@@ -464,7 +495,11 @@ export class EditorTransformManager {
                         if (snapTarget) {
                             worldPos.x = (snapTarget as any).x;
                             worldPos.y = (snapTarget as any).y;
+                        } else {
+                            this.currentSnapBinding = null;
                         }
+                    } else {
+                        this.currentSnapBinding = null;
                     }
 
                     if ((editor.selectedObject as any).type === 'Quad') {
@@ -635,16 +670,31 @@ export class EditorTransformManager {
         }
     }
 
-    onMouseUp(e: MouseEvent): void {
+    onMouseUp(_e: MouseEvent): void {
+        const store = useEditorStore.getState();
+        if (store.selectedVertexIndex !== -1) {
+            // Apply Binding if exists
+            if (this.currentSnapBinding && this.draggingVertexIndex >= 0 && (this.editor.selectedObject as any).type === 'Quad') {
+                const q = this.editor.selectedObject as QuadObject;
+                if (q.vertices[this.draggingVertexIndex]) {
+                    q.vertices[this.draggingVertexIndex].binding = this.currentSnapBinding;
+                    console.log(`[Editor] Vertex ${this.draggingVertexIndex} bound to ${this.currentSnapBinding.targetName} (${this.currentSnapBinding.type})`);
+                }
+            } else if (this.draggingVertexIndex >= 0 && (this.editor.selectedObject as any).type === 'Quad') {
+                // If we moved a vertex and DID NOT snap, clear binding
+                const q = this.editor.selectedObject as QuadObject;
+                if (q.vertices[this.draggingVertexIndex]) {
+                    delete q.vertices[this.draggingVertexIndex].binding;
+                }
+            }
+            this.currentSnapBinding = null;
+            store.selectVertex(-1);
+        }
+
         this.isDragging = false;
         this.draggingVertexIndex = -1;
         this.resizingHandle = null;
         this.isPanning = false;
-
-        const store = useEditorStore.getState();
-        if (store.selectedVertexIndex !== -1) {
-            store.selectVertex(-1);
-        }
     }
 
     onClick(x: number, y: number): boolean {

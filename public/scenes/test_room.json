@@ -1,176 +1,23 @@
 {
   "id": "test_room",
-  "name": "Test Room",
+  "name": "New Scene",
   "filename": "test_room",
   "walkbox": [],
-  "triggerboxes": [
-    {
-      "type": "Triggerbox",
-      "name": "Trig_201",
-      "locked": false,
-      "disabled": false,
-      "layer": 0,
-      "groupID": null,
-      "customName": "",
-      "interactions": {},
-      "components": [
-        {
-          "type": "Subscene",
-          "targetGroupId": "g1",
-          "name": ""
-        }
-      ],
-      "visible": true,
-      "poly": [
-        {
-          "x": 182.5,
-          "y": 124
-        },
-        {
-          "x": 201.5,
-          "y": 122
-        },
-        {
-          "x": 199.5,
-          "y": 93
-        },
-        {
-          "x": 182.5,
-          "y": 91
-        }
-      ],
-      "script": ""
-    },
-    {
-      "type": "Triggerbox",
-      "name": "Trig_222",
-      "locked": false,
-      "disabled": false,
-      "layer": 0,
-      "groupID": "g1",
-      "customName": "",
-      "interactions": {},
-      "components": [
-        {
-          "type": "Switch",
-          "groupId1": "g1",
-          "groupId2": "g2",
-          "state": 1,
-          "idKey": "",
-          "sound1": "drawer_open.wav",
-          "sound2": "drawer_close.wav"
-        }
-      ],
-      "visible": true,
-      "poly": [
-        {
-          "x": 33,
-          "y": 148
-        },
-        {
-          "x": 109,
-          "y": 146
-        },
-        {
-          "x": 105,
-          "y": 206
-        },
-        {
-          "x": 33,
-          "y": 206
-        }
-      ],
-      "script": ""
-    },
-    {
-      "type": "Triggerbox",
-      "name": "Trig_137",
-      "locked": false,
-      "disabled": false,
-      "layer": 0,
-      "groupID": "g1",
-      "customName": "",
-      "interactions": {},
-      "components": [],
-      "visible": true,
-      "poly": [
-        {
-          "x": 40.5,
-          "y": 137.5
-        },
-        {
-          "x": 104.5,
-          "y": 137.5
-        },
-        {
-          "x": 70.5,
-          "y": 86.5
-        }
-      ],
-      "script": ""
-    }
-  ],
+  "triggerboxes": [],
   "scaling": {
     "enabled": true,
     "min": 0.5,
     "max": 1,
-    "horizon": 54,
-    "front": 139
+    "horizon": 150,
+    "front": 300
   },
   "entities": [
     {
       "type": "Quad",
-      "name": "Quad_102",
-      "x": -13.044771874555405,
-      "y": 75.63899383464816,
-      "color": "#528983",
-      "layer": -12,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 2,
-      "vertices": [
-        {
-          "x": -26.86505126953125,
-          "y": -61.36702003279119,
-          "p": 1
-        },
-        {
-          "x": -23.36505126953125,
-          "y": -58.36702003279119,
-          "p": 1
-        },
-        {
-          "x": 44.13494873046875,
-          "y": 41.63297996720881,
-          "p": 1
-        },
-        {
-          "x": -100.86505126953125,
-          "y": 47.13297996720881,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": false,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
-      "filled": true
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_876",
-      "x": -14.495437011995929,
-      "y": 36.67364515004253,
-      "color": "#103814",
+      "name": "Quad_201",
+      "x": 324.7629703392718,
+      "y": 117.47240947615381,
+      "color": "#888888",
       "layer": -1,
       "parallax": 1,
       "ignoreScaling": false,
@@ -180,92 +27,46 @@
       "groupID": null,
       "components": [],
       "interactions": {},
-      "opacity": 0.75,
-      "blendMode": "source-over",
-      "blur": 5,
-      "vertices": [
-        {
-          "x": -25.962907654165956,
-          "y": -51.60195874124255,
-          "p": 1
-        },
-        {
-          "x": -24.80621837007127,
-          "y": -51.02361409919521,
-          "p": 1
-        },
-        {
-          "x": 35.50456298800406,
-          "y": 36.67364515004253,
-          "p": 1
-        },
-        {
-          "x": -92.7305659417288,
-          "y": 37.78593118219422,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": false,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
-      "filled": true
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_70",
-      "x": -93.20165444660321,
-      "y": 106.47773425887672,
-      "color": "#888888",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
       "vertices": [
         {
-          "x": -177.34294388418894,
-          "y": 72.52883165256675,
+          "x": -1441,
+          "y": 390,
+          "p": 0.2
+        },
+        {
+          "x": 1579,
+          "y": 386,
+          "p": 0.2
+        },
+        {
+          "x": 3905.4114019008157,
+          "y": 427.4664044624446,
           "p": 1
         },
         {
-          "x": 163.65705611581106,
-          "y": 72.52883165256675,
-          "p": 1
-        },
-        {
-          "x": 372.58657359080007,
-          "y": 155.00190967235358,
-          "p": 1
-        },
-        {
-          "x": -391,
-          "y": 155.5,
+          "x": -3359.5885980991843,
+          "y": 427.4664044624446,
           "p": 1
         }
       ],
       "sortMode": "ignore",
       "isGrid": true,
-      "gridLines": 13,
-      "lineWidth": 1,
-      "gridColor": "#135317",
+      "gridLinesX": 29,
+      "gridLinesY": 7,
+      "lineWidth": 2,
+      "gridColor": "#0f6719",
       "filled": false
     },
     {
       "type": "Quad",
       "name": "Quad_1",
-      "x": -22.059812066588535,
-      "y": 41.08343720110428,
-      "color": "#000000",
-      "layer": 0,
+      "x": 363.1753332849686,
+      "y": -1342.0347499102,
+      "color": "#888888",
+      "layer": -1,
       "parallax": 1,
       "ignoreScaling": false,
       "locked": false,
@@ -274,91 +75,45 @@
       "groupID": null,
       "components": [],
       "interactions": {},
-      "opacity": 0.15,
+      "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
       "vertices": [
         {
-          "x": -25.384563012118615,
-          "y": -35.986653405964304,
+          "x": -1382.5263247292278,
+          "y": -605.2106827614945,
+          "p": 0.2
+        },
+        {
+          "x": 1692.4736752707722,
+          "y": -565.2106827614945,
+          "p": 0.2
+        },
+        {
+          "x": 3933.8237648465147,
+          "y": -1042.0407549239112,
           "p": 1
         },
         {
-          "x": -24.80621837007127,
-          "y": -49.288580173053184,
-          "p": 1
-        },
-        {
-          "x": 34.06365576107183,
-          "y": 37.342179582012854,
-          "p": 1
-        },
-        {
-          "x": 24.897705013540786,
-          "y": 29.840672889434224,
+          "x": -3331.1762351534853,
+          "y": -1042.0407549239112,
           "p": 1
         }
       ],
       "sortMode": "ignore",
       "isGrid": true,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#103713",
-      "filled": true
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_3",
-      "x": -126.92942802037916,
-      "y": 35.99727223452336,
-      "color": "#0f3e0f",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 0.15,
-      "blendMode": "source-over",
-      "blur": 0,
-      "vertices": [
-        {
-          "x": -30.589664790544692,
-          "y": -47.553546246911154,
-          "p": 1
-        },
-        {
-          "x": -26.541252296213298,
-          "y": -37.72168733210633,
-          "p": 1
-        },
-        {
-          "x": -80.39581154440029,
-          "y": 32.14933291415437,
-          "p": 1
-        },
-        {
-          "x": -88.40848326770285,
-          "y": 39.3988930447615,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": true,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
+      "gridLinesX": 29,
+      "gridLinesY": 7,
+      "lineWidth": 2,
+      "gridColor": "#0f6719",
       "filled": false
     },
     {
       "type": "Quad",
-      "name": "Quad_755",
-      "x": -31.364753589286394,
-      "y": 24.340033314816868,
-      "color": "#1b3122",
+      "name": "Quad_10",
+      "x": 72.6050061895433,
+      "y": -195.46319937708103,
+      "color": "#772727",
       "layer": 0,
       "parallax": 1,
       "ignoreScaling": false,
@@ -369,89 +124,43 @@
       "components": [],
       "interactions": {},
       "opacity": 1,
-      "blendMode": "overlay",
-      "blur": 16,
+      "blendMode": "source-over",
+      "blur": 0,
       "vertices": [
         {
-          "x": -59.616073197465084,
-          "y": 13.24253386384088,
+          "x": 18.661869295135304,
+          "y": -288.99568236562175,
           "p": 1
         },
         {
-          "x": 18.22130925747436,
-          "y": 14.768757049231848,
+          "x": 122.6050061895433,
+          "y": -295.46319937708097,
           "p": 1
         },
         {
-          "x": 18.635246410713613,
-          "y": 24.340033314816868,
+          "x": 89,
+          "y": -184,
           "p": 1
         },
         {
-          "x": -81.3647535892864,
-          "y": 24.340033314816868,
+          "x": 36,
+          "y": -185,
           "p": 1
         }
       ],
       "sortMode": "ignore",
       "isGrid": false,
-      "gridLines": 5,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true
     },
     {
       "type": "Quad",
-      "name": "Quad_5",
-      "x": -54.92325432305837,
-      "y": 47.29635243484712,
-      "color": "#1b3122",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "lighter",
-      "blur": 16,
-      "vertices": [
-        {
-          "x": -3.810968290906639,
-          "y": -22.56073965368118,
-          "p": 1
-        },
-        {
-          "x": 28,
-          "y": 34,
-          "p": 1
-        },
-        {
-          "x": -30.25808474350917,
-          "y": 31.19820351169257,
-          "p": 1
-        },
-        {
-          "x": -30.25808474350917,
-          "y": -4.65916429524265,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": false,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
-      "filled": true
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_6",
-      "x": -88.20554008787711,
-      "y": -67.10088707482781,
+      "name": "Quad_42",
+      "x": 75.25401407283877,
+      "y": -117.60273880454253,
       "color": "#888888",
       "layer": 0,
       "parallax": 1,
@@ -467,424 +176,30 @@
       "blur": 0,
       "vertices": [
         {
-          "x": -172.34682952546285,
-          "y": -101.04978968113778,
+          "x": 62.178829110128284,
+          "y": -135.29432028869175,
+          "p": 0.7
+        },
+        {
+          "x": 115.06844732120439,
+          "y": -134.96562314229297,
+          "p": 0.7
+        },
+        {
+          "x": 125.25401407283877,
+          "y": -117.60273880454253,
           "p": 1
         },
         {
-          "x": 168.65317047453715,
-          "y": -101.04978968113778,
-          "p": 1
-        },
-        {
-          "x": 359.0890178956769,
-          "y": -203.01657973117193,
-          "p": 1
-        },
-        {
-          "x": -361.75561999117247,
-          "y": -201.9143708047394,
+          "x": 25.254014072838764,
+          "y": -117.60273880454253,
           "p": 1
         }
       ],
       "sortMode": "ignore",
       "isGrid": true,
-      "gridLines": 13,
-      "lineWidth": 1,
-      "gridColor": "#135317",
-      "filled": false
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_8",
-      "x": -93.20165444660321,
-      "y": 106.47773425887672,
-      "color": "#888888",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 3,
-      "vertices": [
-        {
-          "x": -177.34294388418894,
-          "y": 72.52883165256675,
-          "p": 1
-        },
-        {
-          "x": 163.65705611581106,
-          "y": 72.52883165256675,
-          "p": 1
-        },
-        {
-          "x": 372.58657359080007,
-          "y": 155.00190967235358,
-          "p": 1
-        },
-        {
-          "x": -391,
-          "y": 155.5,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": true,
-      "gridLines": 13,
-      "lineWidth": 1,
-      "gridColor": "#135317",
-      "filled": false
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_9",
-      "x": -88.20554008787711,
-      "y": -67.10088707482781,
-      "color": "#888888",
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 3,
-      "vertices": [
-        {
-          "x": -172.34682952546285,
-          "y": -101.04978968113778,
-          "p": 1
-        },
-        {
-          "x": 168.65317047453715,
-          "y": -101.04978968113778,
-          "p": 1
-        },
-        {
-          "x": 359.0890178956769,
-          "y": -203.01657973117193,
-          "p": 1
-        },
-        {
-          "x": -361.75561999117247,
-          "y": -201.9143708047394,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": true,
-      "gridLines": 13,
-      "lineWidth": 1,
-      "gridColor": "#135317",
-      "filled": false
-    },
-    {
-      "type": "Entity",
-      "name": "Static_1",
-      "x": -29,
-      "y": -91,
-      "width": 549.4622987371145,
-      "height": 39.77470960298736,
-      "baseWidth": 1098.924597474229,
-      "baseHeight": 79.54941920597471,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#424242",
-      "scale": 0.5,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "multiply",
-      "blur": 10
-    },
-    {
-      "type": "Entity",
-      "name": "Static_6",
-      "x": 131,
-      "y": 45,
-      "width": 33.227503991656775,
-      "height": 37.46102374489355,
-      "baseWidth": 66.45500798331355,
-      "baseHeight": 74.9220474897871,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#944747",
-      "scale": 0.5,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "type": "Entity",
-      "name": "Static_822",
-      "x": -23,
-      "y": 99,
-      "width": 845.4291632627039,
-      "height": 59.89806140437056,
-      "baseWidth": 1105.5612134973821,
-      "baseHeight": 78.32823414417689,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#424242",
-      "scale": 0.7647058823529411,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "multiply",
-      "blur": 10
-    },
-    {
-      "type": "Entity",
-      "name": "Pillar",
-      "x": 190,
-      "y": 131,
-      "width": 41.98426481045766,
-      "height": 63.2022437232591,
-      "baseWidth": 72.70002564581412,
-      "baseHeight": 109.44111467231014,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#888888",
-      "scale": 0.5775,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": true,
-      "customName": "",
-      "groupID": "k",
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "type": "Actor",
-      "name": "Hero",
-      "x": -156.89123176615846,
-      "y": 176.89415605764384,
-      "width": 168.54263340826665,
-      "height": 101.12558004495999,
-      "baseWidth": 561.8087780275555,
-      "baseHeight": 337.0852668165333,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "sub_drawers_d1_id.json",
-      "color": "#00ffff",
-      "scale": 0.3,
-      "modelScale": 0.3,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "overlay",
-      "blur": 0,
-      "isPlayer": true,
-      "speed": 0.1,
-      "direction": "down",
-      "animSets": {}
-    },
-    {
-      "type": "Entity",
-      "name": "Key",
-      "x": 72,
-      "y": 159,
-      "width": 31.360039195558382,
-      "height": 7.722007722007723,
-      "baseWidth": 31.360039195558382,
-      "baseHeight": 7.722007722007723,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#ffff00",
-      "scale": 1,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "type": "Entity",
-      "name": "Static_1 _1 _1",
-      "x": 71,
-      "y": 195,
-      "width": 30,
-      "height": 30,
-      "baseWidth": 40.67796610169491,
-      "baseHeight": 40.67796610169491,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#eeff00",
-      "scale": 0.7375,
-      "modelScale": 1,
-      "layer": 0,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "locked": false,
-      "disabled": true,
-      "customName": "",
-      "groupID": "g2",
-      "components": [],
-      "interactions": {},
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_4",
-      "x": -50.35457644780499,
-      "y": 110.45409806203975,
-      "color": "#050b05",
-      "layer": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 0.15,
-      "blendMode": "source-over",
-      "blur": 0,
-      "vertices": [
-        {
-          "x": -92.45689576203424,
-          "y": 40.55558232885618,
-          "p": 1
-        },
-        {
-          "x": -85.23685909347202,
-          "y": 34.15081843741864,
-          "p": 1
-        },
-        {
-          "x": 26.761759113270262,
-          "y": 30.276652398820644,
-          "p": 1
-        },
-        {
-          "x": 34.15789427786645,
-          "y": 36.26399991301756,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": true,
-      "gridLines": 5,
-      "lineWidth": 1,
-      "gridColor": "#0b0e0b",
-      "filled": true
-    },
-    {
-      "type": "Quad",
-      "name": "Quad_7",
-      "x": -20.026909100369373,
-      "y": -28.029837777378447,
-      "color": "#000000",
-      "layer": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "locked": false,
-      "disabled": false,
-      "customName": "",
-      "groupID": null,
-      "components": [],
-      "interactions": {},
-      "opacity": 0.7,
-      "blendMode": "multiply",
-      "blur": 23,
-      "vertices": [
-        {
-          "x": -20,
-          "y": -14,
-          "p": 1
-        },
-        {
-          "x": -37,
-          "y": 29,
-          "p": 1
-        },
-        {
-          "x": -74,
-          "y": 31,
-          "p": 1
-        },
-        {
-          "x": -25,
-          "y": -33,
-          "p": 1
-        }
-      ],
-      "sortMode": "ignore",
-      "isGrid": false,
-      "gridLines": 5,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true

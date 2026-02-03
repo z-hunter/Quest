@@ -3,10 +3,19 @@ import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { Geometry } from '../utils/Geometry';
 
+export interface QuadVertexBinding {
+    targetName: string;
+    type: 'vertex' | 'grid';
+    index?: number; // 0-3 for vertex
+    gridU?: number; // 0-1 for grid
+    gridV?: number; // 0-1 for grid
+}
+
 export interface QuadVertex {
     x: number;
     y: number;
     p: number; // Parallax Factor (1.0 = standard, <1 = far, >1 = near)
+    binding?: QuadVertexBinding;
 }
 
 export type QuadSortMode = 'ignore' | 'v0' | 'v1' | 'v2' | 'v3';
@@ -262,18 +271,6 @@ export class QuadObject extends Entity {
         if (data.sortMode) {
             obj.sortMode = data.sortMode;
         } else if (data.ignoreYSorting !== undefined) {
-            // Standard sorting uses this.y. v0 is roughly top-left?
-            // Actually, if ignoreYSorting was false, it fell back to Entity.y.
-            // QuadObject usually has y=0? No, checking SceneEditor, we might set y?
-            // To be safe, let's map false to 'v3' (Bottom-Left) or 'v2' (Bottom-Right) which are usually lower?
-            // Actually, for a floor, closest to camera is usually bottom.
-            // Let's mimic standard behavior: Sort by "Y". 
-            // If we pick a vertex, which one is "Y"?
-            // Standard sorting checks min Y? Max Y?
-            // In Scene.ts: return a.y - b.y.
-            // So it uses the object's y property.
-            // If we choose 'v2' (bottom right) or 'v3' (bottom left), it's consistent with "feet" position.
-            // Let's use 'v3' (Bottom Left) for now if explicit sorting was requested.
             obj.sortMode = data.ignoreYSorting ? 'ignore' : 'v3';
         }
 
@@ -308,14 +305,77 @@ export class QuadObject extends Entity {
         return obj;
     }
 
-
-
     update(dt: number): void {
         super.update(dt);
+
+        // Resolve Bindings
+        // Only if Editor is actively moving things? 
+        // Or always? Always ensures game logic works if moving platforms exist.
+        this.resolveBindings();
 
         if (!this.components) return;
 
         // Update Components (via System)
         ComponentSystem.update(this, dt);
+    }
+
+    private resolveBindings() {
+        // @ts-ignore
+        const scene = this.scene;
+        if (!scene) return;
+
+        let hasChanges = false;
+
+        this.vertices.forEach(v => {
+            if (v.binding) {
+                // Find Target
+                // @ts-ignore
+                const target = scene.findEntity ? scene.findEntity(v.binding.targetName) : scene.entities.find((e: any) => e.name === v.binding.targetName);
+                if (target && target.type === 'Quad') {
+                    const q = target as QuadObject;
+                    if (v.binding.type === 'vertex') {
+                        const idx = v.binding.index || 0;
+                        if (q.vertices[idx]) {
+                            const tv = q.vertices[idx];
+                            if (v.x !== tv.x || v.y !== tv.y || v.p !== tv.p) {
+                                v.x = tv.x;
+                                v.y = tv.y;
+                                v.p = tv.p;
+                                hasChanges = true;
+                            }
+                        }
+                    } else if (v.binding.type === 'grid') {
+                        const u = v.binding.gridU || 0;
+                        const v_param = v.binding.gridV || 0;
+
+                        const tv0 = q.vertices[0];
+                        const tv1 = q.vertices[1];
+                        const tv2 = q.vertices[2];
+                        const tv3 = q.vertices[3];
+
+                        // Bilinear Interpolation
+                        const nx = (1 - u) * (1 - v_param) * tv0.x + u * (1 - v_param) * tv1.x + (1 - u) * v_param * tv3.x + u * v_param * tv2.x;
+                        const ny = (1 - u) * (1 - v_param) * tv0.y + u * (1 - v_param) * tv1.y + (1 - u) * v_param * tv3.y + u * v_param * tv2.y;
+
+                        // Parallax Interpolation
+                        const np = (1 - u) * (1 - v_param) * tv0.p + u * (1 - v_param) * tv1.p + (1 - u) * v_param * tv3.p + u * v_param * tv2.p;
+
+                        if (Math.abs(v.x - nx) > 0.01 || Math.abs(v.y - ny) > 0.01 || Math.abs(v.p - np) > 0.001) {
+                            v.x = nx;
+                            v.y = ny;
+                            v.p = np;
+                            hasChanges = true;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Trigger Editor Refresh if in Editor and values changed
+        // @ts-ignore
+        if (hasChanges && this.game.editor && this.game.editor.enabled) {
+            // @ts-ignore
+            this.game.editor.selectionManager.notifyObjectChanged(this);
+        }
     }
 }
