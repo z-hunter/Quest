@@ -27,6 +27,7 @@ export class EditorTransformManager {
     currentPolygon: { x: number, y: number }[] = [];
     currentSnapBinding: QuadVertexBinding | null = null;
     dragStartPos: { x: number, y: number } | null = null;
+    resizeAnchor: { x: number, y: number } | null = null; // Stores the stationary corner (Raw Coords) during resize
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
@@ -217,8 +218,20 @@ export class EditorTransformManager {
 
                         if (hitHandle) {
                             this.resizingHandle = hitHandle;
+
+                            // Initialize Fixed Anchor to prevent Parallax Shift
+                            let ax = entity.x; let ay = entity.y;
+                            // Width/Height are current (including scale)
+                            const hw = entity.width / 2;
+                            if (hitHandle === 'nw') { ax = entity.x + hw; ay = entity.y; } // SE
+                            else if (hitHandle === 'ne') { ax = entity.x - hw; ay = entity.y; } // SW
+                            else if (hitHandle === 'sw') { ax = entity.x + hw; ay = entity.y - entity.height; } // NE
+                            else if (hitHandle === 'se') { ax = entity.x - hw; ay = entity.y - entity.height; } // NW
+                            this.resizeAnchor = { x: ax, y: ay };
+
                         } else {
                             this.resizingHandle = null;
+                            this.resizeAnchor = null;
                             this.dragOffset = { x: pos.x - screenX, y: pos.y - screenY };
                         }
 
@@ -644,78 +657,178 @@ export class EditorTransformManager {
 
                 if (this.resizingHandle) {
                     // RESIZING
-                    // We need World Pos at entity parallax
-                    const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-                    const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
 
-                    // Snap to grid?
-                    const wx = Math.round(worldX);
-                    const wy = Math.round(worldY);
+                    // 1. MOUSE (Raw at Entity Parallax)
+                    let worldX = (pos.x - halfW) / zoom + camX * p - vOx;
+                    let worldY = (pos.y - halfH) / zoom + camY * p - vOy;
 
-                    // Calc new bounding box based on handle
-                    // Top-Left is entity.x - w/2, entity.y - h
-                    // Bottom-Right is entity.x + w/2, entity.y
+                    // 2. SNAPPING (Alt) - Visual Space -> Raw Space
+                    if (e.altKey) {
+                        const mouseVisual = {
+                            x: (pos.x - halfW) / zoom + camX,
+                            y: (pos.y - halfH) / zoom + camY
+                        };
 
-                    let newL = entity.x - entity.width / 2;
-                    let newR = entity.x + entity.width / 2;
-                    let newT = entity.y - entity.height;
-                    let newB = entity.y;
+                        let bestDist = 10 / zoom;
+                        let snapTargetVisual: { x: number, y: number } | null = null;
 
-                    // SHIFT: PROPORTIONAL SCALING
-                    // Calculate Ratio from Base Dims (preferred) or Current Dims
-                    // Ratio = Width / Height
-                    let ratio = 1.0;
-                    if (entity.baseWidth && entity.baseHeight && entity.baseHeight !== 0) {
-                        ratio = entity.baseWidth / entity.baseHeight;
-                    } else if (entity.height !== 0) {
-                        ratio = entity.width / entity.height;
+                        // Check Other Entities (Corners)
+                        scene.entities.forEach((other: Entity) => {
+                            if (other === entity) return;
+                            if (other.disabled || !other.visible) return;
+
+                            const op = other.parallax !== undefined ? other.parallax : 1.0;
+                            // @ts-ignore
+                            const ovOx = other.visualOffset ? other.visualOffset.x : 0;
+                            // @ts-ignore
+                            const ovOy = other.visualOffset ? other.visualOffset.y : 0;
+
+                            // Corners in Raw
+                            const l = other.x - other.width / 2;
+                            const r = other.x + other.width / 2;
+                            const t = other.y - other.height;
+                            const b = other.y;
+
+                            const rawPoints = [
+                                { x: l, y: t }, { x: r, y: t },
+                                { x: l, y: b }, { x: r, y: b }
+                            ];
+
+                            rawPoints.forEach(pt => {
+                                // Project to Visual: Vis = (Raw + vOx) - Cam*(P-1)
+                                const vx = (pt.x + ovOx) - camX * (op - 1.0);
+                                const vy = (pt.y + ovOy) - camY * (op - 1.0);
+
+                                const dx = Math.abs(vx - mouseVisual.x);
+                                const dy = Math.abs(vy - mouseVisual.y);
+                                if (dx < bestDist && dy < bestDist) {
+                                    bestDist = Math.max(dx, dy);
+                                    snapTargetVisual = { x: vx, y: vy };
+                                }
+                            });
+                        });
+
+                        // Check Quads (Vertices & Grid)
+                        const quads = scene.entities.filter((e: any) => e.type === 'Quad') as QuadObject[];
+                        quads.forEach(q => {
+                            if (q.disabled || !q.visible) return;
+
+                            // Vertices
+                            q.vertices.forEach(v => {
+                                const vx = v.x - camX * (v.p - 1.0);
+                                const vy = v.y - camY * (v.p - 1.0);
+                                const dx = Math.abs(vx - mouseVisual.x);
+                                const dy = Math.abs(vy - mouseVisual.y);
+                                if (dx < bestDist && dy < bestDist) {
+                                    bestDist = Math.max(dx, dy);
+                                    snapTargetVisual = { x: vx, y: vy };
+                                }
+                            });
+
+                            // Retro Grid
+                            if (q.isGrid) {
+                                const visualVerts = q.vertices.map(v => ({
+                                    x: v.x - camX * (v.p - 1.0),
+                                    y: v.y - camY * (v.p - 1.0)
+                                }));
+                                const v0 = visualVerts[0];
+                                const v1 = visualVerts[1];
+                                const v2 = visualVerts[2];
+                                const v3 = visualVerts[3];
+
+                                for (let i = 1; i <= q.gridLinesX; i++) {
+                                    const u = i / (q.gridLinesX + 1);
+                                    for (let j = 1; j <= q.gridLinesY; j++) {
+                                        const v = j / (q.gridLinesY + 1);
+                                        const nx = (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
+                                        const ny = (1 - u) * (1 - v) * v0.y + u * (1 - v) * v1.y + (1 - u) * v * v3.y + u * v * v2.y;
+                                        const dx = Math.abs(nx - mouseVisual.x);
+                                        const dy = Math.abs(ny - mouseVisual.y);
+                                        if (dx < bestDist && dy < bestDist) {
+                                            bestDist = Math.max(dx, dy);
+                                            snapTargetVisual = { x: nx, y: ny };
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+
+                        if (snapTargetVisual) {
+                            // Unproject Visual -> Raw (Entity P)
+                            // Raw = Visual - vOx + Cam*(P-1)
+                            worldX = snapTargetVisual.x - vOx + camX * (p - 1.0);
+                            worldY = snapTargetVisual.y - vOy + camY * (p - 1.0);
+                        }
                     }
+
+                    // Quantize
+                    worldX = Math.round(worldX);
+                    worldY = Math.round(worldY);
+
+                    // 3. APPLY RESIZE USING FIXED ANCHOR
+                    if (!this.resizeAnchor) {
+                        let ax = entity.x; let ay = entity.y;
+                        const hw = entity.width / 2;
+                        if (this.resizingHandle === 'nw') { ax = entity.x + hw; ay = entity.y; }
+                        else if (this.resizingHandle === 'ne') { ax = entity.x - hw; ay = entity.y; }
+                        else if (this.resizingHandle === 'sw') { ax = entity.x + hw; ay = entity.y - entity.height; }
+                        else if (this.resizingHandle === 'se') { ax = entity.x - hw; ay = entity.y - entity.height; }
+                        this.resizeAnchor = { x: ax, y: ay };
+                    }
+
+                    const anchor = this.resizeAnchor;
+                    let newL = 0, newR = 0, newT = 0, newB = 0;
 
                     if (this.resizingHandle === 'nw') {
-                        newL = wx; newT = wy;
-                        if (e.shiftKey) {
-                            const w = newR - newL;
-                            const idealH = w / ratio;
-                            newT = newB - idealH;
-                        }
+                        newL = worldX; newT = worldY;
+                        newR = anchor.x; newB = anchor.y;
                     } else if (this.resizingHandle === 'ne') {
-                        newR = wx; newT = wy;
-                        if (e.shiftKey) {
-                            const w = newR - newL;
-                            const idealH = w / ratio;
-                            newT = newB - idealH;
-                        }
+                        newR = worldX; newT = worldY;
+                        newL = anchor.x; newB = anchor.y;
                     } else if (this.resizingHandle === 'sw') {
-                        newL = wx; newB = wy;
-                        if (e.shiftKey) {
-                            const w = newR - newL;
-                            const idealH = w / ratio;
-                            newB = newT + idealH;
-                        }
+                        newL = worldX; newB = worldY;
+                        newR = anchor.x; newT = anchor.y;
                     } else if (this.resizingHandle === 'se') {
-                        newR = wx; newB = wy;
-                        if (e.shiftKey) {
-                            const w = newR - newL;
-                            const idealH = w / ratio;
+                        newR = worldX; newB = worldY;
+                        newL = anchor.x; newT = anchor.y;
+                    }
+
+                    // 4. SHIFT: PROPORTIONAL SCALING
+                    if (e.shiftKey) {
+                        let ratio = 1.0;
+                        if (entity.baseWidth && entity.baseHeight && entity.baseHeight !== 0) {
+                            ratio = entity.baseWidth / entity.baseHeight;
+                        } else if (entity.height !== 0) {
+                            ratio = entity.width / entity.height;
+                        }
+
+                        const currentW = Math.abs(newR - newL);
+                        const idealH = currentW / ratio;
+
+                        if (this.resizingHandle.includes('n')) {
+                            newT = newB - idealH;
+                        } else {
                             newB = newT + idealH;
                         }
                     }
 
-                    // Enforce Min Size
+                    // Enforce Normality & Min Size
+                    if (newR < newL) { const t = newR; newR = newL; newL = t; }
+                    if (newB < newT) { const t = newB; newB = newT; newT = t; }
+
                     if (newR - newL < 10) newR = newL + 10;
                     if (newB - newT < 10) newB = newT + 10;
 
                     const newW = newR - newL;
                     const newH = newB - newT;
-                    // Pivot is Bottom Center
-                    // X = L + W/2
-                    // Y = B
+
                     entity.width = Math.round(newW);
                     entity.height = Math.round(newH);
                     entity.x = Math.round(newL + newW / 2);
                     entity.y = Math.round(newB);
 
-                    // Recalc Base Dims if scaling enabled
+                    // Recalc Base Dims
                     if (!entity.ignoreScaling && scene.scaling.enabled) {
                         const factor = scene.getScaling(entity.y) * entity.modelScale;
                         if (factor !== 0) {
@@ -786,6 +899,7 @@ export class EditorTransformManager {
         this.isDragging = false;
         this.draggingVertexIndex = -1;
         this.resizingHandle = null;
+        this.resizeAnchor = null; // Clear anchor
         this.isPanning = false;
     }
 
