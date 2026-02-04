@@ -300,7 +300,9 @@ export class ComponentSystem {
                 if (scene.game && scene.game.editor && scene.game.editor.enabled) {
                     // @ts-ignore
                     const editor = scene.game.editor;
-                    if (editor.selectedObject === qObj || qObj.selected) {
+                    // Only treat as edited if selected AND being dragged/manipulated
+                    // We check transformManager.isDragging (which handles move/resize)
+                    if ((editor.selectedObject === qObj || qObj.selected) && editor.transformManager && editor.transformManager.isDragging) {
                         isEdited = true;
                     }
                 }
