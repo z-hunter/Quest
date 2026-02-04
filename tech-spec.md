@@ -172,3 +172,30 @@ During development, several critical edge cases were identified:
     * **Context**: "Straight Lines" (Angle Snapping).
     * **The Trap**: Calculating angles based on Raw Coordinates. Two points with different `p` values might have Raw Coordinates forming a vertical line, but will appear diagonal on screen.
     * **Fix**: Always align to **Visual Space** (Screen Space). The user interacts with what they see. Calculate Snapping Vectors in the Parallax Plane of the dragged vertex to ensure "What You See Is What You Get".
+
+### 3.5. Shadow System Architecture
+
+The Shadow System implements a hybrid approach to handle the complex interaction between **Actor Depth Scaling** (Shadow must grow/shrink), **Floor Parallax** (Shadow must deform on slopes), and **User Editing** (Shadow must accept manual reshaping).
+
+#### 3.5.1. The Conflict
+
+* **Rigid Caching**: Traditional scaling stores a "Base Shape" and multiplies it by `currentScale`. This prevents the shadow from deforming on slanted floors because the "Base Shape" overrides the correct parallax-distorted shape every frame.
+* **Continuous Updates**: Simply recalculating the shadow every frame allows deformation but loses the concept of "User defined shape" size relative to the actor (Scaling).
+
+#### 3.5.2. Solution: Delta Scaling & Neutral Resampling
+
+We use a **Delta Scaling** approach that respects both dynamic updates and scaling:
+
+1. **Continuous Resampling**:
+    * Every frame, the system captures the **Current Visual Offsets** of the shadow vertices relative to its anchor (Vertex 0).
+    * This captures the *deformed shape* (e.g. result of `3d-parallax` applying slope correction).
+    * Critically, we capture **Visual Offsets** (Screen Space), creating a "Neutral Shape" independent of global parallax shifts.
+
+2. **Delta Application**:
+    * We track the Actor's scale change: `Ratio = CurrentScale / LastFrameScale`.
+    * We multiply the captured Neutral Shape vectors by this `Ratio`.
+    * **Result**: The shadow grows/shrinks incrementally with the actor, but the *base shape* it modifies is the one correctly distorted by the floor.
+
+3. **State Management**:
+    * The `lastScale` cache is persistent.
+    * The cache is **invalidated** only when the Shadow is **Selected/Edited** in the UI. This sets a new "Baseline" effectively saying "The user wants the shadow to look like *this* at the current scale".

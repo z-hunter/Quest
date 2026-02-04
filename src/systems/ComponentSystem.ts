@@ -226,9 +226,9 @@ export class ComponentSystem {
         }
     }
 
-    // Cache for Shadow Base Shapes to allow scaling
-    // Key: ShadowQuadID, Value: { initScale: number, offsets: {x: number, y: number}[] }
-    private static shadowCache = new Map<string, { initScale: number, offsets: { x: number, y: number }[] }>();
+    // Cache for Shadow Scale State to support delta scaling
+    // Key: ShadowQuadID, Value: { lastScale: number }
+    private static shadowCache = new Map<string, { lastScale: number }>();
 
     private static handleShadow(actor: Actor, shadow: ShadowComponent) {
         // @ts-ignore
@@ -303,150 +303,103 @@ export class ComponentSystem {
 
                 // 4. Move & Scale Shadow
 
-                // Initialize Cache if needed
-                let cache = this.shadowCache.get(qObj.name);
-                if (!cache) {
-                    // Initialize Cache
-                    // Store offsets of V1..V3 relative to V0 in VISUAL SPACE
-                    // This prevents feedback loops if we re-capture while Parallax is active.
-
-                    const v0 = qObj.vertices[0];
-                    const v0p = v0.p !== undefined ? v0.p : 1.0;
-                    const v0VisX = v0.x - camX * (v0p - 1.0);
-                    const v0VisY = v0.y - camY * (v0p - 1.0);
-
-                    const offsets = qObj.vertices.map(v => {
-                        const vp = v.p !== undefined ? v.p : 1.0;
-                        const visX = v.x - camX * (vp - 1.0);
-                        const visY = v.y - camY * (vp - 1.0);
-                        return {
-                            x: visX - v0VisX,
-                            y: visY - v0VisY
-                        };
-                    });
-
-                    // We assume the current state corresponds to the current actor.scale
-                    // If actor.scale is 0 (shouldn't happen?), default to 1
-                    const initScale = actor.scale || 1.0;
-
-                    cache = { initScale, offsets };
-                    this.shadowCache.set(qObj.name, cache);
-                }
-
-                const currentScale = actor.scale || 1.0;
-                const scaleRatio = currentScale / cache.initScale;
-
-                // Scaled Offsets
-                const scaledOffsetX = (shadow.offsetX || 0) * scaleRatio;
-                const scaledOffsetY = (shadow.offsetY || 0) * scaleRatio;
-
-                // --- VISUAL ATTACHMENT LOGIC ---
-                // We want the shadow's V0 to appear at (ActorVisual + Offset)
-                // Regardless of the shadow's parallax.
-
-                // 1. Calculate Actor's Visual Position
-                // Av = Aw - C * (Ap - 1)
-                const actorVisX = actor.x - camX * (pFactor - 1.0);
-                const actorVisY = actor.y - camY * (pFactor - 1.0);
-
-                // 2. Calculate Target Visual Position for Shadow Base (V0)
-                const targetVisX = actorVisX + scaledOffsetX;
-                const targetVisY = actorVisY + scaledOffsetY;
-
-                // 3. Solve for Shadow World Position
-                // We need Sw such that: Sv = Sw - C * (Sp - 1) == TargetVis
-                // Sw = TargetVis + C * (Sp - 1)
-
-                // Get Shadow Parallax (Sp) - assume uniform for base calculation, 
-                // but vertices might have different P if they were tilted (which we reverted).
-                // We use V0's parallax as reference frame.
-                const sp = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
-                const targetWorldX = targetVisX + camX * (sp - 1.0);
-                const targetWorldY = targetVisY + camY * (sp - 1.0);
-
-                // Check if Shadow is being edited in Editor
+                // Check Editing State
                 let isEdited = false;
                 // @ts-ignore
                 if (scene.game && scene.game.editor && scene.game.editor.enabled) {
                     // @ts-ignore
                     const editor = scene.game.editor;
-                    // Only treat as edited if selected AND being dragged/manipulated
-                    // We check transformManager.isDragging (which handles move/resize)
                     if ((editor.selectedObject === qObj || qObj.selected) && editor.transformManager && editor.transformManager.isDragging) {
                         isEdited = true;
                     }
                 }
 
                 if (isEdited) {
-                    // Reverse Binding: If user moves shadow, update component offset
-
-                    // Current Shadow World Pos (V0)
-                    const swX = qObj.vertices[0].x;
-                    const swY = qObj.vertices[0].y;
-
-                    // Use V0's parallax for reverse calc
-                    const sp = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
-
-                    // Current Shadow Visual Pos
-                    const svX = swX - camX * (sp - 1.0);
-                    const svY = swY - camY * (sp - 1.0);
-
-                    // Actor Visual Pos
-                    const avX = actor.x - camX * (pFactor - 1.0);
-                    const avY = actor.y - camY * (pFactor - 1.0);
-
-                    // De-scale Offset
-                    const newScaledOffsetX = svX - avX;
-                    const newScaledOffsetY = svY - avY;
-
-                    const scaleRatio = currentScale / cache.initScale;
-
-                    if (scaleRatio !== 0) {
-                        shadow.offsetX = newScaledOffsetX / scaleRatio;
-                        shadow.offsetY = newScaledOffsetY / scaleRatio;
-                    }
-
-                    // Invalidate Cache to support reshaping
+                    // Reset Cache logic during editing to prevent interference
                     this.shadowCache.delete(qObj.name);
-
-                    // Return early -> Allow Editor to control position
                     return;
                 }
 
-                // FIX: Always invalidate cache to support dynamic updates (e.g. 3d-parallax)
-                // This ensures we capture the current visual shape (which might have been corrected by other systems)
-                // and simply translate it to follow the actor.
-                this.shadowCache.delete(qObj.name);
-                // Re-initialize cache immediately in the next block
+                // --- DELTA SCALING & DYNAMIC SHAPE LOGIC ---
+                // We want to:
+                // 1. Respect the current shape (which might be impacted by 3d-parallax).
+                // 2. Scale it if the Actor's scale changed since last frame.
+                // 3. Move it to follow the Actor.
 
-                // Apply Position (V0) and Scale (V1..V3)
-                // V0
-                // We treat V0 exactly like other vertices now: Visual Pos + Parallax.
-                // V0's Visual Pos is simply targetVisX/Y (since offset is 0 relative to itself).
+                const currentScale = actor.scale || 1.0;
+                let cache = this.shadowCache.get(qObj.name);
 
-                const v0p = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
+                // If just selected/edited, or first run, reset baseline
+                // @ts-ignore
+                const isSelected = qObj.selected || (scene.game && scene.game.editor && scene.game.editor.selectedObject === qObj);
+                if (!cache || isSelected) {
+                    cache = { lastScale: currentScale };
+                    this.shadowCache.set(qObj.name, cache);
+                }
+
+                // Calculate Scale Change (Delta)
+                // If init or just selected, ratio is 1.0
+                const scaleRatio = cache.lastScale !== 0 ? currentScale / cache.lastScale : 1.0;
+
+                // Update Cache immediately
+                cache.lastScale = currentScale;
+
+                // Capture Current Visual Offsets (Neutral Shape)
+                // We do this EVERY FRAME ("Resample") to support dynamic parallax morphing.
+                const v0 = qObj.vertices[0];
+                const v0p = v0.p !== undefined ? v0.p : 1.0;
+                const v0VisX = v0.x - camX * (v0p - 1.0);
+                const v0VisY = v0.y - camY * (v0p - 1.0);
+
+                // --- VISUAL ATTACHMENT LOGIC ---
+                // 1. Calculate Actor's Visual Position
+                const actorVisX = actor.x - camX * (pFactor - 1.0);
+                const actorVisY = actor.y - camY * (pFactor - 1.0);
+
+                // 2. Calculate Target Visual Position for V0
+                // Shadow Offset is scaled by Absolute Scale (approx)? 
+                // Or should we just apply scaleRatio to the distance?
+                // Let's stick to standard scaled offset logic for the attachment point.
+                const scaledOffsetX = (shadow.offsetX || 0) * currentScale; // Assuming offsetX is base
+                const scaledOffsetY = (shadow.offsetY || 0) * currentScale;
+
+                const targetVisX = actorVisX + scaledOffsetX;
+                const targetVisY = actorVisY + scaledOffsetY;
+
+                // 3. Position V0 (World)
+                // NewWorld = TargetVis + Cam * (P - 1)
                 qObj.vertices[0].x = targetVisX + camX * (v0p - 1.0);
                 qObj.vertices[0].y = targetVisY + camY * (v0p - 1.0);
 
-                // Reconstruct others (V1..V3)
-                // We treat cache.offsets as "Visual Offsets" relative to V0.
-                // This allows each vertex to shift in World Space according to its OWN Parallax,
-                // maintaining the Visual Shape.
+                // 4. Position V1..V3 (Relative to V0)
                 for (let i = 1; i < qObj.vertices.length; i++) {
-                    // 1. Target Visual Position
-                    const vVisX = targetVisX + cache.offsets[i].x * scaleRatio;
-                    const vVisY = targetVisY + cache.offsets[i].y * scaleRatio;
+                    const v = qObj.vertices[i];
+                    const vp = v.p !== undefined ? v.p : 1.0;
 
-                    // 2. Apply Per-Vertex Parallax
-                    const vp = qObj.vertices[i].p !== undefined ? qObj.vertices[i].p : 1.0;
+                    // Current Visual Pos
+                    const visX = v.x - camX * (vp - 1.0);
+                    const visY = v.y - camY * (vp - 1.0);
 
-                    qObj.vertices[i].x = vVisX + camX * (vp - 1.0);
-                    qObj.vertices[i].y = vVisY + camY * (vp - 1.0);
+                    // Offset from V0 (Visual)
+                    const offX = visX - v0VisX;
+                    const offY = visY - v0VisY; // This is the shape vector
+
+                    // Apply DELTA SCALE to the shape vector
+                    const newOffX = offX * scaleRatio;
+                    const newOffY = offY * scaleRatio;
+
+                    // New Target Visual Pos
+                    const newVisX = targetVisX + newOffX;
+                    const newVisY = targetVisY + newOffY;
+
+                    // Convert to World
+                    v.x = newVisX + camX * (vp - 1.0);
+                    v.y = newVisY + camY * (vp - 1.0);
                 }
 
-                // Update Entity Pos (for bounds/selection essentially)
-                qObj.x = targetWorldX;
-                qObj.y = targetWorldY;
+                // Update Entity Pos
+                qObj.x = qObj.vertices[0].x;
+                qObj.y = qObj.vertices[0].y;
 
             } else {
                 // Outside
