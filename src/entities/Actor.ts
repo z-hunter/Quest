@@ -145,7 +145,10 @@ export class Actor extends Entity {
             const dy = this.target.y - this.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            const step = this.speed * deltaTime;
+            const p = this.parallax !== undefined ? this.parallax : 1.0;
+            // Scale speed by parallax (dampened: 0.5 input -> 0.6 output)
+            const speedScale = 0.2 + (0.8 * p);
+            const step = this.speed * speedScale * deltaTime;
 
             if (dist <= step) {
                 this.x = this.target.x;
@@ -211,8 +214,10 @@ export class Actor extends Entity {
                     dy /= length;
                 }
 
-                const moveX = dx * this.speed * deltaTime;
-                const moveY = dy * this.speed * deltaTime;
+                const p = this.parallax !== undefined ? this.parallax : 1.0;
+                const speedScale = 0.2 + (0.8 * p);
+                const moveX = dx * this.speed * speedScale * deltaTime;
+                const moveY = dy * this.speed * speedScale * deltaTime;
 
                 const nextX = this.x + moveX;
                 const nextY = this.y + moveY;
