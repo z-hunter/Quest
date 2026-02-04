@@ -168,6 +168,10 @@ export class ComponentSystem {
         }
     }
 
+    // Cache for Shadow Base Shapes to allow scaling
+    // Key: ShadowQuadID, Value: { initScale: number, offsets: {x: number, y: number}[] }
+    private static shadowCache = new Map<string, { initScale: number, offsets: { x: number, y: number }[] }>();
+
     private static handleShadow(actor: Actor, shadow: ShadowComponent) {
         // @ts-ignore
         const scene = actor.scene;
@@ -239,50 +243,70 @@ export class ComponentSystem {
                     qObj.disabled = false;
                 }
 
-                // 4. Parallax Sync & Dynamic Inclination
-                let bottomParallax = pFactor;
+                // 4. Move & Scale Shadow
 
-                if (hitTarget && hitTarget.type === 'Quad') {
-                    const tQuad = hitTarget as QuadObject;
-                    const tv1 = tQuad.vertices[1]; // TR
-                    const tv2 = tQuad.vertices[2]; // BR
+                // Initialize Cache if needed
+                let cache = this.shadowCache.get(qObj.name);
+                if (!cache) {
+                    // Initialize Cache
+                    // Store offsets of V1..V3 relative to V0
+                    const offsets = qObj.vertices.map(v => ({
+                        x: v.x - qObj.vertices[0].x,
+                        y: v.y - qObj.vertices[0].y
+                    }));
 
-                    const rangeY = tv2.y - tv1.y;
-                    if (Math.abs(rangeY) > 1) {
-                        const t = (actor.y - tv1.y) / rangeY;
-                        const clampedT = Math.max(0, Math.min(1, t));
+                    // We assume the current state corresponds to the current actor.scale
+                    // If actor.scale is 0 (shouldn't happen?), default to 1
+                    const initScale = actor.scale || 1.0;
 
-                        // Lerp Parallax
-                        bottomParallax = tv1.p + (tv2.p - tv1.p) * clampedT;
-                    }
+                    cache = { initScale, offsets };
+                    this.shadowCache.set(qObj.name, cache);
                 }
 
-                // Apply Parallax
-                if (qObj.vertices) {
-                    qObj.vertices[0].p = pFactor;
-                    qObj.vertices[1].p = pFactor;
-                    qObj.vertices[2].p = bottomParallax;
-                    qObj.vertices[3].p = bottomParallax;
+                const currentScale = actor.scale || 1.0;
+                const scaleRatio = currentScale / cache.initScale;
+
+                // Scaled Offsets
+                const scaledOffsetX = (shadow.offsetX || 0) * scaleRatio;
+                const scaledOffsetY = (shadow.offsetY || 0) * scaleRatio;
+
+                // --- VISUAL ATTACHMENT LOGIC ---
+                // We want the shadow's V0 to appear at (ActorVisual + Offset)
+                // Regardless of the shadow's parallax.
+
+                // 1. Calculate Actor's Visual Position
+                // Av = Aw - C * (Ap - 1)
+                const actorVisX = actor.x - camX * (pFactor - 1.0);
+                const actorVisY = actor.y - camY * (pFactor - 1.0);
+
+                // 2. Calculate Target Visual Position for Shadow Base (V0)
+                const targetVisX = actorVisX + scaledOffsetX;
+                const targetVisY = actorVisY + scaledOffsetY;
+
+                // 3. Solve for Shadow World Position
+                // We need Sw such that: Sv = Sw - C * (Sp - 1) == TargetVis
+                // Sw = TargetVis + C * (Sp - 1)
+
+                // Get Shadow Parallax (Sp) - assume uniform for base calculation, 
+                // but vertices might have different P if they were tilted (which we reverted).
+                // We use V0's parallax as reference frame.
+                const sp = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
+
+                const targetWorldX = targetVisX + camX * (sp - 1.0);
+                const targetWorldY = targetVisY + camY * (sp - 1.0);
+
+                // Apply Position (V0) and Scale (V1..V3)
+                qObj.vertices[0].x = targetWorldX;
+                qObj.vertices[0].y = targetWorldY;
+
+                // Reconstruct others
+                for (let i = 1; i < qObj.vertices.length; i++) {
+                    qObj.vertices[i].x = targetWorldX + cache.offsets[i].x * scaleRatio;
+                    qObj.vertices[i].y = targetWorldY + cache.offsets[i].y * scaleRatio;
                 }
 
-                // 5. Move Shadow
-                const targetX = actor.x + (shadow.offsetX || 0);
-                const targetY = actor.y + (shadow.offsetY || 0);
-
-                const v0 = qObj.vertices[0];
-                const dx = targetX - v0.x;
-                const dy = targetY - v0.y;
-
-                if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
-                    qObj.vertices.forEach(v => {
-                        v.x += dx;
-                        v.y += dy;
-                    });
-                    qObj.x = targetX;
-                    qObj.y = targetY;
-                }
-
-
+                qObj.x = targetWorldX;
+                qObj.y = targetWorldY;
 
             } else {
                 // Outside
