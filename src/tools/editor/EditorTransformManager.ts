@@ -7,6 +7,7 @@ import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 
 import { Geometry } from '../../utils/Geometry';
+import { EditorSnappingSystem } from './EditorSnappingSystem';
 import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../../entities/EntityPrefabs';
 import { useEditorStore } from '../../store/editorStore';
 
@@ -366,247 +367,24 @@ export class EditorTransformManager {
                     // Moving a Vertex
                     const v = poly[this.draggingVertexIndex];
 
-                    // SHIFT: ANGLE SNAPPING (Pure Visual Space)
-                    if (e.shiftKey) {
-                        const prevIndex = (this.draggingVertexIndex - 1 + poly.length) % poly.length;
-                        const nextIndex = (this.draggingVertexIndex + 1) % poly.length;
+                    // Use Snapping System
+                    const isQuad = (editor.selectedObject as any).type === 'Quad';
+                    const snapResult = EditorSnappingSystem.snapVertex(
+                        worldPos,
+                        poly,
+                        this.draggingVertexIndex,
+                        scene,
+                        camX,
+                        camY,
+                        isQuad,
+                        editor.selectedObject as Entity,
+                        e.shiftKey,
+                        e.altKey && isQuad
+                    );
 
-                        const prevV = poly[prevIndex];
-                        const nextV = poly[nextIndex];
-
-                        // Helper: Resolve effective parallax (Binding Lookup)
-                        // Helper: Resolve effective parallax (Binding Lookup)
-                        const resolveParallax = (v: any) => {
-                            if (v.binding && v.binding.targetName) {
-                                const targetName = v.binding.targetName;
-                                const ent = scene.entities.find((e: any) => e.name === targetName);
-
-                                if (ent) {
-                                    // Special handling for Quad Bindings (Per-Vertex Parallax)
-                                    if ((ent as any).type === 'Quad') {
-                                        const q = ent as QuadObject;
-                                        if (v.binding.type === 'vertex' && v.binding.index !== undefined) {
-                                            const targetV = q.vertices[v.binding.index];
-                                            if (targetV) return targetV.p;
-                                        }
-                                        // TODO: Handle Grid binding parallax interpolation if needed
-                                        // For now, grid usually shares general parallax or we'd need UV interpolation
-                                    }
-                                    return ent.parallax ?? 1.0;
-                                }
-
-                                if (scene.triggerboxes) {
-                                    const tb = scene.triggerboxes.find((t: any) => t.name === targetName);
-                                    if (tb) return tb.parallax ?? 1.0;
-                                }
-                            }
-                            return v.p ?? 1.0;
-                        };
-
-                        const pPrev = resolveParallax(prevV);
-                        const pNext = resolveParallax(nextV);
-
-                        // Convert to Visual Space (P=1)
-                        // This ensures we snap lines based on what the user SEES.
-                        const toVisual = (raw: { x: number, y: number }, p: number) => ({
-                            x: raw.x - camX * (p - 1.0),
-                            y: raw.y - camY * (p - 1.0)
-                        });
-
-                        const prevVis = toVisual(prevV, pPrev);
-                        const nextVis = toVisual(nextV, pNext);
-
-                        // mousePos is already converted to worldPos (Visual/P=1 assumption) at start of fn
-                        const mouseVis = { x: worldPos.x, y: worldPos.y };
-
-                        // Helper: Get angle
-                        const getAngle = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
-
-                        // 1. Calculate angles in Visual Space
-                        const rawAnglePrev = getAngle(prevVis, mouseVis);
-                        const rawAngleNext = getAngle(nextVis, mouseVis);
-
-                        // 2. Snap angles to 22.5 deg (PI/8)
-                        const step = Math.PI / 8;
-                        const snapAnglePrev = Math.round(rawAnglePrev / step) * step;
-                        const snapAngleNext = Math.round(rawAngleNext / step) * step;
-
-                        // 3. Construct Lines
-                        const getLine = (p: { x: number, y: number }, theta: number) => {
-                            const A = -Math.sin(theta);
-                            const B = Math.cos(theta);
-                            const C = A * p.x + B * p.y;
-                            return { A, B, C, p, theta };
-                        };
-
-                        const L1 = getLine(prevVis, snapAnglePrev);
-                        const L2 = getLine(nextVis, snapAngleNext);
-
-                        // 4. Find Intersection
-                        const det = L1.A * L2.B - L2.A * L1.B;
-                        let targetVis = { x: mouseVis.x, y: mouseVis.y };
-
-                        const EPSILON = 0.0001;
-                        if (Math.abs(det) > EPSILON) {
-                            targetVis.x = (L2.B * L1.C - L1.B * L2.C) / det;
-                            targetVis.y = (L1.A * L2.C - L2.A * L1.C) / det;
-                        } else {
-                            // Parallel: Project onto closest
-                            const distToLine = (x: number, y: number, L: any) => Math.abs(L.A * x + L.B * y - L.C);
-                            const d1 = distToLine(mouseVis.x, mouseVis.y, L1);
-                            const d2 = distToLine(mouseVis.x, mouseVis.y, L2);
-
-                            const project = (start: { x: number, y: number }, theta: number, p: { x: number, y: number }) => {
-                                const ux = Math.cos(theta);
-                                const uy = Math.sin(theta);
-                                const v = { x: p.x - start.x, y: p.y - start.y };
-                                const t = v.x * ux + v.y * uy;
-                                return { x: start.x + t * ux, y: start.y + t * uy };
-                            };
-
-                            if (d1 < d2) targetVis = project(L1.p, L1.theta, mouseVis);
-                            else targetVis = project(L2.p, L2.theta, mouseVis);
-                        }
-
-                        // 5. Update WorldPos
-                        // Since downstream logic (line 612) expects worldPos to be Visual (P=1),
-                        // and we calculated targetVis (Visual), we just assign it.
-                        // The downstream code will handle conversion to Raw using v.p.
-                        worldPos.x = targetVis.x;
-                        worldPos.y = targetVis.y;
-                    }
-
-                    // ALT: QUAD SNAP TO OTHER QUADS/GRIDS
-                    if (e.altKey && (editor.selectedObject as any).type === 'Quad') {
-                        let bestDist = 10 / zoom; // Snap threshold
-                        let snapTarget: { x: number, y: number } | null = null;
-
-                        // Iterate all OTHER entities
-                        scene.entities.forEach((ent: Entity) => {
-                            if (ent === editor.selectedObject) return;
-                            if ((ent as any).type === 'Quad') {
-                                const q = ent as QuadObject;
-                                if (q.disabled || !q.visible) return;
-
-                                // Check Vertices
-                                q.vertices.forEach(qv => {
-                                    // Visual Position = Raw - Camera * (P - 1)
-                                    // Note: Editor stores standard camera as camX, camY.
-                                    // We must match the visual projection logic used elsewhere.
-                                    const vx = Math.round(qv.x - camX * (qv.p - 1.0));
-                                    const vy = Math.round(qv.y - camY * (qv.p - 1.0));
-
-                                    const dx = Math.abs(vx - worldPos.x);
-                                    const dy = Math.abs(vy - worldPos.y);
-                                    if (dx < bestDist && dy < bestDist) {
-                                        snapTarget = { x: vx, y: vy };
-                                        bestDist = Math.max(dx, dy);
-                                        this.currentSnapBinding = {
-                                            targetName: q.name,
-                                            type: 'vertex',
-                                            index: q.vertices.indexOf(qv) // Assuming reference identity, else use loop index
-                                        };
-                                    }
-                                });
-
-                                // Check Retro Grid Nodes
-                                if (q.isGrid) {
-                                    // Calculate Visual Positions of Corners
-                                    const visualVerts = q.vertices.map(v => ({
-                                        x: Math.round(v.x - camX * (v.p - 1.0)),
-                                        y: Math.round(v.y - camY * (v.p - 1.0))
-                                    }));
-
-                                    const v0 = visualVerts[0];
-                                    const v1 = visualVerts[1];
-                                    const v2 = visualVerts[2];
-                                    const v3 = visualVerts[3];
-
-                                    for (let i = 1; i <= q.gridLinesX; i++) {
-                                        const t = i / (q.gridLinesX + 1);
-
-                                        // Vertical Line Top/Bottom points (Edge Intersections)
-                                        const tx = v0.x + (v1.x - v0.x) * t;
-                                        const ty = v0.y + (v1.y - v0.y) * t;
-                                        const bx = v3.x + (v2.x - v3.x) * t;
-                                        const by = v3.y + (v2.y - v3.y) * t;
-
-                                        // Snap to Top Edge Point
-                                        let d = Math.abs(tx - worldPos.x);
-                                        let d2 = Math.abs(ty - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) {
-                                            snapTarget = { x: tx, y: ty };
-                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: t, gridV: 0 };
-                                        }
-
-                                        // Snap to Bottom Edge Point
-                                        d = Math.abs(bx - worldPos.x);
-                                        d2 = Math.abs(by - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) {
-                                            snapTarget = { x: bx, y: by };
-                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: t, gridV: 1 };
-                                        }
-
-                                        // Vertical Line
-                                        // Intersection with Horizontal Lines
-                                        for (let j = 1; j <= q.gridLinesY; j++) {
-                                            const ty_h = j / (q.gridLinesY + 1);
-                                            // Bilinear Interpolation
-                                            const u = t;
-                                            const v_param = ty_h;
-
-                                            const nx = (1 - u) * (1 - v_param) * v0.x + u * (1 - v_param) * v1.x + (1 - u) * v_param * v3.x + u * v_param * v2.x;
-                                            const ny = (1 - u) * (1 - v_param) * v0.y + u * (1 - v_param) * v1.y + (1 - u) * v_param * v3.y + u * v_param * v2.y;
-
-                                            const dx = Math.abs(nx - worldPos.x);
-                                            const dy = Math.abs(ny - worldPos.y);
-                                            if (dx < bestDist && dy < bestDist) {
-                                                snapTarget = { x: nx, y: ny };
-                                                this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: u, gridV: v_param };
-                                            }
-                                        }
-                                    }
-
-                                    // Horizontal Line Edge Points (Left/Right)
-                                    for (let j = 1; j <= q.gridLinesY; j++) {
-                                        const u = j / (q.gridLinesY + 1);
-                                        // Left Point (v0 -> v3)
-                                        const lx = v0.x + (v3.x - v0.x) * u;
-                                        const ly = v0.y + (v3.y - v0.y) * u;
-
-                                        // Right Point (v1 -> v2)
-                                        const rx = v1.x + (v2.x - v1.x) * u;
-                                        const ry = v1.y + (v2.y - v1.y) * u;
-
-                                        // Snap to Left Edge Point
-                                        let d = Math.abs(lx - worldPos.x);
-                                        let d2 = Math.abs(ly - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) {
-                                            snapTarget = { x: lx, y: ly };
-                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: 0, gridV: u };
-                                        }
-
-                                        // Snap to Right Edge Point
-                                        d = Math.abs(rx - worldPos.x);
-                                        d2 = Math.abs(ry - worldPos.y);
-                                        if (d < bestDist && d2 < bestDist) {
-                                            snapTarget = { x: rx, y: ry };
-                                            this.currentSnapBinding = { targetName: q.name, type: 'grid', gridU: 1, gridV: u };
-                                        }
-                                    }
-                                }
-                            }
-                        });
-
-                        if (snapTarget) {
-                            worldPos.x = (snapTarget as any).x;
-                            worldPos.y = (snapTarget as any).y;
-                        } else {
-                            this.currentSnapBinding = null;
-                        }
-                    } else {
-                        this.currentSnapBinding = null;
-                    }
+                    worldPos.x = snapResult.x;
+                    worldPos.y = snapResult.y;
+                    this.currentSnapBinding = snapResult.binding;
 
                     if ((editor.selectedObject as any).type === 'Quad') {
                         // Reverse Projection
@@ -670,96 +448,13 @@ export class EditorTransformManager {
                             y: (pos.y - halfH) / zoom + camY
                         };
 
-                        let bestDist = 10 / zoom;
-                        let snapTargetVisual: { x: number, y: number } | null = null;
+                        const snappedVisual = EditorSnappingSystem.snapEntity(mouseVisual, entity, scene, camX, camY, zoom);
 
-                        // Check Other Entities (Corners)
-                        scene.entities.forEach((other: Entity) => {
-                            if (other === entity) return;
-                            if (other.disabled || !other.visible) return;
-
-                            const op = other.parallax !== undefined ? other.parallax : 1.0;
-                            // @ts-ignore
-                            const ovOx = other.visualOffset ? other.visualOffset.x : 0;
-                            // @ts-ignore
-                            const ovOy = other.visualOffset ? other.visualOffset.y : 0;
-
-                            // Corners in Raw
-                            const l = other.x - other.width / 2;
-                            const r = other.x + other.width / 2;
-                            const t = other.y - other.height;
-                            const b = other.y;
-
-                            const rawPoints = [
-                                { x: l, y: t }, { x: r, y: t },
-                                { x: l, y: b }, { x: r, y: b }
-                            ];
-
-                            rawPoints.forEach(pt => {
-                                // Project to Visual: Vis = (Raw + vOx) - Cam*(P-1)
-                                const vx = (pt.x + ovOx) - camX * (op - 1.0);
-                                const vy = (pt.y + ovOy) - camY * (op - 1.0);
-
-                                const dx = Math.abs(vx - mouseVisual.x);
-                                const dy = Math.abs(vy - mouseVisual.y);
-                                if (dx < bestDist && dy < bestDist) {
-                                    bestDist = Math.max(dx, dy);
-                                    snapTargetVisual = { x: vx, y: vy };
-                                }
-                            });
-                        });
-
-                        // Check Quads (Vertices & Grid)
-                        const quads = scene.entities.filter((e: any) => e.type === 'Quad') as QuadObject[];
-                        quads.forEach(q => {
-                            if (q.disabled || !q.visible) return;
-
-                            // Vertices
-                            q.vertices.forEach(v => {
-                                const vx = v.x - camX * (v.p - 1.0);
-                                const vy = v.y - camY * (v.p - 1.0);
-                                const dx = Math.abs(vx - mouseVisual.x);
-                                const dy = Math.abs(vy - mouseVisual.y);
-                                if (dx < bestDist && dy < bestDist) {
-                                    bestDist = Math.max(dx, dy);
-                                    snapTargetVisual = { x: vx, y: vy };
-                                }
-                            });
-
-                            // Retro Grid
-                            if (q.isGrid) {
-                                const visualVerts = q.vertices.map(v => ({
-                                    x: v.x - camX * (v.p - 1.0),
-                                    y: v.y - camY * (v.p - 1.0)
-                                }));
-                                const v0 = visualVerts[0];
-                                const v1 = visualVerts[1];
-                                const v2 = visualVerts[2];
-                                const v3 = visualVerts[3];
-
-                                for (let i = 1; i <= q.gridLinesX; i++) {
-                                    const u = i / (q.gridLinesX + 1);
-                                    for (let j = 1; j <= q.gridLinesY; j++) {
-                                        const v = j / (q.gridLinesY + 1);
-                                        const nx = (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
-                                        const ny = (1 - u) * (1 - v) * v0.y + u * (1 - v) * v1.y + (1 - u) * v * v3.y + u * v * v2.y;
-                                        const dx = Math.abs(nx - mouseVisual.x);
-                                        const dy = Math.abs(ny - mouseVisual.y);
-                                        if (dx < bestDist && dy < bestDist) {
-                                            bestDist = Math.max(dx, dy);
-                                            snapTargetVisual = { x: nx, y: ny };
-                                        }
-                                    }
-                                }
-                            }
-                        });
-
-
-                        if (snapTargetVisual) {
+                        if (snappedVisual) {
                             // Unproject Visual -> Raw (Entity P)
                             // Raw = Visual - vOx + Cam*(P-1)
-                            worldX = snapTargetVisual.x - vOx + camX * (p - 1.0);
-                            worldY = snapTargetVisual.y - vOy + camY * (p - 1.0);
+                            worldX = snappedVisual.x - vOx + camX * (p - 1.0);
+                            worldY = snappedVisual.y - vOy + camY * (p - 1.0);
                         }
                     }
 
