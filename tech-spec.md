@@ -199,3 +199,22 @@ We use a **Delta Scaling** approach that respects both dynamic updates and scali
 3. **State Management**:
     * The `lastScale` cache is persistent.
     * The cache is **invalidated** only when the Shadow is **Selected/Edited** in the UI. This sets a new "Baseline" effectively saying "The user wants the shadow to look like *this* at the current scale".
+
+### 3.6. Centralized Parallax Interpolation
+
+To handle complex 3D surfaces (e.g., slopes, tilted planes) where `p` varies across both X and Y axes, we moved away from simple "edge projection" to a centralized interpolation model.
+
+#### 3.6.1. Inverse Interpolation (XY -> P)
+
+The `QuadObject` class now exposes a method `getParallaxAt(x, y, isVisual)` that calculates the exact Parallax Factor for any point on its surface.
+
+* **Logic**:
+    1. Decomposes the Quad into two triangles (Standard Triangulation: TL-TR-BL and TR-BR-BL).
+    2. Uses **Barycentric Interpolation** to calculate weights for the point relative to the triangle vertices.
+    3. Returns the weighted average `p` of the vertices: `P_point = P_v1*w1 + P_v2*w2 + P_v3*w3`.
+
+This allows systems like `ThreeDParallaxSystem` to robustly determine the correct depth for Actors and Shadows regardless of the surface's orientation or distortion.
+
+#### 3.6.2. Forward Interpolation (UV -> XY/P)
+
+Conversely, `resolveBindings` (in `QuadObject`) handles **Grid Snapping** using Bilinear Interpolation based on UV coordinates (`0.0 - 1.0` along grid lines). It interpolates both position (XY) and Parallax (P) simultaneously, ensuring the grid mesh physically conforms to the perspective defined by the corners.

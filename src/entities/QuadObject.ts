@@ -212,6 +212,80 @@ export class QuadObject extends Entity {
         return Geometry.isPointInPolygon({ x, y }, projectedPoly);
     }
 
+    /**
+     * Get the interpolated Parallax (P) value at a specific point (x,y).
+     * @param x Point X
+     * @param y Point Y
+     * @param isVisual If true, treats (x,y) as visual coordinates and projects Quad vertices to visual space before interpolation.
+     */
+    getParallaxAt(x: number, y: number, isVisual: boolean = false): number {
+        // @ts-ignore
+        const scene = this.scene;
+        if (!scene || this.vertices.length < 3) return 1.0;
+
+        const camX = scene.camera.x;
+        const camY = scene.camera.y;
+
+        // Helper to prepare vertex
+        const prep = (v: QuadVertex) => {
+            if (!isVisual) return { x: v.x, y: v.y, p: v.p };
+            // Project to Visual
+            return {
+                x: v.x - camX * (v.p - 1.0),
+                y: v.y - camY * (v.p - 1.0),
+                p: v.p
+            };
+        };
+
+        const v0 = prep(this.vertices[0]); // TL
+        const v1 = prep(this.vertices[1]); // TR
+        const v2 = prep(this.vertices[2]); // BR
+        const v3 = prep(this.vertices[3]); // BL (if exists)
+
+        // Helper: Barycentric weights for Triangle (a, b, c) vs Point p
+        const barycentric = (a: any, b: any, c: any, px: number, py: number) => {
+            const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+            const subW1 = (b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y);
+            const subW2 = (c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y);
+
+            const w1 = subW1 / det;
+            const w2 = subW2 / det;
+            const w3 = 1 - w1 - w2;
+            return { w1, w2, w3 };
+        };
+
+        // Check Triangle 1: 0-1-3 (TL-TR-BL)
+        if (v3) {
+            const { w1, w2, w3 } = barycentric(v0, v1, v3, x, y);
+            if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
+                return v0.p * w1 + v1.p * w2 + v3.p * w3;
+            }
+        }
+
+        // Check Triangle 2: 1-2-3 (TR-BR-BL)
+        if (v3) {
+            const { w1, w2, w3 } = barycentric(v1, v2, v3, x, y);
+            if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
+                return v1.p * w1 + v2.p * w2 + v3.p * w3;
+            }
+        } else {
+            // Just one triangle 0-1-2?
+            const { w1, w2, w3 } = barycentric(v0, v1, v2, x, y);
+            if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
+                return v0.p * w1 + v1.p * w2 + v2.p * w3;
+            }
+        }
+
+        // Fallback: If outside, return simple average or closest edge?
+        // Maybe just return 1.0 or the P of closest vertex?
+        // For strictly on-quad logic, calling code checks hitTest first.
+        // But hitTest uses generic polygon.
+        // Let's return average P for safety.
+        let sumP = 0;
+        this.vertices.forEach(v => sumP += v.p);
+        return sumP / this.vertices.length;
+    }
+
     // Serialization
     toJSON(): any {
         const data = super.toJSON() as any;
