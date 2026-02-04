@@ -298,10 +298,16 @@ export class SceneEditor {
 
             // Camera Hotkeys
             case '+': case '=':
-                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 1.1;
+                if (this.game.sceneManager.currentScene) {
+                    this.game.sceneManager.currentScene.camera.zoom *= 1.1;
+                    useEditorStore.getState().incrementObjectVersion();
+                }
                 break;
             case '-':
-                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom *= 0.9;
+                if (this.game.sceneManager.currentScene) {
+                    this.game.sceneManager.currentScene.camera.zoom *= 0.9;
+                    useEditorStore.getState().incrementObjectVersion();
+                }
                 break;
             case '*':
                 // Reset Camera Position
@@ -313,11 +319,15 @@ export class SceneEditor {
                     } else {
                         s.camera.x = 0; s.camera.y = 0;
                     }
+                    useEditorStore.getState().incrementObjectVersion();
                 }
                 break;
             case '/':
                 // Reset Zoom
-                if (this.game.sceneManager.currentScene) this.game.sceneManager.currentScene.camera.zoom = 1.0;
+                if (this.game.sceneManager.currentScene) {
+                    this.game.sceneManager.currentScene.camera.zoom = 1.0;
+                    useEditorStore.getState().incrementObjectVersion();
+                }
                 break;
 
             case 'enter':

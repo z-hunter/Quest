@@ -747,10 +747,12 @@ export class EditorTransformManager {
                 scene.camera.zoom *= 1.1;
                 // Clamp max zoom? Optional but good practice.
                 if (scene.camera.zoom > 10) scene.camera.zoom = 10;
+                useEditorStore.getState().incrementObjectVersion();
             } else if (e.deltaY > 0) {
                 // Zoom Out
                 scene.camera.zoom *= 0.9;
-                if (scene.camera.zoom < 0.1) scene.camera.zoom = 0.1;
+                if (scene.camera.zoom < 0.01) scene.camera.zoom = 0.01;
+                useEditorStore.getState().incrementObjectVersion();
             }
             // Notify UI if needed (though zoom usually doesn't need immediate inspector update unless we show zoom level)
             // But we might want to refresh if we add a zoom slider later.
