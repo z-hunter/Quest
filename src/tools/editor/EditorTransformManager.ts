@@ -333,6 +333,11 @@ export class EditorTransformManager {
             const cy = document.getElementById('cam-y') as HTMLInputElement;
             if (cx) cx.value = Math.round(s.camera.x).toString();
             if (cy) cy.value = Math.round(s.camera.y).toString();
+
+            // React Properties Panel Update
+            if (useEditorStore.getState().selectedObjectId === 'SCENE') {
+                useEditorStore.getState().incrementObjectVersion();
+            }
             return;
         }
 

@@ -214,6 +214,9 @@ export class Game implements IGame {
 
     update(deltaTime: number): void {
         this.sceneManager.update(deltaTime);
+        if (this.editor.enabled) {
+            this.editor.update(deltaTime);
+        }
 
         // Cursor Logic: Change to 'eye' if hovering over Subscene object in Game Mode
         if (!this.editor.enabled && this.sceneManager.currentScene) {

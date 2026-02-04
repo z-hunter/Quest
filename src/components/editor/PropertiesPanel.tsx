@@ -974,7 +974,7 @@ export const PropertiesPanel: React.FC = () => {
                                         <>
                                             <div className="e-row">
                                                 <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
-                                                    Interpolates Actor Parallax based on slope (Right Edge).
+                                                    Interpolates Actor Parallax based on Quad's vertexes P.
                                                 </div>
                                             </div>
                                         </>

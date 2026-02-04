@@ -63,11 +63,36 @@ export class SceneEditor {
         this.ui.initUI();
     }
 
+    initUI(): void {
+        this.ui.initUI();
+    }
+
 
 
 
     destroy(): void {
         this.ui.destroy();
+    }
+
+    lastCameraPos: { x: number, y: number } = { x: 0, y: 0 };
+
+    update(deltaTime: number): void {
+        // Check for Camera changes to update UI
+        if (this.game.sceneManager.currentScene) {
+            const cam = this.game.sceneManager.currentScene.camera;
+            if (cam) {
+                if (cam.x !== this.lastCameraPos.x || cam.y !== this.lastCameraPos.y) {
+                    this.lastCameraPos.x = cam.x;
+                    this.lastCameraPos.y = cam.y;
+
+                    // Only update UI if Scene is selected (showing Camera Props)
+                    // Or if we decide to show camera Pos elsewhere
+                    if (useEditorStore.getState().selectedObjectId === 'SCENE') {
+                        useEditorStore.getState().incrementObjectVersion();
+                    }
+                }
+            }
+        }
     }
 
     setupListeners(): void {
