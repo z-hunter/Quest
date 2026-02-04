@@ -291,9 +291,55 @@ export class ComponentSystem {
                 // but vertices might have different P if they were tilted (which we reverted).
                 // We use V0's parallax as reference frame.
                 const sp = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
-
                 const targetWorldX = targetVisX + camX * (sp - 1.0);
                 const targetWorldY = targetVisY + camY * (sp - 1.0);
+
+                // Check if Shadow is being edited in Editor
+                let isEdited = false;
+                // @ts-ignore
+                if (scene.game && scene.game.editor && scene.game.editor.enabled) {
+                    // @ts-ignore
+                    const editor = scene.game.editor;
+                    if (editor.selectedObject === qObj || qObj.selected) {
+                        isEdited = true;
+                    }
+                }
+
+                if (isEdited) {
+                    // Reverse Binding: If user moves shadow, update component offset
+
+                    // Current Shadow World Pos (V0)
+                    const swX = qObj.vertices[0].x;
+                    const swY = qObj.vertices[0].y;
+
+                    // Use V0's parallax for reverse calc
+                    const sp = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
+
+                    // Current Shadow Visual Pos
+                    const svX = swX - camX * (sp - 1.0);
+                    const svY = swY - camY * (sp - 1.0);
+
+                    // Actor Visual Pos
+                    const avX = actor.x - camX * (pFactor - 1.0);
+                    const avY = actor.y - camY * (pFactor - 1.0);
+
+                    // De-scale Offset
+                    const newScaledOffsetX = svX - avX;
+                    const newScaledOffsetY = svY - avY;
+
+                    const scaleRatio = currentScale / cache.initScale;
+
+                    if (scaleRatio !== 0) {
+                        shadow.offsetX = newScaledOffsetX / scaleRatio;
+                        shadow.offsetY = newScaledOffsetY / scaleRatio;
+                    }
+
+                    // Invalidate Cache to support reshaping
+                    this.shadowCache.delete(qObj.name);
+
+                    // Return early -> Allow Editor to control position
+                    return;
+                }
 
                 // Apply Position (V0) and Scale (V1..V3)
                 qObj.vertices[0].x = targetWorldX;
