@@ -624,6 +624,9 @@ export class Scene {
     }
 
     update(deltaTime: number): void {
+        // Run Component System Logic (Shadows, Parallax, etc.)
+        ComponentSystem.update(this, deltaTime);
+
         // Update Camera
         // 0. Update Camera Auto-Center Target
         if (this.player && this.autoCenter) {

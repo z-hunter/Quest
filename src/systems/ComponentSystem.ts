@@ -101,8 +101,8 @@ export class ComponentSystem {
         const camY = scene.camera ? scene.camera.y : 0;
 
         for (const actor of actors) {
-            // Constraint: Only update if moving
-            if (actor.state !== 'walk') continue;
+            // Constraint: Only update if moving? No, update always to handle Editor dragging / Teleport / Idle on moving platform
+            // if (actor.state !== 'walk') continue;
 
             // Check if Actor is ON this Quad
             // Use Visual Position for hitTest
@@ -163,6 +163,64 @@ export class ComponentSystem {
 
                     actor.x = newWorldX;
                     actor.y = newWorldY;
+                }
+            }
+
+            // --- Shadow Logic ---
+            // Check if actor has a Shadow component
+            // We need to update the Shadow Vertices to also respect the Parallax Layer they are on.
+            if (actor.components) {
+                const shadowComp = actor.components.find(c => c.type === 'Shadow') as ShadowComponent | undefined;
+                if (shadowComp && shadowComp.shadowQuadId) {
+                    // Find Shadow Quad
+                    // @ts-ignore
+                    const shadowQuad = scene.findEntity ? scene.findEntity(shadowComp.shadowQuadId) : scene.entities.find((e: any) => e.name === shadowComp.shadowQuadId);
+
+                    if (shadowQuad && shadowQuad.type === 'Quad') {
+                        // Iterate Vertices of the Shadow
+                        for (const sv of shadowQuad.vertices) {
+                            // Calculate Visual Pos of Shadow Vertex
+                            const svP = sv.p !== undefined ? sv.p : 1.0;
+                            const svVisX = sv.x - camX * (svP - 1.0);
+                            const svVisY = sv.y - camY * (svP - 1.0);
+
+                            // Hit Test against the Parallax Floor (quad) using Visual Coordinates
+                            if (quad.hitTest(svVisX, svVisY)) {
+                                // Interpolate Parallax for this vertex
+                                // Reuse logic from above
+                                if (quad.vertices.length >= 3) {
+                                    const v1 = quad.vertices[1];
+                                    const v2 = quad.vertices[2];
+
+                                    const p1 = v1.p !== undefined ? v1.p : 1.0;
+                                    const p2 = v2.p !== undefined ? v2.p : 1.0;
+
+                                    const visY1 = v1.y - camY * (p1 - 1.0);
+                                    const visY2 = v2.y - camY * (p2 - 1.0);
+                                    const visRangeY = visY2 - visY1;
+
+                                    if (Math.abs(visRangeY) > 1) {
+                                        const t = (svVisY - visY1) / visRangeY;
+                                        const clampedT = Math.max(0, Math.min(1, t));
+
+                                        const newP = p1 + (p2 - p1) * clampedT;
+
+                                        // Only update if changed (epsilon check?)
+                                        if (Math.abs(newP - svP) > 0.0001) {
+                                            // Debug Log
+                                            if (Math.random() < 0.01) console.log(`[3dParallax] Updating Shadow Vertex P: ${svP.toFixed(3)} -> ${newP.toFixed(3)}`);
+
+                                            // Apply Correction
+                                            sv.p = newP;
+                                            // Fix World Position to keep Visual Position constant
+                                            sv.x = svVisX + camX * (newP - 1.0);
+                                            sv.y = svVisY + camY * (newP - 1.0);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -249,11 +307,23 @@ export class ComponentSystem {
                 let cache = this.shadowCache.get(qObj.name);
                 if (!cache) {
                     // Initialize Cache
-                    // Store offsets of V1..V3 relative to V0
-                    const offsets = qObj.vertices.map(v => ({
-                        x: v.x - qObj.vertices[0].x,
-                        y: v.y - qObj.vertices[0].y
-                    }));
+                    // Store offsets of V1..V3 relative to V0 in VISUAL SPACE
+                    // This prevents feedback loops if we re-capture while Parallax is active.
+
+                    const v0 = qObj.vertices[0];
+                    const v0p = v0.p !== undefined ? v0.p : 1.0;
+                    const v0VisX = v0.x - camX * (v0p - 1.0);
+                    const v0VisY = v0.y - camY * (v0p - 1.0);
+
+                    const offsets = qObj.vertices.map(v => {
+                        const vp = v.p !== undefined ? v.p : 1.0;
+                        const visX = v.x - camX * (vp - 1.0);
+                        const visY = v.y - camY * (vp - 1.0);
+                        return {
+                            x: visX - v0VisX,
+                            y: visY - v0VisY
+                        };
+                    });
 
                     // We assume the current state corresponds to the current actor.scale
                     // If actor.scale is 0 (shouldn't happen?), default to 1
@@ -343,16 +413,38 @@ export class ComponentSystem {
                     return;
                 }
 
-                // Apply Position (V0) and Scale (V1..V3)
-                qObj.vertices[0].x = targetWorldX;
-                qObj.vertices[0].y = targetWorldY;
+                // FIX: Always invalidate cache to support dynamic updates (e.g. 3d-parallax)
+                // This ensures we capture the current visual shape (which might have been corrected by other systems)
+                // and simply translate it to follow the actor.
+                this.shadowCache.delete(qObj.name);
+                // Re-initialize cache immediately in the next block
 
-                // Reconstruct others
+                // Apply Position (V0) and Scale (V1..V3)
+                // V0
+                // We treat V0 exactly like other vertices now: Visual Pos + Parallax.
+                // V0's Visual Pos is simply targetVisX/Y (since offset is 0 relative to itself).
+
+                const v0p = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
+                qObj.vertices[0].x = targetVisX + camX * (v0p - 1.0);
+                qObj.vertices[0].y = targetVisY + camY * (v0p - 1.0);
+
+                // Reconstruct others (V1..V3)
+                // We treat cache.offsets as "Visual Offsets" relative to V0.
+                // This allows each vertex to shift in World Space according to its OWN Parallax,
+                // maintaining the Visual Shape.
                 for (let i = 1; i < qObj.vertices.length; i++) {
-                    qObj.vertices[i].x = targetWorldX + cache.offsets[i].x * scaleRatio;
-                    qObj.vertices[i].y = targetWorldY + cache.offsets[i].y * scaleRatio;
+                    // 1. Target Visual Position
+                    const vVisX = targetVisX + cache.offsets[i].x * scaleRatio;
+                    const vVisY = targetVisY + cache.offsets[i].y * scaleRatio;
+
+                    // 2. Apply Per-Vertex Parallax
+                    const vp = qObj.vertices[i].p !== undefined ? qObj.vertices[i].p : 1.0;
+
+                    qObj.vertices[i].x = vVisX + camX * (vp - 1.0);
+                    qObj.vertices[i].y = vVisY + camY * (vp - 1.0);
                 }
 
+                // Update Entity Pos (for bounds/selection essentially)
                 qObj.x = targetWorldX;
                 qObj.y = targetWorldY;
 
