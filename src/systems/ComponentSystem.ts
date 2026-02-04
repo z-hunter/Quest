@@ -121,26 +121,48 @@ export class ComponentSystem {
                 const v1 = quad.vertices[1];
                 const v2 = quad.vertices[2];
 
-                const rangeY = v2.y - v1.y;
-                if (Math.abs(rangeY) > 1) {
-                    // Interpolate
-                    // t = 0 at V1 (Top), t = 1 at V2 (Bottom)
-                    const t = (actor.y - v1.y) / rangeY;
+                // Visual Interpolation to prevent Feedback Loop
+                // Calculate Visual Y of vertices and Actor
+                const p1 = v1.p !== undefined ? v1.p : 1.0;
+                const p2 = v2.p !== undefined ? v2.p : 1.0;
+
+                const visY1 = v1.y - camY * (p1 - 1.0);
+                const visY2 = v2.y - camY * (p2 - 1.0);
+
+                const actorP = actor.parallax !== undefined ? actor.parallax : 1.0;
+                const actorVisY = actor.y - camY * (actorP - 1.0);
+
+                const visRangeY = visY2 - visY1;
+
+                if (Math.abs(visRangeY) > 1) {
+                    // Interpolate t in Visual Space (Stable)
+                    const t = (actorVisY - visY1) / visRangeY;
                     const clampedT = Math.max(0, Math.min(1, t));
 
-                    const newP = v1.p + (v2.p - v1.p) * clampedT;
+                    const newP = p1 + (p2 - p1) * clampedT;
 
-                    // Apply
-                    // Apply
+                    // Apply new Parallax
                     actor.parallax = newP;
 
-                    // Correction: Counteract horizontal drift caused by Parallax Perspective
-                    // Move the entity in World Space so its Visual Position remains constant
-                    const dP = newP - pFactor; // pFactor is the old parallax
-                    actor.x += camX * dP;
-                    actor.y += camY * dP;
+                    // Update Actor World Y to maintain this Visual Position with new Parallax
+                    // Vy = Wy - Cy * (P - 1)  ->  Wy = Vy + Cy * (P - 1)
+                    // We use the SAME actorVisY, but now with newP.
+                    // This ensures the actor doesn't visually jump.
 
-                    // console.log(`[3D-Parallax] Actor ${actor.name} P updated to ${newP.toFixed(3)} (T=${clampedT.toFixed(2)})`);
+                    // However, we also need to ensure World Y is consistent with the Quad's slope?
+                    // If we just stabilize Visual Y, we might drift off the quad in World Space if we iterate.
+                    // But "Being on the Quad" is a Visual concept for the player.
+                    // Let's rely on the stability of Vy.
+
+                    const newWorldY = actorVisY + camY * (newP - 1.0);
+
+                    // Also stabilize X?
+                    // Visual X should be constant.
+                    const actorVisX = actor.x - camX * (actorP - 1.0);
+                    const newWorldX = actorVisX + camX * (newP - 1.0);
+
+                    actor.x = newWorldX;
+                    actor.y = newWorldY;
                 }
             }
         }
