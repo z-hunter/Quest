@@ -675,6 +675,12 @@ export class SceneEditor {
 
             } else if (type === 'Quad') {
                 newObj = QuadObject.fromJSON(this.game, data);
+
+                // Clear Bindings for New Objects (Paste/Duplicate/Load)
+                if (newObj.vertices) {
+                    newObj.vertices.forEach((v: any) => delete v.binding);
+                }
+
                 // Handle Paste Position Override
                 if (overrideX !== undefined && overrideY !== undefined) {
                     const oldX = data.x || 0;

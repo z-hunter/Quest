@@ -15,6 +15,8 @@
 - [x] **Shadow & Parallax System:** Fixed 'Inside-Out' distortion, 'Pillar' bugs, and implemented Delta Scaling for robust depth alignment.
 - [x] **SceneEditor IO Refactoring:** Decoupled file I/O logic into `EditorPersistenceManager` for better modularity.
 - [x] **Advanced Snapping & Y-Sorting:** Implemented horizontal grid snapping, Entity corner snapping (parallax-aware), and unified Visual Y-sorting.
+- [x] **Auto-Center Fix:** Resolved keyboard movement blockage during camera auto-centering.
+- [x] **Magnetic Move & Quad Paste:** Implemented magnetized whole-quad dragging and cursor-aware pasting with auto-unlocking.
 
 ## Active/Pending Tasks
 

@@ -419,16 +419,111 @@ export class EditorTransformManager {
 
                 } else if (this.draggingVertexIndex === -1) {
                     // Moving Body (Quad/Polygon)
-                    const dx = worldPos.x - this.dragOffset.x;
-                    const dy = worldPos.y - this.dragOffset.y;
+                    let dx = worldPos.x - this.dragOffset.x;
+                    let dy = worldPos.y - this.dragOffset.y;
+
+                    // MAGNETIC MOVE (Quad only, Alt Key)
+                    if ((editor.selectedObject as any).type === 'Quad' && e.altKey) {
+                        const q = editor.selectedObject as QuadObject;
+                        let bestDist = 20 / zoom;
+                        let bestSnapDelta: { x: number, y: number } | null = null;
+
+                        // Check all vertices for potential snap
+                        for (let i = 0; i < q.vertices.length; i++) {
+                            const v = q.vertices[i];
+
+                            // Proposed position for this vertex
+                            const propX = v.x + dx;
+                            const propY = v.y + dy;
+
+                            // 1. Calculate Visual Position of Proposed Vertex (for Snapping System)
+                            // Note: snapVertex expects "World Visual" (P=1) coords for the mouse/target.
+                            // But v.x/v.y are RAW coords (if using QuadObject).
+                            // Wait, QuadObject vertices are stored in RAW coordinates in data?
+                            // Let's check QuadObject.ts or existing code.
+                            // In TransformManager: 
+                            // poly = (editor.selectedObject as QuadObject).vertices; (Reference)
+                            // worldPos (mouse) is calculated as: (Screen - HalfW)/Zoom + CamX
+                            // In 'Moving a Vertex' block: 
+                            // v.x = Math.round(worldPos.x + camX * (v.p - 1.0));
+                            // This implies v.x is RAW.
+
+                            // snapVertex input `mouseWorldPos` is treated as Visual P=1.
+                            // So we need to convert Proposed Raw -> Proposed Visual.
+                            // Visual = Raw - Cam * (P-1)
+                            const visualPropX = propX - camX * (v.p - 1.0);
+                            const visualPropY = propY - camY * (v.p - 1.0);
+
+                            const snapResult = EditorSnappingSystem.snapVertex(
+                                { x: visualPropX, y: visualPropY },
+                                q.vertices, // Pass vertices for reference (Angle snap ignored via shift=false)
+                                i,
+                                scene,
+                                camX,
+                                camY,
+                                true, // isQuad
+                                editor.selectedObject as Entity,
+                                false, // shiftKey (Disable Angle Snap for Body Move)
+                                true,  // altKey (Enable World Snap)
+                                zoom
+                            );
+
+                            // If snapResult diff differs from visualProp
+                            const sdx = snapResult.x - visualPropX;
+                            const sdy = snapResult.y - visualPropY;
+                            const dist = Math.sqrt(sdx * sdx + sdy * sdy);
+
+                            // If snapped (dist > 0 implies snap usually, or we check if result != input)
+                            // snapVertex returns input pos if no snap found.
+                            if ((Math.abs(sdx) > 0.01 || Math.abs(sdy) > 0.01) && dist < bestDist) {
+                                // Convert Visual Snap Delta back to Raw Delta?
+                                // RawDelta = VisualDelta (since Cam offset allows linear translation? No.)
+                                // Raw1 = Vis1 + Offset. Raw2 = Vis2 + Offset. 
+                                // Raw2 - Raw1 = Vis2 - Vis1. Yes.
+                                // So SnapDelta applies directly to Raw coords?
+                                // Yes, because Camera Offset is constant for a given frame/parallax (ignoring P changes).
+
+                                bestDist = dist;
+                                bestSnapDelta = { x: sdx, y: sdy };
+                            }
+                        }
+
+                        if (bestSnapDelta) {
+                            dx += bestSnapDelta.x;
+                            dy += bestSnapDelta.y;
+                        }
+                    }
 
                     // Update DragOffset
+                    // FIX: If we applied a magnetic snap, our dragoffset (Mouse-to-Object) relation changed.
+                    // If we don't update dragOffset, next frame calculates dx from Mouse Original relative to Body Original.
+                    // We want consistent dragging. 
+                    // If we snap, the object moves. Mouse is same.
+                    // dx = Mouse - DragOffset.
+                    // NewObjectPos = OldObjectPos + dx. 
+                    // Snap modifies dx. NewObjectPos = OldObjectPos + dx + snap.
+                    // Effectively, we just want to set the position.
+                    // The standard logic is: this.dragOffset becomes MousePos at the end? 
+                    // Code says: this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                    // This resets the delta anchor to current mouse pos for the NEXT frame.
+                    // So dx/dy is always "Mouse Delta since last frame".
+                    // Wait. `dx = worldPos.x - this.dragOffset.x`. 
+                    // If dragOffset is updated to current WorldPos at end of frame, then next frame dx is just frame delta.
+                    // And `p.x += dx` applies frame delta.
+                    // Correct.
+
+                    // So if we modify dx via snap, we move the object extra.
+                    // Next frame, mouse moves. dx is small.
+                    // If we are still snapped, maybe we shouldn't move?
+                    // Magnetic snap usually implies: "If close, jump to target".
+                    // If we move mouse further, it might unsnap (dist > threshold).
+                    // So logic holds: Calculate proposed, check snap, apply offset.
+
                     this.dragOffset = { x: worldPos.x, y: worldPos.y };
 
                     if ((editor.selectedObject as any).type === 'Quad') {
                         const q = editor.selectedObject as QuadObject;
                         // Move all vertices
-                        // And center x/y?
                         q.vertices.forEach(v => {
                             v.x += dx;
                             v.y += dy;

@@ -39,6 +39,7 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
   - **Quad Objects:** 4-vertex primitives with vertex-specific Parallax, Retro-Grid mode, and Sorting modes.
   - **Unified Y-Sorting:** Stable Z-ordering between Quads and Entities via consistent Visual Y calculation (Screen Space Depth).
+  - **Auto-Center Fix:** Player keyboard input no longer blocked by UI hover states while Auto-Center is active.
   - **Unified Properties Panel:** Dynamic fields based on object type and components.
   - **UI Layout:** Resizable panels (extending to bottom), grouped camera/depth settings, and SVG icons.
   - **F-Key Menu:** Retro style (F1-F9) with dynamic color styling support.
