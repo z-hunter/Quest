@@ -36,7 +36,7 @@ export const DefaultQuadData: any = {
     name: 'New Quad',
     width: 100,
     height: 100,
-    color: '#888888',
+    color: '#52779aff',
     vertices: [
         { x: 0, y: 0, p: 1.0 },
         { x: 100, y: 0, p: 1.0 },

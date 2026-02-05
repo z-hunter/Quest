@@ -13,6 +13,8 @@
 - [x] **Subscene & Undo Fixes:** Resolved rendering context leaks and deep serialization issues for Undo.
 - [x] **Anchor-Based Parallax:** Removed `visualOffset` and replaced it with Editor-side coordinate compensation for a smoother workflow.
 - [x] **Shadow & Parallax System:** Fixed 'Inside-Out' distortion, 'Pillar' bugs, and implemented Delta Scaling for robust depth alignment.
+- [x] **SceneEditor IO Refactoring:** Decoupled file I/O logic into `EditorPersistenceManager` for better modularity.
+- [x] **Advanced Snapping & Y-Sorting:** Implemented horizontal grid snapping, Entity corner snapping (parallax-aware), and unified Visual Y-sorting.
 
 ## Active/Pending Tasks
 

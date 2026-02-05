@@ -33,8 +33,12 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
 - **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation. Optimized rendering context management to prevent stack leaks.
 - **Scene Editor (F1):**
   - Object placement (Static, Actor, WalkBox, TriggerBox, Quad).
+  - **Editor Decoupling:** File I/O operations (Save/Load) are handled by `EditorPersistenceManager` to keep `SceneEditor` focused on interaction.
+  - **Advanced Snapping:** Zoom-aware (20px) threshold. Support for horizontal grid edges and Entity corners (with automatic parallax adoption).
+  - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
   - **Quad Objects:** 4-vertex primitives with vertex-specific Parallax, Retro-Grid mode, and Sorting modes.
+  - **Unified Y-Sorting:** Stable Z-ordering between Quads and Entities via consistent Visual Y calculation (Screen Space Depth).
   - **Unified Properties Panel:** Dynamic fields based on object type and components.
   - **UI Layout:** Resizable panels (extending to bottom), grouped camera/depth settings, and SVG icons.
   - **F-Key Menu:** Retro style (F1-F9) with dynamic color styling support.
