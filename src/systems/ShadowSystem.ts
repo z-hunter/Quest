@@ -111,72 +111,81 @@ export class ShadowSystem {
                 // 3. Move it to follow the Actor.
 
                 const currentScale = actor.scale || 1.0;
-                let cache = this.shadowCache.get(qObj.name);
+                let cache = this.shadowCache.get(qObj.name) as {
+                    lastScale: number;
+                    baseOffsets: { x: number, y: number }[];
+                } | undefined;
 
-                // If just selected/edited, or first run, reset baseline
+                // Check Editing State/Cache Validity
                 // @ts-ignore
                 const isSelected = qObj.selected || (scene.game && scene.game.editor && scene.game.editor.selectedObject === qObj);
+
+                // If no cache, or selected (potentially edited), regenerate cache
                 if (!cache || isSelected) {
-                    cache = { lastScale: currentScale };
+                    // Capture Base Shape (Visual Offsets from V0)
+                    const v0 = qObj.vertices[0];
+                    const v0p = v0.p !== undefined ? v0.p : 1.0;
+                    const v0VisX = v0.x - camX * (v0p - 1.0);
+                    const v0VisY = v0.y - camY * (v0p - 1.0);
+
+                    const offsets = [];
+                    for (let i = 1; i < qObj.vertices.length; i++) {
+                        const v = qObj.vertices[i];
+                        const vp = v.p !== undefined ? v.p : 1.0;
+                        const visX = v.x - camX * (vp - 1.0);
+                        const visY = v.y - camY * (vp - 1.0);
+
+                        // Store Normalized Offset (descale by current scale)
+                        // So BaseOffset represents "Scale 1.0" shape
+                        const factor = currentScale !== 0 ? 1.0 / currentScale : 1.0;
+                        offsets.push({
+                            x: (visX - v0VisX) * factor,
+                            y: (visY - v0VisY) * factor
+                        });
+                    }
+
+                    cache = {
+                        lastScale: currentScale,
+                        baseOffsets: offsets
+                    };
                     this.shadowCache.set(qObj.name, cache);
+                } else {
+                    // Update lastScale for tracking (if we needed delta, but we use absolute now)
+                    cache.lastScale = currentScale;
                 }
 
-                // Calculate Scale Change (Delta)
-                // If init or just selected, ratio is 1.0
-                const scaleRatio = cache.lastScale !== 0 ? currentScale / cache.lastScale : 1.0;
-
-                // Update Cache immediately
-                cache.lastScale = currentScale;
-
-                // Capture Current Visual Offsets (Neutral Shape)
-                // We do this EVERY FRAME ("Resample") to support dynamic parallax morphing.
-                const v0 = qObj.vertices[0];
-                const v0p = v0.p !== undefined ? v0.p : 1.0;
-                const v0VisX = v0.x - camX * (v0p - 1.0);
-                const v0VisY = v0.y - camY * (v0p - 1.0);
-
-                // --- VISUAL ATTACHMENT LOGIC ---
-                // 1. Calculate Actor's Visual Position
+                // 2. Calculate BASE V0 Visual Position (Target)
                 const actorVisX = actor.x - camX * (pFactor - 1.0);
                 const actorVisY = actor.y - camY * (pFactor - 1.0);
 
-                // 2. Calculate Target Visual Position for V0
-                // Shadow Offset is scaled by Absolute Scale (approx)? 
-                // Or should we just apply scaleRatio to the distance?
-                // Let's stick to standard scaled offset logic for the attachment point.
-                const scaledOffsetX = (shadow.offsetX || 0) * currentScale; // Assuming offsetX is base
+                const scaledOffsetX = (shadow.offsetX || 0) * currentScale;
                 const scaledOffsetY = (shadow.offsetY || 0) * currentScale;
 
                 const targetVisX = actorVisX + scaledOffsetX;
                 const targetVisY = actorVisY + scaledOffsetY;
 
                 // 3. Position V0 (World)
-                // NewWorld = TargetVis + Cam * (P - 1)
+                // Use current V0 P
+                const v0p = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
                 qObj.vertices[0].x = targetVisX + camX * (v0p - 1.0);
                 qObj.vertices[0].y = targetVisY + camY * (v0p - 1.0);
 
-                // 4. Position V1..V3 (Relative to V0)
-                for (let i = 1; i < qObj.vertices.length; i++) {
-                    const v = qObj.vertices[i];
+                // 4. Position V1..V3 using CACHED OFFSETS
+                for (let i = 0; i < cache.baseOffsets.length; i++) {
+                    const vertexIndex = i + 1;
+                    if (vertexIndex >= qObj.vertices.length) break;
+
+                    const v = qObj.vertices[vertexIndex];
                     const vp = v.p !== undefined ? v.p : 1.0;
+                    const baseOff = cache.baseOffsets[i];
 
-                    // Current Visual Pos
-                    const visX = v.x - camX * (vp - 1.0);
-                    const visY = v.y - camY * (vp - 1.0);
+                    // Apply Current Scale to Base Offset
+                    const newOffX = baseOff.x * currentScale;
+                    const newOffY = baseOff.y * currentScale;
 
-                    // Offset from V0 (Visual)
-                    const offX = visX - v0VisX;
-                    const offY = visY - v0VisY; // This is the shape vector
-
-                    // Apply DELTA SCALE to the shape vector
-                    const newOffX = offX * scaleRatio;
-                    const newOffY = offY * scaleRatio;
-
-                    // New Target Visual Pos
                     const newVisX = targetVisX + newOffX;
                     const newVisY = targetVisY + newOffY;
 
-                    // Convert to World
                     v.x = newVisX + camX * (vp - 1.0);
                     v.y = newVisY + camY * (vp - 1.0);
                 }

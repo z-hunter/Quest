@@ -5,7 +5,7 @@ export class EditorUndoManager {
     private editor: SceneEditor;
     private undoStack: any[] = [];
     private redoStack: any[] = [];
-    private readonly MAX_HISTORY = 10;
+    private readonly MAX_HISTORY = 50;
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
