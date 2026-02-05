@@ -16,62 +16,62 @@ export class SceneRenderer {
 
         // Sorting Logic moved from Scene.render
         // Sort by Y (Depth) and Parallax
+        // Sorting Logic moved from Scene.render
+        // Sort by Y (Depth) and Parallax
+        // FIX: Sort by VISUAL Y (Screen Space Y) to ensure consistent depth regardless of Parallax
         const sortedEntities = [...entities].sort((a, b) => {
             if (a.layer !== b.layer) {
                 return a.layer - b.layer;
             }
 
-            // Custom "Ignore Sorting" Logic via Quad properties or similar
-            // We replicate the logic from Scene.ts
-            let yA = a.y;
-            let yB = b.y;
+            // Helper to get Visual Y
+            const getSortY = (e: Entity) => {
+                let y = e.y;
+                let p = e.parallax !== undefined ? e.parallax : 1.0;
+                let ignore = false;
+
+                // Handle Quad Sort Modes
+                if ((e as any).type === 'Quad') {
+                    const q = e as any;
+                    if (q.sortMode === 'ignore') {
+                        ignore = true;
+                    } else if (q.sortMode === 'v0' && q.vertices[0]) { y = q.vertices[0].y; p = q.vertices[0].p; }
+                    else if (q.sortMode === 'v1' && q.vertices[1]) { y = q.vertices[1].y; p = q.vertices[1].p; }
+                    else if (q.sortMode === 'v2' && q.vertices[2]) { y = q.vertices[2].y; p = q.vertices[2].p; }
+                    else if (q.sortMode === 'v3' && q.vertices[3]) { y = q.vertices[3].y; p = q.vertices[3].p; }
+                }
+
+                // Apply Parallax to get Visual Y
+                // VisualY = RawY - CamY * (P - 1)
+                // Note: We ignore visualOffset for sorting usually, unless critical?
+                // Entities usually sort by their base "footprint" line.
+                // If visualOffset shifts them up/down drastically (e.g. flying), we might want to include it.
+                // But typically Y-sorting is about "where they touch the ground".
+                // Let's stick to Parallax correction primarily.
+
+                if (ignore) return -99999999; // Force to bottom/top? Or handle separately.
+
+                const visualY = y - camera.y * (p - 1.0);
+                return visualY;
+            };
+
+            const valA = getSortY(a);
+            const valB = getSortY(b);
+
+            // Access sortMode safely again if needed, or trust getSortY results
+            // If sortMode was 'ignore', we effectively want to treat it as "background" or "unsorted"?
+            // Original logic: if ignoreA, return -1 (draw first/behind).
+
             let ignoreA = false;
             let ignoreB = false;
-
-            // Accessing Internal Quad Props (unsafe cast but needed for logic preservation)
-            if (a.type === 'Quad') {
-                const qA = a as any;
-                if (qA.sortMode === 'ignore') {
-                    ignoreA = true;
-                } else {
-                    yA = qA.y;
-                    let sortP = qA.parallax || 1.0;
-                    if (qA.sortMode === 'v0' && qA.vertices[0]) { yA = qA.vertices[0].y; sortP = qA.vertices[0].p; }
-                    else if (qA.sortMode === 'v1' && qA.vertices[1]) { yA = qA.vertices[1].y; sortP = qA.vertices[1].p; }
-                    else if (qA.sortMode === 'v2' && qA.vertices[2]) { yA = qA.vertices[2].y; sortP = qA.vertices[2].p; }
-                    else if (qA.sortMode === 'v3' && qA.vertices[3]) { yA = qA.vertices[3].y; sortP = qA.vertices[3].p; }
-
-                    // Visual Offset Correction for Sorting
-                    // yA = BaseY - CamY * (P - 1) ... wait, we don't have CamY here easily without scene ref
-                    // In Scene.ts it used 'scene.camera.y'
-
-                    const camY = camera.y;
-                    yA = yA - camY * (sortP - 1.0);
-                }
-            }
-
-            if (b.type === 'Quad') {
-                const qB = b as any;
-                if (qB.sortMode === 'ignore') {
-                    ignoreB = true;
-                } else {
-                    yB = qB.y;
-                    let sortP = qB.parallax || 1.0;
-                    if (qB.sortMode === 'v0' && qB.vertices[0]) { yB = qB.vertices[0].y; sortP = qB.vertices[0].p; }
-                    else if (qB.sortMode === 'v1' && qB.vertices[1]) { yB = qB.vertices[1].y; sortP = qB.vertices[1].p; }
-                    else if (qB.sortMode === 'v2' && qB.vertices[2]) { yB = qB.vertices[2].y; sortP = qB.vertices[2].p; }
-                    else if (qB.sortMode === 'v3' && qB.vertices[3]) { yB = qB.vertices[3].y; sortP = qB.vertices[3].p; }
-
-                    const camY = camera.y;
-                    yB = yB - camY * (sortP - 1.0);
-                }
-            }
+            if ((a as any).type === 'Quad' && (a as any).sortMode === 'ignore') ignoreA = true;
+            if ((b as any).type === 'Quad' && (b as any).sortMode === 'ignore') ignoreB = true;
 
             if (ignoreA && ignoreB) return 0;
             if (ignoreA) return -1;
             if (ignoreB) return 1;
 
-            return yA - yB;
+            return valA - valB;
         });
 
         const halfW = ctx.canvas.width / 2;

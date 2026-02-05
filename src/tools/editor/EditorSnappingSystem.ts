@@ -20,13 +20,15 @@ export class EditorSnappingSystem {
         isQuad: boolean,
         selectedObject: Entity,
         shiftKey: boolean,
-        altKey: boolean
-    ): { x: number, y: number, binding: QuadVertexBinding | null } {
+        altKey: boolean,
+        zoom: number = 1.0
+    ): { x: number, y: number, binding: QuadVertexBinding | null, p?: number } {
 
-        const result = { x: mouseWorldPos.x, y: mouseWorldPos.y, binding: null as QuadVertexBinding | null };
+        const result = { x: mouseWorldPos.x, y: mouseWorldPos.y, binding: null as QuadVertexBinding | null, p: undefined as number | undefined };
 
         // 1. ANGLE SNAPPING (Shift)
         if (shiftKey) {
+            // ... (Existing Angle Snapping Logic - unchanged)
             const prevIndex = (draggingIndex - 1 + poly.length) % poly.length;
             const nextIndex = (draggingIndex + 1) % poly.length;
 
@@ -127,17 +129,64 @@ export class EditorSnappingSystem {
 
         // 2. QUAD SNAP TO OTHER QUADS/GRIDS (Alt)
         if (altKey && isQuad) {
-            let bestDist = 10; // In World Space (assuming Zoom=1 roughly, passed from outside ideally, but hardcoded here matches original)
-            // Ideally we should pass zoom or threshold. Let's assume passed pos is valid.
-            // Original code used 10/zoom. We will refine this if needed, but for now 10 is safe-ish default in World Units? 
-            // Actually, zooming in makes 10 smaller? No, 10 screen pixels / zoom.
-            // Let's assume caller did not pass zoom. We should probably ask for it.
-            // But let's stick to simple logic: Snap to nearest available point within reasonable distance.
-
-            bestDist = 20; // Relaxed threshold
+            let bestDist = 20 / zoom; // Threshold in World Units, scaled by zoom
             let snapTarget: { x: number, y: number } | null = null;
             let binding: QuadVertexBinding | null = null;
+            let snapP: number | undefined = undefined;
 
+            // 2a. Snap to Entity Corners (NEW)
+            // Prioritize Quads/Grid usually, but let's check Entities first or equally?
+            // "Users expect... possibility to snap to Entity corners"
+            scene.entities.forEach((ent: Entity) => {
+                if (ent === selectedObject) return;
+                if ((ent as any).type === 'Quad') return; // Handled below
+                if (ent.disabled || !ent.visible) return;
+
+                const ep = ent.parallax ?? 1.0;
+                // @ts-ignore
+                const vOx = (ent as any).visualOffset ? (ent as any).visualOffset.x : 0;
+                // @ts-ignore
+                const vOy = (ent as any).visualOffset ? (ent as any).visualOffset.y : 0;
+
+                const l = ent.x - ent.width / 2;
+                const r = ent.x + ent.width / 2;
+                const t = ent.y - ent.height;
+                const b = ent.y;
+
+                const corners = [
+                    { x: l, y: t },
+                    { x: r, y: t },
+                    { x: l, y: b },
+                    { x: r, y: b }
+                ];
+
+                corners.forEach(cp => {
+                    // Convert Entity Corner to Visual Space (P=1) so we can compare with mouse/result
+                    // Visual = Raw - Cam*(P-1) + vOffset
+                    // Wait, result.x/y is currently in "World Visual Space" (P=1).
+                    // Correct formula:
+                    // VisualX = (Ex - CamX*(ep-1)) + vOx... wait.
+                    // Standard Render: draw at (x,y) translated by -camX*ep.
+                    // ScreenX = (x - camX*ep + vOx) * zoom + HW
+                    // Visual World X = x - camX*ep + vOx + camX
+                    // = x - camX*(ep - 1) + vOx. Correct.
+
+                    const vx = (cp.x + vOx) - camX * (ep - 1.0);
+                    const vy = (cp.y + vOy) - camY * (ep - 1.0);
+
+                    const dx = Math.abs(vx - result.x);
+                    const dy = Math.abs(vy - result.y);
+
+                    if (dx < bestDist && dy < bestDist) {
+                        snapTarget = { x: vx, y: vy };
+                        bestDist = Math.max(dx, dy);
+                        binding = null; // No binding for Entities
+                        snapP = ep;     // Adopt Parallax
+                    }
+                });
+            });
+
+            // 2b. Snap to Quads/Grids
             scene.entities.forEach((ent: Entity) => {
                 if (ent === selectedObject) return;
                 if ((ent as any).type === 'Quad') {
@@ -159,6 +208,7 @@ export class EditorSnappingSystem {
                                 type: 'vertex',
                                 index: q.vertices.indexOf(qv)
                             };
+                            snapP = undefined; // Will use binding logic to resolve P
                         }
                     });
 
@@ -171,30 +221,64 @@ export class EditorSnappingSystem {
 
                         const v0 = visualVerts[0];
                         const v1 = visualVerts[1];
-                        const v2 = visualVerts[2];
-                        const v3 = visualVerts[3];
+                        const v2 = visualVerts[2]; // BR
+                        const v3 = visualVerts[3]; // BL
 
+                        // Horizontal Cuts (Down the shape using GridLinesY)
+                        for (let i = 1; i <= q.gridLinesY; i++) {
+                            const v = i / (q.gridLinesY + 1);
+
+                            // Left Edge (V0-V3)
+                            const lx = v0.x + (v3.x - v0.x) * v;
+                            const ly = v0.y + (v3.y - v0.y) * v;
+
+                            let d = Math.abs(lx - result.x);
+                            let d2 = Math.abs(ly - result.y);
+                            if (d < bestDist && d2 < bestDist) {
+                                snapTarget = { x: lx, y: ly };
+                                binding = { targetName: q.name, type: 'grid', gridU: 0, gridV: v };
+                                snapP = undefined;
+                            }
+
+                            // Right Edge (V1-V2)
+                            const rx = v1.x + (v2.x - v1.x) * v;
+                            const ry = v1.y + (v2.y - v1.y) * v;
+
+                            d = Math.abs(rx - result.x);
+                            d2 = Math.abs(ry - result.y);
+                            if (d < bestDist && d2 < bestDist) {
+                                snapTarget = { x: rx, y: ry };
+                                binding = { targetName: q.name, type: 'grid', gridU: 1, gridV: v };
+                                snapP = undefined;
+                            }
+                        }
+
+                        // Vertical Cuts (Across the shape using GridLinesX)
                         for (let i = 1; i <= q.gridLinesX; i++) {
                             const u = i / (q.gridLinesX + 1);
 
-                            // Top/Bottom Edge Points
+                            // Top Edge (V0-V1)
                             const tx = v0.x + (v1.x - v0.x) * u;
                             const ty = v0.y + (v1.y - v0.y) * u;
-                            const bx = v3.x + (v2.x - v3.x) * u;
-                            const by = v3.y + (v2.y - v3.y) * u;
 
                             let d = Math.abs(tx - result.x);
                             let d2 = Math.abs(ty - result.y);
                             if (d < bestDist && d2 < bestDist) {
                                 snapTarget = { x: tx, y: ty };
                                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 0 };
+                                snapP = undefined;
                             }
+
+                            // Bottom Edge (V3-V2)
+                            const bx = v3.x + (v2.x - v3.x) * u;
+                            const by = v3.y + (v2.y - v3.y) * u;
 
                             d = Math.abs(bx - result.x);
                             d2 = Math.abs(by - result.y);
                             if (d < bestDist && d2 < bestDist) {
                                 snapTarget = { x: bx, y: by };
                                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 1 };
+                                snapP = undefined;
                             }
 
                             // Internal Nodes
@@ -208,11 +292,10 @@ export class EditorSnappingSystem {
                                 if (dx < bestDist && dy < bestDist) {
                                     snapTarget = { x: nx, y: ny };
                                     binding = { targetName: q.name, type: 'grid', gridU: u, gridV: v };
+                                    snapP = undefined;
                                 }
                             }
                         }
-                        // Horizontal Edges logic omitted for brevity but should be included if desired.
-                        // For now assuming internal nodes cover most cases or strictly following original logic.
                     }
                 }
             });
@@ -221,6 +304,7 @@ export class EditorSnappingSystem {
                 result.x = (snapTarget as any).x;
                 result.y = (snapTarget as any).y;
                 result.binding = binding;
+                result.p = snapP;
             }
         }
 

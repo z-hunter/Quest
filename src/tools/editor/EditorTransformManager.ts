@@ -373,6 +373,8 @@ export class EditorTransformManager {
                     const v = poly[this.draggingVertexIndex];
 
                     // Use Snapping System
+                    const zoom = scene.camera.zoom;
+                    // Use Snapping System
                     const isQuad = (editor.selectedObject as any).type === 'Quad';
                     const snapResult = EditorSnappingSystem.snapVertex(
                         worldPos,
@@ -384,7 +386,8 @@ export class EditorTransformManager {
                         isQuad,
                         editor.selectedObject as Entity,
                         e.shiftKey,
-                        e.altKey && isQuad
+                        e.altKey && isQuad,
+                        zoom
                     );
 
                     worldPos.x = snapResult.x;
@@ -392,7 +395,19 @@ export class EditorTransformManager {
                     this.currentSnapBinding = snapResult.binding;
 
                     if ((editor.selectedObject as any).type === 'Quad') {
-                        // Reverse Projection
+                        // Update Parallax if snapped to Entity
+                        // Note: snapResult.p is undefined if normal snap or no snap
+                        // If it IS defined (Entity Corner Snap), we adopt it.
+                        // If it is undefined, we KEEP existing v.p (unless binding says otherwise? binding resolution handles that separately?)
+                        // "Without locking" means we just set the value.
+
+                        if (snapResult.p !== undefined) {
+                            v.p = snapResult.p;
+                        }
+
+                        // Reverse Projection using potentially NEW v.p
+                        // worldPos is Visual (P=1). 
+                        // Raw = Visual + Cam*(P-1)
                         v.x = Math.round(worldPos.x + camX * (v.p - 1.0));
                         v.y = Math.round(worldPos.y + camY * (v.p - 1.0));
 
