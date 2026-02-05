@@ -560,7 +560,7 @@ export const PropertiesPanel: React.FC = () => {
 
                             {/* Fill Color */}
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', color: (obj.filled !== false) ? (obj.gridColor || '#ffffff') : 'inherit' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', color: (obj.filled !== false) ? '#ffffff' : 'inherit' }}>
                                     <input
                                         type="checkbox"
                                         style={{ marginRight: '5px' }}
@@ -579,7 +579,7 @@ export const PropertiesPanel: React.FC = () => {
 
                             {/* Retro Grid */}
                             <div className="e-row">
-                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: (obj.isGrid) ? (obj.gridColor || '#ffffff') : 'inherit' }}>
+                                <label className="e-label" style={{ display: 'flex', alignItems: 'center', color: (obj.isGrid) ? '#ffffff' : 'inherit' }}>
                                     <input
                                         type="checkbox"
                                         style={{ marginRight: '5px' }}
