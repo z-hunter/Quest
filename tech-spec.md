@@ -1,220 +1,206 @@
-# Quest Engine Technical Specification
+# Scaline Engine Technical Specification
 
-## 1. Architecture Overview (Current)
+## 1. Architecture Overview
 
-The engine architecture has undergone significant refactoring to separate concerns, improve maintainability, and ensure UI reactivity.
+The Scaline Engine is built on a modern web stack designed to emulate retro aesthetics while maintaining high performance and developer ergonomics.
 
-### 1.1. Scene Editor Decomposition
+### 1.1 Core Stack
 
-The monolithic `SceneEditor` class has been decomposed into specialized managers using a **Facade Pattern**.
+* **Framework**: React + Vite
+* **Language**: TypeScript
+* **Rendering**: Hybrid approach
+  * **Game View**: HTML5 Canvas for performance (pixel manipulation, CRT shader effects).
+  * **Editor UI**: React components overlaying the canvas (simulating retro UI).
+* **State Management**:
+  * **Engine**: Direct manipulation of a `Game` singleton.
+  * **UI**: Local React state + Zustand for ephemeral editor state.
 
-* **`SceneEditor.ts` (Facade)**: The central entry point. calls are delegated to specific managers. It holds the shared state (reference to Game, generic Input handlers).
-* **`EditorSelectionManager.ts`**: Handles object selection logic (Scene, Settings, Entities), exclusive selection rules, and **Reactive Notifications**.
-* **`EditorTransformManager.ts`**: Handles mouse interaction in the canvas (Drag, Resize, Gizmos).
-* **`EditorUndoManager.ts`**: Manages the Undo/Redo stack (Command Pattern).
-* **`EditorUI.ts`**: Handles DOM overlays and event listeners for the non-React parts of the UI (Context menus).
+### 1.2 Design Patterns
 
-```mermaid
-classDiagram
-    class SceneEditor {
-        +enabled: boolean
-        +selectObject(obj)
-    }
-    class EditorSelectionManager {
-        -selectedObject
-        +notifyObjectChanged()
-    }
-    class EditorTransformManager {
-        +onMouseDown()
-        +onMouseMove()
-    }
-    class EditorUndoManager {
-        +undo()
-        +redo()
-        +saveState()
-    }
-    
-    SceneEditor --> EditorSelectionManager
-    SceneEditor --> EditorTransformManager
-    SceneEditor --> EditorUndoManager
-```
+* **Facade Pattern**: The `SceneEditor` acts as a central facade, delegating operations to specialized managers (`EditorSelectionManager`, `EditorTransformManager`, `EditorUndoManager`).
+* **Descriptive Renderer**: `SceneRenderer` is a stateless function that receives a `Scene` and `Context` to draw a frame, decoupling state from presentation.
 
-### 1.2. Rendering Pipeline
+---
 
-Rendering logic was extracted from `Scene.ts` into a dedicated **Descriptive Renderer**.
+## 2. Engine Systems
 
-* **`SceneRenderer.ts`**: Stateless renderer. Receives a `Scene` and `Context` and draws the frame.
-* **Pipeline**:
-    1. **Parallax Layers Setup**
-    2. **Sorting**: Entities are sorted by Z-index (Layer), then by Y-coordinate for depth. Special handling for QuadObjects with Sort Modes.
-    3. **Render Pass**:
-        * **Background / Normal Layer**: Standard entities and static objects.
-        * **Foregound Effects**: Blur (if active subscene).
-        * **Subscene Layer**: Highlighted interactive elements.
-    4. **Debug Overlays**:
-        * **Walkboxes**: Invert (Green), Add (Blue), Subtract (Red/Cutout).
-        * **Triggerboxes**: Red overlay (only when selected).
-        * **Selection**: Magenta editing handles.
+### 2.1 Rendering Pipeline
 
-### 1.3. Reactive Data Binding (Zero-Cost Observations)
+Rendering logic is isolated in `SceneRenderer.ts`.
 
-To synchronize Game Logic (Scripts/Physics) with Editor UI without polling overhead:
+1. **Parallax Layers Setup**: Prepares context for different depth scales.
+2. **Sorting**:
+    * Entities sorted by **Layer** (Z-index equivalent).
+    * Entities within layers sorted by **Visual Y** (Screen Space Depth).
+    * **Unified Y-Sorting**: Stable ordering between Quads and Entities.
+3. **Render Pass**:
+    * **Background / Normal Layer**: Standard entities and static objects.
+    * **Foreground Effects**: Blur (active during subscenes).
+    * **Subscene Layer**: Highlighted interactive elements.
+    * **CRT Shader**: Post-processing effect (scanlines, curvature).
+4. **Debug Overlays**:
+    * Walkboxes (Green=Invert, Blue=Add, Red=Subtract).
+    * Triggerboxes & Selection Handles.
 
-* **Smart Entities**: `Entity.ts` uses TypeScript Getters/Setters for mutable properties (`x`, `y`, `parallax`, `width`, `height`).
+### 2.2 Parallax & Coordinate Systems
+
+The engine uses a **2.5D displacement model**. Objects share World Coordinates (X,Y) but appear at different screen locations based on their Parallax Factor (`p`) and Camera Position.
+
+#### 2.2.1 Rendering Model
+
+* **Formula**: `VisualPos = RawPos - Camera * (P - 1)`
+* **Behavior**:
+  * `P = 1.0`: Standard layer. Moves 1:1 with Camera.
+  * `P = 0.0`: Infinite distance (Skybox). Visual position = Raw Position + Camera.
+  * `P > 1.0`: Foreground. Moves faster than camera.
+
+#### 2.2.2 Anchor-Based Logic
+
+* **Logic**: Parallax compensation is handled in the **Editor**.
+* **Behavior**: When `p` is changed, the Editor automatically adjusts the object's X/Y coordinates to keep it visually stationay relative to the camera anchor. This replaces runtime `visualOffset`.
+
+#### 2.2.3 Interaction Formula (Visual Consistency)
+
+To ensure "What You See Is What You Get" during mouse interaction:
+
+* **Relative Parallax**: Transform coordinates directly between parallax planes.
+  * `Pos_New = Pos_Old + Camera * (P_Target - P_Source)`
+* **Visual Alignment**: Snapping and alignment vectors are calculated in **Visual Space** (Screen Space), not Raw Space.
+
+#### 2.2.4 Known Pitfalls
+
+* **"Double Parallax"**: Avoid applying parallax offsets twice. If a logic block produces a Raw Coordinate but the pipeline expects Visual, apply the inverse transform.
+* **Binding Inheritance**: When a vertex is bound to an object, use the **Target Object's `p`** (Effective Parallax), not the vertex's `p`.
+
+### 2.3 Shadow System
+
+The Shadow System manages `Actor` shadows, handling depth scaling and floor slopes.
+
+* **Conflict**: Rigid caching prevents slope deformation; continuous regeneration forbids user-defined shapes.
+* **Solution: Shape Caching (Geometric Locking)**
+    1. **Cache on Acquire**: Captures the "Base Visual Shape" (vertex offsets normalized by scale) when a shadow is assigned or edited.
+    2. **Deterministic Update**: Reconstructs vertices by applying current Actor Scale to cached offsets.
+    3. **Result**: Prevents "Parallax Drift" (skewing/leaning) while maintaining the user's designed shape.
+    4. **Invalidation**: Cache is only regenerated upon manual user edit.
+
+### 2.4 Reactive Data Binding
+
+To synchronize high-performance Game Logic with the React UI without polling overhead:
+
+* **Smart Entities**: Properties (`x`, `y`, `width`) utilize TypeScript setters.
 * **Lazy Notification**:
 
     ```typescript
     set x(val) {
         this._x = val;
-        // Check avoids cost when playing game logic
-        if (this.game.editor && this.game.editor.enabled) { 
-             notify() 
-        }
+        if (this.game.editor?.enabled) notify(); 
     }
     ```
 
-* **Batched Updates**: `EditorSelectionManager` uses a dirty flag and `requestAnimationFrame` to coalesce multiple property changes into a single Zustand Store update per frame.
-
-### 1.4. React UI Architecture (Implemented)
-
-The Editor UI has been fully migrated to React + Zustand, replacing legacy DOM manipulation:
-
-* **`HierarchyPanel.tsx`**: Renders the scene tree. Reactive to addition/deletion/renaming via `store.hierarchyVersion`.
-* **`PropertiesPanel.tsx`**: Renders dynamic forms based on `selectedObjectType`. Usese **Controlled Components** with two-way binding to the underlying Engine Objects.
-* **`editorStore.ts`**: Zustand store holding ephemeral editor state (Selection ID, Modes, Versions).
+* **Batched Updates**: `EditorSelectionManager` coalesces multiple changes into a single Zustand store update per frame via `requestAnimationFrame`.
 
 ---
 
-## 2. Roadmap & Future Tasks
+## 3. Entities & Components
 
-### 2.1. Immediate Term (Editor Polish)
+### 3.1 Entity Model
 
-* [x] **React-based Hierarchy**: Migrated to `HierarchyPanel.tsx`.
-* [x] **Controlled Components for Properties**: Migrated to `PropertiesPanel.tsx`.
-* [x] **DOM Element Caching**: Implemented in `EditorUI` for remaining native inputs (e.g. Parser).
-* [x] **Undo/Redo**: Full stack implemented with keyboard shortcuts (Ctrl+Z / Ctrl+Y).
-* [x] **Object Locking**: Alt+L toggle implemented.
-* [ ] **Prefab System**: Save/Load object templates (Actors, Static groups) to disk for reuse.
+* **Entity**: Base class for all scene objects. Supports:
+  * **Visuals**: Opacity, Blur, Blend Mode.
+  * **Transform**: X, Y, Width, Height, Parallax.
+* **Static**: Simple sprite-based objects.
+* **Actor**: Complex entities with Directional Sprites, Animation Sets, and Shadow support.
 
-### 2.2. Medium Term (Engine Features)
+### 3.2 Quad Objects
 
-* [ ] **Asset Database**: Centralized manifest for all assets (sprites, sounds) to prevent duplicate loading and allow preloading strategies.
-* [ ] **Typed Signals/Events**: Replace ad-hoc EventListeners with a lightweight Signals implementation for internal engine communication (e.g., `onSceneChange`, `onEntityDestroy`).
+Generic polygon objects (`QuadObject`) for perspective geometry (walls, floors).
 
-### 2.3. Long Term (Architecture)
+* **Per-Vertex Parallax**: Each vertex has independent `p`, allowing 2.5D distortion.
+* **Features**: Texture mapping (not implemented yet), Color fill, "Retro Grid" mode.
+* **Interpolation**:
+  * **Inverse (XY -> P)**: `getParallaxAt(x, y)` uses Barycentric Interpolation to find depth at any point on the surface.
+  * **Forward**: Bilinear interpolation for grid snapping.
 
-* [ ] **ECS Migration (Partial)**: The current `Entity` + `Components` array is a hybrid. Moving towards a stricter Entity-Component-System could improve performance for complex scenes (systems iterating over arrays of components rather than objects).
-* [ ] **Virtual Scripting VM**: Isolate user scripts from the engine core to prevent crashes and allow for sandboxed execution (e.g., `yield` support for cutscenes).
+### 3.3 Components
 
-## 3. New Features Documentation
+Objects can attach functional execution components:
 
-### 3.1. Entity Properties
+* **Subscene**: Modal "close-up" view with auto-close logic.
+* **Switch**: Toggles ID/Group states with required items/keys.
+* **TriggerBox**: Executes scripts on `enter`, `leave`, `stay`.
+* **Backface Culling**: Hides objects based on owner vertex orientation.
 
-Standard Entities (`Static`, `Actor`) now support enhanced visual properties:
+### 3.4 Unified Referencing
 
-* **Opacity**: 0.0 - 1.0 transparency.
-* **Blend Mode**: `source-over`, `multiply`, `screen`, `overlay`, `lighter`, `difference`.
-* **Blur**: Background blur effect (0-50px).
-* **Parallax**: Global parallax factor affecting X/Y rendering relative to Camera.
+* **Syntax**: Targets can be specific IDs (`door_1`) or Groups (`#doors`).
+* **Resolution**: `Scene.resolveTarget(query)` handles lookup.
 
-### 3.2. Quad Objects
+---
 
-A generic polygon object (`QuadObject`) for creating perspective geometry (walls, floors).
+## 4. Editor Architecture
 
-* **Per-Vertex Parallax**: Each vertex has its own `p` factor, allowing for 2.5D perspective distortion.
-* **Texture/Modify**: Supports color fill or retro grid rendering.
-* **Sorting**: Can sort by average Y, or force sort based on specific vertex Y (useful for walls).
+### 4.1 UI Structure
 
-### 3.3. Walkbox & Triggerbox
+* **Technology**: React + Zustand.
+* **Components**:
+  * **HierarchyPanel**: Reactive scene tree.
+  * **PropertiesPanel**: Controlled components with two-way binding to Engine Objects.
+  * **SpriteEditor**: Integrated asset management (Frame/Anim definition).
+* **Tools**:
+  * **Object Locking**: `Alt+L` (Click-through in canvas, selectable in Hierarchy).
+  * **Snapping**: Zoom-aware threshold (20px), Grid edges, Entity corners.
 
-* **Walkbox**: Defines walkable areas. Supports boolean operations:
-  * `Invert` (Standard walkable area).
-  * `Add` (Connects areas).
-  * `Subtract` (Holes/Obstacles).
-* **Triggerbox**: Defines event zones. Executes scripts when Player entires (`enter`, `leave`, `stay` events managed by game loop).
+### 4.2 Application Shortcuts
 
-### 3.4. Parallax & Coordinate Systems
+| Key | Action |
+| :--- | :--- |
+| **F1** | Scene Editor |
+| **F5** | Sprite Editor |
+| **F9** | Settings |
+| **Alt + D** | Toggle "Disabled" state |
+| **Alt + L** | Toggle "Locked" state |
+| **Ctrl + Z** | Undo |
+| **Ctrl + Y** | Redo |
+| **Ctrl + C/V** | Copy / Paste |
+| **Del** | Delete selected object |
+| **Space** | Select Scene (when over canvas) |
 
-The engine uses a 2.5D displacement model where objects sharing the same world coordinates (X,Y) appear at different screen locations based on their Parallax Factor (`p`) and the Camera Position.
+---
 
-#### 3.4.1. Rendering Model
+## 5. Coding Standards & Flows
 
-* **Formula**: `VisualPos = RawPos - Camera * (P - 1)`
-* **Behavior**:
-  * `P = 1.0`: Standard layer. `VisualPos = RawPos`. Moves 1:1 with Camera.
-  * `P = 0.0`: Infinite distance. `VisualPos = RawPos + Camera`. Objects strictly follow the camera (Static UI / Skybox).
-  * `P > 1.0`: Foreground. Moves faster than camera.
+### 5.1 Serialization Standard
 
-#### 3.4.2. Interaction Formula (Visual Consistency)
+* **Single Source of Truth**: `fromJSON` / `toJSON` methods in the Class definition.
+* **Factory Pattern**: Loaders must use `Class.fromJSON(data)`.
+* **Extension Rule**: Adding a property requires updates to:
+    1. Class Property
+    2. Constructor
+    3. `toJSON`
+    4. `fromJSON`
+    5. Editor UI Component
 
-When manipulating objects with the mouse (Drag, Snapping), we often need to calculate a new position such that the object *visually* aligns with a target (Mouse Cursor, Grid, or other Object).
+### 5.2 State Management
 
-* **Problem**: Converting "Mouse Position (P=1)" directly to "Object World Space (P?)" is error-prone if intermediate steps assume mixed spaces.
-* **Robust Solution (Relative Parallax)**: Instead of converting to P=1 and back, transform coordinates directly between Parallax Planes:
-  * `Pos_New = Pos_Old + Camera * (P_Target - P_Source)`
-  * Use this for Snapping logic to align a vertex at distinct `P_Source` to a target at `P_Target`.
+* **Engine State**: Mutable. Modifications should verify if `game.editor.enabled` to trigger UI sync.
+* **UI State**: Immutable (React/Zustand). Updates react to Engine triggers.
 
-#### 3.4.3. Known Pitfalls (Lessons Learned)
+---
 
-During development, several critical edge cases were identified:
+## 6. Roadmap
 
-1. **"Double Parallax" (The Jumping Bug)**:
-    * **Context**: Input handlers (e.g. `onMouseMove`) often calculate a `newPosition` based on mouse movement.
-    * **The Trap**: If you calculate a correct **Raw Coordinate** using complex logic (like binding resolution), but then assign it to a variable that the *rest of the function* expects to be a **Visual Coordinate**, the system might applying the Parallax Offset *again* later (thinking it needs to convert Visual -> Raw).
-    * **Fix**: Always verify the coordinate space contract of data being passed between logic blocks. If a block finishes by producing a Raw Coordinate, but the pipeline expects a Visual Input, apply the inverse transform (`Raw -> Visual`) before passing it on.
+### 6.1 Immediate Term (Editor Polish)
 
-2. **Binding Inheritance**:
-    * **Context**: Vertices bound to other objects (e.g. a Quad vertex bound to an Actor).
-    * **The Trap**: Using the vertex's own `p` value (usually default `1.0`) instead of the **Target Object's `p`**. This causes the vertex to drift away from its target when the camera moves.
-    * **Fix**: Always resolve the **Effective Parallax** by checking the binding target (`entity.parallax`) before performing any geometric calculations.
+* [ ] **Prefab System**: Save/Load object templates.
+* [ ] **Interaction Scripting**: Expand demo scripts for `Subscene`/`Switch`.
 
-3. **Visual vs. Geometric Alignment**:
-    * **Context**: "Straight Lines" (Angle Snapping).
-    * **The Trap**: Calculating angles based on Raw Coordinates. Two points with different `p` values might have Raw Coordinates forming a vertical line, but will appear diagonal on screen.
-    * **Fix**: Always align to **Visual Space** (Screen Space). The user interacts with what they see. Calculate Snapping Vectors in the Parallax Plane of the dragged vertex to ensure "What You See Is What You Get".
+### 6.2 Medium Term (Engine Features)
 
-### 3.5. Shadow System Architecture
+* [ ] **Asset Database**: Centralized manifest to prevent duplicate loading.
+* [ ] **Typed Signals**: Replace `EventListener` with lightweight Signals.
+* [ ] **Inventory System**: Expand `Item` component into full UI/Logic system.
 
-The Shadow System implements a hybrid approach to handle the complex interaction between **Actor Depth Scaling** (Shadow must grow/shrink), **Floor Parallax** (Shadow must deform on slopes), and **User Editing** (Shadow must accept manual reshaping).
+### 6.3 Long Term (Architecture)
 
-#### 3.5.1. The Conflict
-
-* **Rigid Caching**: Traditional scaling stores a "Base Shape" and multiplies it by `currentScale`. This prevents the shadow from deforming on slanted floors because the "Base Shape" overrides the correct parallax-distorted shape every frame.
-* **Continuous Updates**: Simply recalculating the shadow every frame allows deformation but loses the concept of "User defined shape" size relative to the actor (Scaling).
-
-#### 3.5.2. Solution: Delta Scaling & Neutral Resampling
-
-We use a **Delta Scaling** approach that respects both dynamic updates and scaling:
-
-1. **Continuous Resampling**:
-    * Every frame, the system captures the **Current Visual Offsets** of the shadow vertices relative to its anchor (Vertex 0).
-    * This captures the *deformed shape* (e.g. result of `3d-parallax` applying slope correction).
-    * Critically, we capture **Visual Offsets** (Screen Space), creating a "Neutral Shape" independent of global parallax shifts.
-
-2. **Delta Application**:
-    * We track the Actor's scale change: `Ratio = CurrentScale / LastFrameScale`.
-    * We multiply the captured Neutral Shape vectors by this `Ratio`.
-    * **Result**: The shadow grows/shrinks incrementally with the actor, but the *base shape* it modifies is the one correctly distorted by the floor.
-
-3. **State Management**:
-    * The `lastScale` cache is persistent.
-    * The cache is **invalidated** only when the Shadow is **Selected/Edited** in the UI. This sets a new "Baseline" effectively saying "The user wants the shadow to look like *this* at the current scale".
-
-### 3.6. Centralized Parallax Interpolation
-
-To handle complex 3D surfaces (e.g., slopes, tilted planes) where `p` varies across both X and Y axes, we moved away from simple "edge projection" to a centralized interpolation model.
-
-#### 3.6.1. Inverse Interpolation (XY -> P)
-
-The `QuadObject` class now exposes a method `getParallaxAt(x, y, isVisual)` that calculates the exact Parallax Factor for any point on its surface.
-
-* **Logic**:
-    1. Decomposes the Quad into two triangles (Standard Triangulation: TL-TR-BL and TR-BR-BL).
-    2. Uses **Barycentric Interpolation** to calculate weights for the point relative to the triangle vertices.
-    3. Returns the weighted average `p` of the vertices: `P_point = P_v1*w1 + P_v2*w2 + P_v3*w3`.
-
-This allows systems like `ThreeDParallaxSystem` to robustly determine the correct depth for Actors and Shadows regardless of the surface's orientation or distortion.
-
-#### 3.6.2. Forward Interpolation (UV -> XY/P)
-
-Conversely, `resolveBindings` (in `QuadObject`) handles **Grid Snapping** using Bilinear Interpolation based on UV coordinates (`0.0 - 1.0` along grid lines). It interpolates both position (XY) and Parallax (P) simultaneously, ensuring the grid mesh physically conforms to the perspective defined by the corners.
+* [ ] **ECS Migration**: Partial move to Entity-Component-System for complex scenes.
+* [ ] **Virtual Scripting VM**: Sandboxed execution for user scripts.
