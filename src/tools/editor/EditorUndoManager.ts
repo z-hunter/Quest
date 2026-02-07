@@ -43,7 +43,7 @@ export class EditorUndoManager {
         // Restore Entities
         if (data.entities) {
             data.entities.forEach((eData: any) => {
-                this.editor.createObjectFromData(eData);
+                this.editor.createObjectFromData(eData, undefined, undefined, { preserveBindings: true });
             });
         }
 
@@ -51,7 +51,7 @@ export class EditorUndoManager {
         if (data.walkbox) {
             data.walkbox.forEach((wData: any) => {
                 // @ts-ignore
-                this.editor.createObjectFromData({ ...wData, type: 'Walkbox' });
+                this.editor.createObjectFromData({ ...wData, type: 'Walkbox' }, undefined, undefined, { preserveBindings: true });
             });
         }
 
@@ -59,7 +59,7 @@ export class EditorUndoManager {
         if (data.triggerboxes) {
             data.triggerboxes.forEach((tData: any) => {
                 // @ts-ignore
-                this.editor.createObjectFromData({ ...tData, type: 'Triggerbox' });
+                this.editor.createObjectFromData({ ...tData, type: 'Triggerbox' }, undefined, undefined, { preserveBindings: true });
             });
         }
 

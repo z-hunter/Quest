@@ -76,7 +76,7 @@ export class SceneEditor {
 
     lastCameraPos: { x: number, y: number } = { x: 0, y: 0 };
 
-    update(deltaTime: number): void {
+    update(): void {
         // Check for Camera changes to update UI
         if (this.game.sceneManager.currentScene) {
             const cam = this.game.sceneManager.currentScene.camera;
@@ -589,7 +589,7 @@ export class SceneEditor {
 
 
     // Unified Object Creation Logic
-    createObjectFromData(data: any, overrideX?: number, overrideY?: number): any {
+    createObjectFromData(data: any, overrideX?: number, overrideY?: number, options?: { preserveBindings?: boolean }): any {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return null;
 
@@ -609,17 +609,10 @@ export class SceneEditor {
             data.y = y;
 
             if (type === 'Walkbox') {
-                // For Walkboxes, we need to shift the polygon if position changed?
-                // Walkboxes usually store absolute poly points.
-                // If we paste at NEW mouse position, we should shift all points relative to center.
-                // But data.poly is absolute.
-                // Let's see... duplicate just copies poly.
-                // If we Paste, we want to center it at mouse.
-
+                // ... (Walkbox logic remains) ...
                 let poly = data.poly || [];
                 if (overrideX !== undefined && overrideY !== undefined) {
-                    // Calculate centroid or top-left of original poly to detect offset
-                    // Simple approach: Center of bounding box
+                    // ... (Walkbox position logic) ...
                     if (poly.length > 0) {
                         const minX = Math.min(...poly.map((p: any) => p.x));
                         const minY = Math.min(...poly.map((p: any) => p.y));
@@ -634,20 +627,19 @@ export class SceneEditor {
                         poly = poly.map((p: any) => ({ x: p.x + dx, y: p.y + dy }));
                     }
                 } else {
-                    // Just copy
                     poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
                 }
 
                 newObj = new Walkbox(poly, data.name);
                 if (data.mode) newObj.mode = data.mode;
-                // Restore SceneObject properties
                 if (data.groupID) newObj.groupID = data.groupID;
                 if (data.locked) newObj.locked = data.locked;
                 if (data.disabled) newObj.disabled = data.disabled;
                 if (data.customName) newObj.customName = data.customName;
                 if (data.interactions) newObj.interactions = data.interactions;
+
             } else if (type === 'Triggerbox') {
-                // Same logic as Walkbox for poly
+                // ... (Triggerbox logic remains) ...
                 let poly = data.poly || [];
                 if (overrideX !== undefined && overrideY !== undefined) {
                     if (poly.length > 0) {
@@ -665,9 +657,8 @@ export class SceneEditor {
                     poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
                 }
                 newObj = new Triggerbox(poly, data.name, data.script || '');
-                // Restore SceneObject properties
                 if (data.groupID) newObj.groupID = data.groupID;
-                if (data.components) newObj.components = JSON.parse(JSON.stringify(data.components)); // Deep copy components
+                if (data.components) newObj.components = JSON.parse(JSON.stringify(data.components));
                 if (data.locked) newObj.locked = data.locked;
                 if (data.disabled) newObj.disabled = data.disabled;
                 if (data.customName) newObj.customName = data.customName;
@@ -677,7 +668,8 @@ export class SceneEditor {
                 newObj = QuadObject.fromJSON(this.game, data);
 
                 // Clear Bindings for New Objects (Paste/Duplicate/Load)
-                if (newObj.vertices) {
+                // BUT preserve if explicitly requested (Undo/Redo)
+                if (!options?.preserveBindings && newObj.vertices) {
                     newObj.vertices.forEach((v: any) => delete v.binding);
                 }
 
