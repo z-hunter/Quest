@@ -19,6 +19,26 @@ export class Parser {
 
     parse(input: string): void {
         console.log(`Command: ${input}`);
+
+        // Integration with Console Commands
+        // If the input starts with a known console command, delegate to Console.
+        // Or better: Console should handle EVERYTHING if it's open, but Parser is for GAMEPLAY commands.
+        // In this architecture, they share the same input line.
+        // Let's check if it IS a console command first.
+
+        const firstWord = input.split(' ')[0].toUpperCase();
+
+        // This requires Parser to know about Console commands or Console processing return value.
+        // Let's try to pass it to Console.processCommand. 
+        // If Console handles it, we stop.
+        // But Console.processCommand currently logs "Unknown command" if not found.
+        // We need a way to check "Is this a console command?"
+
+        if (this.game.console && this.game.console.hasCommand(firstWord)) {
+            this.game.console.processCommand(input);
+            return;
+        }
+
         const words = input.split(' ');
         const verb = words[0];
         const noun = words.slice(1).join(' ');

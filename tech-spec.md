@@ -202,5 +202,87 @@ Objects can attach functional execution components:
 
 ### 6.3 Long Term (Architecture)
 
-* [ ] **ECS Migration**: Partial move to Entity-Component-System for complex scenes.
-* [ ] **Virtual Scripting VM**: Sandboxed execution for user scripts.
+## 7. Scripting API
+
+The engine supports a hot-reloadable scripting system for gameplay logic and debug tools.
+
+### 7.1 Creating Scripts
+
+Scripts are TypeScript files located in `src/scripts/`. They are automatically loaded at startup using `import.meta.glob`.
+
+**Example:** `src/scripts/my_script.ts`
+
+```typescript
+import { ScriptRegistry } from '../core/ScriptRegistry';
+
+ScriptRegistry.register('my_script', ({ api, args }) => {
+    api.log('Script started!');
+    
+    // Access Game Objects
+    const quad = api.getQuad('Q1');
+    if (quad) {
+        // Create Undo Point
+        api.saveCheckpoint();
+        
+        // Modify Vertex (Index 0, X=100, Y=200, P=1.2)
+        quad.setVertex(0, 100, 200, 1.2);
+    }
+});
+```
+
+### 7.2 Running Scripts
+
+1. **Console Command**: Open the console (`~`) and type `RUN <script_id> [args...]`.
+    * Example: `RUN my_script arg1`
+2. **TriggerBox**: Set the `script` property of a TriggerBox to the script ID.
+
+### 7.3 API Reference
+
+The `ScriptContext` provides access to the `api` object.
+
+| Method | Description |
+| :--- | :--- |
+| `api.log(message)` | Prints a message to the in-game console. |
+| `api.getQuad(name)` | Returns a `QuadObject` by name, or `null`. |
+| `api.getActor(name)` | Returns an `Actor` instance by name, or `null`. |
+| `api.getEntity(name)` | Returns a generic `Entity` instance by name, or `null`. |
+| `api.saveCheckpoint()` | Saves the current scene state to the Undo History. |
+
+#### QuadObject Methods
+
+| Method | Description |
+| :--- | :--- |
+| `quad.setVertex(idx, x?, y?, p?)` | Updates vertex properties. Returns `true` if successful, `false` if bound/invalid. Pass `undefined` to skip a property. |
+
+#### Entity Properties (Common for all objects)
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `x`, `y` | `number` | World coordinates. Setters automatically update the Scene Editor. |
+| `parallax` | `number` | Depth plane factor (1.0 = Default, <1.0 = Far, >1.0 = Near). |
+| `width`, `height` | `number` | Visual dimensions (scaled by model scale and depth). |
+| `visible` | `boolean` | Toggles rendering. |
+| `opacity` | `number` | Alpha value (0.0 to 1.0). |
+| `blur` | `number` | Blur filter in pixels. |
+| `blendMode` | `string` | Canvas `globalCompositeOperation` (e.g., 'screen', 'multiply'). |
+| `color` | `string` | Fill color (used if sprite is missing). |
+
+**Methods:**
+
+* `setSprite(filename)`: Changes the object's visual sprite.
+
+#### Actor Methods (Player & NPC)
+
+| Method | Description |
+| :--- | :--- |
+| `walkTo(x, y)` | Moves the actor to target coordinates, respecting walkboxes. |
+| `moveTo(x, y)` | Teleports or moves the actor linearly (ignores walkboxes). |
+| `stop()` | Stops current movement and sets state to 'idle'. |
+| `playAnimSet(id)` | Changes the animation set (e.g., 'dance', 'run'). |
+| `setDirection(dir)` | Sets facing direction: 'up', 'down', 'left', 'right'. |
+| `setState(state)` | Sets actor state (e.g., 'idle', 'walk'). |
+
+### 7.4 Debugging & Undo
+
+* **Hot Reload**: Edits to scripts in `src/scripts/` are applied immediately without reloading the page.
+* **Granular Undo**: Use `api.saveCheckpoint()` before making changes to allow users to `Undo` script actions step-by-step in the Editor.

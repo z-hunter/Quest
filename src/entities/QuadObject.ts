@@ -446,8 +446,57 @@ export class QuadObject extends Entity {
         });
 
         // Trigger Editor Refresh if in Editor and values changed
+        if (hasChanges) {
+            this.notifyChange();
+        }
+    }
+
+    /**
+     * Updates a specific vertex of the Quad.
+     * @param index Vertex index (0-3)
+     * @param x New X position (optional)
+     * @param y New Y position (optional)
+     * @param p New Parallax factor (optional)
+     */
+    public setVertex(index: number, x?: number, y?: number, p?: number): boolean {
+        const v = this.vertices[index];
+        if (!v) {
+            console.warn(`[QuadObject] Vertex ${index} not found on '${this.name}'.`);
+            return false;
+        }
+
+        // If Vertex is Bound, we generally shouldn't move it manually via script
+        // unless we explicitly want to override/break binding? 
+        // For now, let's treat binding as "Locked by logic".
+        if (v.binding) {
+            console.warn(`[QuadObject] Vertex ${index} is bound to '${v.binding.targetName}'. Cannot set manually.`);
+            return false;
+        }
+
+        let changed = false;
+        if (x !== undefined && v.x !== x) {
+            v.x = x;
+            changed = true;
+        }
+        if (y !== undefined && v.y !== y) {
+            v.y = y;
+            changed = true;
+        }
+        if (p !== undefined && v.p !== p) {
+            v.p = p;
+            changed = true;
+        }
+
+        if (changed) {
+            this.notifyChange();
+        }
+
+        return true;
+    }
+
+    private notifyChange() {
         // @ts-ignore
-        if (hasChanges && this.game.editor && this.game.editor.enabled) {
+        if (this.game.editor && this.game.editor.enabled) {
             // @ts-ignore
             this.game.editor.selectionManager.notifyObjectChanged(this);
         }

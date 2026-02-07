@@ -91,9 +91,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                                     // 2. Add to History
                                     game.console.addHistory(val);
 
-                                    // 3. Send to Parser (upper case as convention usually?)
-                                    // Parser.ts .parse() handles splitting.
-                                    game.parser.parse(val.toUpperCase());
+                                    // 3. Send to Parser (Parser handles command casing, Console handles arguments)
+                                    game.parser.parse(val);
 
                                     e.currentTarget.value = '';
                                     setHistoryIndex(-1); // Reset history index on submit

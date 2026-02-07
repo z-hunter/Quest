@@ -1,18 +1,9 @@
-import { ScriptRegistry } from '../core/ScriptRegistry';
+import { loadAllScripts } from './loader';
 
 /**
  * This is the main entry point for User Scripts.
- * Add your scripts here or import them from other files and register them.
- * 
- * Usage:
- * ScriptRegistry.register('my.script.id', ({ game, entity, args }) => { ... });
+ * It automatically loads all scripts in subdirectories via Vite's import.meta.glob.
  */
 export function registerUserScripts() {
-    console.log('[ScriptRegistry] Registering User Scripts...');
-
-    // --- Example Script ---
-    // ScriptRegistry.register('example.script', ({ game, entity }) => {
-    //     game.showMessage("Hello from User Scripts!");
-    // });
-
+    loadAllScripts();
 }

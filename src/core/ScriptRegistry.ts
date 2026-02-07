@@ -1,7 +1,10 @@
+import { ScriptAPI } from './ScriptAPI';
+
 export type ScriptContext = {
-    game: any; // We'll type this properly later or strictly type it to Game
-    entity: any; // The entity executing the script
-    args?: any; // Optional arguments
+    game: any;
+    api: ScriptAPI;
+    entity: any;
+    args?: any;
 };
 
 export type ScriptFunction = (context: ScriptContext) => void;
@@ -17,12 +20,19 @@ export class ScriptRegistry {
         this.scripts.set(id, fn);
     }
 
-    static execute(id: string, context: ScriptContext): void {
+    static execute(id: string, context: Partial<ScriptContext> & { game: any }): void {
         const script = this.scripts.get(id);
         if (script) {
-            console.log(`[ScriptRegistry] Executing: ${id}`);
+            // console.log(`[ScriptRegistry] Executing: ${id}`);
             try {
-                script(context);
+                // Construct full context
+                const fullContext: ScriptContext = {
+                    game: context.game,
+                    entity: context.entity,
+                    args: context.args,
+                    api: new ScriptAPI(context.game) // Create API instance on fly? Or reuse? cheaply created.
+                };
+                script(fullContext);
             } catch (e) {
                 console.error(`[ScriptRegistry] Error in script '${id}':`, e);
             }

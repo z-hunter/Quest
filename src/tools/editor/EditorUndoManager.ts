@@ -15,8 +15,8 @@ export class EditorUndoManager {
         const scene = this.editor.game.sceneManager.currentScene;
         if (!scene) return;
 
-        // Push current state to Undo Stack
-        this.undoStack.push(scene.toJSON());
+        // Push current state to Undo Stack (Deep Clone)
+        this.undoStack.push(JSON.parse(JSON.stringify(scene.toJSON())));
 
         // Enforce Max History
         if (this.undoStack.length > this.MAX_HISTORY) {
@@ -85,7 +85,8 @@ export class EditorUndoManager {
         console.log("[Editor] Performing Undo...");
 
         // 1. Capture CURRENT state and push to Redo Stack
-        const currentState = scene.toJSON();
+        // 1. Capture CURRENT state and push to Redo Stack
+        const currentState = JSON.parse(JSON.stringify(scene.toJSON()));
         this.redoStack.push(currentState);
 
         // 2. Pop from Undo Stack
@@ -111,7 +112,8 @@ export class EditorUndoManager {
         console.log("[Editor] Performing Redo...");
 
         // 1. Capture CURRENT state and push to Undo Stack
-        const currentState = scene.toJSON();
+        // 1. Capture CURRENT state and push to Undo Stack
+        const currentState = JSON.parse(JSON.stringify(scene.toJSON()));
         this.undoStack.push(currentState);
 
         // 2. Pop from Redo Stack

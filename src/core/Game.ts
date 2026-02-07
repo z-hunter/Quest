@@ -132,7 +132,7 @@ export class Game implements IGame {
 
         // (Previously corrupted lines removed)
         this.input = new Input(this);
-        this.console = new Console(); // Init Console
+        this.console = new Console(this); // Init Console with Game Reference
         this.parser = new Parser(this);
         this.assets = new AssetLoader();
         this.audio = new AudioManager();

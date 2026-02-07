@@ -1,4 +1,6 @@
 
+import { ScriptRegistry } from './ScriptRegistry';
+
 export type ConsoleLineType = 'output' | 'command' | 'error' | 'info';
 
 export interface ConsoleLine {
@@ -22,8 +24,80 @@ export class Console {
     readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
     readonly MAX_HISTORY = 50;
 
-    constructor() {
-        // Empty
+    // Command Registry
+    private commands: Map<string, (args: string[]) => void> = new Map();
+
+    constructor(private game: any) { // Inject Game
+        console.log('[Console] Constructor called. Game instance present:', !!game);
+        this.registerDefaultCommands();
+    }
+
+    registerCommand(name: string, callback: (args: string[]) => void): void {
+        this.commands.set(name.toUpperCase(), callback);
+    }
+
+    hasCommand(name: string): boolean {
+        return this.commands.has(name.toUpperCase());
+    }
+
+    processCommand(input: string): void {
+        const trimmed = input.trim();
+        if (!trimmed) return;
+
+        this.log(`> ${trimmed}`, 'command');
+        this.addHistory(trimmed);
+
+        const parts = trimmed.split(/\s+/);
+        // Ensure only the command is uppercased for lookup
+        const commandName = parts[0].toUpperCase();
+
+        // Preserve exact casing for arguments
+        const args = parts.slice(1);
+
+        const handler = this.commands.get(commandName);
+        if (handler) {
+            try {
+                handler(args);
+            } catch (e) {
+                this.log(`Error executing '${commandName}': ${e}`, 'error');
+            }
+        } else {
+            this.log(`Unknown command: ${commandName}`, 'error');
+        }
+    }
+
+    private registerDefaultCommands() {
+        this.registerCommand('CLEAR', () => this.clear());
+        this.registerCommand('HELP', () => {
+            this.log('Available commands:', 'info');
+            this.log(Array.from(this.commands.keys()).join(', '), 'info');
+        });
+
+        this.registerCommand('RUN', (args) => {
+            if (args.length === 0) {
+                this.log('Usage: RUN <script_id> [args...]', 'error');
+                return;
+            }
+            const scriptId = args[0];
+            // Pass rest of args
+            this.runScript(scriptId, args.slice(1));
+        });
+    }
+
+    private runScript(id: string, args: string[]) {
+        if (ScriptRegistry.has(id)) {
+            this.log(`Running script '${id}'...`, 'info');
+            console.log(`[Console] runScript context game:`, this.game);
+
+            ScriptRegistry.execute(id, {
+                game: this.game,
+                entity: null,
+                args: args,
+                // api will be auto-created by Registry
+            } as any);
+        } else {
+            this.log(`Script '${id}' not found.`, 'error');
+        }
     }
 
     toggle(): void {
