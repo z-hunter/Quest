@@ -18,6 +18,9 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     // Editor Store State
     const { enabled: editorEnabled } = useEditorStore();
 
+    // Console State for Input Unlocking
+    const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+
     useEffect(() => {
         if (game) {
             // Bind Game callbacks to React state
@@ -32,6 +35,18 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             setTimeout(() => {
                 game.bindUI();
             }, 0);
+
+
+        }
+    }, [game]);
+
+    // Separate effect for console subscription to handle cleanup properly
+    useEffect(() => {
+        if (game && game.console) {
+            const unsubscribe = game.console.subscribe(() => {
+                setIsConsoleOpen(game.console.isOpen);
+            });
+            return unsubscribe;
         }
     }, [game]);
 
@@ -59,8 +74,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         type="text"
                         id="parser-input"
                         autoComplete="off"
-                        autoFocus={!editorEnabled}
-                        disabled={editorEnabled}
+                        autoFocus={!editorEnabled || isConsoleOpen}
+                        disabled={editorEnabled && !isConsoleOpen}
                         onKeyDown={(e) => {
                             console.log(`[UIOverlay] Input Key: ${e.key}`);
                             // Layer 2: React Event Fallback (fires if Global Capture misses or bubbles up)

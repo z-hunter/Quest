@@ -27,9 +27,21 @@ export class Console {
     // Command Registry
     private commands: Map<string, (args: string[]) => void> = new Map();
 
+    // Listeners
+    private listeners: Set<() => void> = new Set();
+
     constructor(private game: any) { // Inject Game
         console.log('[Console] Constructor called. Game instance present:', !!game);
         this.registerDefaultCommands();
+    }
+
+    subscribe(callback: () => void): () => void {
+        this.listeners.add(callback);
+        return () => this.listeners.delete(callback);
+    }
+
+    private notifyListeners(): void {
+        this.listeners.forEach(cb => cb());
     }
 
     registerCommand(name: string, callback: (args: string[]) => void): void {
@@ -102,10 +114,12 @@ export class Console {
 
     toggle(): void {
         this.isOpen = !this.isOpen;
+        this.notifyListeners();
     }
 
     setOpen(open: boolean): void {
         this.isOpen = open;
+        this.notifyListeners();
     }
 
     log(text: string, type: ConsoleLineType = 'output'): void {
@@ -121,6 +135,8 @@ export class Console {
         if (this.buffer.length > this.MAX_BUFFER_LINES) {
             this.buffer.shift();
         }
+
+        this.notifyListeners();
     }
 
     addHistory(command: string): void {
@@ -133,11 +149,14 @@ export class Console {
         if (this.history.length > this.MAX_HISTORY) {
             this.history.shift();
         }
+        this.notifyListeners();
     }
 
     clear(): void {
         this.buffer = [];
         this.log("Console cleared", "info");
+        // log already notifies, but if we clear buffer directly first, we might want to ensure update.
+        // actually log() calls notify, so we are good.
     }
 
     // Serialization for Save/Load

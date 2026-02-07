@@ -39,8 +39,8 @@ export class Parser {
             return;
         }
 
-        const words = input.split(' ');
-        const verb = words[0];
+        const words = input.trim().split(/\s+/);
+        const verb = words[0].toUpperCase();
         const noun = words.slice(1).join(' ');
 
         this.execute(verb, noun);

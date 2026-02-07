@@ -15,42 +15,40 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Polling loop to sync state with Game Console
-        let rAF: number;
-        const sync = () => {
-            if (game.console) {
-                // Check open state
-                if (game.console.isOpen !== isOpen) {
-                    setIsOpen(game.console.isOpen);
-                    // Focus on open
-                    if (game.console.isOpen) {
-                        setTimeout(() => {
-                            const input = document.getElementById('parser-input');
-                            if (input) input.focus();
-                        }, 0);
-                    }
-                }
+        // Initial sync
+        if (game.console) {
+            setIsOpen(game.console.isOpen);
+            setLines([...game.console.buffer]);
+        }
 
-                // Check buffer updates (simple length check or timestamp check for efficiency)
-                const buffer = game.console.buffer;
-                if (buffer.length > 0) {
-                    const lastGameLine = buffer[buffer.length - 1];
-                    setLines(prev => {
-                        if (prev.length !== buffer.length || (prev.length > 0 && prev[prev.length - 1] !== lastGameLine)) {
-                            return [...buffer];
-                        }
-                        return prev;
-                    });
-                } else if (lines.length > 0) {
-                    setLines([]);
-                }
-            }
-            rAF = requestAnimationFrame(sync);
+        // Subscribe to console events
+        const unsubscribe = game.console?.subscribe(() => {
+            setIsOpen(game.console.isOpen);
+
+            // Check if buffer actually changed to avoid unnecessary renders if just toggling
+            // But toggle calls notify, so we get here. 
+            // We can just setLines every time notify is called, or optimize.
+            // React's setState matches referential equality, so [...buffer] is new ref.
+            // Let's rely on React to handle it, or do a length check if we want.
+            // For now, simple:
+            setLines([...game.console.buffer]);
+        });
+
+        return () => {
+            if (unsubscribe) unsubscribe();
         };
+    }, [game]);
 
-        sync();
-        return () => cancelAnimationFrame(rAF);
-    }, [game, isOpen, lines.length]); // Dependencies might need tuning
+    // Focus handling when opening
+    useEffect(() => {
+        if (isOpen) {
+            // Use a slight delay to ensure UI is rendered/enabled
+            setTimeout(() => {
+                const input = document.getElementById('parser-input');
+                if (input) input.focus();
+            }, 10);
+        }
+    }, [isOpen]);
 
     // Auto-scroll to bottom
     useEffect(() => {
