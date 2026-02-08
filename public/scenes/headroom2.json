@@ -1,7 +1,7 @@
 {
-  "id": "headroom",
+  "id": "headroom2",
   "name": "New Scene",
-  "filename": "headroom",
+  "filename": "headroom2",
   "walkbox": [],
   "triggerboxes": [],
   "scaling": {
@@ -427,12 +427,7 @@
         {
           "x": -296,
           "y": -19,
-          "p": 1,
-          "binding": {
-            "targetName": "q6-6",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -346,
@@ -495,12 +490,7 @@
         {
           "x": -346,
           "y": -19,
-          "p": 1,
-          "binding": {
-            "targetName": "Quad_2",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -396,
@@ -563,12 +553,7 @@
         {
           "x": -346,
           "y": -69,
-          "p": 1,
-          "binding": {
-            "targetName": "Quad_5",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -396,
@@ -631,12 +616,7 @@
         {
           "x": -296,
           "y": -69,
-          "p": 1,
-          "binding": {
-            "targetName": "Quad_4",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -346,
@@ -889,12 +869,7 @@
         {
           "x": -496,
           "y": -69,
-          "p": 1,
-          "binding": {
-            "targetName": "q5-1",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -546,
@@ -957,12 +932,7 @@
         {
           "x": -496,
           "y": -19,
-          "p": 1,
-          "binding": {
-            "targetName": "q6-1",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -546,
@@ -1156,12 +1126,7 @@
         {
           "x": -446,
           "y": -19,
-          "p": 1,
-          "binding": {
-            "targetName": "q6-2",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -496,
@@ -1224,12 +1189,7 @@
         {
           "x": -446,
           "y": -69,
-          "p": 1,
-          "binding": {
-            "targetName": "q5-2",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -496,
@@ -1292,12 +1252,7 @@
         {
           "x": -396,
           "y": -69,
-          "p": 1,
-          "binding": {
-            "targetName": "q5-4",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -446,
@@ -1360,12 +1315,7 @@
         {
           "x": -396,
           "y": -19,
-          "p": 1,
-          "binding": {
-            "targetName": "q6-4",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -446,
@@ -1491,12 +1441,7 @@
         {
           "x": -496,
           "y": -219,
-          "p": 1,
-          "binding": {
-            "targetName": "q1-2",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -546,
@@ -1559,12 +1504,7 @@
         {
           "x": -446,
           "y": -219,
-          "p": 1,
-          "binding": {
-            "targetName": "q1-3",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -496,
@@ -1627,12 +1567,7 @@
         {
           "x": -396,
           "y": -219,
-          "p": 1,
-          "binding": {
-            "targetName": "q1-4",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -446,
@@ -1695,12 +1630,7 @@
         {
           "x": -346,
           "y": -219,
-          "p": 1,
-          "binding": {
-            "targetName": "q1-5",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -396,
@@ -1763,12 +1693,7 @@
         {
           "x": -296,
           "y": -218.99999999999997,
-          "p": 1,
-          "binding": {
-            "targetName": "q1-6",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -346,
@@ -1894,12 +1819,7 @@
         {
           "x": -496,
           "y": -169,
-          "p": 1,
-          "binding": {
-            "targetName": "q2-2",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -546,
@@ -1962,12 +1882,7 @@
         {
           "x": -446,
           "y": -169,
-          "p": 1,
-          "binding": {
-            "targetName": "q2-3",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -496,
@@ -2030,12 +1945,7 @@
         {
           "x": -396,
           "y": -169,
-          "p": 1,
-          "binding": {
-            "targetName": "q2-4",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -446,
@@ -2098,12 +2008,7 @@
         {
           "x": -346,
           "y": -169,
-          "p": 1,
-          "binding": {
-            "targetName": "q2-5",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -396,
@@ -2166,12 +2071,7 @@
         {
           "x": -296,
           "y": -169,
-          "p": 1,
-          "binding": {
-            "targetName": "q2-6",
-            "type": "vertex",
-            "index": 3
-          }
+          "p": 1
         },
         {
           "x": -346,
@@ -2302,12 +2202,7 @@
         {
           "x": -496,
           "y": -119,
-          "p": 1,
-          "binding": {
-            "targetName": "q4-1",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -546,
@@ -2370,12 +2265,7 @@
         {
           "x": -446,
           "y": -119,
-          "p": 1,
-          "binding": {
-            "targetName": "q4-2",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -496,
@@ -2438,12 +2328,7 @@
         {
           "x": -396,
           "y": -119,
-          "p": 1,
-          "binding": {
-            "targetName": "q4-4",
-            "type": "vertex",
-            "index": 0
-          }
+          "p": 1
         },
         {
           "x": -446,
@@ -2506,12 +2391,7 @@
         {
           "x": -346,
           "y": -119,
-          "p": 1,
-          "binding": {
-            "targetName": "q4-4",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -396,
@@ -2574,12 +2454,7 @@
         {
           "x": -296,
           "y": -119,
-          "p": 1,
-          "binding": {
-            "targetName": "q4-5",
-            "type": "vertex",
-            "index": 1
-          }
+          "p": 1
         },
         {
           "x": -346,
