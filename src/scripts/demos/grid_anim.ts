@@ -19,8 +19,8 @@ ScriptRegistry.register('grid_anim', ({ api, args }) => {
   // We use api.setInterval so it can be tracked and stopped by HALT
   api.setInterval(() => {
     // Pick a random quad in the 6x6 grid
-    const x = Math.floor(Math.random() * 6) + 1;
-    const y = Math.floor(Math.random() * 6) + 1;
+    const x = Math.floor(Math.random() * 4) + 2;
+    const y = Math.floor(Math.random() * 4) + 2;
     const quadId = `q${x}-${y}`;
 
     const quad = api.getQuad(quadId);
