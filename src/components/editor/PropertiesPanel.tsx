@@ -2,6 +2,7 @@ import React from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
+import { QuadObject } from '../../entities/QuadObject';
 
 export const PropertiesPanel: React.FC = () => {
     const game = useGame();
@@ -196,7 +197,7 @@ export const PropertiesPanel: React.FC = () => {
                                     // Auto-format: Ensure every token starts with #
                                     // 1. Split by comma
                                     const tokens = val.split(',');
-                                    const newTokens = tokens.map((t, index) => {
+                                    const newTokens = tokens.map((t) => {
                                         // Don't auto-add to the very last token if it's empty (user just typed comma)
                                         if (t.length === 0) return '';
 
@@ -687,60 +688,133 @@ export const PropertiesPanel: React.FC = () => {
                                         <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>
                                             Vertex {i} {i === 0 ? '(TL)' : i === 1 ? '(TR)' : i === 2 ? '(BR)' : i === 3 ? '(BL)' : ''}
                                             {v.binding && (
-                                                <span style={{ color: '#00FFFF', marginLeft: '5px' }}>
+                                                <span style={{ color: '#00FFFF', marginLeft: '5px', display: 'inline-flex', alignItems: 'center' }}>
                                                     L:{v.binding.targetName.length > 8 ? v.binding.targetName.slice(0, 8) + '..' : v.binding.targetName}
+                                                    <button
+                                                        title="Unbind Vertex"
+                                                        style={{
+                                                            background: '#444',
+                                                            border: '1px solid #666',
+                                                            color: '#fff',
+                                                            fontSize: '0.7em',
+                                                            marginLeft: '4px',
+                                                            cursor: 'pointer',
+                                                            padding: '0 4px',
+                                                            borderRadius: '2px',
+                                                            height: '16px',
+                                                            lineHeight: '14px'
+                                                        }}
+                                                        onClick={() => {
+                                                            const binding = v.binding;
+                                                            // Unbind Self (UI Copy)
+                                                            delete v.binding;
+                                                            incrementObjectVersion();
+
+                                                            // Sync to real object & Unbind Reverse
+                                                            if (game.editor.selectedObject) {
+                                                                const sel = game.editor.selectedObject as any;
+
+                                                                // Unbind Self (Real)
+                                                                if (sel.vertices[i].binding) delete sel.vertices[i].binding;
+
+                                                                // Unbind Reverse (Real)
+                                                                if (binding && binding.type === 'vertex') {
+                                                                    const scene = game.sceneManager.currentScene;
+                                                                    if (scene) {
+                                                                        const target = scene.entities.find((e: any) => e.name === binding.targetName);
+                                                                        if (target && (target as any).type === 'Quad') {
+                                                                            const tQuad = target as any;
+                                                                            const tIdx = binding.index;
+                                                                            if (tIdx !== undefined && tQuad.vertices[tIdx]) {
+                                                                                const tV = tQuad.vertices[tIdx];
+                                                                                // Check if target is bound back to US (Mutual)
+                                                                                if (tV.binding && tV.binding.type === 'vertex' &&
+                                                                                    tV.binding.targetName === sel.name && tV.binding.index === i) {
+
+                                                                                    delete tV.binding;
+                                                                                    console.log(`[PropertiesPanel] Mutual binding broken: ${target.name}[${tIdx}] -> ${sel.name}[${i}]`);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                game.editor.saveUndoState();
+                                                            }
+                                                        }}
+                                                    >U</button>
                                                 </span>
                                             )}
                                         </div>
                                         <div style={{ display: 'flex', gap: '2px' }}>
                                             <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.x)} onChange={(e) => {
-                                                v.x = parseFloat(e.target.value);
-                                                if (v.binding) delete v.binding;
-                                                incrementObjectVersion();
-                                                if (game.editor.selectedObject) {
-                                                    const sel = game.editor.selectedObject as any;
-                                                    sel.vertices[i].x = v.x;
-                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
+                                                const val = parseFloat(e.target.value);
+                                                if (v.x !== val) {
+                                                    const diff = val - v.x;
+
+                                                    // Propagate to Group
+                                                    const scene = game.sceneManager.currentScene;
+                                                    if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                                                        const group = QuadObject.getConnectedVertices(scene, game.editor.selectedObject as QuadObject, i);
+                                                        group.forEach(ref => { ref.v.x += diff; });
+                                                    } else {
+                                                        v.x = val;
+                                                    }
+
+                                                    incrementObjectVersion();
+                                                    game.editor.saveUndoState();
                                                 }
                                             }} />
                                             <input type="number" className="e-input" style={{ width: '33%' }} value={Math.round(v.y)} onChange={(e) => {
-                                                v.y = parseFloat(e.target.value);
-                                                if (v.binding) delete v.binding;
-                                                incrementObjectVersion();
-                                                if (game.editor.selectedObject) {
-                                                    const sel = game.editor.selectedObject as any;
-                                                    sel.vertices[i].y = v.y;
-                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
+                                                const val = parseFloat(e.target.value);
+                                                if (v.y !== val) {
+                                                    const diff = val - v.y;
+
+                                                    // Propagate to Group
+                                                    const scene = game.sceneManager.currentScene;
+                                                    if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                                                        const group = QuadObject.getConnectedVertices(scene, game.editor.selectedObject as QuadObject, i);
+                                                        group.forEach(ref => { ref.v.y += diff; });
+                                                    } else {
+                                                        v.y = val;
+                                                    }
+
+                                                    incrementObjectVersion();
+                                                    game.editor.saveUndoState();
                                                 }
                                             }} />
                                             <input type="number" className="e-input" style={{ width: '33%' }} step="0.1" value={v.p} onChange={(e) => {
                                                 const newP = parseFloat(e.target.value);
                                                 const oldP = v.p;
+                                                const diffP = newP - oldP;
 
-                                                // Auto-Correct Position to prevent visual jump
-                                                // NewPos = OldPos + Cam * (NewP - OldP)
                                                 const scene = game.sceneManager.currentScene;
-                                                if (scene) {
-                                                    const camX = scene.camera.x;
-                                                    const camY = scene.camera.y;
-                                                    v.x += camX * (newP - oldP);
-                                                    v.y += camY * (newP - oldP);
-                                                }
+                                                if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                                                    const group = QuadObject.getConnectedVertices(scene, game.editor.selectedObject as QuadObject, i);
 
-                                                v.p = newP;
-                                                if (v.binding) delete v.binding;
+                                                    group.forEach(ref => {
+                                                        // Auto-Correct Position to prevent visual jump
+                                                        // NewPos = OldPos + Cam * (NewP - OldP)
+                                                        const camX = scene.camera.x;
+                                                        const camY = scene.camera.y;
+                                                        ref.v.x += camX * diffP;
+                                                        ref.v.y += camY * diffP;
+
+                                                        ref.v.p = newP; // All adopt the new P? Yes, per "changes parallax together".
+                                                    });
+                                                } else {
+                                                    // Single logic
+                                                    if (scene) {
+                                                        const camX = scene.camera.x;
+                                                        const camY = scene.camera.y;
+                                                        v.x += camX * diffP;
+                                                        v.y += camY * diffP;
+                                                    }
+                                                    v.p = newP;
+                                                }
 
                                                 incrementObjectVersion();
-                                                if (game.editor.selectedObject) {
-                                                    const sel = game.editor.selectedObject as any;
-                                                    sel.vertices[i].p = v.p;
-                                                    sel.vertices[i].x = v.x;
-                                                    sel.vertices[i].y = v.y;
-                                                    if (sel.vertices[i].binding) delete sel.vertices[i].binding;
-
-                                                    // Trigger update
-                                                    game.editor.saveUndoState();
-                                                }
+                                                game.editor.saveUndoState();
                                             }} />
                                         </div>
                                     </div>

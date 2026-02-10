@@ -374,8 +374,9 @@ export class EditorTransformManager {
 
                     // Use Snapping System
                     const zoom = scene.camera.zoom;
-                    // Use Snapping System
                     const isQuad = (editor.selectedObject as any).type === 'Quad';
+
+                    // 1. Calculate Snapped Position for the PRIMARY dragged vertex
                     const snapResult = EditorSnappingSystem.snapVertex(
                         worldPos,
                         poly,
@@ -390,31 +391,122 @@ export class EditorTransformManager {
                         zoom
                     );
 
-                    worldPos.x = snapResult.x;
-                    worldPos.y = snapResult.y;
+                    // 2. Determine Delta for the Primary Vertex
+                    // We want to apply this delta to ALL connected vertices.
+                    // But wait, the snap result is absolute position for THIS vertex.
+
+                    const newX = snapResult.x;
+                    const newY = snapResult.y;
                     this.currentSnapBinding = snapResult.binding;
 
-                    if ((editor.selectedObject as any).type === 'Quad') {
-                        // Update Parallax if snapped to Entity
-                        // Note: snapResult.p is undefined if normal snap or no snap
-                        // If it IS defined (Entity Corner Snap), we adopt it.
-                        // If it is undefined, we KEEP existing v.p (unless binding says otherwise? binding resolution handles that separately?)
-                        // "Without locking" means we just set the value.
+                    // Calculate effective delta from current position
+                    // Note: v.x/v.y are RAW. newX/newY are VISUAL.
+                    // We need to convert current V to Visual to get delta.
+                    const currentVisX = v.x - camX * (v.p - 1.0);
+                    const currentVisY = v.y - camY * (v.p - 1.0);
 
-                        if (snapResult.p !== undefined) {
-                            v.p = snapResult.p;
+                    const diffX = newX - currentVisX;
+                    const diffY = newY - currentVisY;
+
+                    // If NO interaction (diff is 0), skip
+                    if (Math.abs(diffX) < 0.001 && Math.abs(diffY) < 0.001) {
+                        return;
+                    }
+
+                    // 3. Find Connected Group (BFS)
+                    // We need to move ALL vertices that are mutually bound.
+                    // Setup
+                    interface VertexRef { quad: QuadObject; index: number; v: any; }
+                    const group: VertexRef[] = [];
+                    const visited = new Set<string>(); // "QuadName_Index"
+                    const queue: VertexRef[] = [];
+
+                    if (isQuad) {
+                        const startRef = { quad: editor.selectedObject as QuadObject, index: this.draggingVertexIndex, v: v };
+                        queue.push(startRef);
+                        visited.add(`${startRef.quad.name}_${startRef.index}`);
+                        group.push(startRef);
+                    }
+
+                    // BFS Expansion
+                    while (queue.length > 0) {
+                        const current = queue.shift()!;
+
+                        // A. Check OUTGOING binding (Who I am bound to)
+                        if (current.v.binding && current.v.binding.type === 'vertex') {
+                            const targetName = current.v.binding.targetName;
+                            const targetIdx = current.v.binding.index || 0;
+                            if (!visited.has(`${targetName}_${targetIdx}`)) {
+                                // Find Quad
+                                const tEnt = scene.entities.find((e: any) => e.name === targetName);
+                                if (tEnt && (tEnt as any).type === 'Quad') {
+                                    const tQuad = tEnt as QuadObject;
+                                    if (tQuad.vertices[targetIdx]) {
+                                        const nextRef = { quad: tQuad, index: targetIdx, v: tQuad.vertices[targetIdx] };
+                                        visited.add(`${targetName}_${targetIdx}`);
+                                        group.push(nextRef);
+                                        queue.push(nextRef);
+                                    }
+                                }
+                            }
                         }
 
-                        // Reverse Projection using potentially NEW v.p
-                        // worldPos is Visual (P=1). 
-                        // Raw = Visual + Cam*(P-1)
-                        v.x = Math.round(worldPos.x + camX * (v.p - 1.0));
-                        v.y = Math.round(worldPos.y + camY * (v.p - 1.0));
-
-                    } else {
-                        v.x = Math.round(worldPos.x);
-                        v.y = Math.round(worldPos.y);
+                        // B. Check INCOMING bindings (Who is bound to me)
+                        // This requires scanning all Quads. Optimizable but N is small.
+                        scene.entities.forEach((e: any) => {
+                            if ((e as any).type === 'Quad') {
+                                const q = e as QuadObject;
+                                q.vertices.forEach((qv, qIdx) => {
+                                    if (qv.binding && qv.binding.type === 'vertex') {
+                                        if (qv.binding.targetName === current.quad.name && qv.binding.index === current.index) {
+                                            if (!visited.has(`${q.name}_${qIdx}`)) {
+                                                const nextRef = { quad: q, index: qIdx, v: qv };
+                                                visited.add(`${q.name}_${qIdx}`);
+                                                group.push(nextRef);
+                                                queue.push(nextRef);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        });
                     }
+
+                    // 4. Move Group
+                    group.forEach(ref => {
+                        // Apply diff to Visual Position implies modifying Raw Position
+                        // NewRaw = OldRaw + diff?
+                        // Vis1 = Raw1 - Cam*(p-1).
+                        // Vis2 = Vis1 + diff.
+                        // Raw2 = Vis2 + Cam*(p-1) = (Raw1 - Cam*(p-1) + diff) + Cam*(p-1) = Raw1 + diff.
+                        // YES, diff applies directly to Raw if P is constant.
+
+                        // PARALLAX HANDLING
+                        // User said: "all mutually bound vertices will change coordinates and/or parallax"
+                        // If the PRIMARY vertex snapped to an Entity/Grid with specific P, we adopt it.
+                        // If it just moved in space, we keep P.
+                        // If we interactively change P (e.g. via property), that's different.
+                        // Here we are dragging X/Y.
+
+                        // BUT: If the primary vertex snapped to a target with a DIFFERENT Parallax,
+                        // `snapResult.p` might be set.
+                        // If so, we should update P for the whole group?
+                        // "form a entity... always moves together and changes parallax together".
+                        // Yes.
+
+                        if (snapResult.p !== undefined) {
+                            ref.v.p = snapResult.p;
+                        }
+
+                        // Update Position
+                        ref.v.x += diffX;
+                        ref.v.y += diffY;
+
+                        // Rounding?
+                        ref.v.x = Math.round(ref.v.x);
+                        ref.v.y = Math.round(ref.v.y);
+                    });
+
                     store.incrementObjectVersion();
 
                 } else if (this.draggingVertexIndex === -1) {
@@ -693,15 +785,39 @@ export class EditorTransformManager {
             if (this.currentSnapBinding && this.draggingVertexIndex >= 0 && (this.editor.selectedObject as any).type === 'Quad') {
                 const q = this.editor.selectedObject as QuadObject;
                 if (q.vertices[this.draggingVertexIndex]) {
-                    q.vertices[this.draggingVertexIndex].binding = this.currentSnapBinding;
+                    const sourceVertex = q.vertices[this.draggingVertexIndex];
+                    sourceVertex.binding = this.currentSnapBinding;
+
+                    // MUTUAL BINDING LOGIC
+                    // If we bind A -> B, we also want B -> A (if B is compatible and not already bound to a third party C in a way that conflicts,
+                    // although our new group-move logic handles chains, mutual links are more robust).
+                    if (this.currentSnapBinding.type === 'vertex') {
+                        const scene = this.editor.game.sceneManager.currentScene;
+                        const targetEnt = scene.entities.find((e: any) => e.name === this.currentSnapBinding!.targetName);
+                        if (targetEnt && (targetEnt as any).type === 'Quad') {
+                            const targetQuad = targetEnt as QuadObject;
+                            const targetVIndex = this.currentSnapBinding.index;
+                            if (targetVIndex !== undefined && targetQuad.vertices[targetVIndex]) {
+                                const targetVertex = targetQuad.vertices[targetVIndex];
+
+                                // Only create back-link if not already bound, OR if we want to enforce strong pairing.
+                                // User said: "that vertex binds to the one that bound".
+                                // So we force it.
+                                targetVertex.binding = {
+                                    targetName: q.name,
+                                    type: 'vertex',
+                                    index: this.draggingVertexIndex
+                                };
+                                console.log(`[Editor] Mutual Binding created: ${targetEnt.name}[${targetVIndex}] -> ${q.name}[${this.draggingVertexIndex}]`);
+                            }
+                        }
+                    }
+
                     console.log(`[Editor] Vertex ${this.draggingVertexIndex} bound to ${this.currentSnapBinding.targetName} (${this.currentSnapBinding.type})`);
                 }
             } else if (this.draggingVertexIndex >= 0 && (this.editor.selectedObject as any).type === 'Quad') {
-                // If we moved a vertex and DID NOT snap, clear binding
-                const q = this.editor.selectedObject as QuadObject;
-                if (q.vertices[this.draggingVertexIndex]) {
-                    delete q.vertices[this.draggingVertexIndex].binding;
-                }
+                // If we moved a vertex and DID NOT snap, we KEEP the binding (Standard Group Move)
+                // Do nothing.
             }
             this.currentSnapBinding = null;
             store.selectVertex(-1);

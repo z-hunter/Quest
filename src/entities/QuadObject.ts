@@ -465,12 +465,55 @@ export class QuadObject extends Entity {
             return false;
         }
 
-        // If Vertex is Bound, we generally shouldn't move it manually via script
-        // unless we explicitly want to override/break binding? 
-        // For now, let's treat binding as "Locked by logic".
+        // If Vertex is Bound, propagate changes to the entire group
         if (v.binding) {
-            console.warn(`[QuadObject] Vertex ${index} is bound to '${v.binding.targetName}'. Cannot set manually.`);
-            return false;
+            // Calculate delta
+            const dx = x !== undefined ? x - v.x : 0;
+            const dy = y !== undefined ? y - v.y : 0;
+            const dp = p !== undefined ? p - v.p : 0;
+
+            // @ts-ignore
+            const scene = this.scene;
+            if (scene) {
+                const group = QuadObject.getConnectedVertices(scene, this, index);
+
+                let anyChanged = false;
+                group.forEach(ref => {
+                    if (dx !== 0) { ref.v.x += dx; anyChanged = true; }
+                    if (dy !== 0) { ref.v.y += dy; anyChanged = true; }
+                    if (dp !== 0) {
+                        // Parallax logic: Adjust pos to avoid jump?
+                        // If script is setting P, it likely wants to change P. 
+                        // Auto-correcting Pos might be unexpected for a raw setter.
+                        // But for consistency with UI, maybe?
+                        // "setVertex" implies setting raw values.
+                        // Let's just set P for now.
+                        ref.v.p += dp;
+                        anyChanged = true;
+                    }
+                });
+
+                if (anyChanged) {
+                    this.notifyChange();
+                    // Also notify others? They will update on their own draw/update cycle or via editor?
+                    // getConnectedVertices returns Refs. We modified them in place.
+                    // If they are on other objects, those objects might need notification if in Editor.
+                    if (group.length > 1) {
+                        // @ts-ignore
+                        if (this.game.editor && this.game.editor.enabled) {
+                            // Force refresh of scene or selection?
+                            // Individual object notification is hard here without iterating.
+                            group.forEach(g => {
+                                if (g.quad !== this) {
+                                    // @ts-ignore
+                                    this.game.editor.selectionManager.notifyObjectChanged(g.quad);
+                                }
+                            });
+                        }
+                    }
+                }
+                return true;
+            }
         }
 
         let changed = false;
@@ -500,5 +543,66 @@ export class QuadObject extends Entity {
             // @ts-ignore
             this.game.editor.selectionManager.notifyObjectChanged(this);
         }
+    }
+
+    /**
+     * Finds all vertices connected to a specific vertex via bindings (Mutual/Graph Traversal).
+     * Used for moving groups of bound vertices together.
+     */
+    static getConnectedVertices(scene: any, startQuad: QuadObject, startIndex: number): { quad: QuadObject, index: number, v: QuadVertex }[] {
+        const group: { quad: QuadObject, index: number, v: QuadVertex }[] = [];
+        const visited = new Set<string>();
+        const queue: { quad: QuadObject, index: number, v: QuadVertex }[] = [];
+
+        if (!startQuad || !startQuad.vertices[startIndex]) return [];
+
+        const startRef = { quad: startQuad, index: startIndex, v: startQuad.vertices[startIndex] };
+        queue.push(startRef);
+        visited.add(`${startRef.quad.name}_${startRef.index}`);
+        group.push(startRef);
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+
+            // 1. Check OUTGOING binding (Who I am bound to)
+            if (current.v.binding && current.v.binding.type === 'vertex') {
+                const targetName = current.v.binding.targetName;
+                const targetIdx = current.v.binding.index || 0;
+
+                if (!visited.has(`${targetName}_${targetIdx}`)) {
+                    const tEnt = scene.entities.find((e: any) => e.name === targetName);
+                    if (tEnt && (tEnt as any).type === 'Quad') {
+                        const tQuad = tEnt as QuadObject;
+                        if (tQuad.vertices[targetIdx]) {
+                            const nextRef = { quad: tQuad, index: targetIdx, v: tQuad.vertices[targetIdx] };
+                            visited.add(`${targetName}_${targetIdx}`);
+                            group.push(nextRef);
+                            queue.push(nextRef);
+                        }
+                    }
+                }
+            }
+
+            // 2. Check INCOMING bindings (Who is bound to me)
+            scene.entities.forEach((e: any) => {
+                if ((e as any).type === 'Quad') {
+                    const q = e as QuadObject;
+                    q.vertices.forEach((qv, qIdx) => {
+                        if (qv.binding && qv.binding.type === 'vertex') {
+                            if (qv.binding.targetName === current.quad.name && qv.binding.index === current.index) {
+                                if (!visited.has(`${q.name}_${qIdx}`)) {
+                                    const nextRef = { quad: q, index: qIdx, v: qv };
+                                    visited.add(`${q.name}_${qIdx}`);
+                                    group.push(nextRef);
+                                    queue.push(nextRef);
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        return group;
     }
 }
