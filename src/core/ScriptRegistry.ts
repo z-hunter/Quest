@@ -11,6 +11,7 @@ export type ScriptFunction = (context: ScriptContext) => void;
 
 export class ScriptRegistry {
     private static scripts: Map<string, ScriptFunction> = new Map();
+    private static activeScripts: Map<string, ScriptAPI[]> = new Map();
 
     static register(id: string, fn: ScriptFunction): void {
         console.log(`[ScriptRegistry] Registering: ${id}`);
@@ -25,12 +26,20 @@ export class ScriptRegistry {
         if (script) {
             // console.log(`[ScriptRegistry] Executing: ${id}`);
             try {
+                const api = new ScriptAPI(context.game);
+
+                // Track active script instance
+                if (!this.activeScripts.has(id)) {
+                    this.activeScripts.set(id, []);
+                }
+                this.activeScripts.get(id)?.push(api);
+
                 // Construct full context
                 const fullContext: ScriptContext = {
                     game: context.game,
                     entity: context.entity,
                     args: context.args,
-                    api: new ScriptAPI(context.game) // Create API instance on fly? Or reuse? cheaply created.
+                    api: api
                 };
                 script(fullContext);
             } catch (e) {
@@ -38,6 +47,22 @@ export class ScriptRegistry {
             }
         } else {
             console.warn(`[ScriptRegistry] Script not found: ${id}`);
+        }
+    }
+
+    static stop(id: string): void {
+        const instances = this.activeScripts.get(id);
+        if (instances) {
+            console.log(`[ScriptRegistry] Stopping script: ${id} (${instances.length} instances)`);
+            instances.forEach(api => api.dispose());
+            this.activeScripts.delete(id);
+        }
+    }
+
+    static stopAll(): void {
+        console.log(`[ScriptRegistry] Stopping all scripts...`);
+        for (const id of this.activeScripts.keys()) {
+            this.stop(id);
         }
     }
 

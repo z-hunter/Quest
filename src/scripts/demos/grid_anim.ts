@@ -16,7 +16,8 @@ ScriptRegistry.register('grid_anim', ({ api, args }) => {
   const randOffset = () => (Math.random() * 2 - 1) * jitter;
 
   // Use a timer to run the animation in the background
-  const timerId = setInterval(() => {
+  // We use api.setInterval so it can be tracked and stopped by HALT
+  api.setInterval(() => {
     // Pick a random quad in the 6x6 grid
     const x = Math.floor(Math.random() * 6) + 1;
     const y = Math.floor(Math.random() * 6) + 1;
@@ -39,9 +40,8 @@ ScriptRegistry.register('grid_anim', ({ api, args }) => {
     }
   }, interval);
 
-  // Store the timer ID globally or in a way it can be stopped if we add a STOP command later
-  // For now, it just runs.
-  (window as any)._gridAnimTimer = timerId;
+  // No longer need manual global timer tracking
+
 
   api.log('Animation running. Use browser console to stop: clearInterval(window._gridAnimTimer)');
 });

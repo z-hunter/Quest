@@ -2,10 +2,54 @@ import type { IGame } from './IGame';
 import { QuadObject } from '../entities/QuadObject';
 
 export class ScriptAPI {
+  private intervals: number[] = [];
+  private timeouts: number[] = [];
+
   constructor(private game: IGame) { }
 
   log(message: string) {
     this.game.log(message);
+  }
+
+  setInterval(handler: TimerHandler, timeout?: number, ...args: any[]): number {
+    const id = setInterval(handler, timeout, ...args);
+    this.intervals.push(id);
+    return id;
+  }
+
+  clearInterval(id: number | undefined): void {
+    if (id === undefined) return;
+    const idx = this.intervals.indexOf(id);
+    if (idx !== -1) {
+      this.intervals.splice(idx, 1);
+    }
+    clearInterval(id);
+  }
+
+  setTimeout(handler: TimerHandler, timeout?: number, ...args: any[]): number {
+    const id = setTimeout(handler, timeout, ...args);
+    this.timeouts.push(id);
+    return id;
+  }
+
+  clearTimeout(id: number | undefined): void {
+    if (id === undefined) return;
+    const idx = this.timeouts.indexOf(id);
+    if (idx !== -1) {
+      this.timeouts.splice(idx, 1);
+    }
+    clearTimeout(id);
+  }
+
+  /**
+   * Cleans up all active timers created by this script instance.
+   */
+  dispose() {
+    this.intervals.forEach(id => clearInterval(id));
+    this.timeouts.forEach(id => clearTimeout(id));
+    this.intervals = [];
+    this.timeouts = [];
+    console.log('[ScriptAPI] Disposed resources.');
   }
 
   /**

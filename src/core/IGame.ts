@@ -12,6 +12,7 @@ export interface IGame {
     inventory: Entity[];
 
     showMessage(text: string): void;
+    log(text: string): void;
     showNotification?(text: string): void; // Optional
     onSceneChange?(sceneName: string): void;
     playSound(name: string): void;

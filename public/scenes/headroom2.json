@@ -142,9 +142,9 @@
           "y": -19,
           "p": 1,
           "binding": {
-            "targetName": "q5-6",
+            "targetName": "q6-5",
             "type": "vertex",
-            "index": 3
+            "index": 1
           }
         },
         {
@@ -215,7 +215,7 @@
           "y": -19,
           "p": 1,
           "binding": {
-            "targetName": "Quad_320",
+            "targetName": "q6-6",
             "type": "vertex",
             "index": 0
           }
@@ -341,9 +341,9 @@
           "y": -69,
           "p": 1,
           "binding": {
-            "targetName": "q4-5",
+            "targetName": "q4-6",
             "type": "vertex",
-            "index": 2
+            "index": 3
           }
         },
         {
@@ -711,7 +711,7 @@
           "y": -69,
           "p": 1,
           "binding": {
-            "targetName": "Quad_4",
+            "targetName": "q5-6",
             "type": "vertex",
             "index": 0
           }

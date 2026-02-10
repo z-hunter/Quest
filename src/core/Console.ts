@@ -94,6 +94,19 @@ export class Console {
             // Pass rest of args
             this.runScript(scriptId, args.slice(1));
         });
+
+        this.registerCommand('HALT', (args) => {
+            if (args.length === 0) {
+                // Halt all
+                ScriptRegistry.stopAll();
+                this.log('Stopped all scripts.', 'info');
+            } else {
+                // Halt specific
+                const scriptId = args[0];
+                ScriptRegistry.stop(scriptId);
+                this.log(`Stopped script '${scriptId}'.`, 'info');
+            }
+        });
     }
 
     private runScript(id: string, args: string[]) {
