@@ -185,6 +185,35 @@ Objects can attach functional execution components:
 * **Engine State**: Mutable. Modifications should verify if `game.editor.enabled` to trigger UI sync.
 * **UI State**: Immutable (React/Zustand). Updates react to Engine triggers.
 
+### 5.3 Adding New Properties (Serialization Standard)
+
+The engine uses a **Declarative Serialization System** to prevent data loss and reduce boilerplate. To add a new persistent property to any `SceneObject` subclass (Entity, Actor, etc.):
+
+1.  **Define the Property**: Add the public property to the class.
+2.  **Update Metadata**: Add the property name to the static `SERIALIZABLE_PROPS` array.
+    *   *Note: Always spread the parent's props: `...BaseClass.SERIALIZABLE_PROPS`.*
+3.  **Side Effects**: If the property requires logic upon loading (like re-calculating dimensions or triggering an asset load), override the `load(data)` method, call `super.load(data)`, and then implement your logic.
+
+**Example:**
+```typescript
+class MyEntity extends Entity {
+    public myNewProp: number = 0;
+
+    static override SERIALIZABLE_PROPS = [
+        ...Entity.SERIALIZABLE_PROPS,
+        'myNewProp'
+    ];
+
+    override load(data: any) {
+        super.load(data);
+        if (data.myNewProp !== undefined) {
+            // Optional: trigger specific side effect
+            this.handlePropChange(data.myNewProp);
+        }
+    }
+}
+```
+
 ---
 
 ## 6. Roadmap

@@ -38,6 +38,15 @@ export class Actor extends Entity {
 
     isPlayer: boolean = false;
 
+    /**
+     * List of properties to be serialized to/from JSON.
+     * Extends Entity.SERIALIZABLE_PROPS.
+     */
+    static override SERIALIZABLE_PROPS: string[] = [
+        ...Entity.SERIALIZABLE_PROPS,
+        'isPlayer', 'speed', 'direction', 'animSets'
+    ];
+
     constructor(game: IGame, x: number, y: number, width: number = 30, height: number = 30, name: string = 'Actor') {
         super(game, x, y, width, height, name);
         this.direction = 'down';
@@ -308,31 +317,16 @@ export class Actor extends Entity {
     }
 
     toJSON() {
-        const data = super.toJSON() as ActorData;
+        const data = super.toJSON();
         data.type = 'Actor';
-        if (this.isPlayer) data.isPlayer = true;
-        data.speed = this.speed;
-        data.direction = this.direction;
-        data.animSets = this.animSets;
         return data;
     }
 
-    override load(data: ActorData): void {
+    override load(data: any): void {
         this.startLoading();
         try {
             super.load(data);
-            if (data.direction) this.direction = data.direction;
-            if (data.speed !== undefined) this.speed = data.speed;
-            if (data.isPlayer !== undefined) this.isPlayer = data.isPlayer;
-
-            // Restore AnimSets
-            if (data.animSets) {
-                this.animSets = JSON.parse(JSON.stringify(data.animSets)); // Deep copy to prevent ref issues
-            } else {
-                this.animSets = {};
-            }
-
-            // Initial sprite update
+            // Initial sprite update based on loaded state/direction
             this.updateSpriteForState();
         } finally {
             this.endLoading();

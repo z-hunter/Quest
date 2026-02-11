@@ -1,4 +1,5 @@
 import { Entity } from './Entity';
+import { SceneObject } from './SceneObject';
 import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { Geometry } from '../utils/Geometry';
@@ -55,6 +56,17 @@ export class QuadObject extends Entity {
 
     // Effects
     blur: number = 0;
+
+    /**
+     * List of properties to be serialized to/from JSON.
+     * Note: We don't extend Entity.SERIALIZABLE_PROPS because Quad uses vertices instead of width/height/sprite.
+     */
+    static override SERIALIZABLE_PROPS: string[] = [
+        ...SceneObject.SERIALIZABLE_PROPS,
+        'x', 'y', 'parallax', 'ignoreScaling', 'vertices', 'color', 'sortMode', 
+        'opacity', 'blendMode', 'isGrid', 'gridLinesX', 'gridLinesY', 
+        'lineWidth', 'gridColor', 'filled', 'blur'
+    ];
 
     // Override render to handle per-vertex parallax
     render(ctx: CanvasRenderingContext2D): void {
@@ -288,94 +300,29 @@ export class QuadObject extends Entity {
 
     // Serialization
     toJSON(): any {
-        const data = super.toJSON() as any;
+        const data = super.toJSON();
+        data.type = 'Quad';
+        return data;
+    }
 
-        // Remove redundant Entity fields for Quad
-        delete data.width;
-        delete data.height;
-        delete data.baseWidth;
-        delete data.baseHeight;
-        delete data.colliderWidth;
-        delete data.colliderHeight;
-        delete data.spriteName;
-        delete data.scale;
-        delete data.modelScale;
-        delete data.animationSpeed;
+    override load(data: any): void {
+        // Backwards compatibility for ignoreYSorting
+        if (data.sortMode === undefined && data.ignoreYSorting !== undefined) {
+            data.sortMode = data.ignoreYSorting ? 'ignore' : 'v3';
+        }
 
-        return {
-            ...data,
-            type: 'Quad', // Force Type
-            vertices: this.vertices.map(v => ({ ...v })),
-            color: this.color,
-            sortMode: this.sortMode,
-            opacity: this.opacity,
-            blendMode: this.blendMode,
+        // Migrate old gridLines
+        if (data.gridLines !== undefined) {
+            if (data.gridLinesX === undefined) data.gridLinesX = data.gridLines;
+            if (data.gridLinesY === undefined) data.gridLinesY = data.gridLines;
+        }
 
-            // Retro Grid
-            isGrid: this.isGrid,
-            gridLinesX: this.gridLinesX,
-            gridLinesY: this.gridLinesY,
-            lineWidth: this.lineWidth,
-            gridColor: this.gridColor,
-
-            // Fill
-            filled: this.filled,
-
-            // Effects
-            blur: this.blur
-        };
+        super.load(data);
     }
 
     static fromJSON(game: IGame, data: any): QuadObject {
         const obj = new QuadObject(game, data.name);
-        // Standard Props
-        if (data.x !== undefined) obj.x = data.x;
-        if (data.y !== undefined) obj.y = data.y;
-        obj.layer = (data.layer !== undefined && Number.isFinite(Number(data.layer))) ? Number(data.layer) : 0;
-        if (data.locked) obj.locked = data.locked;
-        if (data.disabled) obj.disabled = data.disabled;
-        if (data.visible !== undefined) obj.visible = data.visible;
-        if (data.groupID) obj.groupID = data.groupID;
-
-        // Custom Props
-        if (data.vertices) obj.vertices = data.vertices.map((v: any) => ({ ...v }));
-        if (data.color) obj.color = data.color;
-
-        // Backwards compatibility for ignoreYSorting
-        if (data.sortMode) {
-            obj.sortMode = data.sortMode;
-        } else if (data.ignoreYSorting !== undefined) {
-            obj.sortMode = data.ignoreYSorting ? 'ignore' : 'v3';
-        }
-
-        if (data.opacity !== undefined) obj.opacity = data.opacity;
-        if (data.blendMode !== undefined) obj.blendMode = data.blendMode;
-
-        if (data.isGrid !== undefined) obj.isGrid = data.isGrid;
-
-        // Migrate old gridLines
-        if (data.gridLines !== undefined) {
-            obj.gridLinesX = data.gridLines;
-            obj.gridLinesY = data.gridLines;
-        }
-
-        if (data.gridLinesX !== undefined) obj.gridLinesX = data.gridLinesX;
-        if (data.gridLinesY !== undefined) obj.gridLinesY = data.gridLinesY;
-
-        if (data.lineWidth !== undefined) obj.lineWidth = data.lineWidth;
-        if (data.gridColor !== undefined) obj.gridColor = data.gridColor;
-
-        // Fill
-        if (data.filled !== undefined) obj.filled = data.filled;
-
-        // Effects
-        if (data.blur !== undefined) obj.blur = data.blur;
-
-        // Components
-        if (data.components) {
-            obj.components = JSON.parse(JSON.stringify(data.components));
-        }
-
+        obj.load(data);
         return obj;
     }
 

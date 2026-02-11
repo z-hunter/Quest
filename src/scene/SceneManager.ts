@@ -126,12 +126,7 @@ export class SceneManager {
                 newScene.walkbox = (data.walkbox || []).map((wb: any) => {
                     const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
                     const w = new Walkbox(poly, wb.name || 'Walkbox');
-                    if (wb.mode) w.mode = wb.mode;
-                    if (wb.locked) w.locked = true;
-                    if (wb.disabled) w.disabled = true;
-                    if (wb.groupID) w.groupID = wb.groupID;
-                    if (wb.customName) w.customName = wb.customName;
-                    if (wb.interactions) w.interactions = wb.interactions;
+                    w.load(wb);
                     return w;
                 });
             }
@@ -141,13 +136,7 @@ export class SceneManager {
                 newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
                     const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
                     const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
-                    if (t.locked) tb.locked = true;
-                    if (t.disabled) tb.disabled = true;
-                    if (t.groupID) tb.groupID = t.groupID;
-                    if (t.customName) tb.customName = t.customName;
-                    if (t.interactions) tb.interactions = t.interactions;
-                    if (t.components) tb.components = t.components;
-                    if (t.layer !== undefined) tb.layer = t.layer;
+                    tb.load(t);
                     return tb;
                 });
             }
@@ -161,51 +150,10 @@ export class SceneManager {
                         entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
                     } else if (entityData.type === 'Actor') {
                         entity = Actor.fromJSON(this.game, entityData);
-                        if (entityData.isPlayer) (entity as Actor).isPlayer = true;
                     } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
                         entity = QuadObject.fromJSON(this.game, entityData);
                     } else {
                         entity = Entity.fromJSON(this.game, entityData);
-                    }
-
-                    // Restore common properties
-                    entity.color = entityData.color || entity.color;
-                    entity.scale = entityData.scale || entity.scale;
-                    entity.layer = entityData.layer || entity.layer;
-                    entity.parallax = entityData.parallax !== undefined ? entityData.parallax : 1.0;
-                    entity.ignoreScaling = !!entityData.ignoreScaling;
-
-                    // Restore base dimensions
-                    if (entityData.baseWidth !== undefined) {
-                        entity.baseWidth = entityData.baseWidth;
-                    } else {
-                        entity.baseWidth = entity.scale > 0 ? entityData.width / entity.scale : entityData.width;
-                    }
-
-                    if (entityData.baseHeight !== undefined) {
-                        entity.baseHeight = entityData.baseHeight;
-                    } else {
-                        entity.baseHeight = entity.scale > 0 ? entityData.height / entity.scale : entityData.height;
-                    }
-
-                    let skipSprite = false;
-                    if (entity.spriteName && entityData.spriteName) {
-                        const s1 = entity.spriteName;
-                        const s2 = entityData.spriteName;
-                        if (s1 === s2 || s1.endsWith('/' + s2) || s2.endsWith('/' + s1)) {
-                            skipSprite = true;
-                        }
-                    }
-
-                    if (entityData.spriteName && !skipSprite) {
-                        entity.setSprite(entityData.spriteName, true);
-                    }
-
-                    // Restore Actor specific properties if needed (state, direction)
-                    if (entity instanceof Actor && entityData.type === 'Actor') {
-                        // Check for basic state props if serialization saved them
-                        if ((entityData as any).direction) entity.setDirection((entityData as any).direction);
-                        // State restoring if needed...
                     }
 
                     newScene.addEntity(entity);

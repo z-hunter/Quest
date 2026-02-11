@@ -139,6 +139,18 @@ export class Entity extends SceneObject {
     animationSpeed: number; // Added
     game: IGame;
 
+    /**
+     * List of properties to be serialized to/from JSON.
+     * Extends SceneObject.SERIALIZABLE_PROPS.
+     */
+    static override SERIALIZABLE_PROPS: string[] = [
+        ...SceneObject.SERIALIZABLE_PROPS,
+        'x', 'y', 'width', 'height', 'baseWidth', 'baseHeight',
+        'colliderWidth', 'colliderHeight', 'spriteName', 'color',
+        'scale', 'modelScale', 'parallax', 'ignoreScaling',
+        'animationSpeed', 'opacity', 'blendMode', 'blur'
+    ];
+
     constructor(game: IGame, x: number, y: number, width: number = 30, height: number = 30, name: string = 'Entity') {
         super(name, 'Static');
         this.game = game;
@@ -384,113 +396,30 @@ export class Entity extends SceneObject {
         }
     }
 
-    toJSON(): EntityData {
-        return {
-            type: 'Entity', // Subclasses should override this or we can use constructor.name if safe
-            name: this.name,
-            x: this.x,
-            y: this.y,
-            width: this.width,
-            height: this.height,
-            baseWidth: this.baseWidth,
-            baseHeight: this.baseHeight,
-            colliderWidth: this.colliderWidth,
-            colliderHeight: this.colliderHeight,
-            spriteName: this.spriteName,
-            color: this.color,
-            scale: this.scale,
-            modelScale: this.modelScale, // Added persistence
-            layer: this.layer,
-            parallax: this.parallax,
-            ignoreScaling: this.ignoreScaling,
-            animationSpeed: this.animationSpeed,
-            locked: this.locked, // Added Locked Property
-            disabled: this.disabled,
-            customName: this.customName,
-            groupID: this.groupID,
-            components: this.components,
-            interactions: this.interactions,
-
-            // New Visual Properties
-            opacity: this.opacity,
-            blendMode: this.blendMode,
-            blur: this.blur
-        };
+    toJSON(): any {
+        const data = super.toJSON();
+        data.type = 'Entity'; // SceneManager expects 'Entity' or 'Actor' etc.
+        return data;
     }
 
-    load(data: EntityData): void {
+    load(data: any): void {
         this.startLoading();
         try {
-            this.x = data.x;
-            this.y = data.y;
-            this.width = data.width;
-            this.height = data.height;
-            this.name = data.name ? data.name.trim() : 'Entity'; // SceneObject property
-            this.groupID = data.groupID ? data.groupID.trim() : null; // SceneObject property
-
-            this.color = data.color || '#ff0000';
-            this.scale = data.scale || 1.0;
-            if (data.modelScale !== undefined) this.modelScale = data.modelScale;
-
-            console.log(`[Entity.load] '${data.name}' - Init W:${data.width} H:${data.height} Scale:${data.scale} ModelScale:${data.modelScale} Sprite:${data.spriteName}`);
-
-            if (data.baseWidth !== undefined) {
-                this.baseWidth = data.baseWidth;
-            } else {
-                this.baseWidth = this.scale > 0 ? data.width / this.scale : data.width;
+            // Special handling for missing baseWidth/baseHeight in old JSONs
+            if (data.baseWidth === undefined && data.width !== undefined) {
+                const scale = data.scale || 1.0;
+                this.baseWidth = scale > 0 ? data.width / scale : data.width;
+            }
+            if (data.baseHeight === undefined && data.height !== undefined) {
+                const scale = data.scale || 1.0;
+                this.baseHeight = scale > 0 ? data.height / scale : data.height;
             }
 
-            if (data.baseHeight !== undefined) this.baseHeight = data.baseHeight;
-            else this.baseHeight = this.scale > 0 ? data.height / this.scale : data.height;
-
-            if (data.colliderWidth !== undefined) this.colliderWidth = data.colliderWidth;
-            if (data.colliderHeight !== undefined) this.colliderHeight = data.colliderHeight;
-
-            if (data.colliderHeight !== undefined) this.colliderHeight = data.colliderHeight;
-
-            this.layer = data.layer || 0;
-            this.parallax = data.parallax !== undefined ? data.parallax : 1.0;
-            this.ignoreScaling = !!data.ignoreScaling;
-
-            // Restore animationSpeed
-            if (data.animationSpeed !== undefined) {
-                this.animationSpeed = data.animationSpeed;
-            }
-
-            if (data.locked !== undefined) {
-                this.locked = data.locked;
-            }
-
-            if (data.disabled !== undefined) {
-                this.disabled = data.disabled;
-            }
-
-            if (data.visible !== undefined) {
-                this.visible = data.visible;
-            }
-
-            if (data.customName !== undefined) {
-                this.customName = data.customName;
-            }
-
-            if (data.components) {
-                this.components = JSON.parse(JSON.stringify(data.components));
-            }
-
-            if (data.interactions) {
-                this.interactions = JSON.parse(JSON.stringify(data.interactions));
-            }
+            super.load(data);
 
             if (data.spriteName) {
-                // Pass isLoading (true) explicitly, or rely on internal flag
                 this.setSprite(data.spriteName, true);
             }
-
-            // Restore Visual Properties
-            if (data.opacity !== undefined) this.opacity = data.opacity;
-            if (data.blendMode !== undefined) this.blendMode = data.blendMode as GlobalCompositeOperation;
-            if (data.blur !== undefined) this.blur = data.blur;
-
         } finally {
             this.endLoading();
         }

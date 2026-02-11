@@ -20,6 +20,15 @@ export class SceneObject {
     layer: number = 0;
     visible: boolean = true; // Controls rendering only (optimization/culling)
 
+    /**
+     * List of properties to be serialized to/from JSON.
+     * Subclasses should extend this list.
+     */
+    static SERIALIZABLE_PROPS: string[] = [
+        'name', 'type', 'locked', 'disabled', 'groupID',
+        'customName', 'interactions', 'components', 'layer', 'visible'
+    ];
+
     constructor(name: string, type: string) {
         this.name = name.trim();
         this.type = type;
@@ -33,18 +42,38 @@ export class SceneObject {
     }
 
     toJSON(): any {
-        return {
-            type: this.type,
-            name: this.name,
-            locked: this.locked,
-            disabled: this.disabled,
-            layer: this.layer,
-            groupID: this.groupID,
-            customName: this.customName,
-            interactions: this.interactions,
-            components: this.components,
-            visible: this.visible
-        };
+        const json: any = {};
+        const props = (this.constructor as typeof SceneObject).SERIALIZABLE_PROPS || SceneObject.SERIALIZABLE_PROPS;
+
+        props.forEach(prop => {
+            const value = (this as any)[prop];
+            if (value !== undefined) {
+                // Deep clone objects and arrays to prevent reference sharing
+                if (typeof value === 'object' && value !== null) {
+                    json[prop] = JSON.parse(JSON.stringify(value));
+                } else {
+                    json[prop] = value;
+                }
+            }
+        });
+
+        return json;
+    }
+
+    load(data: any): void {
+        const props = (this.constructor as typeof SceneObject).SERIALIZABLE_PROPS || SceneObject.SERIALIZABLE_PROPS;
+
+        props.forEach(prop => {
+            if (data[prop] !== undefined) {
+                const value = data[prop];
+                // Deep clone objects and arrays
+                if (typeof value === 'object' && value !== null) {
+                    (this as any)[prop] = JSON.parse(JSON.stringify(value));
+                } else {
+                    (this as any)[prop] = value;
+                }
+            }
+        });
     }
 
     /**

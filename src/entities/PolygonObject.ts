@@ -4,16 +4,21 @@ import { Geometry } from '../utils/Geometry';
 export class PolygonObject extends SceneObject {
     poly: { x: number, y: number }[];
 
+    /**
+     * List of properties to be serialized to/from JSON.
+     */
+    static override SERIALIZABLE_PROPS: string[] = [
+        ...SceneObject.SERIALIZABLE_PROPS,
+        'poly'
+    ];
+
     constructor(poly: { x: number, y: number }[], name: string, type: string) {
         super(name, type);
         this.poly = poly;
     }
 
     toJSON(): any {
-        return {
-            ...super.toJSON(),
-            poly: this.poly.map(p => ({ ...p }))
-        };
+        return super.toJSON();
     }
 
     hitTest(x: number, y: number): boolean {
