@@ -64,7 +64,7 @@ export class SpriteEditor {
         const newState = force !== undefined ? force : !this.active;
         this.active = newState;
 
-        const parserInput = document.getElementById('parser-input') as HTMLInputElement;
+        const parserInput = this.game.getCommandInput();
 
         if (this.active) {
             console.log('[SpriteEditor] Activated');
@@ -471,13 +471,13 @@ export class SpriteEditor {
             if (response.ok) {
                 console.log(`[SpriteEditor] Saved to server: ${filePath}`);
                 // Use Toast Message instead of Alert
-                this.game.showNotification(`Sprite saved as ${normalizedFilename}`);
+                this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
             } else {
                 throw new Error(await response.text());
             }
         } catch (e) {
             console.error('[SpriteEditor] Failed to save sprite:', e);
-            this.game.showNotification(`Error saving sprite: ${e}`);
+            this.game.showNotification?.(`Error saving sprite: ${e}`);
         }
     }
 

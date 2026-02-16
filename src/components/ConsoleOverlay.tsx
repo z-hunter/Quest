@@ -13,6 +13,7 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
     const [lines, setLines] = useState<ConsoleLine[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // Initial sync
@@ -44,11 +45,10 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
         if (isOpen) {
             // Use a slight delay to ensure UI is rendered/enabled
             setTimeout(() => {
-                const input = document.getElementById('parser-input');
-                if (input) input.focus();
+                game.focusCommandInput();
             }, 10);
         }
-    }, [isOpen]);
+    }, [game, isOpen]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -62,19 +62,16 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
         if (!isOpen) return;
 
         const handleKeys = (e: KeyboardEvent) => {
+            const scrollContainer = scrollRef.current;
+            if (!scrollContainer) return;
+
             if (e.key === 'PageUp') {
                 e.preventDefault();
-                const scrollContainer = document.querySelector('.console-scroll');
-                if (scrollContainer) {
-                    scrollContainer.scrollBy({ top: -300, behavior: 'auto' });
-                }
+                scrollContainer.scrollBy({ top: -300, behavior: 'auto' });
             }
             if (e.key === 'PageDown') {
                 e.preventDefault();
-                const scrollContainer = document.querySelector('.console-scroll');
-                if (scrollContainer) {
-                    scrollContainer.scrollBy({ top: 300, behavior: 'auto' });
-                }
+                scrollContainer.scrollBy({ top: 300, behavior: 'auto' });
             }
         };
 
@@ -102,7 +99,7 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
             overflow: 'hidden',
             pointerEvents: 'auto' // Allow scrolling
         }}>
-            <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '10px' }} className="console-scroll">
+            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', paddingBottom: '10px' }} className="console-scroll">
                 {lines.map((line, i) => (
                     <div key={i} style={{
                         marginBottom: '4px',
@@ -127,7 +124,8 @@ const InputMirror: React.FC<{ game: Game }> = ({ game }) => {
     const [val, setVal] = useState('');
 
     useEffect(() => {
-        const input = document.getElementById('parser-input') as HTMLInputElement;
+        const input = game.getCommandInput();
+        if (!input) return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Enter') {

@@ -7,7 +7,7 @@ import { ScriptRegistry } from '../../core/ScriptRegistry';
  * Applies dynamic "dent" and "bump" distortions to a 6x6 grid of Quads (q1-1 to q6-6).
  * Usage: RUN grid_distortion
  */
-ScriptRegistry.register('grid_distortion', ({ api, args }) => {
+ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
   api.log('Starting Grid Distortion...');
 
   const gridSize = 6;

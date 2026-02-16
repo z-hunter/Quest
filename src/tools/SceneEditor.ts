@@ -76,7 +76,7 @@ export class SceneEditor {
 
     lastCameraPos: { x: number, y: number } = { x: 0, y: 0 };
 
-    update(): void {
+    update(_deltaTime?: number): void {
         // Check for Camera changes to update UI
         if (this.game.sceneManager.currentScene) {
             const cam = this.game.sceneManager.currentScene.camera;
@@ -469,6 +469,31 @@ export class SceneEditor {
         useEditorStore.getState().incrementHierarchyVersion();
     }
 
+    // Compatibility wrappers for React panels and managers.
+    syncSettingsUI(): void {
+        this.syncUI();
+    }
+
+    updateUIFromObject(): void {
+        this.ui.updateUIFromObject();
+    }
+
+    saveObject(): Promise<void> {
+        return this.persistenceManager.saveObject();
+    }
+
+    loadObject(): Promise<void> {
+        return this.persistenceManager.loadObject();
+    }
+
+    saveScene(saveAs: boolean = false): Promise<void> {
+        return this.persistenceManager.saveScene(saveAs);
+    }
+
+    promptLoadScene(): void {
+        this.persistenceManager.promptLoadScene();
+    }
+
 
 
     onMouseDown(e: MouseEvent): void {
@@ -490,81 +515,7 @@ export class SceneEditor {
     }
 
     selectObject(obj: any): void {
-        this.selectedObject = obj;
-
-        // Sync to Store
-        let type: string | null = null;
-        let id: string | null = null;
-
-        if (obj === null || obj === undefined) {
-            // Deselect
-            type = null;
-            id = null;
-        } else if (obj === 'SCENE') {
-            type = 'SCENE';
-            id = 'SCENE';
-        } else if (obj === 'SETTINGS') {
-            type = 'SETTINGS';
-            id = 'SETTINGS';
-        } else if (obj.type === 'Quad') {
-            type = 'Quad';
-            id = obj.name;
-        } else if (obj instanceof Actor) {
-            type = 'Actor';
-            id = obj.name;
-        } else if (obj instanceof Entity) {
-            type = 'Entity'; // Used for generic/static entities
-            id = obj.name;
-        } else if (obj instanceof Walkbox) {
-            type = 'Walkbox';
-            id = obj.name || 'Walkbox';
-        } else if (obj instanceof Triggerbox) {
-            type = 'Triggerbox';
-            id = obj.name || 'Triggerbox';
-        }
-        useEditorStore.getState().selectObject(id, type);
-
-        const sectionSceneProps = document.getElementById('section-scene-props');
-        const sectionEntityProps = document.getElementById('section-entity-props');
-        const sectionWalkboxProps = document.getElementById('section-walkbox-props');
-        const sectionSettingsProps = document.getElementById('section-settings');
-        const propActorGroup = document.getElementById('prop-actor-group');
-
-        // Reset all to hidden first
-        if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
-        if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
-        if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
-        if (sectionSettingsProps) sectionSettingsProps.classList.add('hidden');
-
-        // Visibility Toggles
-        if ((this.selectedObject as any) === 'SCENE') {
-            if (sectionSceneProps) sectionSceneProps.classList.remove('hidden');
-            this.syncUI();
-        } else if ((this.selectedObject as any) === 'SETTINGS') {
-            if (sectionSettingsProps) sectionSettingsProps.classList.remove('hidden');
-            // Settings synced via store/React
-        } else if (obj instanceof SceneObject) {
-            // Unified Logic for all SceneObjects
-            if (obj instanceof Entity) {
-                // Entity Specifics
-                if (sectionEntityProps) sectionEntityProps.classList.remove('hidden');
-
-                if (propActorGroup) {
-                    if (obj instanceof Actor) {
-                        propActorGroup.classList.remove('hidden');
-                    } else {
-                        propActorGroup.classList.add('hidden');
-                    }
-                }
-            } else if (obj instanceof Walkbox || obj instanceof Triggerbox) {
-                // Walkbox/Triggerbox
-                if (sectionWalkboxProps) sectionWalkboxProps.classList.remove('hidden');
-            }
-
-
-        }
-
-        this.refreshHierarchy();
+        this.selectionManager.selectObject(obj);
     }
 
 
@@ -852,41 +803,6 @@ export class SceneEditor {
         if (scene && scene.camera) {
             camX = scene.camera.x;
             camY = scene.camera.y;
-        }
-
-        // Sync UI if Scene is selected (so coordinates update during auto-center)
-        if (scene && (this.selectedObject as any) === 'SCENE') {
-            const cx = document.getElementById('cam-x') as HTMLInputElement;
-            const cy = document.getElementById('cam-y') as HTMLInputElement;
-            const cz = document.getElementById('cam-zoom') as HTMLInputElement;
-            const ac = document.getElementById('cam-auto-center') as HTMLInputElement;
-            const cs = document.getElementById('cam-speed') as HTMLInputElement;
-
-            const dx = document.getElementById('def-cam-x') as HTMLInputElement;
-            const dy = document.getElementById('def-cam-y') as HTMLInputElement;
-            const dz = document.getElementById('def-cam-zoom') as HTMLInputElement;
-
-            // Always update runtime X/Y if auto-center is ON override inputs
-            if (scene.autoCenter) {
-                if (cx) cx.value = Math.round(camX).toString();
-                if (cy) cy.value = Math.round(camY).toString();
-            } else {
-                // If auto-center is OFF, only update if not focused (allowing edit)
-                if (cx && document.activeElement !== cx) cx.value = Math.round(camX).toString();
-                if (cy && document.activeElement !== cy) cy.value = Math.round(camY).toString();
-            }
-
-            // Sync Zoom and AutoCenter checkbox
-            if (cz && document.activeElement !== cz) cz.value = (scene.camera.zoom || 1.0).toFixed(2);
-            if (ac) ac.checked = scene.autoCenter !== false;
-            if (cs && document.activeElement !== cs) cs.value = (scene.cameraSpeed || 5.0).toString();
-
-            // Sync Default Camera Settings
-            if (scene.defaultCamera) {
-                if (dx && document.activeElement !== dx) dx.value = Math.round(scene.defaultCamera.x).toString();
-                if (dy && document.activeElement !== dy) dy.value = Math.round(scene.defaultCamera.y).toString();
-                if (dz && document.activeElement !== dz) dz.value = (scene.defaultCamera.zoom || 1.0).toFixed(2);
-            }
         }
 
         const halfW = this.game.canvas.width / 2;

@@ -4,8 +4,11 @@ import { QuadObject } from '../entities/QuadObject';
 export class ScriptAPI {
   private intervals: number[] = [];
   private timeouts: number[] = [];
+  private game: IGame;
 
-  constructor(private game: IGame) { }
+  constructor(game: IGame) {
+    this.game = game;
+  }
 
   log(message: string) {
     this.game.log(message);

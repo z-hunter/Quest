@@ -46,7 +46,7 @@ import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
 
-    static update(entity: SceneObject, dt: number) {
+    static update(entity: any, _dt: number) {
         if (!entity.components) return;
 
         for (const comp of entity.components) {

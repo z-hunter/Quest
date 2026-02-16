@@ -20,9 +20,9 @@ export const EditorBottomMenu: React.FC = () => {
 
         switch (action) {
             case 'F1': toggle(false); break; // Close Editor
-            case 'F2': editor.persistenceManager.saveScene(false); break;
-            case 'ShiftF2': editor.persistenceManager.saveScene(true); break;
-            case 'F3': editor.persistenceManager.promptLoadScene(); break;
+            case 'F2': editor.saveScene(false); break;
+            case 'ShiftF2': editor.saveScene(true); break;
+            case 'F3': editor.promptLoadScene(); break;
             case 'F4': editor.newScene(); break;
             case 'F5': toggleSpriteEditor(true); break;
             case 'F9': editor.selectObject('SETTINGS'); break;

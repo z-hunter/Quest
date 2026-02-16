@@ -20,6 +20,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
     // Console State for Input Unlocking
     const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+    const parserInputRef = React.useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (game) {
@@ -38,6 +39,12 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
 
         }
+    }, [game]);
+
+    useEffect(() => {
+        if (!game) return;
+        game.setCommandInput(parserInputRef.current);
+        return () => game.setCommandInput(null);
     }, [game]);
 
     // Separate effect for console subscription to handle cleanup properly
@@ -73,6 +80,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     <input
                         type="text"
                         id="parser-input"
+                        ref={parserInputRef}
                         autoComplete="off"
                         autoFocus={!editorEnabled || isConsoleOpen}
                         disabled={editorEnabled && !isConsoleOpen}

@@ -1,6 +1,5 @@
 import { Entity } from '../../entities/Entity';
 import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
-import { SceneObject } from '../../entities/SceneObject';
 
 export class EditorSnappingSystem {
 

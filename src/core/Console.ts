@@ -29,8 +29,10 @@ export class Console {
 
     // Listeners
     private listeners: Set<() => void> = new Set();
+    private game: any;
 
-    constructor(private game: any) { // Inject Game
+    constructor(game: any) { // Inject Game
+        this.game = game;
         console.log('[Console] Constructor called. Game instance present:', !!game);
         this.registerDefaultCommands();
     }

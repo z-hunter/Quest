@@ -48,47 +48,7 @@ export class EditorSelectionManager {
             id = obj.name || 'Triggerbox';
         }
         useEditorStore.getState().selectObject(id, type);
-
-        const sectionSceneProps = document.getElementById('section-scene-props');
-        const sectionEntityProps = document.getElementById('section-entity-props');
-        const sectionWalkboxProps = document.getElementById('section-walkbox-props');
-        const sectionSettingsProps = document.getElementById('section-settings');
-        const propActorGroup = document.getElementById('prop-actor-group');
-
-        // Reset all to hidden first
-        if (sectionSceneProps) sectionSceneProps.classList.add('hidden');
-        if (sectionEntityProps) sectionEntityProps.classList.add('hidden');
-        if (sectionWalkboxProps) sectionWalkboxProps.classList.add('hidden');
-        if (sectionSettingsProps) sectionSettingsProps.classList.add('hidden');
-
-        // Visibility Toggles
-        if ((this.editor.selectedObject as any) === 'SCENE') {
-            if (sectionSceneProps) sectionSceneProps.classList.remove('hidden');
-            this.editor.syncUI();
-        } else if ((this.editor.selectedObject as any) === 'SETTINGS') {
-            if (sectionSettingsProps) sectionSettingsProps.classList.remove('hidden');
-            this.editor.syncSettingsUI();
-        } else if (obj instanceof SceneObject) {
-            // Unified Logic for all SceneObjects
-            if (obj instanceof Entity) {
-                // Entity Specifics
-                if (sectionEntityProps) sectionEntityProps.classList.remove('hidden');
-
-                if (propActorGroup) {
-                    if (obj instanceof Actor) {
-                        propActorGroup.classList.remove('hidden');
-                    } else {
-                        propActorGroup.classList.add('hidden');
-                    }
-                }
-            } else if (obj instanceof Walkbox || obj instanceof Triggerbox) {
-                // Walkbox/Triggerbox
-                if (sectionWalkboxProps) sectionWalkboxProps.classList.remove('hidden');
-            }
-
-            this.editor.updateUIFromObject();
-        }
-
+        this.editor.updateUIFromObject();
         this.editor.refreshHierarchy();
     }
 

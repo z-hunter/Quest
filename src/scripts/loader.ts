@@ -1,5 +1,3 @@
-import { ScriptRegistry } from '../core/ScriptRegistry';
-
 /**
  * Auto-loads all scripts in the current directory and subdirectories.
  * Uses Vite's import.meta.glob feature.
@@ -13,8 +11,6 @@ export function loadAllScripts() {
   for (const path in modules) {
     // Skip this loader file and main.ts if they are in the glob result (they shouldn't be if in subdirs, but safety first)
     if (path.includes('loader.ts') || path.includes('main.ts')) continue;
-
-    const mod = modules[path] as any;
 
     // Auto-register if the module exports an 'id' and a default function
     // OR if it calls ScriptRegistry.register itself (controlled by the script).

@@ -19,8 +19,8 @@ export class EditorUI {
 
         console.log('[SceneEditor] Initializing UI...');
 
-        // Cache DOM Elements
-        this.elParserInput = document.getElementById('parser-input') as HTMLInputElement;
+        // Cache command input provided by UI layer
+        this.elParserInput = this.editor.game.getCommandInput();
 
         this.setupListeners();
 

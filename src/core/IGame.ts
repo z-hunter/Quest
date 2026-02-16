@@ -17,6 +17,9 @@ export interface IGame {
     onSceneChange?(sceneName: string): void;
     playSound(name: string): void;
     openFileBrowser(mode: 'load' | 'save', dir: string, callback: (file: string) => void, extension?: string): void;
+    setCommandInput(input: HTMLInputElement | null): void;
+    getCommandInput(): HTMLInputElement | null;
+    focusCommandInput(): void;
 
     // Core property access needed by entities/systems
     input: any;

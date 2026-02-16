@@ -299,7 +299,19 @@ export class Game implements IGame {
         }
     }
 
-    consoleInput: HTMLInputElement | null = null; // Cache DOM element
+    consoleInput: HTMLInputElement | null = null; // Command input provided by UI layer
+
+    setCommandInput(input: HTMLInputElement | null): void {
+        this.consoleInput = input;
+    }
+
+    getCommandInput(): HTMLInputElement | null {
+        return this.consoleInput;
+    }
+
+    focusCommandInput(): void {
+        this.consoleInput?.focus();
+    }
 
     renderUI(ctx: CanvasRenderingContext2D): void {
         const w = this.bufferCanvas.width;
@@ -346,11 +358,6 @@ export class Game implements IGame {
         }
 
         // --- INPUT LINE ---
-        // Read Input from Hidden DOM Element
-        if (!this.consoleInput) {
-            this.consoleInput = document.getElementById('parser-input') as HTMLInputElement;
-        }
-
         const inputText = this.consoleInput ? this.consoleInput.value : '';
         const isFocused = document.activeElement === this.consoleInput;
 
@@ -374,11 +381,9 @@ export class Game implements IGame {
     onMouseClick(x: number, y: number): void {
         console.log(`[Game] onMouseClick: ${x}, ${y}`);
 
-        const input = document.getElementById('parser-input');
-
         // Only focus parser if editor is NOT enabled
-        if (input && !this.editor.enabled) {
-            input.focus();
+        if (!this.editor.enabled) {
+            this.focusCommandInput();
         }
 
         // If editor consumes the click, don't pass to game

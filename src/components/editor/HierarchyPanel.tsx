@@ -17,18 +17,10 @@ export const HierarchyPanel: React.FC = () => {
         game.editor.startCreating(type);
     };
 
-    const handleDelete = () => {
-        game.editor.deleteSelectedObject();
-    };
-
     const scene = game?.sceneManager?.currentScene;
-
-
-    if (!scene) return <div className="p-2 text-gray-500">No Scene</div>;
-
-    const entities = scene.entities || [];
-    const walkboxes = scene.walkbox || [];
-    const triggers = scene.triggerboxes || [];
+    const entities = scene?.entities || [];
+    const walkboxes = scene?.walkbox || [];
+    const triggers = scene?.triggerboxes || [];
 
     // Helper to resolve display ID for an item, matching how it's identified in the UI
     const getDisplayId = (item: any): string => {
@@ -131,15 +123,7 @@ export const HierarchyPanel: React.FC = () => {
         scene.camera.x = targetX;
         scene.camera.y = targetY;
         scene.autoCenter = false; // Disable auto-follow
-
-        // Update UI inputs manually since they are not reactive
-        const autoCenterChk = document.getElementById('cam-auto-center') as HTMLInputElement;
-        if (autoCenterChk) autoCenterChk.checked = false;
-
-        const cx = document.getElementById('cam-x') as HTMLInputElement;
-        const cy = document.getElementById('cam-y') as HTMLInputElement;
-        if (cx) cx.value = Math.round(targetX).toString();
-        if (cy) cy.value = Math.round(targetY).toString();
+        useEditorStore.getState().incrementObjectVersion();
     };
 
     // Normalize helper for consistent ID comparison
@@ -150,6 +134,8 @@ export const HierarchyPanel: React.FC = () => {
     };
 
     const uiScale = game?.settings?.editor?.uiScale || 1.0;
+
+    if (!scene) return <div className="p-2 text-gray-500">No Scene</div>;
 
     return (
 
