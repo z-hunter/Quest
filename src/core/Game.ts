@@ -140,10 +140,6 @@ export class Game implements IGame {
         this.editor = new SceneEditor(this);
         this.spriteEditor = new SpriteEditor(this);
 
-        // Expose game instance globally for legacy compatibility (Entity.ts uses it)
-        // @ts-ignore
-        window.game = this;
-
         this.sceneManager.loadScene('test_room.json');
 
         // Register default scripts

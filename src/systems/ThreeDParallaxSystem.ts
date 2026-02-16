@@ -1,6 +1,8 @@
 import { Actor } from '../entities/Actor';
 import { QuadObject } from '../entities/QuadObject';
 import type { ShadowComponent } from './ShadowSystem';
+import type { SceneSystemContext } from './types';
+import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
 
 export interface ThreeDParallaxComponent {
     type: '3d-parallax';
@@ -9,18 +11,14 @@ export interface ThreeDParallaxComponent {
 export class ThreeDParallaxSystem {
 
     static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
-        // @ts-ignore
-        const scene = quad.scene;
+        const scene = quad.scene as SceneSystemContext | null;
         if (!scene || !scene.entities) return;
 
         // Iterate over all Actors in the scene
-        // @ts-ignore
-        const actors = scene.entities.filter((e: any) => e.type === 'Actor' || e.type === 'Player') as Actor[];
+        const actors = scene.entities.filter((e) => e.type === 'Actor' || e.type === 'Player') as Actor[];
 
-        // @ts-ignore
-        const camX = scene.camera ? scene.camera.x : 0;
-        // @ts-ignore
-        const camY = scene.camera ? scene.camera.y : 0;
+        const camX = scene.camera.x;
+        const camY = scene.camera.y;
 
         for (const actor of actors) {
             // Constraint: Only update if moving? No, update always to handle Editor dragging / Teleport / Idle on moving platform
@@ -29,11 +27,9 @@ export class ThreeDParallaxSystem {
             // Check if Actor is ON this Quad
             // Use Visual Position for hitTest
             const pFactor = actor.parallax !== undefined ? actor.parallax : 1.0;
-            const shiftX = -camX * (pFactor - 1.0);
-            const shiftY = -camY * (pFactor - 1.0);
-
-            const checkX = actor.x + shiftX;
-            const checkY = actor.y + shiftY;
+            const actorVisual = toVisualPosition({ x: actor.x, y: actor.y }, { x: camX, y: camY }, pFactor);
+            const checkX = actorVisual.x;
+            const checkY = actorVisual.y;
 
             if (quad.hitTest(checkX, checkY)) {
                 // Calculate new Parallax using centralized Barycentric Interpolation
@@ -52,11 +48,9 @@ export class ThreeDParallaxSystem {
                 // Update Actor World Position to maintain Visual Position
                 // Wy = Vy + Cy * (P - 1)
                 // Wx = Vx + Cx * (P - 1)
-                const newWorldX = checkX + camX * (newP - 1.0);
-                const newWorldY = checkY + camY * (newP - 1.0);
-
-                actor.x = newWorldX;
-                actor.y = newWorldY;
+                const newWorld = toWorldPosition({ x: checkX, y: checkY }, { x: camX, y: camY }, newP);
+                actor.x = newWorld.x;
+                actor.y = newWorld.y;
             }
 
             // --- Shadow Logic ---
@@ -65,17 +59,16 @@ export class ThreeDParallaxSystem {
             if (actor.components) {
                 const shadowComp = actor.components.find(c => c.type === 'Shadow') as ShadowComponent | undefined;
                 if (shadowComp && shadowComp.shadowQuadId) {
-                    // Find Shadow Quad
-                    // @ts-ignore
-                    const shadowQuad = scene.findEntity ? scene.findEntity(shadowComp.shadowQuadId) : scene.entities.find((e: any) => e.name === shadowComp.shadowQuadId);
+                    const shadowQuad = scene.findEntity(shadowComp.shadowQuadId) as QuadObject | undefined;
 
                     if (shadowQuad && shadowQuad.type === 'Quad') {
                         // Iterate Vertices of the Shadow
                         for (const sv of shadowQuad.vertices) {
                             // Calculate Visual Pos of Shadow Vertex
                             const svP = sv.p !== undefined ? sv.p : 1.0;
-                            const svVisX = sv.x - camX * (svP - 1.0);
-                            const svVisY = sv.y - camY * (svP - 1.0);
+                            const shadowVisual = toVisualPosition({ x: sv.x, y: sv.y }, { x: camX, y: camY }, svP);
+                            const svVisX = shadowVisual.x;
+                            const svVisY = shadowVisual.y;
 
                             // Hit Test against the Parallax Floor (quad) using Visual Coordinates
                             if (quad.hitTest(svVisX, svVisY)) {
@@ -90,8 +83,9 @@ export class ThreeDParallaxSystem {
                                     // Apply Correction
                                     sv.p = newP;
                                     // Fix World Position to keep Visual Position constant
-                                    sv.x = svVisX + camX * (newP - 1.0);
-                                    sv.y = svVisY + camY * (newP - 1.0);
+                                    const newWorld = toWorldPosition({ x: svVisX, y: svVisY }, { x: camX, y: camY }, newP);
+                                    sv.x = newWorld.x;
+                                    sv.y = newWorld.y;
                                 }
                             }
                         }

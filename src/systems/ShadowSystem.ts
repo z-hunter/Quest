@@ -1,5 +1,7 @@
 import { Actor } from '../entities/Actor';
 import { QuadObject } from '../entities/QuadObject';
+import type { SceneSystemContext } from './types';
+import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
 
 export interface ShadowComponent {
     type: 'Shadow';
@@ -17,21 +19,17 @@ export class ShadowSystem {
     private static shadowCache = new Map<string, { lastScale: number }>();
 
     static update(actor: Actor, shadow: ShadowComponent) {
-        // @ts-ignore
-        const scene = actor.scene;
+        const scene = actor.scene as SceneSystemContext | null;
         if (!scene) return;
 
         if (!shadow.shadowQuadId || !shadow.triggerId) return;
 
         // 1. Resolve Targets (Triggers)
-        // @ts-ignore
-        const targets = scene.resolveTarget ? scene.resolveTarget(shadow.triggerId) : [];
+        const targets = scene.resolveTarget(shadow.triggerId);
 
         // 2. Check if Actor Center is inside any target (Visual/Parallax Corrected)
-        // @ts-ignore
-        const camX = scene.camera ? scene.camera.x : 0;
-        // @ts-ignore
-        const camY = scene.camera ? scene.camera.y : 0;
+        const camX = scene.camera.x;
+        const camY = scene.camera.y;
 
         // Actor Base World Pos
         const ax = actor.x;
@@ -39,14 +37,9 @@ export class ShadowSystem {
 
         // Actor Visual Pos (Shifted by its Parallax)
         const pFactor = actor.parallax !== undefined ? actor.parallax : 1.0;
-        const shiftX = -camX * (pFactor - 1.0);
-        const shiftY = -camY * (pFactor - 1.0);
-
-        const vOx = 0;
-        const vOy = 0;
-
-        const checkX = ax + shiftX + vOx;
-        const checkY = ay + shiftY + vOy;
+        const actorVisual = toVisualPosition({ x: ax, y: ay }, { x: camX, y: camY }, pFactor);
+        const checkX = actorVisual.x;
+        const checkY = actorVisual.y;
 
         let inside = false;
 
@@ -63,18 +56,10 @@ export class ShadowSystem {
         // 3. Find Shadow Quad
         let qObj: QuadObject | undefined;
 
-        // @ts-ignore
-        if (scene.findEntity) {
-            // @ts-ignore
-            qObj = scene.findEntity(shadow.shadowQuadId) as QuadObject;
-        }
+        qObj = scene.findEntity(shadow.shadowQuadId) as QuadObject | undefined;
 
         if (!qObj) {
-            // @ts-ignore
-            if (scene.entities) {
-                // @ts-ignore
-                qObj = scene.entities.find((e: any) => e.name.toLowerCase() === shadow.shadowQuadId.toLowerCase());
-            }
+            qObj = scene.entities.find(e => e.name.toLowerCase() === shadow.shadowQuadId.toLowerCase()) as QuadObject | undefined;
         }
 
         if (qObj && qObj.type === 'Quad') {
@@ -88,12 +73,9 @@ export class ShadowSystem {
 
                 // Check Editing State
                 let isEdited = false;
-                // @ts-ignore
                 if (scene.game && scene.game.editor && scene.game.editor.enabled) {
-                    // @ts-ignore
                     const editor = scene.game.editor;
-                    // @ts-ignore
-                    if ((editor.selectedObject === qObj || qObj.selected) && editor.transformManager && editor.transformManager.isDragging) {
+                    if ((editor.selectedObject === qObj || (qObj as any).selected) && editor.transformManager && editor.transformManager.isDragging) {
                         isEdited = true;
                     }
                 }
@@ -117,30 +99,27 @@ export class ShadowSystem {
                 } | undefined;
 
                 // Check Editing State/Cache Validity
-                // @ts-ignore
-                const isSelected = qObj.selected || (scene.game && scene.game.editor && scene.game.editor.selectedObject === qObj);
+                const isSelected = (qObj as any).selected || (scene.game && scene.game.editor && scene.game.editor.selectedObject === qObj);
 
                 // If no cache, or selected (potentially edited), regenerate cache
                 if (!cache || isSelected) {
                     // Capture Base Shape (Visual Offsets from V0)
                     const v0 = qObj.vertices[0];
                     const v0p = v0.p !== undefined ? v0.p : 1.0;
-                    const v0VisX = v0.x - camX * (v0p - 1.0);
-                    const v0VisY = v0.y - camY * (v0p - 1.0);
+                    const v0Visual = toVisualPosition({ x: v0.x, y: v0.y }, { x: camX, y: camY }, v0p);
 
                     const offsets = [];
                     for (let i = 1; i < qObj.vertices.length; i++) {
                         const v = qObj.vertices[i];
                         const vp = v.p !== undefined ? v.p : 1.0;
-                        const visX = v.x - camX * (vp - 1.0);
-                        const visY = v.y - camY * (vp - 1.0);
+                        const visual = toVisualPosition({ x: v.x, y: v.y }, { x: camX, y: camY }, vp);
 
                         // Store Normalized Offset (descale by current scale)
                         // So BaseOffset represents "Scale 1.0" shape
                         const factor = currentScale !== 0 ? 1.0 / currentScale : 1.0;
                         offsets.push({
-                            x: (visX - v0VisX) * factor,
-                            y: (visY - v0VisY) * factor
+                            x: (visual.x - v0Visual.x) * factor,
+                            y: (visual.y - v0Visual.y) * factor
                         });
                     }
 
@@ -155,20 +134,20 @@ export class ShadowSystem {
                 }
 
                 // 2. Calculate BASE V0 Visual Position (Target)
-                const actorVisX = actor.x - camX * (pFactor - 1.0);
-                const actorVisY = actor.y - camY * (pFactor - 1.0);
+                const actorVisualPos = toVisualPosition({ x: actor.x, y: actor.y }, { x: camX, y: camY }, pFactor);
 
                 const scaledOffsetX = (shadow.offsetX || 0) * currentScale;
                 const scaledOffsetY = (shadow.offsetY || 0) * currentScale;
 
-                const targetVisX = actorVisX + scaledOffsetX;
-                const targetVisY = actorVisY + scaledOffsetY;
+                const targetVisX = actorVisualPos.x + scaledOffsetX;
+                const targetVisY = actorVisualPos.y + scaledOffsetY;
 
                 // 3. Position V0 (World)
                 // Use current V0 P
                 const v0p = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
-                qObj.vertices[0].x = targetVisX + camX * (v0p - 1.0);
-                qObj.vertices[0].y = targetVisY + camY * (v0p - 1.0);
+                const targetWorldV0 = toWorldPosition({ x: targetVisX, y: targetVisY }, { x: camX, y: camY }, v0p);
+                qObj.vertices[0].x = targetWorldV0.x;
+                qObj.vertices[0].y = targetWorldV0.y;
 
                 // 4. Position V1..V3 using CACHED OFFSETS
                 for (let i = 0; i < cache.baseOffsets.length; i++) {
@@ -186,8 +165,9 @@ export class ShadowSystem {
                     const newVisX = targetVisX + newOffX;
                     const newVisY = targetVisY + newOffY;
 
-                    v.x = newVisX + camX * (vp - 1.0);
-                    v.y = newVisY + camY * (vp - 1.0);
+                    const worldPos = toWorldPosition({ x: newVisX, y: newVisY }, { x: camX, y: camY }, vp);
+                    v.x = worldPos.x;
+                    v.y = worldPos.y;
                 }
 
                 // Update Entity Pos

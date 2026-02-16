@@ -2,6 +2,7 @@
 import type { IGame } from '../core/IGame';
 import { useEditorStore } from '../store/editorStore';
 import { Theme } from '../utils/Theme';
+import { Game } from '../core/Game';
 
 export interface SpriteData {
     id: string; // Filename without extension
@@ -106,7 +107,7 @@ export class SpriteEditor {
     handleKey(e: KeyboardEvent): void {
         // HMR/Reload Protection:
         // If this editor belongs to an old Game instance (zombie), kill the listener.
-        const globalGame = (window as any).game;
+        const globalGame = Game.instance;
         if (globalGame && this.game !== globalGame) {
             console.warn('[SpriteEditor] Detected Zombie Instance - Removing Listener');
             document.removeEventListener('keydown', this.boundKeyHandler, true);

@@ -8,6 +8,10 @@ import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
 import { SceneRenderer } from '../graphics/SceneRenderer';
 import type { IGame } from '../core/IGame';
+import { toVisualPosition } from '../utils/Parallax';
+import { updateSceneCamera } from './SceneCamera';
+import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
+import { handleSceneClick, activateSceneObject } from './SceneInteraction';
 
 export interface SceneScaling {
     enabled: boolean;
@@ -80,88 +84,13 @@ export class Scene {
 
     // Unified Target Resolution (Groups & Objects)
     resolveTarget(targetStr: string): SceneObject[] {
-        if (!targetStr) return [];
-
-        const targets = new Set<SceneObject>();
-        const tokens = targetStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
-
-        tokens.forEach(token => {
-            if (token.startsWith('#')) {
-                // Group Target
-                // Match: Object's groupID contains this token
-                // NOTE: Object's groupID is now a CSV string.
-                this.entities.forEach(e => {
-                    if (e.groupID) {
-                        const groups = e.groupID.split(',').map(g => g.trim());
-                        if (groups.includes(token)) targets.add(e);
-                    }
-                });
-                if (this.triggerboxes) {
-                    this.triggerboxes.forEach(t => {
-                        if (t.groupID) {
-                            const groups = t.groupID.split(',').map(g => g.trim());
-                            if (groups.includes(token)) targets.add(t);
-                        }
-                    });
-                }
-            } else {
-                // Individual Object Target
-                const obj = this.findEntity(token);
-                if (obj) targets.add(obj);
-
-                // Also check Triggerboxes by name
-                if (this.triggerboxes) {
-                    const tb = this.triggerboxes.find(t => t.name === token);
-                    if (tb) targets.add(tb);
-                }
-            }
-        });
-
-        return Array.from(targets);
+        return resolveSceneTargets(this, targetStr);
     }
 
     set activeSubscene(value: string | null) {
         // If changing from a valid subscene to something else (or null), perform cleanup
         if (this._activeSubscene && this._activeSubscene !== value) {
-            console.log(`[Scene] Closing Subscene: '${this._activeSubscene}' -> '${value}'`);
-
-            // 1. Reset Switches (Robust Scan)
-            // We scan ALL triggers because any switch could have been part of the "State" of this subscene
-            // Resolving *state* is tricky with mixed targets. 
-            // Assumption: If a Switch was activated by this subscene, it should probably reset? 
-            // OR: We only reset switches that are *literally* in the group?
-            // Existing logic: "Scan ALL triggers for Switches belonging to this subscene"
-            // With mixed targets, "belonging" is fuzzy.
-            // Let's stick to: If a switch is IN the closing group (via resolveTarget), reset it?
-            // Actually, the previous logic scanned triggers to see if their groupID matched the subscene.
-
-            const closingTargets = this.resolveTarget(this._activeSubscene);
-
-            // Check for switches within the closing targets
-            closingTargets.forEach(obj => {
-                if (obj.components) {
-                    for (const comp of obj.components) {
-                        if (comp.type === 'Switch') {
-                            const sw = comp as any;
-                            // @ts-ignore
-                            if (sw.state == 2) {
-                                console.log(`  -> [AutoReset] Resetting Switch in '${obj.name}' to State 1`);
-                                sw.state = 1;
-                                if (sw.sound1) {
-                                    this.game.playSound(sw.sound1);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // 2. Disable All Tracked Entities
-            console.log(`  -> Disabling ${this.subsceneEntities.size} subscene entities.`);
-            this.subsceneEntities.forEach(e => {
-                e.disabled = true;
-            });
-            this.subsceneEntities.clear();
+            cleanupClosingSubscene(this, this._activeSubscene);
         }
 
         this._activeSubscene = value;
@@ -257,23 +186,11 @@ export class Scene {
             const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
             const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
             const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
-
-            // Source is currently at 'x, y' proposed world pos.
-            // Effective Visual X = ProposedWorldX - CamX * (P - 1) + vOx
-            let sEffX = x;
-            let sEffY = y;
-
-            if (sp !== 1.0 && this.camera) {
-                sEffX = x - this.camera.x * (sp - 1.0) + svOx;
-                sEffY = y - this.camera.y * (sp - 1.0) + svOy;
-            } else {
-                sEffX = x + svOx;
-                sEffY = y + svOy;
-            }
+            const sourceVisual = toVisualPosition({ x, y }, this.camera, sp, { x: svOx, y: svOy });
 
             sourceRect = {
-                x: sEffX - sourceEntity.colliderWidth / 2,
-                y: sEffY - sourceEntity.colliderHeight,
+                x: sourceVisual.x - sourceEntity.colliderWidth / 2,
+                y: sourceVisual.y - sourceEntity.colliderHeight,
                 w: sourceEntity.colliderWidth,
                 h: sourceEntity.colliderHeight
             };
@@ -285,28 +202,14 @@ export class Scene {
                 if (other.disabled) continue; // Skip disabled
                 if (other.colliderWidth === 0 || other.colliderHeight === 0) continue; // Skip ghosts
 
-                const p = other.parallax !== undefined ? other.parallax : 1.0;
-
-                // Effective Collision Position (Visual Position)
-                // If P != 1, the object is visually shifted by -Cam * (P - 1)
-                // We collide with what we see.
-                let effX = other.x;
-                let effY = other.y;
-
                 const vOx = (other as any).visualOffset ? (other as any).visualOffset.x : 0;
                 const vOy = (other as any).visualOffset ? (other as any).visualOffset.y : 0;
-
-                if (p !== 1.0 && this.camera) {
-                    effX = other.x - this.camera.x * (p - 1.0) + vOx;
-                    effY = other.y - this.camera.y * (p - 1.0) + vOy;
-                } else {
-                    effX = other.x + vOx;
-                    effY = other.y + vOy;
-                }
+                const p = other.parallax !== undefined ? other.parallax : 1.0;
+                const otherVisual = toVisualPosition({ x: other.x, y: other.y }, this.camera, p, { x: vOx, y: vOy });
 
                 const otherRect = {
-                    x: effX - other.colliderWidth / 2,
-                    y: effY - other.colliderHeight,
+                    x: otherVisual.x - other.colliderWidth / 2,
+                    y: otherVisual.y - other.colliderHeight,
                     w: other.colliderWidth,
                     h: other.colliderHeight
                 };
@@ -532,159 +435,31 @@ export class Scene {
     }
 
     onClick(x: number, y: number): void {
-        const screenW = 420;
-        const screenH = 300;
-        const halfW = screenW / 2;
-        const halfH = screenH / 2;
-        const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
-        const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
-
-        console.log(`[Scene] onClick World: ${worldX.toFixed(1)}, ${worldY.toFixed(1)} ActiveSubscene: '${this.activeSubscene}'`);
-
-        const hitObj = this.getHitObject(worldX, worldY);
-
-        if (hitObj) {
-            console.log(`[Scene] Hit Interactive Object: ${hitObj.name}`);
-
-            // Check if it's a WalkBox (Movement Command, not Interaction)
-            const isWalkBox = hitObj.components && hitObj.components.some(c => c.type === 'WalkBox');
-            // If it has OTHER interactive components (Switch, Subscene), they take precedence over WalkBox
-            const isMechanism = hitObj.components && hitObj.components.some(c => ['Switch', 'Subscene', 'Subtrigger'].includes(c.type));
-            const hasScript = (hitObj instanceof Triggerbox) && (hitObj.script && hitObj.script.length > 0);
-
-            if (isWalkBox && !isMechanism && !hasScript) {
-                // It's just a floor/walkbox. Treat as movement content.
-                console.log(`  -> Object is WalkBox. Proceeding to WalkTo.`);
-                // Fallthrough to movement logic below
-            } else {
-                this.activateObject(hitObj);
-                return; // Consume Click
-            }
-        }
-
-        // 4. Subscene Logic (If NO trigger/entity hit)
-        if (this.activeSubscene) {
-            // Check if we hit specific subscene entities to keep open?
-            // The logic from previous impl:
-            let clickedSubsceneObj = false;
-            for (const obj of this.subsceneEntities) {
-                if (obj.hitTest(worldX, worldY)) {
-                    clickedSubsceneObj = true;
-                    break;
-                }
-            }
-
-            if (clickedSubsceneObj) {
-                console.log(`[Subscene] Clicked on passive object (Keep Open)`);
-                return;
-            }
-
-            console.log("  -> Clicked outside Subscene triggers/entities. Closing.");
-            this.activeSubscene = null;
-            return;
-        }
-
-        if (this.player) {
-            // @ts-ignore
-            if (typeof this.player.walkTo === 'function') {
-                // @ts-ignore
-                this.player.walkTo(worldX, worldY);
-            } else if (typeof this.player.moveTo === 'function') {
-                // @ts-ignore
-                this.player.moveTo(worldX, worldY);
-            }
-        } else {
-            console.log("Cannot walk there!");
-        }
+        handleSceneClick(this, x, y);
     }
 
     activateObject(obj: SceneObject, depth: number = 0): void {
-        if (depth > 5) {
-            console.warn("[Scene] Recursion limit reached.");
-            return;
-        }
-
-        console.log(`[Scene] Activating Object: ${obj.name} (${obj.type})`);
-
-        // Delegate Component Logic to System
-        // Store depth on scene for ComponentSystem to access during recursion (Subtrigger)
-        (this as any)._depth = depth;
-
-        if (ComponentSystem.handleActivation(obj, this)) {
-            return;
-        }
-
-        // Legacy Script check (Triggerbox specific usually)
-        if (obj instanceof Triggerbox && obj.script) {
-            console.log("Run Script:", obj.script);
-            // Implement script running here if needed
-        }
-
-        return;
+        activateSceneObject(this, obj, depth);
     }
 
     update(deltaTime: number): void {
         // Run Component System Logic (Shadows, Parallax, etc.)
         ComponentSystem.update(this, deltaTime);
 
-        // Update Camera
-        // 0. Update Camera Auto-Center Target
-        if (this.player && this.autoCenter) {
-
-            // 1. Calculate Player Center
-
-            // 1. Calculate Player Center
-            // Entity Coords: x = Center X, y = Bottom Y (Feet)
-            const pHeight = this.player.height || 0;
-            const playerCenterX = this.player.x;
-            const playerCenterY = this.player.y - pHeight / 2;
-
-            // 2. Deadzone Logic (Hysteresis / Catch-up)
-            // If outside deadzone, START centering (target = player).
-            // Stop centering only when very close to player.
-
-            let targetX = this.camera.x;
-            let targetY = this.camera.y;
-
-            const dx = playerCenterX - this.camera.x;
-            const dy = playerCenterY - this.camera.y;
-
-            // X Axis
-            if (Math.abs(dx) > this.camDeadzoneX) this._isCenteringX = true;
-            if (this._isCenteringX) {
-                targetX = playerCenterX;
-                if (Math.abs(dx) < 2) this._isCenteringX = false;
-            }
-
-            // Y Axis
-            if (Math.abs(dy) > this.camDeadzoneY) this._isCenteringY = true;
-            if (this._isCenteringY) {
-                targetY = playerCenterY;
-                if (Math.abs(dy) < 2) this._isCenteringY = false;
-            }
-
-            // 3. Clamping (Level Bounds)
-            if (this.camMinX !== undefined) targetX = Math.max(this.camMinX, targetX);
-            if (this.camMaxX !== undefined) targetX = Math.min(this.camMaxX, targetX);
-            if (this.camMinY !== undefined) targetY = Math.max(this.camMinY, targetY);
-            if (this.camMaxY !== undefined) targetY = Math.min(this.camMaxY, targetY);
-
-            // 4. Smooth Lerp to Target
-            const dt = deltaTime / 1000;
-            const speed = this.cameraSpeed || 5.0;
-
-            if (Math.abs(targetX - this.camera.x) < 0.5) this.camera.x = targetX;
-            else this.camera.x += (targetX - this.camera.x) * speed * dt;
-
-            if (Math.abs(targetY - this.camera.y) < 0.5) this.camera.y = targetY;
-            else this.camera.y += (targetY - this.camera.y) * speed * dt;
-
-        }
+        const cameraState = updateSceneCamera(this, deltaTime, {
+            isCenteringX: this._isCenteringX,
+            isCenteringY: this._isCenteringY
+        });
+        this._isCenteringX = cameraState.isCenteringX;
+        this._isCenteringY = cameraState.isCenteringY;
 
         this.entities.forEach(entity => {
             if (entity.disabled) return;
-            // @ts-ignore
-            entity.update(deltaTime, (x, y) => this.isWalkable(x, y, entity));
+            if (entity instanceof Actor) {
+                entity.update(deltaTime, (x: number, y: number) => this.isWalkable(x, y, entity));
+            } else {
+                entity.update(deltaTime);
+            }
         });
     }
 

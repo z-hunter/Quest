@@ -22,11 +22,11 @@
 - [x] Убедиться, что runtime не зависит от наличия React DOM.
 
 ## Приоритет 3. Снижение архитектурных рисков runtime
-- [ ] Декомпозировать `Scene` на подмодули (camera/interaction/subscene).
-- [ ] Декомпозировать `SceneEditor` на подмодули (hotkeys/ui-sync/creation).
-- [ ] Сократить использование `window.game` и экспорта сущностей в `window`.
-- [ ] Заменить `any`/`@ts-ignore` в системах на типизированные контракты.
-- [ ] Вынести единую утилиту parallax/visual-space для устранения дублирования математики.
+- [x] Декомпозировать `Scene` на подмодули (camera/interaction/subscene).
+- [x] Декомпозировать `SceneEditor` на подмодули (hotkeys/ui-sync/creation).
+- [x] Сократить использование `window.game` и экспорта сущностей в `window`.
+- [x] Заменить `any`/`@ts-ignore` в системах на типизированные контракты.
+- [x] Вынести единую утилиту parallax/visual-space для устранения дублирования математики.
 
 ## Приоритет 4. Parser/Console под текущий scope
 - [ ] Выделить текущий парсер как `RuleBasedParser`.

@@ -1,4 +1,6 @@
 import { QuadObject } from '../entities/QuadObject';
+import { toVisualScalar } from '../utils/Parallax';
+import type { SceneSystemContext } from './types';
 
 export interface BackfaceComponent {
     type: 'Backface';
@@ -13,8 +15,7 @@ export interface BackfaceComponent {
 export class BackfaceSystem {
 
     static update(quad: QuadObject, bf: BackfaceComponent) {
-        // @ts-ignore
-        const scene = quad.scene;
+        const scene = quad.scene as SceneSystemContext | null;
         if (!scene) return;
 
         // Props: vertexA (0-3), vertexB (0-3), axis ('x'|'y'), op ('>'|'<'), targetId (opt)
@@ -31,33 +32,23 @@ export class BackfaceSystem {
         const pA = vA.p !== undefined ? vA.p : 1.0;
         const pB = vB.p !== undefined ? vB.p : 1.0;
 
-        // @ts-ignore
         const camX = scene.camera.x;
-        // @ts-ignore
         const camY = scene.camera.y;
 
         // Calculate Visual Coordinate
-        const valA = (axis === 'x' ? vA.x : vA.y) - (axis === 'x' ? camX : camY) * pA;
-        const valB = (axis === 'x' ? vB.x : vB.y) - (axis === 'x' ? camX : camY) * pB;
+        const valA = axis === 'x' ? toVisualScalar(vA.x, camX, pA) : toVisualScalar(vA.y, camY, pA);
+        const valB = axis === 'x' ? toVisualScalar(vB.x, camX, pB) : toVisualScalar(vB.y, camY, pB);
 
         let match = false;
         if (op === '>') match = valA > valB;
         else if (op === '<') match = valA < valB;
 
         // Resolve Targets (Unified)
-        let targets: any[] = [];
+        let targets: Array<QuadObject | { visible?: boolean; layer?: number; renderLayer?: number }> = [];
         if (!bf.targetId) {
             targets.push(quad);
         } else {
-            // @ts-ignore
-            if (scene.resolveTarget) {
-                // @ts-ignore
-                targets = scene.resolveTarget(bf.targetId);
-            } else {
-                // @ts-ignore
-                const found = scene.entities.find((e: any) => e.name === bf.targetId.trim());
-                if (found) targets.push(found);
-            }
+            targets = scene.resolveTarget(bf.targetId) as Array<QuadObject | { visible?: boolean; layer?: number; renderLayer?: number }>;
         }
 
         if (targets.length > 0) {
@@ -67,18 +58,15 @@ export class BackfaceSystem {
                 if (match) {
                     if (cullingType === 'render') {
                         target.visible = false;
-                        // @ts-ignore
-                        target.renderLayer = undefined;
+                        (target as any).renderLayer = undefined;
                     } else {
                         // Layer Mode
-                        // @ts-ignore
-                        target.renderLayer = target.layer - 1;
+                        (target as any).renderLayer = (target.layer || 0) - 1;
                         target.visible = true;
                     }
                 } else {
                     target.visible = true;
-                    // @ts-ignore
-                    target.renderLayer = undefined;
+                    (target as any).renderLayer = undefined;
                 }
             });
         }

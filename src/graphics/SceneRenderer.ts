@@ -2,6 +2,7 @@
 import { Scene } from '../scene/Scene';
 import { Entity } from '../entities/Entity';
 import type { IGame } from '../core/IGame';
+import { toVisualScalar } from '../utils/Parallax';
 
 export class SceneRenderer {
     private blurCanvas: HTMLCanvasElement | null = null;
@@ -51,7 +52,7 @@ export class SceneRenderer {
 
                 if (ignore) return -99999999; // Force to bottom/top? Or handle separately.
 
-                const visualY = y - camera.y * (p - 1.0);
+                const visualY = toVisualScalar(y, camera.y, p);
                 return visualY;
             };
 

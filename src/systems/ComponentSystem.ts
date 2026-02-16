@@ -36,6 +36,7 @@ export interface ItemComponent {
 }
 
 import { ThreeDParallaxSystem, type ThreeDParallaxComponent } from './ThreeDParallaxSystem';
+import type { ActivationSceneContext } from './types';
 
 export interface WalkBoxComponent {
     type: 'WalkBox';
@@ -75,12 +76,12 @@ export class ComponentSystem {
 
     // Called on Interaction/Activation (Click or Trigger)
     // Returns TRUE if component handled the activation (blocking default)
-    static handleActivation(entity: SceneObject, scene: any): boolean {
+    static handleActivation(entity: SceneObject, scene: ActivationSceneContext, depth: number = 0): boolean {
         if (!entity.components) return false;
 
         for (const comp of entity.components) {
             if (comp.type === 'Subtrigger') {
-                return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene);
+                return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene, depth);
             } else if (comp.type === 'Subscene') {
                 return this.handleSubscene(entity, comp as SubsceneComponent, scene);
             } else if (comp.type === 'Switch') {
@@ -92,7 +93,7 @@ export class ComponentSystem {
 
     // Called when trying to TAKE an item
     // Returns string (error message) or null (success)
-    static canTakeItem(entity: SceneObject, player: Actor): string | null {
+    static canTakeItem(entity: SceneObject, player: Actor | null): string | null {
         if (!entity.components) return 'You cannot take that.';
 
         const itemComp = entity.components.find((c: any) => c.type === 'Item') as ItemComponent | undefined;
@@ -103,7 +104,7 @@ export class ComponentSystem {
 
         // Check Proximity
         if (!itemComp.ignoreDistance && player) {
-            const e = entity as any;
+            const e = entity as unknown as { x: number; y: number };
             const dist = Math.hypot(player.x - e.x, player.y - e.y);
             const allowedDist = (player.width || 30) * 4; // Tolerance
 
@@ -115,49 +116,43 @@ export class ComponentSystem {
         return null; // OK
     }
 
-    private static handleSubtrigger(entity: SceneObject, sub: SubtriggerComponent, scene: any): boolean {
+    private static handleSubtrigger(entity: SceneObject, sub: SubtriggerComponent, scene: ActivationSceneContext, depth: number): boolean {
         const targetName = sub.target;
         if (!targetName) {
             console.warn(`[Subtrigger] No target specified for '${entity.name}'`);
             return false;
         }
 
-        // Find Target Object (Entity or Triggerbox)
-        // @ts-ignore
-        const targetObj = (scene.triggerboxes || []).find(t => t.name === targetName) || (scene.entities || []).find(e => e.name === targetName);
+        const targetObj =
+            scene.triggerboxes.find(t => t.name === targetName) ||
+            scene.entities.find(e => e.name === targetName);
 
         if (targetObj) {
             console.log(`  -> Delegating to '${targetObj.name}'`);
-            // Recursive call to scene activation
-            if (scene.activateObject) {
-                scene.activateObject(targetObj, (scene._depth || 0) + 1);
-            }
+            scene.activateObject(targetObj, depth + 1);
         } else {
             console.warn(`[Subtrigger] Target '${targetName}' not found.`);
         }
         return true; // Hanlded
     }
 
-    private static handleSubscene(entity: SceneObject, sub: SubsceneComponent, scene: any): boolean {
+    private static handleSubscene(entity: SceneObject, sub: SubsceneComponent, scene: ActivationSceneContext): boolean {
         const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
         if (!targetStr) return false;
 
         // Proximity Check (if player exists)
-        // @ts-ignore
         const player = scene.player;
         if (player) {
             let cx = 0, cy = 0;
             if (entity.type === 'Triggerbox') {
-                // @ts-ignore
-                const poly = (entity as any).poly;
+                const poly = (entity as unknown as { poly?: { x: number; y: number }[] }).poly;
                 if (poly) {
-                    // @ts-ignore
                     poly.forEach(p => { cx += p.x; cy += p.y; });
                     cx /= poly.length;
                     cy /= poly.length;
                 }
             } else {
-                const e = entity as any;
+                const e = entity as unknown as { x?: number; y?: number; height?: number };
                 cx = e.x || 0;
                 cy = (e.y || 0) - (e.height || 0) / 2;
             }
@@ -167,8 +162,7 @@ export class ComponentSystem {
 
             if (dist > allowedDist) {
                 console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
-                // @ts-ignore
-                const game = scene.game as IGame;
+                const game = scene.game as unknown as IGame;
                 if (game && typeof game.showMessage === 'function') {
                     game.showMessage("You are too far away.");
                 }
@@ -177,36 +171,23 @@ export class ComponentSystem {
         }
 
         console.log(`  -> Activating Subscene Target: '${targetStr}'`);
-        // We need to manipulate scene state. 
-        // Ideally ComponentSystem shouldn't mutate Scene direct internals if possible, but here we must.
-        // @ts-ignore
         scene.activeSubscene = targetStr;
-        // @ts-ignore
-        if (scene.subsceneEntities) scene.subsceneEntities.clear();
+        scene.subsceneEntities.clear();
 
-        // @ts-ignore
-        if (scene.resolveTarget) {
-            // @ts-ignore
-            const targets = scene.resolveTarget(targetStr);
-            // @ts-ignore
-            targets.forEach(t => {
-                t.disabled = false;
-                // @ts-ignore
-                if (scene.subsceneEntities) scene.subsceneEntities.add(t);
-            });
-        }
+        const targets = scene.resolveTarget(targetStr);
+        targets.forEach(t => {
+            t.disabled = false;
+            scene.subsceneEntities.add(t);
+        });
         return true; // Handled
     }
 
-    private static handleSwitch(entity: SceneObject, sw: SwitchComponent, scene: any): boolean {
+    private static handleSwitch(entity: SceneObject, sw: SwitchComponent, scene: ActivationSceneContext): boolean {
         // 1. Check Key
         if (sw.idKey) {
-            // @ts-ignore
-            const game = scene.game as IGame;
-            // @ts-ignore
+            const game = scene.game as unknown as IGame;
             if (game && game.inventory) {
-                // @ts-ignore
-                const hasKey = game.inventory.some((i: any) => i.name === sw.idKey || i.id === sw.idKey);
+                const hasKey = game.inventory.some(i => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey);
                 if (!hasKey) {
                     console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
                     game.showMessage(`Locked. Needs ${sw.idKey}`);
@@ -223,8 +204,7 @@ export class ComponentSystem {
         console.log(`[Switch] Toggling to State ${nextState}`);
 
         // 3. Audio
-        // @ts-ignore
-        const game = scene.game as IGame;
+        const game = scene.game as unknown as IGame;
         if (game) {
             if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
             if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
@@ -239,15 +219,12 @@ export class ComponentSystem {
             const toShow = scene.resolveTarget(targetStrShow || '');
             const toHide = scene.resolveTarget(targetStrHide || '');
 
-            // Apply
-            // @ts-ignore
-            toShow.forEach((t: any) => {
+            toShow.forEach(t => {
                 t.disabled = false;
                 if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(t);
             });
 
-            // @ts-ignore
-            toHide.forEach((t: any) => {
+            toHide.forEach(t => {
                 // Don't disable self if self is in target list (safety)
                 if (t === entity) return;
 

@@ -38,12 +38,13 @@ export class SceneManager {
 
     exposeEntitiesToWindow(): void {
         if (!this.currentScene) return;
+        const shouldExpose = typeof window !== 'undefined' && (window as { __QUEST_EXPOSE_GLOBALS__?: boolean }).__QUEST_EXPOSE_GLOBALS__ === true;
+        if (!shouldExpose) return;
 
         // Expose all entities by Name to window for Console API usage
         this.currentScene.entities.forEach(entity => {
             if (entity.name) {
-                // @ts-ignore
-                window[entity.name] = entity;
+                (window as unknown as Record<string, unknown>)[entity.name] = entity;
             }
         });
         console.log(`[SceneManager] Entities exposed to Console: ${this.currentScene.entities.map(e => e.name).join(', ')}`);
