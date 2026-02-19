@@ -1,6 +1,4 @@
 import { SceneEditor } from '../SceneEditor';
-import { Actor } from '../../entities/Actor';
-import { Entity } from '../../entities/Entity';
 import { useEditorStore } from '../../store/editorStore';
 
 export class EditorUI {
@@ -99,36 +97,4 @@ export class EditorUI {
         useEditorStore.getState().incrementObjectVersion();
     }
 
-    // Called when the hierarchy needs a refresh (e.g. added/removed object, renamed)
-    refreshHierarchy(): void {
-        useEditorStore.getState().incrementHierarchyVersion();
-    }
-
-    setActorIsPlayer(actor: Actor, value: boolean): void {
-        const scene = this.editor.game.sceneManager.currentScene;
-        if (!scene) return;
-
-        console.log(`[Editor] Setting isPlayer for ${actor.name} to ${value} `);
-
-        if (value) {
-            // Unset others
-            scene.entities.forEach((e: Entity) => {
-                if (e instanceof Actor && e !== actor && e.isPlayer) {
-                    e.isPlayer = false;
-                    console.log(`[Editor] Unset isPlayer for ${e.name}`);
-                }
-            });
-            actor.isPlayer = true;
-            scene.player = actor;
-        } else {
-            actor.isPlayer = false;
-            // If we are unchecking the current player, clear the reference
-            if (scene.player === actor) {
-                scene.player = null;
-            }
-        }
-
-        // Force update to refresh UI checkboxes/state
-        this.updateUIFromObject();
-    }
 }

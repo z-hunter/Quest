@@ -8,13 +8,6 @@ export class Parser {
     constructor(game: any) {
         this.game = game;
         this.inputField = null;
-        // We delay listener setup because DOM might not be ready if React hasn't rendered yet
-        // Game.ts will call setup or we try to find it lazily
-    }
-
-    setupListener(): void {
-        // Obsolete: Event handling moved to UIOverlay.tsx (React) to prevent stale DOM references.
-        // This method remains for compatibility with Game.ts bindUI call.
     }
 
     parse(input: string): void {

@@ -469,11 +469,6 @@ export class SceneEditor {
         useEditorStore.getState().incrementHierarchyVersion();
     }
 
-    // Compatibility wrappers for React panels and managers.
-    syncSettingsUI(): void {
-        this.syncUI();
-    }
-
     updateUIFromObject(): void {
         this.ui.updateUIFromObject();
     }

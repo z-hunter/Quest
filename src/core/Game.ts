@@ -413,7 +413,6 @@ export class Game implements IGame {
     }
 
     bindUI(): void {
-        this.parser.setupListener();
         this.editor.initUI();
     }
 
