@@ -3,78 +3,87 @@ export class Input {
     canvas: HTMLCanvasElement;
     mouse: { x: number, y: number, clicked: boolean };
     keys: { [key: string]: boolean };
+    private listenersAttached: boolean;
+
+    private readonly onMouseMove: (e: MouseEvent) => void;
+    private readonly onMouseDown: (e: MouseEvent) => void;
+    private readonly onContextMenu: (e: Event) => void;
+    private readonly onKeyDown: (e: KeyboardEvent) => void;
+    private readonly onKeyUp: (e: KeyboardEvent) => void;
 
     constructor(game: any) {
         this.game = game;
         this.canvas = game.canvas;
         this.mouse = { x: 0, y: 0, clicked: false };
         this.keys = {};
+        this.listenersAttached = false;
 
-        this.setupListeners();
-    }
-
-
-
-    setupListeners(): void {
-        const updateMouse = (e: MouseEvent) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const scaleX = this.canvas.width / rect.width;
-            const scaleY = this.canvas.height / rect.height;
-
-            this.mouse.x = (e.clientX - rect.left) * scaleX;
-            this.mouse.y = (e.clientY - rect.top) * scaleY;
+        this.onMouseMove = (e: MouseEvent) => {
+            this.updateMouse(e);
         };
 
-        this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
-            updateMouse(e);
-        });
-
-        this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
+        this.onMouseDown = (e: MouseEvent) => {
             e.preventDefault(); // Prevent canvas from stealing focus
-            updateMouse(e);
+            this.updateMouse(e);
             this.mouse.clicked = true;
 
             console.log(`[Input] MouseDown: ${this.mouse.x}, ${this.mouse.y}`);
             if (this.game.onMouseClick) {
-                // Input handles mousedown, updates state.
-                // Actual 'click' logic usually happens on mouseup or here?
-                // Game.onMouseClick is called here.
                 this.game.onMouseClick(this.mouse.x, this.mouse.y);
             }
-        });
+        };
 
-        // Prevent context menu on right click
-        this.canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+        this.onContextMenu = (e: Event) => {
+            e.preventDefault();
+        };
 
-        // Keyboard Listeners (Attached to window to catch global input)
-        window.addEventListener('keydown', (e: KeyboardEvent) => {
+        this.onKeyDown = (e: KeyboardEvent) => {
             this.keys[e.key] = true;
-            // console.log(`[Input] KeyDown: ${e.key}`);
 
             // Global Tilde (~) to toggle Console
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
                 if (this.game.console) {
                     this.game.console.toggle();
-                    // Force React UI update (if needed, but polling might handle it or we use callback)
-                    // We might need to expose an OnConsoleToggle event or similar if React doesn't pick it up via polling.
-                    // For now, let's assume UIOverlay or ConsoleOverlay will poll or we add a callback.
-                    // Actually, simpler: toggle() changes state, React component should ideally observe this.
-                    // Since we don't have MobX/Redux signals effectively from Game -> React without forceUpdate,
-                    // we might need a generic onUIChange callback or similar.
-                    // Let's add a quick hack if needed or rely on refresh.
-                    // Better: call a method on Game that triggers listeners.
-
-                    // Actually, Game loop renders 60fps. The React overlay might not re-render unless state changes.
-                    // We should add a listener for console toggle.
                 }
             }
-        });
+        };
 
-        window.addEventListener('keyup', (e: KeyboardEvent) => {
+        this.onKeyUp = (e: KeyboardEvent) => {
             this.keys[e.key] = false;
-            // console.log(`[Input] KeyUp: ${e.key}`);
-        });
+        };
+
+        this.setupListeners();
+    }
+
+    private updateMouse(e: MouseEvent): void {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        this.mouse.x = (e.clientX - rect.left) * scaleX;
+        this.mouse.y = (e.clientY - rect.top) * scaleY;
+    }
+
+    setupListeners(): void {
+        if (this.listenersAttached) {
+            return;
+        }
+
+        this.canvas.addEventListener('mousemove', this.onMouseMove);
+        this.canvas.addEventListener('mousedown', this.onMouseDown);
+        this.canvas.addEventListener('contextmenu', this.onContextMenu);
+
+        // Keyboard listeners stay on window to catch global input.
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup', this.onKeyUp);
+        this.listenersAttached = true;
+    }
+
+    private detachCanvasListeners(canvas: HTMLCanvasElement): void {
+        canvas.removeEventListener('mousemove', this.onMouseMove);
+        canvas.removeEventListener('mousedown', this.onMouseDown);
+        canvas.removeEventListener('contextmenu', this.onContextMenu);
     }
 
     isDown(key: string): boolean {
@@ -82,7 +91,28 @@ export class Input {
     }
 
     updateCanvas(newCanvas: HTMLCanvasElement): void {
+        if (this.canvas === newCanvas) {
+            return;
+        }
+
+        if (this.listenersAttached) {
+            this.detachCanvasListeners(this.canvas);
+        }
+
         this.canvas = newCanvas;
-        this.setupListeners();
+        this.canvas.addEventListener('mousemove', this.onMouseMove);
+        this.canvas.addEventListener('mousedown', this.onMouseDown);
+        this.canvas.addEventListener('contextmenu', this.onContextMenu);
+    }
+
+    destroy(): void {
+        if (!this.listenersAttached) {
+            return;
+        }
+
+        this.detachCanvasListeners(this.canvas);
+        window.removeEventListener('keydown', this.onKeyDown);
+        window.removeEventListener('keyup', this.onKeyUp);
+        this.listenersAttached = false;
     }
 }

@@ -170,7 +170,7 @@ export class Game implements IGame {
             this.editor.destroy();
         }
         if (this.input) {
-            // this.input.destroy(); // Input also has listeners? Check Input.ts later.
+            this.input.destroy();
         }
         console.log('[Game] Destroyed');
     }

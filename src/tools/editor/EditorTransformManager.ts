@@ -737,7 +737,7 @@ export class EditorTransformManager {
                         entity.baseHeight = entity.height / entity.scale;
                     }
 
-                    editor.ui.updateUIFromObject();
+                    editor.updateUIFromObject();
 
                 } else {
                     // MOVING
@@ -766,7 +766,7 @@ export class EditorTransformManager {
                         entity.height = entity.baseHeight * factor;
                     }
 
-                    editor.ui.updateUIFromObject();
+                    editor.updateUIFromObject();
                 }
             }
         }
