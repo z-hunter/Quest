@@ -6,7 +6,7 @@ import { EditorToolbar } from './EditorToolbar';
 
 export const HierarchyPanel: React.FC = () => {
     const game = useGame();
-    const { hierarchyVersion, selectedObjectId } = useEditorStore();
+    const { hierarchyVersion, selectedObjectId, selectedObjectKeys } = useEditorStore();
 
     // Force re-render on hierarchy version change (subscription)
     React.useEffect(() => {
@@ -31,6 +31,18 @@ export const HierarchyPanel: React.FC = () => {
             return item.name; // For entities and other objects
         }
         return String(item); // Fallback, should not be hit with current data structure
+    };
+
+    const getSelectionKey = (item: any): string => {
+        if (item === 'SCENE') return 'SCENE';
+        if (item && typeof item === 'object') {
+            if (item.type === 'Quad') return `Quad:${item.name}`;
+            if (item.type === 'Walkbox') return `Walkbox:${item.name || 'Walkbox'}`;
+            if (item.type === 'Triggerbox') return `Triggerbox:${item.name || 'Triggerbox'}`;
+            if (item.type === 'Actor') return `Actor:${item.name}`;
+            return `Entity:${item.name}`;
+        }
+        return String(item);
     };
 
     // Unified list for navigation
@@ -129,8 +141,12 @@ export const HierarchyPanel: React.FC = () => {
     // Normalize helper for consistent ID comparison
     const normalize = (s: string | null) => (s || '').replace(/\\/g, '/');
 
-    const isItemSelected = (id: string | null) => {
-        return normalize(id) === normalize(selectedObjectId);
+    const isItemSelected = (item: any) => {
+        const key = getSelectionKey(item);
+        if (selectedObjectKeys?.length) {
+            return selectedObjectKeys.includes(key) || selectedObjectKeys.includes(getDisplayId(item));
+        }
+        return normalize(getDisplayId(item)) === normalize(selectedObjectId);
     };
 
     const uiScale = game?.settings?.editor?.uiScale || 1.0;
@@ -185,7 +201,10 @@ export const HierarchyPanel: React.FC = () => {
                         background: isItemSelected('SCENE') ? 'var(--ui-selection-bg)' : 'transparent',
                         color: isItemSelected('SCENE') ? 'var(--ui-selection-text)' : '#aaa'
                     }}
-                    onClick={() => game.editor.selectObject('SCENE')}
+                    onClick={(e) => {
+                        if (e.ctrlKey) return;
+                        game.editor.selectObject('SCENE');
+                    }}
                     onDoubleClick={() => centerCameraOn('SCENE')}
                 >
                     <span style={{
@@ -202,7 +221,7 @@ export const HierarchyPanel: React.FC = () => {
 
                 {/* Entities */}
                 {entities.map((ent: any) => {
-                    const isSelected = isItemSelected(ent.name);
+                    const isSelected = isItemSelected(ent);
                     return (
                         <div
                             key={ent.name}
@@ -212,7 +231,10 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => game.editor.selectObject(ent)}
+                            onClick={(e) => {
+                                if (e.ctrlKey) game.editor.toggleObjectSelection(ent);
+                                else game.editor.selectObject(ent);
+                            }}
                             onDoubleClick={() => centerCameraOn(ent)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: ent.disabled ? 0.5 : 1.0 }}>
@@ -235,8 +257,7 @@ export const HierarchyPanel: React.FC = () => {
 
                 {/* Walkboxes */}
                 {walkboxes.map((wb: any, i: number) => {
-                    const id = wb.name || 'Walkbox';
-                    const isSelected = isItemSelected(id);
+                    const isSelected = isItemSelected(wb);
                     return (
                         <div
                             key={wb.name || i}
@@ -246,7 +267,10 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => game.editor.selectObject(wb)}
+                            onClick={(e) => {
+                                if (e.ctrlKey) game.editor.toggleObjectSelection(wb);
+                                else game.editor.selectObject(wb);
+                            }}
                             onDoubleClick={() => centerCameraOn(wb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: wb.disabled ? 0.5 : 1.0 }}>
@@ -269,8 +293,7 @@ export const HierarchyPanel: React.FC = () => {
 
                 {/* Triggers */}
                 {triggers.map((tb: any, i: number) => {
-                    const id = tb.name || 'Triggerbox';
-                    const isSelected = isItemSelected(id);
+                    const isSelected = isItemSelected(tb);
                     return (
                         <div
                             key={tb.name || i}
@@ -280,7 +303,10 @@ export const HierarchyPanel: React.FC = () => {
                                 color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                             }}
-                            onClick={() => game.editor.selectObject(tb)}
+                            onClick={(e) => {
+                                if (e.ctrlKey) game.editor.toggleObjectSelection(tb);
+                                else game.editor.selectObject(tb);
+                            }}
                             onDoubleClick={() => centerCameraOn(tb)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', opacity: tb.disabled ? 0.5 : 1.0 }}>

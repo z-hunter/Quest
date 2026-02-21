@@ -513,6 +513,18 @@ export class SceneEditor {
         this.selectionManager.selectObject(obj);
     }
 
+    toggleObjectSelection(obj: SceneObject): void {
+        this.selectionManager.toggleObjectSelection(obj);
+    }
+
+    setMultiSelection(objs: SceneObject[]): void {
+        this.selectionManager.setMultiSelection(objs);
+    }
+
+    getSelectedObjects(): SceneObject[] {
+        return this.selectionManager.getSelectedObjects();
+    }
+
 
 
 
@@ -824,15 +836,19 @@ export class SceneEditor {
         }
 
 
-        // Highlight selected object
-        if (this.selectedObject) {
+        const highlighted = this.selectionManager.hasMultiSelection()
+            ? this.selectionManager.getSelectedObjects()
+            : (this.selectedObject ? [this.selectedObject] : []);
+
+        // Highlight selected object(s)
+        for (const selected of highlighted) {
             ctx.save();
             const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-            if (this.selectedObject instanceof Entity) {
-                if ((this.selectedObject as any).type === 'Quad') {
+            if (selected instanceof Entity) {
+                if ((selected as any).type === 'Quad') {
                     // ** QUAD SELECTION RENDERING **
-                    const quad = this.selectedObject as QuadObject;
+                    const quad = selected as QuadObject;
 
                     ctx.save();
                     ctx.translate(halfW, halfH);
@@ -986,19 +1002,19 @@ export class SceneEditor {
                 }
 
                 ctx.restore();
-            } else if (this.selectedObject instanceof Walkbox || this.selectedObject instanceof Triggerbox) {
+            } else if (selected instanceof Walkbox || selected instanceof Triggerbox) {
                 // Triggerbox/Walkbox
                 ctx.translate(halfW, halfH);
                 ctx.scale(zoom, zoom);
                 ctx.translate(-camX, -camY);
 
-                const poly = this.selectedObject.poly;
+                const poly = selected.poly;
 
                 // If getting bounding box or drawing highlight
-                if (this.selectedObject instanceof Walkbox) ctx.strokeStyle = '#ff0000';
+                if (selected instanceof Walkbox) ctx.strokeStyle = '#ff0000';
                 else ctx.strokeStyle = '#ff00ff';
 
-                if (this.selectedObject.locked) {
+                if (selected.locked) {
                     // Locked Style
                     ctx.lineWidth = 1.5 / zoom;
                     ctx.setLineDash([]);
@@ -1018,8 +1034,8 @@ export class SceneEditor {
                     ctx.stroke();
 
                     // Draw Vertex Handles (Only if NOT locked)
-                    if (!this.selectedObject.locked) {
-                        if (this.selectedObject instanceof Walkbox) ctx.fillStyle = '#ff0000';
+                    if (!selected.locked) {
+                        if (selected instanceof Walkbox) ctx.fillStyle = '#ff0000';
                         else ctx.fillStyle = '#ff00ff';
 
                         const handleSize = 6 / zoom;
@@ -1030,6 +1046,25 @@ export class SceneEditor {
                 }
             }
             ctx.restore();
+        }
+
+        // Draw area selection rectangle
+        if (this.transformManager.isBoxSelecting()) {
+            const box = this.transformManager.getSelectionBox();
+            if (box) {
+                const x = Math.min(box.start.x, box.current.x);
+                const y = Math.min(box.start.y, box.current.y);
+                const w = Math.abs(box.current.x - box.start.x);
+                const h = Math.abs(box.current.y - box.start.y);
+                ctx.save();
+                ctx.strokeStyle = '#79EFA4';
+                ctx.fillStyle = 'rgba(121, 239, 164, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 3]);
+                ctx.fillRect(x, y, w, h);
+                ctx.strokeRect(x, y, w, h);
+                ctx.restore();
+            }
         }
 
         // Draw Scaling Lines (Horizon and Front)

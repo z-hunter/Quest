@@ -5,6 +5,7 @@ import { Actor } from '../../entities/Actor';
 import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
+import { SceneObject } from '../../entities/SceneObject';
 
 import { Geometry } from '../../utils/Geometry';
 import { EditorSnappingSystem } from './EditorSnappingSystem';
@@ -29,6 +30,9 @@ export class EditorTransformManager {
     currentSnapBinding: QuadVertexBinding | null = null;
     dragStartPos: { x: number, y: number } | null = null;
     resizeAnchor: { x: number, y: number } | null = null; // Stores the stationary corner (Raw Coords) during resize
+    private boxSelectActive: boolean = false;
+    private boxSelectStart: { x: number, y: number } | null = null;
+    private boxSelectCurrent: { x: number, y: number } | null = null;
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
@@ -60,6 +64,129 @@ export class EditorTransformManager {
             x: Math.round(anchor.x + Math.cos(snappedAngle) * dist),
             y: Math.round(anchor.y + Math.sin(snappedAngle) * dist)
         };
+    }
+
+    isBoxSelecting(): boolean {
+        return this.boxSelectActive;
+    }
+
+    getSelectionBox(): { start: { x: number, y: number }, current: { x: number, y: number } } | null {
+        if (!this.boxSelectActive || !this.boxSelectStart || !this.boxSelectCurrent) return null;
+        return { start: this.boxSelectStart, current: this.boxSelectCurrent };
+    }
+
+    private rectIntersects(a: { l: number, t: number, r: number, b: number }, b: { l: number, t: number, r: number, b: number }): boolean {
+        return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b);
+    }
+
+    private findHitSelectable(
+        pos: { x: number, y: number },
+        scene: any,
+        camX: number,
+        camY: number,
+        zoom: number,
+        halfW: number,
+        halfH: number
+    ): SceneObject | null {
+        const entities = scene.entities || [];
+        for (let i = entities.length - 1; i >= 0; i--) {
+            const entity = entities[i];
+            if (entity.disabled || entity.locked) continue;
+
+            const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+            const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+            const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+            const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
+            const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
+
+            if (entity.hitTest(worldX, worldY)) return entity;
+        }
+
+        const worldPos = {
+            x: (pos.x - halfW) / zoom + camX,
+            y: (pos.y - halfH) / zoom + camY
+        };
+
+        if (scene.walkbox) {
+            for (const wb of scene.walkbox) {
+                if (wb.disabled || wb.locked) continue;
+                if (Geometry.isPointInPolygon(worldPos, wb.poly)) return wb;
+            }
+        }
+
+        if (scene.triggerboxes) {
+            for (const tb of scene.triggerboxes) {
+                if (tb.disabled || tb.locked) continue;
+                if (Geometry.isPointInPolygon(worldPos, tb.poly)) return tb;
+            }
+        }
+
+        return null;
+    }
+
+    private collectObjectsInScreenRect(
+        scene: any,
+        rect: { l: number, t: number, r: number, b: number },
+        camX: number,
+        camY: number,
+        zoom: number,
+        halfW: number,
+        halfH: number
+    ): SceneObject[] {
+        const selected: SceneObject[] = [];
+        const toScreen = (wx: number, wy: number) => ({
+            x: (wx - camX) * zoom + halfW,
+            y: (wy - camY) * zoom + halfH
+        });
+
+        (scene.entities || []).forEach((entity: any) => {
+            if (entity.disabled || entity.locked) return;
+
+            if ((entity as any).type === 'Quad' && entity.vertices) {
+                const pts = entity.vertices.map((v: any) => ({
+                    x: (v.x - camX * v.p) * zoom + halfW,
+                    y: (v.y - camY * v.p) * zoom + halfH
+                }));
+                const minX = Math.min(...pts.map((p: any) => p.x));
+                const maxX = Math.max(...pts.map((p: any) => p.x));
+                const minY = Math.min(...pts.map((p: any) => p.y));
+                const maxY = Math.max(...pts.map((p: any) => p.y));
+                if (this.rectIntersects(rect, { l: minX, t: minY, r: maxX, b: maxY })) selected.push(entity);
+                return;
+            }
+
+            const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+            const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
+            const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
+            const cx = (entity.x - camX * p + vOx) * zoom + halfW;
+            const cy = (entity.y - camY * p + vOy) * zoom + halfH;
+            const halfEW = (entity.width * zoom) / 2;
+            const eh = entity.height * zoom;
+            const entityRect = { l: cx - halfEW, t: cy - eh, r: cx + halfEW, b: cy };
+            if (this.rectIntersects(rect, entityRect)) selected.push(entity);
+        });
+
+        (scene.walkbox || []).forEach((wb: any) => {
+            if (wb.disabled || wb.locked || !wb.poly?.length) return;
+            const screenPoly = wb.poly.map((p: any) => toScreen(p.x, p.y));
+            const minX = Math.min(...screenPoly.map((p: any) => p.x));
+            const maxX = Math.max(...screenPoly.map((p: any) => p.x));
+            const minY = Math.min(...screenPoly.map((p: any) => p.y));
+            const maxY = Math.max(...screenPoly.map((p: any) => p.y));
+            if (this.rectIntersects(rect, { l: minX, t: minY, r: maxX, b: maxY })) selected.push(wb);
+        });
+
+        (scene.triggerboxes || []).forEach((tb: any) => {
+            if (tb.disabled || tb.locked || !tb.poly?.length) return;
+            const screenPoly = tb.poly.map((p: any) => toScreen(p.x, p.y));
+            const minX = Math.min(...screenPoly.map((p: any) => p.x));
+            const maxX = Math.max(...screenPoly.map((p: any) => p.x));
+            const minY = Math.min(...screenPoly.map((p: any) => p.y));
+            const maxY = Math.max(...screenPoly.map((p: any) => p.y));
+            if (this.rectIntersects(rect, { l: minX, t: minY, r: maxX, b: maxY })) selected.push(tb);
+        });
+
+        return selected;
     }
 
     // Interaction Handlers
@@ -99,6 +226,42 @@ export class EditorTransformManager {
 
             const halfW = editor.game.canvas.width / 2;
             const halfH = editor.game.canvas.height / 2;
+            const hitObject = this.findHitSelectable(pos, scene, camX, camY, zoom, halfW, halfH);
+
+            if (e.button === 0 && e.ctrlKey && hitObject) {
+                editor.toggleObjectSelection(hitObject);
+                e.stopPropagation();
+                return;
+            }
+
+            if (e.button === 0 && editor.selectionManager.hasMultiSelection()) {
+                if (hitObject && editor.selectionManager.isInMultiSelection(hitObject)) {
+                    editor.saveUndoState();
+                    this.isDragging = true;
+                    this.draggingVertexIndex = -1;
+                    const worldPos = {
+                        x: (pos.x - halfW) / zoom + camX,
+                        y: (pos.y - halfH) / zoom + camY
+                    };
+                    this.dragOffset = { x: worldPos.x, y: worldPos.y };
+                    editor.selectionManager.rebuildGroupTransformSnapshot();
+                    e.stopPropagation();
+                    return;
+                }
+
+                if (hitObject) {
+                    // Regular single selection destroys the group.
+                    editor.selectObject(hitObject);
+                }
+            }
+
+            if (e.button === 0 && !hitObject && !e.ctrlKey) {
+                this.boxSelectActive = true;
+                this.boxSelectStart = { x: pos.x, y: pos.y };
+                this.boxSelectCurrent = { x: pos.x, y: pos.y };
+                e.stopPropagation();
+                return;
+            }
 
             // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
             if (editor.selectedObject && (editor.selectedObject instanceof Walkbox || editor.selectedObject instanceof Triggerbox || (editor.selectedObject as any).type === 'Quad')) {
@@ -299,7 +462,9 @@ export class EditorTransformManager {
             }
         }
 
-        this.editor.selectObject(null);
+        if (!e.ctrlKey) {
+            this.editor.selectObject(null);
+        }
     }
 
     onMouseMove(e: MouseEvent): void {
@@ -335,6 +500,11 @@ export class EditorTransformManager {
             return;
         }
 
+        if (this.boxSelectActive) {
+            this.boxSelectCurrent = { x: this.lastMousePos.x, y: this.lastMousePos.y };
+            return;
+        }
+
         if (!this.isDragging || !editor.selectedObject) return;
 
         const pos = this.getMousePos(e);
@@ -347,6 +517,23 @@ export class EditorTransformManager {
             const halfW = editor.game.canvas.width / 2;
             const halfH = editor.game.canvas.height / 2;
             const store = useEditorStore.getState();
+            if (editor.selectionManager.hasMultiSelection()) {
+                const worldPos = {
+                    x: (pos.x - halfW) / zoom + camX,
+                    y: (pos.y - halfH) / zoom + camY
+                };
+                const dx = worldPos.x - this.dragOffset.x;
+                const dy = worldPos.y - this.dragOffset.y;
+                const current = editor.selectionManager.getGroupTransform();
+                editor.selectionManager.applyGroupTransform(
+                    current.offsetX + dx,
+                    current.offsetY + dy,
+                    current.scale
+                );
+                this.dragOffset = worldPos;
+                store.incrementObjectVersion();
+                return;
+            }
 
             // POLYGON DRAGGING
             if (editor.selectedObject instanceof Walkbox || editor.selectedObject instanceof Triggerbox || (editor.selectedObject as any).type === 'Quad') {
@@ -773,6 +960,41 @@ export class EditorTransformManager {
     }
 
     onMouseUp(_e: MouseEvent): void {
+        if (this.boxSelectActive && this.boxSelectStart && this.boxSelectCurrent) {
+            const editor = this.editor;
+            const scene = editor.game.sceneManager.currentScene;
+            if (scene) {
+                const camX = scene.camera ? scene.camera.x : 0;
+                const camY = scene.camera ? scene.camera.y : 0;
+                const zoom = scene.camera ? scene.camera.zoom : 1.0;
+                const halfW = editor.game.canvas.width / 2;
+                const halfH = editor.game.canvas.height / 2;
+
+                const rect = {
+                    l: Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x),
+                    t: Math.min(this.boxSelectStart.y, this.boxSelectCurrent.y),
+                    r: Math.max(this.boxSelectStart.x, this.boxSelectCurrent.x),
+                    b: Math.max(this.boxSelectStart.y, this.boxSelectCurrent.y)
+                };
+
+                const hasArea = Math.abs(rect.r - rect.l) > 4 && Math.abs(rect.b - rect.t) > 4;
+                if (hasArea) {
+                    const selected = this.collectObjectsInScreenRect(scene, rect, camX, camY, zoom, halfW, halfH);
+                    if (selected.length > 1) editor.setMultiSelection(selected);
+                    else if (selected.length === 1) editor.selectObject(selected[0]);
+                    else editor.selectObject(null);
+                } else {
+                    editor.selectObject(null);
+                }
+            }
+            this.boxSelectActive = false;
+            this.boxSelectStart = null;
+            this.boxSelectCurrent = null;
+            this.isDragging = false;
+            this.isPanning = false;
+            return;
+        }
+
         const store = useEditorStore.getState();
         if (store.selectedVertexIndex !== -1) {
             // Apply Binding if exists

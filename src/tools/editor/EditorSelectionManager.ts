@@ -9,45 +9,235 @@ import { useEditorStore } from '../../store/editorStore';
 
 export class EditorSelectionManager {
     private editor: SceneEditor;
+    private _selectedObjects: SceneObject[] = [];
+    private _groupTransform = {
+        originX: 0,
+        originY: 0,
+        offsetX: 0,
+        offsetY: 0,
+        scale: 1
+    };
+    private _groupSnapshot = new Map<string, any>();
 
     constructor(editor: SceneEditor) {
         this.editor = editor;
     }
 
+    private getObjectTypeAndId(obj: any): { type: string | null; id: string | null; key: string | null } {
+        if (obj === null || obj === undefined) return { type: null, id: null, key: null };
+        if (obj === 'SCENE') return { type: 'SCENE', id: 'SCENE', key: 'SCENE' };
+        if (obj === 'SETTINGS') return { type: 'SETTINGS', id: 'SETTINGS', key: 'SETTINGS' };
+        if (obj.type === 'Quad') return { type: 'Quad', id: obj.name, key: `Quad:${obj.name}` };
+        if (obj instanceof Actor) return { type: 'Actor', id: obj.name, key: `Actor:${obj.name}` };
+        if (obj instanceof Entity) return { type: 'Entity', id: obj.name, key: `Entity:${obj.name}` };
+        if (obj instanceof Walkbox) return { type: 'Walkbox', id: obj.name || 'Walkbox', key: `Walkbox:${obj.name || 'Walkbox'}` };
+        if (obj instanceof Triggerbox) return { type: 'Triggerbox', id: obj.name || 'Triggerbox', key: `Triggerbox:${obj.name || 'Triggerbox'}` };
+        return { type: null, id: null, key: null };
+    }
+
+    private resetGroupState(): void {
+        this._selectedObjects = [];
+        this._groupSnapshot.clear();
+        this._groupTransform = { originX: 0, originY: 0, offsetX: 0, offsetY: 0, scale: 1 };
+    }
+
     selectObject(obj: any): void {
+        this.resetGroupState();
         this.editor.selectedObject = obj;
 
         // Sync to Store
-        let type: string | null = null;
-        let id: string | null = null;
+        const meta = this.getObjectTypeAndId(obj);
+        useEditorStore.getState().selectObjects(meta.key ? [meta.key] : [], meta.id, meta.type);
+        this.editor.updateUIFromObject();
+        this.editor.refreshHierarchy();
+    }
 
-        if (obj === null || obj === undefined) {
-            // Deselect
-            type = null;
-            id = null;
-        } else if (obj === 'SCENE') {
-            type = 'SCENE';
-            id = 'SCENE';
-        } else if (obj === 'SETTINGS') {
-            type = 'SETTINGS';
-            id = 'SETTINGS';
-        } else if (obj.type === 'Quad') {
-            type = 'Quad';
-            id = obj.name;
-        } else if (obj instanceof Actor) {
-            type = 'Actor';
-            id = obj.name;
-        } else if (obj instanceof Entity) {
-            type = 'Entity'; // Used for generic/static entities
-            id = obj.name;
-        } else if (obj instanceof Walkbox) {
-            type = 'Walkbox';
-            id = obj.name || 'Walkbox';
-        } else if (obj instanceof Triggerbox) {
-            type = 'Triggerbox';
-            id = obj.name || 'Triggerbox';
+    toggleObjectSelection(obj: SceneObject): void {
+        if (!obj) return;
+
+        const key = this.getObjectTypeAndId(obj).key;
+        if (!key) return;
+
+        if (this._selectedObjects.length === 0 && this._selectedObject) {
+            const currentKey = this.getObjectTypeAndId(this._selectedObject).key;
+            if (currentKey) {
+                this._selectedObjects.push(this._selectedObject);
+            }
         }
-        useEditorStore.getState().selectObject(id, type);
+
+        const existing = this._selectedObjects.findIndex((o) => this.getObjectTypeAndId(o).key === key);
+        if (existing >= 0) {
+            this._selectedObjects.splice(existing, 1);
+        } else {
+            this._selectedObjects.push(obj);
+        }
+
+        if (this._selectedObjects.length <= 1) {
+            // Revert to single-select mode
+            if (this._selectedObjects.length === 1) {
+                this.selectObject(this._selectedObjects[0]);
+            } else {
+                this.selectObject(null);
+            }
+            return;
+        }
+
+        this.editor.selectedObject = this._selectedObjects[this._selectedObjects.length - 1];
+        this.rebuildGroupTransformSnapshot();
+
+        const keys = this._selectedObjects
+            .map((o) => this.getObjectTypeAndId(o).key)
+            .filter((k): k is string => !!k);
+
+        useEditorStore.getState().selectObjects(keys, this.editor.selectedObject?.name || null, 'MULTI');
+        this.editor.updateUIFromObject();
+        this.editor.refreshHierarchy();
+    }
+
+    setMultiSelection(objs: SceneObject[]): void {
+        const uniq = new Map<string, SceneObject>();
+        objs.forEach((o) => {
+            const key = this.getObjectTypeAndId(o).key;
+            if (o && key) uniq.set(key, o);
+        });
+
+        const selected = [...uniq.values()];
+        if (selected.length <= 1) {
+            this.selectObject(selected[0] || null);
+            return;
+        }
+
+        this._selectedObjects = selected;
+        this.editor.selectedObject = selected[selected.length - 1];
+        this.rebuildGroupTransformSnapshot();
+
+        const keys = selected
+            .map((o) => this.getObjectTypeAndId(o).key)
+            .filter((k): k is string => !!k);
+
+        useEditorStore.getState().selectObjects(keys, this.editor.selectedObject?.name || null, 'MULTI');
+        this.editor.updateUIFromObject();
+        this.editor.refreshHierarchy();
+    }
+
+    isInMultiSelection(obj: any): boolean {
+        const key = this.getObjectTypeAndId(obj).key;
+        if (!key) return false;
+        return this._selectedObjects.some((o) => this.getObjectTypeAndId(o).key === key);
+    }
+
+    hasMultiSelection(): boolean {
+        return this._selectedObjects.length > 1;
+    }
+
+    getSelectedObjects(): SceneObject[] {
+        return [...this._selectedObjects];
+    }
+
+    getGroupTransform() {
+        return { ...this._groupTransform };
+    }
+
+    rebuildGroupTransformSnapshot(): void {
+        if (!this.hasMultiSelection()) return;
+
+        this._groupSnapshot.clear();
+        let sumX = 0;
+        let sumY = 0;
+        let count = 0;
+
+        this._selectedObjects.forEach((obj) => {
+            const key = this.getObjectTypeAndId(obj).key;
+            if (!key) return;
+
+            if (obj instanceof Entity) {
+                this._groupSnapshot.set(key, {
+                    kind: 'entity',
+                    obj,
+                    x: obj.x,
+                    y: obj.y,
+                    modelScale: obj.modelScale ?? 1
+                });
+                sumX += obj.x;
+                sumY += obj.y;
+                count++;
+                return;
+            }
+
+            if (obj instanceof Walkbox || obj instanceof Triggerbox) {
+                const poly = obj.poly || [];
+                if (poly.length === 0) return;
+                const cx = poly.reduce((acc: number, p: any) => acc + p.x, 0) / poly.length;
+                const cy = poly.reduce((acc: number, p: any) => acc + p.y, 0) / poly.length;
+                this._groupSnapshot.set(key, {
+                    kind: 'poly',
+                    obj,
+                    centroidX: cx,
+                    centroidY: cy,
+                    poly: poly.map((p: any) => ({ x: p.x, y: p.y }))
+                });
+                sumX += cx;
+                sumY += cy;
+                count++;
+            }
+        });
+
+        this._groupTransform.originX = count > 0 ? sumX / count : 0;
+        this._groupTransform.originY = count > 0 ? sumY / count : 0;
+        this._groupTransform.offsetX = 0;
+        this._groupTransform.offsetY = 0;
+        this._groupTransform.scale = 1;
+    }
+
+    applyGroupTransform(offsetX: number, offsetY: number, scale: number): void {
+        if (!this.hasMultiSelection()) return;
+        if (this._groupSnapshot.size === 0) this.rebuildGroupTransformSnapshot();
+
+        const sx = Number.isFinite(scale) ? Math.max(0.01, scale) : 1;
+        const { originX, originY } = this._groupTransform;
+        const scene = this.editor.game.sceneManager.currentScene;
+
+        this._groupSnapshot.forEach((snap) => {
+            if (snap.kind === 'entity') {
+                const obj = snap.obj as Entity;
+                const rx = snap.x - originX;
+                const ry = snap.y - originY;
+
+                obj.x = Math.round(originX + rx * sx + offsetX);
+                obj.y = Math.round(originY + ry * sx + offsetY);
+                obj.modelScale = snap.modelScale * sx;
+
+                if (!obj.ignoreScaling && scene?.scaling?.enabled) {
+                    const factor = scene.getScaling(obj.y) * obj.modelScale;
+                    obj.scale = factor;
+                } else {
+                    obj.scale = obj.modelScale;
+                }
+                return;
+            }
+
+            if (snap.kind === 'poly') {
+                const obj = snap.obj as Walkbox | Triggerbox;
+                const rcx = snap.centroidX - originX;
+                const rcy = snap.centroidY - originY;
+                const targetCx = originX + rcx * sx + offsetX;
+                const targetCy = originY + rcy * sx + offsetY;
+
+                const scaledPoly = snap.poly.map((p: any) => ({
+                    x: originX + (p.x - originX) * sx,
+                    y: originY + (p.y - originY) * sx
+                }));
+                const scaledCx = scaledPoly.reduce((acc: number, p: any) => acc + p.x, 0) / scaledPoly.length;
+                const scaledCy = scaledPoly.reduce((acc: number, p: any) => acc + p.y, 0) / scaledPoly.length;
+                const dx = targetCx - scaledCx;
+                const dy = targetCy - scaledCy;
+                obj.poly = scaledPoly.map((p: any) => ({ x: Math.round(p.x + dx), y: Math.round(p.y + dy) }));
+            }
+        });
+
+        this._groupTransform.offsetX = offsetX;
+        this._groupTransform.offsetY = offsetY;
+        this._groupTransform.scale = sx;
         this.editor.updateUIFromObject();
         this.editor.refreshHierarchy();
     }
@@ -200,8 +390,10 @@ export class EditorSelectionManager {
     set selectedObject(val: SceneObject | null) { this._selectedObject = val; }
 
     notifyObjectChanged(obj: SceneObject): void {
-        // Only update UI if the changed object is the currently selected one
-        if (obj !== this._selectedObject) return;
+        // Update UI if changed object is selected singly or belongs to current multi-selection
+        const isPrimary = obj === this._selectedObject;
+        const isInMulti = this.hasMultiSelection() && this.isInMultiSelection(obj);
+        if (!isPrimary && !isInMulti) return;
 
         if (!this.dirty) {
             this.dirty = true;

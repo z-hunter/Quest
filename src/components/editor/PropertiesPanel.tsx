@@ -3,10 +3,12 @@ import { useEditorStore } from '../../store/editorStore';
 import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { QuadObject } from '../../entities/QuadObject';
+import { Entity } from '../../entities/Entity';
 
 export const PropertiesPanel: React.FC = () => {
     const game = useGame();
     const { selectedObjectId, selectedObjectType, incrementHierarchyVersion, incrementObjectVersion, mode, selectedVertexIndex } = useEditorStore();
+    const [groupIdDraft, setGroupIdDraft] = React.useState('');
 
     // Derived Object Binding (Source of Truth)
     // We re-render whenever objectVersion changes (subscribed via store hook)
@@ -22,6 +24,30 @@ export const PropertiesPanel: React.FC = () => {
     }
 
     const uiScale = game?.settings?.editor?.uiScale || 1.0;
+    const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
+        ? game.editor.selectionManager.getSelectedObjects()
+        : [];
+
+    const getSharedValue = (arr: any[], getter: (o: any) => any) => {
+        if (!arr.length) return '';
+        const first = getter(arr[0]);
+        for (let i = 1; i < arr.length; i++) {
+            if (getter(arr[i]) !== first) return '';
+        }
+        return first ?? '';
+    };
+
+    const applyToMulti = (fn: (o: any) => void) => {
+        multiObjects.forEach(fn);
+        incrementObjectVersion();
+        incrementHierarchyVersion();
+    };
+
+    React.useEffect(() => {
+        if (selectedObjectType !== 'MULTI') {
+            setGroupIdDraft('');
+        }
+    }, [selectedObjectType, selectedObjectId]);
 
     if (!obj || !game) {
         return (
@@ -37,6 +63,241 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
                 <div className="editor-content" style={{ color: '#888', fontStyle: 'italic' }}>
                     {selectedObjectId === 'SETTINGS' ? 'Loading Settings...' : 'No Selection'}
+                </div>
+            </div>
+        );
+    }
+
+    if (selectedObjectType === 'MULTI' && multiObjects.length > 1) {
+        const group = game.editor.selectionManager.getGroupTransform();
+        const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
+        const quads = multiObjects.filter((o: any) => (o as any).type === 'Quad');
+        const sharedLayer = getSharedValue(multiObjects, (o) => o.layer ?? 0);
+        const sharedParallax = getSharedValue(entitiesAndQuads, (o: any) => o.parallax ?? 1);
+        const sharedBlendMode = getSharedValue(entitiesAndQuads, (o: any) => o.blendMode || 'source-over');
+        const sharedBlur = getSharedValue(entitiesAndQuads, (o: any) => o.blur || 0);
+        const sharedColor = getSharedValue(
+            multiObjects.filter((o: any) => (o as any).color !== undefined),
+            (o: any) => o.color || '#ffffff'
+        );
+        const sharedLineColor = getSharedValue(quads, (q: any) => q.gridColor || '#ffffff');
+
+        return (
+            <div
+                id="editor-panel"
+                className="editor-sidebar right"
+                onMouseEnter={() => { if (game) game.isMouseOverUI = true; }}
+                onMouseLeave={() => { if (game) game.isMouseOverUI = false; }}
+                style={{ fontSize: `${12 * uiScale}px` }}
+            >
+                <div className="editor-header">
+                    <span>MULTI</span>
+                    <button className="e-btn" onClick={() => (useEditorStore.getState().toggle(false))}>X</button>
+                </div>
+                <div className="editor-content">
+                    <div className="e-row">
+                        <label className="e-label">Selected {multiObjects.length} obj.</label>
+                    </div>
+
+                    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        <div>
+                            <label className="e-label">Group X</label>
+                            <input
+                                type="number"
+                                className="e-input"
+                                value={group.offsetX.toFixed(2)}
+                                onChange={(e) => {
+                                    const x = parseFloat(e.target.value);
+                                    game.editor.selectionManager.applyGroupTransform(isNaN(x) ? 0 : x, group.offsetY, group.scale);
+                                    incrementObjectVersion();
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <label className="e-label">Group Y</label>
+                            <input
+                                type="number"
+                                className="e-input"
+                                value={group.offsetY.toFixed(2)}
+                                onChange={(e) => {
+                                    const y = parseFloat(e.target.value);
+                                    game.editor.selectionManager.applyGroupTransform(group.offsetX, isNaN(y) ? 0 : y, group.scale);
+                                    incrementObjectVersion();
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="e-row">
+                        <label className="e-label">Group Scale</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            className="e-input"
+                            value={group.scale.toFixed(3)}
+                            onChange={(e) => {
+                                const s = parseFloat(e.target.value);
+                                game.editor.selectionManager.applyGroupTransform(group.offsetX, group.offsetY, isNaN(s) ? 1 : s);
+                                incrementObjectVersion();
+                            }}
+                        />
+                    </div>
+
+                    <div className="e-row">
+                        <label className="e-label">Layer</label>
+                        <input
+                            type="number"
+                            className="e-input"
+                            placeholder="mixed"
+                            value={sharedLayer === '' ? '' : sharedLayer}
+                            onChange={(e) => {
+                                const v = parseInt(e.target.value);
+                                if (isNaN(v)) return;
+                                applyToMulti((o) => { o.layer = v; });
+                            }}
+                        />
+                    </div>
+
+                    {entitiesAndQuads.length > 0 && (
+                        <div className="e-row">
+                            <label className="e-label">Parallax</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                className="e-input"
+                                placeholder="mixed"
+                                value={sharedParallax === '' ? '' : sharedParallax}
+                                onChange={(e) => {
+                                    const v = parseFloat(e.target.value);
+                                    if (isNaN(v)) return;
+                                    applyToMulti((o: any) => {
+                                        if (o instanceof Entity) o.parallax = v;
+                                    });
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    {entitiesAndQuads.length > 0 && (
+                        <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                            <div>
+                                <label className="e-label">Blend</label>
+                                <Select
+                                    value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                                    onChange={(value) => {
+                                        applyToMulti((o: any) => {
+                                            if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                                        });
+                                    }}
+                                    options={[
+                                        { value: 'source-over', label: 'Normal' },
+                                        { value: 'multiply', label: 'Multiply' },
+                                        { value: 'screen', label: 'Screen' },
+                                        { value: 'overlay', label: 'Overlay' },
+                                        { value: 'lighter', label: 'Add' },
+                                        { value: 'difference', label: 'Diff' },
+                                    ]}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            <div>
+                                <label className="e-label">Blur</label>
+                                <input
+                                    type="number"
+                                    className="e-input"
+                                    placeholder="mixed"
+                                    value={sharedBlur === '' ? '' : sharedBlur}
+                                    onChange={(e) => {
+                                        const v = parseInt(e.target.value);
+                                        if (isNaN(v)) return;
+                                        applyToMulti((o: any) => {
+                                            if (o instanceof Entity) o.blur = v;
+                                        });
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="e-row">
+                        <label className="e-label">Fill Color</label>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                            <input
+                                type="color"
+                                className="e-input"
+                                style={{ width: '32px', padding: 0 }}
+                                value={sharedColor === '' ? '#ffffff' : sharedColor}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    applyToMulti((o: any) => {
+                                        if (o.color !== undefined) o.color = v;
+                                    });
+                                }}
+                            />
+                            <input
+                                type="text"
+                                className="e-input"
+                                placeholder="mixed"
+                                value={sharedColor === '' ? '' : sharedColor}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    applyToMulti((o: any) => {
+                                        if (o.color !== undefined) o.color = v;
+                                    });
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {quads.length > 0 && (
+                        <div className="e-row">
+                            <label className="e-label">Line Color</label>
+                            <input
+                                type="text"
+                                className="e-input"
+                                placeholder="mixed"
+                                value={sharedLineColor === '' ? '' : sharedLineColor}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    applyToMulti((o: any) => {
+                                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                                    });
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    <div className="e-row">
+                        <label className="e-label">Group ID (append)</label>
+                        <input
+                            type="text"
+                            className="e-input"
+                            value={groupIdDraft}
+                            placeholder="#group"
+                            onChange={(e) => setGroupIdDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key !== 'Enter') return;
+                                e.preventDefault();
+                                const raw = groupIdDraft.trim();
+                                if (!raw) return;
+                                const prepared = raw
+                                    .split(',')
+                                    .map((x) => x.trim())
+                                    .filter(Boolean)
+                                    .map((x) => x.startsWith('#') ? x : `#${x}`);
+                                applyToMulti((o: any) => {
+                                    const existing = (o.groupID || '')
+                                        .split(',')
+                                        .map((x: string) => x.trim())
+                                        .filter(Boolean);
+                                    const merged = [...new Set([...existing, ...prepared])];
+                                    o.groupID = merged.join(',');
+                                });
+                                setGroupIdDraft('');
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
         );

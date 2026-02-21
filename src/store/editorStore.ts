@@ -7,6 +7,7 @@ interface EditorState {
     mode: EditorMode;
     selectedObjectId: string | null;
     selectedObjectType: string | null; // 'Entity', 'Walkbox', 'Triggerbox', 'SCENE', 'SETTINGS'
+    selectedObjectKeys: string[];
 
     // Scene Metadata (Used for Scene Props Panel)
     sceneName: string;
@@ -20,6 +21,7 @@ interface EditorState {
     toggle: (force?: boolean) => void;
     setMode: (mode: EditorMode) => void;
     selectObject: (id: string | null, type: string | null) => void;
+    selectObjects: (keys: string[], primaryId: string | null, type: string | null) => void;
     setSceneInfo: (name: string, filename: string) => void;
     incrementHierarchyVersion: () => void;
     incrementObjectVersion: () => void;
@@ -38,6 +40,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     mode: 'SELECT',
     selectedObjectId: null,
     selectedObjectType: null,
+    selectedObjectKeys: [],
     selectedVertexIndex: -1,
     sceneName: '',
     sceneFilename: '',
@@ -48,7 +51,19 @@ export const useEditorStore = create<EditorState>((set) => ({
 
     setMode: (mode) => set({ mode }),
 
-    selectObject: (id, type) => set({ selectedObjectId: id, selectedObjectType: type, selectedVertexIndex: -1 }),
+    selectObject: (id, type) => set({
+        selectedObjectId: id,
+        selectedObjectType: type,
+        selectedObjectKeys: id ? [id] : [],
+        selectedVertexIndex: -1
+    }),
+
+    selectObjects: (keys, primaryId, type) => set({
+        selectedObjectKeys: keys,
+        selectedObjectId: primaryId,
+        selectedObjectType: type,
+        selectedVertexIndex: -1
+    }),
 
     selectVertex: (index) => set({ selectedVertexIndex: index }),
 
