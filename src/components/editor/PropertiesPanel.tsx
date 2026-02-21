@@ -253,18 +253,32 @@ export const PropertiesPanel: React.FC = () => {
                     {quads.length > 0 && (
                         <div className="e-row">
                             <label className="e-label">Line Color</label>
-                            <input
-                                type="text"
-                                className="e-input"
-                                placeholder="mixed"
-                                value={sharedLineColor === '' ? '' : sharedLineColor}
-                                onChange={(e) => {
-                                    const v = e.target.value;
-                                    applyToMulti((o: any) => {
-                                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                                    });
-                                }}
-                            />
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                                <input
+                                    type="color"
+                                    className="e-input"
+                                    style={{ width: '32px', padding: 0 }}
+                                    value={sharedLineColor === '' ? '#ffffff' : sharedLineColor}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        applyToMulti((o: any) => {
+                                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                                        });
+                                    }}
+                                />
+                                <input
+                                    type="text"
+                                    className="e-input"
+                                    placeholder="mixed"
+                                    value={sharedLineColor === '' ? '' : sharedLineColor}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        applyToMulti((o: any) => {
+                                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                                        });
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
 
