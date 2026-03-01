@@ -197,8 +197,6 @@ export class Entity extends SceneObject {
 
         // Delegate to AssetLoader
         // Note: AssetLoader handles extension and path resolution
-        const requestName = filename;
-        console.log(`[Entity] Requesting sprite: ${requestName}`);
 
         // Update spriteName immediately so other systems (SceneManager) know what we are loading
         this.spriteName = filename;

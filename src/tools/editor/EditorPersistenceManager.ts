@@ -63,7 +63,6 @@ export class EditorPersistenceManager {
       });
 
       if (response.ok) {
-        console.log('Scene saved to server:', filePath);
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
       } else {
@@ -130,7 +129,6 @@ export class EditorPersistenceManager {
       });
 
       if (response.ok) {
-        console.log('Prefab saved to server:', filePath);
         this.editor.game.showNotification(`Prefab Saved: ${filename} `);
       } else {
         throw new Error(await response.text());

@@ -85,7 +85,6 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                         autoFocus={!editorEnabled || isConsoleOpen}
                         disabled={editorEnabled && !isConsoleOpen}
                         onKeyDown={(e) => {
-                            console.log(`[UIOverlay] Input Key: ${e.key}`);
                             // Layer 2: React Event Fallback (fires if Global Capture misses or bubbles up)
 
                             // F1: Toggle Scene Editor

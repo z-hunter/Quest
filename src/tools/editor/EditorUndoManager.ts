@@ -25,8 +25,6 @@ export class EditorUndoManager {
 
         // Clear Redo Stack on new action
         this.redoStack = [];
-
-        console.log(`[Editor] Undo State Saved. Stack Size: ${this.undoStack.length}`);
     }
 
     restoreSceneState(data: any): void {
@@ -77,12 +75,10 @@ export class EditorUndoManager {
         if (!scene) return;
 
         if (this.undoStack.length === 0) {
-            console.log("[Editor] Cannot Undo: Start of Buffer");
             this.editor.game.showNotification("Cannot Undo: Start of Buffer");
             return;
         }
 
-        console.log("[Editor] Performing Undo...");
 
         // 1. Capture CURRENT state and push to Redo Stack
         // 1. Capture CURRENT state and push to Redo Stack
@@ -96,7 +92,6 @@ export class EditorUndoManager {
         this.restoreSceneState(previousState);
 
         this.editor.game.showNotification(`Undo (-${this.redoStack.length})`);
-        console.log(`[Editor] Undo Complete. Undo Stack: ${this.undoStack.length}, Redo Stack: ${this.redoStack.length}`);
     }
 
     redo(): void {
@@ -104,12 +99,10 @@ export class EditorUndoManager {
         if (!scene) return;
 
         if (this.redoStack.length === 0) {
-            console.log("[Editor] Cannot Redo: End of Buffer");
             this.editor.game.showNotification("Cannot Redo: End of Buffer");
             return;
         }
 
-        console.log("[Editor] Performing Redo...");
 
         // 1. Capture CURRENT state and push to Undo Stack
         // 1. Capture CURRENT state and push to Undo Stack
@@ -127,7 +120,6 @@ export class EditorUndoManager {
         } else {
             this.editor.game.showNotification(`Redo (-${this.redoStack.length})`);
         }
-        console.log(`[Editor] Redo Complete. Undo Stack: ${this.undoStack.length}, Redo Stack: ${this.redoStack.length}`);
     }
 }
 

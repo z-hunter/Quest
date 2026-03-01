@@ -1007,7 +1007,6 @@ export const PropertiesPanel: React.FC = () => {
                                                                                     tV.binding.targetName === sel.name && tV.binding.index === i) {
 
                                                                                     delete tV.binding;
-                                                                                    console.log(`[PropertiesPanel] Mutual binding broken: ${target.name}[${tIdx}] -> ${sel.name}[${i}]`);
                                                                                 }
                                                                             }
                                                                         }

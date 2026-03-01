@@ -147,8 +147,6 @@ export class Game implements IGame {
 
         // Register user scripts (from src/scripts/main.ts)
         registerUserScripts();
-
-        console.log('Game initialized');
     }
 
     start(): void {
@@ -172,7 +170,6 @@ export class Game implements IGame {
         if (this.input) {
             this.input.destroy();
         }
-        console.log('[Game] Destroyed');
     }
 
     loop(timestamp: number): void {
@@ -375,7 +372,6 @@ export class Game implements IGame {
     }
 
     onMouseClick(x: number, y: number): void {
-        console.log(`[Game] onMouseClick: ${x}, ${y}`);
 
         // Only focus parser if editor is NOT enabled
         if (!this.editor.enabled) {
@@ -384,11 +380,9 @@ export class Game implements IGame {
 
         // If editor consumes the click, don't pass to game
         if (this.editor.onClick(x, y)) {
-            console.log(`[Game] Editor consumed click`);
             return;
         }
 
-        console.log(`Click at ${Math.round(x)}, ${Math.round(y)}`);
         // Forward click to current scene
         if (this.sceneManager.currentScene) {
             this.sceneManager.currentScene.onClick(x, y);
@@ -402,7 +396,6 @@ export class Game implements IGame {
     }
 
     showNotification(text: string): void {
-        console.log(`[SYSTEM NOTIFICATION] ${text}`);
         if (this.onMessage) {
             this.onMessage(text);
         }
@@ -429,7 +422,6 @@ export class Game implements IGame {
         try {
             const json = JSON.stringify(this.settings);
             localStorage.setItem('quest_settings', json);
-            console.log('[Game] Settings saved to LocalStorage');
             this.showNotification("Settings Saved!");
         } catch (e) {
             console.error("Failed to save settings:", e);
@@ -448,7 +440,6 @@ export class Game implements IGame {
                 if (loaded.editor) {
                     this.settings.editor = { ...this.settings.editor, ...loaded.editor };
                 }
-                console.log('[Game] Settings loaded from LocalStorage');
             }
         } catch (e) {
             console.error("Failed to load settings:", e);

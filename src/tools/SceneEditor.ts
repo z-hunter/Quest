@@ -1,4 +1,3 @@
-
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
@@ -174,7 +173,6 @@ export class SceneEditor {
             e.preventDefault();
             if (this.selectedObject) {
                 this.selectedObject.disabled = !this.selectedObject.disabled;
-                console.log(`[Editor] Object ${this.selectedObject.name} disabled: ${this.selectedObject.disabled}`);
 
                 // Force UI Update
                 useEditorStore.getState().incrementObjectVersion();
@@ -188,7 +186,6 @@ export class SceneEditor {
             e.preventDefault();
             if (this.selectedObject) {
                 this.selectedObject.locked = !this.selectedObject.locked;
-                console.log(`[Editor] Object ${this.selectedObject.name} locked: ${this.selectedObject.locked}`);
 
                 // Force UI Update
                 useEditorStore.getState().incrementObjectVersion();
@@ -364,7 +361,6 @@ export class SceneEditor {
                 this.transformManager.currentPolygon = [];
                 const c = document.getElementById('chk-draw-mode') as HTMLInputElement;
                 if (c) c.checked = false;
-                console.log("[Editor] Draw Mode Cancelled");
                 break;
         }
     }
@@ -417,7 +413,6 @@ export class SceneEditor {
 
         // Normalization Logic on Toggle
         if (wasEnabled !== isEnabled) {
-            console.log(`[Editor] Scaling Toggled: ${wasEnabled} -> ${isEnabled}. Normalizing entities...`);
             const entities = scene.entities;
             for (const ent of entities) {
                 if (ent.ignoreScaling) continue;
@@ -537,7 +532,6 @@ export class SceneEditor {
         this.syncUI();
         this.refreshHierarchy();
         this.selectObject('SCENE');
-        console.log('New Scene Created');
     }
 
     refreshHierarchy(): void {
@@ -725,7 +719,6 @@ export class SceneEditor {
         const json = JSON.stringify(data, null, 2);
 
         navigator.clipboard.writeText(json).then(() => {
-            console.log('Object JSON copied to clipboard');
             // Silent success as requested
         }).catch(err => {
             console.error('Failed to copy object JSON: ', err);
@@ -754,7 +747,6 @@ export class SceneEditor {
                 const index = scene.entities.indexOf(this.selectedObject);
                 if (index > -1) scene.entities.splice(index, 1);
             }
-            console.log('Object deleted');
         }
 
         this.selectedObject = null;
@@ -783,7 +775,6 @@ export class SceneEditor {
             if (type === 'Walkbox') useEditorStore.getState().setMode('DRAW_WALKBOX');
             else useEditorStore.getState().setMode('DRAW_TRIGGER');
 
-            console.log(`Redrawing ${type}: ${this.selectedObject.name} `);
         }
     }
 

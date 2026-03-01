@@ -68,7 +68,6 @@ export class SpriteEditor {
         const parserInput = this.game.getCommandInput();
 
         if (this.active) {
-            console.log('[SpriteEditor] Activated');
 
             // Disable Parser Input to prevent game commands and focus stealing
             if (parserInput) {
@@ -93,7 +92,6 @@ export class SpriteEditor {
                 this.updatePreviewCanvas();
             }, 50);
         } else {
-            console.log('[SpriteEditor] Deactivated');
             // Re-enable Parser
             if (parserInput) {
                 parserInput.disabled = false;
@@ -126,7 +124,6 @@ export class SpriteEditor {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            console.log('[SpriteEditor] Ctrl+O Handled');
             this.promptLoadImage();
             return;
         }
@@ -376,7 +373,6 @@ export class SpriteEditor {
         this.sourceImage = new Image();
         this.sourceImage.src = src;
         this.sourceImage.onload = () => {
-            console.log(`[SpriteEditor] Loaded image: ${src} (Original: ${path})`);
 
             // Auto-resize sprite logic requested by user
             // Unless we are loading an existing sprite (keepDimensions = true)
@@ -470,7 +466,6 @@ export class SpriteEditor {
             });
 
             if (response.ok) {
-                console.log(`[SpriteEditor] Saved to server: ${filePath}`);
                 // Use Toast Message instead of Alert
                 this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
             } else {

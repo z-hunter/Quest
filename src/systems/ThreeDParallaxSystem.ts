@@ -77,8 +77,6 @@ export class ThreeDParallaxSystem {
 
                                 // Only update if changed (epsilon check?)
                                 if (Math.abs(newP - svP) > 0.0001) {
-                                    // Debug Log
-                                    if (Math.random() < 0.01) console.log(`[3dParallax] Updating Shadow Vertex P: ${svP.toFixed(3)} -> ${newP.toFixed(3)}`);
 
                                     // Apply Correction
                                     sv.p = newP;

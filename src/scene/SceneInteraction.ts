@@ -25,7 +25,7 @@ export function activateSceneObject(scene: Scene, obj: SceneObject, depth: numbe
     }
 
     if (obj instanceof Triggerbox && obj.script) {
-        console.log('Run Script:', obj.script);
+        // Intentionally silent: triggering handled by systems/scripts
     }
 }
 

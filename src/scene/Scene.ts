@@ -263,7 +263,6 @@ export class Scene {
             for (const wb of activeWalkboxes) {
                 if (wb.mode === 'Subtract') {
                     if (Geometry.rectIntersectsPolygon(sourceRect, wb.poly)) {
-                        console.log(`  -> Blocked by Subtract '${wb.name}'`);
                         return false; // Hit a hole
                     }
                 }
@@ -280,14 +279,12 @@ export class Scene {
                 // Check simple containment in ANY positive box
                 for (const wb of positives) {
                     if (Geometry.rectInsidePolygon(sourceRect, wb.poly)) {
-                        console.log(`  -> Safe in Positive Box '${wb.name}' (${wb.mode || 'Invert'})`);
                         safe = true;
                         break;
                     }
                 }
 
                 if (!safe) {
-                    console.log('  -> Blocked: Not inside any active Invert/Add box');
                     return false;
                 }
             }

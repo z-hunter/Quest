@@ -246,7 +246,7 @@ export class EditorSelectionManager {
         const obj = this.editor.selectedObject;
         if (!obj || !(obj instanceof SceneObject)) return;
 
-        console.log("[Editor] Duplicating Object:", obj);
+        
 
         // serialize
         const data = obj.toJSON();
@@ -289,7 +289,6 @@ export class EditorSelectionManager {
         // Use unified creation from Editor
         const newObj = this.editor.createObjectFromData(data);
         if (newObj) {
-            console.log(`Duplicated: ${baseName} -> ${newName} `);
             this.selectObject(newObj);
             this.editor.refreshHierarchy();
         }
@@ -303,19 +302,16 @@ export class EditorSelectionManager {
         const text = e.clipboardData?.getData('text');
         if (text) {
             e.preventDefault();
-            console.log("Paste Event Captured. Text length:", text.length);
             this.processPasteData(text);
         }
     }
 
     async processPasteData(text: string): Promise<void> {
         try {
-            console.log("Processing Paste Data...");
             this.editor.saveUndoState(); // Save before paste
             let data: any;
             try {
                 data = JSON.parse(text);
-                console.log("JSON Parsed:", data);
             } catch (e) {
                 console.warn("Clipboard does not contain valid JSON");
                 return;
@@ -329,7 +325,6 @@ export class EditorSelectionManager {
 
             // Check Mouse Pos
             if (!this.editor.lastMousePos) {
-                console.log("Mouse position unknown, cannot paste at cursor.");
                 return;
             }
 

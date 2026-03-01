@@ -26,8 +26,6 @@ export class Input {
             e.preventDefault(); // Prevent canvas from stealing focus
             this.updateMouse(e);
             this.mouse.clicked = true;
-
-            console.log(`[Input] MouseDown: ${this.mouse.x}, ${this.mouse.y}`);
             if (this.game.onMouseClick) {
                 this.game.onMouseClick(this.mouse.x, this.mouse.y);
             }

@@ -11,7 +11,7 @@ export class Parser {
     }
 
     parse(input: string): void {
-        console.log(`Command: ${input}`);
+        
 
         // Integration with Console Commands
         // If the input starts with a known console command, delegate to Console.

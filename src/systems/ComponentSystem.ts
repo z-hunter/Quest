@@ -128,7 +128,6 @@ export class ComponentSystem {
             scene.entities.find(e => e.name === targetName);
 
         if (targetObj) {
-            console.log(`  -> Delegating to '${targetObj.name}'`);
             scene.activateObject(targetObj, depth + 1);
         } else {
             console.warn(`[Subtrigger] Target '${targetName}' not found.`);
@@ -161,7 +160,6 @@ export class ComponentSystem {
             const allowedDist = (player.width || 30) * 4;
 
             if (dist > allowedDist) {
-                console.log(`[Scene] Activation too far: ${dist.toFixed(1)} > ${allowedDist}`);
                 const game = scene.game as unknown as IGame;
                 if (game && typeof game.showMessage === 'function') {
                     game.showMessage("You are too far away.");
@@ -170,7 +168,6 @@ export class ComponentSystem {
             }
         }
 
-        console.log(`  -> Activating Subscene Target: '${targetStr}'`);
         scene.activeSubscene = targetStr;
         scene.subsceneEntities.clear();
 
@@ -189,7 +186,6 @@ export class ComponentSystem {
             if (game && game.inventory) {
                 const hasKey = game.inventory.some(i => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey);
                 if (!hasKey) {
-                    console.log(`[Switch] Access Denied. Missing key: ${sw.idKey}`);
                     game.showMessage(`Locked. Needs ${sw.idKey}`);
                     return true; // Handled (Blocked)
                 }
@@ -201,7 +197,7 @@ export class ComponentSystem {
         const currentState = sw.state || 1;
         const nextState = currentState === 1 ? 2 : 1;
         sw.state = nextState;
-        console.log(`[Switch] Toggling to State ${nextState}`);
+        
 
         // 3. Audio
         const game = scene.game as unknown as IGame;
@@ -231,8 +227,6 @@ export class ComponentSystem {
                 t.disabled = true;
                 if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(t);
             });
-
-            console.log(`[Switch] Updated Targets. Enabled '${targetStrShow}', Disabled '${targetStrHide}'`);
         }
 
         return true; // Handled

@@ -15,7 +15,6 @@ export class EditorUI {
     initUI(): void {
         if (this.uiInitialized) return;
 
-        console.log('[SceneEditor] Initializing UI...');
 
         // Cache command input provided by UI layer
         this.elParserInput = this.editor.game.getCommandInput();
@@ -23,12 +22,9 @@ export class EditorUI {
         this.setupListeners();
 
         this.uiInitialized = true;
-        console.log('[SceneEditor] UI Initialized');
     }
 
     destroy(): void {
-        console.log('[SceneEditor] Destroying, removing listeners...');
-
         if (this.editor.boundKeyHandler) document.removeEventListener('keydown', this.editor.boundKeyHandler, { capture: true });
 
         if (this.editor.boundMouseDownHandler) this.editor.game.canvas.removeEventListener('mousedown', this.editor.boundMouseDownHandler);

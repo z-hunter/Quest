@@ -33,7 +33,6 @@ export class Console {
 
     constructor(game: any) { // Inject Game
         this.game = game;
-        console.log('[Console] Constructor called. Game instance present:', !!game);
         this.registerDefaultCommands();
     }
 
@@ -114,7 +113,6 @@ export class Console {
     private runScript(id: string, args: string[]) {
         if (ScriptRegistry.has(id)) {
             this.log(`Running script '${id}'...`, 'info');
-            console.log(`[Console] runScript context game:`, this.game);
 
             ScriptRegistry.execute(id, {
                 game: this.game,

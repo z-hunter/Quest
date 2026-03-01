@@ -1024,12 +1024,12 @@ export class EditorTransformManager {
                                     type: 'vertex',
                                     index: this.draggingVertexIndex
                                 };
-                                console.log(`[Editor] Mutual Binding created: ${targetEnt.name}[${targetVIndex}] -> ${q.name}[${this.draggingVertexIndex}]`);
+                                
                             }
                         }
                     }
 
-                    console.log(`[Editor] Vertex ${this.draggingVertexIndex} bound to ${this.currentSnapBinding.targetName} (${this.currentSnapBinding.type})`);
+                    
                 }
             } else if (this.draggingVertexIndex >= 0 && (this.editor.selectedObject as any).type === 'Quad') {
                 // If we moved a vertex and DID NOT snap, we KEEP the binding (Standard Group Move)
@@ -1047,7 +1047,6 @@ export class EditorTransformManager {
     }
 
     onClick(x: number, y: number): boolean {
-        // console.log(`[Editor] onClick: ${x}, ${y}, Enabled: ${this.editor.enabled}, DrawMode: ${this.drawMode} `);
         if (!this.editor.enabled) return false;
 
         // If in Draw Mode, add points
@@ -1078,7 +1077,6 @@ export class EditorTransformManager {
             }
 
             this.currentPolygon.push({ x: finalX, y: finalY });
-            console.log(`Point Added: ${finalX},${finalY}.Total: ${this.currentPolygon.length} `);
         }
 
         // ALWAYS consume click if editor is enabled to prevent Game/Player interaction
@@ -1144,7 +1142,6 @@ export class EditorTransformManager {
             if (!scene.walkbox) scene.walkbox = [];
             const newWalkbox = new Walkbox([], 'Walk_' + Math.floor(Math.random() * 1000));
             scene.walkbox.push(newWalkbox);
-            console.log('Walkbox object added to scene (Empty)');
             editor.selectObject(newWalkbox);
             editor.redrawSelected();
 
@@ -1152,19 +1149,16 @@ export class EditorTransformManager {
             if (!scene.triggerboxes) scene.triggerboxes = [];
             const newTrigger = new Triggerbox([], 'Trig_' + Math.floor(Math.random() * 1000));
             scene.triggerboxes.push(newTrigger);
-            console.log('Triggerbox object added to scene (Empty)');
             editor.selectObject(newTrigger);
             editor.redrawSelected();
         }
     }
 
     finishPolygon(): void {
-        console.log('finishPolygon called');
         if (this.currentPolygon && this.currentPolygon.length > 2) {
             // Instead of creating NEW object, assign to SELECTED object
             if (this.editor.selectedObject && (this.editor.selectedObject instanceof Walkbox || this.editor.selectedObject instanceof Triggerbox)) {
                 this.editor.selectedObject.poly = [...this.currentPolygon];
-                console.log("Polygon updated for " + this.editor.selectedObject.name);
             } else {
                 console.warn("No valid object selected for polygon completion!");
             }

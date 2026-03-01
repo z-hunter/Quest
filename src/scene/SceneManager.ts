@@ -25,7 +25,6 @@ export class SceneManager {
         const scene = this.scenes.get(sceneId);
         if (scene) {
             this.currentScene = scene;
-            console.log(`Switched to scene: ${this.currentScene.name}`);
             this.exposeEntitiesToWindow();
             // Optional: Notify UI provided by Game
             if (this.game.onSceneChange) {
@@ -47,7 +46,7 @@ export class SceneManager {
                 (window as unknown as Record<string, unknown>)[entity.name] = entity;
             }
         });
-        console.log(`[SceneManager] Entities exposed to Console: ${this.currentScene.entities.map(e => e.name).join(', ')}`);
+        
     }
 
     update(deltaTime: number): void {
@@ -173,7 +172,7 @@ export class SceneManager {
                 // Better: SceneManager emits event.
             }
 
-            console.log('Scene loaded successfully!');
+            
             // Only notify if explicit? Or maybe "Scene loaded" is good debug.
             // But GDD implies "Scene saved..." is notification. "Scene loaded..." might be noise or notification.
             // Let's use notification.

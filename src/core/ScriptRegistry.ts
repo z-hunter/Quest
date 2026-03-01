@@ -14,7 +14,6 @@ export class ScriptRegistry {
     private static activeScripts: Map<string, ScriptAPI[]> = new Map();
 
     static register(id: string, fn: ScriptFunction): void {
-        console.log(`[ScriptRegistry] Registering: ${id}`);
         if (this.scripts.has(id)) {
             console.warn(`[ScriptRegistry] Overwriting script: ${id}`);
         }
@@ -53,14 +52,12 @@ export class ScriptRegistry {
     static stop(id: string): void {
         const instances = this.activeScripts.get(id);
         if (instances) {
-            console.log(`[ScriptRegistry] Stopping script: ${id} (${instances.length} instances)`);
             instances.forEach(api => api.dispose());
             this.activeScripts.delete(id);
         }
     }
 
     static stopAll(): void {
-        console.log(`[ScriptRegistry] Stopping all scripts...`);
         for (const id of this.activeScripts.keys()) {
             this.stop(id);
         }

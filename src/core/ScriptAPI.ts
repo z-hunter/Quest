@@ -52,7 +52,6 @@ export class ScriptAPI {
     this.timeouts.forEach(id => clearTimeout(id));
     this.intervals = [];
     this.timeouts = [];
-    console.log('[ScriptAPI] Disposed resources.');
   }
 
   /**
@@ -107,7 +106,6 @@ export class ScriptAPI {
   saveCheckpoint() {
     if (this.game.editor) {
       this.game.editor.saveUndoState();
-      console.log('[ScriptAPI] Checkpoint saved.');
     }
   }
 }
