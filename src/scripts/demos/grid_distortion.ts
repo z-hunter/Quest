@@ -1,9 +1,8 @@
-
 import { ScriptRegistry } from '../../core/ScriptRegistry';
 
 /**
  * Grid Distortion Script
- * 
+ *
  * Applies dynamic "dent" and "bump" distortions to a 6x6 grid of Quads (q1-1 to q6-6).
  * Usage: RUN grid_distortion
  */
@@ -11,7 +10,7 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
   api.log('Starting Grid Distortion...');
 
   const gridSize = 6;
-  const quads: { id: string, quad: any, baseVertices: { x: number, y: number }[] }[] = [];
+  const quads: { id: string; quad: any; baseVertices: { x: number; y: number }[] }[] = [];
 
   // 1. Capture initial state
   for (let x = 1; x <= gridSize; x++) {
@@ -48,9 +47,12 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
 
   // Bounds for spawning dents (approximate based on grid)
   // We can start with a rough guess or calculate bounding box of all quads
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  quads.forEach(q => {
-    q.baseVertices.forEach(v => {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  quads.forEach((q) => {
+    q.baseVertices.forEach((v) => {
       if (v.x < minX) minX = v.x;
       if (v.x > maxX) maxX = v.x;
       if (v.y < minY) minY = v.y;
@@ -77,7 +79,7 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
         radius: 100 + Math.random() * 150,
         strength: (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random() * 30), // Push/Pull amount
         life: 100,
-        maxLife: 100
+        maxLife: 100,
       });
     }
 
@@ -87,7 +89,7 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
         let offsetX = 0;
         let offsetY = 0;
 
-        dents.forEach(dent => {
+        dents.forEach((dent) => {
           const dx = baseV.x - dent.x;
           const dy = baseV.y - dent.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -100,7 +102,7 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
             // Sin(t * PI) gives 0 at ends, 1 at center? No, cos.
             // Let's use (1 - t) * (1 - t) for falloff
             // const falloff = (1 - t) * (1 - t);
-            const falloff = Math.pow(Math.cos(t * Math.PI / 2), 2);
+            const falloff = Math.pow(Math.cos((t * Math.PI) / 2), 2);
 
             // Lifecycle fade in/out
             const ageRatio = dent.life / dent.maxLife;
@@ -111,7 +113,8 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
             // Direction: Vector from dent center to vertex
             // If strength > 0 (Bump/Expand), push away.
             // If strength < 0 (Dent/Pinch), pull towards.
-            if (dist > 0.1) { // Avoid div by zero
+            if (dist > 0.1) {
+              // Avoid div by zero
               const dirX = dx / dist;
               const dirY = dy / dist;
               offsetX += dirX * force;
@@ -129,7 +132,6 @@ ScriptRegistry.register('grid_distortion', ({ api, args: _args }) => {
         quad.setVertex(vIdx, baseV.x + offsetX, baseV.y + offsetY);
       });
     });
-
   }, 16); // ~60fps
 
   api.log('Grid Distortion running.');

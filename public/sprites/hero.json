@@ -1,8 +1,8 @@
 {
-    "imageFile": "hero.png",
-    "width": 176,
-    "height": 192,
-    "frames": 1,
-    "x": 0,
-    "y": 20
+  "imageFile": "hero.png",
+  "width": 176,
+  "height": 192,
+  "frames": 1,
+  "x": 0,
+  "y": 20
 }

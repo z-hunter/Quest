@@ -3,8 +3,6 @@
  * Uses Vite's import.meta.glob feature.
  */
 export function loadAllScripts() {
-  
-
   // Import all .ts files in subdirectories, eagerly (included in bundle)
   const modules = import.meta.glob('./**/*.ts', { eager: true });
 
@@ -17,18 +15,14 @@ export function loadAllScripts() {
 
     // If the script purely relies on side-effects (calling register itself), simply importing it is enough.
     // We log it for debugging.
-    
   }
-
-  
 }
 
 // Hot Module Replacement
 if (import.meta.hot) {
   import.meta.hot.accept((newModule) => {
-    
     // In a real HMR scenario, we might need to clear old scripts or re-run registration.
-    // Since our ScriptRegistry.register warns on overwrite but allows it, 
+    // Since our ScriptRegistry.register warns on overwrite but allows it,
     // essentially re-importing updated modules will update the registry.
     // However, `import.meta.glob` with `{ eager: true }` usually invalidates the parent module (this file)
     // when a child changes, triggering this accept block.

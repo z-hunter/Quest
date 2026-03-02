@@ -48,17 +48,17 @@ export class ScriptAPI {
    * Cleans up all active timers created by this script instance.
    */
   dispose() {
-    this.intervals.forEach(id => clearInterval(id));
-    this.timeouts.forEach(id => clearTimeout(id));
+    this.intervals.forEach((id) => clearInterval(id));
+    this.timeouts.forEach((id) => clearTimeout(id));
     this.intervals = [];
     this.timeouts = [];
   }
 
   /**
-  * Retrieves a QuadObject by name.
-  * @param name Name of the QuadObject
-  * @returns The QuadObject or null if not found
-  */
+   * Retrieves a QuadObject by name.
+   * @param name Name of the QuadObject
+   * @returns The QuadObject or null if not found
+   */
   getQuad(name: string): QuadObject | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;

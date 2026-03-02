@@ -1,116 +1,116 @@
 export class Input {
-    game: any; // Using any to avoid circular dependency for now
-    canvas: HTMLCanvasElement;
-    mouse: { x: number, y: number, clicked: boolean };
-    keys: { [key: string]: boolean };
-    private listenersAttached: boolean;
+  game: any; // Using any to avoid circular dependency for now
+  canvas: HTMLCanvasElement;
+  mouse: { x: number; y: number; clicked: boolean };
+  keys: { [key: string]: boolean };
+  private listenersAttached: boolean;
 
-    private readonly onMouseMove: (e: MouseEvent) => void;
-    private readonly onMouseDown: (e: MouseEvent) => void;
-    private readonly onContextMenu: (e: Event) => void;
-    private readonly onKeyDown: (e: KeyboardEvent) => void;
-    private readonly onKeyUp: (e: KeyboardEvent) => void;
+  private readonly onMouseMove: (e: MouseEvent) => void;
+  private readonly onMouseDown: (e: MouseEvent) => void;
+  private readonly onContextMenu: (e: Event) => void;
+  private readonly onKeyDown: (e: KeyboardEvent) => void;
+  private readonly onKeyUp: (e: KeyboardEvent) => void;
 
-    constructor(game: any) {
-        this.game = game;
-        this.canvas = game.canvas;
-        this.mouse = { x: 0, y: 0, clicked: false };
-        this.keys = {};
-        this.listenersAttached = false;
+  constructor(game: any) {
+    this.game = game;
+    this.canvas = game.canvas;
+    this.mouse = { x: 0, y: 0, clicked: false };
+    this.keys = {};
+    this.listenersAttached = false;
 
-        this.onMouseMove = (e: MouseEvent) => {
-            this.updateMouse(e);
-        };
+    this.onMouseMove = (e: MouseEvent) => {
+      this.updateMouse(e);
+    };
 
-        this.onMouseDown = (e: MouseEvent) => {
-            e.preventDefault(); // Prevent canvas from stealing focus
-            this.updateMouse(e);
-            this.mouse.clicked = true;
-            if (this.game.onMouseClick) {
-                this.game.onMouseClick(this.mouse.x, this.mouse.y);
-            }
-        };
+    this.onMouseDown = (e: MouseEvent) => {
+      e.preventDefault(); // Prevent canvas from stealing focus
+      this.updateMouse(e);
+      this.mouse.clicked = true;
+      if (this.game.onMouseClick) {
+        this.game.onMouseClick(this.mouse.x, this.mouse.y);
+      }
+    };
 
-        this.onContextMenu = (e: Event) => {
-            e.preventDefault();
-        };
+    this.onContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
 
-        this.onKeyDown = (e: KeyboardEvent) => {
-            this.keys[e.key] = true;
+    this.onKeyDown = (e: KeyboardEvent) => {
+      this.keys[e.key] = true;
 
-            // Global Tilde (~) to toggle Console
-            if (e.key === '`' || e.key === '~') {
-                e.preventDefault();
-                if (this.game.console) {
-                    this.game.console.toggle();
-                }
-            }
-        };
-
-        this.onKeyUp = (e: KeyboardEvent) => {
-            this.keys[e.key] = false;
-        };
-
-        this.setupListeners();
-    }
-
-    private updateMouse(e: MouseEvent): void {
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-
-        this.mouse.x = (e.clientX - rect.left) * scaleX;
-        this.mouse.y = (e.clientY - rect.top) * scaleY;
-    }
-
-    setupListeners(): void {
-        if (this.listenersAttached) {
-            return;
+      // Global Tilde (~) to toggle Console
+      if (e.key === '`' || e.key === '~') {
+        e.preventDefault();
+        if (this.game.console) {
+          this.game.console.toggle();
         }
+      }
+    };
 
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('mousedown', this.onMouseDown);
-        this.canvas.addEventListener('contextmenu', this.onContextMenu);
+    this.onKeyUp = (e: KeyboardEvent) => {
+      this.keys[e.key] = false;
+    };
 
-        // Keyboard listeners stay on window to catch global input.
-        window.addEventListener('keydown', this.onKeyDown);
-        window.addEventListener('keyup', this.onKeyUp);
-        this.listenersAttached = true;
+    this.setupListeners();
+  }
+
+  private updateMouse(e: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+
+    this.mouse.x = (e.clientX - rect.left) * scaleX;
+    this.mouse.y = (e.clientY - rect.top) * scaleY;
+  }
+
+  setupListeners(): void {
+    if (this.listenersAttached) {
+      return;
     }
 
-    private detachCanvasListeners(canvas: HTMLCanvasElement): void {
-        canvas.removeEventListener('mousemove', this.onMouseMove);
-        canvas.removeEventListener('mousedown', this.onMouseDown);
-        canvas.removeEventListener('contextmenu', this.onContextMenu);
+    this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
+    this.canvas.addEventListener('contextmenu', this.onContextMenu);
+
+    // Keyboard listeners stay on window to catch global input.
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    this.listenersAttached = true;
+  }
+
+  private detachCanvasListeners(canvas: HTMLCanvasElement): void {
+    canvas.removeEventListener('mousemove', this.onMouseMove);
+    canvas.removeEventListener('mousedown', this.onMouseDown);
+    canvas.removeEventListener('contextmenu', this.onContextMenu);
+  }
+
+  isDown(key: string): boolean {
+    return !!this.keys[key];
+  }
+
+  updateCanvas(newCanvas: HTMLCanvasElement): void {
+    if (this.canvas === newCanvas) {
+      return;
     }
 
-    isDown(key: string): boolean {
-        return !!this.keys[key];
+    if (this.listenersAttached) {
+      this.detachCanvasListeners(this.canvas);
     }
 
-    updateCanvas(newCanvas: HTMLCanvasElement): void {
-        if (this.canvas === newCanvas) {
-            return;
-        }
+    this.canvas = newCanvas;
+    this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('mousedown', this.onMouseDown);
+    this.canvas.addEventListener('contextmenu', this.onContextMenu);
+  }
 
-        if (this.listenersAttached) {
-            this.detachCanvasListeners(this.canvas);
-        }
-
-        this.canvas = newCanvas;
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('mousedown', this.onMouseDown);
-        this.canvas.addEventListener('contextmenu', this.onContextMenu);
+  destroy(): void {
+    if (!this.listenersAttached) {
+      return;
     }
 
-    destroy(): void {
-        if (!this.listenersAttached) {
-            return;
-        }
-
-        this.detachCanvasListeners(this.canvas);
-        window.removeEventListener('keydown', this.onKeyDown);
-        window.removeEventListener('keyup', this.onKeyUp);
-        this.listenersAttached = false;
-    }
+    this.detachCanvasListeners(this.canvas);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.listenersAttached = false;
+  }
 }

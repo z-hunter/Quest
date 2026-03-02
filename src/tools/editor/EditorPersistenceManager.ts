@@ -59,7 +59,7 @@ export class EditorPersistenceManager {
       const response = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json })
+        body: JSON.stringify({ path: filePath, content: json }),
       });
 
       if (response.ok) {
@@ -89,7 +89,7 @@ export class EditorPersistenceManager {
 
   async saveObject(): Promise<void> {
     if (!this.editor.selectedObject || !(this.editor.selectedObject instanceof Entity)) {
-      this.editor.game.showNotification("Select an Object to Save");
+      this.editor.game.showNotification('Select an Object to Save');
       return;
     }
 
@@ -103,20 +103,22 @@ export class EditorPersistenceManager {
     const ent = this.editor.selectedObject as Entity;
 
     // Use Entity.toJSON or basic properties
-    const data = ent.toJSON ? ent.toJSON() : {
-      type: (ent as any).type || (ent instanceof Actor ? 'Actor' : 'Static'),
-      name: ent.name,
-      x: 0,
-      y: 0,
-      width: ent.width,
-      height: ent.height,
-      color: ent.color,
-      scale: ent.scale,
-      layer: ent.layer,
-      parallax: ent.parallax,
-      spriteName: ent.spriteName,
-      ignoreScaling: ent.ignoreScaling
-    };
+    const data = ent.toJSON
+      ? ent.toJSON()
+      : {
+          type: (ent as any).type || (ent instanceof Actor ? 'Actor' : 'Static'),
+          name: ent.name,
+          x: 0,
+          y: 0,
+          width: ent.width,
+          height: ent.height,
+          color: ent.color,
+          scale: ent.scale,
+          layer: ent.layer,
+          parallax: ent.parallax,
+          spriteName: ent.spriteName,
+          ignoreScaling: ent.ignoreScaling,
+        };
 
     const json = JSON.stringify(data, null, 2);
     const filePath = `public/prefabs/${filename}`;
@@ -125,7 +127,7 @@ export class EditorPersistenceManager {
       const response = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json })
+        body: JSON.stringify({ path: filePath, content: json }),
       });
 
       if (response.ok) {
@@ -167,7 +169,7 @@ export class EditorPersistenceManager {
         const allObjects = [
           ...(scene.entities || []),
           ...(scene.walkbox || []),
-          ...(scene.triggerboxes || [])
+          ...(scene.triggerboxes || []),
         ];
 
         // Override name in data to be the ID (or base it off ID)
@@ -197,10 +199,9 @@ export class EditorPersistenceManager {
         this.editor.selectObject(entity);
         this.editor.refreshHierarchy();
       }
-
     } catch (e) {
       console.error(e);
-      this.editor.game.showNotification("Failed to load prefab");
+      this.editor.game.showNotification('Failed to load prefab');
     }
   }
 

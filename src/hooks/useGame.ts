@@ -7,16 +7,16 @@ import { Game } from '../core/Game';
  * to provide reactivity without changing the consuming components.
  */
 export const useGame = (): Game => {
-    if (!Game.instance) {
-        throw new Error("Game instance not initialized!");
-    }
-    return Game.instance;
+  if (!Game.instance) {
+    throw new Error('Game instance not initialized!');
+  }
+  return Game.instance;
 };
 
 /**
  * Helper hook to access the Editor module specifically.
  */
 export const useEditor = () => {
-    const game = useGame();
-    return game.editor;
+  const game = useGame();
+  return game.editor;
 };

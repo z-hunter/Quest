@@ -5,5 +5,5 @@ import { loadAllScripts } from './loader';
  * It automatically loads all scripts in subdirectories via Vite's import.meta.glob.
  */
 export function registerUserScripts() {
-    loadAllScripts();
+  loadAllScripts();
 }

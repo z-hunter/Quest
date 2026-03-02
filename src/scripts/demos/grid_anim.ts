@@ -2,7 +2,7 @@ import { ScriptRegistry } from '../../core/ScriptRegistry';
 
 /**
  * Grid Animation Script
- * 
+ *
  * Jitters vertices of a 6x6 grid of Quads (q1-1 to q6-6).
  * Usage: RUN grid_anim [jitterAmount] [interval]
  */
@@ -41,7 +41,6 @@ ScriptRegistry.register('grid_anim', ({ api, args }) => {
   }, interval);
 
   // No longer need manual global timer tracking
-
 
   api.log('Animation running. Use browser console to stop: clearInterval(window._gridAnimTimer)');
 });

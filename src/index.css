@@ -49,23 +49,23 @@ body {
 
   /* Input Fields */
   --ui-input-bg: #000000;
-  --ui-input-text: #79EFA4;
+  --ui-input-text: #79efa4;
   --ui-input-border: #444444;
-  --ui-input-focus-border: #79EFA4;
+  --ui-input-focus-border: #79efa4;
 
   /* Dropdowns */
   --ui-dropdown-bg: #000000;
-  --ui-dropdown-text: #79EFA4;
+  --ui-dropdown-text: #79efa4;
   --ui-dropdown-selection-bg: #204638;
   /* Optional specific */
 
   /* Buttons */
   --ui-btn-bg: #000000;
   --ui-btn-text: #52c966;
-  --ui-btn-border: #79EFA4;
+  --ui-btn-border: #79efa4;
 
   /* F-Keys */
-  --ui-fkey-text: #79EFA4;
+  --ui-fkey-text: #79efa4;
   --ui-fkey-hotkey: #468a5f;
 }
 
@@ -237,8 +237,6 @@ canvas {
   background: #000;
 }
 
-
-
 .f-num {
   font-weight: bold;
   margin-right: 5px;
@@ -329,8 +327,8 @@ button:hover {
   justify-content: center;
 }
 
-input[type="text"],
-input[type="number"],
+input[type='text'],
+input[type='number'],
 .e-input,
 select {
   background: var(--ui-input-bg);
@@ -339,8 +337,6 @@ select {
   box-sizing: border-box;
   color-scheme: dark;
 }
-
-
 
 input:focus,
 select:focus,
@@ -409,7 +405,7 @@ textarea,
   cursor: pointer;
 }
 
-input[type="file"] {
+input[type='file'] {
   display: none;
 }
 
@@ -444,17 +440,17 @@ input[type="file"] {
   height: 100%;
   pointer-events: none;
   z-index: 100;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%,
-      rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg,
-      rgba(255, 0, 0, 0.06),
-      rgba(0, 255, 0, 0.02),
-      rgba(0, 0, 255, 0.06));
-  background-size: 100% 2px, 3px 100%;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size:
+    100% 2px,
+    3px 100%;
   box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 .crt-overlay::after {
-  content: " ";
+  content: ' ';
   display: block;
   position: absolute;
   top: 0;
@@ -507,5 +503,8 @@ input[type="file"] {
 }
 
 .cursor-eye {
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z%22/><circle cx=%2212%22 cy=%2212%22 r=%223%22/></svg>') 16 16, pointer;
+  cursor:
+    url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2232%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z%22/><circle cx=%2212%22 cy=%2212%22 r=%223%22/></svg>')
+      16 16,
+    pointer;
 }

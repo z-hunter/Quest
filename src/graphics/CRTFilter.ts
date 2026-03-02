@@ -1,113 +1,119 @@
 export interface CRTSettings {
-    curvature: number;      // 0.0 to 1.0 (Approx, was using hardcoded math)
-    scanlineCount: number;  // 300 - 1000?
-    scanlineIntensity: number; // 0.0 to 1.0
-    aberration: number;     // 0.0 to 10.0 (pixels?)
-    vignette: number;       // 0.0 to 1.0
-    phosphor: number;       // 0.0 to 1.0 (Surface noise/lift)
-    bezelGlow: boolean;     // Optimization toggle
-    bloom: number;          // 0.0 to 1.0 (Halation intensity)
+  curvature: number; // 0.0 to 1.0 (Approx, was using hardcoded math)
+  scanlineCount: number; // 300 - 1000?
+  scanlineIntensity: number; // 0.0 to 1.0
+  aberration: number; // 0.0 to 10.0 (pixels?)
+  vignette: number; // 0.0 to 1.0
+  phosphor: number; // 0.0 to 1.0 (Surface noise/lift)
+  bezelGlow: boolean; // Optimization toggle
+  bloom: number; // 0.0 to 1.0 (Halation intensity)
 }
 
 export class CRTFilter {
-    canvas: HTMLCanvasElement;
-    gl: WebGLRenderingContext | null;
-    program: WebGLProgram | null;
-    texture: WebGLTexture | null;
-    buffer: WebGLBuffer | null;
-    positionLocation: number;
-    texCoordLocation: number;
-    resolutionLocation: WebGLUniformLocation | null;
-    timeLocation: WebGLUniformLocation | null;
-    scanlineCountLocation: WebGLUniformLocation | null;
-    curvatureLocation: WebGLUniformLocation | null;
-    aberrationLocation: WebGLUniformLocation | null;
-    vignetteLocation: WebGLUniformLocation | null;
-    scanlineIntensityLocation: WebGLUniformLocation | null;
-    phosphorLocation: WebGLUniformLocation | null;
-    bezelGlowLocation: WebGLUniformLocation | null;
-    bloomLocation: WebGLUniformLocation | null;
+  canvas: HTMLCanvasElement;
+  gl: WebGLRenderingContext | null;
+  program: WebGLProgram | null;
+  texture: WebGLTexture | null;
+  buffer: WebGLBuffer | null;
+  positionLocation: number;
+  texCoordLocation: number;
+  resolutionLocation: WebGLUniformLocation | null;
+  timeLocation: WebGLUniformLocation | null;
+  scanlineCountLocation: WebGLUniformLocation | null;
+  curvatureLocation: WebGLUniformLocation | null;
+  aberrationLocation: WebGLUniformLocation | null;
+  vignetteLocation: WebGLUniformLocation | null;
+  scanlineIntensityLocation: WebGLUniformLocation | null;
+  phosphorLocation: WebGLUniformLocation | null;
+  bezelGlowLocation: WebGLUniformLocation | null;
+  bloomLocation: WebGLUniformLocation | null;
 
-    constructor(canvas: HTMLCanvasElement) {
-        this.canvas = canvas;
-        this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') as WebGLRenderingContext;
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.gl =
+      canvas.getContext('webgl') ||
+      (canvas.getContext('experimental-webgl') as WebGLRenderingContext);
 
-        if (!this.gl) {
-            console.error("WebGL not supported");
-            this.program = null;
-            this.texture = null;
-            this.buffer = null;
-            this.positionLocation = 0;
-            this.texCoordLocation = 0;
-            this.resolutionLocation = null;
-            this.timeLocation = null;
-            this.scanlineCountLocation = null;
-            this.curvatureLocation = null;
-            this.aberrationLocation = null;
-            this.vignetteLocation = null;
-            this.scanlineIntensityLocation = null;
-            this.phosphorLocation = null;
-            this.bezelGlowLocation = null;
-            this.bloomLocation = null;
-            return;
-        }
-
-        this.program = null;
-        this.texture = null;
-        this.buffer = null;
-        this.positionLocation = 0;
-        this.texCoordLocation = 0;
-        this.resolutionLocation = null;
-        this.timeLocation = null;
-        this.scanlineCountLocation = null;
-        this.curvatureLocation = null;
-        this.aberrationLocation = null;
-        this.vignetteLocation = null;
-        this.scanlineIntensityLocation = null;
-        this.phosphorLocation = null;
-        this.bezelGlowLocation = null;
-        this.bloomLocation = null;
-
-        this.init();
+    if (!this.gl) {
+      console.error('WebGL not supported');
+      this.program = null;
+      this.texture = null;
+      this.buffer = null;
+      this.positionLocation = 0;
+      this.texCoordLocation = 0;
+      this.resolutionLocation = null;
+      this.timeLocation = null;
+      this.scanlineCountLocation = null;
+      this.curvatureLocation = null;
+      this.aberrationLocation = null;
+      this.vignetteLocation = null;
+      this.scanlineIntensityLocation = null;
+      this.phosphorLocation = null;
+      this.bezelGlowLocation = null;
+      this.bloomLocation = null;
+      return;
     }
 
-    createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-        const shader = gl.createShader(type);
-        if (!shader) return null;
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
-            return null;
-        }
-        return shader;
+    this.program = null;
+    this.texture = null;
+    this.buffer = null;
+    this.positionLocation = 0;
+    this.texCoordLocation = 0;
+    this.resolutionLocation = null;
+    this.timeLocation = null;
+    this.scanlineCountLocation = null;
+    this.curvatureLocation = null;
+    this.aberrationLocation = null;
+    this.vignetteLocation = null;
+    this.scanlineIntensityLocation = null;
+    this.phosphorLocation = null;
+    this.bezelGlowLocation = null;
+    this.bloomLocation = null;
+
+    this.init();
+  }
+
+  createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
+    const shader = gl.createShader(type);
+    if (!shader) return null;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+      return null;
     }
+    return shader;
+  }
 
-    createProgram(gl: WebGLRenderingContext, vsSource: string, fsSource: string): WebGLProgram | null {
-        const vs = this.createShader(gl, gl.VERTEX_SHADER, vsSource);
-        const fs = this.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
-        if (!vs || !fs) return null;
+  createProgram(
+    gl: WebGLRenderingContext,
+    vsSource: string,
+    fsSource: string
+  ): WebGLProgram | null {
+    const vs = this.createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fs = this.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    if (!vs || !fs) return null;
 
-        const program = gl.createProgram();
-        if (!program) return null;
+    const program = gl.createProgram();
+    if (!program) return null;
 
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(program));
-            return null;
-        }
-        return program;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(program));
+      return null;
     }
+    return program;
+  }
 
-    init(): void {
-        if (!this.gl) return;
-        const gl = this.gl;
+  init(): void {
+    if (!this.gl) return;
+    const gl = this.gl;
 
-        // Vertex Shader
-        const vsSource = `
+    // Vertex Shader
+    const vsSource = `
             attribute vec2 a_position;
             attribute vec2 a_texCoord;
             varying vec2 v_texCoord;
@@ -117,8 +123,8 @@ export class CRTFilter {
             }
         `;
 
-        // Fragment Shader (The CRT Magic)
-        const fsSource = `
+    // Fragment Shader (The CRT Magic)
+    const fsSource = `
             precision mediump float;
             uniform sampler2D u_image;
             uniform vec2 u_resolution;
@@ -329,90 +335,94 @@ export class CRTFilter {
             }
         `;
 
-        this.program = this.createProgram(gl, vsSource, fsSource);
-        if (!this.program) return;
+    this.program = this.createProgram(gl, vsSource, fsSource);
+    if (!this.program) return;
 
-        // Look up locations
-        this.positionLocation = gl.getAttribLocation(this.program, "a_position");
-        this.texCoordLocation = gl.getAttribLocation(this.program, "a_texCoord");
-        this.resolutionLocation = gl.getUniformLocation(this.program, "u_resolution");
-        this.timeLocation = gl.getUniformLocation(this.program, "u_time");
-        this.scanlineCountLocation = gl.getUniformLocation(this.program, "u_scanlineCount");
-        this.curvatureLocation = gl.getUniformLocation(this.program, "u_curvature");
-        this.aberrationLocation = gl.getUniformLocation(this.program, "u_aberration");
-        this.vignetteLocation = gl.getUniformLocation(this.program, "u_vignette");
-        this.scanlineIntensityLocation = gl.getUniformLocation(this.program, "u_scanlineIntensity");
-        this.phosphorLocation = gl.getUniformLocation(this.program, "u_phosphor");
-        this.bezelGlowLocation = gl.getUniformLocation(this.program, "u_bezelGlow");
-        this.bloomLocation = gl.getUniformLocation(this.program, "u_bloom");
+    // Look up locations
+    this.positionLocation = gl.getAttribLocation(this.program, 'a_position');
+    this.texCoordLocation = gl.getAttribLocation(this.program, 'a_texCoord');
+    this.resolutionLocation = gl.getUniformLocation(this.program, 'u_resolution');
+    this.timeLocation = gl.getUniformLocation(this.program, 'u_time');
+    this.scanlineCountLocation = gl.getUniformLocation(this.program, 'u_scanlineCount');
+    this.curvatureLocation = gl.getUniformLocation(this.program, 'u_curvature');
+    this.aberrationLocation = gl.getUniformLocation(this.program, 'u_aberration');
+    this.vignetteLocation = gl.getUniformLocation(this.program, 'u_vignette');
+    this.scanlineIntensityLocation = gl.getUniformLocation(this.program, 'u_scanlineIntensity');
+    this.phosphorLocation = gl.getUniformLocation(this.program, 'u_phosphor');
+    this.bezelGlowLocation = gl.getUniformLocation(this.program, 'u_bezelGlow');
+    this.bloomLocation = gl.getUniformLocation(this.program, 'u_bloom');
 
-        // Create buffer for a quad (2 triangles)
-        this.buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -1.0, -1.0, 0.0, 1.0,
-            1.0, -1.0, 1.0, 1.0,
-            -1.0, 1.0, 0.0, 0.0,
-            -1.0, 1.0, 0.0, 0.0,
-            1.0, -1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 0.0,
-        ]), gl.STATIC_DRAW);
+    // Create buffer for a quad (2 triangles)
+    this.buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([
+        -1.0, -1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 1.0,
+        -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
+      ]),
+      gl.STATIC_DRAW
+    );
 
-        // Create texture
-        this.texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, this.texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    }
+    // Create texture
+    this.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  }
 
-    isValid(): boolean {
-        return !!(this.gl && this.program && this.buffer && this.texture);
-    }
+  isValid(): boolean {
+    return !!(this.gl && this.program && this.buffer && this.texture);
+  }
 
-    render(sourceCanvas: HTMLCanvasElement, settings: CRTSettings): void {
-        if (!this.gl || !this.program || !this.buffer || !this.texture) return;
-        const gl = this.gl;
+  render(sourceCanvas: HTMLCanvasElement, settings: CRTSettings): void {
+    if (!this.gl || !this.program || !this.buffer || !this.texture) return;
+    const gl = this.gl;
 
-        // ---------------------------------------------------------
-        // SINGLE PASS CRT (Render to Screen)
-        // ---------------------------------------------------------
-        gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+    // ---------------------------------------------------------
+    // SINGLE PASS CRT (Render to Screen)
+    // ---------------------------------------------------------
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
-        gl.useProgram(this.program);
+    gl.useProgram(this.program);
 
-        // Bind attributes
-        gl.enableVertexAttribArray(this.positionLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-        gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 16, 0);
+    // Bind attributes
+    gl.enableVertexAttribArray(this.positionLocation);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+    gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 16, 0);
 
-        gl.enableVertexAttribArray(this.texCoordLocation);
-        gl.vertexAttribPointer(this.texCoordLocation, 2, gl.FLOAT, false, 16, 8);
+    gl.enableVertexAttribArray(this.texCoordLocation);
+    gl.vertexAttribPointer(this.texCoordLocation, 2, gl.FLOAT, false, 16, 8);
 
-        // Uniforms
-        if (this.resolutionLocation) gl.uniform2f(this.resolutionLocation, this.canvas.width, this.canvas.height);
-        if (this.timeLocation) gl.uniform1f(this.timeLocation, performance.now() / 1000);
+    // Uniforms
+    if (this.resolutionLocation)
+      gl.uniform2f(this.resolutionLocation, this.canvas.width, this.canvas.height);
+    if (this.timeLocation) gl.uniform1f(this.timeLocation, performance.now() / 1000);
 
-        if (this.scanlineCountLocation) gl.uniform1f(this.scanlineCountLocation, settings.scanlineCount);
-        if (this.curvatureLocation) gl.uniform1f(this.curvatureLocation, settings.curvature);
-        if (this.scanlineIntensityLocation) gl.uniform1f(this.scanlineIntensityLocation, settings.scanlineIntensity);
-        if (this.aberrationLocation) gl.uniform1f(this.aberrationLocation, settings.aberration);
-        if (this.vignetteLocation) gl.uniform1f(this.vignetteLocation, settings.vignette);
-        if (this.phosphorLocation) gl.uniform1f(this.phosphorLocation, settings.phosphor || 0.0);
-        if (this.bezelGlowLocation) gl.uniform1f(this.bezelGlowLocation, settings.bezelGlow ? 1.0 : 0.0);
-        if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
+    if (this.scanlineCountLocation)
+      gl.uniform1f(this.scanlineCountLocation, settings.scanlineCount);
+    if (this.curvatureLocation) gl.uniform1f(this.curvatureLocation, settings.curvature);
+    if (this.scanlineIntensityLocation)
+      gl.uniform1f(this.scanlineIntensityLocation, settings.scanlineIntensity);
+    if (this.aberrationLocation) gl.uniform1f(this.aberrationLocation, settings.aberration);
+    if (this.vignetteLocation) gl.uniform1f(this.vignetteLocation, settings.vignette);
+    if (this.phosphorLocation) gl.uniform1f(this.phosphorLocation, settings.phosphor || 0.0);
+    if (this.bezelGlowLocation)
+      gl.uniform1f(this.bezelGlowLocation, settings.bezelGlow ? 1.0 : 0.0);
+    if (this.bloomLocation) gl.uniform1f(this.bloomLocation, settings.bloom || 0.0);
 
-        // Texture Unit 0: Main Image (Already bound/uploaded)
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, this.texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.uniform1i(gl.getUniformLocation(this.program, "u_image"), 0);
+    // Texture Unit 0: Main Image (Already bound/uploaded)
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.uniform1i(gl.getUniformLocation(this.program, 'u_image'), 0);
 
-        // Draw Main
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
+    // Draw Main
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
 }
