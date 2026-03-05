@@ -1,0 +1,56 @@
+name: Fibery Commit Export
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+jobs:
+  export-commits:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Export commits to Fibery
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FIBERY_TOKEN: ${{ secrets.FIBERY_TOKEN }}
+          FIBERY_HOST: vsoft.fibery.io
+
+          # Type names for Blue Signal Game space
+          FIBERY_COMMIT_TYPE: Blue Signal Game/Commit
+          FIBERY_BRANCH_TYPE: Blue Signal Game/Branch_Blue Signal Game/Commit
+          FIBERY_REPO_TYPE: Blue Signal Game/Repository_Blue Signal Game/Commit
+
+          # Commit fields
+          FIBERY_FIELD_COMMIT_SHA: Blue Signal Game/SHA
+          FIBERY_FIELD_COMMIT_MESSAGE: Blue Signal Game/Message
+          FIBERY_FIELD_AUTHOR_NAME: Blue Signal Game/Author Name
+          FIBERY_FIELD_AUTHOR_EMAIL: Blue Signal Game/Author Email
+          FIBERY_FIELD_COMMIT_DATE: Blue Signal Game/Commit Date
+          FIBERY_FIELD_GITHUB_LINK: Blue Signal Game/GitHub Link
+          FIBERY_FIELD_PARENT_SHAS: Blue Signal Game/Parent SHAs
+          FIBERY_FIELD_COMMIT_NAME: Blue Signal Game/Name
+          FIBERY_FIELD_BRANCH_REL: Blue Signal Game/Branch
+          FIBERY_FIELD_REPO_REL: Blue Signal Game/Repository
+
+          # Related enum-like relation values
+          FIBERY_FIELD_RELATION_NAME: enum/name
+          FIBERY_BRANCH_VALUE: develop
+          FIBERY_REPO_VALUE: Main Repository
+
+          # Robustness
+          FIBERY_BATCH_SIZE: 25
+          FIBERY_RETRY_MAX: 3
+          FIBERY_RETRY_BASE_MS: 250
+        run: node scripts/fibery/export-commits-to-fibery.mjs
