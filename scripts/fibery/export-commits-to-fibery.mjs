@@ -46,7 +46,7 @@ const fields = {
   relationName: process.env.FIBERY_FIELD_RELATION_NAME || 'enum/name',
 };
 
-const branchValue = process.env.FIBERY_BRANCH_VALUE || mapBranchToFibery(gitBranch);
+const branchValueOverride = process.env.FIBERY_BRANCH_VALUE || '';
 const repoValue = process.env.FIBERY_REPO_VALUE || 'Main Repository';
 
 const batchSize = parseInt(process.env.FIBERY_BATCH_SIZE || '25', 10);
@@ -194,6 +194,31 @@ async function resolveRelationId(typeName, relationValue) {
   return item['fibery/id'];
 }
 
+function detectBranchValueForCommit(sha) {
+  if (branchValueOverride) return branchValueOverride;
+
+  // For normal GitHub push flow we trust the pushed ref.
+  if (process.env.GITHUB_EVENT_PATH && fs.existsSync(process.env.GITHUB_EVENT_PATH)) {
+    return mapBranchToFibery(gitBranch);
+  }
+
+  // Backfill/local mode: try to infer from remote branches containing commit.
+  const containsRaw = safeExec(`git branch -r --contains ${sha}`);
+  const contains = containsRaw
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  // Priority: main/master -> develop/dev -> hotfix/* -> feature/*
+  if (contains.some((x) => x.includes('origin/main') || x.includes('origin/master'))) return 'main';
+  if (contains.some((x) => x.includes('origin/develop') || x.includes('origin/dev')))
+    return 'develop';
+  if (contains.some((x) => x.includes('origin/hotfix'))) return 'hotfix';
+  if (contains.some((x) => x.includes('origin/feature'))) return 'feature';
+
+  return mapBranchToFibery(gitBranch);
+}
+
 function readShasFromEvent() {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath || !fs.existsSync(eventPath)) return [];
@@ -319,15 +344,19 @@ async function main() {
   shas = [...new Set(shas)];
   console.log(`Preparing export for ${shas.length} commit(s)...`);
 
-  const [branchId, repoId] = await Promise.all([
-    resolveRelationId(branchType, branchValue),
-    resolveRelationId(repoType, repoValue),
-  ]);
+  const repoId = await resolveRelationId(repoType, repoValue);
+  const branchIdCache = new Map();
 
   const createOrUpdateItems = [];
   for (const sha of shas) {
     try {
       const details = await getCommitDetails(sha);
+      const branchValue = detectBranchValueForCommit(sha);
+      let branchId = branchIdCache.get(branchValue);
+      if (!branchId) {
+        branchId = await resolveRelationId(branchType, branchValue);
+        branchIdCache.set(branchValue, branchId);
+      }
       const existing = await fiberyQueryOne(commitType, fields.commitSha, sha);
       const entity = buildCommitEntity(details, branchId, repoId);
       if (existing?.['fibery/id']) {

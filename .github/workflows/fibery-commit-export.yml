@@ -46,7 +46,6 @@ jobs:
 
           # Related enum-like relation values
           FIBERY_FIELD_RELATION_NAME: enum/name
-          FIBERY_BRANCH_VALUE: develop
           FIBERY_REPO_VALUE: Main Repository
 
           # Robustness
