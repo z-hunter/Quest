@@ -44,6 +44,15 @@ export const PropertiesPanel: React.FC = () => {
     return first ?? '';
   };
 
+  const getSharedBooleanState = (arr: any[], getter: (o: any) => boolean) => {
+    if (!arr.length) return 'off';
+    const first = !!getter(arr[0]);
+    for (let i = 1; i < arr.length; i++) {
+      if (!!getter(arr[i]) !== first) return 'mixed';
+    }
+    return first ? 'on' : 'off';
+  };
+
   const applyToMulti = (fn: (o: any) => void) => {
     multiObjects.forEach(fn);
     incrementObjectVersion();
@@ -89,12 +98,23 @@ export const PropertiesPanel: React.FC = () => {
       entitiesAndQuads,
       (o: any) => o.blendMode || 'source-over'
     );
+    const sharedOpacity = getSharedValue(entitiesAndQuads, (o: any) => o.opacity ?? 1);
     const sharedBlur = getSharedValue(entitiesAndQuads, (o: any) => o.blur || 0);
     const sharedColor = getSharedValue(
       multiObjects.filter((o: any) => (o as any).color !== undefined),
       (o: any) => o.color || '#ffffff'
     );
-    const sharedLineColor = getSharedValue(quads, (q: any) => q.gridColor || '#ffffff');
+    const sharedIsGrid = getSharedBooleanState(quads, (q: any) => !!q.isGrid);
+    const sharedGridX = getSharedValue(quads, (q: any) => q.gridLinesX ?? 5);
+    const sharedGridY = getSharedValue(quads, (q: any) => q.gridLinesY ?? 5);
+    const sharedGridWidth = getSharedValue(quads, (q: any) => q.lineWidth ?? 1.0);
+    const sharedGridColor = getSharedValue(quads, (q: any) => q.gridColor || '#ffffff');
+    const sharedIgnoreScaling = getSharedBooleanState(
+      entitiesAndQuads,
+      (o: any) => !!o.ignoreScaling
+    );
+    const sharedLocked = getSharedBooleanState(multiObjects, (o: any) => !!o.locked);
+    const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
     return (
       <div
@@ -109,14 +129,74 @@ export const PropertiesPanel: React.FC = () => {
         style={{ fontSize: `${12 * uiScale}px` }}
       >
         <div className="editor-header">
-          <span>MULTI</span>
+          <span>MULTI SELECTION ({multiObjects.length})</span>
           <button className="e-btn" onClick={() => useEditorStore.getState().toggle(false)}>
             X
           </button>
         </div>
         <div className="editor-content">
           <div className="e-row">
-            <label className="e-label">Selected {multiObjects.length} obj.</label>
+            <label className="e-label">Group #ID</label>
+            <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+              (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
+            </div>
+            <input
+              type="text"
+              className="e-input"
+              value={groupIdDraft}
+              placeholder="#group"
+              onChange={(e) => setGroupIdDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const raw = groupIdDraft.trim();
+                if (!raw) return;
+                const prepared = raw
+                  .split(',')
+                  .map((x) => x.trim())
+                  .filter(Boolean)
+                  .map((x) => (x.startsWith('#') ? x : `#${x}`));
+
+                let changedCount = 0;
+                multiObjects.forEach((o: any) => {
+                  const existing = (o.groupID || '')
+                    .split(',')
+                    .map((x: string) => x.trim())
+                    .filter(Boolean);
+
+                  if (e.ctrlKey) {
+                    const filtered = existing.filter((x: string) => !prepared.includes(x));
+                    if (filtered.length !== existing.length) {
+                      changedCount++;
+                    }
+                    o.groupID = filtered.join(',');
+                    return;
+                  }
+
+                  const merged = [...new Set([...existing, ...prepared])];
+                  if (merged.length !== existing.length) {
+                    changedCount++;
+                  }
+                  o.groupID = merged.join(',');
+                });
+
+                if (changedCount > 0) {
+                  incrementObjectVersion();
+                  incrementHierarchyVersion();
+                  const tagsText = prepared.join(', ');
+                  if (e.ctrlKey) {
+                    game.showNotification(
+                      `Removed ${tagsText} from ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                    );
+                  } else {
+                    game.showNotification(
+                      `Appended ${tagsText} to ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                    );
+                  }
+                }
+                setGroupIdDraft('');
+              }}
+            />
           </div>
 
           <div
@@ -179,42 +259,48 @@ export const PropertiesPanel: React.FC = () => {
             />
           </div>
 
-          <div className="e-row">
-            <label className="e-label">Layer</label>
-            <input
-              type="number"
-              className="e-input"
-              placeholder="mixed"
-              value={sharedLayer === '' ? '' : sharedLayer}
-              onChange={(e) => {
-                const v = parseInt(e.target.value);
-                if (isNaN(v)) return;
-                applyToMulti((o) => {
-                  o.layer = v;
-                });
-              }}
-            />
-          </div>
-
-          {entitiesAndQuads.length > 0 && (
-            <div className="e-row">
-              <label className="e-label">Parallax</label>
+          <div
+            className="e-row"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+          >
+            <div>
+              <label className="e-label">Layer</label>
               <input
                 type="number"
-                step="0.1"
                 className="e-input"
                 placeholder="mixed"
-                value={sharedParallax === '' ? '' : sharedParallax}
+                value={sharedLayer === '' ? '' : sharedLayer}
                 onChange={(e) => {
-                  const v = parseFloat(e.target.value);
+                  const v = parseInt(e.target.value);
                   if (isNaN(v)) return;
-                  applyToMulti((o: any) => {
-                    if (o instanceof Entity) o.parallax = v;
+                  applyToMulti((o) => {
+                    o.layer = v;
                   });
                 }}
               />
             </div>
-          )}
+            {entitiesAndQuads.length > 0 ? (
+              <div>
+                <label className="e-label">Parallax</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="e-input"
+                  placeholder="mixed"
+                  value={sharedParallax === '' ? '' : sharedParallax}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (isNaN(v)) return;
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.parallax = v;
+                    });
+                  }}
+                />
+              </div>
+            ) : (
+              <div />
+            )}
+          </div>
 
           {entitiesAndQuads.length > 0 && (
             <div
@@ -222,23 +308,22 @@ export const PropertiesPanel: React.FC = () => {
               style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
             >
               <div>
-                <label className="e-label">Blend</label>
-                <Select
-                  value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
-                  onChange={(value) => {
+                <label className="e-label">Opacity</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                  className="e-input"
+                  placeholder="mixed"
+                  value={sharedOpacity === '' ? '' : sharedOpacity}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (isNaN(v)) return;
                     applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                      if (o instanceof Entity) o.opacity = v;
                     });
                   }}
-                  options={[
-                    { value: 'source-over', label: 'Normal' },
-                    { value: 'multiply', label: 'Multiply' },
-                    { value: 'screen', label: 'Screen' },
-                    { value: 'overlay', label: 'Overlay' },
-                    { value: 'lighter', label: 'Add' },
-                    { value: 'difference', label: 'Diff' },
-                  ]}
-                  style={{ width: '100%' }}
                 />
               </div>
               <div>
@@ -260,97 +345,250 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           )}
 
-          <div className="e-row">
-            <label className="e-label">Fill Color</label>
-            <div style={{ display: 'flex', gap: '5px' }}>
-              <input
-                type="color"
-                className="e-input"
-                style={{ width: '32px', padding: 0 }}
-                value={sharedColor === '' ? '#ffffff' : sharedColor}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  applyToMulti((o: any) => {
-                    if (o.color !== undefined) o.color = v;
-                  });
-                }}
-              />
-              <input
-                type="text"
-                className="e-input"
-                placeholder="mixed"
-                value={sharedColor === '' ? '' : sharedColor}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  applyToMulti((o: any) => {
-                    if (o.color !== undefined) o.color = v;
-                  });
-                }}
-              />
-            </div>
-          </div>
-
-          {quads.length > 0 && (
-            <div className="e-row">
-              <label className="e-label">Line Color</label>
-              <div style={{ display: 'flex', gap: '5px' }}>
-                <input
-                  type="color"
-                  className="e-input"
-                  style={{ width: '32px', padding: 0 }}
-                  value={sharedLineColor === '' ? '#ffffff' : sharedLineColor}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    applyToMulti((o: any) => {
-                      if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                    });
-                  }}
-                />
-                <input
-                  type="text"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedLineColor === '' ? '' : sharedLineColor}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    applyToMulti((o: any) => {
-                      if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                    });
-                  }}
-                />
+          {entitiesAndQuads.length > 0 && (
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+            >
+              <div>
+                <label className="e-label">Fill Color</label>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <input
+                    type="color"
+                    className="e-input"
+                    style={{ width: '32px', padding: 0 }}
+                    value={sharedColor === '' ? '#ffffff' : sharedColor}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      applyToMulti((o: any) => {
+                        if (o.color !== undefined) o.color = v;
+                      });
+                    }}
+                  />
+                  <input
+                    type="text"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedColor === '' ? '' : sharedColor}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      applyToMulti((o: any) => {
+                        if (o.color !== undefined) o.color = v;
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'end' }}>
+                <div style={{ width: '100%' }}>
+                  <label className="e-label">Blend</label>
+                  <Select
+                    value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                    onChange={(value) => {
+                      applyToMulti((o: any) => {
+                        if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                      });
+                    }}
+                    options={[
+                      { value: 'source-over', label: 'Normal' },
+                      { value: 'multiply', label: 'Multiply' },
+                      { value: 'screen', label: 'Screen' },
+                      { value: 'overlay', label: 'Overlay' },
+                      { value: 'lighter', label: 'Add' },
+                      { value: 'difference', label: 'Diff' },
+                    ]}
+                    style={{ width: '100%' }}
+                  />
+                </div>
               </div>
             </div>
           )}
 
+          {quads.length > 0 && (
+            <div className="e-row">
+              <label
+                className="e-label"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  style={{ marginRight: '5px' }}
+                  checked={sharedIsGrid === 'on'}
+                  ref={(el) => {
+                    if (el) el.indeterminate = sharedIsGrid === 'mixed';
+                  }}
+                  onChange={(e) => {
+                    applyToMulti((o: any) => {
+                      if ((o as any).type === 'Quad') (o as any).isGrid = e.target.checked;
+                    });
+                  }}
+                />
+                Retro Grid
+              </label>
+            </div>
+          )}
+
+          {quads.length > 0 && sharedIsGrid !== 'off' && (
+            <>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+              >
+                <div>
+                  <label className="e-label">Grid X</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedGridX === '' ? '' : sharedGridX}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (isNaN(v)) return;
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).gridLinesX = v;
+                      });
+                    }}
+                    min={1}
+                    max={50}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Grid Y</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedGridY === '' ? '' : sharedGridY}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (isNaN(v)) return;
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).gridLinesY = v;
+                      });
+                    }}
+                    min={1}
+                    max={50}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Width</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedGridWidth === '' ? '' : sharedGridWidth}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (isNaN(v)) return;
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).lineWidth = v;
+                      });
+                    }}
+                    step={0.1}
+                    min={0.1}
+                    max={10}
+                  />
+                </div>
+              </div>
+              <div className="e-row">
+                <label className="e-label">Grid Color</label>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <input
+                    type="color"
+                    className="e-input"
+                    style={{ width: '32px', padding: 0 }}
+                    value={sharedGridColor === '' ? '#ffffff' : sharedGridColor}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                      });
+                    }}
+                  />
+                  <input
+                    type="text"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedGridColor === '' ? '' : sharedGridColor}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div
+            className="e-row"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'end' }}>
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={sharedIgnoreScaling === 'on'}
+                  ref={(el) => {
+                    if (el) el.indeterminate = sharedIgnoreScaling === 'mixed';
+                  }}
+                  onChange={(e) => {
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.ignoreScaling = e.target.checked;
+                    });
+                  }}
+                />
+                Disable Depth Scaling
+              </label>
+            </div>
+            <label
+              className="e-label"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+            >
+              <input
+                type="checkbox"
+                checked={sharedLocked === 'on'}
+                ref={(el) => {
+                  if (el) el.indeterminate = sharedLocked === 'mixed';
+                }}
+                onChange={(e) => {
+                  applyToMulti((o: any) => {
+                    o.locked = e.target.checked;
+                  });
+                }}
+              />
+              Lock
+            </label>
+          </div>
+
           <div className="e-row">
-            <label className="e-label">Group ID (append)</label>
-            <input
-              type="text"
-              className="e-input"
-              value={groupIdDraft}
-              placeholder="#group"
-              onChange={(e) => setGroupIdDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const raw = groupIdDraft.trim();
-                if (!raw) return;
-                const prepared = raw
-                  .split(',')
-                  .map((x) => x.trim())
-                  .filter(Boolean)
-                  .map((x) => (x.startsWith('#') ? x : `#${x}`));
-                applyToMulti((o: any) => {
-                  const existing = (o.groupID || '')
-                    .split(',')
-                    .map((x: string) => x.trim())
-                    .filter(Boolean);
-                  const merged = [...new Set([...existing, ...prepared])];
-                  o.groupID = merged.join(',');
-                });
-                setGroupIdDraft('');
-              }}
-            />
+            <label
+              className="e-label"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+            >
+              <input
+                type="checkbox"
+                checked={sharedDisabled === 'on'}
+                ref={(el) => {
+                  if (el) el.indeterminate = sharedDisabled === 'mixed';
+                }}
+                onChange={(e) => {
+                  applyToMulti((o: any) => {
+                    o.disabled = e.target.checked;
+                  });
+                }}
+              />
+              Disabled
+            </label>
           </div>
         </div>
       </div>
@@ -518,7 +756,7 @@ export const PropertiesPanel: React.FC = () => {
 
         {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
           <div className="e-row">
-            <label className="e-label">Group ID</label>
+            <label className="e-label">Group #ID</label>
             <input
               type="text"
               className="e-input"
