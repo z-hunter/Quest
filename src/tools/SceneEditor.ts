@@ -127,6 +127,27 @@ export class SceneEditor {
   }
 
   handleGlobalKey(e: KeyboardEvent): void {
+    if (
+      this.enabled &&
+      e.key === '/' &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !(document.activeElement instanceof HTMLInputElement) &&
+      !(document.activeElement instanceof HTMLTextAreaElement)
+    ) {
+      const filterInput = document.getElementById(
+        'hierarchy-filter-input'
+      ) as HTMLInputElement | null;
+      if (filterInput) {
+        e.preventDefault();
+        filterInput.focus();
+        const valueLength = filterInput.value.length;
+        filterInput.setSelectionRange(valueLength, valueLength);
+        return;
+      }
+    }
+
     // High Priority: Ctrl+D for Duplication (Overrides Chrome Bookmark & Input focus)
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
       e.preventDefault();
@@ -374,7 +395,7 @@ export class SceneEditor {
           useEditorStore.getState().incrementObjectVersion();
         }
         break;
-      case '/':
+      case '\\':
         // Reset Zoom
         if (this.game.sceneManager.currentScene) {
           this.game.sceneManager.currentScene.camera.zoom = 1.0;

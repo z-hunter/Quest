@@ -7,6 +7,8 @@ import { EditorToolbar } from './EditorToolbar';
 export const HierarchyPanel: React.FC = () => {
   const game = useGame();
   const { hierarchyVersion, selectedObjectId, selectedObjectKeys } = useEditorStore();
+  const [filterText, setFilterText] = React.useState('');
+  const filterInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Force re-render on hierarchy version change (subscription)
   React.useEffect(() => {
@@ -21,6 +23,40 @@ export const HierarchyPanel: React.FC = () => {
   const entities = React.useMemo(() => scene?.entities || [], [scene]);
   const walkboxes = React.useMemo(() => scene?.walkbox || [], [scene]);
   const triggers = React.useMemo(() => scene?.triggerboxes || [], [scene]);
+
+  const filterMode = filterText.startsWith('#') ? 'group' : 'name';
+  const filterNeedle = React.useMemo(() => filterText.trim().toLowerCase(), [filterText]);
+
+  const matchesFilter = React.useCallback(
+    (item: any) => {
+      if (!filterNeedle) return true;
+      if (!item || typeof item !== 'object') return true;
+
+      if (filterMode === 'group') {
+        return String(item.groupID || '')
+          .toLowerCase()
+          .includes(filterNeedle);
+      }
+
+      return String(item.name || '')
+        .toLowerCase()
+        .includes(filterNeedle);
+    },
+    [filterMode, filterNeedle]
+  );
+
+  const filteredEntities = React.useMemo(
+    () => entities.filter((item: any) => matchesFilter(item)),
+    [entities, matchesFilter]
+  );
+  const filteredWalkboxes = React.useMemo(
+    () => walkboxes.filter((item: any) => matchesFilter(item)),
+    [walkboxes, matchesFilter]
+  );
+  const filteredTriggers = React.useMemo(
+    () => triggers.filter((item: any) => matchesFilter(item)),
+    [triggers, matchesFilter]
+  );
 
   // Helper to resolve display ID for an item, matching how it's identified in the UI
   const getDisplayId = (item: any): string => {
@@ -52,7 +88,14 @@ export const HierarchyPanel: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isHovered.current) return;
 
-      const allItems = ['SCENE', ...entities, ...walkboxes, ...triggers];
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const allItems = ['SCENE', ...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -93,7 +136,14 @@ export const HierarchyPanel: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [entities, walkboxes, triggers, hierarchyVersion, selectedObjectId, game.editor]);
+  }, [
+    filteredEntities,
+    filteredWalkboxes,
+    filteredTriggers,
+    hierarchyVersion,
+    selectedObjectId,
+    game.editor,
+  ]);
 
   const centerCameraOn = (item: any) => {
     const scene = game?.sceneManager?.currentScene;
@@ -190,6 +240,44 @@ export const HierarchyPanel: React.FC = () => {
               style={{ width: '100%', fontSize: '12px' }}
             />
           </div>
+
+          <div style={{ marginTop: '5px', position: 'relative' }}>
+            <input
+              type="text"
+              ref={filterInputRef}
+              id="hierarchy-filter-input"
+              className="e-input"
+              value={filterText}
+              placeholder='Filter by ID or "#group"'
+              onChange={(e) => setFilterText(e.target.value)}
+              style={{
+                width: '100%',
+                paddingRight: filterText ? '28px' : undefined,
+              }}
+            />
+            {filterText && (
+              <button
+                className="toolbar-icon-btn"
+                type="button"
+                title="Clear filter"
+                onClick={() => setFilterText('')}
+                style={{
+                  position: 'absolute',
+                  right: '2px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '22px',
+                  height: '22px',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                x
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -226,7 +314,7 @@ export const HierarchyPanel: React.FC = () => {
         </div>
 
         {/* Entities */}
-        {entities.map((ent: any) => {
+        {filteredEntities.map((ent: any) => {
           const isSelected = isItemSelected(ent);
           return (
             <div
@@ -272,7 +360,7 @@ export const HierarchyPanel: React.FC = () => {
         })}
 
         {/* Walkboxes */}
-        {walkboxes.map((wb: any, i: number) => {
+        {filteredWalkboxes.map((wb: any, i: number) => {
           const isSelected = isItemSelected(wb);
           return (
             <div
@@ -318,7 +406,7 @@ export const HierarchyPanel: React.FC = () => {
         })}
 
         {/* Triggers */}
-        {triggers.map((tb: any, i: number) => {
+        {filteredTriggers.map((tb: any, i: number) => {
           const isSelected = isItemSelected(tb);
           return (
             <div
