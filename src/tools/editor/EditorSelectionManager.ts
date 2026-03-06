@@ -6,6 +6,22 @@ import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { useEditorStore } from '../../store/editorStore';
 
+type SelectionPayloadKind = 'single' | 'group' | 'group_prefab';
+
+interface SerializedSelectionPayload {
+  kind: SelectionPayloadKind;
+  version: number;
+  items: any[];
+  order: string[];
+  anchorKey: string | null;
+  meta?: {
+    source?: 'copy' | 'duplicate' | 'paste' | 'prefab-load' | 'prefab-save';
+    timestamp?: number;
+  };
+}
+
+type PayloadSource = 'copy' | 'duplicate' | 'paste' | 'prefab-load' | 'prefab-save';
+
 export class EditorSelectionManager {
   private editor: SceneEditor;
   private _selectedObjects: SceneObject[] = [];
@@ -167,6 +183,30 @@ export class EditorSelectionManager {
       const key = this.getObjectTypeAndId(obj).key;
       if (!key) return;
 
+      if ((obj as any).type === 'Quad' && Array.isArray((obj as any).vertices)) {
+        const quad = obj as any;
+        const vertices = quad.vertices || [];
+        if (!vertices.length) return;
+        const cx = vertices.reduce((acc: number, v: any) => acc + v.x, 0) / vertices.length;
+        const cy = vertices.reduce((acc: number, v: any) => acc + v.y, 0) / vertices.length;
+        this._groupSnapshot.set(key, {
+          kind: 'quad',
+          obj: quad,
+          centroidX: cx,
+          centroidY: cy,
+          vertices: vertices.map((v: any) => ({
+            x: v.x,
+            y: v.y,
+            p: v.p,
+            binding: v.binding ? JSON.parse(JSON.stringify(v.binding)) : undefined,
+          })),
+        });
+        sumX += cx;
+        sumY += cy;
+        count++;
+        return;
+      }
+
       if (obj instanceof Entity) {
         this._groupSnapshot.set(key, {
           kind: 'entity',
@@ -215,6 +255,23 @@ export class EditorSelectionManager {
     const scene = this.editor.game.sceneManager.currentScene;
 
     this._groupSnapshot.forEach((snap) => {
+      if (snap.kind === 'quad') {
+        const obj = snap.obj as any;
+        const vertices = (snap.vertices || []).map((v: any) => ({
+          x: originX + (v.x - originX) * sx + offsetX,
+          y: originY + (v.y - originY) * sx + offsetY,
+          p: v.p,
+          ...(v.binding ? { binding: JSON.parse(JSON.stringify(v.binding)) } : {}),
+        }));
+
+        obj.vertices = vertices;
+        const cx = vertices.reduce((acc: number, v: any) => acc + v.x, 0) / vertices.length;
+        const cy = vertices.reduce((acc: number, v: any) => acc + v.y, 0) / vertices.length;
+        obj.x = Math.round(cx);
+        obj.y = Math.round(cy);
+        return;
+      }
+
       if (snap.kind === 'entity') {
         const obj = snap.obj as Entity;
         const rx = snap.x - originX;
@@ -264,56 +321,6 @@ export class EditorSelectionManager {
     this.editor.refreshHierarchy();
   }
 
-  duplicateSelectedObject(): void {
-    const obj = this.editor.selectedObject;
-    if (!obj || !(obj instanceof SceneObject)) return;
-
-    // serialize
-    const data = obj.toJSON();
-
-    // Generate new name
-    const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return;
-
-    // Base Name
-    const baseName = data.name;
-    // Strip existing suffix if present
-    const match = baseName.match(/^(.*?)_\d+$/);
-    const prefix = match ? match[1] : baseName;
-
-    let counter = 1;
-    let newName = `${prefix}_${counter}`;
-
-    // Check availability
-    // We check against all entities, walkboxes, triggerboxes
-    const allObjects = [
-      ...(scene.entities || []),
-      ...(scene.walkbox || []),
-      ...(scene.triggerboxes || []),
-    ];
-
-    const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
-
-    while (isNameTaken(newName)) {
-      counter++;
-      newName = `${prefix}_${counter}`;
-    }
-
-    data.name = newName;
-    data.x = (data.x || 0) + 10;
-    data.y = (data.y || 0) + 10;
-
-    // Fix Component IDs if they reference self (Backface, Shadow)
-    // Similar logic to Paste...
-
-    // Use unified creation from Editor
-    const newObj = this.editor.createObjectFromData(data);
-    if (newObj) {
-      this.selectObject(newObj);
-      this.editor.refreshHierarchy();
-    }
-  }
-
   handleGlobalPaste(e: ClipboardEvent): void {
     if (!this.editor.enabled) return;
     if (document.activeElement instanceof HTMLInputElement) return;
@@ -326,9 +333,299 @@ export class EditorSelectionManager {
     }
   }
 
+  private getCurrentSelectionForSerialization(): SceneObject[] {
+    if (this.hasMultiSelection()) return this.getSelectedObjects();
+    if (this.editor.selectedObject instanceof SceneObject) return [this.editor.selectedObject];
+    return [];
+  }
+
+  private getSerializedObjectKey(data: any): string {
+    const type = data?.type || 'Entity';
+    const name = data?.name || 'Object';
+    return `${type}:${name}`;
+  }
+
+  private buildSelectionPayload(source: PayloadSource): SerializedSelectionPayload | null {
+    const selected = this.getCurrentSelectionForSerialization();
+    if (selected.length === 0) return null;
+
+    const items = selected.map((obj) => obj.toJSON());
+    const order = items.map((item) => this.getSerializedObjectKey(item));
+
+    return {
+      kind: items.length > 1 ? 'group' : 'single',
+      version: 2,
+      items,
+      order,
+      anchorKey: order[0] || null,
+      meta: { source, timestamp: Date.now() },
+    };
+  }
+
+  private normalizeIncomingPayload(raw: any): SerializedSelectionPayload | null {
+    if (!raw || typeof raw !== 'object') return null;
+
+    // Legacy single object JSON from clipboard/prefab.
+    if (raw.type && typeof raw.type === 'string') {
+      const key = this.getSerializedObjectKey(raw);
+      return {
+        kind: 'single',
+        version: 1,
+        items: [raw],
+        order: [key],
+        anchorKey: key,
+      };
+    }
+
+    const kind: SelectionPayloadKind =
+      raw.kind === 'group' || raw.kind === 'group_prefab' ? raw.kind : 'single';
+    let items: any[] = [];
+
+    if (Array.isArray(raw.items)) items = raw.items;
+    else if (raw.item && typeof raw.item === 'object') items = [raw.item];
+
+    if (!items.length) return null;
+
+    const providedOrder: string[] = Array.isArray(raw.order) ? raw.order : [];
+    const defaultOrder = items.map((item) => this.getSerializedObjectKey(item));
+    const order = providedOrder.length ? providedOrder : defaultOrder;
+    const anchorKey: string | null = raw.anchorKey || raw.anchor || order[0] || null;
+
+    // Keep item order stable with explicit order if it exists.
+    if (providedOrder.length) {
+      const byKey = new Map<string, any>();
+      items.forEach((item) => byKey.set(this.getSerializedObjectKey(item), item));
+      const sorted: any[] = [];
+      providedOrder.forEach((key) => {
+        const item = byKey.get(key);
+        if (item) {
+          sorted.push(item);
+          byKey.delete(key);
+        }
+      });
+      byKey.forEach((item) => sorted.push(item));
+      items = sorted;
+    }
+
+    return {
+      kind,
+      version: typeof raw.version === 'number' ? raw.version : 1,
+      items,
+      order,
+      anchorKey,
+      meta: raw.meta,
+    };
+  }
+
+  private stripAutoSuffix(name: string): string {
+    const match = name.match(/^(.*?)_\d+$/);
+    return match ? match[1] : name;
+  }
+
+  private getExistingSceneNames(): Set<string> {
+    const scene = this.editor.game.sceneManager.currentScene;
+    const names = new Set<string>();
+    if (!scene) return names;
+
+    [...(scene.entities || []), ...(scene.walkbox || []), ...(scene.triggerboxes || [])].forEach(
+      (obj: any) => {
+        if (obj?.name) names.add(obj.name);
+      }
+    );
+    return names;
+  }
+
+  private generateUniqueName(baseName: string, usedNames: Set<string>): string {
+    const safeBase = (baseName || 'Object').trim() || 'Object';
+    const prefix = this.stripAutoSuffix(safeBase);
+    if (!usedNames.has(prefix)) return prefix;
+
+    let counter = 1;
+    let candidate = `${prefix}_${counter}`;
+    while (usedNames.has(candidate)) {
+      counter++;
+      candidate = `${prefix}_${counter}`;
+    }
+    return candidate;
+  }
+
+  private getReferencePointFromSerializedData(data: any): { x: number; y: number } {
+    const type = data?.type || 'Static';
+    if (type === 'Quad' && Array.isArray(data?.vertices) && data.vertices.length > 0) {
+      const sx = data.vertices.reduce((acc: number, v: any) => acc + v.x, 0);
+      const sy = data.vertices.reduce((acc: number, v: any) => acc + v.y, 0);
+      return { x: sx / data.vertices.length, y: sy / data.vertices.length };
+    }
+
+    if (
+      (type === 'Walkbox' || type === 'Triggerbox') &&
+      Array.isArray(data?.poly) &&
+      data.poly.length
+    ) {
+      const minX = Math.min(...data.poly.map((p: any) => p.x));
+      const minY = Math.min(...data.poly.map((p: any) => p.y));
+      const maxX = Math.max(...data.poly.map((p: any) => p.x));
+      const maxY = Math.max(...data.poly.map((p: any) => p.y));
+      return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    }
+
+    return {
+      x: typeof data?.x === 'number' ? data.x : 0,
+      y: typeof data?.y === 'number' ? data.y : 0,
+    };
+  }
+
+  private getDefaultInsertionPoint(): { x: number; y: number } {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (scene?.camera) {
+      return { x: scene.camera.x, y: scene.camera.y };
+    }
+    return { x: 0, y: 0 };
+  }
+
+  private getInsertionPoint(preferCursor: boolean): { x: number; y: number } {
+    if (preferCursor) {
+      const worldPos = this.editor.getMouseWorldPosIfOverCanvas();
+      if (worldPos) return worldPos;
+    }
+    return this.getDefaultInsertionPoint();
+  }
+
+  private remapReferencesForPastedObject(node: any, nameMap: Map<string, string>): void {
+    if (!node || typeof node !== 'object') return;
+
+    if (Array.isArray(node)) {
+      node.forEach((item) => this.remapReferencesForPastedObject(item, nameMap));
+      return;
+    }
+
+    Object.keys(node).forEach((key) => {
+      const value = node[key];
+      if (typeof value === 'string') {
+        if (key === 'targetName' || key === 'shadowQuadId') {
+          if (nameMap.has(value)) node[key] = nameMap.get(value);
+        } else if (key === 'targetId' || key === 'triggerId' || key === 'triggerID') {
+          const parts = value
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .map((part) => nameMap.get(part) || part);
+          node[key] = parts.join(', ');
+        }
+      } else {
+        this.remapReferencesForPastedObject(value, nameMap);
+      }
+    });
+  }
+
+  private instantiateNormalizedPayload(
+    payload: SerializedSelectionPayload,
+    options?: {
+      preferCursor?: boolean;
+      insertionWorldPos?: { x: number; y: number } | null;
+      preserveOriginalPosition?: boolean;
+    }
+  ): SceneObject[] {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene || payload.items.length === 0) return [];
+
+    const orderedItems = payload.items.map((item) => JSON.parse(JSON.stringify(item)));
+    const anchorIndex = Math.max(
+      0,
+      payload.anchorKey
+        ? orderedItems.findIndex((item) => this.getSerializedObjectKey(item) === payload.anchorKey)
+        : 0
+    );
+    const anchorData = orderedItems[Math.max(anchorIndex, 0)];
+    const anchorSourcePoint = this.getReferencePointFromSerializedData(anchorData);
+    const insertionPoint = options?.preserveOriginalPosition
+      ? anchorSourcePoint
+      : options?.insertionWorldPos || this.getInsertionPoint(options?.preferCursor ?? true);
+
+    const usedNames = this.getExistingSceneNames();
+    const nameMap = new Map<string, string>();
+
+    // Precompute name remapping for all pasted objects.
+    orderedItems.forEach((item, index) => {
+      const originalName =
+        typeof item?.name === 'string' && item.name.trim()
+          ? item.name
+          : `${item?.type || 'Object'}_${index + 1}`;
+      const uniqueName = this.generateUniqueName(originalName, usedNames);
+      usedNames.add(uniqueName);
+      nameMap.set(originalName, uniqueName);
+    });
+
+    const created: SceneObject[] = [];
+    const preserveQuadBindings = payload.items.length > 1;
+    orderedItems.forEach((item) => {
+      const sourcePoint = this.getReferencePointFromSerializedData(item);
+      const overrideX = insertionPoint.x + (sourcePoint.x - anchorSourcePoint.x);
+      const overrideY = insertionPoint.y + (sourcePoint.y - anchorSourcePoint.y);
+
+      this.remapReferencesForPastedObject(item, nameMap);
+      if (item.name && nameMap.has(item.name)) {
+        item.name = nameMap.get(item.name);
+      }
+
+      const newObj = this.editor.createObjectFromData(item, overrideX, overrideY, {
+        preserveBindings: preserveQuadBindings && item?.type === 'Quad',
+      });
+      if (newObj) created.push(newObj);
+    });
+
+    return created;
+  }
+
+  instantiateFromSerializedData(
+    raw: any,
+    options?: {
+      saveUndo?: boolean;
+      preferCursor?: boolean;
+      insertionWorldPos?: { x: number; y: number } | null;
+      preserveOriginalPosition?: boolean;
+    }
+  ): SceneObject[] {
+    const payload = this.normalizeIncomingPayload(raw);
+    if (!payload) {
+      console.warn('Clipboard/prefab does not contain valid serialized selection payload');
+      return [];
+    }
+
+    if (options?.saveUndo) this.editor.saveUndoState();
+    const created = this.instantiateNormalizedPayload(payload, {
+      preferCursor: options?.preferCursor ?? true,
+      insertionWorldPos: options?.insertionWorldPos,
+      preserveOriginalPosition: options?.preserveOriginalPosition ?? false,
+    });
+
+    if (created.length > 1) this.setMultiSelection(created);
+    else if (created.length === 1) this.selectObject(created[0]);
+
+    return created;
+  }
+
+  copySelectionToClipboard(): void {
+    const payload = this.buildSelectionPayload('copy');
+    if (!payload) return;
+
+    navigator.clipboard
+      .writeText(JSON.stringify(payload, null, 2))
+      .catch((err) => console.error('Failed to copy selection JSON: ', err));
+  }
+
+  duplicateSelection(): void {
+    const payload = this.buildSelectionPayload('duplicate');
+    if (!payload) return;
+
+    this.instantiateFromSerializedData(payload, {
+      saveUndo: true,
+      preferCursor: true,
+    });
+  }
+
   async processPasteData(text: string): Promise<void> {
     try {
-      this.editor.saveUndoState(); // Save before paste
       let data: any;
       try {
         data = JSON.parse(text);
@@ -337,68 +634,12 @@ export class EditorSelectionManager {
         return;
       }
 
-      // Basic Validation
-      if (!data || typeof data !== 'object') {
-        console.warn('Clipboard data is not an object');
-        return;
-      }
-
-      // Check Mouse Pos
-      if (!this.editor.lastMousePos) {
-        return;
-      }
-
-      // Helper to get World Coords - delegating to Editor for now
-      // @ts-ignore
-      const worldPos = this.editor.convertScreenToWorld(
-        this.editor.lastMousePos.x,
-        this.editor.lastMousePos.y
-      );
-
-      // Ensure unique name for Paste as well
-      const scene = this.editor.game.sceneManager.currentScene;
-      if (scene) {
-        const baseName = data.name || 'Object';
-        const match = baseName.match(/^(.*?)_\d+$/);
-        const prefix = match ? match[1] : baseName;
-
-        let counter = 1;
-        let newName = `${prefix}_${counter}`;
-        const allObjects = [
-          ...(scene.entities || []),
-          ...(scene.walkbox || []),
-          ...(scene.triggerboxes || []),
-        ];
-        const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
-        while (isNameTaken(newName)) {
-          counter++;
-          newName = `${prefix}_${counter}`;
-        }
-        data.name = newName;
-
-        // Fix Component References (Self-Targeting)
-        if (data.components) {
-          const srcName = scene.entities.find((e: any) => e.name === baseName)
-            ? baseName
-            : baseName;
-          data.components.forEach((comp: any) => {
-            if (comp.type === 'Backface') {
-              if (comp.targetId === srcName || comp.targetId === baseName) {
-                comp.targetId = newName;
-              }
-            }
-          });
-        }
-      }
-
-      // Create
-      const newObj = this.editor.createObjectFromData(data, worldPos.x, worldPos.y);
-      if (newObj) {
-        this.selectObject(newObj);
-        this.editor.refreshHierarchy();
-      }
+      this.instantiateFromSerializedData(data, {
+        saveUndo: true,
+        preferCursor: true,
+      });
     } catch (e) {
-      console.error('Paste Failed:', e);
+      console.error('Paste failed:', e);
     }
   }
 

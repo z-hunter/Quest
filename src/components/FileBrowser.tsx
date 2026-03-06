@@ -41,6 +41,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   // Fetch when currentPath changes
   useEffect(() => {
     setIsLoading(true);
+    setError(null);
     // Clear filter when changing directory
     setFilterText('');
 
@@ -49,17 +50,31 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: currentPath }),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`File API error (${res.status}): ${text || res.statusText}`);
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (data.files) {
+        if (Array.isArray(data.files)) {
           setItems(data.files);
         } else {
-          setError('Failed to list files');
+          setError('File API returned invalid payload.');
         }
-        setIsLoading(false);
       })
       .catch((err) => {
-        setError(String(err));
+        const raw = String(err);
+        if (raw.includes('Failed to fetch')) {
+          setError(
+            `File API unavailable at ${window.location.origin}/api/list. Start app with 'npm run dev'.`
+          );
+        } else {
+          setError(raw);
+        }
+      })
+      .finally(() => {
         setIsLoading(false);
       });
   }, [currentPath]);

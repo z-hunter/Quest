@@ -1,62 +1,61 @@
 # tasks.md
 
-## Цель этапа
+## Текущий фокус (блокер перед Parser)
 
-Стабилизировать ядро Scanline Engine за 2-4 недели и подготовить базу для безопасного развития фич.
+Закрыть долг по операциям с множественным выделением в Scene Editor:
+
+- copy/paste группы;
+- duplicate группы (`Ctrl + D`);
+- save/load prefab для single и group;
+- единая логика размещения при вставке.
 
 ## Критерии успеха
 
-- [ ] `npm run build` проходит без ошибок.
-- [ ] `npm run lint` проходит (или зафиксирован временный baseline без критических ошибок).
-- [ ] Ключевые runtime/editor сценарии проходят без регрессий.
-- [ ] Контракты между Engine, Editor и React формализованы.
+- [x] `Ctrl + C` копирует single/group выделение как сериализуемый payload.
+- [x] `Ctrl + V` вставляет single/group с сохранением относительных позиций группы.
+- [x] `Ctrl + D` дублирует single/group с тем же pipeline, что и paste.
+- [x] `Ctrl + S` сохраняет single prefab и group prefab.
+- [x] Group prefab поддерживает все selectable-типы (`Entity`, `Actor`, `Quad`, `Walkbox`, `Triggerbox`) со свойствами.
+- [x] `Ctrl + O` загружает prefab и вставляет в позицию курсора (или в центр вида, если курсор вне canvas).
+- [x] Toolbar `Load` сохраняет стандартное поведение загрузки (без cursor-only режима hotkey).
+- [x] После paste/duplicate/load снимается старое выделение и выделяются только новые объекты.
+- [x] Порядок объектов группы после вставки/дублирования сохраняется.
 
-## Приоритет 1. Инженерный baseline (блокер)
+## Реализация
 
-- [x] Починить TypeScript сборку до зеленого состояния.
-- [x] Устранить критические ошибки интерфейсов React <-> SceneEditor.
-- [x] Согласовать `tsconfig`-политику с фактическим кодом.
-- [x] Добавить quality gate в CI: `npm run build`, `npm run lint`.
+### Приоритет 1. Сериализация и instantiate pipeline
 
-## Приоритет 2. Контракт слоев Engine <-> Editor <-> React
+- [x] Ввести общий формат payload (`single/group`) для clipboard.
+- [x] Поддержать legacy single JSON без `kind/version`.
+- [x] Реализовать общий pipeline создания объектов из payload (single/group).
+- [x] Ввести remap имён и ссылок внутри вставляемой группы.
 
-- [x] Убрать вызовы несуществующих API SceneEditor из React.
-- [x] Зафиксировать фасадный контракт редактора (persistence/selection/transform).
-- [x] Перенести прямые DOM-манипуляции из SceneEditor в Zustand/React, где возможно.
-- [x] Убедиться, что runtime не зависит от наличия React DOM.
+### Приоритет 2. Hotkeys и редакторные операции
 
-## Приоритет 3. Снижение архитектурных рисков runtime
+- [x] Перевести `copySelectedObjectToClipboard` на новый pipeline.
+- [x] Реализовать duplicate для группы через тот же pipeline.
+- [x] Перевести paste на общий pipeline с fallback в центр вида.
+- [x] Исправить рендер подсветки multi-selection для Entity (использовать текущий объект цикла).
 
-- [x] Декомпозировать `Scene` на подмодули (camera/interaction/subscene).
-- [x] Декомпозировать `SceneEditor` на подмодули (hotkeys/ui-sync/creation).
-- [x] Сократить использование `window.game` и экспорта сущностей в `window`.
-- [x] Заменить `any`/`@ts-ignore` в системах на типизированные контракты.
-- [x] Вынести единую утилиту parallax/visual-space для устранения дублирования математики.
+### Приоритет 3. Prefab single/group
 
-## Приоритет 4. Parser/Console под текущий scope
+- [x] Расширить `saveObject` на single/group.
+- [x] Добавить формат `group_prefab`.
+- [x] Расширить `loadObject` на single/group с backward compatibility.
+- [x] Разделить режимы загрузки: `Ctrl + O` (`cursor`) и toolbar (`default`).
 
-- [ ] Выделить текущий парсер как `RuleBasedParser`.
-- [ ] Ввести интерфейсы `ICommandParser` и `ParserPipeline` для будущего каскада.
-- [ ] Централизовать обработку ввода/истории команд.
-- [ ] Обновить документацию: NLP/LLM каскад - следующий этап roadmap.
+### Приоритет 4. Документация и приемка
 
-## Приоритет 5. Тестовый каркас критических сценариев
+- [x] Обновить GDD по copy/paste/duplicate и prefab single/group.
+- [x] Прогнать `npm run typecheck`.
+- [x] Прогнать `npm run build`.
+- [ ] Ручной smoke-тест в браузере (single/group copy/paste/duplicate/save/load).
 
-- [ ] Добавить smoke-тесты: init Game, load scene, update/render frame.
-- [ ] Добавить regression-тесты editor: select/move/undo-redo/save-load.
-- [ ] Добавить тесты parser/console: history, hotkeys, базовые команды.
-- [ ] Зафиксировать 2-3 golden-сцены для регрессионных проверок.
+## Следующий этап (после закрытия блока)
 
-## Порядок итераций
-
-- [ ] Итерация A (дни 1-3): baseline build/lint + CI gate.
-- [ ] Итерация B (дни 4-7): контракты Engine<->Editor<->React.
-- [ ] Итерация C (дни 8-12): декомпозиция и типизация систем.
-- [ ] Итерация D (дни 13-16): parser/console контракт + docs.
-- [ ] Итерация E (дни 17-20): smoke/regression и финальная стабилизация.
+- [ ] Вернуться к задачам Parser/Text resources.
 
 ## Правило сопровождения плана
 
-- [ ] При любых изменениях задач обновлять `tasks.md`.
-- [ ] Перед началом новой задачи сверяться с этим планом.
-- [ ] Любые отклонения фиксировать отдельным пунктом с обоснованием.
+- [ ] Перед началом новой задачи сверяться с `tasks.md`.
+- [ ] При изменении приоритетов обновлять статусы и критерии.

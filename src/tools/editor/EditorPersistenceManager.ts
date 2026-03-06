@@ -1,6 +1,6 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
-import { Actor } from '../../entities/Actor';
+import { SceneObject } from '../../entities/SceneObject';
 import { useEditorStore } from '../../store/editorStore';
 
 export class EditorPersistenceManager {
@@ -88,37 +88,37 @@ export class EditorPersistenceManager {
   // --- Prefab Saving ---
 
   async saveObject(): Promise<void> {
-    if (!this.editor.selectedObject || !(this.editor.selectedObject instanceof Entity)) {
+    const selection = this.editor.selectionManager.hasMultiSelection()
+      ? this.editor.selectionManager.getSelectedObjects()
+      : this.editor.selectedObject instanceof SceneObject
+        ? [this.editor.selectedObject]
+        : [];
+
+    if (!selection.length) {
       this.editor.game.showNotification('Select an Object to Save');
       return;
     }
 
     this.editor.game.openFileBrowser('save', 'public/prefabs', (filename: string) => {
-      this.performSaveObject(filename);
+      this.performSaveObject(filename, selection);
     });
   }
 
-  async performSaveObject(filename: string): Promise<void> {
-    if (!this.editor.selectedObject) return;
-    const ent = this.editor.selectedObject as Entity;
+  async performSaveObject(filename: string, selection: SceneObject[]): Promise<void> {
+    if (!selection.length) return;
 
-    // Use Entity.toJSON or basic properties
-    const data = ent.toJSON
-      ? ent.toJSON()
-      : {
-          type: (ent as any).type || (ent instanceof Actor ? 'Actor' : 'Static'),
-          name: ent.name,
-          x: 0,
-          y: 0,
-          width: ent.width,
-          height: ent.height,
-          color: ent.color,
-          scale: ent.scale,
-          layer: ent.layer,
-          parallax: ent.parallax,
-          spriteName: ent.spriteName,
-          ignoreScaling: ent.ignoreScaling,
-        };
+    const serialized = selection.map((obj) => obj.toJSON());
+    const data =
+      serialized.length === 1
+        ? serialized[0]
+        : {
+            kind: 'group_prefab',
+            version: 1,
+            items: serialized,
+            order: serialized.map((item) => `${item.type || 'Entity'}:${item.name || 'Object'}`),
+            anchorKey: `${serialized[0]?.type || 'Entity'}:${serialized[0]?.name || 'Object'}`,
+            meta: { source: 'prefab-save', timestamp: Date.now() },
+          };
 
     const json = JSON.stringify(data, null, 2);
     const filePath = `public/prefabs/${filename}`;
@@ -143,61 +143,54 @@ export class EditorPersistenceManager {
 
   // --- Prefab Loading ---
 
-  async loadObject(): Promise<void> {
+  async loadObject(mode: 'default' | 'cursor' = 'default'): Promise<void> {
     if (!this.editor.game.sceneManager.currentScene) return;
+    const insertionWorldPos = mode === 'cursor' ? this.editor.getMouseWorldPosIfOverCanvas() : null;
     this.editor.game.openFileBrowser('load', 'public/prefabs', (filename: string) => {
-      this.performLoadObject(filename);
+      this.performLoadObject(filename, mode, insertionWorldPos);
     });
   }
 
-  async performLoadObject(filename: string): Promise<void> {
+  async performLoadObject(
+    filename: string,
+    mode: 'default' | 'cursor' = 'default',
+    insertionWorldPos: { x: number; y: number } | null = null
+  ): Promise<void> {
     try {
       const response = await fetch(`/prefabs/${filename}?t=${Date.now()}`);
       if (!response.ok) throw new Error('File not found');
       const data = await response.json();
 
-      // Validate data
-      if (!data.type) data.type = 'Static'; // Default
+      // Backward compatibility for single-object prefabs:
+      // keep previous naming behavior based on file path.
+      const isGroupPrefab =
+        data &&
+        typeof data === 'object' &&
+        data.kind === 'group_prefab' &&
+        Array.isArray(data.items);
 
-      // Logic 2 & 3: ID Derivation & Collision
-      // Filename: "folder/chair.json" -> ID: "folder\chair"
-      const baseId = filename.replace('.json', '').replace(/\//g, '\\');
-
-      // Check Collision against current scene objects
-      const scene = this.editor.game.sceneManager.currentScene;
-      if (scene) {
-        const allObjects = [
-          ...(scene.entities || []),
-          ...(scene.walkbox || []),
-          ...(scene.triggerboxes || []),
-        ];
-
-        // Override name in data to be the ID (or base it off ID)
-        // Actually, objects have 'name', not 'id'. We treat 'name' as unique identifier in Editor.
-        // So we format the name as "folder\chair".
-
-        let newName = baseId;
-        let counter = 1;
-
-        const isNameTaken = (n: string) => allObjects.some((o: any) => o.name === n);
-
-        if (isNameTaken(newName)) {
-          // Try name_1, name_2...
-          while (isNameTaken(`${baseId}_${counter}`)) {
-            counter++;
-          }
-          newName = `${baseId}_${counter}`;
-        }
-
-        data.name = newName;
+      let payload: any = data;
+      if (!isGroupPrefab) {
+        if (!payload.type) payload.type = 'Static';
+        const baseId = filename.replace('.json', '').replace(/\//g, '\\');
+        payload = { ...payload, name: baseId };
       }
 
-      // Use Editor's creation logic
-      const entity = this.editor.createObjectFromData(data);
+      const resolvedInsertionPoint = mode === 'cursor' ? insertionWorldPos : null;
 
-      if (entity) {
-        this.editor.selectObject(entity);
-        this.editor.refreshHierarchy();
+      const created = this.editor.selectionManager.instantiateFromSerializedData(payload, {
+        saveUndo: true,
+        // For Ctrl+O we must use cursor position captured at hotkey time only.
+        // If it was outside canvas, selection manager will fall back to center view.
+        preferCursor: false,
+        insertionWorldPos: resolvedInsertionPoint,
+        preserveOriginalPosition: mode === 'default',
+      });
+      if (mode === 'cursor' && !resolvedInsertionPoint) {
+        this.editor.game.showNotification('Prefab loaded: cursor not on canvas, used center view');
+      }
+      if (!created.length) {
+        this.editor.game.showNotification('Failed to instantiate prefab');
       }
     } catch (e) {
       console.error(e);

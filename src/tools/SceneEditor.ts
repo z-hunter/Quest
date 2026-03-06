@@ -161,10 +161,10 @@ export class SceneEditor {
       return;
     }
 
-    // Ctrl+O: Load Object
+    // Ctrl+O: Load Object (cursor placement mode)
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'o' || e.code === 'KeyO')) {
       e.preventDefault();
-      this.persistenceManager.loadObject();
+      this.persistenceManager.loadObject('cursor');
       return;
     }
 
@@ -399,12 +399,23 @@ export class SceneEditor {
 
   // Helper to get World Pos from last mouse pos if inside canvas
   getMouseWorldPosIfOverCanvas(): { x: number; y: number } | null {
-    const mx = this.lastMousePos.x;
-    const my = this.lastMousePos.y;
+    // IMPORTANT:
+    // lastMousePos is updated from window mousemove in EditorUI and is the most up-to-date cursor point.
+    // game.input.mouse is updated only from canvas events and may be stale.
+    const candidates: { x: number; y: number }[] = [this.lastMousePos];
+    if (this.game?.input?.mouse) {
+      candidates.push({
+        x: this.game.input.mouse.x,
+        y: this.game.input.mouse.y,
+      });
+    }
 
-    // Basic check if inside canvas
-    if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
-      return this.convertScreenToWorld(mx, my);
+    for (const pos of candidates) {
+      const mx = pos.x;
+      const my = pos.y;
+      if (mx >= 0 && mx <= this.game.canvas.width && my >= 0 && my <= this.game.canvas.height) {
+        return this.convertScreenToWorld(mx, my);
+      }
     }
     return null;
   }
@@ -501,8 +512,8 @@ export class SceneEditor {
     return this.persistenceManager.saveObject();
   }
 
-  loadObject(): Promise<void> {
-    return this.persistenceManager.loadObject();
+  loadObject(mode: 'default' | 'cursor' = 'default'): Promise<void> {
+    return this.persistenceManager.loadObject(mode);
   }
 
   saveScene(saveAs: boolean = false): Promise<void> {
@@ -651,8 +662,15 @@ export class SceneEditor {
 
         // Handle Paste Position Override
         if (overrideX !== undefined && overrideY !== undefined) {
-          const oldX = data.x || 0;
-          const oldY = data.y || 0;
+          const vertices = Array.isArray(data.vertices) ? data.vertices : [];
+          const oldX =
+            vertices.length > 0
+              ? vertices.reduce((acc: number, v: any) => acc + v.x, 0) / vertices.length
+              : data.x || 0;
+          const oldY =
+            vertices.length > 0
+              ? vertices.reduce((acc: number, v: any) => acc + v.y, 0) / vertices.length
+              : data.y || 0;
           const dx = overrideX - oldX;
           const dy = overrideY - oldY;
 
@@ -723,29 +741,11 @@ export class SceneEditor {
   // Existing mouse move needs to update this
 
   copySelectedObjectToClipboard(): void {
-    if (!this.selectedObject) return;
-
-    let data: any;
-    if (this.selectedObject.toJSON) {
-      data = this.selectedObject.toJSON();
-    } else {
-      return;
-    }
-
-    const json = JSON.stringify(data, null, 2);
-
-    navigator.clipboard
-      .writeText(json)
-      .then(() => {
-        // Silent success as requested
-      })
-      .catch((err) => {
-        console.error('Failed to copy object JSON: ', err);
-      });
+    this.selectionManager.copySelectionToClipboard();
   }
 
   duplicateSelectedObject(): void {
-    this.selectionManager.duplicateSelectedObject();
+    this.selectionManager.duplicateSelection();
   }
 
   deleteSelectedObject(): void {
@@ -967,7 +967,7 @@ export class SceneEditor {
           ctx.restore();
         } else {
           // ** STANDARD ENTITY SELECTION **
-          const entity = this.selectedObject as Entity;
+          const entity = selected as Entity;
           const p = entity.parallax !== undefined ? entity.parallax : 1.0;
 
           const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
