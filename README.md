@@ -1,21 +1,21 @@
 # Scanline: AI-Powered Retro-Vibe Adventure game engine [WIP]
 
 ![logo](public/assets/scanline_logo.png)
-SHALL WE MAKE A GAME? 
+SHALL WE MAKE A GAME?
 **Scanline** is a 2D third-person adventure game engine inspired by 80s classics (like early Sierra and LukasArt games) with a modern twist. It combines traditional Point-n-Click mechanics for movement and inspection with a _text parser_ for interactions.
 
 ## Key Features
 
-*   **Hybrid Controls**: Point-n-Click for navigation + Text Parser for actions. No more "scroll and click everything" pixel hunting.
-*   **AI Game Master**: An AI (LLM) acts as the bridge between the player and the game engine. It parses natural language commands, generates descriptions, and drives dynamic conversations with NPCs.
-*   **Retro Aesthetics**: Pixel art style, CRT shader effects, and a command-line interface.
-*   **Integrated Editor**: Built-in tools for editing scenes, defining sprites and game logic (polygonal walkboxes, triggers).
+- **Hybrid Controls**: Point-n-Click for navigation + Text Parser for actions. No more "scroll and click everything" pixel hunting.
+- **AI Game Master**: An AI (LLM) acts as the bridge between the player and the game engine. It parses natural language commands, generates descriptions, and drives dynamic conversations with NPCs.
+- **Retro Aesthetics**: Pixel art style, CRT shader effects, and a command-line interface.
+- **Integrated Editor**: Built-in tools for editing scenes, defining sprites and game logic (polygonal walkboxes, triggers).
 
 ## Installation and Run (Windows)
 
 ### Prerequisites
 
-*   **Node.js**: You need to have Node.js installed. You can download it from [nodejs.org](https://nodejs.org/).
+- **Node.js**: You need to have Node.js installed. You can download it from [nodejs.org](https://nodejs.org/).
 
 ### Quick Start (Windows)
 
@@ -38,9 +38,9 @@ To run the game on a Linux web server (e.g., Nginx or Apache):
 
 ## Project Structure
 
-*   `src/` - Source code (React, TypeScript).
-*   `public/` - Static assets (sprites, sounds, scenes).
-*   `GDD.md` - Game Design Document (Russian).
+- `src/` - Source code (React, TypeScript).
+- `public/` - Static assets (sprites, sounds, scenes).
+- `GDD.md` - Game Design Document (Russian).
 
 ## License
 

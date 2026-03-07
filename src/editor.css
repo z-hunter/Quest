@@ -1,377 +1,376 @@
 /* Main App Container */
 .app-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    width: 100vw;
-    background: #000;
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: #000;
+  overflow: hidden;
 }
 
 .workspace-row {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    position: relative;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
 }
 
 .game-wrapper {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #000;
-    overflow: hidden;
-    /* Ensure Game Canvas fills this space */
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+  /* Ensure Game Canvas fills this space */
 }
 
 /* React Editor Layout Logic */
 .editor-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1000;
-    pointer-events: none;
-    /* This now only holds overlays like Messages/Modal, NOT panels */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  pointer-events: none;
+  /* This now only holds overlays like Messages/Modal, NOT panels */
 }
 
 /* DEPRECATED: Old Main Row */
 /* .editor-main-row { ... } */
 
-
 .editor-main-row {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-    width: 100%;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  width: 100%;
 }
 
 .editor-sidebar {
-    width: 260px;
-    background: rgba(10, 10, 10, 0.95);
-    border: 1px solid #333;
-    color: #ddd;
-    display: flex;
-    flex-direction: column;
-    pointer-events: auto;
-    /* Capture clicks */
-    overflow: hidden;
-    flex-shrink: 0;
+  width: 260px;
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid #333;
+  color: #ddd;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  /* Capture clicks */
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .editor-sidebar.left {
-    border-right: 1px solid var(--ui-main-color);
-    /* Retro Green accent */
+  border-right: 1px solid var(--ui-main-color);
+  /* Retro Green accent */
 }
 
 .editor-sidebar.right {
-    border-left: 1px solid var(--ui-main-color);
+  border-left: 1px solid var(--ui-main-color);
 }
 
 .editor-center-spacer {
-    flex: 1;
-    pointer-events: none;
-    /* Pass through to game */
+  flex: 1;
+  pointer-events: none;
+  /* Pass through to game */
 }
 
 .editor-header {
-    padding: 5px;
-    background: #222;
-    border-bottom: 1px solid #444;
-    font-weight: bold;
-    color: var(--ui-main-color);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  padding: 5px;
+  background: #222;
+  border-bottom: 1px solid #444;
+  font-weight: bold;
+  color: var(--ui-main-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .editor-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
 }
 
 /* Controls */
 .e-btn {
-    background: #111;
-    border: 1px solid #555;
-    color: #eee;
-    padding: 4px 8px;
-    font-family: inherit;
-    font-size: inherit;
-    /* WAS: 12px */
-    cursor: pointer;
-    margin-right: 5px;
+  background: #111;
+  border: 1px solid #555;
+  color: #eee;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: inherit;
+  /* WAS: 12px */
+  cursor: pointer;
+  margin-right: 5px;
 }
 
 .e-btn:hover {
-    background: #333;
-    border-color: var(--ui-main-color);
-    color: #fff;
+  background: #333;
+  border-color: var(--ui-main-color);
+  color: #fff;
 }
 
 .e-btn-red {
-    border-color: #900;
-    color: #faa;
+  border-color: #900;
+  color: #faa;
 }
 
 .e-btn-red:hover {
-    background: #500;
+  background: #500;
 }
 
 .e-btn-yellow {
-    border-color: #990;
-    color: #ffa;
+  border-color: #990;
+  color: #ffa;
 }
 
 .e-btn-small {
-    padding: 2px 4px;
-    font-size: 0.85em;
-    /* WAS: 10px */
+  padding: 2px 4px;
+  font-size: 0.85em;
+  /* WAS: 10px */
 }
 
 .e-input {
-    background: var(--ui-input-bg);
-    border: 1px solid var(--ui-input-border);
-    color: var(--ui-input-text);
-    padding: 4px;
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 5px;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-input-text);
+  padding: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 5px;
 }
 
 .e-select {
-    background: var(--ui-dropdown-bg);
-    border: 1px solid var(--ui-input-border);
-    color: var(--ui-dropdown-text);
-    padding: 4px;
-    width: 100%;
-    margin-bottom: 5px;
+  background: var(--ui-dropdown-bg);
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-dropdown-text);
+  padding: 4px;
+  width: 100%;
+  margin-bottom: 5px;
 }
 
 .e-row {
-    margin-bottom: 8px;
+  margin-bottom: 8px;
 }
 
 .e-label {
-    display: block;
-    color: var(--ui-label-color);
-    font-size: 0.9em;
-    /* WAS: 11px */
-    margin-bottom: 2px;
+  display: block;
+  color: var(--ui-label-color);
+  font-size: 0.9em;
+  /* WAS: 11px */
+  margin-bottom: 2px;
 }
 
 /* Bottom Menu */
 .editor-bottom-menu {
-    height: 32px;
-    background: #111;
-    border-top: 1px solid var(--ui-main-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* Center items */
-    padding: 0 10px;
-    gap: 15px;
-    pointer-events: auto;
-    font-family: monospace;
-    width: 100%;
-    box-sizing: border-box;
-    z-index: 200;
-    position: relative;
+  height: 32px;
+  background: #111;
+  border-top: 1px solid var(--ui-main-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Center items */
+  padding: 0 10px;
+  gap: 15px;
+  pointer-events: auto;
+  font-family: monospace;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 200;
+  position: relative;
 }
 
 .e-menu-btn {
-    background: transparent;
-    border: none;
-    color: var(--ui-fkey-text);
-    cursor: pointer;
-    font-size: 1em;
-    /* WAS: 12px */
-    text-transform: uppercase;
-    padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--ui-fkey-text);
+  cursor: pointer;
+  font-size: 1em;
+  /* WAS: 12px */
+  text-transform: uppercase;
+  padding: 2px 6px;
 }
 
 /* Hotkey Accent Color */
 .hotkey-accent {
-    color: var(--ui-fkey-hotkey);
-    font-weight: bold;
-    margin-right: 4px;
-    opacity: 1;
+  color: var(--ui-fkey-hotkey);
+  font-weight: bold;
+  margin-right: 4px;
+  opacity: 1;
 }
 
 .e-menu-btn:hover {
-    background: var(--ui-main-color);
+  background: var(--ui-main-color);
 
-    color: #000;
+  color: #000;
 }
 
 .e-menu-btn:hover .hotkey-accent {
-    color: #000;
-    /* reset on hover */
+  color: #000;
+  /* reset on hover */
 }
 
 .fps-counter {
-    position: absolute;
-    right: 10px;
-    font-family: monospace;
-    font-weight: bold;
-    color: var(--ui-text-dim, #666);
+  position: absolute;
+  right: 10px;
+  font-family: monospace;
+  font-weight: bold;
+  color: var(--ui-text-dim, #666);
 }
 
 /* ... existing code ... */
 
 /* Entity List Items */
 .entity-item {
-    padding: 2px 5px;
-    cursor: pointer;
-    border-bottom: 1px solid #333;
+  padding: 2px 5px;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
 }
 
 .entity-item:hover {
-    background: var(--ui-selection-item-hover-bg);
-    border-bottom: 1px solid var(--ui-main-color);
+  background: var(--ui-selection-item-hover-bg);
+  border-bottom: 1px solid var(--ui-main-color);
 }
 
 .entity-item.selected {
-    background-color: var(--ui-selection-bg);
-    color: var(--ui-selection-text);
+  background-color: var(--ui-selection-bg);
+  color: var(--ui-selection-text);
 }
 
 /* Global Checkbox Style */
-input[type="checkbox"] {
-    accent-color: var(--ui-main-color);
-    cursor: pointer;
-    width: 1em;
-    height: 1em;
-    vertical-align: middle;
+input[type='checkbox'] {
+  accent-color: var(--ui-main-color);
+  cursor: pointer;
+  width: 1em;
+  height: 1em;
+  vertical-align: middle;
 }
 
 .sprite-panel {
-    background: #111;
-    border: 2px solid #f0f;
-    position: absolute;
-    top: 50px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 65em;
-    /* WAS: 600px - approx 600/9.2... let's say 50em? 12px base. 600/12 = 50. */
-    height: 50em;
-    /* WAS: 500px - 500/12 = 41.6. Let's start with proper conversion */
-    z-index: 2000;
-    display: flex;
-    flex-direction: column;
-    pointer-events: auto;
-    box-shadow: 0 0 20px #f0f;
+  background: #111;
+  border: 2px solid #f0f;
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 65em;
+  /* WAS: 600px - approx 600/9.2... let's say 50em? 12px base. 600/12 = 50. */
+  height: 50em;
+  /* WAS: 500px - 500/12 = 41.6. Let's start with proper conversion */
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  box-shadow: 0 0 20px #f0f;
 }
 
 .sprite-panel-header {
-    background: #303;
-    color: #fff;
-    padding: 5px;
-    font-weight: bold;
-    display: flex;
-    justify-content: space-between;
+  background: #303;
+  color: #fff;
+  padding: 5px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
 }
 
 .editor-center-column {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-    height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
 }
 
 /* Toolbar Icon Buttons */
 .toolbar-icon-btn {
-    background: transparent;
-    border: none;
-    padding: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2px;
-    width: 100%;
-    aspect-ratio: 1;
-    color: var(--ui-main-color);
-    /* Default icon color */
+  background: transparent;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  width: 100%;
+  aspect-ratio: 1;
+  color: var(--ui-main-color);
+  /* Default icon color */
 }
 
 .toolbar-icon {
-    width: 20px;
-    height: 20px;
-    display: block;
-    /* SVGs are pre-colored to var(--ui-main-color) */
+  width: 20px;
+  height: 20px;
+  display: block;
+  /* SVGs are pre-colored to var(--ui-main-color) */
 }
 
 .toolbar-icon-btn:hover {
-    background-color: var(--ui-main-color);
-    /* Icon becomes black on hover */
+  background-color: var(--ui-main-color);
+  /* Icon becomes black on hover */
 }
 
 .toolbar-icon-btn:hover .toolbar-icon {
-    filter: brightness(0);
-    /* Turn icon black on hover */
+  filter: brightness(0);
+  /* Turn icon black on hover */
 }
 
 /* Slider (Range) Styling */
-input[type=range] {
-    -webkit-appearance: none;
-    width: 100%;
-    background: transparent;
-    padding: 0;
-    margin: 5px 0;
+input[type='range'] {
+  -webkit-appearance: none;
+  width: 100%;
+  background: transparent;
+  padding: 0;
+  margin: 5px 0;
 }
 
-input[type=range]:focus {
-    outline: none;
-    box-shadow: none;
-    /* Override default input focus */
-    border-color: transparent;
-    /* Override default input border */
+input[type='range']:focus {
+  outline: none;
+  box-shadow: none;
+  /* Override default input focus */
+  border-color: transparent;
+  /* Override default input border */
 }
 
 /* Track */
-input[type=range]::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 4px;
-    cursor: pointer;
-    background: #444;
-    border-radius: 2px;
-    border: none;
+input[type='range']::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  background: #444;
+  border-radius: 2px;
+  border: none;
 }
 
 /* Thumb */
-input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    height: 14px;
-    width: 14px;
-    border-radius: 50%;
-    background: var(--ui-main-color);
-    cursor: pointer;
-    margin-top: -5px;
-    /* Offset to center on track (14/2 - 4/2 = 5) */
-    border: 1px solid #000;
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: var(--ui-main-color);
+  cursor: pointer;
+  margin-top: -5px;
+  /* Offset to center on track (14/2 - 4/2 = 5) */
+  border: 1px solid #000;
 }
 
-input[type=range]:hover::-webkit-slider-thumb {
-    background: var(--ui-input-text);
-    /* Brighter green on hover */
+input[type='range']:hover::-webkit-slider-thumb {
+  background: var(--ui-input-text);
+  /* Brighter green on hover */
 }
 
-input[type=range]:focus::-webkit-slider-runnable-track {
-    background: #555;
+input[type='range']:focus::-webkit-slider-runnable-track {
+  background: #555;
 }
 
 /* Checkbox Label Styling */
-.e-label:has(input[type="checkbox"]) {
-    color: #cccccc;
-    cursor: pointer;
+.e-label:has(input[type='checkbox']) {
+  color: #cccccc;
+  cursor: pointer;
 }
 
-.e-label:has(input[type="checkbox"]):hover {
-    color: var(--ui-main-color);
+.e-label:has(input[type='checkbox']):hover {
+  color: var(--ui-main-color);
 }

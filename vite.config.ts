@@ -1,8 +1,8 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import fs from 'fs'
-import path from 'path'
-import { exec } from 'child_process'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -64,11 +64,11 @@ export default defineConfig({
                   return;
                 }
 
-                const items = fs.readdirSync(targetPath).map(file => {
+                const items = fs.readdirSync(targetPath).map((file) => {
                   const stats = fs.statSync(path.join(targetPath, file));
                   return {
                     name: file,
-                    isDir: stats.isDirectory()
+                    isDir: stats.isDirectory(),
                   };
                 });
 
@@ -123,6 +123,6 @@ export default defineConfig({
           }
         });
       },
-    }
+    },
   ],
-})
+});

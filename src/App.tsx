@@ -11,7 +11,6 @@ import { Game } from './core/Game';
 import './index.css';
 import './editor.css';
 
-
 function App() {
   const [game, setGame] = useState<Game | null>(null);
   const { enabled: editorEnabled, spriteEditorEnabled } = useEditorStore();
@@ -22,9 +21,8 @@ function App() {
     <div className="app-container">
       <div className="workspace-row">
         {/* Left Panel - Hierarchy or Empty/SpriteList */}
-        {showLayout && (
-          editorEnabled && !spriteEditorEnabled ? <HierarchyPanel /> : null // TODO: Sprite List?
-        )}
+        {showLayout && (editorEnabled && !spriteEditorEnabled ? <HierarchyPanel /> : null)}
+        {/* TODO: Sprite List? */}
 
         {/* Center Column: Game + Bottom Menu */}
         <div className="editor-center-column">
@@ -38,15 +36,21 @@ function App() {
           </div>
 
           {/* Bottom Bar - moved INSIDE the center column */}
-          {showLayout && (
-            spriteEditorEnabled ? <SpriteBottomMenu /> : (editorEnabled ? <EditorBottomMenu /> : null)
-          )}
+          {showLayout &&
+            (spriteEditorEnabled ? (
+              <SpriteBottomMenu />
+            ) : editorEnabled ? (
+              <EditorBottomMenu />
+            ) : null)}
         </div>
 
         {/* Right Panel - Properties */}
-        {showLayout && (
-          spriteEditorEnabled ? <SpritePropertiesPanel /> : (editorEnabled ? <PropertiesPanel /> : null)
-        )}
+        {showLayout &&
+          (spriteEditorEnabled ? (
+            <SpritePropertiesPanel />
+          ) : editorEnabled ? (
+            <PropertiesPanel />
+          ) : null)}
       </div>
     </div>
   );

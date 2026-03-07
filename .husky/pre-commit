@@ -1,0 +1,5 @@
+# Run linters on staged files
+npx lint-staged || exit 1
+
+# Run TypeScript typecheck (no emit)
+npm run -s typecheck || exit 1
