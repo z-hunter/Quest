@@ -10,6 +10,18 @@ export default defineConfig([
   // Ignore build output
   globalIgnores(['dist']),
 
+  // Node scripts (CI utilities, local tooling)
+  {
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: {
+        ...globals.node,
+        fetch: 'readonly',
+      },
+    },
+  },
+
   // Base recommended configs (Flat Config composition, without "extends")
   js.configs.recommended,
   ...tseslint.configs.recommended,
