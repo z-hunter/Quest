@@ -20,10 +20,6 @@ export const HierarchyPanel: React.FC = () => {
   };
 
   const scene = game?.sceneManager?.currentScene;
-  const entities = React.useMemo(() => scene?.entities || [], [scene]);
-  const walkboxes = React.useMemo(() => scene?.walkbox || [], [scene]);
-  const triggers = React.useMemo(() => scene?.triggerboxes || [], [scene]);
-
   const filterMode = filterText.startsWith('#') ? 'group' : 'name';
   const filterNeedle = React.useMemo(() => filterText.trim().toLowerCase(), [filterText]);
 
@@ -45,17 +41,10 @@ export const HierarchyPanel: React.FC = () => {
     [filterMode, filterNeedle]
   );
 
-  const filteredEntities = React.useMemo(
-    () => entities.filter((item: any) => matchesFilter(item)),
-    [entities, matchesFilter]
-  );
-  const filteredWalkboxes = React.useMemo(
-    () => walkboxes.filter((item: any) => matchesFilter(item)),
-    [walkboxes, matchesFilter]
-  );
-  const filteredTriggers = React.useMemo(
-    () => triggers.filter((item: any) => matchesFilter(item)),
-    [triggers, matchesFilter]
+  const filteredEntities = [...(scene?.entities || [])].filter((item: any) => matchesFilter(item));
+  const filteredWalkboxes = [...(scene?.walkbox || [])].filter((item: any) => matchesFilter(item));
+  const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
+    matchesFilter(item)
   );
 
   // Helper to resolve display ID for an item, matching how it's identified in the UI

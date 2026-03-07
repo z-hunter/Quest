@@ -1238,18 +1238,21 @@ export class EditorTransformManager {
 
       scene.addEntity(ent);
       editor.selectObject(ent);
+      useEditorStore.getState().incrementHierarchyVersion();
       this.drawMode = false;
     } else if (type === 'Walkbox') {
       if (!scene.walkbox) scene.walkbox = [];
       const newWalkbox = new Walkbox([], 'Walk_' + Math.floor(Math.random() * 1000));
       scene.walkbox.push(newWalkbox);
       editor.selectObject(newWalkbox);
+      useEditorStore.getState().incrementHierarchyVersion();
       editor.redrawSelected();
     } else if (type === 'Triggerbox') {
       if (!scene.triggerboxes) scene.triggerboxes = [];
       const newTrigger = new Triggerbox([], 'Trig_' + Math.floor(Math.random() * 1000));
       scene.triggerboxes.push(newTrigger);
       editor.selectObject(newTrigger);
+      useEditorStore.getState().incrementHierarchyVersion();
       editor.redrawSelected();
     }
   }

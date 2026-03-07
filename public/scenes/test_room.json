@@ -133,19 +133,19 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 156.23918781992623,
-      "y": 439.6243717606097,
-      "width": 135.16072178410627,
-      "height": 326.22124825670096,
+      "x": 159.0196542021097,
+      "y": 443.2970635781322,
+      "width": 143.88497017161473,
+      "height": 347.27792183395906,
       "baseWidth": 162,
       "baseHeight": 391,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.8343254431117672,
+      "scale": 0.8881788282198441,
       "modelScale": 1.03,
-      "parallax": 0.6561434673282573,
+      "parallax": 0.7269997060619294,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "opacity": 1,
@@ -182,30 +182,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 89.31012646699949,
-      "y": 439.5431435855021,
+      "x": 87.7396949124423,
+      "y": 443.2105923504103,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 89.31012646699949,
-          "y": 439.5431435855021,
-          "p": 0.6545763543622682
+          "x": 87.7396949124423,
+          "y": 443.2105923504103,
+          "p": 0.7253314403158566
         },
         {
-          "x": 196.85804624581476,
-          "y": 439.54972313996643,
-          "p": 0.654703291907003
+          "x": 196.48465665453705,
+          "y": 443.21612487072593,
+          "p": 0.7254381777171315
         },
         {
-          "x": 205.7526543676805,
-          "y": 446.9427557615439,
-          "p": 0.7973350482392529
+          "x": 197.82134195961072,
+          "y": 449.4326708990447,
+          "p": 0.8453722999813154
         },
         {
-          "x": 104.00270644867524,
-          "y": 446.5423141958654,
-          "p": 0.7896094386356303
+          "x": 95.34720342352023,
+          "y": 449.095953404058,
+          "p": 0.8388761014446592
         }
       ],
       "color": "#000000",
@@ -221,7 +221,7 @@
       "blur": 4
     },
     {
-      "name": "Static_742",
+      "name": "logo",
       "type": "Entity",
       "locked": false,
       "disabled": false,
@@ -231,8 +231,38 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 111,
-      "y": 359,
+      "x": 91,
+      "y": 392,
+      "width": 706.7755102040817,
+      "height": 721.2734693877551,
+      "baseWidth": 585,
+      "baseHeight": 597,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "scanline_logo",
+      "color": "#AAAAAA",
+      "scale": 1.2081632653061225,
+      "modelScale": 2.8,
+      "parallax": 0.2,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 0.6,
+      "blendMode": "lighter",
+      "blur": 0
+    },
+    {
+      "name": "logo_1",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "x": 96,
+      "y": 340,
       "width": 655.1999999999999,
       "height": 668.64,
       "baseWidth": 585,
@@ -248,7 +278,7 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 32
     }
   ],
   "camera": {
