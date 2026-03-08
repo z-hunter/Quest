@@ -135,28 +135,6 @@ const InputMirror: React.FC<{ game: Game }> = ({ game }) => {
     const input = game.getCommandInput();
     if (!input) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        const command = input.value;
-        if (command.trim()) {
-          // Send to Game Console Processing
-          if (game.console) {
-            game.console.processCommand(command);
-          } else {
-            // Fallback purely for parser if console not active?
-            // Actually, if we are in ConsoleOverlay, we want Console logic.
-            // The original game parser logic might still listen to 'Enter' globally?
-            // Let's ensure we don't double submit.
-            // Game.ts -> onKeyDown usually handles parser.
-            // We might need to coordinate who consumes the input.
-            // For now, let's assume this is the Console input.
-          }
-          input.value = '';
-          setVal('');
-        }
-      }
-    };
-
     const update = () => {
       if (input && input.value !== val) {
         setVal(input.value);
@@ -164,11 +142,9 @@ const InputMirror: React.FC<{ game: Game }> = ({ game }) => {
       requestAnimationFrame(update);
     };
 
-    input.addEventListener('keydown', handleKeyDown);
     const rAF = requestAnimationFrame(update);
 
     return () => {
-      input.removeEventListener('keydown', handleKeyDown);
       cancelAnimationFrame(rAF);
     };
   }, [game, val]);

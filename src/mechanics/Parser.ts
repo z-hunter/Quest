@@ -40,14 +40,24 @@ export class Parser {
   execute(verb: string, noun: string): void {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return;
+    const normalizedNoun = noun.trim().toUpperCase();
+    const isSceneLook =
+      !normalizedNoun ||
+      normalizedNoun === 'AROUND' ||
+      normalizedNoun === 'HERE' ||
+      normalizedNoun === 'SCENE';
 
     // Basic command handling
     switch (verb) {
       case 'LOOK':
       case 'EXAMINE':
       case 'X': // Common shortcut
-        if (!noun) {
-          this.game.log(`You are in ${scene.name}.`);
+        if (isSceneLook) {
+          const sceneDescription =
+            this.game.textAssets.getResolvedSceneField(scene, 'description') ||
+            scene.description ||
+            `You are in ${scene.name}.`;
+          this.game.log(sceneDescription);
         } else {
           const entity = scene.findEntity(noun);
           if (entity) {
@@ -58,7 +68,10 @@ export class Parser {
               ScriptRegistry.execute(interactionId, { game: this.game, entity: entity });
             } else {
               // Fallback to description
-              this.game.log(entity.description || `You see nothing special about the ${noun}.`);
+              const description =
+                this.game.textAssets.getResolvedObjectField(entity, 'description') ||
+                entity.description;
+              this.game.log(description || `You see nothing special about the ${noun}.`);
             }
           } else {
             this.game.log(`You don't see any ${noun} here.`);

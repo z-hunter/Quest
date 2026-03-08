@@ -63,6 +63,7 @@ export class EditorPersistenceManager {
       });
 
       if (response.ok) {
+        await this.editor.game.textAssets.ensureSceneAssetFile(scene);
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
       } else {

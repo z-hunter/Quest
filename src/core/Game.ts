@@ -9,6 +9,7 @@ import { Entity } from '../entities/Entity';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
+import { TextAssetManager } from './TextAssetManager';
 
 import { Console } from './Console';
 
@@ -41,6 +42,7 @@ export class Game implements IGame {
   sceneManager: SceneManager;
   assets: AssetLoader;
   audio: AudioManager;
+  textAssets: TextAssetManager;
   editor: SceneEditor;
   spriteEditor: SpriteEditor;
   console: Console; // Virtual Console
@@ -149,6 +151,7 @@ export class Game implements IGame {
     this.parser = new Parser(this);
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
+    this.textAssets = new TextAssetManager();
     this.sceneManager = new SceneManager(this);
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);

@@ -9,6 +9,7 @@ export class SceneObject {
 
   // User-facing name for parser (e.g. "Pillar" instead of "Pillar_01")
   customName: string = '';
+  textRedirects: Record<string, string> = {};
 
   // Script bindings for verbs: { "LOOK": "script.id", "USE": "script.id" }
   interactions: Record<string, string> = {};
@@ -30,6 +31,7 @@ export class SceneObject {
     'disabled',
     'groupID',
     'customName',
+    'textRedirects',
     'interactions',
     'components',
     'layer',
@@ -44,6 +46,7 @@ export class SceneObject {
     this.layer = 0;
     this.visible = true;
     this.customName = '';
+    this.textRedirects = {};
     this.interactions = {};
     this.components = [];
   }
