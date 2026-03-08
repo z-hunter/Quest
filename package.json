@@ -43,6 +43,6 @@
       "prettier --write",
       "eslint --max-warnings=0 --fix"
     ],
-    "*.{json,md,css,scss}": "prettier --write"
+    "*.{json,css,scss}": "prettier --write"
   }
 }
