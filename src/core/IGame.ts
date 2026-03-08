@@ -15,6 +15,7 @@ export interface IGame {
 
   showMessage(text: string): void;
   log(text: string): void;
+  text(key: string, params?: Record<string, string | number>): string;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;

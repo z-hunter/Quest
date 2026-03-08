@@ -88,6 +88,29 @@ export class SceneObject {
     });
   }
 
+  setTextRedirect(field: string, targetField: string): void {
+    const source = String(field || '').trim();
+    const target = String(targetField || '').trim();
+    if (!source || !target) return;
+    this.textRedirects[source] = target;
+    this.notifyTextRedirectChanged();
+  }
+
+  clearTextRedirect(field: string): void {
+    const source = String(field || '').trim();
+    if (!source) return;
+    if (this.textRedirects[source] === undefined) return;
+    delete this.textRedirects[source];
+    this.notifyTextRedirectChanged();
+  }
+
+  private notifyTextRedirectChanged(): void {
+    const game = (this as any).game;
+    if (game?.editor?.selectionManager) {
+      game.editor.selectionManager.notifyObjectChanged(this);
+    }
+  }
+
   /**
    * Checks if a World Coordinate point hits this object.
    * Base implementation returns false. Subclasses should override.

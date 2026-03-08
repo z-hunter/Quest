@@ -3,9 +3,41 @@ import type { SceneObject } from '../entities/SceneObject';
 
 type TextAssetData = Record<string, string>;
 
+const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
+  parser: {
+    look_default_scene: 'You are in {scene}.',
+    look_default_object: 'You see nothing special about the {target}.',
+    look_not_found: "You don't see any {target} here.",
+    take_prompt: 'Take what?',
+    take_pickup_success: 'You picked up the {item}.',
+    take_cannot: 'You cannot take that.',
+    inventory_empty: 'You are not carrying anything.',
+    inventory_items: 'You are carrying: {items}',
+    use_prompt: 'Use what?',
+    use_format_prompt: 'Use what on what? (Format: USE ITEM ON TARGET)',
+    use_missing_item: "You don't have the {item}.",
+    use_no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    use_no_effect_single: 'You try to use the {target}, but nothing happens.',
+    parse_unknown: "I don't understand.",
+  },
+  engine: {
+    click_you_see: 'You see {title}',
+    too_far_generic: 'You are too far away.',
+    too_far_from_entity: 'You are too far away from the {target}.',
+    locked_needs: 'Locked. Needs {item}',
+  },
+  scripts: {
+    pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',
+    pillar_compartment_opened: 'Click! A secret compartment opens!',
+    pillar_open_description: 'The pillar is open, revealing a secret compartment.',
+    test_audio_playing: 'Playing test sound...',
+  },
+};
+
 export class TextAssetManager {
   private sceneCache = new Map<string, TextAssetData | null>();
   private objectCache = new Map<string, TextAssetData | null>();
+  private serviceCache = new Map<string, TextAssetData>();
 
   private normalizeId(id: string): string {
     return String(id || '')
@@ -31,6 +63,14 @@ export class TextAssetManager {
 
   private getObjectAssetUrl(objectId: string): string {
     return `/text/objects/${this.idToRelativePath(objectId)}.json`;
+  }
+
+  private getServiceAssetUrl(domain: string): string {
+    return `/text/system/${domain}.json`;
+  }
+
+  private getDefaultServiceDomain(domain: string): TextAssetData {
+    return { ...(DEFAULT_SERVICE_ASSETS[domain] || {}) };
   }
 
   buildDefaultSceneAsset(scene: Scene): TextAssetData {
@@ -118,9 +158,31 @@ export class TextAssetManager {
     );
   }
 
+  async preloadServiceAssets(domains?: string[]): Promise<void> {
+    const targetDomains = domains?.length ? domains : Object.keys(DEFAULT_SERVICE_ASSETS);
+    await Promise.all(targetDomains.map((domain) => this.readServiceAsset(domain, true)));
+  }
+
   clearCaches(): void {
     this.sceneCache.clear();
     this.objectCache.clear();
+    this.serviceCache.clear();
+  }
+
+  async readServiceAsset(domain: string, forceReload: boolean = false): Promise<TextAssetData> {
+    const normalizedDomain = String(domain || '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedDomain) return {};
+    if (!forceReload && this.serviceCache.has(normalizedDomain)) {
+      return this.serviceCache.get(normalizedDomain) || {};
+    }
+
+    const defaults = this.getDefaultServiceDomain(normalizedDomain);
+    const loaded = await this.fetchJson(this.getServiceAssetUrl(normalizedDomain));
+    const merged = { ...defaults, ...(loaded || {}) };
+    this.serviceCache.set(normalizedDomain, merged);
+    return merged;
   }
 
   getResolvedSceneField(scene: Scene, field: string): string | null {
@@ -135,6 +197,38 @@ export class TextAssetManager {
     const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
+  }
+
+  getServiceText(key: string, params?: Record<string, string | number>, fallback?: string): string {
+    const rawKey = String(key || '').trim();
+    if (!rawKey) return fallback || '';
+
+    const dotIndex = rawKey.indexOf('.');
+    if (dotIndex === -1) {
+      console.warn(`[TextAssetManager] Invalid service text key '${rawKey}'.`);
+      return fallback || rawKey;
+    }
+
+    const domain = rawKey.slice(0, dotIndex).toLowerCase();
+    const entryKey = rawKey.slice(dotIndex + 1);
+    if (!entryKey) {
+      console.warn(`[TextAssetManager] Invalid service text key '${rawKey}'.`);
+      return fallback || rawKey;
+    }
+
+    if (!this.serviceCache.has(domain)) {
+      this.serviceCache.set(domain, this.getDefaultServiceDomain(domain));
+      void this.readServiceAsset(domain, true);
+    }
+
+    const domainAsset = this.serviceCache.get(domain) || {};
+    const template = domainAsset[entryKey];
+    if (typeof template !== 'string') {
+      console.warn(`[TextAssetManager] Missing service text '${rawKey}'.`);
+      return fallback || rawKey;
+    }
+
+    return this.interpolate(template, params);
   }
 
   private resolveField(
@@ -173,6 +267,17 @@ export class TextAssetManager {
       console.error('[TextAssetManager] Failed to fetch text asset:', error);
       return null;
     }
+  }
+
+  private interpolate(
+    template: string,
+    params?: Record<string, string | number> | null | undefined
+  ): string {
+    if (!params) return template;
+    return template.replace(/\{(\w+)\}/g, (_match, token: string) => {
+      const value = params[token];
+      return value === undefined || value === null ? `{${token}}` : String(value);
+    });
   }
 
   private async ensureFile(filePath: string, content: string): Promise<void> {

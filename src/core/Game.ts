@@ -152,6 +152,7 @@ export class Game implements IGame {
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
+    void this.textAssets.preloadServiceAssets();
     this.sceneManager = new SceneManager(this);
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);
@@ -413,6 +414,10 @@ export class Game implements IGame {
   log(text: string): void {
     console.log(`[GAME LOG] ${text}`);
     this.console.log(text);
+  }
+
+  text(key: string, params?: Record<string, string | number>): string {
+    return this.textAssets.getServiceText(key, params);
   }
 
   showNotification(text: string): void {

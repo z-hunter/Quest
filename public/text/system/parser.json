@@ -1,0 +1,16 @@
+{
+  "look_default_scene": "You are in {scene}.",
+  "look_default_object": "You see nothing special about the {target}.",
+  "look_not_found": "You don't see any {target} here.",
+  "take_prompt": "Take what?",
+  "take_pickup_success": "You picked up the {item}.",
+  "take_cannot": "You cannot take that.",
+  "inventory_empty": "You are not carrying anything.",
+  "inventory_items": "You are carrying: {items}",
+  "use_prompt": "Use what?",
+  "use_format_prompt": "Use what on what? (Format: USE ITEM ON TARGET)",
+  "use_missing_item": "You don't have the {item}.",
+  "use_no_effect_pair": "Using the {item} on the {target} does nothing.",
+  "use_no_effect_single": "You try to use the {target}, but nothing happens.",
+  "parse_unknown": "I don't understand."
+}

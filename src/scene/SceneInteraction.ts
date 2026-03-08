@@ -188,7 +188,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
       const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
       const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
       if (title && title.trim()) {
-        scene.game.log(`You see ${title}`);
+        scene.game.log(scene.game.text('engine.click_you_see', { title }));
       }
       activateSceneObject(scene, subsceneHit);
       return;
@@ -203,7 +203,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   if (hitObj) {
     const title = scene.game.textAssets.getResolvedObjectField(hitObj, 'title');
     if (title) {
-      scene.game.log(`You see ${title}`);
+      scene.game.log(scene.game.text('engine.click_you_see', { title }));
     }
 
     const isWalkBox = hitObj.components && hitObj.components.some((c) => c.type === 'WalkBox');
@@ -223,7 +223,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
     const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
     if (title && title.trim()) {
-      scene.game.log(`You see ${title}`);
+      scene.game.log(scene.game.text('engine.click_you_see', { title }));
       return;
     }
   }

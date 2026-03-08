@@ -12,6 +12,7 @@ import { toVisualPosition } from '../utils/Parallax';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import { handleSceneClick, activateSceneObject } from './SceneInteraction';
+import { useEditorStore } from '../store/editorStore';
 
 export interface SceneScaling {
   enabled: boolean;
@@ -163,6 +164,26 @@ export class Scene {
         (resolvedTitle && resolvedTitle.toUpperCase() === normalized)
       );
     });
+  }
+
+  setTextRedirect(field: string, targetField: string): void {
+    const source = String(field || '').trim();
+    const target = String(targetField || '').trim();
+    if (!source || !target) return;
+    this.textRedirects[source] = target;
+    this.notifyTextRedirectChanged();
+  }
+
+  clearTextRedirect(field: string): void {
+    const source = String(field || '').trim();
+    if (!source) return;
+    if (this.textRedirects[source] === undefined) return;
+    delete this.textRedirects[source];
+    this.notifyTextRedirectChanged();
+  }
+
+  private notifyTextRedirectChanged(): void {
+    useEditorStore.getState().incrementObjectVersion();
   }
 
   getScaling(y: number): number {
