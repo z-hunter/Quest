@@ -98,7 +98,7 @@ export class TextAssetManager {
   }
 
   async ensureObjectAssetFile(obj: SceneObject): Promise<void> {
-    if (!obj?.name) return;
+    if (!obj?.name || obj.type === 'Walkbox') return;
     const assetPath = this.getObjectAssetProjectPath(obj.name);
     const content = JSON.stringify(this.buildDefaultObjectAsset(obj), null, 2);
     await this.ensureFile(assetPath, content);
@@ -111,6 +111,7 @@ export class TextAssetManager {
   }
 
   async openObjectAsset(obj: SceneObject): Promise<void> {
+    if (!obj?.name || obj.type === 'Walkbox') return;
     const assetPath = this.getObjectAssetProjectPath(obj.name);
     const content = JSON.stringify(this.buildDefaultObjectAsset(obj), null, 2);
     await this.openFile(assetPath, content);
@@ -122,6 +123,7 @@ export class TextAssetManager {
   }
 
   async deleteObjectAsset(obj: SceneObject): Promise<void> {
+    if (!obj?.name || obj.type === 'Walkbox') return;
     await this.deleteFile(this.getObjectAssetProjectPath(obj.name));
     this.objectCache.delete(this.normalizeId(obj.name));
   }
@@ -141,6 +143,7 @@ export class TextAssetManager {
     obj: SceneObject,
     forceReload: boolean = false
   ): Promise<TextAssetData | null> {
+    if (!obj?.name || obj.type === 'Walkbox') return null;
     const objectId = this.normalizeId(obj?.name || '');
     if (!objectId) return null;
     if (!forceReload && this.objectCache.has(objectId)) {
@@ -288,6 +291,17 @@ export class TextAssetManager {
     });
   }
 
+  private async saveFile(filePath: string, content: string): Promise<void> {
+    const response = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: filePath, content }),
+    });
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+  }
+
   private async openFile(filePath: string, content: string): Promise<void> {
     const response = await fetch('/api/open-file', {
       method: 'POST',
@@ -317,6 +331,33 @@ export class TextAssetManager {
       throw new Error(await response.text());
     }
     this.objectCache.set(this.normalizeId(targetObjectId), sourceData);
+  }
+
+  async carrySceneAssetIfNeeded(
+    previousSceneId: string | null | undefined,
+    scene: Scene
+  ): Promise<void> {
+    const targetSceneId = this.normalizeId(scene?.id || '');
+    const sourceSceneId = this.normalizeId(previousSceneId || '');
+
+    if (!targetSceneId) return;
+
+    if (sourceSceneId && sourceSceneId !== targetSceneId) {
+      const targetData = await this.fetchJson(this.getSceneAssetUrl(targetSceneId));
+      if (!targetData) {
+        const sourceData = await this.fetchJson(this.getSceneAssetUrl(sourceSceneId));
+        if (sourceData) {
+          await this.saveFile(
+            this.getSceneAssetProjectPath(targetSceneId),
+            JSON.stringify(sourceData, null, 2)
+          );
+          this.sceneCache.set(targetSceneId, sourceData);
+          return;
+        }
+      }
+    }
+
+    await this.ensureSceneAssetFile(scene);
   }
 
   private async deleteFile(filePath: string): Promise<void> {

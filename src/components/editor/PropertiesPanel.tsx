@@ -35,6 +35,11 @@ export const PropertiesPanel: React.FC = () => {
   }
 
   const uiScale = game?.settings?.editor?.uiScale || 1.0;
+  const supportsTextAsset =
+    selectedObjectType === 'SCENE' ||
+    (selectedObjectType !== 'MULTI' &&
+      selectedObjectType !== 'SETTINGS' &&
+      game?.editor?.selectedObject?.type !== 'Walkbox');
   const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
     ? game.editor.selectionManager.getSelectedObjects()
     : [];
@@ -68,6 +73,14 @@ export const PropertiesPanel: React.FC = () => {
       if (!game || !obj || selectedObjectType === 'MULTI' || selectedObjectType === 'SETTINGS') {
         setResolvedTitle('');
         setTextAssetPath('');
+        setHasTextAsset(false);
+        return;
+      }
+
+      if (!supportsTextAsset) {
+        setResolvedTitle('');
+        setTextAssetPath('');
+        setHasTextAsset(false);
         return;
       }
 
@@ -93,7 +106,7 @@ export const PropertiesPanel: React.FC = () => {
         setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
       }
     },
-    [game, obj, selectedObjectType]
+    [game, obj, selectedObjectType, supportsTextAsset]
   );
 
   React.useEffect(() => {
@@ -874,38 +887,40 @@ export const PropertiesPanel: React.FC = () => {
                 }}
               />
             </div>
-            <div className="e-row">
-              <label className="e-label">Title</label>
-              <input
-                type="text"
-                className="e-input"
-                value={resolvedTitle}
-                readOnly
-                tabIndex={-1}
-                onFocus={(e) => e.currentTarget.blur()}
-                style={{ pointerEvents: 'none', color: '#888' }}
-              />
-              {textAssetPath && (
-                <>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <button className="e-btn" onClick={handleOpenTA}>
-                      {hasTextAsset ? 'Open TA' : 'Create TA'}
-                    </button>
-                    <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
-                      {isReadingTA ? 'Syncing...' : 'Sync TA'}
-                    </button>
-                    {hasTextAsset && (
-                      <button className="e-btn" onClick={handleDeleteTA}>
-                        Delete TA
+            {supportsTextAsset && (
+              <div className="e-row">
+                <label className="e-label">Title</label>
+                <input
+                  type="text"
+                  className="e-input"
+                  value={resolvedTitle}
+                  readOnly
+                  tabIndex={-1}
+                  onFocus={(e) => e.currentTarget.blur()}
+                  style={{ pointerEvents: 'none', color: '#888' }}
+                />
+                {textAssetPath && (
+                  <>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                      <button className="e-btn" onClick={handleOpenTA}>
+                        {hasTextAsset ? 'Open TA' : 'Create TA'}
                       </button>
-                    )}
-                  </div>
-                  <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
-                    {textAssetPath}
-                  </div>
-                </>
-              )}
-            </div>
+                      <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
+                        {isReadingTA ? 'Syncing...' : 'Sync TA'}
+                      </button>
+                      {hasTextAsset && (
+                        <button className="e-btn" onClick={handleDeleteTA}>
+                          Delete TA
+                        </button>
+                      )}
+                    </div>
+                    <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+                      {textAssetPath}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
 

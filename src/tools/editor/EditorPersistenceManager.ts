@@ -15,6 +15,7 @@ export class EditorPersistenceManager {
   async saveScene(saveAs: boolean = false): Promise<void> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return;
+    const previousSceneId = scene.id || '';
 
     const id = scene.id || '';
     // Allow backslashes for subfolders
@@ -24,7 +25,7 @@ export class EditorPersistenceManager {
       // Smart Save
       // Ensure filename property matches ID (normalized for file system)
       scene.filename = id.replace(/\\/g, '/');
-      this.performSaveScene(scene.filename);
+      this.performSaveScene(scene.filename, previousSceneId);
       return;
     }
 
@@ -40,11 +41,11 @@ export class EditorPersistenceManager {
       scene.id = idFromName;
 
       this.editor.syncUI(); // Refresh UI to show new Filename
-      this.performSaveScene(scene.filename);
+      this.performSaveScene(scene.filename, previousSceneId);
     });
   }
 
-  async performSaveScene(filenameId: string): Promise<void> {
+  async performSaveScene(filenameId: string, previousSceneId?: string): Promise<void> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return;
 
@@ -63,7 +64,7 @@ export class EditorPersistenceManager {
       });
 
       if (response.ok) {
-        await this.editor.game.textAssets.ensureSceneAssetFile(scene);
+        await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
       } else {
