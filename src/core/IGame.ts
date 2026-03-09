@@ -3,16 +3,19 @@ import { AudioManager } from './AudioManager';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
+import { TextAssetManager } from './TextAssetManager';
 
 export interface IGame {
   assets: AssetLoader;
   audio: AudioManager;
+  textAssets: TextAssetManager;
   sceneManager: SceneManager;
   editor: SceneEditor;
   inventory: Entity[];
 
   showMessage(text: string): void;
   log(text: string): void;
+  text(key: string, params?: Record<string, string | number>): string;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;

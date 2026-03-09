@@ -14,6 +14,10 @@ export class ScriptAPI {
     this.game.log(message);
   }
 
+  text(key: string, params?: Record<string, string | number>): string {
+    return this.game.text(key, params);
+  }
+
   setInterval(handler: TimerHandler, timeout?: number, ...args: any[]): number {
     const id = setInterval(handler, timeout, ...args);
     this.intervals.push(id);

@@ -2,6 +2,7 @@ import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
+import { toWorldPosition } from '../utils/Parallax';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -34,6 +35,7 @@ export class Actor extends Entity {
 
   speed: number;
   target: { x: number; y: number } | null;
+  visualTarget: { x: number; y: number } | null;
   readonly type: string = 'Actor';
 
   isPlayer: boolean = false;
@@ -63,6 +65,7 @@ export class Actor extends Entity {
     this.state = 'idle';
     this.speed = 0.1;
     this.target = null;
+    this.visualTarget = null;
     this.isPlayer = false;
 
     this.animSets = {};
@@ -130,12 +133,21 @@ export class Actor extends Entity {
 
   moveTo(x: number, y: number): void {
     this.target = { x, y };
+    this.visualTarget = null;
+    this.setState('walk');
+    this.overrideAnimSet = null;
+  }
+
+  moveToVisual(x: number, y: number): void {
+    this.visualTarget = { x, y };
+    this.target = null;
     this.setState('walk');
     this.overrideAnimSet = null;
   }
 
   stop(): void {
     this.target = null;
+    this.visualTarget = null;
     this.setState('idle');
   }
 
@@ -159,9 +171,22 @@ export class Actor extends Entity {
       this.handlePlayerInput(deltaTime, isWalkable);
     }
 
-    if (this.state === 'walk' && this.target) {
-      const dx = this.target.x - this.x;
-      const dy = this.target.y - this.y;
+    if (this.state === 'walk' && (this.target || this.visualTarget)) {
+      const currentTarget = this.visualTarget
+        ? toWorldPosition(
+            this.visualTarget,
+            this.scene?.camera || { x: 0, y: 0 },
+            this.parallax !== undefined ? this.parallax : 1.0
+          )
+        : this.target;
+
+      if (!currentTarget) {
+        this.stop();
+        return;
+      }
+
+      const dx = currentTarget.x - this.x;
+      const dy = currentTarget.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       const p = this.parallax !== undefined ? this.parallax : 1.0;
@@ -170,8 +195,8 @@ export class Actor extends Entity {
       const step = this.speed * speedScale * deltaTime;
 
       if (dist <= step) {
-        this.x = this.target.x;
-        this.y = this.target.y;
+        this.x = currentTarget.x;
+        this.y = currentTarget.y;
         this.stop();
       } else {
         const moveX = (dx / dist) * step;
@@ -258,7 +283,7 @@ export class Actor extends Entity {
             this.y = nextY;
           }
         }
-      } else if (!this.target) {
+      } else if (!this.target && !this.visualTarget) {
         this.setState('idle');
       }
     }

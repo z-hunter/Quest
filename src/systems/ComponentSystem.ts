@@ -95,7 +95,8 @@ export class ComponentSystem {
   // Called when trying to TAKE an item
   // Returns string (error message) or null (success)
   static canTakeItem(entity: SceneObject, player: Actor | null): string | null {
-    if (!entity.components) return 'You cannot take that.';
+    const game = (entity as any).game as IGame | undefined;
+    if (!entity.components) return game?.text('parser.take_cannot') || 'You cannot take that.';
 
     const itemComp = entity.components.find((c: any) => c.type === 'Item') as
       | ItemComponent
@@ -112,7 +113,10 @@ export class ComponentSystem {
       const allowedDist = (player.width || 30) * 4; // Tolerance
 
       if (dist > allowedDist) {
-        return `You are too far away from the ${entity.name}.`;
+        return (
+          game?.text('engine.too_far_from_entity', { target: entity.name }) ||
+          `You are too far away from the ${entity.name}.`
+        );
       }
     }
 
@@ -178,7 +182,7 @@ export class ComponentSystem {
       if (dist > allowedDist) {
         const game = scene.game as unknown as IGame;
         if (game && typeof game.showMessage === 'function') {
-          game.showMessage('You are too far away.');
+          game.showMessage(game.text('engine.too_far_generic'));
         }
         return true; // Blocked
       }
@@ -208,7 +212,7 @@ export class ComponentSystem {
           (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
         );
         if (!hasKey) {
-          game.showMessage(`Locked. Needs ${sw.idKey}`);
+          game.showMessage(game.text('engine.locked_needs', { item: sw.idKey }));
           return true; // Handled (Blocked)
         }
       }

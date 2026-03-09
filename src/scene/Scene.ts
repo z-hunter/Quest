@@ -12,6 +12,7 @@ import { toVisualPosition } from '../utils/Parallax';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import { handleSceneClick, activateSceneObject } from './SceneInteraction';
+import { useEditorStore } from '../store/editorStore';
 
 export interface SceneScaling {
   enabled: boolean;
@@ -24,6 +25,8 @@ export interface SceneScaling {
 export interface SceneData {
   id: string;
   name: string;
+  description?: string;
+  textRedirects?: Record<string, string>;
   filename?: string;
   walkbox: {
     poly: { x: number; y: number }[];
@@ -50,6 +53,7 @@ export class Scene {
 
   id: string;
   name: string;
+  description: string;
   filename: string;
   background: HTMLImageElement | null;
   entities: Entity[];
@@ -77,6 +81,7 @@ export class Scene {
 
   // Default Camera (saved to scene file, restored on load/reset)
   defaultCamera: { x: number; y: number; zoom: number };
+  textRedirects: Record<string, string> = {};
 
   // Subscene State
   private _activeSubscene: string | null = null;
@@ -104,6 +109,7 @@ export class Scene {
     this.game = game;
     this.id = id;
     this.name = name;
+    this.description = `You are in ${name}.`;
     this.filename = ''; // Default empty
     this.background = null; // Image object
     this.entities = [];
@@ -149,11 +155,35 @@ export class Scene {
   }
 
   findEntity(name: string): Entity | undefined {
-    return this.entities.find(
-      (e) =>
-        e.name.toUpperCase() === name.toUpperCase() ||
-        (e.customName && e.customName.toUpperCase() === name.toUpperCase())
-    );
+    const normalized = name.toUpperCase();
+    return this.entities.find((e) => {
+      const resolvedTitle = this.game.textAssets.getResolvedObjectField(e, 'title');
+      return (
+        e.name.toUpperCase() === normalized ||
+        (e.customName && e.customName.toUpperCase() === normalized) ||
+        (resolvedTitle && resolvedTitle.toUpperCase() === normalized)
+      );
+    });
+  }
+
+  setTextRedirect(field: string, targetField: string): void {
+    const source = String(field || '').trim();
+    const target = String(targetField || '').trim();
+    if (!source || !target) return;
+    this.textRedirects[source] = target;
+    this.notifyTextRedirectChanged();
+  }
+
+  clearTextRedirect(field: string): void {
+    const source = String(field || '').trim();
+    if (!source) return;
+    if (this.textRedirects[source] === undefined) return;
+    delete this.textRedirects[source];
+    this.notifyTextRedirectChanged();
+  }
+
+  private notifyTextRedirectChanged(): void {
+    useEditorStore.getState().incrementObjectVersion();
   }
 
   getScaling(y: number): number {
@@ -486,6 +516,8 @@ export class Scene {
     return {
       id: this.id,
       name: this.name,
+      description: this.description,
+      textRedirects: this.textRedirects,
       filename: this.filename,
       walkbox: this.walkbox.map((wb) => wb.toJSON()),
       triggerboxes: this.triggerboxes.map((tb) => tb.toJSON()),

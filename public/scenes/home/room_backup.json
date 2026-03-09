@@ -1,6 +1,8 @@
 {
   "id": "home\\room_backup",
   "name": "Test Room",
+  "description": "You are in Test Room.",
+  "textRedirects": {},
   "filename": "home/room_backup",
   "walkbox": [
     {
@@ -10,6 +12,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -41,6 +44,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -106,6 +110,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -159,6 +164,7 @@
       "disabled": true,
       "groupID": "#D ",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -171,7 +177,7 @@
           "sound2": "drawer_close.wav"
         }
       ],
-      "layer": 0,
+      "layer": 1,
       "visible": true,
       "poly": [
         {
@@ -200,6 +206,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -214,6 +221,7 @@
       "disabled": true,
       "groupID": "#D ",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -226,7 +234,7 @@
           "sound2": "drawer_close.wav"
         }
       ],
-      "layer": 0,
+      "layer": 1,
       "visible": true,
       "poly": [
         {
@@ -264,6 +272,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": -2,
@@ -294,6 +303,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": -1,
@@ -324,6 +334,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -354,12 +365,13 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
       "visible": true,
       "x": 249.76314957424822,
-      "y": 295.45481146309464,
+      "y": 295.45481146309453,
       "width": 119.88,
       "height": 289.34,
       "baseWidth": 162,
@@ -403,6 +415,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -433,9 +446,10 @@
       "disabled": true,
       "groupID": "#D",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
-      "layer": 3,
+      "layer": 0,
       "visible": true,
       "x": 135,
       "y": 310,
@@ -463,8 +477,14 @@
       "disabled": true,
       "groupID": "#D2",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Subtrigger",
+          "target": "sub_sw_d2"
+        }
+      ],
       "layer": 4,
       "visible": true,
       "x": 134,
@@ -493,9 +513,10 @@
       "disabled": true,
       "groupID": "#D1",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
-      "layer": 5,
+      "layer": 4,
       "visible": true,
       "x": 136,
       "y": -4,
@@ -523,6 +544,7 @@
       "disabled": true,
       "groupID": "#D1",
       "customName": "your ID card",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -558,6 +580,7 @@
       "disabled": true,
       "groupID": "#D1",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 5,
@@ -588,6 +611,7 @@
       "disabled": true,
       "groupID": "#D",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 6,
@@ -618,6 +642,7 @@
       "disabled": true,
       "groupID": "#D1",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -653,6 +678,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -706,12 +732,13 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.90433731748038,
-      "y": 306.92845155295413,
+      "x": 222.90433731748033,
+      "y": 306.92845155295396,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -722,7 +749,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.079038203629382,
+      "parallax": 1.0790382036293817,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,

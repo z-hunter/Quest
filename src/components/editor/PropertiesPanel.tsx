@@ -16,6 +16,10 @@ export const PropertiesPanel: React.FC = () => {
     selectedVertexIndex,
   } = useEditorStore();
   const [groupIdDraft, setGroupIdDraft] = React.useState('');
+  const [resolvedTitle, setResolvedTitle] = React.useState('');
+  const [textAssetPath, setTextAssetPath] = React.useState('');
+  const [isReadingTA, setIsReadingTA] = React.useState(false);
+  const [hasTextAsset, setHasTextAsset] = React.useState(false);
 
   // Derived Object Binding (Source of Truth)
   // We re-render whenever objectVersion changes (subscribed via store hook)
@@ -57,6 +61,125 @@ export const PropertiesPanel: React.FC = () => {
     multiObjects.forEach(fn);
     incrementObjectVersion();
     incrementHierarchyVersion();
+  };
+
+  const loadResolvedTitle = React.useCallback(
+    async (forceReload: boolean = false) => {
+      if (!game || !obj || selectedObjectType === 'MULTI' || selectedObjectType === 'SETTINGS') {
+        setResolvedTitle('');
+        setTextAssetPath('');
+        return;
+      }
+
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        const asset = forceReload
+          ? await game.textAssets.readSceneAsset(scene, true)
+          : await game.textAssets.readSceneAsset(scene, false);
+        setHasTextAsset(!!asset);
+        setResolvedTitle(game.textAssets.getResolvedSceneField(scene, 'title') || '');
+        setTextAssetPath(game.textAssets.getSceneAssetProjectPath(scene.id));
+        return;
+      }
+
+      if (game.editor?.selectedObject) {
+        const selected = game.editor.selectedObject;
+        const asset = forceReload
+          ? await game.textAssets.readObjectAsset(selected, true)
+          : await game.textAssets.readObjectAsset(selected, false);
+        setHasTextAsset(!!asset);
+        setResolvedTitle(game.textAssets.getResolvedObjectField(selected, 'title') || '');
+        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
+      }
+    },
+    [game, obj, selectedObjectType]
+  );
+
+  React.useEffect(() => {
+    loadResolvedTitle(false).catch((err) => {
+      console.error('Failed to load text asset title:', err);
+    });
+  }, [loadResolvedTitle, selectedObjectId, selectedObjectType]);
+
+  const handleOpenTA = async () => {
+    if (!game || !obj) return;
+    try {
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        await game.textAssets.openSceneAsset(scene);
+      } else if (game.editor?.selectedObject) {
+        await game.textAssets.openObjectAsset(game.editor.selectedObject);
+      }
+      await loadResolvedTitle(true);
+    } catch (err) {
+      console.error('Failed to open text asset:', err);
+      game.showNotification?.(`Failed to open TA: ${err}`);
+    }
+  };
+
+  const handleReadTA = async () => {
+    if (!game || !obj) return;
+    setIsReadingTA(true);
+    try {
+      const path =
+        selectedObjectType === 'SCENE'
+          ? game.textAssets.getSceneAssetProjectPath(game.sceneManager.currentScene?.id || '')
+          : game.editor?.selectedObject
+            ? game.textAssets.getObjectAssetProjectPath(game.editor.selectedObject.name)
+            : '';
+      const defaultContent =
+        selectedObjectType === 'SCENE'
+          ? JSON.stringify(
+              game.textAssets.buildDefaultSceneAsset(game.sceneManager.currentScene as any),
+              null,
+              2
+            )
+          : game.editor?.selectedObject
+            ? JSON.stringify(
+                game.textAssets.buildDefaultObjectAsset(game.editor.selectedObject),
+                null,
+                2
+              )
+            : '{}';
+
+      await fetch('/api/read-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content: defaultContent }),
+      });
+      await loadResolvedTitle(true);
+      incrementObjectVersion();
+      game.showNotification?.('Text asset reloaded');
+    } catch (err) {
+      console.error('Failed to read text asset:', err);
+      game.showNotification?.(`Failed to read TA: ${err}`);
+    } finally {
+      setIsReadingTA(false);
+    }
+  };
+
+  const handleDeleteTA = async () => {
+    if (!game || !obj || !hasTextAsset) return;
+    const confirmed = window.confirm(`Delete text asset?\n${textAssetPath}`);
+    if (!confirmed) return;
+
+    try {
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        await game.textAssets.deleteSceneAsset(scene);
+      } else if (game.editor?.selectedObject) {
+        await game.textAssets.deleteObjectAsset(game.editor.selectedObject);
+      }
+      await loadResolvedTitle(true);
+      incrementObjectVersion();
+      game.showNotification?.('Text asset deleted');
+    } catch (err) {
+      console.error('Failed to delete text asset:', err);
+      game.showNotification?.(`Failed to delete TA: ${err}`);
+    }
   };
 
   React.useEffect(() => {
@@ -751,6 +874,38 @@ export const PropertiesPanel: React.FC = () => {
                 }}
               />
             </div>
+            <div className="e-row">
+              <label className="e-label">Title</label>
+              <input
+                type="text"
+                className="e-input"
+                value={resolvedTitle}
+                readOnly
+                tabIndex={-1}
+                onFocus={(e) => e.currentTarget.blur()}
+                style={{ pointerEvents: 'none', color: '#888' }}
+              />
+              {textAssetPath && (
+                <>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                    <button className="e-btn" onClick={handleOpenTA}>
+                      {hasTextAsset ? 'Open TA' : 'Create TA'}
+                    </button>
+                    <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
+                      {isReadingTA ? 'Syncing...' : 'Sync TA'}
+                    </button>
+                    {hasTextAsset && (
+                      <button className="e-btn" onClick={handleDeleteTA}>
+                        Delete TA
+                      </button>
+                    )}
+                  </div>
+                  <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+                    {textAssetPath}
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
 
@@ -792,18 +947,6 @@ export const PropertiesPanel: React.FC = () => {
           selectedObjectType === 'Actor' ||
           selectedObjectType === 'Static') && (
           <>
-            {/* Display Name */}
-            <div className="e-row">
-              <label className="e-label">Display Name</label>
-              <input
-                type="text"
-                className="e-input"
-                placeholder="e.g. Pillar (for Parser)"
-                value={obj.customName || ''}
-                onChange={(e) => handleChange('customName', e.target.value)}
-              />
-            </div>
-
             {/* Transform: X, Y, W, H */}
             <div
               className="e-row"
@@ -2611,16 +2754,6 @@ export const PropertiesPanel: React.FC = () => {
         {/* SCENE Properties */}
         {selectedObjectType === 'SCENE' && (
           <>
-            <div className="e-row">
-              <label className="e-label">Title</label>
-              <input
-                type="text"
-                className="e-input"
-                value={obj.name || ''}
-                onChange={(e) => handleChange('name', e.target.value)}
-              />
-            </div>
-
             {/* Camera properties */}
             {(obj.camera || obj.defaultCamera) && (
               <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>

@@ -73,14 +73,14 @@ export class SceneManager {
       const data = await response.json();
 
       // Pass the derived ID to loadSceneData
-      this.loadSceneData(data, idFromPath);
+      await this.loadSceneData(data, idFromPath);
     } catch (e) {
       console.error(e);
       this.game.showNotification?.('Failed to load scene');
     }
   }
 
-  loadSceneData(data: any, filename?: string): void {
+  async loadSceneData(data: any, filename?: string): Promise<void> {
     try {
       // Priority:
       // 1. filename argument (derived from path: "sub\scene")
@@ -96,6 +96,8 @@ export class SceneManager {
 
       // If ID was missing in File but provided by filename, ensure consistency
       newScene.id = sceneId;
+      if (data.description !== undefined) newScene.description = data.description;
+      if (data.textRedirects) newScene.textRedirects = { ...data.textRedirects };
 
       // Restore Camera
       if (data.camera) {
@@ -162,6 +164,7 @@ export class SceneManager {
 
       this.addScene(newScene);
       this.switchTo(newScene.id);
+      await this.game.textAssets.preloadScene(newScene);
 
       // If Editor is active, it needs to know
       if (this.game.editor) {

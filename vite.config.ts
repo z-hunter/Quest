@@ -4,6 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 
+function ensureFile(targetPath: string, content: string) {
+  const dir = path.dirname(targetPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  if (!fs.existsSync(targetPath)) {
+    fs.writeFileSync(targetPath, content);
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -36,6 +46,30 @@ export default defineConfig({
                 res.end(JSON.stringify({ success: true }));
               } catch (err) {
                 console.error('[Vite] Save error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+
+        server.middlewares.use('/api/ensure-file', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath, content } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                ensureFile(targetPath, content || '{}');
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('[Vite] Ensure file error:', err);
                 res.statusCode = 500;
                 res.end(JSON.stringify({ error: String(err) }));
               }
@@ -90,6 +124,30 @@ export default defineConfig({
             next();
           }
         });
+        server.middlewares.use('/api/read-file', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath, content } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                ensureFile(targetPath, content || '{}');
+                const fileContent = fs.readFileSync(targetPath, 'utf-8');
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true, content: fileContent }));
+              } catch (err) {
+                console.error('[Vite] Read file error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
         // OPEN FOLDER ENDPOINT
         server.middlewares.use('/api/open-folder', (req, res, next) => {
           if (req.method === 'POST') {
@@ -114,6 +172,57 @@ export default defineConfig({
                 res.end(JSON.stringify({ success: true }));
               } catch (err) {
                 console.error('[Vite] Open folder error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+        server.middlewares.use('/api/open-file', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath, content } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                ensureFile(targetPath, content || '{}');
+
+                exec(`start "" "${targetPath}"`);
+
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('[Vite] Open file error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+        server.middlewares.use('/api/delete-file', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                if (fs.existsSync(targetPath)) {
+                  fs.unlinkSync(targetPath);
+                }
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('[Vite] Delete file error:', err);
                 res.statusCode = 500;
                 res.end(JSON.stringify({ error: String(err) }));
               }

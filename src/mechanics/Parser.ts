@@ -40,14 +40,24 @@ export class Parser {
   execute(verb: string, noun: string): void {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return;
+    const normalizedNoun = noun.trim().toUpperCase();
+    const isSceneLook =
+      !normalizedNoun ||
+      normalizedNoun === 'AROUND' ||
+      normalizedNoun === 'HERE' ||
+      normalizedNoun === 'SCENE';
 
     // Basic command handling
     switch (verb) {
       case 'LOOK':
       case 'EXAMINE':
       case 'X': // Common shortcut
-        if (!noun) {
-          this.game.log(`You are in ${scene.name}.`);
+        if (isSceneLook) {
+          const sceneDescription =
+            this.game.textAssets.getResolvedSceneField(scene, 'description') ||
+            scene.description ||
+            this.game.text('parser.look_default_scene', { scene: scene.name });
+          this.game.log(sceneDescription);
         } else {
           const entity = scene.findEntity(noun);
           if (entity) {
@@ -58,10 +68,15 @@ export class Parser {
               ScriptRegistry.execute(interactionId, { game: this.game, entity: entity });
             } else {
               // Fallback to description
-              this.game.log(entity.description || `You see nothing special about the ${noun}.`);
+              const description =
+                this.game.textAssets.getResolvedObjectField(entity, 'description') ||
+                entity.description;
+              this.game.log(
+                description || this.game.text('parser.look_default_object', { target: noun })
+              );
             }
           } else {
-            this.game.log(`You don't see any ${noun} here.`);
+            this.game.log(this.game.text('parser.look_not_found', { target: noun }));
           }
         }
         break;
@@ -69,7 +84,7 @@ export class Parser {
       case 'GET':
       case 'PICKUP':
         if (!noun) {
-          this.game.log('Take what?');
+          this.game.log(this.game.text('parser.take_prompt'));
         } else {
           const entity = scene.findEntity(noun);
           if (entity) {
@@ -102,12 +117,16 @@ export class Parser {
             if (isItem || entity.isTakeable) {
               scene.removeEntity(entity);
               this.game.inventory.push(entity);
-              this.game.log(`You picked up the ${entity.customName || entity.name}.`);
+              this.game.log(
+                this.game.text('parser.take_pickup_success', {
+                  item: entity.customName || entity.name,
+                })
+              );
             } else {
-              this.game.log('You cannot take that.');
+              this.game.log(this.game.text('parser.take_cannot'));
             }
           } else {
-            this.game.log(`You don't see any ${noun} here.`);
+            this.game.log(this.game.text('parser.look_not_found', { target: noun }));
           }
         }
         break;
@@ -115,22 +134,22 @@ export class Parser {
       case 'INVENTORY':
       case 'I':
         if (this.game.inventory.length === 0) {
-          this.game.log('You are not carrying anything.');
+          this.game.log(this.game.text('parser.inventory_empty'));
         } else {
           const items = this.game.inventory.map((e: any) => e.customName || e.name).join(', ');
-          this.game.log(`You are carrying: ${items}`);
+          this.game.log(this.game.text('parser.inventory_items', { items }));
         }
         break;
       case 'USE':
         if (!noun) {
-          this.game.log('Use what?');
+          this.game.log(this.game.text('parser.use_prompt'));
         } else {
           // Check if it's "USE [ID] ON [ID]" vs "USE [ID]"
           if (noun.includes(' ON ')) {
             // Parse "USE X ON Y"
             const parts = noun.split(' ON ');
             if (parts.length !== 2) {
-              this.game.log('Use what on what? (Format: USE ITEM ON TARGET)');
+              this.game.log(this.game.text('parser.use_format_prompt'));
             } else {
               const itemName = parts[0].trim();
               const targetName = parts[1].trim();
@@ -140,7 +159,7 @@ export class Parser {
                 (i: any) => (i.customName || i.name).toUpperCase() === itemName.toUpperCase()
               );
               if (!item) {
-                this.game.log(`You don't have the ${itemName}.`);
+                this.game.log(this.game.text('parser.use_missing_item', { item: itemName }));
               } else {
                 // Check if target is in the scene
                 const target = scene.findEntity(targetName);
@@ -154,10 +173,15 @@ export class Parser {
                   if (interactionId) {
                     ScriptRegistry.execute(interactionId, { game: this.game, entity: target });
                   } else {
-                    this.game.log(`Using the ${itemName} on the ${targetName} does nothing.`);
+                    this.game.log(
+                      this.game.text('parser.use_no_effect_pair', {
+                        item: itemName,
+                        target: targetName,
+                      })
+                    );
                   }
                 } else {
-                  this.game.log(`You don't see any ${targetName} here.`);
+                  this.game.log(this.game.text('parser.look_not_found', { target: targetName }));
                 }
               }
             }
@@ -170,16 +194,16 @@ export class Parser {
               if (interactionId) {
                 ScriptRegistry.execute(interactionId, { game: this.game, entity: entity });
               } else {
-                this.game.log(`You try to use the ${noun}, but nothing happens.`);
+                this.game.log(this.game.text('parser.use_no_effect_single', { target: noun }));
               }
             } else {
-              this.game.log(`You don't see any ${noun} here.`);
+              this.game.log(this.game.text('parser.look_not_found', { target: noun }));
             }
           }
         }
         break;
       default:
-        this.game.log("I don't understand.");
+        this.game.log(this.game.text('parser.parse_unknown'));
     }
   }
 }
