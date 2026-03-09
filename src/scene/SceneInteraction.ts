@@ -159,19 +159,22 @@ function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
   return target || obj;
 }
 
-export function activateSceneObject(scene: Scene, obj: SceneObject, depth: number = 0): void {
+export function activateSceneObject(scene: Scene, obj: SceneObject, depth: number = 0): boolean {
   if (depth > 5) {
     console.warn('[Scene] Recursion limit reached.');
-    return;
+    return false;
   }
 
   if (ComponentSystem.handleActivation(obj, scene, depth)) {
-    return;
+    return true;
   }
 
   if (obj instanceof Triggerbox && obj.script) {
     // Intentionally silent: triggering handled by systems/scripts
+    return true;
   }
+
+  return false;
 }
 
 export function handleSceneClick(scene: Scene, x: number, y: number): void {
@@ -201,19 +204,16 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   const hitObj = findTopHitObject(scene, x, y);
 
   if (hitObj) {
-    const title = scene.game.textAssets.getResolvedObjectField(hitObj, 'title');
+    const titleOwner = resolveSubtriggerTarget(scene, hitObj);
+    const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+    const activated = activateSceneObject(scene, hitObj);
+
     if (title) {
       scene.game.log(scene.game.text('engine.click_you_see', { title }));
+      return;
     }
 
-    const isWalkBox = hitObj.components && hitObj.components.some((c) => c.type === 'WalkBox');
-    const isMechanism =
-      hitObj.components &&
-      hitObj.components.some((c) => ['Switch', 'Subscene', 'Subtrigger'].includes(c.type));
-    const hasScript = hitObj instanceof Triggerbox && hitObj.script && hitObj.script.length > 0;
-
-    if (!(isWalkBox && !isMechanism && !hasScript)) {
-      activateSceneObject(scene, hitObj);
+    if (activated) {
       return;
     }
   }
