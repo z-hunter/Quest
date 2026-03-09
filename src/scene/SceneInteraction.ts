@@ -15,6 +15,22 @@ function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
   };
 }
 
+function toWorldForParallax(
+  scene: Scene,
+  x: number,
+  y: number,
+  parallax: number = 1.0
+): { x: number; y: number } {
+  const screenW = 420;
+  const screenH = 300;
+  const halfW = screenW / 2;
+  const halfH = screenH / 2;
+  return {
+    x: (x - halfW) / scene.camera.zoom + scene.camera.x * parallax,
+    y: (y - halfH) / scene.camera.zoom + scene.camera.y * parallax,
+  };
+}
+
 function findVisibleHitObject(scene: Scene, screenX: number, screenY: number): SceneObject | null {
   const screenW = 420;
   const screenH = 300;
@@ -229,10 +245,17 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   }
 
   if (scene.player) {
-    if (typeof scene.player.walkTo === 'function') {
-      scene.player.walkTo(world.x, world.y);
+    const visualTarget = toWorld(scene, x, y);
+    if (typeof (scene.player as any).moveToVisual === 'function') {
+      (scene.player as any).moveToVisual(visualTarget.x, visualTarget.y);
+    } else if (typeof scene.player.walkTo === 'function') {
+      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+      scene.player.walkTo(playerTarget.x, playerTarget.y);
     } else if (typeof scene.player.moveTo === 'function') {
-      scene.player.moveTo(world.x, world.y);
+      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+      scene.player.moveTo(playerTarget.x, playerTarget.y);
     }
   }
 }
