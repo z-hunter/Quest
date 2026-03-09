@@ -18,6 +18,7 @@ export class Console {
   buffer: ConsoleLine[] = [];
   history: string[] = [];
   isOpen: boolean = false;
+  parserPeekEnabled: boolean = false;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -80,15 +81,15 @@ export class Console {
   }
 
   private registerDefaultCommands() {
-    this.registerCommand('CLEAR', () => this.clear());
-    this.registerCommand('HELP', () => {
+    this.registerCommand('#CLS', () => this.clear());
+    this.registerCommand('#HELP', () => {
       this.log('Available commands:', 'info');
       this.log(Array.from(this.commands.keys()).join(', '), 'info');
     });
 
-    this.registerCommand('RUN', (args) => {
+    this.registerCommand('#RUN', (args) => {
       if (args.length === 0) {
-        this.log('Usage: RUN <script_id> [args...]', 'error');
+        this.log('Usage: #RUN <script_id> [args...]', 'error');
         return;
       }
       const scriptId = args[0];
@@ -96,7 +97,7 @@ export class Console {
       this.runScript(scriptId, args.slice(1));
     });
 
-    this.registerCommand('HALT', (args) => {
+    this.registerCommand('#HALT', (args) => {
       if (args.length === 0) {
         // Halt all
         ScriptRegistry.stopAll();
@@ -107,6 +108,16 @@ export class Console {
         ScriptRegistry.stop(scriptId);
         this.log(`Stopped script '${scriptId}'.`, 'info');
       }
+    });
+
+    this.registerCommand('#PEEK-ON', () => {
+      this.parserPeekEnabled = true;
+      this.log('Parser peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEK-OFF', () => {
+      this.parserPeekEnabled = false;
+      this.log('Parser peek disabled.', 'info');
     });
   }
 

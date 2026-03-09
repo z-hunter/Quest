@@ -1,6 +1,8 @@
 {
   "id": "test_room",
   "name": "New Scene",
+  "description": "You are in New Scene.",
+  "textRedirects": {},
   "filename": "test_room",
   "walkbox": [],
   "triggerboxes": [],
@@ -19,6 +21,7 @@
       "disabled": false,
       "groupID": "#g,#a",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -72,6 +75,7 @@
       "disabled": false,
       "groupID": "#a",
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": -1,
@@ -121,6 +125,7 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [
         {
@@ -133,19 +138,19 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 159.0196542021097,
-      "y": 443.2970635781322,
-      "width": 143.88497017161473,
-      "height": 347.27792183395906,
+      "x": 95.87250515576761,
+      "y": 444.191244640698,
+      "width": 146.00904103865875,
+      "height": 352.40453732170107,
       "baseWidth": 162,
       "baseHeight": 391,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.8881788282198441,
+      "scale": 0.9012903767818442,
       "modelScale": 1.03,
-      "parallax": 0.7269997060619294,
+      "parallax": 0.7442508967384815,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "opacity": 1,
@@ -178,34 +183,35 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 87.7396949124423,
-      "y": 443.2105923504103,
+      "x": 23.61461296023532,
+      "y": 444.1034969001102,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 87.7396949124423,
-          "y": 443.2105923504103,
-          "p": 0.7253314403158566
+          "x": 23.61461296023532,
+          "y": 444.1034969001102,
+          "p": 0.7425580035788193
         },
         {
-          "x": 196.48465665453705,
-          "y": 443.21612487072593,
-          "p": 0.7254381777171315
+          "x": 130.79310145805096,
+          "y": 444.10826139683275,
+          "p": 0.7426499237109707
         },
         {
-          "x": 197.82134195961072,
-          "y": 449.4326708990447,
-          "p": 0.8453722999813154
+          "x": 121.97350541619949,
+          "y": 449.4618274910352,
+          "p": 0.8459348101360973
         },
         {
-          "x": 95.34720342352023,
-          "y": 449.095953404058,
-          "p": 0.8388761014446592
+          "x": 21.516082555040327,
+          "y": 449.17185306532133,
+          "p": 0.8403404128504302
         }
       ],
       "color": "#000000",
@@ -221,12 +227,13 @@
       "blur": 4
     },
     {
-      "name": "logo",
+      "name": "logo_1",
       "type": "Entity",
       "locked": false,
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
@@ -257,27 +264,28 @@
       "disabled": false,
       "groupID": null,
       "customName": "",
+      "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 96,
-      "y": 340,
-      "width": 655.1999999999999,
-      "height": 668.64,
+      "x": 79,
+      "y": 417,
+      "width": 778.4081632653061,
+      "height": 794.3755102040816,
       "baseWidth": 585,
       "baseHeight": 597,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "scanline_logo",
       "color": "#AAAAAA",
-      "scale": 1.1199999999999999,
+      "scale": 1.3306122448979592,
       "modelScale": 2.8,
       "parallax": 0.2,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
-      "blendMode": "source-over",
+      "blendMode": "lighter",
       "blur": 32
     }
   ],
