@@ -39,6 +39,7 @@ export class EditorPersistenceManager {
 
       scene.filename = name;
       scene.id = idFromName;
+      this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId);
 
       this.editor.syncUI(); // Refresh UI to show new Filename
       this.performSaveScene(scene.filename, previousSceneId);
@@ -64,6 +65,7 @@ export class EditorPersistenceManager {
       });
 
       if (response.ok) {
+        this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
         await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);

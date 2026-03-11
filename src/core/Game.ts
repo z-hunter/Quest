@@ -603,24 +603,17 @@ export class Game implements IGame {
     }
 
     const currentScene = this.sceneManager.currentScene;
-    const sceneMatch = Array.from(this.sceneManager.scenes.values()).find((scene) => {
-      const resolvedTitle = this.textAssets.getResolvedSceneField(scene, 'title');
-      const normalized = normalizedTarget.toUpperCase();
-      return (
-        scene.id.toUpperCase() === normalized ||
-        scene.name.toUpperCase() === normalized ||
-        (!!resolvedTitle && resolvedTitle.toUpperCase() === normalized)
-      );
-    });
+    const sceneMatch = this.sceneManager.findSceneDescriptorByTarget(normalizedTarget);
 
     if (sceneMatch) {
       this.sceneManager.switchTo(sceneMatch.id);
+      const activeScene = this.sceneManager.currentScene;
       return {
         status: 'ok',
         code: 'scene_switched',
         message:
-          this.textAssets.getResolvedSceneField(sceneMatch, 'description') ||
-          sceneMatch.description ||
+          (activeScene && this.textAssets.getResolvedSceneField(activeScene, 'description')) ||
+          activeScene?.description ||
           this.text('parser.go_to_success', { target: sceneMatch.name }),
         data: { targetType: 'scene', sceneId: sceneMatch.id },
         effects: currentScene?.id !== sceneMatch.id ? ['scene_changed'] : [],
