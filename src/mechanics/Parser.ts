@@ -1,5 +1,4 @@
-import { ScriptRegistry } from '../core/ScriptRegistry';
-import { ComponentSystem } from '../systems/ComponentSystem';
+import type { GameActionOutcome } from '../core/GameActionTypes';
 
 type ParserEntityContext = {
   id: string;
@@ -14,6 +13,12 @@ type ParserInventoryItemContext = {
   title: string | null;
 };
 
+type ParserPendingState = {
+  intent: 'take' | 'goTo';
+  question: string;
+  originalInput: string;
+};
+
 type ParserContext = {
   rawInput: string;
   normalizedInput: string;
@@ -25,44 +30,46 @@ type ParserContext = {
   } | null;
   entities: ParserEntityContext[];
   inventory: ParserInventoryItemContext[];
+  pending: ParserPendingState | null;
 };
 
-type ParserAction =
-  | { type: 'lookScene' }
-  | { type: 'lookEntity'; target: string }
-  | { type: 'takeEntity'; target: string | null }
-  | { type: 'showInventory' }
-  | { type: 'handoff'; reason: string; verb: string; noun: string; rawInput: string };
+type ParserToolAction =
+  | {
+      type: 'callGameMethod';
+      method: 'look' | 'take' | 'showInventory' | 'goTo';
+      args: Array<string | null>;
+    }
+  | {
+      type: 'handoff';
+      reason: string;
+      verb: string;
+      noun: string;
+      rawInput: string;
+    };
 
 type ParserActionEnvelope = {
-  stage: 'regex-v1';
-  actions: ParserAction[];
+  stage: 'regex-v1' | 'pending-resolution';
+  actions: ParserToolAction[];
   debug: {
     rawInput: string;
     normalizedInput: string;
     verb: string;
     noun: string;
+    pendingIntent?: string;
   };
 };
 
 type ParserResult =
   | {
-      type: 'message';
-      handled: true;
-      messages: string[];
+      type: 'outcomes';
+      handled: boolean;
+      outcomes: GameActionOutcome[];
       actionsExecuted: string[];
-    }
-  | {
-      type: 'scriptDelegated';
-      handled: true;
-      messages: string[];
-      actionsExecuted: string[];
-      delegatedScriptId: string;
     }
   | {
       type: 'handoff';
       handled: false;
-      messages: string[];
+      outcomes: GameActionOutcome[];
       actionsExecuted: string[];
       reason: string;
       debug: Record<string, unknown>;
@@ -71,34 +78,56 @@ type ParserResult =
 type ParserResponse = {
   playerMessage?: string;
   debugMessages?: string[];
+  nextPendingState?: ParserPendingState | null;
 };
+
+const STAGE1_COMMAND_WORDS = new Set([
+  'LOOK',
+  'EXAMINE',
+  'X',
+  'TAKE',
+  'GET',
+  'PICKUP',
+  'INV',
+  'INVENTORY',
+  'I',
+  'GO',
+  'WALK',
+  'MOVE',
+]);
 
 export class Parser {
   game: any;
   inputField: HTMLInputElement | null;
+  pendingState: ParserPendingState | null;
 
   constructor(game: any) {
     this.game = game;
     this.inputField = null;
+    this.pendingState = null;
   }
 
   parse(input: string): void {
     const trimmed = input.trim();
     if (!trimmed) return;
 
+    const actionEnvelope = this.resolvePendingAction(trimmed);
     const contextJson = this.buildContextJson(trimmed);
-    const actionJson = this.runStage1(trimmed, contextJson);
-    const resultJson = this.executeActionJson(actionJson, contextJson);
+    const actionJson = actionEnvelope || this.runStage1(trimmed);
+    const resultJson = this.executeActionJson(actionJson);
     const response = this.buildResponse(resultJson, actionJson, contextJson);
-
-    if (response.playerMessage) {
-      this.game.log(response.playerMessage);
-    }
 
     if (response.debugMessages?.length) {
       for (const message of response.debugMessages) {
         this.game.console?.log(message, 'info');
       }
+    }
+
+    this.pendingState =
+      response.nextPendingState === undefined ? this.pendingState : response.nextPendingState;
+
+    if (response.playerMessage) {
+      this.game.log(response.playerMessage);
     }
   }
 
@@ -134,44 +163,93 @@ export class Parser {
           title: this.game.textAssets.getResolvedObjectField(entity, 'title'),
         }))
         .filter((entity: ParserInventoryItemContext) => !!entity.title?.trim()),
+      pending: this.pendingState
+        ? {
+            intent: this.pendingState.intent,
+            question: this.pendingState.question,
+            originalInput: this.pendingState.originalInput,
+          }
+        : null,
     };
 
     return JSON.stringify(context);
   }
 
-  private runStage1(input: string, _contextJson: string): string {
+  private resolvePendingAction(input: string): string | null {
+    if (!this.pendingState) return null;
+    if (this.looksLikeFreshCommand(input)) {
+      this.pendingState = null;
+      return null;
+    }
+
+    const action: ParserToolAction = {
+      type: 'callGameMethod',
+      method: this.pendingState.intent,
+      args: [input.trim()],
+    };
+
+    const envelope: ParserActionEnvelope = {
+      stage: 'pending-resolution',
+      actions: [action],
+      debug: {
+        rawInput: input,
+        normalizedInput: input.trim().toUpperCase(),
+        verb: this.pendingState.intent.toUpperCase(),
+        noun: input.trim(),
+        pendingIntent: this.pendingState.intent,
+      },
+    };
+
+    return JSON.stringify(envelope);
+  }
+
+  private runStage1(input: string): string {
     const words = input.trim().split(/\s+/);
     const verb = (words[0] || '').toUpperCase();
     const noun = words.slice(1).join(' ').trim();
     const normalizedNoun = noun.toUpperCase();
 
-    let actions: ParserAction[];
+    let actions: ParserToolAction[];
 
     switch (verb) {
       case 'LOOK':
       case 'EXAMINE':
       case 'X':
-        if (
-          !normalizedNoun ||
-          normalizedNoun === 'AROUND' ||
-          normalizedNoun === 'HERE' ||
-          normalizedNoun === 'SCENE'
-        ) {
-          actions = [{ type: 'lookScene' }];
-        } else {
-          actions = [{ type: 'lookEntity', target: noun }];
-        }
+        actions = [
+          {
+            type: 'callGameMethod',
+            method: 'look',
+            args: [
+              !normalizedNoun ||
+              normalizedNoun === 'AROUND' ||
+              normalizedNoun === 'HERE' ||
+              normalizedNoun === 'SCENE'
+                ? null
+                : noun,
+            ],
+          },
+        ];
         break;
       case 'TAKE':
       case 'GET':
       case 'PICKUP':
-        actions = [{ type: 'takeEntity', target: noun || null }];
+        actions = [{ type: 'callGameMethod', method: 'take', args: [noun || null] }];
         break;
       case 'INV':
       case 'INVENTORY':
       case 'I':
-        actions = [{ type: 'showInventory' }];
+        actions = [{ type: 'callGameMethod', method: 'showInventory', args: [] }];
         break;
+      case 'GO':
+      case 'WALK':
+      case 'MOVE': {
+        let target = noun;
+        if (target.toUpperCase().startsWith('TO ')) {
+          target = target.slice(3).trim();
+        }
+        actions = [{ type: 'callGameMethod', method: 'goTo', args: [target || null] }];
+        break;
+      }
       default:
         actions = [
           {
@@ -199,29 +277,15 @@ export class Parser {
     return JSON.stringify(envelope);
   }
 
-  private executeActionJson(actionJson: string, _contextJson: string): string {
+  private executeActionJson(actionJson: string): string {
     const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
-    const scene = this.game.sceneManager.currentScene;
     const executedActions: string[] = [];
 
-    if (!scene) {
+    if (!envelope.actions.length) {
       const result: ParserResult = {
         type: 'handoff',
         handled: false,
-        messages: [],
-        actionsExecuted: executedActions,
-        reason: 'no_current_scene',
-        debug: { actionJson },
-      };
-      return JSON.stringify(result);
-    }
-
-    const firstAction = envelope.actions[0];
-    if (!firstAction) {
-      const result: ParserResult = {
-        type: 'handoff',
-        handled: false,
-        messages: [],
+        outcomes: [],
         actionsExecuted: executedActions,
         reason: 'empty_action_plan',
         debug: { actionJson },
@@ -229,166 +293,62 @@ export class Parser {
       return JSON.stringify(result);
     }
 
-    switch (firstAction.type) {
-      case 'lookScene': {
-        executedActions.push('lookScene');
-        const sceneDescription =
-          this.game.textAssets.getResolvedSceneField(scene, 'description') ||
-          scene.description ||
-          this.game.text('parser.look_default_scene', { scene: scene.name });
-        const result: ParserResult = {
-          type: 'message',
-          handled: true,
-          messages: [sceneDescription],
-          actionsExecuted: executedActions,
-        };
-        return JSON.stringify(result);
-      }
-      case 'lookEntity': {
-        executedActions.push('lookEntity');
-        const entity = scene.findEntity(firstAction.target);
-        if (!entity) {
-          const result: ParserResult = {
-            type: 'message',
-            handled: true,
-            messages: [this.game.text('parser.look_not_found', { target: firstAction.target })],
-            actionsExecuted: executedActions,
-          };
-          return JSON.stringify(result);
-        }
+    const outcomes: GameActionOutcome[] = [];
 
-        const interactionId =
-          entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
-        if (interactionId) {
-          ScriptRegistry.execute(interactionId, { game: this.game, entity });
-          const result: ParserResult = {
-            type: 'scriptDelegated',
-            handled: true,
-            messages: [],
-            actionsExecuted: executedActions,
-            delegatedScriptId: interactionId,
-          };
-          return JSON.stringify(result);
-        }
-
-        const description =
-          this.game.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
-        const result: ParserResult = {
-          type: 'message',
-          handled: true,
-          messages: [
-            description ||
-              this.game.text('parser.look_default_object', { target: firstAction.target }),
-          ],
-          actionsExecuted: executedActions,
-        };
-        return JSON.stringify(result);
-      }
-      case 'takeEntity': {
-        executedActions.push('takeEntity');
-        if (!firstAction.target) {
-          const result: ParserResult = {
-            type: 'message',
-            handled: true,
-            messages: [this.game.text('parser.take_prompt')],
-            actionsExecuted: executedActions,
-          };
-          return JSON.stringify(result);
-        }
-
-        const entity = scene.findEntity(firstAction.target);
-        if (!entity) {
-          const result: ParserResult = {
-            type: 'message',
-            handled: true,
-            messages: [this.game.text('parser.look_not_found', { target: firstAction.target })],
-            actionsExecuted: executedActions,
-          };
-          return JSON.stringify(result);
-        }
-
-        const interactionId =
-          entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
-        if (interactionId) {
-          ScriptRegistry.execute(interactionId, { game: this.game, entity });
-          const result: ParserResult = {
-            type: 'scriptDelegated',
-            handled: true,
-            messages: [],
-            actionsExecuted: executedActions,
-            delegatedScriptId: interactionId,
-          };
-          return JSON.stringify(result);
-        }
-
-        const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
-        if (errorMsg) {
-          const result: ParserResult = {
-            type: 'message',
-            handled: true,
-            messages: [errorMsg],
-            actionsExecuted: executedActions,
-          };
-          return JSON.stringify(result);
-        }
-
-        const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
-        if (isItem || entity.isTakeable) {
-          scene.removeEntity(entity);
-          this.game.inventory.push(entity);
-          const result: ParserResult = {
-            type: 'message',
-            handled: true,
-            messages: [
-              this.game.text('parser.take_pickup_success', {
-                item: entity.customName || entity.name,
-              }),
-            ],
-            actionsExecuted: executedActions,
-          };
-          return JSON.stringify(result);
-        }
-
-        const result: ParserResult = {
-          type: 'message',
-          handled: true,
-          messages: [this.game.text('parser.take_cannot')],
-          actionsExecuted: executedActions,
-        };
-        return JSON.stringify(result);
-      }
-      case 'showInventory': {
-        executedActions.push('showInventory');
-        const result: ParserResult = {
-          type: 'message',
-          handled: true,
-          messages:
-            this.game.inventory.length === 0
-              ? [this.game.text('parser.inventory_empty')]
-              : [
-                  this.game.text('parser.inventory_items', {
-                    items: this.game.inventory.map((e: any) => e.customName || e.name).join(', '),
-                  }),
-                ],
-          actionsExecuted: executedActions,
-        };
-        return JSON.stringify(result);
-      }
-      case 'handoff':
-      default: {
+    for (const action of envelope.actions) {
+      if (action.type === 'handoff') {
         const result: ParserResult = {
           type: 'handoff',
           handled: false,
-          messages: [],
+          outcomes,
           actionsExecuted: executedActions,
-          reason: firstAction.type === 'handoff' ? firstAction.reason : 'unsupported_action_type',
+          reason: action.reason,
           debug: {
             actionJson,
-            action: firstAction,
+            action,
           },
         };
         return JSON.stringify(result);
       }
+
+      executedActions.push(action.method);
+      const outcome = this.callGameMethod(action.method, action.args);
+      outcomes.push(outcome);
+
+      if (outcome.status !== 'ok') {
+        break;
+      }
+    }
+
+    const result: ParserResult = {
+      type: 'outcomes',
+      handled: true,
+      outcomes,
+      actionsExecuted: executedActions,
+    };
+    return JSON.stringify(result);
+  }
+
+  private callGameMethod(
+    method: 'look' | 'take' | 'showInventory' | 'goTo',
+    args: Array<string | null>
+  ): GameActionOutcome {
+    switch (method) {
+      case 'look':
+        return this.game.look(args[0] || null);
+      case 'take':
+        return this.game.take(args[0] || null);
+      case 'showInventory':
+        return this.game.showInventory();
+      case 'goTo':
+        return this.game.goTo(args[0] || null);
+      default:
+        return {
+          status: 'escalate',
+          code: 'unknown_game_method',
+          message: this.game.text('parser.parse_unknown'),
+          recoverable: false,
+        };
     }
   }
 
@@ -406,26 +366,75 @@ export class Parser {
         ]
       : undefined;
 
-    if (result.type === 'message') {
+    if (result.type === 'handoff') {
       return {
-        playerMessage: result.messages[0],
+        playerMessage: this.game.text('parser.parse_unknown'),
+        nextPendingState: null,
+        debugMessages: peekMessages || [
+          `[Parser handoff] context=${contextJson}`,
+          `[Parser handoff] actions=${actionJson}`,
+          `[Parser handoff] result=${resultJson}`,
+        ],
+      };
+    }
+
+    const clarification = result.outcomes.find((outcome) => outcome.status === 'needs_clarification');
+    if (clarification) {
+      return {
+        playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
+        nextPendingState: {
+          intent: clarification.code === 'missing_destination' ? 'goTo' : 'take',
+          question: clarification.message || this.game.text('parser.parse_unknown'),
+          originalInput: this.extractRawInput(actionJson),
+        },
         debugMessages: peekMessages,
       };
     }
 
-    if (result.type === 'scriptDelegated') {
-      return result.messages.length > 0
-        ? { playerMessage: result.messages[0], debugMessages: peekMessages }
-        : { debugMessages: peekMessages };
+    const escalation = result.outcomes.find((outcome) => outcome.status === 'escalate');
+    if (escalation) {
+      return {
+        playerMessage: escalation.message || this.game.text('parser.parse_unknown'),
+        nextPendingState: null,
+        debugMessages: peekMessages || [
+          `[Parser handoff] context=${contextJson}`,
+          `[Parser handoff] actions=${actionJson}`,
+          `[Parser handoff] result=${resultJson}`,
+        ],
+      };
     }
 
+    const firstFailure = result.outcomes.find((outcome) => outcome.status === 'failed');
+    if (firstFailure) {
+      return {
+        playerMessage: firstFailure.message || this.game.text('parser.parse_unknown'),
+        nextPendingState: null,
+        debugMessages: peekMessages,
+      };
+    }
+
+    const finalOutcomeWithMessage = [...result.outcomes].reverse().find((outcome) => !!outcome.message);
     return {
-      playerMessage: this.game.text('parser.parse_unknown'),
-      debugMessages: peekMessages || [
-        `[Parser handoff] context=${contextJson}`,
-        `[Parser handoff] actions=${actionJson}`,
-        `[Parser handoff] result=${resultJson}`,
-      ],
+      playerMessage: finalOutcomeWithMessage?.message,
+      nextPendingState: null,
+      debugMessages: peekMessages,
     };
+  }
+
+  private extractRawInput(actionJson: string): string {
+    try {
+      const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
+      return envelope.debug.rawInput;
+    } catch {
+      return '';
+    }
+  }
+
+  private looksLikeFreshCommand(input: string): boolean {
+    const trimmed = input.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith('#') || trimmed.startsWith('-')) return true;
+    const firstWord = trimmed.split(/\s+/)[0]?.toUpperCase() || '';
+    return STAGE1_COMMAND_WORDS.has(firstWord);
   }
 }

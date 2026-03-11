@@ -10,8 +10,11 @@ import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
+import type { GameActionOutcome } from './GameActionTypes';
 
 import { Console } from './Console';
+import { ScriptRegistry } from './ScriptRegistry';
+import { ComponentSystem } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
 
@@ -418,6 +421,235 @@ export class Game implements IGame {
 
   text(key: string, params?: Record<string, string | number>): string {
     return this.textAssets.getServiceText(key, params);
+  }
+
+  look(target?: string | null): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const normalizedTarget = String(target || '').trim();
+    const normalizedUpper = normalizedTarget.toUpperCase();
+
+    if (
+      !normalizedTarget ||
+      normalizedUpper === 'AROUND' ||
+      normalizedUpper === 'HERE' ||
+      normalizedUpper === 'SCENE'
+    ) {
+      const sceneDescription =
+        this.textAssets.getResolvedSceneField(scene, 'description') ||
+        scene.description ||
+        this.text('parser.look_default_scene', { scene: scene.name });
+      return {
+        status: 'ok',
+        code: 'scene_description',
+        message: sceneDescription,
+        data: { targetType: 'scene', sceneId: scene.id },
+      };
+    }
+
+    const entity = scene.findEntity(normalizedTarget);
+    if (!entity) {
+      return {
+        status: 'failed',
+        code: 'entity_not_found',
+        message: this.text('parser.look_not_found', { target: normalizedTarget }),
+        data: { target: normalizedTarget },
+        recoverable: true,
+      };
+    }
+
+    const interactionId = entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const description = this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    if (description && description.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_description',
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_description',
+      message: this.text('parser.look_default_object', { target: normalizedTarget }),
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  take(target?: string | null): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const normalizedTarget = String(target || '').trim();
+    if (!normalizedTarget) {
+      return {
+        status: 'needs_clarification',
+        code: 'missing_take_target',
+        message: this.text('parser.take_prompt'),
+        recoverable: true,
+      };
+    }
+
+    const entity = scene.findEntity(normalizedTarget);
+    if (!entity) {
+      return {
+        status: 'failed',
+        code: 'entity_not_found',
+        message: this.text('parser.look_not_found', { target: normalizedTarget }),
+        data: { target: normalizedTarget },
+        recoverable: true,
+      };
+    }
+
+    const interactionId =
+      entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
+    if (isItem || entity.isTakeable) {
+      scene.removeEntity(entity);
+      this.inventory.push(entity);
+      return {
+        status: 'ok',
+        code: 'item_taken',
+        message: this.text('parser.take_pickup_success', {
+          item: entity.customName || entity.name,
+        }),
+        data: { entityId: entity.name },
+        effects: ['moved_to_inventory'],
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'not_takeable',
+      message: this.text('parser.take_cannot'),
+      data: { entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  showInventory(): GameActionOutcome {
+    return {
+      status: 'ok',
+      code: 'inventory_list',
+      message:
+        this.inventory.length === 0
+          ? this.text('parser.inventory_empty')
+          : this.text('parser.inventory_items', {
+              items: this.inventory.map((e: any) => e.customName || e.name).join(', '),
+            }),
+      data: {
+        count: this.inventory.length,
+      },
+    };
+  }
+
+  goTo(target?: string | null): GameActionOutcome {
+    const normalizedTarget = String(target || '').trim();
+    if (!normalizedTarget) {
+      return {
+        status: 'needs_clarification',
+        code: 'missing_destination',
+        message: this.text('parser.go_to_prompt'),
+        recoverable: true,
+      };
+    }
+
+    const currentScene = this.sceneManager.currentScene;
+    const sceneMatch = Array.from(this.sceneManager.scenes.values()).find((scene) => {
+      const resolvedTitle = this.textAssets.getResolvedSceneField(scene, 'title');
+      const normalized = normalizedTarget.toUpperCase();
+      return (
+        scene.id.toUpperCase() === normalized ||
+        scene.name.toUpperCase() === normalized ||
+        (!!resolvedTitle && resolvedTitle.toUpperCase() === normalized)
+      );
+    });
+
+    if (sceneMatch) {
+      this.sceneManager.switchTo(sceneMatch.id);
+      return {
+        status: 'ok',
+        code: 'scene_switched',
+        message:
+          this.textAssets.getResolvedSceneField(sceneMatch, 'description') ||
+          sceneMatch.description ||
+          this.text('parser.go_to_success', { target: sceneMatch.name }),
+        data: { targetType: 'scene', sceneId: sceneMatch.id },
+        effects: currentScene?.id !== sceneMatch.id ? ['scene_changed'] : [],
+      };
+    }
+
+    if (currentScene?.player) {
+      const entity = currentScene.findEntity(normalizedTarget);
+      if (entity && 'x' in entity && 'y' in entity) {
+        currentScene.player.walkTo((entity as any).x, (entity as any).y);
+        return {
+          status: 'ok',
+          code: 'player_moving',
+          message: this.text('parser.go_to_success', {
+            target: this.textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+          }),
+          data: { targetType: 'entity', entityId: entity.name },
+          effects: ['player_move_started'],
+        };
+      }
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      message: this.text('parser.go_to_not_found', { target: normalizedTarget }),
+      data: { target: normalizedTarget },
+      recoverable: true,
+    };
   }
 
   showNotification(text: string): void {

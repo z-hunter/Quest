@@ -13,7 +13,7 @@
 
 - **Команда**: указание что нужно сделать, напр. "открой дверь ключом";
 - **Реплика**: прямой текст, который произносит герой и который "слышат" все NPC находяшиеся в сцене. Начинается с символа "-".
-  > Режим команд является основным, и пользователь может давать команду парсеру сегенерировать реплику за него, напр. "Расскажи Линде про то, что видел по дороге".
+> Режим команд является основным, и пользователь может давать команду парсеру сегенерировать реплику за него, напр. "Расскажи Линде про то, что видел по дороге".
 
 ## Виртуальная консоль
 
@@ -61,9 +61,9 @@
 
 Parser обрабатывает пользовательский ввод каскадно, если каскад не смог обработать команду, она передаётся следующему:
 
-1. Простой разбор через regexps, распознающий самые элементарные команды типа look [at], take [up], drop, use <> with <>, i (inventory), а также служебные команды save, load, run, etc. (мгновенно);
+1. Простой разбор через regexps, распознающий самые элементарные команды типа look [at], take [up], drop, use <> with <>, i (inventory):  (мгновенно);
 2. Малая локальная нейросеть, например nlp.js (быстро, порядка 50 ms);
-3. Средняя (или малая) языковая модель, работающая локально или через API. (очень медленно и "дорого")
+3. Средняя (или малая) языковая модель (LM), работающая локально или через API. (очень медленно и "дорого")
 
 Первые два каскада парсят почти весь нормальный пользовательский ввод, а LLM/SLM подключается только если ввод не распознан ни одним из них, либо надо сгенерировать текст, в том числе при прямых диалогах с NPC.
 В любом случае, на выходе парсера получается json с набором вызовов API. Затем парсер анализирует их результат (то, что возвращают методы API) и осуществляет какое-то действие: либо отправляет новый json c вызовами API и уходит на новую итерацию, либо отправляет пользователю итоговое сообщение в консоль и заканчивает обработку команды.
@@ -78,9 +78,10 @@ Parser обрабатывает пользовательский ввод кас
 
 - строка ввода сначала разделяется на **console commands** и **gameplay commands**; служебные команды консоли в формате `#...` не проходят через gameplay parser;
 - gameplay parser получает пользовательский ввод и собирает **Context JSON** — упрощённый снимок текстово значимой части текущей сцены и инвентаря;
-- первый каскад остаётся простым regexp/switch parser и строит **Action JSON**;
-- отдельный executor обрабатывает этот Action JSON, вызывает API/методы движка и возвращает **Result JSON**;
-- затем первый каскад получает Result JSON обратно и либо формирует итоговый ответ игроку, либо выдаёт временный debug handoff для будущих старших каскадов.
+- parser хранит собственное runtime-состояние, включая pending clarification, если предыдущая команда не была завершена и требует уточнения;
+- первый каскад остаётся простым regexp/switch parser и строит **Action JSON**, но теперь это план вызовов semantic runtime API (`game.look`, `game.take`, `game.showInventory`, `game.goTo`);
+- отдельный tool layer / API adapter исполняет эти вызовы и возвращает parser структурированный **Result JSON** в виде outcomes, а не готового сценарного ответа;
+- parser анализирует outcomes и сам решает, что делать дальше: завершить ответ игроку, сохранить pending state, передать кейс на старший каскад или выполнить следующую команду API.
 
 Таким образом, даже при очень простом первом каскаде уже существует правильная форма взаимодействия:
 
@@ -93,28 +94,40 @@ Parser обрабатывает пользовательский ввод кас
 - `LOOK AROUND / HERE / SCENE`
 - `TAKE / GET / PICKUP <target>`
 - `INV / INVENTORY / I`
+- `GO / WALK / MOVE <target>`
+- `GO TO <target>`
+
+Для `TAKE` и `GO` уже поддерживается базовый pending clarification: если обязательная цель не указана, parser может задать уточняющий вопрос и ожидать следующий ввод как продолжение текущей команды.
 
 Команда `USE`, speech input (реплики с `-`) и старшие каскады пока в эту версию не входят.
 
-### Текущая реализация executor
+### Текущая реализация tool layer / API adapter
 
-На этом этапе executor является отдельным runtime-слоем, который получает от parser готовый `Action JSON`, исполняет его через API движка и возвращает parser структурированный `Result JSON`.
+На этом этапе parser уже не перекладывает на исполнитель решение о том, что говорить игроку. Он использует runtime API как набор инструментов и сам остаётся оркестратором команды.
 
-Сейчас executor поддерживает только ограниченный набор action-типов:
+Сейчас первый каскад parser может строить action-план из вызовов следующих semantic API-методов:
 
-- `lookScene`
-- `lookEntity`
-- `takeEntity`
-- `showInventory`
-- `handoff`
+- `game.look(target?)`
+- `game.take(target?)`
+- `game.showInventory()`
+- `game.goTo(target?)`
 
-Примеры `Action JSON`, которые parser может передать executor:
+Каждый такой вызов возвращает structured outcome:
+
+- `status`: `ok | failed | needs_clarification | escalate`
+- `code`: машинный код результата
+- `message`: fallback-текст, который parser может вывести игроку, переиспользовать или проигнорировать
+- `data`: структурированные данные
+- `effects`: список побочных эффектов (`scene_changed`, `moved_to_inventory`, `script_executed` и тп)
+- `recoverable`: можно ли пытаться продолжать обработку
+
+Примеры `Action JSON`, которые parser может передать tool layer:
 
 ```json
 {
   "stage": "regex-v1",
   "actions": [
-    { "type": "lookScene" }
+    { "type": "callGameMethod", "method": "look", "args": [null] }
   ],
   "debug": {
     "rawInput": "look",
@@ -129,7 +142,7 @@ Parser обрабатывает пользовательский ввод кас
 {
   "stage": "regex-v1",
   "actions": [
-    { "type": "lookEntity", "target": "lamp" }
+    { "type": "callGameMethod", "method": "look", "args": ["lamp"] }
   ],
   "debug": {
     "rawInput": "look lamp",
@@ -144,7 +157,7 @@ Parser обрабатывает пользовательский ввод кас
 {
   "stage": "regex-v1",
   "actions": [
-    { "type": "takeEntity", "target": "key" }
+    { "type": "callGameMethod", "method": "take", "args": ["key"] }
   ],
   "debug": {
     "rawInput": "take key",
@@ -155,33 +168,69 @@ Parser обрабатывает пользовательский ввод кас
 }
 ```
 
-Примеры `Result JSON`, которые executor возвращает parser:
+Пример pending-resolution, когда parser ждёт уточнение и трактует следующий ввод как продолжение предыдущей команды:
 
 ```json
 {
-  "type": "message",
+  "stage": "pending-resolution",
+  "actions": [
+    { "type": "callGameMethod", "method": "take", "args": ["key"] }
+  ],
+  "debug": {
+    "rawInput": "key",
+    "normalizedInput": "KEY",
+    "verb": "TAKE",
+    "noun": "key",
+    "pendingIntent": "take"
+  }
+}
+```
+
+Примеры `Result JSON`, которые tool layer возвращает parser:
+
+```json
+{
+  "type": "outcomes",
   "handled": true,
-  "messages": ["You are in New Scene."],
-  "actionsExecuted": ["lookScene"]
+  "outcomes": [
+    {
+      "status": "ok",
+      "code": "scene_description",
+      "message": "You are in New Scene."
+    }
+  ],
+  "actionsExecuted": ["look"]
 }
 ```
 
 ```json
 {
-  "type": "message",
+  "type": "outcomes",
   "handled": true,
-  "messages": ["You picked up key."],
-  "actionsExecuted": ["takeEntity"]
+  "outcomes": [
+    {
+      "status": "ok",
+      "code": "item_taken",
+      "message": "You picked up the key.",
+      "effects": ["moved_to_inventory"]
+    }
+  ],
+  "actionsExecuted": ["take"]
 }
 ```
 
 ```json
 {
-  "type": "scriptDelegated",
+  "type": "outcomes",
   "handled": true,
-  "messages": [],
-  "actionsExecuted": ["lookEntity"],
-  "delegatedScriptId": "look_lamp"
+  "outcomes": [
+    {
+      "status": "needs_clarification",
+      "code": "missing_destination",
+      "message": "Where do you want to go?"
+    }
+  ],
+  "actionsExecuted": ["goTo"]
 }
 ```
 
@@ -189,7 +238,7 @@ Parser обрабатывает пользовательский ввод кас
 {
   "type": "handoff",
   "handled": false,
-  "messages": [],
+  "outcomes": [],
   "actionsExecuted": [],
   "reason": "unsupported_by_stage1",
   "debug": {
@@ -199,11 +248,12 @@ Parser обрабатывает пользовательский ввод кас
 }
 ```
 
-После получения `Result JSON` parser на текущем этапе может сделать одно из трёх действий:
+После получения `Result JSON` parser на текущем этапе может сделать одно из четырёх действий:
 
-1. Взять готовое сообщение из `result.messages[0]` и вывести его в игровую консоль.
-2. Ничего не выводить напрямую, если исполнение было делегировано скрипту, а сам скрипт уже формирует игровой вывод.
-3. При `handoff` выдать игроку fallback-сообщение и, в debug-режиме, напечатать в консоль служебный отчёт (`Context JSON`, `Action JSON`, `Result JSON`) для следующего каскада.
+1. Вывести игроку `outcome.message` как итог ответа.
+2. Сохранить pending state и задать уточняющий вопрос, если `status = needs_clarification`.
+3. Передать кейс на старший каскад, если `status = escalate` или stage1 не смог построить plan.
+4. При `handoff` выдать игроку fallback-сообщение и, в debug-режиме, напечатать в консоль служебный отчёт (`Context JSON`, `Action JSON`, `Result JSON`) для следующего каскада.
 
 ### Ближайшее направление развития
 
@@ -211,11 +261,11 @@ Parser обрабатывает пользовательский ввод кас
 
 Ближайшие шаги развития:
 
-1. Расширять и стабилизировать JSON-контракты между context builder, first-stage parser, executor и response builder.
-2. Постепенно переносить в executor всю игровую логику, чтобы первый каскад оставался только интерпретатором ввода, а не прямым caller-ом runtime API.
-3. Добавить обработку новых команд первого каскада поверх той же схемы `Action JSON -> Result JSON`, начиная с `USE`.
-4. После стабилизации этого контура подключать второй каскад, который будет получать тот же Context JSON и тот же Result JSON, но уже пытаться разбирать более свободный ввод.
-5. Лишь после этого подключать тяжёлый LLM/SLM каскад и speech/dialogue routing, чтобы они встраивались в уже готовую схему, а не диктовали архитектуру снизу вверх.
+1. Расширять и стабилизировать JSON-контракты между context builder, first-stage parser, tool layer и response builder.
+2. Постепенно добавлять новые semantic API-методы (`game.use`, `game.open`, `game.talkTo`, etc), чтобы parser не реализовывал типовые действия через ad hoc low-level логику.
+3. Укреплять pending clarification и parser session state, чтобы он мог вести короткий диалог с игроком внутри одной незавершённой команды.
+4. После стабилизации этого контура подключать второй каскад, который будет получать тот же Context JSON и тот же Result JSON, но уже пытаться разбирать более свободный ввод и строить многошаговые планы.
+5. Затем подключать тяжёлый LLM/SLM каскад и speech/dialogue routing, чтобы parser мог не только генерировать тексты, но и строить plan’ы для сложных команд.
 
 Иными словами, ближайшая цель — сделать первый каскад не умнее, а **архитектурно правильнее**, чтобы все последующие каскады подключались к уже работающему посреднику.
 
@@ -543,6 +593,10 @@ Hero.walkTo(100, 100);
 - `game.showMessage(text: string)`: выводит сообщение в игровую консоль;
 - `game.log(text: string)`: выводит сообщение напрямую в буфер консоли;
 - `game.text(key: string, params?: Record<string, string | number>)`: получает строку из служебного TA по ключу;
+- `game.look(target?: string | null)`: semantic API для осмотра сцены или объекта;
+- `game.take(target?: string | null)`: semantic API для подбора предмета;
+- `game.showInventory()`: semantic API для получения описания инвентаря;
+- `game.goTo(target?: string | null)`: semantic API для перехода в сцену или перемещения игрока к объекту;
 - `game.playSound(filename: string)`: проигрывает звук из `public/sounds`;
 - `game.sceneManager.currentScene`: ссылка на текущую сцену;
 - `game.sceneManager.switchTo(sceneId: string)`: переключает игру на другую сцену;
@@ -554,6 +608,79 @@ Hero.walkTo(100, 100);
 ScriptRegistry.register('door.locked', ({ game }) => {
   game.showMessage(game.text('engine.locked_needs', { item: 'keycard' }));
 });
+```
+
+`game.look / game.take / game.showInventory / game.goTo` на текущем этапе возвращают **structured outcome**, а не только текст. В нём есть:
+
+- `status`: `ok | failed | needs_clarification | escalate`
+- `code`: машинный код результата
+- `message`: fallback-текст, который parser может показать игроку или использовать как промежуточный ответ
+- `data`: структурированные данные о результате
+- `effects`: список побочных эффектов (`scene_changed`, `moved_to_inventory`, `script_executed`, etc)
+- `recoverable`: можно ли продолжать обработку
+
+Пример:
+
+```typescript
+const outcome = game.look('lamp');
+
+if (outcome.status === 'ok' && outcome.message) {
+  game.showMessage(outcome.message);
+}
+```
+
+#### Подробности по `game.goTo()`
+
+`game.goTo(target?: string | null)` в текущей реализации является **semantic API-заготовкой** для команд перемещения высокого уровня. Это ещё не полноценный travel planner, но уже единая точка входа, через которую parser может пробовать реализовывать команды вида `GO TO OFFICE`.
+
+Поведение метода сейчас такое:
+
+1. Если цель не указана, метод не падает и не завершает команду ошибкой, а возвращает outcome:
+   - `status = needs_clarification`
+   - `code = missing_destination`
+   - `message = "Where do you want to go?"`
+
+2. Если цель указана, метод сначала пытается найти **сцену** среди уже загруженных сцен. Поиск выполняется по:
+   - `scene.id`
+   - `scene.name`
+   - `scene title` из связанного TA
+
+3. Если сцена найдена:
+   - вызывается `game.sceneManager.switchTo(scene.id)`
+   - возвращается outcome со статусом `ok`
+   - в `message` попадает описание сцены (`description` из TA или fallback)
+   - в `effects` может быть `scene_changed`
+
+4. Если сцена не найдена, метод пытается найти **объект текущей сцены** через `scene.findEntity(target)`.
+
+5. Если объект найден и у него есть координаты:
+   - персонажу игрока отдаётся команда идти к этому объекту
+   - возвращается outcome со статусом `ok`
+   - в `message` используется fallback вроде `You go to <target>.`
+   - в `effects` может быть `player_move_started`
+
+6. Если не найдена ни сцена, ни объект:
+   - возвращается outcome со статусом `failed`
+   - `code = destination_not_found`
+   - `message = "You can't get to <target> from here."`
+
+Важно: текущий `game.goTo()` **не** делает сложного планирования и не проверяет сюжетные условия высокого уровня. Например, он пока не умеет сам решать кейсы вида:
+
+- доступен ли сейчас офис по сюжету;
+- есть ли у игрока машина;
+- есть ли ключи;
+- надо ли выполнить цепочку промежуточных действий перед переходом.
+
+Именно такие кейсы в будущем должен будет разруливать parser-оркестратор и старшие каскады. Тогда `game.goTo()` станет для них не “полным решателем задачи”, а semantic runtime инструментом, который либо может выполнить шаг, либо возвращает structured outcome, на основании которого parser решает, что делать дальше.
+
+Пример:
+
+```typescript
+const outcome = game.goTo('office');
+
+if (outcome.status === 'needs_clarification' && outcome.message) {
+  game.showMessage(outcome.message);
+}
 ```
 
 ### Доступ через `api`
