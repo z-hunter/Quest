@@ -6,6 +6,9 @@ import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
 
+const GRAPH_WEIGHT_FACTOR = 0.15;
+const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
+
 export interface SceneDescriptor {
   id: string;
   path: string;
@@ -13,23 +16,55 @@ export interface SceneDescriptor {
   title: string | null;
   sourceData: any | null;
   lastIndexed: number;
+  graphWeightUnits?: number;
+  textureBytes?: number;
+  textureWeightUnits?: number;
+  totalWeightUnits?: number;
 }
 
 export interface SceneCacheStats {
   estimatedMemory: number;
   loadedScenes: number;
   budget: number;
+  graphUnits: number;
+  textureMb: number;
+  imageBudgetMb: number;
+}
+
+export interface SceneMemoryProfile {
+  sceneId: string;
+  sceneName: string;
+  weightUnits: number;
+  graphWeightUnits: number;
+  textureWeightUnits: number;
+  loadedScenes: number;
+  estimatedCacheUnits: number;
+  jsHeapUsedBytes: number | null;
+  jsHeapUsedMb: number | null;
+  jsHeapDeltaBytes: number | null;
+  jsHeapDeltaMb: number | null;
+  bytesPerUnit: number | null;
+  estimatedTextureBytes: number;
+  estimatedTextureMb: number;
+  textureCount: number;
+  imageCacheBytes: number;
+  imageCacheMb: number;
 }
 
 type DeviceMemoryProfile = {
   className: string;
   deviceMemoryGb: number | null;
   sceneCacheBudget: number;
+  imageCacheBudgetBytes: number;
 };
 
 type CachedSceneEntry = {
   scene: Scene;
-  estimatedWeight: number;
+  graphWeightUnits: number;
+  textureBytes: number;
+  textureWeightUnits: number;
+  totalWeightUnits: number;
+  spriteKeys: Set<string>;
   lastAccessed: number;
   pinned: boolean;
 };
@@ -48,13 +83,17 @@ export class SceneManager {
     this.scenes = new Map();
     this.sceneRegistry = new Map();
     this.sceneCacheMeta = new Map();
+
     const memoryProfile = this.detectDeviceMemoryProfile();
     this.sceneCacheBudget = memoryProfile.sceneCacheBudget;
+    this.game.assets.setImageCacheBudget(memoryProfile.imageCacheBudgetBytes);
     console.log(
       `[SceneManager] Device class: ${memoryProfile.className}` +
         ` (deviceMemory=${memoryProfile.deviceMemoryGb ?? 'unknown'}GB)` +
-        `, scene cache budget: ${this.sceneCacheBudget}`
+        `, scene cache budget: ${this.sceneCacheBudget}` +
+        `, image cache budget: ${this.bytesToMb(memoryProfile.imageCacheBudgetBytes)}MB`
     );
+
     void this.refreshSceneRegistry();
   }
 
@@ -65,18 +104,20 @@ export class SceneManager {
 
   switchTo(sceneId: string): void {
     const scene = this.ensureSceneLoaded(sceneId);
-    if (scene) {
-      this.currentScene = scene;
-      this.touchScene(scene.id);
-      this.pinCurrentScene();
-      this.exposeEntitiesToWindow();
-      if (this.game.onSceneChange) {
-        this.game.onSceneChange(scene.name);
-      }
-      this.evictScenesIfNeeded();
-    } else {
+    if (!scene) {
       console.error(`Scene ${sceneId} not found!`);
+      return;
     }
+
+    this.currentScene = scene;
+    this.touchScene(scene.id);
+    this.pinCurrentScene();
+    this.syncAssetCacheState();
+    this.exposeEntitiesToWindow();
+    if (this.game.onSceneChange) {
+      this.game.onSceneChange(scene.name);
+    }
+    this.evictScenesIfNeeded();
   }
 
   exposeEntitiesToWindow(): void {
@@ -94,10 +135,9 @@ export class SceneManager {
   }
 
   update(deltaTime: number): void {
-    if (this.currentScene) {
-      this.currentScene.update(deltaTime);
-      this.refreshCurrentSceneWeight();
-    }
+    if (!this.currentScene) return;
+    this.currentScene.update(deltaTime);
+    this.refreshCurrentSceneGraphWeight();
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -130,7 +170,7 @@ export class SceneManager {
       this.switchTo(newScene.id);
       await this.game.textAssets.preloadScene(newScene);
       this.syncSceneRegistration(newScene, undefined, newScene.toJSON());
-      this.refreshCurrentSceneWeight();
+      await this.refreshSceneFootprint(newScene.id);
 
       if (this.game.editor) {
         this.game.editor.refreshHierarchy();
@@ -144,6 +184,7 @@ export class SceneManager {
   syncSceneRegistration(scene: Scene, previousId?: string, sourceData?: any): void {
     const sceneId = scene.id;
     const pathValue = this.getScenePathFromScene(scene);
+    const existingMeta = this.sceneCacheMeta.get(sceneId);
     const descriptor: SceneDescriptor = {
       id: sceneId,
       path: pathValue,
@@ -151,6 +192,10 @@ export class SceneManager {
       title: this.game.textAssets.getResolvedSceneField(scene, 'title') || scene.name || sceneId,
       sourceData: sourceData ? JSON.parse(JSON.stringify(sourceData)) : null,
       lastIndexed: Date.now(),
+      graphWeightUnits: existingMeta?.graphWeightUnits,
+      textureBytes: existingMeta?.textureBytes,
+      textureWeightUnits: existingMeta?.textureWeightUnits,
+      totalWeightUnits: existingMeta?.totalWeightUnits,
     };
 
     if (previousId && previousId !== sceneId) {
@@ -163,12 +208,10 @@ export class SceneManager {
       }
       if (previousMeta) {
         this.sceneCacheMeta.delete(previousId);
-        this.sceneCacheMeta.set(sceneId, {
-          ...previousMeta,
-          scene,
-          estimatedWeight: this.estimateSceneWeight(scene),
-        });
+        this.sceneCacheMeta.set(sceneId, { ...previousMeta, scene });
       }
+      this.game.assets.renameSceneSpriteRefs(previousId, sceneId);
+      this.syncAssetCacheState();
     }
 
     this.sceneRegistry.set(sceneId, descriptor);
@@ -176,17 +219,26 @@ export class SceneManager {
 
   getSceneCacheStats(): SceneCacheStats {
     let estimatedMemory = 0;
+    let graphUnits = 0;
+    let textureBytes = 0;
+
     for (const entry of this.sceneCacheMeta.values()) {
-      estimatedMemory += entry.estimatedWeight;
+      estimatedMemory += entry.totalWeightUnits;
+      graphUnits += entry.graphWeightUnits;
+      textureBytes += entry.textureBytes;
     }
+
     return {
       estimatedMemory: Math.round(estimatedMemory),
       loadedScenes: this.scenes.size,
       budget: this.sceneCacheBudget,
+      graphUnits: Math.round(graphUnits),
+      textureMb: this.bytesToMb(textureBytes),
+      imageBudgetMb: this.bytesToMb(this.game.assets.getImageCacheStats().budgetBytes),
     };
   }
 
-  estimateSceneWeight(scene: Scene): number {
+  estimateSceneGraphWeight(scene: Scene): number {
     let weight = 16;
 
     weight += (scene.walkbox?.length || 0) * 6;
@@ -254,6 +306,7 @@ export class SceneManager {
         const response = await fetch(`/scenes/${file}?t=${Date.now()}`);
         if (!response.ok) continue;
         const data = await response.json();
+        const existingMeta = this.sceneCacheMeta.get(sceneId);
         const descriptor: SceneDescriptor = {
           id: sceneId,
           path: file,
@@ -261,6 +314,10 @@ export class SceneManager {
           title: (await this.readSceneTitle(sceneId)) || data.name || sceneId,
           sourceData: data,
           lastIndexed: Date.now(),
+          graphWeightUnits: existingMeta?.graphWeightUnits,
+          textureBytes: existingMeta?.textureBytes,
+          textureWeightUnits: existingMeta?.textureWeightUnits,
+          totalWeightUnits: existingMeta?.totalWeightUnits,
         };
         this.sceneRegistry.set(sceneId, descriptor);
       }
@@ -278,6 +335,69 @@ export class SceneManager {
     } catch (error) {
       console.warn('[SceneManager] Failed to refresh scene registry:', error);
     }
+  }
+
+  async profileCurrentSceneMemory(): Promise<SceneMemoryProfile | null> {
+    const scene = this.currentScene;
+    if (!scene) {
+      console.warn('[SceneManager] profileCurrentSceneMemory(): no current scene');
+      return null;
+    }
+
+    await this.waitForSceneToSettle();
+    await this.refreshSceneFootprint(scene.id);
+    const heapBytes = this.readUsedJsHeapBytes();
+    const entry = this.sceneCacheMeta.get(scene.id);
+    const stats = this.getSceneCacheStats();
+    const imageStats = this.game.assets.getImageCacheStats();
+    const profile = this.buildMemoryProfile(scene, entry, stats.estimatedMemory, heapBytes, null, imageStats.estimatedBytes);
+
+    console.table([this.formatMemoryProfileForConsole(profile)]);
+    return profile;
+  }
+
+  async profileScenes(sceneIds: string[]): Promise<SceneMemoryProfile[]> {
+    const requested = [...new Set((sceneIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    if (requested.length === 0) {
+      console.warn('[SceneManager] profileScenes(): no scene ids provided');
+      return [];
+    }
+
+    const results: SceneMemoryProfile[] = [];
+    const originalSceneId = this.currentScene?.id ?? null;
+
+    for (const sceneId of requested) {
+      const beforeHeap = this.readUsedJsHeapBytes();
+      await this.loadProfileScene(sceneId);
+      await this.waitForSceneToSettle();
+      await this.refreshSceneFootprint(sceneId);
+
+      const scene = this.currentScene;
+      if (!scene || scene.id !== sceneId) {
+        console.warn(`[SceneManager] profileScenes(): failed to load scene '${sceneId}'`);
+        continue;
+      }
+
+      const afterHeap = this.readUsedJsHeapBytes();
+      const imageStats = this.game.assets.getImageCacheStats();
+      const profile = this.buildMemoryProfile(
+        scene,
+        this.sceneCacheMeta.get(scene.id),
+        this.getSceneCacheStats().estimatedMemory,
+        afterHeap,
+        beforeHeap !== null && afterHeap !== null ? Math.max(0, afterHeap - beforeHeap) : null,
+        imageStats.estimatedBytes
+      );
+      results.push(profile);
+    }
+
+    if (originalSceneId && originalSceneId !== this.currentScene?.id) {
+      this.switchTo(originalSceneId);
+      await this.waitForSceneToSettle();
+    }
+
+    console.table(results.map((profile) => this.formatMemoryProfileForConsole(profile)));
+    return results;
   }
 
   private instantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
@@ -357,18 +477,33 @@ export class SceneManager {
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
     this.cacheScene(scene, false);
     void this.game.textAssets.preloadScene(scene);
+    void this.refreshSceneFootprint(scene.id);
     return scene;
   }
 
   private cacheScene(scene: Scene, pinned: boolean): void {
     this.scenes.set(scene.id, scene);
     const existing = this.sceneCacheMeta.get(scene.id);
+    const graphWeightUnits = this.estimateSceneGraphWeight(scene);
+    const spriteKeys = this.collectSceneSpriteNames(scene);
+    this.game.assets.markSceneSpriteRefs(scene.id, spriteKeys);
+
+    const textureBytes = existing?.textureBytes || 0;
+    const textureWeightUnits = existing?.textureWeightUnits || this.textureBytesToUnits(textureBytes);
+
     this.sceneCacheMeta.set(scene.id, {
       scene,
-      estimatedWeight: this.estimateSceneWeight(scene),
+      graphWeightUnits,
+      textureBytes,
+      textureWeightUnits,
+      totalWeightUnits: this.computeTotalWeightUnits(graphWeightUnits, textureBytes),
+      spriteKeys,
       lastAccessed: Date.now(),
       pinned: existing?.pinned || pinned,
     });
+
+    this.syncAssetCacheState();
+    void this.refreshSceneFootprint(scene.id);
     this.evictScenesIfNeeded();
   }
 
@@ -382,13 +517,42 @@ export class SceneManager {
     for (const [sceneId, entry] of this.sceneCacheMeta.entries()) {
       entry.pinned = this.currentScene?.id === sceneId;
     }
+    this.syncAssetCacheState();
   }
 
-  private refreshCurrentSceneWeight(): void {
+  private refreshCurrentSceneGraphWeight(): void {
     if (!this.currentScene) return;
     const entry = this.sceneCacheMeta.get(this.currentScene.id);
     if (!entry) return;
-    entry.estimatedWeight = this.estimateSceneWeight(this.currentScene);
+    entry.graphWeightUnits = this.estimateSceneGraphWeight(this.currentScene);
+    entry.totalWeightUnits = this.computeTotalWeightUnits(entry.graphWeightUnits, entry.textureBytes);
+  }
+
+  private async refreshSceneFootprint(sceneId: string): Promise<void> {
+    const entry = this.sceneCacheMeta.get(sceneId);
+    const scene = this.scenes.get(sceneId);
+    if (!entry || !scene) return;
+
+    const spriteKeys = this.collectSceneSpriteNames(scene);
+    this.game.assets.markSceneSpriteRefs(sceneId, spriteKeys);
+    const textureEstimate = await this.game.assets.estimateSpritesTextureBytes(spriteKeys);
+    entry.spriteKeys = spriteKeys;
+    entry.graphWeightUnits = this.estimateSceneGraphWeight(scene);
+    entry.textureBytes = textureEstimate.bytes;
+    entry.textureWeightUnits = this.textureBytesToUnits(textureEstimate.bytes);
+    entry.totalWeightUnits = this.computeTotalWeightUnits(entry.graphWeightUnits, entry.textureBytes);
+
+    const descriptor = this.sceneRegistry.get(sceneId);
+    if (descriptor) {
+      descriptor.graphWeightUnits = entry.graphWeightUnits;
+      descriptor.textureBytes = entry.textureBytes;
+      descriptor.textureWeightUnits = entry.textureWeightUnits;
+      descriptor.totalWeightUnits = entry.totalWeightUnits;
+      descriptor.lastIndexed = Date.now();
+    }
+
+    this.syncAssetCacheState();
+    this.evictScenesIfNeeded();
   }
 
   private evictScenesIfNeeded(): void {
@@ -410,6 +574,7 @@ export class SceneManager {
     const scene = this.scenes.get(sceneId);
     if (!scene) return;
 
+    const entry = this.sceneCacheMeta.get(sceneId);
     const descriptor = this.sceneRegistry.get(sceneId) || {
       id: sceneId,
       path: this.getScenePathFromScene(scene),
@@ -423,10 +588,16 @@ export class SceneManager {
     descriptor.title = this.game.textAssets.getResolvedSceneField(scene, 'title') || scene.name;
     descriptor.sourceData = scene.toJSON();
     descriptor.lastIndexed = Date.now();
+    descriptor.graphWeightUnits = entry?.graphWeightUnits;
+    descriptor.textureBytes = entry?.textureBytes;
+    descriptor.textureWeightUnits = entry?.textureWeightUnits;
+    descriptor.totalWeightUnits = entry?.totalWeightUnits;
     this.sceneRegistry.set(sceneId, descriptor);
 
     this.scenes.delete(sceneId);
     this.sceneCacheMeta.delete(sceneId);
+    this.game.assets.releaseSceneSpriteRefs(sceneId);
+    this.syncAssetCacheState();
   }
 
   private getScenePathFromScene(scene: Scene): string {
@@ -485,7 +656,8 @@ export class SceneManager {
       return {
         className: 'unknown',
         deviceMemoryGb: null,
-        sceneCacheBudget: 900,
+        sceneCacheBudget: 2700,
+        imageCacheBudgetBytes: 256 * 1024 * 1024,
       };
     }
 
@@ -493,7 +665,8 @@ export class SceneManager {
       return {
         className: 'low-memory',
         deviceMemoryGb,
-        sceneCacheBudget: 900,
+        sceneCacheBudget: 2700,
+        imageCacheBudgetBytes: 256 * 1024 * 1024,
       };
     }
 
@@ -501,7 +674,8 @@ export class SceneManager {
       return {
         className: 'mid-memory',
         deviceMemoryGb,
-        sceneCacheBudget: 1500,
+        sceneCacheBudget: 4500,
+        imageCacheBudgetBytes: 512 * 1024 * 1024,
       };
     }
 
@@ -509,14 +683,140 @@ export class SceneManager {
       return {
         className: 'high-memory',
         deviceMemoryGb,
-        sceneCacheBudget: 2400,
+        sceneCacheBudget: 7200,
+        imageCacheBudgetBytes: 1024 * 1024 * 1024,
       };
     }
 
     return {
       className: 'very-high-memory',
       deviceMemoryGb,
-      sceneCacheBudget: 3200,
+      sceneCacheBudget: 9600,
+      imageCacheBudgetBytes: 1536 * 1024 * 1024,
+    };
+  }
+
+  private async loadProfileScene(sceneId: string): Promise<void> {
+    const descriptor = this.sceneRegistry.get(sceneId);
+    if (descriptor) {
+      this.switchTo(descriptor.id);
+      return;
+    }
+
+    const guessedFile = `${sceneId.replace(/\\/g, '/')}.json`;
+    await this.loadScene(guessedFile);
+  }
+
+  private collectSceneSpriteNames(scene: Scene): Set<string> {
+    const spriteNames = new Set<string>();
+
+    for (const entity of scene.entities || []) {
+      if (entity.spriteName) {
+        spriteNames.add(entity.spriteName);
+      }
+
+      const animSets = (entity as any).animSets as Record<string, Record<string, string | null>> | undefined;
+      if (!animSets) continue;
+
+      for (const set of Object.values(animSets)) {
+        for (const key of ['up', 'down', 'left', 'right'] as const) {
+          const spriteName = set?.[key];
+          if (typeof spriteName === 'string' && spriteName.trim()) {
+            spriteNames.add(spriteName);
+          }
+        }
+      }
+    }
+
+    return spriteNames;
+  }
+
+  private syncAssetCacheState(): void {
+    this.game.assets.syncSceneCacheState(
+      this.currentScene?.id || null,
+      [...this.scenes.keys()]
+    );
+  }
+
+  private computeTotalWeightUnits(graphWeightUnits: number, textureBytes: number): number {
+    return Math.max(
+      1,
+      Math.round(this.textureBytesToUnits(textureBytes) + graphWeightUnits * GRAPH_WEIGHT_FACTOR)
+    );
+  }
+
+  private textureBytesToUnits(textureBytes: number): number {
+    return textureBytes / TEXTURE_BYTES_PER_UNIT;
+  }
+
+  private buildMemoryProfile(
+    scene: Scene,
+    entry: CachedSceneEntry | undefined,
+    estimatedCacheUnits: number,
+    heapBytes: number | null,
+    deltaBytes: number | null,
+    imageCacheBytes: number
+  ): SceneMemoryProfile {
+    const graphWeightUnits = Math.round(entry?.graphWeightUnits ?? this.estimateSceneGraphWeight(scene));
+    const textureBytes = entry?.textureBytes ?? 0;
+    const totalWeightUnits = Math.round(entry?.totalWeightUnits ?? this.computeTotalWeightUnits(graphWeightUnits, textureBytes));
+    const bytesPerUnit =
+      heapBytes !== null && totalWeightUnits > 0 ? heapBytes / totalWeightUnits : null;
+
+    return {
+      sceneId: scene.id,
+      sceneName: scene.name,
+      weightUnits: totalWeightUnits,
+      graphWeightUnits,
+      textureWeightUnits: Math.round(entry?.textureWeightUnits ?? this.textureBytesToUnits(textureBytes)),
+      loadedScenes: this.scenes.size,
+      estimatedCacheUnits,
+      jsHeapUsedBytes: heapBytes,
+      jsHeapUsedMb: heapBytes !== null ? this.bytesToMb(heapBytes) : null,
+      jsHeapDeltaBytes: deltaBytes,
+      jsHeapDeltaMb: deltaBytes !== null ? this.bytesToMb(deltaBytes) : null,
+      bytesPerUnit,
+      estimatedTextureBytes: textureBytes,
+      estimatedTextureMb: this.bytesToMb(textureBytes),
+      textureCount: entry?.spriteKeys.size ?? this.collectSceneSpriteNames(scene).size,
+      imageCacheBytes,
+      imageCacheMb: this.bytesToMb(imageCacheBytes),
+    };
+  }
+
+  private readUsedJsHeapBytes(): number | null {
+    const performanceLike =
+      typeof performance !== 'undefined'
+        ? (performance as Performance & { memory?: { usedJSHeapSize?: number } })
+        : null;
+    const used = performanceLike?.memory?.usedJSHeapSize;
+    return typeof used === 'number' && Number.isFinite(used) ? used : null;
+  }
+
+  private async waitForSceneToSettle(delayMs: number = 300): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  private bytesToMb(bytes: number): number {
+    return Math.round((bytes / (1024 * 1024)) * 100) / 100;
+  }
+
+  private formatMemoryProfileForConsole(profile: SceneMemoryProfile): Record<string, string | number | null> {
+    return {
+      sceneId: profile.sceneId,
+      sceneName: profile.sceneName,
+      weightUnits: profile.weightUnits,
+      graphUnits: profile.graphWeightUnits,
+      textureUnits: profile.textureWeightUnits,
+      loadedScenes: profile.loadedScenes,
+      cacheUnits: profile.estimatedCacheUnits,
+      jsHeapMb: profile.jsHeapUsedMb,
+      deltaMb: profile.jsHeapDeltaMb,
+      textureMb: profile.estimatedTextureMb,
+      imageCacheMb: profile.imageCacheMb,
+      textureCount: profile.textureCount,
+      kbPerUnit:
+        profile.bytesPerUnit !== null ? Math.round((profile.bytesPerUnit / 1024) * 100) / 100 : null,
     };
   }
 }

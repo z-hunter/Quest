@@ -157,6 +157,17 @@ export class Game implements IGame {
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
     this.sceneManager = new SceneManager(this);
+    if (typeof window !== 'undefined') {
+      const debugWindow = window as Window & {
+        __QUEST_DEBUG__?: Record<string, unknown>;
+      };
+      debugWindow.__QUEST_DEBUG__ = {
+        ...(debugWindow.__QUEST_DEBUG__ || {}),
+        game: this,
+        profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
+        profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
+      };
+    }
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);
 

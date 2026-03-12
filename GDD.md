@@ -1179,3 +1179,50 @@ ctx.fillStyle = Theme.backgroundColor; // Получает значение --ui
 3. **Данные**:
    - В `QuadObject` добавляются свойства: `textureName` (string), `tileX` (number), `tileY` (number).
    - В редактор добавляется выбор текстуры и настройка тайлинга.
+
+## Отладочный profiler памяти сцен
+
+В движок встроен debug-profiler для оценки веса сцен и кэшей. Он доступен из DevTools Console через глобальный объект:
+
+```js
+window.__QUEST_DEBUG__
+```
+
+Доступные методы:
+
+```js
+await __QUEST_DEBUG__.profileCurrentSceneMemory()
+await __QUEST_DEBUG__.profileScenes(['test_room', 'home\\room'])
+```
+
+`profileCurrentSceneMemory()` снимает снимок по текущей сцене, а `profileScenes([...])` последовательно загружает перечисленные сцены и печатает `console.table(...)` с их метриками.
+
+Основные поля profiler-отчёта:
+
+- `weightUnits` — итоговый вес сцены в условных единицах cache policy.
+- `graphWeightUnits` — вклад структуры сцены (объекты, компоненты, полигоны).
+- `textureWeightUnits` — вклад текстур, доминирующий в общей оценке.
+- `estimatedTextureMb` / `textureMb` — грубая оценка объёма уникальных изображений сцены.
+- `jsHeapMb` — текущий объём JS heap после загрузки сцены.
+- `jsHeapDeltaMb` / `deltaMb` — прирост JS heap между шагами batch-профилирования.
+- `bytesPerUnit` / `kbPerUnit` — приблизительная стоимость одной unit-единицы в JS heap.
+- `imageCacheMb` — текущий общий вес image cache.
+
+Пример использования:
+
+```js
+const current = await __QUEST_DEBUG__.profileCurrentSceneMemory()
+console.log(current.weightUnits, current.estimatedTextureMb)
+```
+
+```js
+const batch = await __QUEST_DEBUG__.profileScenes(['test_room', 'home\\room'])
+console.table(batch.map((row) => ({
+  scene: row.sceneId,
+  units: row.weightUnits,
+  texMb: row.estimatedTextureMb,
+  heapDeltaMb: row.jsHeapDeltaMb,
+})))
+```
+
+Profiler предназначен для инженерной оценки и калибровки cache policy. Его числа не являются точным измерением всей RAM приложения: `jsHeap` отражает память JavaScript, а `estimatedTextureMb` является вычисляемой оценкой по размерам изображений.
