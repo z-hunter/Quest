@@ -477,7 +477,8 @@ export class Game implements IGame {
       };
     }
 
-    const interactionId = entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
+    const interactionId =
+      entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
     if (interactionId) {
       ScriptRegistry.execute(interactionId, { game: this, entity });
       return {
@@ -488,7 +489,8 @@ export class Game implements IGame {
       };
     }
 
-    const description = this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    const description =
+      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
     if (description && description.trim()) {
       return {
         status: 'ok',
@@ -634,7 +636,7 @@ export class Game implements IGame {
     if (currentScene?.player) {
       const entity = currentScene.findEntity(normalizedTarget);
       if (entity && 'x' in entity && 'y' in entity) {
-        currentScene.player.walkTo((entity as any).x, (entity as any).y);
+        currentScene.player.moveTo((entity as any).x, (entity as any).y);
         return {
           status: 'ok',
           code: 'player_moving',
