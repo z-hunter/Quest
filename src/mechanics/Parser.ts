@@ -14,7 +14,7 @@ type ParserInventoryItemContext = {
 };
 
 type ParserPendingState = {
-  intent: 'take' | 'goTo';
+  intent: 'look' | 'take' | 'goTo';
   question: string;
   originalInput: string;
 };
@@ -378,12 +378,14 @@ export class Parser {
       };
     }
 
-    const clarification = result.outcomes.find((outcome) => outcome.status === 'needs_clarification');
+    const clarification = result.outcomes.find(
+      (outcome) => outcome.status === 'needs_clarification'
+    );
     if (clarification) {
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
         nextPendingState: {
-          intent: clarification.code === 'missing_destination' ? 'goTo' : 'take',
+          intent: this.extractPendingIntent(actionJson),
           question: clarification.message || this.game.text('parser.parse_unknown'),
           originalInput: this.extractRawInput(actionJson),
         },
@@ -413,7 +415,9 @@ export class Parser {
       };
     }
 
-    const finalOutcomeWithMessage = [...result.outcomes].reverse().find((outcome) => !!outcome.message);
+    const finalOutcomeWithMessage = [...result.outcomes]
+      .reverse()
+      .find((outcome) => !!outcome.message);
     return {
       playerMessage: finalOutcomeWithMessage?.message,
       nextPendingState: null,
@@ -428,6 +432,25 @@ export class Parser {
     } catch {
       return '';
     }
+  }
+
+  private extractPendingIntent(actionJson: string): 'look' | 'take' | 'goTo' {
+    try {
+      const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
+      const firstAction = envelope.actions[0];
+      if (
+        firstAction &&
+        firstAction.type === 'callGameMethod' &&
+        (firstAction.method === 'look' ||
+          firstAction.method === 'take' ||
+          firstAction.method === 'goTo')
+      ) {
+        return firstAction.method;
+      }
+    } catch {
+      // Fall through to default.
+    }
+    return 'take';
   }
 
   private looksLikeFreshCommand(input: string): boolean {

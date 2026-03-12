@@ -17,6 +17,7 @@ import { ScriptRegistry } from './ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
+import type { Scene } from '../scene/Scene';
 
 export class Game implements IGame {
   public static instance: Game;
@@ -434,6 +435,90 @@ export class Game implements IGame {
     return this.textAssets.getServiceText(key, params);
   }
 
+  private resolveSceneEntityTarget(
+    scene: Scene,
+    rawTarget: string,
+    options: {
+      includeTakeablesOnly: boolean;
+      clarificationKey: string;
+    }
+  ):
+    | { status: 'found'; entity: Entity }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] } {
+    const normalizedTarget = String(rawTarget || '')
+      .trim()
+      .toUpperCase();
+    if (!normalizedTarget) return { status: 'not_found' };
+
+    const allCandidates = (scene.entities || []).filter((entity: Entity) => !entity.disabled);
+    const partialCandidates = allCandidates.filter((entity: Entity) => {
+      if (!options.includeTakeablesOnly) return true;
+      const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
+      return !!isItem || !!entity.isTakeable;
+    });
+
+    const exactMatches = allCandidates.filter((entity: Entity) =>
+      this.getEntityLookupTokens(entity).includes(normalizedTarget)
+    );
+    if (exactMatches.length === 1) {
+      return { status: 'found', entity: exactMatches[0] };
+    }
+    if (exactMatches.length > 1) {
+      const optionTitles = this.getResolutionOptionTitles(exactMatches);
+      return {
+        status: 'ambiguous',
+        message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
+        options: optionTitles,
+      };
+    }
+
+    const partialMatches = partialCandidates.filter((entity: Entity) => {
+      const title = this.textAssets.getResolvedObjectField(entity, 'title');
+      if (!title) return false;
+      return title.toUpperCase().includes(normalizedTarget);
+    });
+
+    if (partialMatches.length === 1) {
+      return { status: 'found', entity: partialMatches[0] };
+    }
+    if (partialMatches.length > 1) {
+      const optionTitles = this.getResolutionOptionTitles(partialMatches);
+      return {
+        status: 'ambiguous',
+        message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
+        options: optionTitles,
+      };
+    }
+
+    return { status: 'not_found' };
+  }
+
+  private getEntityLookupTokens(entity: Entity): string[] {
+    const tokens = [
+      entity.name,
+      entity.customName,
+      this.textAssets.getResolvedObjectField(entity, 'title'),
+    ]
+      .filter((value): value is string => !!value)
+      .map((value) => value.toUpperCase());
+
+    return Array.from(new Set(tokens));
+  }
+
+  private getResolutionOptionTitles(entities: Entity[]): string[] {
+    return Array.from(
+      new Set(
+        entities.map(
+          (entity) =>
+            this.textAssets.getResolvedObjectField(entity, 'title') ||
+            entity.customName ||
+            entity.name
+        )
+      )
+    );
+  }
+
   look(target?: string | null): GameActionOutcome {
     const scene = this.sceneManager.currentScene;
     if (!scene) {
@@ -466,8 +551,11 @@ export class Game implements IGame {
       };
     }
 
-    const entity = scene.findEntity(normalizedTarget);
-    if (!entity) {
+    const resolved = this.resolveSceneEntityTarget(scene, normalizedTarget, {
+      includeTakeablesOnly: false,
+      clarificationKey: 'parser.look_which_one',
+    });
+    if (resolved.status === 'not_found') {
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -476,6 +564,16 @@ export class Game implements IGame {
         recoverable: true,
       };
     }
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_look_target',
+        message: resolved.message,
+        data: { target: normalizedTarget, options: resolved.options },
+        recoverable: true,
+      };
+    }
+    const entity = resolved.entity;
 
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
@@ -530,8 +628,37 @@ export class Game implements IGame {
       };
     }
 
-    const entity = scene.findEntity(normalizedTarget);
-    if (!entity) {
+    const resolved = this.resolveSceneEntityTarget(scene, normalizedTarget, {
+      includeTakeablesOnly: true,
+      clarificationKey: 'parser.take_which_one',
+    });
+    const broadResolved =
+      resolved.status === 'not_found'
+        ? this.resolveSceneEntityTarget(scene, normalizedTarget, {
+            includeTakeablesOnly: false,
+            clarificationKey: 'parser.take_which_one',
+          })
+        : null;
+
+    if (resolved.status === 'not_found') {
+      if (broadResolved?.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_take_target',
+          message: broadResolved.message,
+          data: { target: normalizedTarget, options: broadResolved.options },
+          recoverable: true,
+        };
+      }
+      if (broadResolved?.status === 'found') {
+        return {
+          status: 'failed',
+          code: 'not_takeable',
+          message: this.text('parser.take_cannot'),
+          data: { entityId: broadResolved.entity.name },
+          recoverable: true,
+        };
+      }
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -540,6 +667,16 @@ export class Game implements IGame {
         recoverable: true,
       };
     }
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_take_target',
+        message: resolved.message,
+        data: { target: normalizedTarget, options: resolved.options },
+        recoverable: true,
+      };
+    }
+    const entity = resolved.entity;
 
     const interactionId =
       entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
@@ -634,8 +771,22 @@ export class Game implements IGame {
     }
 
     if (currentScene?.player) {
-      const entity = currentScene.findEntity(normalizedTarget);
-      if (entity && 'x' in entity && 'y' in entity) {
+      const resolved = this.resolveSceneEntityTarget(currentScene, normalizedTarget, {
+        includeTakeablesOnly: false,
+        clarificationKey: 'parser.go_to_which_one',
+      });
+      if (resolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_destination',
+          message: resolved.message,
+          data: { target: normalizedTarget, options: resolved.options },
+          recoverable: true,
+        };
+      }
+
+      if (resolved.status === 'found' && 'x' in resolved.entity && 'y' in resolved.entity) {
+        const entity = resolved.entity;
         currentScene.player.moveTo((entity as any).x, (entity as any).y);
         return {
           status: 'ok',

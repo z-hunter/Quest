@@ -157,6 +157,7 @@ export class Scene {
   findEntity(name: string): Entity | undefined {
     const normalized = name.toUpperCase();
     return this.entities.find((e) => {
+      if (e.disabled) return false;
       const resolvedTitle = this.game.textAssets.getResolvedObjectField(e, 'title');
       return (
         e.name.toUpperCase() === normalized ||
