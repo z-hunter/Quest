@@ -57,6 +57,22 @@
 | <User> | <--text--- |          | <--------- |       |
 |        |
 
+```mermaid
+flowchart LR
+
+User["User"]
+Parser["Parser<br/>(Game Master)"]
+Context["Game Context<br/>(Scene, Objects, NPCs, States)"]
+API["Game Engine API"]
+Preprocessor["Preprocessor"]
+
+User -- "text input" --> Preprocessor
+Preprocessor -- "json" --> Parser 
+Context -- "json context" --> Parser
+Parser -- "json commands" --> API
+API -- "state / results" --> Parser
+Parser -- "text response" --> User
+```
 
 
 Parser обрабатывает пользовательский ввод каскадно, если каскад не смог обработать команду, она передаётся следующему:
