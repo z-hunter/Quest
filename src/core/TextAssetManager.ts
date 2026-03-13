@@ -31,6 +31,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     too_far_generic: 'You are too far away.',
     too_far_from_entity: 'You are too far away from the {target}.',
     locked_needs: 'Locked. Needs {item}',
+    locked_generic: 'Locked.',
   },
   scripts: {
     pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',

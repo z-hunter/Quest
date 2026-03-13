@@ -45,6 +45,11 @@ export interface WalkBoxComponent {
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
+    const title = game?.textAssets.getResolvedObjectField(entity, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
   static update(entity: any, _dt: number) {
     if (!entity.components) return;
 
@@ -113,10 +118,14 @@ export class ComponentSystem {
       const allowedDist = (player.width || 30) * 4; // Tolerance
 
       if (dist > allowedDist) {
-        return (
-          game?.text('engine.too_far_from_entity', { target: entity.name }) ||
-          `You are too far away from the ${entity.name}.`
-        );
+        const title = this.getPlayerFacingTitle(game, entity);
+        if (title) {
+          return (
+            game?.text('engine.too_far_from_entity', { target: title }) ||
+            `You are too far away from the ${title}.`
+          );
+        }
+        return game?.text('engine.too_far_generic') || 'You are too far away.';
       }
     }
 
@@ -212,7 +221,24 @@ export class ComponentSystem {
           (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
         );
         if (!hasKey) {
-          game.showMessage(game.text('engine.locked_needs', { item: sw.idKey }));
+          const keyEntity =
+            game.inventory.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            ) ||
+            scene.entities.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            ) ||
+            scene.triggerboxes.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            );
+          const keyTitle = keyEntity
+            ? this.getPlayerFacingTitle(game, keyEntity as SceneObject)
+            : null;
+          game.showMessage(
+            keyTitle
+              ? game.text('engine.locked_needs', { item: keyTitle })
+              : game.text('engine.locked_generic')
+          );
           return true; // Handled (Blocked)
         }
       }

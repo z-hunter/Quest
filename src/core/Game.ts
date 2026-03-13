@@ -445,7 +445,8 @@ export class Game implements IGame {
   ):
     | { status: 'found'; entity: Entity }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] } {
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string; message?: string } {
     const normalizedTarget = String(rawTarget || '')
       .trim()
       .toUpperCase();
@@ -466,6 +467,12 @@ export class Game implements IGame {
     }
     if (exactMatches.length > 1) {
       const optionTitles = this.getResolutionOptionTitles(exactMatches);
+      if (!optionTitles) {
+        return {
+          status: 'escalate',
+          code: 'ambiguous_targets_missing_titles',
+        };
+      }
       return {
         status: 'ambiguous',
         message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
@@ -484,6 +491,12 @@ export class Game implements IGame {
     }
     if (partialMatches.length > 1) {
       const optionTitles = this.getResolutionOptionTitles(partialMatches);
+      if (!optionTitles) {
+        return {
+          status: 'escalate',
+          code: 'ambiguous_targets_missing_titles',
+        };
+      }
       return {
         status: 'ambiguous',
         message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
@@ -506,17 +519,17 @@ export class Game implements IGame {
     return Array.from(new Set(tokens));
   }
 
-  private getResolutionOptionTitles(entities: Entity[]): string[] {
-    return Array.from(
-      new Set(
-        entities.map(
-          (entity) =>
-            this.textAssets.getResolvedObjectField(entity, 'title') ||
-            entity.customName ||
-            entity.name
-        )
-      )
-    );
+  private getPlayerFacingEntityTitle(entity: Entity): string | null {
+    const title = this.textAssets.getResolvedObjectField(entity, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private getResolutionOptionTitles(entities: Entity[]): string[] | null {
+    const titles = entities
+      .map((entity) => this.getPlayerFacingEntityTitle(entity))
+      .filter((title): title is string => !!title);
+    if (titles.length !== entities.length) return null;
+    return Array.from(new Set(titles));
   }
 
   look(target?: string | null): GameActionOutcome {
@@ -555,6 +568,13 @@ export class Game implements IGame {
       includeTakeablesOnly: false,
       clarificationKey: 'parser.look_which_one',
     });
+    if (resolved.status === 'escalate') {
+      return {
+        status: 'escalate',
+        code: resolved.code,
+        recoverable: true,
+      };
+    }
     if (resolved.status === 'not_found') {
       return {
         status: 'failed',
@@ -640,6 +660,19 @@ export class Game implements IGame {
           })
         : null;
 
+    if (resolved.status === 'escalate' || broadResolved?.status === 'escalate') {
+      return {
+        status: 'escalate',
+        code:
+          resolved.status === 'escalate'
+            ? resolved.code
+            : broadResolved?.status === 'escalate'
+              ? broadResolved.code
+              : 'take_target_missing_title',
+        recoverable: true,
+      };
+    }
+
     if (resolved.status === 'not_found') {
       if (broadResolved?.status === 'ambiguous') {
         return {
@@ -705,11 +738,21 @@ export class Game implements IGame {
     if (isItem || entity.isTakeable) {
       scene.removeEntity(entity);
       this.inventory.push(entity);
+      const itemTitle = this.getPlayerFacingEntityTitle(entity);
+      if (!itemTitle) {
+        return {
+          status: 'escalate',
+          code: 'taken_item_missing_title',
+          data: { entityId: entity.name },
+          effects: ['moved_to_inventory'],
+          recoverable: true,
+        };
+      }
       return {
         status: 'ok',
         code: 'item_taken',
         message: this.text('parser.take_pickup_success', {
-          item: entity.customName || entity.name,
+          item: itemTitle,
         }),
         data: { entityId: entity.name },
         effects: ['moved_to_inventory'],
@@ -726,6 +769,21 @@ export class Game implements IGame {
   }
 
   showInventory(): GameActionOutcome {
+    const inventoryTitles = this.inventory
+      .map((entity: any) => this.getPlayerFacingEntityTitle(entity))
+      .filter((title): title is string => !!title);
+
+    if (inventoryTitles.length !== this.inventory.length) {
+      return {
+        status: 'escalate',
+        code: 'inventory_item_missing_title',
+        data: {
+          count: this.inventory.length,
+        },
+        recoverable: true,
+      };
+    }
+
     return {
       status: 'ok',
       code: 'inventory_list',
@@ -733,7 +791,7 @@ export class Game implements IGame {
         this.inventory.length === 0
           ? this.text('parser.inventory_empty')
           : this.text('parser.inventory_items', {
-              items: this.inventory.map((e: any) => e.customName || e.name).join(', '),
+              items: inventoryTitles.join(', '),
             }),
       data: {
         count: this.inventory.length,
@@ -775,6 +833,13 @@ export class Game implements IGame {
         includeTakeablesOnly: false,
         clarificationKey: 'parser.go_to_which_one',
       });
+      if (resolved.status === 'escalate') {
+        return {
+          status: 'escalate',
+          code: resolved.code,
+          recoverable: true,
+        };
+      }
       if (resolved.status === 'ambiguous') {
         return {
           status: 'needs_clarification',
@@ -787,12 +852,21 @@ export class Game implements IGame {
 
       if (resolved.status === 'found' && 'x' in resolved.entity && 'y' in resolved.entity) {
         const entity = resolved.entity;
+        const entityTitle = this.getPlayerFacingEntityTitle(entity);
+        if (!entityTitle) {
+          return {
+            status: 'escalate',
+            code: 'destination_missing_title',
+            data: { targetType: 'entity', entityId: entity.name },
+            recoverable: true,
+          };
+        }
         currentScene.player.moveTo((entity as any).x, (entity as any).y);
         return {
           status: 'ok',
           code: 'player_moving',
           message: this.text('parser.go_to_success', {
-            target: this.textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+            target: entityTitle,
           }),
           data: { targetType: 'entity', entityId: entity.name },
           effects: ['player_move_started'],
