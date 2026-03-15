@@ -124,7 +124,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     game.console.addHistory(val);
 
                     // 3. Send to gameplay parser
-                    game.parser.parse(val);
+                    void game.parser.parse(val);
                   }
 
                   e.currentTarget.value = '';

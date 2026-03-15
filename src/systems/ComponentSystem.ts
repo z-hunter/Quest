@@ -99,6 +99,32 @@ export class ComponentSystem {
 
   // Called when trying to TAKE an item
   // Returns string (error message) or null (success)
+  static getInteractionDistanceError(
+    entity: SceneObject,
+    player: Actor | null,
+    options?: { ignoreDistance?: boolean }
+  ): string | null {
+    const game = (entity as any).game as IGame | undefined;
+    if (!player || options?.ignoreDistance) return null;
+
+    const e = entity as unknown as { x: number; y: number };
+    const dist = Math.hypot(player.x - e.x, player.y - e.y);
+    const allowedDist = (player.width || 30) * 4;
+
+    if (dist > allowedDist) {
+      const title = this.getPlayerFacingTitle(game, entity);
+      if (title) {
+        return (
+          game?.text('engine.too_far_from_entity', { target: title }) ||
+          `You are too far away from the ${title}.`
+        );
+      }
+      return game?.text('engine.too_far_generic') || 'You are too far away.';
+    }
+
+    return null;
+  }
+
   static canTakeItem(entity: SceneObject, player: Actor | null): string | null {
     const game = (entity as any).game as IGame | undefined;
     if (!entity.components) return game?.text('parser.take_cannot') || 'You cannot take that.';
@@ -111,23 +137,10 @@ export class ComponentSystem {
 
     if (!itemComp) return null; // Not an item component, let caller handle legacy or fail
 
-    // Check Proximity
-    if (!itemComp.ignoreDistance && player) {
-      const e = entity as unknown as { x: number; y: number };
-      const dist = Math.hypot(player.x - e.x, player.y - e.y);
-      const allowedDist = (player.width || 30) * 4; // Tolerance
-
-      if (dist > allowedDist) {
-        const title = this.getPlayerFacingTitle(game, entity);
-        if (title) {
-          return (
-            game?.text('engine.too_far_from_entity', { target: title }) ||
-            `You are too far away from the ${title}.`
-          );
-        }
-        return game?.text('engine.too_far_generic') || 'You are too far away.';
-      }
-    }
+    const distanceError = this.getInteractionDistanceError(entity, player, {
+      ignoreDistance: !!itemComp.ignoreDistance,
+    });
+    if (distanceError) return distanceError;
 
     return null; // OK
   }

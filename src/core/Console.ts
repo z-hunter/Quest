@@ -19,6 +19,7 @@ export class Console {
   history: string[] = [];
   isOpen: boolean = false;
   parserPeekEnabled: boolean = false;
+  parserStage1Enabled: boolean = true;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -118,6 +119,19 @@ export class Console {
     this.registerCommand('#PEEK-OFF', () => {
       this.parserPeekEnabled = false;
       this.log('Parser peek disabled.', 'info');
+    });
+
+    this.registerCommand('#STAGE1-OFF', () => {
+      this.parserStage1Enabled = false;
+      this.log(
+        'Parser stage1 disabled. Commands will go directly to stage2 when possible.',
+        'info'
+      );
+    });
+
+    this.registerCommand('#STAGE1-ON', () => {
+      this.parserStage1Enabled = true;
+      this.log('Parser stage1 enabled.', 'info');
     });
   }
 

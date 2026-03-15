@@ -435,104 +435,18 @@ export class Game implements IGame {
     return this.textAssets.getServiceText(key, params);
   }
 
-  private resolveSceneEntityTarget(
-    scene: Scene,
-    rawTarget: string,
-    options: {
-      includeTakeablesOnly: boolean;
-      clarificationKey: string;
-    }
-  ):
-    | { status: 'found'; entity: Entity }
-    | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
-    | { status: 'escalate'; code: string; message?: string } {
-    const normalizedTarget = String(rawTarget || '')
-      .trim()
-      .toUpperCase();
-    if (!normalizedTarget) return { status: 'not_found' };
-
-    const allCandidates = (scene.entities || []).filter((entity: Entity) => !entity.disabled);
-    const partialCandidates = allCandidates.filter((entity: Entity) => {
-      if (!options.includeTakeablesOnly) return true;
-      const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
-      return !!isItem || !!entity.isTakeable;
-    });
-
-    const exactMatches = allCandidates.filter((entity: Entity) =>
-      this.getEntityLookupTokens(entity).includes(normalizedTarget)
-    );
-    if (exactMatches.length === 1) {
-      return { status: 'found', entity: exactMatches[0] };
-    }
-    if (exactMatches.length > 1) {
-      const optionTitles = this.getResolutionOptionTitles(exactMatches);
-      if (!optionTitles) {
-        return {
-          status: 'escalate',
-          code: 'ambiguous_targets_missing_titles',
-        };
-      }
-      return {
-        status: 'ambiguous',
-        message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
-        options: optionTitles,
-      };
-    }
-
-    const partialMatches = partialCandidates.filter((entity: Entity) => {
-      const title = this.textAssets.getResolvedObjectField(entity, 'title');
-      if (!title) return false;
-      return title.toUpperCase().includes(normalizedTarget);
-    });
-
-    if (partialMatches.length === 1) {
-      return { status: 'found', entity: partialMatches[0] };
-    }
-    if (partialMatches.length > 1) {
-      const optionTitles = this.getResolutionOptionTitles(partialMatches);
-      if (!optionTitles) {
-        return {
-          status: 'escalate',
-          code: 'ambiguous_targets_missing_titles',
-        };
-      }
-      return {
-        status: 'ambiguous',
-        message: this.text(options.clarificationKey, { options: optionTitles.join(', ') }),
-        options: optionTitles,
-      };
-    }
-
-    return { status: 'not_found' };
-  }
-
-  private getEntityLookupTokens(entity: Entity): string[] {
-    const tokens = [
-      entity.name,
-      entity.customName,
-      this.textAssets.getResolvedObjectField(entity, 'title'),
-    ]
-      .filter((value): value is string => !!value)
-      .map((value) => value.toUpperCase());
-
-    return Array.from(new Set(tokens));
-  }
-
   private getPlayerFacingEntityTitle(entity: Entity): string | null {
     const title = this.textAssets.getResolvedObjectField(entity, 'title');
     return title && title.trim() ? title.trim() : null;
   }
 
-  private getResolutionOptionTitles(entities: Entity[]): string[] | null {
-    const titles = entities
-      .map((entity) => this.getPlayerFacingEntityTitle(entity))
-      .filter((title): title is string => !!title);
-    if (titles.length !== entities.length) return null;
-    return Array.from(new Set(titles));
+  private isEntityInInventory(entity: Entity): boolean {
+    return this.inventory.includes(entity);
   }
 
-  look(target?: string | null): GameActionOutcome {
+  private canExamineEntity(entity: Entity): GameActionOutcome | null {
+    if (this.isEntityInInventory(entity)) return null;
+
     const scene = this.sceneManager.currentScene;
     if (!scene) {
       return {
@@ -543,58 +457,48 @@ export class Game implements IGame {
       };
     }
 
-    const normalizedTarget = String(target || '').trim();
-    const normalizedUpper = normalizedTarget.toUpperCase();
-
-    if (
-      !normalizedTarget ||
-      normalizedUpper === 'AROUND' ||
-      normalizedUpper === 'HERE' ||
-      normalizedUpper === 'SCENE'
-    ) {
-      const sceneDescription =
-        this.textAssets.getResolvedSceneField(scene, 'description') ||
-        scene.description ||
-        this.text('parser.look_default_scene', { scene: scene.name });
-      return {
-        status: 'ok',
-        code: 'scene_description',
-        message: sceneDescription,
-        data: { targetType: 'scene', sceneId: scene.id },
-      };
+    if (scene.activeSubscene && scene.subsceneEntities.has(entity as any)) {
+      return null;
     }
 
-    const resolved = this.resolveSceneEntityTarget(scene, normalizedTarget, {
-      includeTakeablesOnly: false,
-      clarificationKey: 'parser.look_which_one',
-    });
-    if (resolved.status === 'escalate') {
-      return {
-        status: 'escalate',
-        code: resolved.code,
-        recoverable: true,
-      };
-    }
-    if (resolved.status === 'not_found') {
+    const distanceError = ComponentSystem.getInteractionDistanceError(entity as any, scene.player);
+    if (distanceError) {
       return {
         status: 'failed',
-        code: 'entity_not_found',
-        message: this.text('parser.look_not_found', { target: normalizedTarget }),
-        data: { target: normalizedTarget },
+        code: 'too_far_to_examine',
+        message: distanceError,
+        data: { entityId: entity.name },
         recoverable: true,
       };
     }
-    if (resolved.status === 'ambiguous') {
-      return {
-        status: 'needs_clarification',
-        code: 'ambiguous_look_target',
-        message: resolved.message,
-        data: { target: normalizedTarget, options: resolved.options },
-        recoverable: true,
-      };
-    }
-    const entity = resolved.entity;
 
+    return null;
+  }
+
+  lookScene(scene?: Scene | null): GameActionOutcome {
+    const targetScene = scene || this.sceneManager.currentScene;
+    if (!targetScene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const sceneDescription =
+      this.textAssets.getResolvedSceneField(targetScene, 'description') ||
+      targetScene.description ||
+      this.text('parser.look_default_scene', { scene: targetScene.name });
+    return {
+      status: 'ok',
+      code: 'scene_description',
+      message: sceneDescription,
+      data: { targetType: 'scene', sceneId: targetScene.id },
+    };
+  }
+
+  lookEntity(entity: Entity): GameActionOutcome {
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
     if (interactionId) {
@@ -621,13 +525,52 @@ export class Game implements IGame {
     return {
       status: 'escalate',
       code: 'missing_description',
-      message: this.text('parser.look_default_object', { target: normalizedTarget }),
       data: { targetType: 'entity', entityId: entity.name },
       recoverable: true,
     };
   }
 
-  take(target?: string | null): GameActionOutcome {
+  examineEntity(entity: Entity): GameActionOutcome {
+    const accessError = this.canExamineEntity(entity);
+    if (accessError) return accessError;
+
+    const interactionId =
+      entity.interactions &&
+      (entity.interactions.examine ||
+        entity.interactions.EXAMINE ||
+        entity.interactions.inspect ||
+        entity.interactions.INSPECT ||
+        entity.interactions.check ||
+        entity.interactions.CHECK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const details = this.textAssets.getResolvedObjectField(entity, 'details');
+    if (details && details.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_details',
+        message: details,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_details',
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  takeEntity(entity: Entity): GameActionOutcome {
     const scene = this.sceneManager.currentScene;
     if (!scene) {
       return {
@@ -637,79 +580,6 @@ export class Game implements IGame {
         recoverable: false,
       };
     }
-
-    const normalizedTarget = String(target || '').trim();
-    if (!normalizedTarget) {
-      return {
-        status: 'needs_clarification',
-        code: 'missing_take_target',
-        message: this.text('parser.take_prompt'),
-        recoverable: true,
-      };
-    }
-
-    const resolved = this.resolveSceneEntityTarget(scene, normalizedTarget, {
-      includeTakeablesOnly: true,
-      clarificationKey: 'parser.take_which_one',
-    });
-    const broadResolved =
-      resolved.status === 'not_found'
-        ? this.resolveSceneEntityTarget(scene, normalizedTarget, {
-            includeTakeablesOnly: false,
-            clarificationKey: 'parser.take_which_one',
-          })
-        : null;
-
-    if (resolved.status === 'escalate' || broadResolved?.status === 'escalate') {
-      return {
-        status: 'escalate',
-        code:
-          resolved.status === 'escalate'
-            ? resolved.code
-            : broadResolved?.status === 'escalate'
-              ? broadResolved.code
-              : 'take_target_missing_title',
-        recoverable: true,
-      };
-    }
-
-    if (resolved.status === 'not_found') {
-      if (broadResolved?.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_take_target',
-          message: broadResolved.message,
-          data: { target: normalizedTarget, options: broadResolved.options },
-          recoverable: true,
-        };
-      }
-      if (broadResolved?.status === 'found') {
-        return {
-          status: 'failed',
-          code: 'not_takeable',
-          message: this.text('parser.take_cannot'),
-          data: { entityId: broadResolved.entity.name },
-          recoverable: true,
-        };
-      }
-      return {
-        status: 'failed',
-        code: 'entity_not_found',
-        message: this.text('parser.look_not_found', { target: normalizedTarget }),
-        data: { target: normalizedTarget },
-        recoverable: true,
-      };
-    }
-    if (resolved.status === 'ambiguous') {
-      return {
-        status: 'needs_clarification',
-        code: 'ambiguous_take_target',
-        message: resolved.message,
-        data: { target: normalizedTarget, options: resolved.options },
-        recoverable: true,
-      };
-    }
-    const entity = resolved.entity;
 
     const interactionId =
       entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
@@ -799,86 +669,58 @@ export class Game implements IGame {
     };
   }
 
-  goTo(target?: string | null): GameActionOutcome {
-    const normalizedTarget = String(target || '').trim();
-    if (!normalizedTarget) {
+  goToScene(sceneId: string): GameActionOutcome {
+    const currentScene = this.sceneManager.currentScene;
+    const activeScene = this.sceneManager.scenes.get(sceneId);
+    if (!activeScene && !this.sceneManager.sceneRegistry.get(sceneId)) {
       return {
-        status: 'needs_clarification',
-        code: 'missing_destination',
-        message: this.text('parser.go_to_prompt'),
+        status: 'failed',
+        code: 'destination_not_found',
         recoverable: true,
       };
     }
 
+    this.sceneManager.switchTo(sceneId);
+    const switchedScene = this.sceneManager.currentScene;
+    return {
+      status: 'ok',
+      code: 'scene_switched',
+      message:
+        (switchedScene && this.textAssets.getResolvedSceneField(switchedScene, 'description')) ||
+        switchedScene?.description ||
+        undefined,
+      data: { targetType: 'scene', sceneId },
+      effects: currentScene?.id !== sceneId ? ['scene_changed'] : [],
+    };
+  }
+
+  goToEntity(entity: Entity): GameActionOutcome {
     const currentScene = this.sceneManager.currentScene;
-    const sceneMatch = this.sceneManager.findSceneDescriptorByTarget(normalizedTarget);
-
-    if (sceneMatch) {
-      this.sceneManager.switchTo(sceneMatch.id);
-      const activeScene = this.sceneManager.currentScene;
-      return {
-        status: 'ok',
-        code: 'scene_switched',
-        message:
-          (activeScene && this.textAssets.getResolvedSceneField(activeScene, 'description')) ||
-          activeScene?.description ||
-          this.text('parser.go_to_success', { target: sceneMatch.name }),
-        data: { targetType: 'scene', sceneId: sceneMatch.id },
-        effects: currentScene?.id !== sceneMatch.id ? ['scene_changed'] : [],
-      };
-    }
-
-    if (currentScene?.player) {
-      const resolved = this.resolveSceneEntityTarget(currentScene, normalizedTarget, {
-        includeTakeablesOnly: false,
-        clarificationKey: 'parser.go_to_which_one',
-      });
-      if (resolved.status === 'escalate') {
+    if (currentScene?.player && 'x' in entity && 'y' in entity) {
+      const entityTitle = this.getPlayerFacingEntityTitle(entity);
+      if (!entityTitle) {
         return {
           status: 'escalate',
-          code: resolved.code,
-          recoverable: true,
-        };
-      }
-      if (resolved.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_destination',
-          message: resolved.message,
-          data: { target: normalizedTarget, options: resolved.options },
-          recoverable: true,
-        };
-      }
-
-      if (resolved.status === 'found' && 'x' in resolved.entity && 'y' in resolved.entity) {
-        const entity = resolved.entity;
-        const entityTitle = this.getPlayerFacingEntityTitle(entity);
-        if (!entityTitle) {
-          return {
-            status: 'escalate',
-            code: 'destination_missing_title',
-            data: { targetType: 'entity', entityId: entity.name },
-            recoverable: true,
-          };
-        }
-        currentScene.player.moveTo((entity as any).x, (entity as any).y);
-        return {
-          status: 'ok',
-          code: 'player_moving',
-          message: this.text('parser.go_to_success', {
-            target: entityTitle,
-          }),
+          code: 'destination_missing_title',
           data: { targetType: 'entity', entityId: entity.name },
-          effects: ['player_move_started'],
+          recoverable: true,
         };
       }
+      currentScene.player.moveTo((entity as any).x, (entity as any).y);
+      return {
+        status: 'ok',
+        code: 'player_moving',
+        message: this.text('parser.go_to_success', {
+          target: entityTitle,
+        }),
+        data: { targetType: 'entity', entityId: entity.name },
+        effects: ['player_move_started'],
+      };
     }
 
     return {
       status: 'failed',
       code: 'destination_not_found',
-      message: this.text('parser.go_to_not_found', { target: normalizedTarget }),
-      data: { target: normalizedTarget },
       recoverable: true,
     };
   }

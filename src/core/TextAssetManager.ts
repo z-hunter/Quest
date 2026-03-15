@@ -9,6 +9,8 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     look_default_object: 'You see nothing special about the {target}.',
     look_not_found: "You don't see any {target} here.",
     look_which_one: 'Which one do you mean: {options}?',
+    examine_prompt: 'Examine what?',
+    examine_which_one: 'Which one do you want to examine: {options}?',
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
     take_pickup_success: 'You picked up the {item}.',

@@ -5,6 +5,7 @@ import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
+import type { Scene } from '../scene/Scene';
 
 export interface IGame {
   assets: AssetLoader;
@@ -17,10 +18,13 @@ export interface IGame {
   showMessage(text: string): void;
   log(text: string): void;
   text(key: string, params?: Record<string, string | number>): string;
-  look(target?: string | null): GameActionOutcome;
-  take(target?: string | null): GameActionOutcome;
+  lookScene(scene?: Scene | null): GameActionOutcome;
+  lookEntity(entity: Entity): GameActionOutcome;
+  examineEntity(entity: Entity): GameActionOutcome;
+  takeEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
-  goTo(target?: string | null): GameActionOutcome;
+  goToScene(sceneId: string): GameActionOutcome;
+  goToEntity(entity: Entity): GameActionOutcome;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;

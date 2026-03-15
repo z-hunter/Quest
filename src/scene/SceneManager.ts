@@ -250,7 +250,7 @@ export class SceneManager {
           weight += 24;
           break;
         case 'Quad':
-          weight += 18 + (((entity as any).vertices?.length || 0) * 3);
+          weight += 18 + ((entity as any).vertices?.length || 0) * 3;
           break;
         default:
           weight += 12;
@@ -274,25 +274,6 @@ export class SceneManager {
     }
 
     return weight;
-  }
-
-  findSceneDescriptorByTarget(target: string): SceneDescriptor | null {
-    const normalized = String(target || '')
-      .trim()
-      .toUpperCase();
-    if (!normalized) return null;
-
-    for (const descriptor of this.sceneRegistry.values()) {
-      if (
-        descriptor.id.toUpperCase() === normalized ||
-        descriptor.name.toUpperCase() === normalized ||
-        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
-      ) {
-        return descriptor;
-      }
-    }
-
-    return null;
   }
 
   async refreshSceneRegistry(): Promise<void> {
@@ -350,14 +331,23 @@ export class SceneManager {
     const entry = this.sceneCacheMeta.get(scene.id);
     const stats = this.getSceneCacheStats();
     const imageStats = this.game.assets.getImageCacheStats();
-    const profile = this.buildMemoryProfile(scene, entry, stats.estimatedMemory, heapBytes, null, imageStats.estimatedBytes);
+    const profile = this.buildMemoryProfile(
+      scene,
+      entry,
+      stats.estimatedMemory,
+      heapBytes,
+      null,
+      imageStats.estimatedBytes
+    );
 
     console.table([this.formatMemoryProfileForConsole(profile)]);
     return profile;
   }
 
   async profileScenes(sceneIds: string[]): Promise<SceneMemoryProfile[]> {
-    const requested = [...new Set((sceneIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    const requested = [
+      ...new Set((sceneIds || []).map((id) => String(id || '').trim()).filter(Boolean)),
+    ];
     if (requested.length === 0) {
       console.warn('[SceneManager] profileScenes(): no scene ids provided');
       return [];
@@ -489,7 +479,8 @@ export class SceneManager {
     this.game.assets.markSceneSpriteRefs(scene.id, spriteKeys);
 
     const textureBytes = existing?.textureBytes || 0;
-    const textureWeightUnits = existing?.textureWeightUnits || this.textureBytesToUnits(textureBytes);
+    const textureWeightUnits =
+      existing?.textureWeightUnits || this.textureBytesToUnits(textureBytes);
 
     this.sceneCacheMeta.set(scene.id, {
       scene,
@@ -525,7 +516,10 @@ export class SceneManager {
     const entry = this.sceneCacheMeta.get(this.currentScene.id);
     if (!entry) return;
     entry.graphWeightUnits = this.estimateSceneGraphWeight(this.currentScene);
-    entry.totalWeightUnits = this.computeTotalWeightUnits(entry.graphWeightUnits, entry.textureBytes);
+    entry.totalWeightUnits = this.computeTotalWeightUnits(
+      entry.graphWeightUnits,
+      entry.textureBytes
+    );
   }
 
   private async refreshSceneFootprint(sceneId: string): Promise<void> {
@@ -540,7 +534,10 @@ export class SceneManager {
     entry.graphWeightUnits = this.estimateSceneGraphWeight(scene);
     entry.textureBytes = textureEstimate.bytes;
     entry.textureWeightUnits = this.textureBytesToUnits(textureEstimate.bytes);
-    entry.totalWeightUnits = this.computeTotalWeightUnits(entry.graphWeightUnits, entry.textureBytes);
+    entry.totalWeightUnits = this.computeTotalWeightUnits(
+      entry.graphWeightUnits,
+      entry.textureBytes
+    );
 
     const descriptor = this.sceneRegistry.get(sceneId);
     if (descriptor) {
@@ -645,12 +642,15 @@ export class SceneManager {
 
   private detectDeviceMemoryProfile(): DeviceMemoryProfile {
     const navigatorLike =
-      typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }) : null;
+      typeof navigator !== 'undefined'
+        ? (navigator as Navigator & { deviceMemory?: number })
+        : null;
     const deviceMemoryRaw =
       navigatorLike && typeof navigatorLike.deviceMemory === 'number'
         ? navigatorLike.deviceMemory
         : null;
-    const deviceMemoryGb = deviceMemoryRaw && Number.isFinite(deviceMemoryRaw) ? deviceMemoryRaw : null;
+    const deviceMemoryGb =
+      deviceMemoryRaw && Number.isFinite(deviceMemoryRaw) ? deviceMemoryRaw : null;
 
     if (deviceMemoryGb === null) {
       return {
@@ -715,7 +715,9 @@ export class SceneManager {
         spriteNames.add(entity.spriteName);
       }
 
-      const animSets = (entity as any).animSets as Record<string, Record<string, string | null>> | undefined;
+      const animSets = (entity as any).animSets as
+        | Record<string, Record<string, string | null>>
+        | undefined;
       if (!animSets) continue;
 
       for (const set of Object.values(animSets)) {
@@ -732,10 +734,7 @@ export class SceneManager {
   }
 
   private syncAssetCacheState(): void {
-    this.game.assets.syncSceneCacheState(
-      this.currentScene?.id || null,
-      [...this.scenes.keys()]
-    );
+    this.game.assets.syncSceneCacheState(this.currentScene?.id || null, [...this.scenes.keys()]);
   }
 
   private computeTotalWeightUnits(graphWeightUnits: number, textureBytes: number): number {
@@ -757,9 +756,13 @@ export class SceneManager {
     deltaBytes: number | null,
     imageCacheBytes: number
   ): SceneMemoryProfile {
-    const graphWeightUnits = Math.round(entry?.graphWeightUnits ?? this.estimateSceneGraphWeight(scene));
+    const graphWeightUnits = Math.round(
+      entry?.graphWeightUnits ?? this.estimateSceneGraphWeight(scene)
+    );
     const textureBytes = entry?.textureBytes ?? 0;
-    const totalWeightUnits = Math.round(entry?.totalWeightUnits ?? this.computeTotalWeightUnits(graphWeightUnits, textureBytes));
+    const totalWeightUnits = Math.round(
+      entry?.totalWeightUnits ?? this.computeTotalWeightUnits(graphWeightUnits, textureBytes)
+    );
     const bytesPerUnit =
       heapBytes !== null && totalWeightUnits > 0 ? heapBytes / totalWeightUnits : null;
 
@@ -768,7 +771,9 @@ export class SceneManager {
       sceneName: scene.name,
       weightUnits: totalWeightUnits,
       graphWeightUnits,
-      textureWeightUnits: Math.round(entry?.textureWeightUnits ?? this.textureBytesToUnits(textureBytes)),
+      textureWeightUnits: Math.round(
+        entry?.textureWeightUnits ?? this.textureBytesToUnits(textureBytes)
+      ),
       loadedScenes: this.scenes.size,
       estimatedCacheUnits,
       jsHeapUsedBytes: heapBytes,
@@ -801,7 +806,9 @@ export class SceneManager {
     return Math.round((bytes / (1024 * 1024)) * 100) / 100;
   }
 
-  private formatMemoryProfileForConsole(profile: SceneMemoryProfile): Record<string, string | number | null> {
+  private formatMemoryProfileForConsole(
+    profile: SceneMemoryProfile
+  ): Record<string, string | number | null> {
     return {
       sceneId: profile.sceneId,
       sceneName: profile.sceneName,
@@ -816,7 +823,9 @@ export class SceneManager {
       imageCacheMb: profile.imageCacheMb,
       textureCount: profile.textureCount,
       kbPerUnit:
-        profile.bytesPerUnit !== null ? Math.round((profile.bytesPerUnit / 1024) * 100) / 100 : null,
+        profile.bytesPerUnit !== null
+          ? Math.round((profile.bytesPerUnit / 1024) * 100) / 100
+          : null,
     };
   }
 }
