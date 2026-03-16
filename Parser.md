@@ -1,0 +1,916 @@
+# Parser
+
+## Summary
+
+`Parser` в `Blue Signal` — это отдельный оркестратор между игроком и движком `Scanline`.
+
+Он не является простым обработчиком команд. Его роль ближе к **Game Master**:
+- принять ввод игрока;
+- увидеть текущую картину мира через `context`;
+- выбрать подходящий каскад распознавания;
+- разрешить цели команды внутри собственной модели мира;
+- вызвать допустимые игровые API;
+- проанализировать outcomes;
+- либо ответить игроку,
+- либо задать уточнение,
+- либо передать кейс более сильному каскаду,
+- либо сделать следующую итерацию исполнения.
+
+Главный принцип:
+- **вся языковая интерпретация живёт внутри parser-а**;
+- `Game` и runtime не понимают язык игрока и не резолвят текстовые цели;
+- `Game` только исполняет операции над уже понятными сущностями и возвращает structured outcomes.
+
+---
+
+## Design Goals
+
+Parser должен:
+- быть единственной точкой интерпретации пользовательского текста;
+- иметь собственную "картину мира", пригодную для текстового анализа;
+- использовать движок как набор инструментов, а не как место принятия языковых решений;
+- поддерживать несколько каскадов понимания ввода;
+- уметь вести короткий диалог с игроком внутри одной незавершённой команды;
+- быть локализуемым без переписывания логики;
+- со временем уметь переходить от простого command parser-а к полноценному orchestrator/GM.
+
+---
+
+## High-Level Architecture
+
+Ключевой момент:
+- `Player Input` и `Parser Context` — это **две отдельные сущности**;
+- `Context Builder` работает только от состояния игры;
+- ввод игрока проходит каскады **последовательно**, а не параллельно.
+
+```mermaid
+flowchart TD
+    GS[Game state]
+    CB[Context builder]
+    CTX[Parser context]
+    U[Input]
+    L1[Stage1 Regex]
+    L2[Stage1 NLP]
+    S2[Stage2 LLM]
+    CORE[Parser Core]
+    API[Game API]
+    Q[Question]
+    R[Response]
+
+    GS --> CB
+    CB --> CTX
+
+    U --> L1
+    CTX --> L1
+
+    L1 --> CORE
+    L1 --> L2
+
+    CTX --> L2
+    L2 --> CORE
+    L2 --> S2
+
+    CTX --> S2
+    S2 --> CORE
+
+    CORE --> S2
+    CORE --> Q
+    Q --> U
+
+    CORE --> API
+    API --> CORE
+
+    CORE --> R
+```
+
+Что важно в этой схеме:
+- ввод игрока всегда сначала идёт в `Stage 1.1`;
+- `Stage 1.2` включается только по handoff от `Stage 1.1`;
+- следующий каскад включается только после провала всего первого каскада;
+- `Core` получает два разных типа входа:
+  - распознанные данные от каскадов;
+  - outcomes от `Game API`.
+
+---
+
+## Layers
+
+### 1. Raw Game State
+
+Это реальное состояние runtime:
+- текущая сцена;
+- объекты сцены;
+- инвентарь игрока;
+- активная subscene;
+- registry сцен;
+- состояния объектов и компонентов;
+- player actor.
+
+Это не parser-слой. Это слой движка.
+
+### 2. Context Builder
+
+`Context Builder` не использует ввод игрока.
+
+Он получает только состояние игры и строит `Parser Context`: упрощённый снимок мира, пригодный для parser-а.
+
+Текущий context включает:
+- `rawInput` и `normalizedInput` как metadata текущего цикла parser-а;
+- текущую сцену (`id`, `name`, `title`, `description`);
+- список текстово значимых объектов сцены;
+- инвентарь игрока;
+- `pending state`, если parser уже ждёт уточнение.
+
+Важно:
+- `Context Builder` не интерпретирует пользовательский ввод;
+- он не выбирает intent;
+- он не определяет target;
+- он лишь даёт parser-у картину мира.
+
+Пример context:
+
+```json
+{
+  "rawInput": "look logo",
+  "normalizedInput": "LOOK LOGO",
+  "scene": {
+    "id": "test_room",
+    "name": "New Scene",
+    "title": "New Scene",
+    "description": "You are in New Scene."
+  },
+  "entities": [
+    {
+      "id": "logo_1",
+      "type": "Entity",
+      "title": "logo",
+      "description": "You see Scanline Engine logo.",
+      "details": null,
+      "interactions": []
+    }
+  ],
+  "inventory": [],
+  "pending": null
+}
+```
+
+### 3. Scope Builder
+
+`Scope` — это не отдельный каскад, а структурированная часть context.
+
+То есть:
+- `context` = всё, что parser знает о мире;
+- `scope` = какая часть этого мира доступна для конкретного класса действий.
+
+Примеры:
+- `LOOK` использует видимые объекты сцены и инвентарь;
+- `TAKE` использует только берущиеся объекты сцены;
+- `EXAMINE` использует инвентарь, объекты активной subscene и объекты в пределах допустимой дистанции;
+- `GO TO` использует сценовые цели и достижимые сценовые объекты.
+
+Планируемая модель scope:
+
+```ts
+type ParserScope = {
+  visible: Entity[];
+  held: Entity[];
+  takable: Entity[];
+  reachable: Entity[];
+  examinable: Entity[];
+  subscene: Entity[];
+  sceneTargets: SceneDescriptor[];
+};
+```
+
+Ключевой принцип:
+- scope должен быть общим для всех каскадов;
+- каскады различаются тем, **как они понимают ввод**;
+- они не должны различаться тем, **как они понимают мир**.
+
+---
+
+## Cascades
+
+## Stage 1
+
+Stage 1 на самом деле состоит из двух внутренних уровней.
+
+### Stage 1.1 — Regex Parser
+
+Это быстрый, детерминированный, дешёвый слой.
+
+Он:
+- пытается распознать canonical-команду;
+- выделяет базовый `intent`;
+- строит preliminary action candidate;
+- нормализует или очищает `target phrase`.
+
+Подходит для:
+- `LOOK`
+- `LOOK LOGO`
+- `EXAMINE BOOMBOX`
+- `TAKE KEY`
+- `INV`
+- `GO TO OFFICE`
+
+### Stage 1.2 — NLP Layer
+
+Этот слой включается только если `Stage 1.1` не справился.
+
+Он:
+- определяет `intent` по более свободному вводу;
+- оценивает confidence;
+- очищает `target phrase`;
+- строит тот же action candidate, что и `Stage 1.1`.
+
+Он полезен для:
+- `look at the lamp`
+- `pick up the key`
+- `what do i have?`
+- `go over to the office`
+
+Важно:
+- `Stage 1.2` не занимается world reasoning;
+- не должен сам принимать игровые решения;
+- не должен сам резолвить сложные semantic target-и;
+- не генерирует player-facing ответы.
+
+### Детальная схема Stage 1
+
+```mermaid
+flowchart TD
+    U[Player Input]
+    CTX[Parser Context]
+
+    U --> R1[Stage 1.1 Regex Parser]
+    CTX --> R1
+
+    R1 --> R1A{Intent recognized?}
+    R1A -->|yes| R1B[Build preliminary action candidate]
+    R1B --> R1C[Extract or normalize target phrase]
+    R1C --> CORE[Parser Core]
+
+    R1A -->|no| N1[Stage 1.2 NLP Layer]
+    CTX --> N1
+
+    N1 --> N1A[Classify intent]
+    N1A --> N1B{Confidence high enough?}
+    N1B -->|yes| N1C[Extract or normalize target phrase]
+    N1C --> N1D[Build preliminary action candidate]
+    N1D --> CORE
+
+    N1B -->|no| H[Handoff to next cascade]
+```
+
+Что важно:
+- `intent` определяется внутри уровня каскада;
+- `target phrase` выделяется и очищается там же;
+- в `Core` приходит уже не сырой ввод, а первичная интерпретация команды.
+
+## Stage 2 — LLM / Future
+
+Следующий каскад — старший, LLM-based.
+
+Его роль намного шире:
+- понимать сложные смысловые соответствия;
+- строить многошаговые планы;
+- генерировать player-facing тексты, когда lower layers не справились;
+- задавать сложные уточнения;
+- работать как настоящий Game Master.
+
+Например:
+- `look logotype` -> понять, что речь о `logo`;
+- `go to office` -> построить цепочку действий;
+- `examine the thing under the desk` -> понять relation и target.
+
+В отличие от первых двух уровней, stage2 не обязан возвращать только `intent`.
+
+---
+
+## Parser Core
+
+`Parser Core` — центральный оркестратор всей системы.
+
+Он получает:
+- action candidate от активного каскада;
+- outcomes от `Game API` по отдельному каналу.
+
+Именно `Core` принимает решения:
+- достаточно ли данных для обработки команды;
+- нужно ли звать следующий каскад;
+- нужно ли задать clarification;
+- какой API-блок вызвать;
+- нужно ли сделать следующую итерацию;
+- какой итоговый ответ показать игроку.
+
+### Детальная схема Core
+
+```mermaid
+flowchart TD
+    IN[Action candidate]
+    OUT[API outcomes]
+    CORE[Parser Core]
+    RES[Resolve and validate]
+    DEC[Decision]
+    PLAN[Build API block]
+    API[Game API]
+    POST[Analyze outcomes]
+    CLAR[Clarification]
+    ASK[Missing argument]
+    ESC[Escalate]
+    LOOP[Next API step]
+    RESP[Final response]
+    Q[Question]
+    M[Message]
+
+    IN --> CORE
+    OUT --> CORE
+
+    CORE --> RES
+    RES --> DEC
+
+    DEC --> PLAN
+    DEC --> CLAR
+    DEC --> ASK
+    DEC --> ESC
+
+    PLAN --> API
+    API --> OUT
+
+    CORE --> POST
+    POST --> RESP
+    POST --> CLAR
+    POST --> ESC
+    POST --> LOOP
+
+    LOOP --> API
+    CLAR --> Q
+    ASK --> Q
+    RESP --> M
+```
+
+Самое важное утверждение:
+- `Core` может эскалировать **до API**, если уже видит, что intent/target/данных недостаточно;
+- `Core` может эскалировать **после API**, если полученных outcomes недостаточно для завершения сценария.
+
+Именно это делает parser не просто parser-ом, а оркестратором.
+
+---
+
+## Action Flow
+
+### Step 1. Input arrives
+
+Игрок вводит текст.
+
+### Step 2. Pending clarification is checked
+
+Parser сначала проверяет:
+- не является ли ввод продолжением уже незавершённой команды;
+- или это новая команда.
+
+### Step 3. Context is built
+
+`Context Builder` строит `Parser Context` из состояния игры.
+
+### Step 4. Stage 1 runs sequentially
+
+- сначала `Stage 1.1`;
+- если не справился, `Stage 1.2`;
+- если весь первый каскад не справился, handoff на следующий каскад.
+
+### Step 5. Core resolves, validates, and decides
+
+`Core` получает action candidate, применяет context/scope, и решает:
+- можно ли продолжать;
+- нужен ли API call block;
+- нужен ли clarification;
+- нужна ли эскалация выше.
+
+### Step 6. API block executes
+
+Если `Core` решил исполнять, он формирует блок API вызовов.
+
+### Step 7. Outcomes return to Core
+
+`Game API` возвращает structured outcomes.
+
+### Step 8. Core either completes or iterates
+
+`Core` может:
+- завершить ответ;
+- задать уточнение;
+- передать кейс следующему каскаду;
+- построить следующий API block и продолжить цикл.
+
+---
+
+## Game API Contract
+
+`Game` — это tool layer для parser-а.
+
+Он не занимается языком игрока.
+
+Текущий semantic API:
+- `lookScene(scene?)`
+- `lookEntity(entity)`
+- `examineEntity(entity)`
+- `takeEntity(entity)`
+- `showInventory()`
+- `goToScene(sceneId)`
+- `goToEntity(entity)`
+
+Принцип:
+- parser передаёт в `Game` уже resolved цели;
+- `Game` не подбирает объекты по тексту;
+- `Game` не делает disambiguation;
+- `Game` не разбирает user input.
+
+### Что делает Game
+
+`Game` отвечает за:
+- реальные операции в мире;
+- валидацию игровых ограничений;
+- structured outcomes.
+
+Например:
+- `takeEntity(entity)` проверяет дистанцию и возможность взять предмет;
+- `examineEntity(entity)` проверяет доступность examine;
+- `goToEntity(entity)` запускает movement;
+- `lookEntity(entity)` возвращает краткое описание.
+
+То есть:
+- parser отвечает за язык и выбор цели;
+- `Game` отвечает за допустимость и исполнение операции.
+
+---
+
+## Current Actions
+
+Текущие action types parser-а:
+- `lookScene`
+- `lookTarget`
+- `examineTarget`
+- `takeTarget`
+- `showInventory`
+- `goToTarget`
+- `handoff`
+
+Нижние каскады сейчас обычно выдают именно такие действия.
+
+---
+
+## Target Resolution
+
+### Current Resolution Model
+
+Сейчас target resolution уже принадлежит parser-у.
+
+Parser:
+- ищет цели в собственной модели мира;
+- использует только player-facing `title`, а не технические `id`;
+- исключает `disabled` объекты сцены;
+- поддерживает partial matching;
+- поддерживает clarification при неоднозначности.
+
+### Inventory-aware resolution
+
+Инвентарь является частью доступного текстового мира для non-movement действий.
+
+Сейчас:
+- `LOOK` может находить предметы в инвентаре;
+- `EXAMINE` может находить предметы в инвентаре;
+- `TAKE` и `GO TO` inventory не используют.
+
+### EXAMINE
+
+`EXAMINE` — отдельное действие, отличное от `LOOK`.
+
+- `LOOK` использует обычное краткое описание (`description`);
+- `EXAMINE` использует расширенное описание (`details`).
+
+Если `details` отсутствует:
+- lower layer не обязан это придумывать;
+- `Game.examineEntity()` может вернуть `escalate`;
+- старший каскад решит, что делать дальше.
+
+### Access rules for EXAMINE
+
+Игрок может examine объект, если он:
+- лежит в инвентаре;
+- находится в активной subscene;
+- находится достаточно близко, по той же дистанции, что и `TAKE`.
+
+Это правило относится к игровому миру, а не к языку, поэтому применяется на стороне `Game.examineEntity()`.
+
+---
+
+## Pending Clarification
+
+Parser может задавать вопросы, если ввода недостаточно.
+
+Примеры:
+- `TAKE` -> `Take what?`
+- `EXAMINE` -> `Examine what?`
+- `GO TO` -> `Where do you want to go?`
+- ambiguity -> `Which one do you mean ...?`
+
+Parser хранит `pendingState`:
+- intent
+- question
+- originalInput
+
+Следующий ввод:
+- либо трактуется как продолжение текущей команды;
+- либо отменяет pending flow, если выглядит как новая команда.
+
+```mermaid
+sequenceDiagram
+    participant P as Player
+    participant R as Parser
+    participant G as Game
+
+    P->>R: TAKE
+    R->>G: takeTarget(null)
+    G-->>R: needs_clarification
+    R-->>P: Take what?
+
+    P->>R: key
+    R->>R: resolve as continuation of TAKE
+    R->>G: takeEntity(key)
+    G-->>R: ok / failed
+    R-->>P: final response
+```
+
+---
+
+## Stage 2 Output Model
+
+Первые два уровня parser-а по сути формируют пакет данных для одного и того же `Core`.
+
+То есть:
+- `Stage 1.1` и `Stage 1.2` — это не два разных parser-а;
+- это два разных способа превратить ввод игрока в данные для `Core`.
+
+Нижние уровни обычно возвращают:
+- `intent`
+- `target phrase`
+- preliminary action candidate
+
+Но старший каскад должен уметь возвращать более богатые инструкции.
+
+---
+
+## Stage 2 DSL (First Draft)
+
+Будущий старший каскад (LLM) должен уметь возвращать не только `intent`, но и richer instructions.
+
+Однако он не должен:
+- напрямую вызывать `Game API`;
+- исполнять произвольный код;
+- писать свободный JS;
+- обходить `Parser Core`.
+
+Поэтому нужен **ограниченный parser DSL**.
+
+### Общий смысл DSL
+
+LLM возвращает не код, а допустимый план шагов.
+
+`Core`:
+- валидирует этот план;
+- исполняет шаги по одному;
+- собирает outcomes;
+- при необходимости повторно зовёт старший каскад.
+
+### Богатые выходы старшего каскада
+
+Старший каскад должен уметь возвращать не только `intent`, но и:
+- `plan`
+- `clarification`
+- `final_response`
+- `handoff_up`
+
+То есть `Core` должен уметь принимать richer cascade outputs.
+
+### Первый вариант envelope
+
+```ts
+type CascadeEnvelope =
+  | {
+      stage: 'llm-v3';
+      output: {
+        kind: 'plan';
+        actions: ParserPlannedAction[];
+      };
+    }
+  | {
+      stage: 'llm-v3';
+      output: {
+        kind: 'clarification';
+        question: string;
+        missing: string;
+      };
+    }
+  | {
+      stage: 'llm-v3';
+      output: {
+        kind: 'final_response';
+        message: string;
+      };
+    }
+  | {
+      stage: 'llm-v3';
+      output: {
+        kind: 'handoff_up';
+        reason: string;
+      };
+    };
+```
+
+### Первый вариант `ParserPlannedAction`
+
+Для первого DSL достаточно ограниченного набора шагов:
+
+```ts
+type ParserPlannedAction =
+  | { type: 'resolveEntity'; source: 'visible' | 'held' | 'takable' | 'examinable' | 'reachable'; query: string; saveAs: string }
+  | { type: 'resolveScene'; query: string; saveAs: string }
+  | { type: 'checkInventoryContains'; query: string; saveAs?: string }
+  | { type: 'checkResolved'; ref: string }
+  | { type: 'checkState'; scope: 'scene' | 'entity'; ref?: string; key: string; expected?: string | number | boolean }
+  | { type: 'lookScene' }
+  | { type: 'lookEntity'; ref: string }
+  | { type: 'examineEntity'; ref: string }
+  | { type: 'takeEntity'; ref: string }
+  | { type: 'showInventory' }
+  | { type: 'goToScene'; ref: string }
+  | { type: 'goToEntity'; ref: string }
+  | { type: 'removeInventoryItem'; ref: string }
+  | { type: 'addInventoryItem'; ref: string }
+  | { type: 'askPlayer'; question: string; saveAs?: string }
+  | { type: 'showMessage'; text: string };
+```
+
+### Почему DSL должен быть ограниченным
+
+Это важно для безопасности и устойчивости архитектуры.
+
+LLM не должна:
+- писать произвольный код;
+- обращаться к внутренностям runtime напрямую;
+- вносить неконтролируемые side effects.
+
+Поэтому DSL должен быть:
+- декларативным;
+- ограниченным;
+- валидируемым `Core`-ом;
+- исполняемым только через разрешённые игровые API.
+
+### Важный принцип DSL
+
+Первый вариант DSL лучше делать **линейным**, без встроенных `if/else` и циклов.
+
+То есть:
+- старший каскад предлагает список шагов;
+- `Core` исполняет их по одному;
+- при неожиданном outcome `Core` останавливает план и снова зовёт старший каскад.
+
+Это проще и надёжнее, чем сразу делать полноценный mini-language.
+
+### Пример планового потока
+
+```mermaid
+sequenceDiagram
+    participant P as Player
+    participant C as Parser Core
+    participant L as Stage 2 LLM
+    participant G as Game API
+
+    P->>C: go to office
+    C->>L: unresolved complex command + context
+    L-->>C: plan(actions[])
+    C->>G: execute action 1
+    G-->>C: outcome 1
+    C->>G: execute action 2
+    G-->>C: outcome 2
+    C->>L: outcomes summary / interrupted plan
+    L-->>C: clarification or new plan or final response
+    C-->>P: message or question
+```
+
+---
+
+## Parser Debugging
+
+Для отладки используются служебные команды консоли:
+- `#PEEK-ON`
+- `#PEEK-OFF`
+- `#STAGE1-ON`
+- `#STAGE1-OFF`
+
+### PEEK
+
+При `#PEEK-ON` parser выводит:
+- `context=...`
+- `actions=...`
+- `result=...`
+- `nlp=...` при участии NLP-слоя
+
+### Stage toggles
+
+Можно отключить `Stage 1.1` и отправлять обработку сразу на следующий уровень первого каскада, чтобы изолированно тестировать NLP.
+
+---
+
+## Language Assets
+
+Parser должен быть локализуемым без переписывания логики.
+
+### Что должно жить в text assets
+
+Всё language-specific:
+- player-facing parser strings;
+- clarification prompts;
+- NLP training phrases;
+- stage1 lexicon и normalisation vocabulary:
+  - verbs;
+  - aliases;
+  - articles;
+  - polite prefixes;
+  - prepositional phrases.
+
+### Что остаётся в коде
+
+- internal intent ids (`look`, `take`, `examine`, `goTo`);
+- parser action ids (`lookTarget`, `takeTarget`, etc);
+- `Game API` contracts;
+- dev/system console commands вроде `#RUN`, `#PEEK`.
+
+### Предпочтительный формат language assets
+
+Language assets лучше хранить как **структурированные словари**, а не как сырые regex-строки.
+
+Пример:
+
+```json
+{
+  "verbs": {
+    "look": ["look"],
+    "examine": ["examine", "inspect", "check", "x"],
+    "take": ["take", "get", "grab", "pick up"],
+    "goTo": ["go", "walk", "move", "head", "travel"]
+  },
+  "articles": ["the", "a", "an", "my"],
+  "politePrefixes": ["please", "could you", "can you", "would you", "i want to"],
+  "lookPrepositions": ["at"],
+  "goToPhrases": ["to", "over to"]
+}
+```
+
+---
+
+## Why Stage 1.2 Still Matters
+
+NLP-слой полезен, но не является фундаментом parser-а.
+
+Его роль:
+- сделать ввод менее хрупким;
+- поддержать более естественные формулировки;
+- выдавать тот же internal package, что и regex layer.
+
+Фундамент parser-а — это:
+- `Context Builder`;
+- `Scope`;
+- `Relations`;
+- `Parser Core`.
+
+То есть:
+- `Stage 1.1` = strict command parser;
+- `Stage 1.2` = language comfort layer;
+- `Stage 2` = semantic reasoning / Game Master layer.
+
+---
+
+## Future: Relations and World Understanding
+
+Следующий важный шаг — richer world model.
+
+Например:
+- `key under table`
+- `note in drawer`
+- `coin behind the picture`
+
+Тогда parser сможет различать:
+- `look table`
+- `look under table`
+- `examine drawer`
+- `look in drawer`
+
+Пример будущей relation model:
+
+```ts
+type ParserRelation = {
+  type: 'on' | 'under' | 'in' | 'behind' | 'near';
+  sourceId: string;
+  targetId: string;
+};
+```
+
+Именно richer context/scope/relations дадут parser-у настоящую "картину мира".
+
+---
+
+## Technical Organization
+
+Текущие роли по коду:
+
+- `src/mechanics/Parser.ts`
+  - главный orchestrator parser-а
+  - context building
+  - stage orchestration
+  - target resolution
+  - pending clarification
+  - response building
+
+- `src/mechanics/NlpCascade.ts`
+  - Stage 1.2 (`NLP.js`)
+  - intent recognition + target cleanup
+
+- `src/core/Game.ts`
+  - semantic runtime tools
+  - world operations on resolved scene/entity targets
+  - access checks and structured outcomes
+
+- `src/core/TextAssetManager.ts`
+  - service text assets
+  - scene/object text resolution
+
+### Separation of concerns
+
+```mermaid
+flowchart TD
+    A[Parser] -->|resolved target| B[Game API]
+    B -->|outcome| A
+
+    A --> C[Language interpretation]
+    A --> D[Clarification]
+    A --> E[Target resolution]
+    A --> F[Plan orchestration]
+
+    B --> G[World rules]
+    B --> H[Movement]
+    B --> I[Inventory mutation]
+    B --> J[Script execution]
+```
+
+Главное правило:
+- parser понимает язык и управляет сценарием обработки;
+- `Game` исполняет допустимые действия в игровом мире.
+
+---
+
+## Current State vs Target State
+
+### Уже реализовано
+
+- parser-mediator v1;
+- первый каскад с двумя уровнями (`regex` + `NLP.js`);
+- shared action package model;
+- parser-owned target resolution;
+- inventory-aware `LOOK` / `EXAMINE`;
+- отдельный `EXAMINE` + `details`;
+- pending clarification;
+- parser debug via `#PEEK`;
+- stage toggles via console;
+- Game API с resolved targets;
+- базовая groundwork for future stage-2 DSL.
+
+### Дальше
+
+- explicit `Scope Builder` как отдельный subsystem;
+- parser relations (`on`, `under`, `in`, `behind`, ...);
+- parser language assets for lexicon/training;
+- richer stage-2 (LLM) handoff;
+- полноценный DSL execution loop;
+- более сложные semantic actions (`use`, `open`, `talkTo`, ...);
+- richer dialog/session state.
+
+---
+
+## Core Principles Recap
+
+1. Parser — единственный слой, интерпретирующий язык игрока.
+2. `Game` и runtime не должны парсить текст и резолвить текстовые цели.
+3. `Context Builder` строит context только из состояния игры.
+4. `Player Input` и `Parser Context` — отдельные входы parser-а.
+5. Stage processing последовательный, а не параллельный.
+6. Первый каскад имеет два внутренних уровня: `regex`, затем `NLP`.
+7. Все каскады подают данные в один и тот же `Parser Core`.
+8. `Core` может эскалировать как до API, так и после API.
+9. `Core` — центр clarification, orchestration, iteration и final response.
+10. Старший каскад должен уметь возвращать не только `intent`, но и richer instructions через constrained DSL.
+11. Player-facing messages никогда не должны показывать технические `id`.
+12. Всё language-specific должно жить в text assets.
+
+Эта архитектура делает parser фундаментом для постепенного перехода от классического IF-style command parser-а к полноценному Game Master и orchestrator.
