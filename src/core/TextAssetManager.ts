@@ -4,6 +4,16 @@ import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parse
 
 type TextAssetValue = string | string[];
 type TextAssetData = Record<string, TextAssetValue>;
+export type SceneTextAssetData = TextAssetData & {
+  title?: string;
+  description?: string;
+};
+export type ObjectTextAssetData = TextAssetData & {
+  title?: string;
+  description?: string;
+  details?: string;
+  synonyms?: string[];
+};
 
 const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
   parser: {
@@ -185,8 +195,8 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
 };
 
 export class TextAssetManager {
-  private sceneCache = new Map<string, TextAssetData | null>();
-  private objectCache = new Map<string, TextAssetData | null>();
+  private sceneCache = new Map<string, SceneTextAssetData | null>();
+  private objectCache = new Map<string, ObjectTextAssetData | null>();
   private serviceCache = new Map<string, TextAssetData>();
   private parserLexiconCache: ParserLexiconAsset = structuredClone(DEFAULT_PARSER_LEXICON);
   private parserTrainingCache: ParserTrainingAsset = structuredClone(DEFAULT_PARSER_TRAINING);
@@ -235,7 +245,7 @@ export class TextAssetManager {
     return this.parserTrainingCache;
   }
 
-  buildDefaultSceneAsset(scene: Scene): TextAssetData {
+  buildDefaultSceneAsset(scene: Scene): SceneTextAssetData {
     return {
       title: scene.name || scene.id || 'Untitled Scene',
       description:
@@ -243,7 +253,7 @@ export class TextAssetManager {
     };
   }
 
-  buildDefaultObjectAsset(obj: SceneObject): TextAssetData {
+  buildDefaultObjectAsset(obj: SceneObject): ObjectTextAssetData {
     const fallbackTitle = (obj as any).customName || obj.name || obj.type || 'Object';
     const fallbackDescription = (obj as any).description || 'You see nothing special.';
     return {
@@ -291,13 +301,16 @@ export class TextAssetManager {
     this.objectCache.delete(this.normalizeId(obj.name));
   }
 
-  async readSceneAsset(scene: Scene, forceReload: boolean = false): Promise<TextAssetData | null> {
+  async readSceneAsset(
+    scene: Scene,
+    forceReload: boolean = false
+  ): Promise<SceneTextAssetData | null> {
     const sceneId = this.normalizeId(scene?.id || '');
     if (!sceneId) return null;
     if (!forceReload && this.sceneCache.has(sceneId)) {
       return this.sceneCache.get(sceneId) || null;
     }
-    const data = await this.fetchJson(this.getSceneAssetUrl(sceneId));
+    const data = this.normalizeSceneAssetData(await this.fetchJson(this.getSceneAssetUrl(sceneId)));
     this.sceneCache.set(sceneId, data);
     return data;
   }
@@ -305,14 +318,16 @@ export class TextAssetManager {
   async readObjectAsset(
     obj: SceneObject,
     forceReload: boolean = false
-  ): Promise<TextAssetData | null> {
+  ): Promise<ObjectTextAssetData | null> {
     if (!obj?.name || obj.type === 'Walkbox') return null;
     const objectId = this.normalizeId(obj?.name || '');
     if (!objectId) return null;
     if (!forceReload && this.objectCache.has(objectId)) {
       return this.objectCache.get(objectId) || null;
     }
-    const data = await this.fetchJson(this.getObjectAssetUrl(objectId));
+    const data = this.normalizeObjectAssetData(
+      await this.fetchJson(this.getObjectAssetUrl(objectId))
+    );
     this.objectCache.set(objectId, data);
     return data;
   }
@@ -484,6 +499,24 @@ export class TextAssetManager {
     return (await this.fetchUnknownJson(url)) as TextAssetData | null;
   }
 
+  private normalizeSceneAssetData(asset: TextAssetData | null): SceneTextAssetData | null {
+    if (!asset) return null;
+    const normalized: SceneTextAssetData = { ...asset };
+    if (typeof asset.title === 'string') normalized.title = asset.title;
+    if (typeof asset.description === 'string') normalized.description = asset.description;
+    return normalized;
+  }
+
+  private normalizeObjectAssetData(asset: TextAssetData | null): ObjectTextAssetData | null {
+    if (!asset) return null;
+    const normalized: ObjectTextAssetData = { ...asset };
+    if (typeof asset.title === 'string') normalized.title = asset.title;
+    if (typeof asset.description === 'string') normalized.description = asset.description;
+    if (typeof asset.details === 'string') normalized.details = asset.details;
+    normalized.synonyms = this.resolveListField(asset, 'synonyms');
+    return normalized;
+  }
+
   private async fetchUnknownJson(url: string): Promise<unknown | null> {
     try {
       const response = await fetch(`${url}?t=${Date.now()}`);
@@ -548,7 +581,7 @@ export class TextAssetManager {
     targetObjectId: string
   ): Promise<void> {
     const sourceUrl = this.getObjectAssetUrl(sourceObjectId);
-    const sourceData = await this.fetchJson(sourceUrl);
+    const sourceData = this.normalizeObjectAssetData(await this.fetchJson(sourceUrl));
     if (!sourceData) return;
 
     const targetPath = this.getObjectAssetProjectPath(targetObjectId);
@@ -573,9 +606,13 @@ export class TextAssetManager {
     if (!targetSceneId) return;
 
     if (sourceSceneId && sourceSceneId !== targetSceneId) {
-      const targetData = await this.fetchJson(this.getSceneAssetUrl(targetSceneId));
+      const targetData = this.normalizeSceneAssetData(
+        await this.fetchJson(this.getSceneAssetUrl(targetSceneId))
+      );
       if (!targetData) {
-        const sourceData = await this.fetchJson(this.getSceneAssetUrl(sourceSceneId));
+        const sourceData = this.normalizeSceneAssetData(
+          await this.fetchJson(this.getSceneAssetUrl(sourceSceneId))
+        );
         if (sourceData) {
           await this.saveFile(
             this.getSceneAssetProjectPath(targetSceneId),

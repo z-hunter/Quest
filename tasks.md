@@ -20,7 +20,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 - [x] Refactor `Parser Core` around the unified envelope/protocol.
 - [x] Separate pre-API escalation from post-API escalation in `Parser Core`.
 - [x] Support linear plan execution in `Parser Core` without requiring LLM.
-- [ ] Add optional `synonyms` to object TA schema.
+- [x] Add optional `synonyms` to object TA schema.
 - [x] Include `synonyms` in the default object TA template.
 - [x] Extend parser target resolution to use:
   - `title`
@@ -41,6 +41,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
   - pre-API escalation
   - post-API escalation
   - linear plan execution without LLM
+  - manual checklist drafted in `ParserSmoke.md`
 
 ## Suggested Order
 
