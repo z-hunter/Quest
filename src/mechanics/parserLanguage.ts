@@ -1,3 +1,5 @@
+import type { ParserRelationType } from './parserTypes';
+
 export type ParserIntentId = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
 
 export type ParserLexiconAsset = {
@@ -6,6 +8,7 @@ export type ParserLexiconAsset = {
   politePrefixes: string[];
   articles: string[];
   lookSceneWords: string[];
+  relationMarkers: Record<ParserRelationType, string[]>;
 };
 
 export type ParserTrainingAsset = Record<ParserIntentId, string[]>;
@@ -39,6 +42,30 @@ function stripFromList(input: string, phrases: string[]): string {
     }
   }
   return value.trim();
+}
+
+function findLeadingRelation(
+  input: string,
+  relationMarkers: Record<ParserRelationType, string[]>
+): { relation: ParserRelationType; marker: string } | null {
+  const lowered = input.trim().toLowerCase();
+  const candidates: Array<{ relation: ParserRelationType; marker: string }> = [];
+
+  for (const relation of Object.keys(relationMarkers) as ParserRelationType[]) {
+    for (const marker of relationMarkers[relation] || []) {
+      const normalized = marker.trim();
+      if (!normalized) continue;
+      candidates.push({ relation, marker: normalized });
+    }
+  }
+
+  for (const candidate of candidates.sort((a, b) => b.marker.length - a.marker.length)) {
+    if (startsWithPhrase(lowered, candidate.marker.toLowerCase())) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): Stage1Match | null {
@@ -99,4 +126,36 @@ export function normalizeTargetForIntent(
   value = stripFromList(value, lexicon.articles || []);
 
   return value.trim() || null;
+}
+
+export function extractRelationTargetForIntent(
+  input: string,
+  intent: ParserIntentId,
+  lexicon: ParserLexiconAsset
+): { relation: ParserRelationType; anchor: string | null } | null {
+  if (intent !== 'look' && intent !== 'examine') {
+    return null;
+  }
+
+  let value = input.replace(/[?.!,]+$/g, '').trim();
+  if (!value) return null;
+
+  value = stripFromList(value, lexicon.politePrefixes || []);
+  value = stripFromList(value, lexicon.normalizationPrefixes[intent] || []);
+  if (!value) return null;
+
+  const relationMatch = findLeadingRelation(value, lexicon.relationMarkers || ({} as any));
+  if (!relationMatch) {
+    return null;
+  }
+
+  const marker = relationMatch.marker;
+  const anchor = stripFromList(stripLeadingPhrase(value, value.slice(0, marker.length)), [
+    ...(lexicon.articles || []),
+  ]);
+
+  return {
+    relation: relationMatch.relation,
+    anchor: anchor || null,
+  };
 }

@@ -83,6 +83,11 @@ The flow is:
 6. Multi-argument commands should be expressed through the same generic machinery, not special parser branches.
 7. Words like `with`, `on`, `to`, `in`, `under` should usually be treated as grammar hints for binding arguments or relations, not as standalone commands.
 
+This now has a concrete parser-side consequence:
+- built-in `LOOK` / `EXAMINE` can already recognize relation markers such as `under`, `in`, `behind`, `near`;
+- custom commands keep using the same idea through grammar markers like `separatorsBefore`;
+- full execution of relation semantics still depends on future runtime scene-relation data.
+
 ---
 
 ## Command Asset Location

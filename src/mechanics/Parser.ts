@@ -2,6 +2,7 @@ import type { GameActionOutcome } from '../core/GameActionTypes';
 import { NlpCascade } from './NlpCascade';
 import { matchParserCommandSpec } from './parserCommands';
 import {
+  extractRelationTargetForIntent,
   getStage1CommandWords,
   isLookSceneWord,
   matchStage1Intent,
@@ -19,6 +20,7 @@ import type {
   ParserCoreDecision,
   ParserPlanState,
   ParserPendingState,
+  ParserRelationType,
   ParserResponse,
   ParserResult,
   ParserScope,
@@ -101,13 +103,8 @@ export class Parser {
       return null;
     }
 
-    if (this.pendingState.intent === 'custom') {
+    if (this.pendingState.pendingEnvelopeJson) {
       const pendingEnvelopeJson = this.pendingState.pendingEnvelopeJson;
-      if (!pendingEnvelopeJson) {
-        this.pendingState = null;
-        return null;
-      }
-
       try {
         const envelope = JSON.parse(pendingEnvelopeJson) as ParserCascadeEnvelope;
         if (envelope.output.kind !== 'plan') {
@@ -116,14 +113,20 @@ export class Parser {
         }
 
         const patchedActions = envelope.output.actions.map((action) => {
-          if (
-            action.type === 'resolveArgumentEntity' &&
-            (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg)
-          ) {
-            return {
-              ...action,
-              query: input.trim(),
-            };
+          if (action.type === 'resolveArgumentEntity') {
+            if (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg) {
+              return {
+                ...action,
+                query: input.trim(),
+              };
+            }
+            return action;
+          }
+          if (action.type === 'lookRelationTarget') {
+            return { ...action, anchor: input.trim() || null };
+          }
+          if (action.type === 'examineRelationTarget') {
+            return { ...action, anchor: input.trim() || null };
           }
           return action;
         });
@@ -140,7 +143,7 @@ export class Parser {
             rawInput: input,
             normalizedInput: input.trim().toUpperCase(),
             noun: input.trim(),
-            pendingIntent: this.pendingState.commandId || 'custom',
+            pendingIntent: this.pendingState.commandId || this.pendingState.intent,
           },
         };
       } catch {
@@ -188,15 +191,22 @@ export class Parser {
 
     switch (match?.intent) {
       case 'look': {
+        const relationQuery = extractRelationTargetForIntent(input, 'look', lexicon);
         const target = normalizeTargetForIntent(input, 'look', lexicon) || match.remainder || noun;
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
             actions: [
-              !target || isLookSceneWord(target, lexicon)
-                ? { type: 'lookScene' as const }
-                : { type: 'lookTarget' as const, target },
+              relationQuery
+                ? {
+                    type: 'lookRelationTarget' as const,
+                    relation: relationQuery.relation,
+                    anchor: relationQuery.anchor,
+                  }
+                : !target || isLookSceneWord(target, lexicon)
+                  ? { type: 'lookScene' as const }
+                  : { type: 'lookTarget' as const, target },
             ],
           },
           debug: {
@@ -204,23 +214,32 @@ export class Parser {
             normalizedInput: input.trim().toUpperCase(),
             verb,
             noun,
+            relation: relationQuery?.relation,
+            anchor: relationQuery?.anchor,
           },
         };
       }
-      case 'examine':
+      case 'examine': {
+        const relationQuery = extractRelationTargetForIntent(input, 'examine', lexicon);
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
             actions: [
-              {
-                type: 'examineTarget',
-                target:
-                  normalizeTargetForIntent(input, 'examine', lexicon) ||
-                  match?.remainder ||
-                  noun ||
-                  null,
-              },
+              relationQuery
+                ? {
+                    type: 'examineRelationTarget' as const,
+                    relation: relationQuery.relation,
+                    anchor: relationQuery.anchor,
+                  }
+                : {
+                    type: 'examineTarget',
+                    target:
+                      normalizeTargetForIntent(input, 'examine', lexicon) ||
+                      match?.remainder ||
+                      noun ||
+                      null,
+                  },
             ],
           },
           debug: {
@@ -228,8 +247,11 @@ export class Parser {
             normalizedInput: input.trim().toUpperCase(),
             verb,
             noun,
+            relation: relationQuery?.relation,
+            anchor: relationQuery?.anchor,
           },
         };
+      }
       case 'take':
         return {
           stage: 'regex-v1',
@@ -436,8 +458,12 @@ export class Parser {
         return this.game.lookScene();
       case 'lookTarget':
         return this.resolveLookTarget(action.target);
+      case 'lookRelationTarget':
+        return this.resolveRelationTarget('look', action.relation, action.anchor);
       case 'examineTarget':
         return this.resolveExamineTarget(action.target);
+      case 'examineRelationTarget':
+        return this.resolveRelationTarget('examine', action.relation, action.anchor);
       case 'takeTarget':
         return this.resolveTakeTarget(action.target);
       case 'showInventory':
@@ -484,8 +510,12 @@ export class Parser {
         return 'lookScene';
       case 'lookTarget':
         return 'look';
+      case 'lookRelationTarget':
+        return 'lookRelation';
       case 'examineTarget':
         return 'examine';
+      case 'examineRelationTarget':
+        return 'examineRelation';
       case 'takeTarget':
         return 'take';
       case 'showInventory':
@@ -528,6 +558,58 @@ export class Parser {
     return Array.from(new Set(titles));
   }
 
+  private areResolutionOptionsDistinct(entities: Entity[]): boolean {
+    const titles = this.getResolutionOptionTitles(entities);
+    if (!titles) return false;
+    return titles.length === entities.length;
+  }
+
+  private getEntitySelectionPriority(entity: Entity): {
+    bucket: number;
+    order: number;
+    distance: number;
+  } {
+    const inventoryIndex = this.game.inventory.indexOf(entity);
+    if (inventoryIndex >= 0) {
+      return {
+        bucket: 0,
+        order: inventoryIndex,
+        distance: 0,
+      };
+    }
+
+    const scene = this.game.sceneManager.currentScene;
+    const player = scene?.player;
+    if (player) {
+      const dx = (entity.x || 0) - (player.x || 0);
+      const dy = (entity.y || 0) - (player.y || 0);
+      return {
+        bucket: 1,
+        order: Number.MAX_SAFE_INTEGER,
+        distance: Math.hypot(dx, dy),
+      };
+    }
+
+    return {
+      bucket: 1,
+      order: Number.MAX_SAFE_INTEGER,
+      distance: Number.MAX_SAFE_INTEGER,
+    };
+  }
+
+  private choosePreferredEntity(entities: Entity[]): Entity | null {
+    if (!entities.length) return null;
+    return [...entities].sort((left, right) => {
+      const a = this.getEntitySelectionPriority(left);
+      const b = this.getEntitySelectionPriority(right);
+
+      if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+      if (a.order !== b.order) return a.order - b.order;
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      return left.name.localeCompare(right.name);
+    })[0];
+  }
+
   private getScopeCandidates(sliceNames: Array<keyof Omit<ParserScope, 'sceneTargets'>>): Entity[] {
     const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
     const candidates: Entity[] = [];
@@ -556,6 +638,10 @@ export class Parser {
     );
     if (exactMatches.length === 1) return { status: 'found', entity: exactMatches[0] };
     if (exactMatches.length > 1) {
+      if (!this.areResolutionOptionsDistinct(exactMatches)) {
+        const preferred = this.choosePreferredEntity(exactMatches);
+        if (preferred) return { status: 'found', entity: preferred };
+      }
       const optionTitles = this.getResolutionOptionTitles(exactMatches);
       if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
       return {
@@ -571,6 +657,10 @@ export class Parser {
     });
     if (partialMatches.length === 1) return { status: 'found', entity: partialMatches[0] };
     if (partialMatches.length > 1) {
+      if (!this.areResolutionOptionsDistinct(partialMatches)) {
+        const preferred = this.choosePreferredEntity(partialMatches);
+        if (preferred) return { status: 'found', entity: preferred };
+      }
       const optionTitles = this.getResolutionOptionTitles(partialMatches);
       if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
       return {
@@ -711,6 +801,69 @@ export class Parser {
       };
     }
     return this.game.examineEntity(resolved.entity);
+  }
+
+  private resolveRelationTarget(
+    intent: 'look' | 'examine',
+    relation: ParserRelationType,
+    anchor: string | null
+  ): GameActionOutcome {
+    if (!anchor) {
+      return {
+        status: 'needs_clarification',
+        code:
+          intent === 'look' ? 'missing_look_relation_anchor' : 'missing_examine_relation_anchor',
+        message:
+          intent === 'look'
+            ? this.game.text('parser.look_relation_prompt')
+            : this.game.text('parser.examine_relation_prompt'),
+        data: { relation },
+        recoverable: true,
+      };
+    }
+
+    const clarificationKey =
+      intent === 'look' ? 'parser.look_which_one' : 'parser.examine_which_one';
+    const candidates = this.getScopeCandidates(
+      intent === 'look' ? ['visible', 'held'] : ['examinable']
+    );
+    const resolved = this.resolveEntityTargetInCandidates(anchor, candidates, clarificationKey);
+
+    if (resolved.status === 'escalate') {
+      return { status: 'escalate', code: resolved.code, recoverable: true };
+    }
+    if (resolved.status === 'not_found') {
+      return {
+        status: 'failed',
+        code: 'relation_anchor_not_found',
+        message: this.game.text('parser.look_not_found', { target: anchor }),
+        data: { relation, anchor },
+        recoverable: true,
+      };
+    }
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_relation_anchor',
+        message: resolved.message,
+        data: { relation, anchor, options: resolved.options },
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'relation_not_supported',
+      message: this.game.text('parser.relation_not_supported', {
+        relation: this.getRelationDisplayText(relation),
+        target: this.getPlayerFacingEntityTitle(resolved.entity) || anchor,
+      }),
+      data: {
+        relation,
+        anchorEntityId: resolved.entity.name,
+      },
+      recoverable: true,
+    };
   }
 
   private resolveTakeTarget(rawTarget: string | null): GameActionOutcome {
@@ -1119,6 +1272,8 @@ export class Parser {
         typeof clarificationData.pendingArg === 'string' ? clarificationData.pendingArg : undefined;
       const commandId =
         typeof clarificationData.commandId === 'string' ? clarificationData.commandId : undefined;
+      const relation =
+        typeof clarificationData.relation === 'string' ? clarificationData.relation : undefined;
       const nextPendingState =
         pendingArg && commandId
           ? {
@@ -1129,11 +1284,18 @@ export class Parser {
               pendingArg,
               commandId,
             }
-          : {
-              intent: this.extractPendingIntent(envelopeJson),
-              question: clarification.message || this.game.text('parser.parse_unknown'),
-              originalInput: this.extractRawInput(envelopeJson),
-            };
+          : relation
+            ? {
+                intent: this.extractPendingIntent(envelopeJson),
+                question: clarification.message || this.game.text('parser.parse_unknown'),
+                originalInput: this.extractRawInput(envelopeJson),
+                pendingEnvelopeJson: envelopeJson,
+              }
+            : {
+                intent: this.extractPendingIntent(envelopeJson),
+                question: clarification.message || this.game.text('parser.parse_unknown'),
+                originalInput: this.extractRawInput(envelopeJson),
+              };
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
         nextPendingState,
@@ -1194,17 +1356,23 @@ export class Parser {
       if (
         firstAction &&
         (firstAction.type === 'lookTarget' ||
+          firstAction.type === 'lookRelationTarget' ||
           firstAction.type === 'examineTarget' ||
+          firstAction.type === 'examineRelationTarget' ||
           firstAction.type === 'takeTarget' ||
           firstAction.type === 'goToTarget')
       ) {
         return firstAction.type === 'lookTarget'
           ? 'look'
-          : firstAction.type === 'examineTarget'
-            ? 'examine'
-            : firstAction.type === 'takeTarget'
-              ? 'take'
-              : 'goTo';
+          : firstAction.type === 'lookRelationTarget'
+            ? 'look'
+            : firstAction.type === 'examineTarget'
+              ? 'examine'
+              : firstAction.type === 'examineRelationTarget'
+                ? 'examine'
+                : firstAction.type === 'takeTarget'
+                  ? 'take'
+                  : 'goTo';
       }
     } catch {
       // Fall through to default.
@@ -1281,6 +1449,23 @@ export class Parser {
       const value = params[token];
       return value === undefined || value === null ? `{${token}}` : String(value);
     });
+  }
+
+  private getRelationDisplayText(relation: ParserRelationType): string {
+    switch (relation) {
+      case 'on':
+        return 'on';
+      case 'under':
+        return 'under';
+      case 'in':
+        return 'in';
+      case 'behind':
+        return 'behind';
+      case 'near':
+        return 'near';
+      default:
+        return relation;
+    }
   }
 
   private isEntityValidForCommandArgument(

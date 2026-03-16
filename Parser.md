@@ -119,7 +119,7 @@ flowchart TD
 
 Текущий context включает:
 - `rawInput` и `normalizedInput` как metadata текущего цикла parser-а;
-- текущую сцену (`id`, `name`, `title`, `description`);
+- текущую сцену (`id`, `name`, `title`, `description`, `activeSubscene`);
 - список текстово значимых объектов сцены;
 - инвентарь игрока;
 - `pending state`, если parser уже ждёт уточнение.
@@ -215,15 +215,25 @@ Stage 1 на самом деле состоит из двух внутренни
 - пытается распознать canonical-команду;
 - выделяет базовый `intent`;
 - нормализует или очищает `target phrase`;
+- для `LOOK` / `EXAMINE` умеет извлекать relation grammar вроде `under`, `in`, `behind`, `near`;
 - собирает унифицированный envelope для `Core`.
 
 Подходит для:
 - `LOOK`
 - `LOOK LOGO`
+- `LOOK UNDER TABLE`
 - `EXAMINE BOOMBOX`
+- `EXAMINE IN DRAWER`
 - `TAKE KEY`
 - `INV`
 - `GO TO OFFICE`
+
+Важно:
+- relation-aware parsing уже начинается на уровне `Stage 1.1`;
+- пока runtime не хранит явные object relations, `Core` умеет только:
+  - распознать relation-query;
+  - разрешить anchor-object через обычный resolution/clarification flow;
+  - и затем вернуть честный fallback, что spatial relation пока не может быть определена.
 
 ### Stage 1.2 — NLP Layer
 
@@ -605,6 +615,14 @@ Parser может задавать вопросы, если ввода недо�
 - `EXAMINE` -> `Examine what?`
 - `GO TO` -> `Where do you want to go?`
 - ambiguity -> `Which one do you mean ...?`
+
+Важно:
+- parser задаёт ambiguity-question только если может показать игроку действительно различимые варианты;
+- если несколько кандидатов имеют один и тот же player-facing `title`, parser не должен зацикливать уточнение;
+- в таком случае применяется детерминированный tie-break:
+  - сначала предметы в инвентаре;
+  - если их несколько, по порядку инвентаря;
+  - иначе ближайший объект сцены.
 
 Parser хранит `pendingState`:
 - intent

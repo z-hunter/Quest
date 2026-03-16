@@ -24,6 +24,9 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     look_which_one: 'Which one do you mean: {options}?',
     examine_prompt: 'Examine what?',
     examine_which_one: 'Which one do you want to examine: {options}?',
+    look_relation_prompt: 'Look where?',
+    examine_relation_prompt: 'Examine what area?',
+    relation_not_supported: "You can't determine what is {relation} the {target} from here.",
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
     take_pickup_success: 'You picked up the {item}.',
@@ -106,6 +109,13 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   ],
   articles: ['the', 'a', 'an', 'my'],
   lookSceneWords: ['around', 'here', 'scene'],
+  relationMarkers: {
+    on: ['on'],
+    under: ['under', 'beneath'],
+    in: ['in', 'inside'],
+    behind: ['behind'],
+    near: ['near', 'next to', 'by'],
+  },
 };
 
 const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
@@ -471,6 +481,10 @@ export class TextAssetManager {
       normalizationPrefixes: {
         ...DEFAULT_PARSER_LEXICON.normalizationPrefixes,
         ...(loaded?.normalizationPrefixes || {}),
+      },
+      relationMarkers: {
+        ...DEFAULT_PARSER_LEXICON.relationMarkers,
+        ...(loaded?.relationMarkers || {}),
       },
     };
     this.parserLexiconLoaded = true;

@@ -29,6 +29,8 @@ export type ParserPendingState = {
   commandId?: string;
 };
 
+export type ParserRelationType = 'on' | 'under' | 'in' | 'behind' | 'near';
+
 export type ParserScopeSlice = keyof Omit<ParserScope, 'sceneTargets'>;
 
 export type ParserCommandArgumentMessages = {
@@ -97,6 +99,7 @@ export type ParserContext = {
     name: string;
     title: string | null;
     description: string | null;
+    activeSubscene: string | null;
   } | null;
   entities: ParserEntityContext[];
   inventory: ParserInventoryItemContext[];
@@ -127,8 +130,18 @@ export type ParserToolAction =
       target: string;
     }
   | {
+      type: 'lookRelationTarget';
+      relation: ParserRelationType;
+      anchor: string | null;
+    }
+  | {
       type: 'examineTarget';
       target: string | null;
+    }
+  | {
+      type: 'examineRelationTarget';
+      relation: ParserRelationType;
+      anchor: string | null;
     }
   | {
       type: 'takeTarget';
@@ -191,6 +204,8 @@ export type ParserCascadeEnvelope = {
     normalizedInput: string;
     verb: string;
     noun: string;
+    relation?: ParserRelationType;
+    anchor?: string | null;
     pendingIntent?: string;
     intent?: string;
     score?: number;

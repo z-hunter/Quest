@@ -37,6 +37,7 @@ export class ParserWorldModelBuilder {
             name: scene.name,
             title: this.game.textAssets.getResolvedSceneField(scene, 'title'),
             description: this.game.textAssets.getResolvedSceneField(scene, 'description'),
+            activeSubscene: scene.activeSubscene || null,
           }
         : null,
       entities: scene

@@ -10,6 +10,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 - [x] Expand parser DSL/Core so lower layers can mock richer Stage-2-style plans.
 - [x] Implement `TELEPORT WITH` as the first custom command scenario driven by command TA.
 - [x] Extend command assets to support multi-argument parsing for flows like `USE X ON Y`.
+- [x] Add parser-side relation grammar recognition for queries like `LOOK UNDER TABLE` and `EXAMINE IN DRAWER`.
 
 ## Backlog
 
@@ -49,6 +50,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
   - post-API escalation
   - linear plan execution without LLM
   - manual checklist drafted in `ParserSmoke.md`
+- [ ] Formalize runtime scene relations so relation-aware parser queries (`under`, `in`, `behind`, `near`) can execute against real world data instead of returning the current fallback message.
 
 ## Suggested Order
 

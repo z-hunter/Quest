@@ -46,5 +46,12 @@
     "i'd like to"
   ],
   "articles": ["the", "a", "an", "my"],
-  "lookSceneWords": ["around", "here", "scene"]
+  "lookSceneWords": ["around", "here", "scene"],
+  "relationMarkers": {
+    "on": ["on"],
+    "under": ["under", "beneath"],
+    "in": ["in", "inside"],
+    "behind": ["behind"],
+    "near": ["near", "next to", "by"]
+  }
 }
