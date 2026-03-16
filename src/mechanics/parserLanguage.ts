@@ -1,0 +1,102 @@
+export type ParserIntentId = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
+
+export type ParserLexiconAsset = {
+  stage1Aliases: Record<ParserIntentId, string[]>;
+  normalizationPrefixes: Record<ParserIntentId, string[]>;
+  politePrefixes: string[];
+  articles: string[];
+  lookSceneWords: string[];
+};
+
+export type ParserTrainingAsset = Record<ParserIntentId, string[]>;
+
+type Stage1Match = {
+  intent: ParserIntentId;
+  matchedAlias: string;
+  remainder: string;
+};
+
+function sortByLengthDesc(values: string[]): string[] {
+  return [...values].sort((a, b) => b.length - a.length);
+}
+
+function startsWithPhrase(input: string, phrase: string): boolean {
+  if (input === phrase) return true;
+  return input.startsWith(`${phrase} `);
+}
+
+function stripLeadingPhrase(input: string, phrase: string): string {
+  if (input === phrase) return '';
+  return input.slice(phrase.length).trimStart();
+}
+
+function stripFromList(input: string, phrases: string[]): string {
+  let value = input.trim();
+  for (const phrase of sortByLengthDesc(phrases.map((item) => item.trim()).filter(Boolean))) {
+    if (startsWithPhrase(value.toLowerCase(), phrase.toLowerCase())) {
+      value = stripLeadingPhrase(value, value.slice(0, phrase.length));
+      break;
+    }
+  }
+  return value.trim();
+}
+
+export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): Stage1Match | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const lowered = trimmed.toLowerCase();
+
+  const intents: ParserIntentId[] = ['look', 'examine', 'take', 'showInventory', 'goTo'];
+  for (const intent of intents) {
+    const aliases = sortByLengthDesc(lexicon.stage1Aliases[intent] || []);
+    for (const alias of aliases) {
+      const normalizedAlias = alias.trim().toLowerCase();
+      if (!normalizedAlias) continue;
+      if (startsWithPhrase(lowered, normalizedAlias)) {
+        const remainder = trimmed.slice(alias.length).trim();
+        return {
+          intent,
+          matchedAlias: alias,
+          remainder,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function getStage1CommandWords(lexicon: ParserLexiconAsset): Set<string> {
+  const words = new Set<string>();
+  for (const aliases of Object.values(lexicon.stage1Aliases)) {
+    for (const alias of aliases) {
+      const firstWord = alias.trim().split(/\s+/)[0];
+      if (firstWord) words.add(firstWord.toUpperCase());
+    }
+  }
+  return words;
+}
+
+export function isLookSceneWord(target: string, lexicon: ParserLexiconAsset): boolean {
+  const normalized = String(target || '')
+    .trim()
+    .toLowerCase();
+  return (
+    !!normalized && (lexicon.lookSceneWords || []).some((word) => word.toLowerCase() === normalized)
+  );
+}
+
+export function normalizeTargetForIntent(
+  input: string,
+  intent: ParserIntentId,
+  lexicon: ParserLexiconAsset
+): string | null {
+  let value = input.replace(/[?.!,]+$/g, '').trim();
+  if (!value) return null;
+
+  value = stripFromList(value, lexicon.politePrefixes || []);
+  value = stripFromList(value, lexicon.normalizationPrefixes[intent] || []);
+  value = stripFromList(value, lexicon.articles || []);
+
+  return value.trim() || null;
+}

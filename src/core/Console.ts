@@ -20,6 +20,7 @@ export class Console {
   isOpen: boolean = false;
   parserPeekEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
+  parserStage2Enabled: boolean = true;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -53,6 +54,25 @@ export class Console {
 
   hasCommand(name: string): boolean {
     return this.commands.has(name.toUpperCase());
+  }
+
+  preprocessGameplayInput(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) return trimmed;
+
+    if (/^i$/i.test(trimmed)) {
+      return 'INVENTORY';
+    }
+
+    if (/^x(?:\s|$)/i.test(trimmed)) {
+      return trimmed.replace(/^x/i, 'EXAMINE');
+    }
+
+    if (/^l(?:\s|$)/i.test(trimmed)) {
+      return trimmed.replace(/^l/i, 'LOOK');
+    }
+
+    return trimmed;
   }
 
   processCommand(input: string): void {
@@ -132,6 +152,16 @@ export class Console {
     this.registerCommand('#STAGE1-ON', () => {
       this.parserStage1Enabled = true;
       this.log('Parser stage1 enabled.', 'info');
+    });
+
+    this.registerCommand('#STAGE2-OFF', () => {
+      this.parserStage2Enabled = false;
+      this.log('Parser stage2 disabled. NLP handoff is bypassed.', 'info');
+    });
+
+    this.registerCommand('#STAGE2-ON', () => {
+      this.parserStage2Enabled = true;
+      this.log('Parser stage2 enabled.', 'info');
     });
   }
 

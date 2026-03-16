@@ -1,5 +1,6 @@
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
+import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 
 type TextAssetData = Record<string, string>;
 
@@ -43,10 +44,156 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
   },
 };
 
+const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
+  stage1Aliases: {
+    look: ['look'],
+    examine: ['examine', 'inspect', 'check', 'x'],
+    take: ['take', 'get', 'pickup', 'pick up'],
+    goTo: ['go', 'walk', 'move'],
+    showInventory: ['inventory', 'inv', 'i'],
+  },
+  normalizationPrefixes: {
+    look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
+    examine: [
+      'take a closer look at',
+      'look closely at',
+      'examine at',
+      'examine',
+      'inspect at',
+      'inspect',
+      'check at',
+      'check',
+      'x at',
+      'x',
+    ],
+    take: ['pick up', 'take', 'get', 'grab'],
+    goTo: [
+      'go over to',
+      'walk over to',
+      'move over to',
+      'go to',
+      'walk to',
+      'move to',
+      'go',
+      'walk',
+      'move',
+      'head to',
+      'travel to',
+      'head',
+      'travel',
+    ],
+    showInventory: [],
+  },
+  politePrefixes: [
+    'please',
+    'could you',
+    'can you',
+    'would you',
+    'i want to',
+    'i would like to',
+    "i'd like to",
+  ],
+  articles: ['the', 'a', 'an', 'my'],
+  lookSceneWords: ['around', 'here', 'scene'],
+};
+
+const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
+  look: [
+    'look',
+    'look chair',
+    'look logo',
+    'look lamp',
+    'look key',
+    'look door',
+    'look at the lamp',
+    'look at the chair',
+    'look at the logo',
+    'tell me about the door',
+    'what is that lamp',
+    'what is the chair',
+    'what is the logo',
+    'describe the office door',
+    'look over the note',
+  ],
+  examine: [
+    'examine',
+    'x boombox',
+    'examine chair',
+    'examine logo',
+    'inspect chair',
+    'inspect the logo',
+    'check the card',
+    'check chair',
+    'inspect the note',
+    'examine the lamp',
+    'inspect the desk',
+    'check the key',
+    'look closely at the logo',
+    'take a closer look at the chair',
+  ],
+  take: [
+    'take',
+    'take key',
+    'take card',
+    'take note',
+    'get key',
+    'pickup key',
+    'pick up key',
+    'take the key',
+    'pick up the key',
+    'grab the card',
+    'take the id card',
+    'pick up linda card',
+    'grab the note',
+    'i want to take the key',
+    'please pick up the card',
+  ],
+  goTo: [
+    'go',
+    'go office',
+    'go logo',
+    'walk office',
+    'walk logo',
+    'move office',
+    'move logo',
+    'go to the office',
+    'go to office',
+    'walk to the office',
+    'walk to the logo',
+    'move to the lamp',
+    'move to logo',
+    'head to the door',
+    'go over to the desk',
+    'go over to the office',
+    'go over to the logo',
+    'travel to the office',
+    'walk over to the card reader',
+    'move over to the console',
+  ],
+  showInventory: [
+    'inventory',
+    'inv',
+    'items',
+    'my items',
+    'show inventory',
+    'what do i have',
+    'what am i carrying',
+    'check my inventory',
+    'show me my inventory',
+    'list my items',
+    'what items do i have',
+    'open inventory',
+  ],
+};
+
 export class TextAssetManager {
   private sceneCache = new Map<string, TextAssetData | null>();
   private objectCache = new Map<string, TextAssetData | null>();
   private serviceCache = new Map<string, TextAssetData>();
+  private parserLexiconCache: ParserLexiconAsset = structuredClone(DEFAULT_PARSER_LEXICON);
+  private parserTrainingCache: ParserTrainingAsset = structuredClone(DEFAULT_PARSER_TRAINING);
+  private parserLexiconLoaded = false;
+  private parserTrainingLoaded = false;
 
   private normalizeId(id: string): string {
     return String(id || '')
@@ -80,6 +227,14 @@ export class TextAssetManager {
 
   private getDefaultServiceDomain(domain: string): TextAssetData {
     return { ...(DEFAULT_SERVICE_ASSETS[domain] || {}) };
+  }
+
+  getParserLexicon(): ParserLexiconAsset {
+    return this.parserLexiconCache;
+  }
+
+  getParserTraining(): ParserTrainingAsset {
+    return this.parserTrainingCache;
   }
 
   buildDefaultSceneAsset(scene: Scene): TextAssetData {
@@ -175,10 +330,58 @@ export class TextAssetManager {
     await Promise.all(targetDomains.map((domain) => this.readServiceAsset(domain, true)));
   }
 
+  async preloadParserLanguageAssets(): Promise<void> {
+    await Promise.all([this.readParserLexiconAsset(true), this.readParserTrainingAsset(true)]);
+  }
+
   clearCaches(): void {
     this.sceneCache.clear();
     this.objectCache.clear();
     this.serviceCache.clear();
+    this.parserLexiconCache = structuredClone(DEFAULT_PARSER_LEXICON);
+    this.parserTrainingCache = structuredClone(DEFAULT_PARSER_TRAINING);
+    this.parserLexiconLoaded = false;
+    this.parserTrainingLoaded = false;
+  }
+
+  async readParserLexiconAsset(forceReload: boolean = false): Promise<ParserLexiconAsset> {
+    if (!forceReload && this.parserLexiconLoaded) {
+      return this.parserLexiconCache;
+    }
+
+    const loaded = (await this.fetchUnknownJson(
+      '/text/system/parser-lexicon.json'
+    )) as Partial<ParserLexiconAsset> | null;
+    this.parserLexiconCache = {
+      ...structuredClone(DEFAULT_PARSER_LEXICON),
+      ...(loaded || {}),
+      stage1Aliases: {
+        ...DEFAULT_PARSER_LEXICON.stage1Aliases,
+        ...(loaded?.stage1Aliases || {}),
+      },
+      normalizationPrefixes: {
+        ...DEFAULT_PARSER_LEXICON.normalizationPrefixes,
+        ...(loaded?.normalizationPrefixes || {}),
+      },
+    };
+    this.parserLexiconLoaded = true;
+    return this.parserLexiconCache;
+  }
+
+  async readParserTrainingAsset(forceReload: boolean = false): Promise<ParserTrainingAsset> {
+    if (!forceReload && this.parserTrainingLoaded) {
+      return this.parserTrainingCache;
+    }
+
+    const loaded = (await this.fetchUnknownJson(
+      '/text/system/parser-training.json'
+    )) as Partial<ParserTrainingAsset> | null;
+    this.parserTrainingCache = {
+      ...structuredClone(DEFAULT_PARSER_TRAINING),
+      ...(loaded || {}),
+    };
+    this.parserTrainingLoaded = true;
+    return this.parserTrainingCache;
   }
 
   async readServiceAsset(domain: string, forceReload: boolean = false): Promise<TextAssetData> {
@@ -264,6 +467,10 @@ export class TextAssetManager {
   }
 
   private async fetchJson(url: string): Promise<TextAssetData | null> {
+    return (await this.fetchUnknownJson(url)) as TextAssetData | null;
+  }
+
+  private async fetchUnknownJson(url: string): Promise<unknown | null> {
     try {
       const response = await fetch(`${url}?t=${Date.now()}`);
       if (!response.ok) {
@@ -274,7 +481,7 @@ export class TextAssetManager {
       if (!contentType.includes('application/json')) {
         return null;
       }
-      return (await response.json()) as TextAssetData;
+      return await response.json();
     } catch (error) {
       console.error('[TextAssetManager] Failed to fetch text asset:', error);
       return null;

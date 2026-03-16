@@ -1,6 +1,6 @@
-import { NLP_TRAINING_DATA } from './nlp/trainingData';
-import { normalizeTargetForIntent } from './nlp/normalizeTarget';
+import { normalizeTargetForIntent } from './parserLanguage';
 import type { ParserActionEnvelope, ParserContext, ParserToolAction } from './parserTypes';
+import type { TextAssetManager } from '../core/TextAssetManager';
 
 const NLP_CONFIDENCE_THRESHOLD = 0.58;
 
@@ -27,10 +27,15 @@ export type NlpCascadeDebugInfo = {
 };
 
 export class NlpCascade {
+  private getTextAssets: () => TextAssetManager | undefined;
   private manager: any = null;
   private initPromise: Promise<void> | null = null;
   private ready = false;
   private lastDebugInfo: NlpCascadeDebugInfo | null = null;
+
+  constructor(getTextAssets: () => TextAssetManager | undefined) {
+    this.getTextAssets = getTextAssets;
+  }
 
   getLastDebugInfo(): NlpCascadeDebugInfo | null {
     return this.lastDebugInfo;
@@ -45,6 +50,11 @@ export class NlpCascade {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
+      const textAssets = this.getTextAssets();
+      if (!textAssets) {
+        throw new Error('Parser language assets are not available');
+      }
+      const trainingData = await textAssets.readParserTrainingAsset();
       const [coreModule, { Nlp }, { LangEn }] = await Promise.all([
         import('@nlpjs/core'),
         import('@nlpjs/nlp'),
@@ -71,7 +81,7 @@ export class NlpCascade {
         container
       );
 
-      for (const [intent, utterances] of Object.entries(NLP_TRAINING_DATA)) {
+      for (const [intent, utterances] of Object.entries(trainingData)) {
         for (const utterance of utterances) {
           this.manager.addDocument('en', utterance, intent);
         }
@@ -126,8 +136,32 @@ export class NlpCascade {
     }
 
     const intent = rawIntent as SupportedIntent;
+    if (!this.shouldAcceptIntent(intent, normalizedInput)) {
+      this.lastDebugInfo = {
+        input,
+        normalizedInput,
+        rawIntent,
+        score,
+        matched: false,
+        reason: 'unsupported_intent',
+      };
+      return null;
+    }
 
-    const target = normalizeTargetForIntent(input, intent);
+    const textAssets = this.getTextAssets();
+    if (!textAssets) {
+      this.lastDebugInfo = {
+        input,
+        normalizedInput,
+        rawIntent,
+        score,
+        matched: false,
+        reason: 'not_initialized',
+      };
+      return null;
+    }
+
+    const target = normalizeTargetForIntent(input, intent, textAssets.getParserLexicon());
     const actions = this.buildActions(intent, target);
     if (!actions) {
       this.lastDebugInfo = {
@@ -181,5 +215,21 @@ export class NlpCascade {
       default:
         return null;
     }
+  }
+
+  private shouldAcceptIntent(intent: SupportedIntent, normalizedInput: string): boolean {
+    if (intent !== 'showInventory') {
+      return true;
+    }
+
+    const lowered = normalizedInput.toLowerCase();
+    return (
+      /\binventory\b/.test(lowered) ||
+      /\binv\b/.test(lowered) ||
+      /\bitems?\b/.test(lowered) ||
+      /\bcarrying\b/.test(lowered) ||
+      /\bcarry\b/.test(lowered) ||
+      /\bhave\b/.test(lowered)
+    );
   }
 }

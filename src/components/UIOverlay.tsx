@@ -117,6 +117,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                   if (firstWord.startsWith('#')) {
                     game.console.processCommand(val);
                   } else {
+                    const preprocessed = game.console.preprocessGameplayInput(val);
+
                     // 1. Log Command to Buffer
                     game.console.log(val, 'command');
 
@@ -124,7 +126,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     game.console.addHistory(val);
 
                     // 3. Send to gameplay parser
-                    void game.parser.parse(val);
+                    void game.parser.parse(preprocessed);
                   }
 
                   e.currentTarget.value = '';

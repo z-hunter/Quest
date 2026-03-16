@@ -157,6 +157,7 @@ export class Game implements IGame {
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
+    void this.textAssets.preloadParserLanguageAssets();
     this.sceneManager = new SceneManager(this);
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {

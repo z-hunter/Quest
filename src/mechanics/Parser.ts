@@ -1,6 +1,11 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import { NlpCascade } from './NlpCascade';
-import { normalizeTargetForIntent } from './nlp/normalizeTarget';
+import {
+  getStage1CommandWords,
+  isLookSceneWord,
+  matchStage1Intent,
+  normalizeTargetForIntent,
+} from './parserLanguage';
 import type { Entity } from '../entities/Entity';
 import type { SceneDescriptor } from '../scene/SceneManager';
 import type {
@@ -14,23 +19,6 @@ import type {
   ParserToolAction,
 } from './parserTypes';
 
-const STAGE1_COMMAND_WORDS = new Set([
-  'LOOK',
-  'EXAMINE',
-  'INSPECT',
-  'CHECK',
-  'X',
-  'TAKE',
-  'GET',
-  'PICKUP',
-  'INV',
-  'INVENTORY',
-  'I',
-  'GO',
-  'WALK',
-  'MOVE',
-]);
-
 export class Parser {
   game: any;
   inputField: HTMLInputElement | null;
@@ -41,7 +29,7 @@ export class Parser {
     this.game = game;
     this.inputField = null;
     this.pendingState = null;
-    this.nlpCascade = new NlpCascade();
+    this.nlpCascade = new NlpCascade(() => this.game.textAssets);
   }
 
   async parse(input: string): Promise<void> {
@@ -58,7 +46,11 @@ export class Parser {
           ? this.buildStage1BypassAction(trimmed)
           : this.runStage1(trimmed));
 
-      if (!actionEnvelope && this.isHandoffAction(actionJson)) {
+      if (
+        !actionEnvelope &&
+        this.game.console?.parserStage2Enabled !== false &&
+        this.isHandoffAction(actionJson)
+      ) {
         const stage2Envelope = await this.nlpCascade.parse(trimmed, context);
         if (stage2Envelope) {
           actionJson = JSON.stringify(stage2Envelope);
@@ -167,54 +159,50 @@ export class Parser {
   }
 
   private runStage1(input: string): string {
+    const lexicon = this.game.textAssets.getParserLexicon();
+    const match = matchStage1Intent(input, lexicon);
     const words = input.trim().split(/\s+/);
     const verb = (words[0] || '').toUpperCase();
     const noun = words.slice(1).join(' ').trim();
-    const normalizedNoun = noun.toUpperCase();
 
     let actions: ParserToolAction[];
 
-    switch (verb) {
-      case 'LOOK':
+    switch (match?.intent) {
+      case 'look': {
+        const target = normalizeTargetForIntent(input, 'look', lexicon) || match.remainder || noun;
         actions = [
-          !normalizedNoun ||
-          normalizedNoun === 'AROUND' ||
-          normalizedNoun === 'HERE' ||
-          normalizedNoun === 'SCENE'
+          !target || isLookSceneWord(target, lexicon)
             ? { type: 'lookScene' as const }
-            : {
-                type: 'lookTarget' as const,
-                target: normalizeTargetForIntent(input, 'look') || noun,
-              },
+            : { type: 'lookTarget' as const, target },
         ];
         break;
-      case 'EXAMINE':
-      case 'INSPECT':
-      case 'CHECK':
-      case 'X':
+      }
+      case 'examine':
         actions = [
           {
             type: 'examineTarget',
-            target: normalizeTargetForIntent(input, 'examine') || noun || null,
+            target:
+              normalizeTargetForIntent(input, 'examine', lexicon) ||
+              match?.remainder ||
+              noun ||
+              null,
           },
         ];
         break;
-      case 'TAKE':
-      case 'GET':
-      case 'PICKUP':
+      case 'take':
         actions = [
-          { type: 'takeTarget', target: normalizeTargetForIntent(input, 'take') || noun || null },
+          {
+            type: 'takeTarget',
+            target:
+              normalizeTargetForIntent(input, 'take', lexicon) || match?.remainder || noun || null,
+          },
         ];
         break;
-      case 'INV':
-      case 'INVENTORY':
-      case 'I':
+      case 'showInventory':
         actions = [{ type: 'showInventory' }];
         break;
-      case 'GO':
-      case 'WALK':
-      case 'MOVE': {
-        const target = normalizeTargetForIntent(input, 'goTo') || noun;
+      case 'goTo': {
+        const target = normalizeTargetForIntent(input, 'goTo', lexicon) || match?.remainder || noun;
         actions = [{ type: 'goToTarget', target: target || null }];
         break;
       }
@@ -800,6 +788,6 @@ export class Parser {
     if (!trimmed) return false;
     if (trimmed.startsWith('#') || trimmed.startsWith('-')) return true;
     const firstWord = trimmed.split(/\s+/)[0]?.toUpperCase() || '';
-    return STAGE1_COMMAND_WORDS.has(firstWord);
+    return getStage1CommandWords(this.game.textAssets.getParserLexicon()).has(firstWord);
   }
 }

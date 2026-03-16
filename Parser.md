@@ -740,6 +740,23 @@ Parser должен быть локализуемым без переписыв�
   - polite prefixes;
   - prepositional phrases.
 
+Текущая раскладка:
+- `public/text/system/parser.json` — player-facing parser strings;
+- `public/text/system/parser-lexicon.json` — stage1 lexicon и normalization vocabulary;
+- `public/text/system/parser-training.json` — training phrases для NLP-слоя.
+
+Текущее применение:
+- `Stage 1.1` использует `parser-lexicon.json` для:
+  - command aliases;
+  - command-word detection;
+  - target normalization;
+  - scene-look special words (`around`, `here`, `scene`);
+- `Stage 1.2` использует:
+  - `parser-training.json` как training corpus для `NLP.js`;
+  - `parser-lexicon.json` для той же target normalization, что и у `Stage 1.1`.
+
+То есть stage1 и stage2 уже питаются от одного и того же language pack, а не от независимых словарей в коде.
+
 ### Что остаётся в коде
 
 - internal intent ids (`look`, `take`, `examine`, `goTo`);
@@ -755,16 +772,22 @@ Language assets лучше хранить как **структурирован�
 
 ```json
 {
-  "verbs": {
+  "stage1Aliases": {
     "look": ["look"],
     "examine": ["examine", "inspect", "check", "x"],
-    "take": ["take", "get", "grab", "pick up"],
-    "goTo": ["go", "walk", "move", "head", "travel"]
+    "take": ["take", "get", "pickup", "pick up"],
+    "goTo": ["go", "walk", "move"],
+    "showInventory": ["inventory", "inv", "i"]
+  },
+  "normalizationPrefixes": {
+    "look": ["look at", "tell me about", "what is", "describe"],
+    "examine": ["take a closer look at", "look closely at", "examine", "inspect", "check", "x"],
+    "take": ["pick up", "take", "get", "grab"],
+    "goTo": ["go over to", "go to", "walk to", "move to", "go", "walk", "move"]
   },
   "articles": ["the", "a", "an", "my"],
   "politePrefixes": ["please", "could you", "can you", "would you", "i want to"],
-  "lookPrepositions": ["at"],
-  "goToPhrases": ["to", "over to"]
+  "lookSceneWords": ["around", "here", "scene"]
 }
 ```
 
