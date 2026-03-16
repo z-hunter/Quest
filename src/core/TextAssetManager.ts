@@ -2,7 +2,8 @@ import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 
-type TextAssetData = Record<string, string>;
+type TextAssetValue = string | string[];
+type TextAssetData = Record<string, TextAssetValue>;
 
 const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
   parser: {
@@ -47,10 +48,10 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
 const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   stage1Aliases: {
     look: ['look'],
-    examine: ['examine', 'inspect', 'check', 'x'],
+    examine: ['examine', 'inspect', 'check'],
     take: ['take', 'get', 'pickup', 'pick up'],
     goTo: ['go', 'walk', 'move'],
-    showInventory: ['inventory', 'inv', 'i'],
+    showInventory: ['inventory', 'inv'],
   },
   normalizationPrefixes: {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
@@ -63,8 +64,6 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
       'inspect',
       'check at',
       'check',
-      'x at',
-      'x',
     ],
     take: ['pick up', 'take', 'get', 'grab'],
     goTo: [
@@ -117,7 +116,6 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   ],
   examine: [
     'examine',
-    'x boombox',
     'examine chair',
     'examine logo',
     'inspect chair',
@@ -251,6 +249,7 @@ export class TextAssetManager {
     return {
       title: fallbackTitle,
       description: fallbackDescription,
+      synonyms: [],
     };
   }
 
@@ -414,6 +413,12 @@ export class TextAssetManager {
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
   }
 
+  getResolvedObjectListField(obj: SceneObject, field: string): string[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return this.resolveListField(asset, field);
+  }
+
   getServiceText(key: string, params?: Record<string, string | number>, fallback?: string): string {
     const rawKey = String(key || '').trim();
     if (!rawKey) return fallback || '';
@@ -464,6 +469,15 @@ export class TextAssetManager {
     const direct = asset[field];
     if (typeof direct === 'string') return direct;
     return fallback;
+  }
+
+  private resolveListField(asset: TextAssetData | null | undefined, field: string): string[] {
+    const raw = asset?.[field];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private async fetchJson(url: string): Promise<TextAssetData | null> {

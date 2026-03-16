@@ -1,0 +1,65 @@
+# Parser Tasks
+
+## Current Scope
+
+These tasks cover the parser roadmap described in `Parser.md`, excluding the future LLM cascade.
+
+## Backlog
+
+- [x] Replace the separate `ParserContextBuilder` / `ParserScopeBuilder` idea with one `ParserWorldModelBuilder` that returns both `context` and `scope`.
+- [x] Define explicit scope slices:
+  - `visible`
+  - `held`
+  - `takable`
+  - `reachable`
+  - `examinable`
+  - `subscene`
+  - `sceneTargets`
+- [x] Replace ad-hoc resolution helpers with scope-driven resolution.
+- [x] Unify stage outputs so `Stage 1.1` and `Stage 1.2` emit the same Core-facing envelope.
+- [ ] Refactor `Parser Core` around the unified envelope/protocol.
+- [ ] Separate pre-API escalation from post-API escalation in `Parser Core`.
+- [ ] Support linear plan execution in `Parser Core` without requiring LLM.
+- [ ] Add optional `synonyms` to object TA schema.
+- [x] Include `synonyms` in the default object TA template.
+- [x] Extend parser target resolution to use:
+  - `title`
+  - `synonyms`
+  - partial matching
+  - clarification on ambiguity
+- [ ] Expand `#PEEK` debug output with:
+  - scope data
+  - unified envelope data
+  - Core decision data
+- [ ] Verify that UI, scripts, and game logic continue using the same shared `Game API`.
+- [ ] Add regression tests / smoke checks for:
+  - `#STAGE1-ON/OFF`
+  - `#STAGE2-ON/OFF`
+  - clarification flows
+  - inventory-aware resolution
+  - `synonyms`
+  - pre-API escalation
+  - post-API escalation
+  - linear plan execution without LLM
+
+## Suggested Order
+
+1. Extract a single world-model builder that produces context and scope together.
+2. Unify cascade envelopes.
+3. Refactor `Parser Core` around the unified protocol.
+4. Add `synonyms` support to TA and target resolution.
+5. Improve `#PEEK`.
+6. Run regression checks and clean up boundaries with `Game API`.
+
+## Plan For Step 3
+
+- [x] Define a single `CascadeEnvelope` shape that both `Stage 1.1` and `Stage 1.2` emit.
+- [ ] Replace the current action/handoff JSON split with the unified envelope.
+- [ ] Make `Parser Core` consume the unified envelope directly instead of inferring behavior from ad-hoc action types.
+- [ ] Split `Parser Core` flow into explicit phases:
+  - envelope intake
+  - pre-API validation/resolution
+  - API plan execution
+  - post-API outcome analysis
+- [ ] Introduce a minimal linear plan execution path in `Core` for non-LLM producers.
+- [ ] Expose enough debug data in `#PEEK` to inspect envelope and Core decisions while refactoring.

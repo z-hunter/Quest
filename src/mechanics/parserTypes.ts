@@ -1,9 +1,12 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
+import type { Entity } from '../entities/Entity';
+import type { SceneDescriptor } from '../scene/SceneManager';
 
 export type ParserEntityContext = {
   id: string;
   type: string;
   title: string | null;
+  synonyms: string[];
   description: string | null;
   details: string | null;
   interactions: string[];
@@ -12,6 +15,7 @@ export type ParserEntityContext = {
 export type ParserInventoryItemContext = {
   id: string;
   title: string | null;
+  synonyms: string[];
   description: string | null;
   details: string | null;
 };
@@ -36,6 +40,21 @@ export type ParserContext = {
   pending: ParserPendingState | null;
 };
 
+export type ParserScope = {
+  visible: Entity[];
+  held: Entity[];
+  takable: Entity[];
+  reachable: Entity[];
+  examinable: Entity[];
+  subscene: Entity[];
+  sceneTargets: SceneDescriptor[];
+};
+
+export type ParserWorldModel = {
+  context: ParserContext;
+  scope: ParserScope;
+};
+
 export type ParserToolAction =
   | {
       type: 'lookScene';
@@ -58,18 +77,22 @@ export type ParserToolAction =
   | {
       type: 'goToTarget';
       target: string | null;
-    }
-  | {
-      type: 'handoff';
-      reason: string;
-      verb: string;
-      noun: string;
-      rawInput: string;
     };
 
-export type ParserActionEnvelope = {
+export type ParserCascadeEnvelope = {
   stage: 'regex-v1' | 'pending-resolution' | 'nlp-v2';
-  actions: ParserToolAction[];
+  output:
+    | {
+        kind: 'plan';
+        actions: ParserToolAction[];
+      }
+    | {
+        kind: 'handoff_up';
+        reason: string;
+        rawInput: string;
+        verb: string;
+        noun: string;
+      };
   debug: {
     rawInput: string;
     normalizedInput: string;

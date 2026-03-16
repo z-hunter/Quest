@@ -1,5 +1,5 @@
 import { normalizeTargetForIntent } from './parserLanguage';
-import type { ParserActionEnvelope, ParserContext, ParserToolAction } from './parserTypes';
+import type { ParserCascadeEnvelope, ParserContext, ParserToolAction } from './parserTypes';
 import type { TextAssetManager } from '../core/TextAssetManager';
 
 const NLP_CONFIDENCE_THRESHOLD = 0.58;
@@ -93,7 +93,7 @@ export class NlpCascade {
     return this.initPromise;
   }
 
-  async parse(input: string, _context: ParserContext): Promise<ParserActionEnvelope | null> {
+  async parse(input: string, _context: ParserContext): Promise<ParserCascadeEnvelope | null> {
     await this.initialize();
     const normalizedInput = input.replace(/[?.!,]+$/g, '').trim();
     if (!this.manager) {
@@ -187,7 +187,10 @@ export class NlpCascade {
 
     return {
       stage: 'nlp-v2',
-      actions,
+      output: {
+        kind: 'plan',
+        actions,
+      },
       debug: {
         rawInput: input,
         normalizedInput: normalizedInput.toUpperCase(),

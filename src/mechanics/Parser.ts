@@ -6,16 +6,15 @@ import {
   matchStage1Intent,
   normalizeTargetForIntent,
 } from './parserLanguage';
+import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import type { Entity } from '../entities/Entity';
 import type { SceneDescriptor } from '../scene/SceneManager';
 import type {
-  ParserActionEnvelope,
-  ParserContext,
-  ParserEntityContext,
-  ParserInventoryItemContext,
+  ParserCascadeEnvelope,
   ParserPendingState,
   ParserResponse,
   ParserResult,
+  ParserScope,
   ParserToolAction,
 } from './parserTypes';
 
@@ -24,12 +23,16 @@ export class Parser {
   inputField: HTMLInputElement | null;
   pendingState: ParserPendingState | null;
   nlpCascade: NlpCascade;
+  worldModelBuilder: ParserWorldModelBuilder;
+  activeScope: ParserScope | null;
 
   constructor(game: any) {
     this.game = game;
     this.inputField = null;
     this.pendingState = null;
     this.nlpCascade = new NlpCascade(() => this.game.textAssets);
+    this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
+    this.activeScope = null;
   }
 
   async parse(input: string): Promise<void> {
@@ -38,9 +41,11 @@ export class Parser {
     try {
       this.nlpCascade.clearLastDebugInfo();
       const actionEnvelope = this.resolvePendingAction(trimmed);
-      const context = this.buildContext(trimmed);
+      const worldModel = this.worldModelBuilder.build(trimmed, this.pendingState);
+      const context = worldModel.context;
+      this.activeScope = worldModel.scope;
       const contextJson = JSON.stringify(context);
-      let actionJson =
+      let envelope =
         actionEnvelope ||
         (this.game.console?.parserStage1Enabled === false
           ? this.buildStage1BypassAction(trimmed)
@@ -49,16 +54,17 @@ export class Parser {
       if (
         !actionEnvelope &&
         this.game.console?.parserStage2Enabled !== false &&
-        this.isHandoffAction(actionJson)
+        this.isHandoffEnvelope(envelope)
       ) {
         const stage2Envelope = await this.nlpCascade.parse(trimmed, context);
         if (stage2Envelope) {
-          actionJson = JSON.stringify(stage2Envelope);
+          envelope = stage2Envelope;
         }
       }
 
-      const resultJson = this.executeActionJson(actionJson);
-      const response = this.buildResponse(resultJson, actionJson, contextJson);
+      const envelopeJson = JSON.stringify(envelope);
+      const resultJson = this.executeEnvelope(envelope);
+      const response = this.buildResponse(resultJson, envelopeJson, contextJson);
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
@@ -74,57 +80,13 @@ export class Parser {
       }
     } catch (error) {
       this.pendingState = null;
+      this.activeScope = null;
       this.game.console?.log(`[Parser error] ${String(error)}`, 'error');
       this.game.log(this.game.text('parser.parse_unknown'));
     }
   }
 
-  private buildContext(rawInput: string): ParserContext {
-    const scene = this.game.sceneManager.currentScene;
-    const normalizedInput = rawInput.trim().toUpperCase();
-
-    return {
-      rawInput,
-      normalizedInput,
-      scene: scene
-        ? {
-            id: scene.id,
-            name: scene.name,
-            title: this.game.textAssets.getResolvedSceneField(scene, 'title'),
-            description: this.game.textAssets.getResolvedSceneField(scene, 'description'),
-          }
-        : null,
-      entities: scene
-        ? (scene.entities || [])
-            .map((entity: any) => ({
-              id: entity.name,
-              type: entity.type,
-              title: this.game.textAssets.getResolvedObjectField(entity, 'title'),
-              description: this.game.textAssets.getResolvedObjectField(entity, 'description'),
-              details: this.game.textAssets.getResolvedObjectField(entity, 'details'),
-              interactions: Object.keys(entity.interactions || {}),
-            }))
-            .filter((entity: ParserEntityContext) => !!entity.title?.trim())
-        : [],
-      inventory: (this.game.inventory || [])
-        .map((entity: any) => ({
-          id: entity.name,
-          title: this.game.textAssets.getResolvedObjectField(entity, 'title'),
-          description: this.game.textAssets.getResolvedObjectField(entity, 'description'),
-          details: this.game.textAssets.getResolvedObjectField(entity, 'details'),
-        }))
-        .filter((entity: ParserInventoryItemContext) => !!entity.title?.trim()),
-      pending: this.pendingState
-        ? {
-            intent: this.pendingState.intent,
-            question: this.pendingState.question,
-            originalInput: this.pendingState.originalInput,
-          }
-        : null,
-    };
-  }
-
-  private resolvePendingAction(input: string): string | null {
+  private resolvePendingAction(input: string): ParserCascadeEnvelope | null {
     if (!this.pendingState) return null;
     if (this.looksLikeFreshCommand(input)) {
       this.pendingState = null;
@@ -143,9 +105,12 @@ export class Parser {
       target: input.trim(),
     };
 
-    const envelope: ParserActionEnvelope = {
+    const envelope: ParserCascadeEnvelope = {
       stage: 'pending-resolution',
-      actions: [action],
+      output: {
+        kind: 'plan',
+        actions: [action],
+      },
       debug: {
         rawInput: input,
         normalizedInput: input.trim().toUpperCase(),
@@ -154,101 +119,147 @@ export class Parser {
         pendingIntent: this.pendingState.intent,
       },
     };
-
-    return JSON.stringify(envelope);
+    return envelope;
   }
 
-  private runStage1(input: string): string {
+  private runStage1(input: string): ParserCascadeEnvelope {
     const lexicon = this.game.textAssets.getParserLexicon();
     const match = matchStage1Intent(input, lexicon);
     const words = input.trim().split(/\s+/);
     const verb = (words[0] || '').toUpperCase();
     const noun = words.slice(1).join(' ').trim();
 
-    let actions: ParserToolAction[];
-
     switch (match?.intent) {
       case 'look': {
         const target = normalizeTargetForIntent(input, 'look', lexicon) || match.remainder || noun;
-        actions = [
-          !target || isLookSceneWord(target, lexicon)
-            ? { type: 'lookScene' as const }
-            : { type: 'lookTarget' as const, target },
-        ];
-        break;
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [
+              !target || isLookSceneWord(target, lexicon)
+                ? { type: 'lookScene' as const }
+                : { type: 'lookTarget' as const, target },
+            ],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       }
       case 'examine':
-        actions = [
-          {
-            type: 'examineTarget',
-            target:
-              normalizeTargetForIntent(input, 'examine', lexicon) ||
-              match?.remainder ||
-              noun ||
-              null,
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [
+              {
+                type: 'examineTarget',
+                target:
+                  normalizeTargetForIntent(input, 'examine', lexicon) ||
+                  match?.remainder ||
+                  noun ||
+                  null,
+              },
+            ],
           },
-        ];
-        break;
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       case 'take':
-        actions = [
-          {
-            type: 'takeTarget',
-            target:
-              normalizeTargetForIntent(input, 'take', lexicon) || match?.remainder || noun || null,
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [
+              {
+                type: 'takeTarget',
+                target:
+                  normalizeTargetForIntent(input, 'take', lexicon) ||
+                  match?.remainder ||
+                  noun ||
+                  null,
+              },
+            ],
           },
-        ];
-        break;
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       case 'showInventory':
-        actions = [{ type: 'showInventory' }];
-        break;
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [{ type: 'showInventory' }],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       case 'goTo': {
         const target = normalizeTargetForIntent(input, 'goTo', lexicon) || match?.remainder || noun;
-        actions = [{ type: 'goToTarget', target: target || null }];
-        break;
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [{ type: 'goToTarget', target: target || null }],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       }
       default:
-        actions = [
-          {
-            type: 'handoff',
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'handoff_up',
             reason: 'unsupported_by_stage1',
             verb,
             noun,
             rawInput: input,
           },
-        ];
-        break;
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
     }
-
-    const envelope: ParserActionEnvelope = {
-      stage: 'regex-v1',
-      actions,
-      debug: {
-        rawInput: input,
-        normalizedInput: input.trim().toUpperCase(),
-        verb,
-        noun,
-      },
-    };
-
-    return JSON.stringify(envelope);
   }
 
-  private buildStage1BypassAction(input: string): string {
+  private buildStage1BypassAction(input: string): ParserCascadeEnvelope {
     const words = input.trim().split(/\s+/);
     const verb = (words[0] || '').toUpperCase();
     const noun = words.slice(1).join(' ').trim();
 
-    const envelope: ParserActionEnvelope = {
+    const envelope: ParserCascadeEnvelope = {
       stage: 'regex-v1',
-      actions: [
-        {
-          type: 'handoff',
-          reason: 'stage1_disabled',
-          verb,
-          noun,
-          rawInput: input,
-        },
-      ],
+      output: {
+        kind: 'handoff_up',
+        reason: 'stage1_disabled',
+        verb,
+        noun,
+        rawInput: input,
+      },
       debug: {
         rawInput: input,
         normalizedInput: input.trim().toUpperCase(),
@@ -256,53 +267,46 @@ export class Parser {
         noun,
       },
     };
-
-    return JSON.stringify(envelope);
+    return envelope;
   }
 
-  private isHandoffAction(actionJson: string): boolean {
-    try {
-      const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
-      return envelope.actions.length === 1 && envelope.actions[0]?.type === 'handoff';
-    } catch {
-      return false;
-    }
+  private isHandoffEnvelope(envelope: ParserCascadeEnvelope): boolean {
+    return envelope.output.kind === 'handoff_up';
   }
 
-  private executeActionJson(actionJson: string): string {
-    const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
+  private executeEnvelope(envelope: ParserCascadeEnvelope): string {
     const executedActions: string[] = [];
 
-    if (!envelope.actions.length) {
+    if (envelope.output.kind === 'handoff_up') {
+      const result: ParserResult = {
+        type: 'handoff',
+        handled: false,
+        outcomes: [],
+        actionsExecuted: executedActions,
+        reason: envelope.output.reason,
+        debug: {
+          envelope,
+        },
+      };
+      return JSON.stringify(result);
+    }
+
+    const actions = envelope.output.actions;
+    if (!actions.length) {
       const result: ParserResult = {
         type: 'handoff',
         handled: false,
         outcomes: [],
         actionsExecuted: executedActions,
         reason: 'empty_action_plan',
-        debug: { actionJson },
+        debug: { envelope },
       };
       return JSON.stringify(result);
     }
 
     const outcomes: GameActionOutcome[] = [];
 
-    for (const action of envelope.actions) {
-      if (action.type === 'handoff') {
-        const result: ParserResult = {
-          type: 'handoff',
-          handled: false,
-          outcomes,
-          actionsExecuted: executedActions,
-          reason: action.reason,
-          debug: {
-            actionJson,
-            action,
-          },
-        };
-        return JSON.stringify(result);
-      }
-
+    for (const action of actions) {
       const outcome = this.executeParserAction(action);
       executedActions.push(this.getExecutedActionName(action));
       outcomes.push(outcome);
@@ -335,13 +339,6 @@ export class Parser {
         return this.game.showInventory();
       case 'goToTarget':
         return this.resolveGoToTarget(action.target);
-      case 'handoff':
-        return {
-          status: 'escalate',
-          code: action.reason,
-          message: this.game.text('parser.parse_unknown'),
-          recoverable: true,
-        };
       default:
         return {
           status: 'escalate',
@@ -366,8 +363,6 @@ export class Parser {
         return 'showInventory';
       case 'goToTarget':
         return 'goTo';
-      case 'handoff':
-        return 'handoff';
       default:
         return 'unknown';
     }
@@ -380,7 +375,10 @@ export class Parser {
 
   private getEntityLookupTokens(entity: Entity): string[] {
     const title = this.getPlayerFacingEntityTitle(entity);
-    return title ? [title.toUpperCase()] : [];
+    const synonyms = this.game.textAssets.getResolvedObjectListField(entity as any, 'synonyms');
+    return Array.from(
+      new Set([title, ...synonyms].filter((item): item is string => !!item && !!item.trim()))
+    ).map((item) => item.toUpperCase());
   }
 
   private getResolutionOptionTitles(entities: Entity[]): string[] | null {
@@ -391,54 +389,30 @@ export class Parser {
     return Array.from(new Set(titles));
   }
 
-  private getSceneEntitiesForResolution(options: { includeTakeablesOnly: boolean }): Entity[] {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return [];
-
-    return (scene.entities || []).filter((entity: Entity) => {
-      if (entity.disabled || !this.getPlayerFacingEntityTitle(entity)) return false;
-      if (!options.includeTakeablesOnly) return true;
-      const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
-      return !!isItem || !!entity.isTakeable;
-    });
-  }
-
-  private getInventoryEntitiesForResolution(): Entity[] {
-    return (this.game.inventory || []).filter(
-      (entity: Entity) => !!this.getPlayerFacingEntityTitle(entity)
-    );
-  }
-
-  private resolveSceneEntityTarget(
-    rawTarget: string,
-    options: {
-      includeTakeablesOnly: boolean;
-      includeInventory: boolean;
-      clarificationKey: string;
+  private getScopeCandidates(sliceNames: Array<keyof Omit<ParserScope, 'sceneTargets'>>): Entity[] {
+    const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
+    const candidates: Entity[] = [];
+    for (const sliceName of sliceNames) {
+      candidates.push(...scope[sliceName]);
     }
+    return Array.from(new Set(candidates));
+  }
+
+  private resolveEntityTargetInCandidates(
+    rawTarget: string,
+    candidates: Entity[],
+    clarificationKey: string
   ):
     | { status: 'found'; entity: Entity }
     | { status: 'not_found' }
     | { status: 'ambiguous'; message: string; options: string[] }
     | { status: 'escalate'; code: string } {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return { status: 'not_found' };
-
     const normalizedTarget = String(rawTarget || '')
       .trim()
       .toUpperCase();
     if (!normalizedTarget) return { status: 'not_found' };
 
-    const sceneCandidates = this.getSceneEntitiesForResolution({
-      includeTakeablesOnly: options.includeTakeablesOnly,
-    });
-    const inventoryCandidates = options.includeInventory
-      ? this.getInventoryEntitiesForResolution()
-      : [];
-    const exactCandidates = Array.from(new Set([...sceneCandidates, ...inventoryCandidates]));
-    const partialCandidates = exactCandidates;
-
-    const exactMatches = exactCandidates.filter((entity: Entity) =>
+    const exactMatches = candidates.filter((entity: Entity) =>
       this.getEntityLookupTokens(entity).includes(normalizedTarget)
     );
     if (exactMatches.length === 1) return { status: 'found', entity: exactMatches[0] };
@@ -447,14 +421,14 @@ export class Parser {
       if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
       return {
         status: 'ambiguous',
-        message: this.game.text(options.clarificationKey, { options: optionTitles.join(', ') }),
+        message: this.game.text(clarificationKey, { options: optionTitles.join(', ') }),
         options: optionTitles,
       };
     }
 
-    const partialMatches = partialCandidates.filter((entity: Entity) => {
-      const title = this.getPlayerFacingEntityTitle(entity);
-      return !!title && title.toUpperCase().includes(normalizedTarget);
+    const partialMatches = candidates.filter((entity: Entity) => {
+      const lookupTokens = this.getEntityLookupTokens(entity);
+      return lookupTokens.some((token) => token.includes(normalizedTarget));
     });
     if (partialMatches.length === 1) return { status: 'found', entity: partialMatches[0] };
     if (partialMatches.length > 1) {
@@ -462,7 +436,7 @@ export class Parser {
       if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
       return {
         status: 'ambiguous',
-        message: this.game.text(options.clarificationKey, { options: optionTitles.join(', ') }),
+        message: this.game.text(clarificationKey, { options: optionTitles.join(', ') }),
         options: optionTitles,
       };
     }
@@ -475,7 +449,8 @@ export class Parser {
       .trim()
       .toUpperCase();
     if (!normalized) return null;
-    for (const descriptor of this.game.sceneManager.sceneRegistry.values()) {
+    const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
+    for (const descriptor of scope.sceneTargets) {
       if (
         descriptor.id.toUpperCase() === normalized ||
         descriptor.name.toUpperCase() === normalized ||
@@ -488,11 +463,11 @@ export class Parser {
   }
 
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
-    const resolved = this.resolveSceneEntityTarget(rawTarget, {
-      includeTakeablesOnly: false,
-      includeInventory: true,
-      clarificationKey: 'parser.look_which_one',
-    });
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['visible', 'held']),
+      'parser.look_which_one'
+    );
     if (resolved.status === 'escalate') {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
@@ -527,11 +502,11 @@ export class Parser {
       };
     }
 
-    const resolved = this.resolveSceneEntityTarget(rawTarget, {
-      includeTakeablesOnly: false,
-      includeInventory: true,
-      clarificationKey: 'parser.examine_which_one',
-    });
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['examinable']),
+      'parser.examine_which_one'
+    );
     if (resolved.status === 'escalate') {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
@@ -565,18 +540,18 @@ export class Parser {
         recoverable: true,
       };
     }
-    const resolved = this.resolveSceneEntityTarget(rawTarget, {
-      includeTakeablesOnly: true,
-      includeInventory: false,
-      clarificationKey: 'parser.take_which_one',
-    });
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['takable']),
+      'parser.take_which_one'
+    );
     const broadResolved =
       resolved.status === 'not_found'
-        ? this.resolveSceneEntityTarget(rawTarget, {
-            includeTakeablesOnly: false,
-            includeInventory: false,
-            clarificationKey: 'parser.take_which_one',
-          })
+        ? this.resolveEntityTargetInCandidates(
+            rawTarget,
+            this.getScopeCandidates(['visible']),
+            'parser.take_which_one'
+          )
         : null;
 
     if (resolved.status === 'escalate' || broadResolved?.status === 'escalate') {
@@ -645,11 +620,11 @@ export class Parser {
       return this.game.goToScene(sceneMatch.id);
     }
 
-    const resolved = this.resolveSceneEntityTarget(rawTarget, {
-      includeTakeablesOnly: false,
-      includeInventory: false,
-      clarificationKey: 'parser.go_to_which_one',
-    });
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['visible']),
+      'parser.go_to_which_one'
+    );
     if (resolved.status === 'escalate') {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
@@ -751,7 +726,7 @@ export class Parser {
 
   private extractRawInput(actionJson: string): string {
     try {
-      const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
+      const envelope = JSON.parse(actionJson) as ParserCascadeEnvelope;
       return envelope.debug.rawInput;
     } catch {
       return '';
@@ -760,8 +735,11 @@ export class Parser {
 
   private extractPendingIntent(actionJson: string): 'look' | 'examine' | 'take' | 'goTo' {
     try {
-      const envelope = JSON.parse(actionJson) as ParserActionEnvelope;
-      const firstAction = envelope.actions[0];
+      const envelope = JSON.parse(actionJson) as ParserCascadeEnvelope;
+      if (envelope.output.kind !== 'plan') {
+        return 'take';
+      }
+      const firstAction = envelope.output.actions[0];
       if (
         firstAction &&
         (firstAction.type === 'lookTarget' ||
