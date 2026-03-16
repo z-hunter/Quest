@@ -41,13 +41,13 @@ Parser должен:
 
 Ключевой момент:
 - `Player Input` и `Parser Context` — это **две отдельные сущности**;
-- `Context Builder` работает только от состояния игры;
+- `ParserWorldModelBuilder` работает только от состояния игры;
 - ввод игрока проходит каскады **последовательно**, а не параллельно.
 
 ```mermaid
 flowchart TD
     GS[Game state]
-    CB[Context builder]
+    CB[ParserWorldModelBuilder]
     CTX[Parser context]
     U[Input]
     L1[Stage1 Regex]
@@ -109,11 +109,13 @@ flowchart TD
 
 Это не parser-слой. Это слой движка.
 
-### 2. Context Builder
+### 2. ParserWorldModelBuilder
 
-`Context Builder` не использует ввод игрока.
+`ParserWorldModelBuilder` не использует ввод игрока для определения intent или target.
 
-Он получает только состояние игры и строит `Parser Context`: упрощённый снимок мира, пригодный для parser-а.
+Он получает состояние игры, а также metadata текущего parser-цикла, и строит единый `ParserWorldModel`:
+- `context`
+- `scope`
 
 Текущий context включает:
 - `rawInput` и `normalizedInput` как metadata текущего цикла parser-а;
@@ -122,8 +124,17 @@ flowchart TD
 - инвентарь игрока;
 - `pending state`, если parser уже ждёт уточнение.
 
+Текущий scope включает:
+- `visible`
+- `held`
+- `takable`
+- `reachable`
+- `examinable`
+- `subscene`
+- `sceneTargets`
+
 Важно:
-- `Context Builder` не интерпретирует пользовательский ввод;
+- `ParserWorldModelBuilder` не интерпретирует пользовательский ввод;
 - он не выбирает intent;
 - он не определяет target;
 - он лишь даёт parser-у картину мира.
@@ -155,9 +166,9 @@ flowchart TD
 }
 ```
 
-### 3. Scope Builder
+### 3. Scope Model
 
-`Scope` — это не отдельный каскад, а структурированная часть context.
+`Scope` — это не отдельный каскад и не отдельный runtime subsystem, а структурированная часть `ParserWorldModel`.
 
 То есть:
 - `context` = всё, что parser знает о мире;
@@ -169,7 +180,7 @@ flowchart TD
 - `EXAMINE` использует инвентарь, объекты активной subscene и объекты в пределах допустимой дистанции;
 - `GO TO` использует сценовые цели и достижимые сценовые объекты.
 
-Планируемая модель scope:
+Текущая модель scope:
 
 ```ts
 type ParserScope = {
@@ -294,7 +305,7 @@ flowchart TD
 `Parser Core` — центральный оркестратор всей системы.
 
 Он получает:
-- action candidate от активного каскада;
+- cascade envelope от активного каскада;
 - outcomes от `Game API` по отдельному каналу.
 
 Именно `Core` принимает решения:
@@ -309,7 +320,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    IN[Action candidate]
+    IN[Cascade envelope]
     OUT[API outcomes]
     CORE[Parser Core]
     RES[Resolve and validate]
@@ -371,9 +382,11 @@ Parser сначала проверяет:
 - не является ли ввод продолжением уже незавершённой команды;
 - или это новая команда.
 
-### Step 3. Context is built
+### Step 3. World model is built
 
-`Context Builder` строит `Parser Context` из состояния игры.
+`ParserWorldModelBuilder` строит `ParserWorldModel` из состояния игры:
+- `context`
+- `scope`
 
 ### Step 4. Stage 1 runs sequentially
 
@@ -383,7 +396,7 @@ Parser сначала проверяет:
 
 ### Step 5. Core resolves, validates, and decides
 
-`Core` получает action candidate, применяет context/scope, и решает:
+`Core` получает cascade envelope, применяет context/scope, и решает:
 - можно ли продолжать;
 - нужен ли API call block;
 - нужен ли clarification;
@@ -453,18 +466,25 @@ Parser сначала проверяет:
 
 ---
 
-## Current Actions
+## Current Envelope And Actions
 
-Текущие action types parser-а:
+Сейчас lower cascades (`Stage 1.1` и `Stage 1.2`) уже отдают единый `ParserCascadeEnvelope`.
+
+Текущие `ParserToolAction`:
 - `lookScene`
 - `lookTarget`
 - `examineTarget`
 - `takeTarget`
 - `showInventory`
 - `goToTarget`
-- `handoff`
 
-Нижние каскады сейчас обычно выдают именно такие действия.
+Текущий envelope имеет вид:
+- `output.kind = 'plan'`
+- `output.kind = 'handoff_up'`
+
+То есть:
+- handoff больше не кодируется отдельным fake-action;
+- `Parser Core` принимает envelope напрямую и сам решает, что это значит до API.
 
 ---
 
@@ -766,9 +786,18 @@ sequenceDiagram
 
 При `#PEEK-ON` parser выводит:
 - `context=...`
-- `actions=...`
+- `scope=...`
+- `envelope=...`
+- `core=...`
 - `result=...`
 - `nlp=...` при участии NLP-слоя
+
+Это даёт возможность смотреть отдельно:
+- world model snapshot;
+- scope slices;
+- cascade output;
+- решение `Core`;
+- итоговые outcomes.
 
 ### Stage toggles
 
@@ -906,24 +935,86 @@ type ParserRelation = {
 
 - `src/mechanics/Parser.ts`
   - главный orchestrator parser-а
-  - context building
   - stage orchestration
   - target resolution
   - pending clarification
+  - unified envelope intake
+  - `Parser Core`
+  - pre-API decision making
+  - linear plan execution
   - response building
+
+- `src/mechanics/ParserWorldModelBuilder.ts`
+  - строит `ParserWorldModel`
+  - собирает `ParserContext`
+  - собирает `ParserScope`
+  - добавляет parser-facing данные по:
+    - scene entities
+    - inventory
+    - subscene
+    - scene registry
+    - object `synonyms`
 
 - `src/mechanics/NlpCascade.ts`
   - Stage 1.2 (`NLP.js`)
   - intent recognition + target cleanup
+  - возвращает тот же `ParserCascadeEnvelope`, что и regex-слой
+
+- `src/mechanics/parserLanguage.ts`
+  - stage1 lexicon helpers
+  - command matching
+  - target normalization
+  - parser language-pack access helpers
+
+- `src/mechanics/parserTypes.ts`
+  - parser-facing types
+  - `ParserWorldModel`
+  - `ParserScope`
+  - `ParserCascadeEnvelope`
+  - `ParserCoreDecision`
+  - `ParserToolAction`
 
 - `src/core/Game.ts`
   - semantic runtime tools
   - world operations on resolved scene/entity targets
   - access checks and structured outcomes
 
+- `src/core/IGame.ts`
+  - shared `Game API` contract used by parser and other clients
+
 - `src/core/TextAssetManager.ts`
   - service text assets
   - scene/object text resolution
+  - parser lexicon assets
+  - parser training assets
+  - object list fields such as `synonyms`
+
+- `src/core/Console.ts`
+  - console command handling before gameplay parser
+  - gameplay input preprocessor
+  - stage toggles:
+    - `#STAGE1-ON/OFF`
+    - `#STAGE2-ON/OFF`
+  - parser debug toggle:
+    - `#PEEK-ON/OFF`
+
+- `src/components/UIOverlay.tsx`
+  - entry point from UI input to console preprocessor and gameplay parser
+
+### Code Map By Architecture Block
+
+| Architecture block | Main files | Key methods / responsibilities |
+|---|---|---|
+| Player input entry | `src/components/UIOverlay.tsx`, `src/core/Console.ts` | `UIOverlay` routes typed input into `console.preprocessGameplayInput(...)` before parser execution |
+| Console preprocessor | `src/core/Console.ts` | `preprocessGameplayInput(...)`, stage toggles, shorthand expansion |
+| World model builder | `src/mechanics/ParserWorldModelBuilder.ts` | `build(...)` returns `{ context, scope }` |
+| Stage 1.1 regex | `src/mechanics/Parser.ts`, `src/mechanics/parserLanguage.ts` | `runStage1(...)`, `matchStage1Intent(...)`, `normalizeTargetForIntent(...)` |
+| Stage 1.2 NLP | `src/mechanics/NlpCascade.ts` | `parse(...)`, training on parser language assets, envelope generation |
+| Parser Core | `src/mechanics/Parser.ts` | `runParserCore(...)`, `makeCoreDecision(...)`, `executeCoreDecision(...)`, `executeCorePlan(...)` |
+| Scope-driven resolution | `src/mechanics/Parser.ts` | `resolveLookTarget(...)`, `resolveExamineTarget(...)`, `resolveTakeTarget(...)`, `resolveGoToTarget(...)`, `resolveEntityTargetInCandidates(...)` |
+| Shared gameplay API | `src/core/Game.ts`, `src/core/IGame.ts` | `lookScene(...)`, `lookEntity(...)`, `examineEntity(...)`, `takeEntity(...)`, `goToScene(...)`, `goToEntity(...)`, `showInventory()` |
+| Text assets | `src/core/TextAssetManager.ts`, `public/text/system/*.json` | `getParserLexicon()`, `getParserTraining()`, `getResolvedObjectListField(...)` |
+| Parser debugging | `src/mechanics/Parser.ts`, `src/core/Console.ts` | `#PEEK`, stage toggles, debug output for `scope/envelope/core/result/nlp` |
 
 ### Separation of concerns
 
@@ -955,7 +1046,9 @@ flowchart TD
 
 - parser-mediator v1;
 - первый каскад с двумя уровнями (`regex` + `NLP.js`);
-- shared action package model;
+- unified cascade envelope model;
+- `ParserWorldModelBuilder`;
+- explicit scope slices;
 - parser-owned target resolution;
 - inventory-aware `LOOK` / `EXAMINE`;
 - отдельный `EXAMINE` + `details`;
@@ -963,13 +1056,12 @@ flowchart TD
 - parser debug via `#PEEK`;
 - stage toggles via console;
 - Game API с resolved targets;
+- linear plan execution in `Parser Core` for non-LLM producers;
 - базовая groundwork for future stage-2 DSL.
 
 ### Дальше
 
-- explicit `Scope Builder` как отдельный subsystem;
 - parser relations (`on`, `under`, `in`, `behind`, ...);
-- parser language assets for lexicon/training;
 - richer stage-2 (LLM) handoff;
 - полноценный DSL execution loop;
 - более сложные semantic actions (`use`, `open`, `talkTo`, ...);
@@ -982,7 +1074,7 @@ flowchart TD
 1. Parser — единственный слой, интерпретирующий язык игрока.
 2. `Game API` — общий gameplay API для parser-а, UI, scripts и игровой логики.
 3. `Game` и runtime не должны парсить текст и резолвить текстовые цели.
-4. `Context Builder` строит context только из состояния игры.
+4. `ParserWorldModelBuilder` строит world model только из состояния игры.
 5. `Player Input` и `Parser Context` — отдельные входы parser-а.
 6. Stage processing последовательный, а не параллельный.
 7. Первый каскад имеет два внутренних уровня: `regex`, затем `NLP`.
@@ -994,5 +1086,6 @@ flowchart TD
 13. Object TA может содержать опциональное поле `synonyms` для повышения точности target resolution.
 14. Player-facing messages никогда не должны показывать технические `id`.
 15. Всё language-specific должно жить в text assets.
+16. Console preprocessor работает до gameplay parser-а и отвечает за shorthand-ы и stage toggles.
 
 Эта архитектура делает parser фундаментом для постепенного перехода от классического IF-style command parser-а к полноценному Game Master и orchestrator.
