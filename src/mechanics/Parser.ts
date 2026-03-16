@@ -10,6 +10,7 @@ import {
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
 import type { SceneDescriptor } from '../scene/SceneManager';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserCascadeEnvelope,
   ParserCommandActionSpec,
@@ -287,7 +288,7 @@ export class Parser {
           return this.buildCustomCommandEnvelope(
             input,
             commandMatch.command,
-            commandMatch.remainder
+            commandMatch.argumentValues
           );
         }
         return {
@@ -451,14 +452,22 @@ export class Parser {
         return this.game.goToScene(action.sceneId);
       case 'removeInventoryEntity':
         return this.executeRemoveInventoryEntity(action, planState);
-      case 'showText':
+      case 'showText': {
+        const resolvedParams = this.resolveShowTextParams(
+          action.params,
+          action.paramsFromRefs,
+          planState
+        );
         return {
           status: 'ok',
           code: 'custom_message',
           message:
-            action.message ||
-            (action.textKey ? this.game.text(action.textKey, action.params) : undefined),
+            (action.message
+              ? this.interpolateTemplate(action.message, resolvedParams)
+              : undefined) ||
+            (action.textKey ? this.game.text(action.textKey, resolvedParams) : undefined),
         };
+      }
       default:
         return {
           status: 'escalate',
@@ -837,6 +846,12 @@ export class Parser {
     }
 
     if (resolution.status === 'not_found') {
+      const distanceFailure = action.query
+        ? this.resolveDistanceFailureForArgument(action.query, action.scopes)
+        : null;
+      if (distanceFailure) {
+        return distanceFailure;
+      }
       return {
         status: action.query ? 'failed' : 'needs_clarification',
         code: action.query ? 'custom_command_target_not_found' : 'custom_command_missing_argument',
@@ -886,6 +901,54 @@ export class Parser {
         saveAs: action.saveAs,
         entityId: resolution.entity.name,
       },
+    };
+  }
+
+  private resolveDistanceFailureForArgument(
+    rawTarget: string,
+    scopes: Array<keyof Omit<ParserScope, 'sceneTargets'>>
+  ): GameActionOutcome | null {
+    if (!scopes.includes('reachable') || scopes.includes('visible')) {
+      return null;
+    }
+
+    const broadResolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['held', 'visible']),
+      'parser.look_which_one'
+    );
+    if (broadResolved.status !== 'found') {
+      return null;
+    }
+
+    if (this.game.inventory.includes(broadResolved.entity)) {
+      return null;
+    }
+
+    const scene = this.game.sceneManager.currentScene;
+    const player = scene?.player;
+    if (!scene || !player) {
+      return null;
+    }
+
+    const distanceError = ComponentSystem.getInteractionDistanceError(
+      broadResolved.entity as any,
+      player
+    );
+
+    if (!distanceError) {
+      return null;
+    }
+
+    return {
+      status: 'failed',
+      code: 'custom_command_target_too_far',
+      message: distanceError,
+      data: {
+        target: rawTarget,
+        entityId: broadResolved.entity.name,
+      },
+      recoverable: true,
     };
   }
 
@@ -940,10 +1003,10 @@ export class Parser {
   private buildCustomCommandEnvelope(
     input: string,
     command: ParserCommandSpec,
-    remainder: string
+    argumentValues: Record<string, string | null>
   ): ParserCascadeEnvelope {
     const actions = command.plan
-      .map((step) => this.mapCommandPlanStep(command, step, remainder))
+      .map((step) => this.mapCommandPlanStep(command, step, argumentValues))
       .filter((action): action is ParserToolAction => !!action);
 
     return {
@@ -956,7 +1019,9 @@ export class Parser {
         rawInput: input,
         normalizedInput: input.trim().toUpperCase(),
         verb: command.id.toUpperCase(),
-        noun: remainder,
+        noun: Object.values(argumentValues)
+          .filter((value): value is string => !!value)
+          .join(' '),
       },
     };
   }
@@ -964,7 +1029,7 @@ export class Parser {
   private mapCommandPlanStep(
     command: ParserCommandSpec,
     step: ParserCommandActionSpec,
-    remainder: string
+    argumentValues: Record<string, string | null>
   ): ParserToolAction | null {
     switch (step.type) {
       case 'resolveArgumentEntity': {
@@ -974,11 +1039,11 @@ export class Parser {
           type: 'resolveArgumentEntity',
           commandId: command.id,
           arg: step.arg,
-          query: remainder || null,
+          query: argumentValues[step.arg] || null,
           scopes: argSpec.scopes,
           saveAs: step.saveAs,
-          messages: argSpec.messages,
           validation: argSpec.validation,
+          messages: argSpec.messages,
         };
       }
       case 'ensureHeldEntity':
@@ -1004,6 +1069,7 @@ export class Parser {
           type: 'showText',
           message: step.messageId ? command.messages?.[step.messageId] : step.text,
           params: step.params,
+          paramsFromRefs: step.paramsFromRefs,
         };
       default:
         return null;
@@ -1171,6 +1237,50 @@ export class Parser {
         title: scene.title,
       })),
     };
+  }
+
+  private resolveShowTextParams(
+    directParams: Record<string, string> | undefined,
+    paramsFromRefs: Record<string, string> | undefined,
+    planState: ParserPlanState
+  ): Record<string, string> | undefined {
+    const resolved: Record<string, string> = { ...(directParams || {}) };
+
+    for (const [paramName, refName] of Object.entries(paramsFromRefs || {})) {
+      const value = planState[refName];
+      const displayValue = this.getPlanStateDisplayValue(value);
+      if (displayValue) {
+        resolved[paramName] = displayValue;
+      }
+    }
+
+    return Object.keys(resolved).length ? resolved : undefined;
+  }
+
+  private getPlanStateDisplayValue(value: unknown): string | null {
+    if (value instanceof Entity) {
+      return this.getPlayerFacingEntityTitle(value) || null;
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (value && typeof value === 'object') {
+      const maybeScene = value as { title?: unknown; name?: unknown; id?: unknown };
+      if (typeof maybeScene.title === 'string' && maybeScene.title.trim())
+        return maybeScene.title.trim();
+      if (typeof maybeScene.name === 'string' && maybeScene.name.trim())
+        return maybeScene.name.trim();
+      if (typeof maybeScene.id === 'string' && maybeScene.id.trim()) return maybeScene.id.trim();
+    }
+    return null;
+  }
+
+  private interpolateTemplate(template: string, params?: Record<string, string>): string {
+    if (!params) return template;
+    return template.replace(/\{(\w+)\}/g, (_match, token: string) => {
+      const value = params[token];
+      return value === undefined || value === null ? `{${token}}` : String(value);
+    });
   }
 
   private isEntityValidForCommandArgument(

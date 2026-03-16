@@ -49,6 +49,7 @@ export type ParserCommandArgumentSpec = {
   kind: 'entity';
   required: boolean;
   scopes: ParserScopeSlice[];
+  separatorsBefore?: string[];
   messages?: ParserCommandArgumentMessages;
   validation?: ParserCommandArgumentValidation;
 };
@@ -77,6 +78,7 @@ export type ParserCommandActionSpec =
       messageId?: string;
       text?: string;
       params?: Record<string, string>;
+      paramsFromRefs?: Record<string, string>;
     };
 
 export type ParserCommandSpec = {
@@ -167,6 +169,7 @@ export type ParserToolAction =
       message?: string;
       textKey?: string;
       params?: Record<string, string>;
+      paramsFromRefs?: Record<string, string>;
     };
 
 export type ParserCascadeEnvelope = {

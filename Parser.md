@@ -242,6 +242,10 @@ Stage 1 на самом деле состоит из двух внутренни
 - `go over to the office`
 
 Важно:
+- глагол или verb phrase обычно определяет саму команду;
+- слова вроде `with`, `on`, `to`, `in`, `under` обычно являются не отдельными командами, а grammar hints для связывания аргументов или relation semantics.
+
+Важно:
 - `Stage 1.2` не занимается world reasoning;
 - не должен сам принимать игровые решения;
 - не должен сам резолвить сложные semantic target-и;
@@ -508,6 +512,16 @@ Parser:
 - поддерживает partial matching;
 - поддерживает clarification при неоднозначности.
 
+При этом parser полезно различает:
+- **command verb**: например `use`, `unlock`, `look`, `teleport`
+- **grammar markers / relations**: например `with`, `on`, `to`, `in`, `under`
+
+Эти слова не обязательно являются частью самой команды.
+Чаще они помогают parser-у:
+- назначать роли аргументам;
+- выбирать relation-aware scope;
+- понимать структуру одной и той же команды в разных формулировках.
+
 ### Object TA fields relevant to target resolution
 
 Для object TA важны не только:
@@ -723,27 +737,37 @@ type CascadeEnvelope =
 
 ### Первый вариант `ParserPlannedAction`
 
-Для первого DSL достаточно ограниченного набора шагов:
+Целевой DSL может быть богаче, но текущая реализация уже поддерживает полезный ограниченный subset:
 
 ```ts
 type ParserPlannedAction =
-  | { type: 'resolveEntity'; source: 'visible' | 'held' | 'takable' | 'examinable' | 'reachable'; query: string; saveAs: string }
-  | { type: 'resolveScene'; query: string; saveAs: string }
-  | { type: 'checkInventoryContains'; query: string; saveAs?: string }
-  | { type: 'checkResolved'; ref: string }
-  | { type: 'checkState'; scope: 'scene' | 'entity'; ref?: string; key: string; expected?: string | number | boolean }
-  | { type: 'lookScene' }
-  | { type: 'lookEntity'; ref: string }
-  | { type: 'examineEntity'; ref: string }
-  | { type: 'takeEntity'; ref: string }
-  | { type: 'showInventory' }
-  | { type: 'goToScene'; ref: string }
-  | { type: 'goToEntity'; ref: string }
-  | { type: 'removeInventoryItem'; ref: string }
-  | { type: 'addInventoryItem'; ref: string }
-  | { type: 'askPlayer'; question: string; saveAs?: string }
-  | { type: 'showMessage'; text: string };
+  | {
+      type: 'resolveArgumentEntity';
+      commandId: string;
+      arg: string;
+      query: string | null;
+      scopes: ParserScopeSlice[];
+      saveAs: string;
+      messages?: ParserCommandArgumentMessages;
+      validation?: ParserCommandArgumentValidation;
+    }
+  | { type: 'ensureHeldEntity'; ref: string; noEffectMessage?: string }
+  | { type: 'goToSceneById'; sceneId: string }
+  | { type: 'removeInventoryEntity'; ref: string }
+  | {
+      type: 'showText';
+      message?: string;
+      textKey?: string;
+      params?: Record<string, string>;
+      paramsFromRefs?: Record<string, string>;
+    };
 ```
+
+Этого уже хватает для:
+- `TELEPORT WITH item`;
+- двухаргументных custom commands вроде `USE X ON Y`;
+- generic clarification и validation на уровне `Parser Core`;
+- подстановки resolved entity titles в финальные сообщения через `paramsFromRefs`.
 
 ### Почему DSL должен быть ограниченным
 
@@ -845,12 +869,14 @@ Parser должен быть локализуемым без переписыв�
   - aliases;
   - articles;
   - polite prefixes;
-  - prepositional phrases.
+  - prepositional phrases and grammar markers.
 
 Текущая раскладка:
 - `public/text/system/parser.json` — player-facing parser strings;
 - `public/text/system/parser-lexicon.json` — stage1 lexicon и normalization vocabulary;
 - `public/text/system/parser-training.json` — training phrases для NLP-слоя.
+- `public/text/system/commands/*.json` — custom command assets;
+- `Commands.md` — формат и принципы command TA.
 
 Текущее применение:
 - `Stage 1.1` использует `parser-lexicon.json` для:
@@ -984,9 +1010,13 @@ type ParserRelation = {
 
 - `src/mechanics/parserLanguage.ts`
   - stage1 lexicon helpers
-  - command matching
   - target normalization
   - parser language-pack access helpers
+
+- `src/mechanics/parserCommands.ts`
+  - parser custom command matching
+  - phrase matching
+  - multi-argument splitting through `separatorsBefore`
 
 - `src/mechanics/parserTypes.ts`
   - parser-facing types
@@ -995,6 +1025,8 @@ type ParserRelation = {
   - `ParserCascadeEnvelope`
   - `ParserCoreDecision`
   - `ParserToolAction`
+  - `ParserCommandSpec`
+  - `ParserPlanState`
 
 - `src/core/Game.ts`
   - semantic runtime tools
@@ -1009,6 +1041,7 @@ type ParserRelation = {
   - scene/object text resolution
   - parser lexicon assets
   - parser training assets
+  - parser command assets
   - object fields such as `details`
   - object list fields such as `synonyms`
 
@@ -1032,11 +1065,12 @@ type ParserRelation = {
 | Console preprocessor | `src/core/Console.ts` | `preprocessGameplayInput(...)`, stage toggles, shorthand expansion |
 | World model builder | `src/mechanics/ParserWorldModelBuilder.ts` | `build(...)` returns `{ context, scope }` |
 | Stage 1.1 regex | `src/mechanics/Parser.ts`, `src/mechanics/parserLanguage.ts` | `runStage1(...)`, `matchStage1Intent(...)`, `normalizeTargetForIntent(...)` |
+| Custom command matching | `src/mechanics/parserCommands.ts`, `src/mechanics/Parser.ts` | `matchParserCommandSpec(...)`, `buildCustomCommandEnvelope(...)`, multi-argument extraction |
 | Stage 1.2 NLP | `src/mechanics/NlpCascade.ts` | `parse(...)`, training on parser language assets, envelope generation |
 | Parser Core | `src/mechanics/Parser.ts` | `runParserCore(...)`, `makeCoreDecision(...)`, `executeCoreDecision(...)`, `executeCorePlan(...)` |
 | Scope-driven resolution | `src/mechanics/Parser.ts` | `resolveLookTarget(...)`, `resolveExamineTarget(...)`, `resolveTakeTarget(...)`, `resolveGoToTarget(...)`, `resolveEntityTargetInCandidates(...)` |
-| Shared gameplay API | `src/core/Game.ts`, `src/core/IGame.ts` | `lookScene(...)`, `lookEntity(...)`, `examineEntity(...)`, `takeEntity(...)`, `goToScene(...)`, `goToEntity(...)`, `showInventory()` |
-| Text assets | `src/core/TextAssetManager.ts`, `public/text/system/*.json` | `getParserLexicon()`, `getParserTraining()`, `getResolvedObjectField(...)`, `getResolvedObjectListField(...)` |
+| Shared gameplay API | `src/core/Game.ts`, `src/core/IGame.ts` | `lookScene(...)`, `lookEntity(...)`, `examineEntity(...)`, `takeEntity(...)`, `goToScene(...)`, `goToEntity(...)`, `showInventory()`, `removeInventoryEntity(...)` |
+| Text assets | `src/core/TextAssetManager.ts`, `public/text/system/*.json` | `getParserLexicon()`, `getParserTraining()`, `getParserCommands()`, `getResolvedObjectField(...)`, `getResolvedObjectListField(...)` |
 | Parser debugging | `src/mechanics/Parser.ts`, `src/core/Console.ts` | `#PEEK`, stage toggles, debug output for `scope/envelope/core/result/nlp` |
 
 ### Separation of concerns
@@ -1080,6 +1114,9 @@ flowchart TD
 - stage toggles via console;
 - Game API с resolved targets;
 - linear plan execution in `Parser Core` for non-LLM producers;
+- parser custom command assets via `public/text/system/commands/*.json`;
+- first generic multi-step command `TELEPORT WITH`;
+- first generic two-argument command path `USE X ON Y`;
 - базовая groundwork for future stage-2 DSL.
 
 ### Дальше

@@ -80,6 +80,8 @@ The flow is:
    - `Parser Core`
 4. Command-specific messages should be **overrides**, not separate parser logic.
 5. Plans should remain **linear and constrained** in the first version.
+6. Multi-argument commands should be expressed through the same generic machinery, not special parser branches.
+7. Words like `with`, `on`, `to`, `in`, `under` should usually be treated as grammar hints for binding arguments or relations, not as standalone commands.
 
 ---
 
@@ -171,6 +173,7 @@ Notes:
 - first draft should keep this simple
 - exact phrase matching is enough for v1
 - later this can evolve into richer grammar or language-pack integration
+- in most cases, `phrases` should represent the verb-level command (`use`, `unlock`, `teleport`), while prepositions like `with` or `on` are handled by argument grammar
 
 ### `arguments`
 
@@ -285,6 +288,7 @@ That means:
 
 This is important:
 - we should not build a second clarification system just for custom commands
+- clarification may happen for any individual argument in a multi-argument command
 
 ---
 
@@ -304,6 +308,44 @@ This means:
 
 The command asset does not bypass scope rules.
 It only says which scope slices are legal for that argument.
+
+### Multi-Argument Commands
+
+Commands may declare more than one argument.
+
+Important distinction:
+- the **command** is usually the verb or verb phrase (`use`, `unlock`, `teleport`)
+- words like `with`, `on`, `to`, `in`, `under` are usually **argument-binding markers**
+- they help parser assign roles to arguments, but they are not usually separate commands in themselves
+
+For v1, arguments after the first may define `separatorsBefore`, for example:
+
+```json
+{
+  "name": "target",
+  "kind": "entity",
+  "required": true,
+  "scopes": ["visible", "held", "examinable"],
+  "separatorsBefore": ["on"]
+}
+```
+
+With this, input like:
+
+```text
+use key on door
+```
+
+is parsed as:
+- `item = key`
+- `target = door`
+
+So for parser architecture purposes, `USE` is the command, while `ON` is a grammar hint that introduces the next argument.
+
+If the separator is missing:
+- earlier arguments keep the remaining text they can claim
+- later required arguments may remain unresolved
+- the usual parser clarification flow asks for the missing argument
 
 ---
 
@@ -335,7 +377,13 @@ type ParserPlannedAction =
   | { type: 'ensureHeldEntity'; ref: string }
   | { type: 'goToSceneById'; sceneId: string }
   | { type: 'removeInventoryEntity'; ref: string }
-  | { type: 'showText'; textKey: string; params?: Record<string, string> };
+  | {
+      type: 'showText';
+      textKey?: string;
+      messageId?: string;
+      params?: Record<string, string>;
+      paramsFromRefs?: Record<string, string>;
+    };
 ```
 
 These actions are intentionally generic.
@@ -346,6 +394,21 @@ They are useful not only for teleportation, but later for:
 - giving
 - consuming
 - scripted inventory-driven actions
+
+`paramsFromRefs` allows `showText` to interpolate values from resolved plan state.
+
+Example:
+
+```json
+{
+  "type": "showText",
+  "messageId": "no_effect_pair",
+  "paramsFromRefs": {
+    "item": "use_item",
+    "target": "use_target"
+  }
+}
+```
 
 ---
 
@@ -416,6 +479,56 @@ Expected flow:
    - show success message
 
 This gives us a realistic multi-step scenario while still using the lower cascade.
+
+---
+
+## Second Example: `USE X ON Y`
+
+This is the first generic multi-argument command supported by the current system.
+
+Example command asset shape:
+
+```json
+{
+  "id": "use_on",
+  "phrases": ["use"],
+  "arguments": [
+    {
+      "name": "item",
+      "kind": "entity",
+      "required": true,
+      "scopes": ["held", "takable"]
+    },
+    {
+      "name": "target",
+      "kind": "entity",
+      "required": true,
+      "scopes": ["visible", "held", "examinable"],
+      "separatorsBefore": ["on"]
+    }
+  ],
+  "plan": [
+    { "type": "resolveArgumentEntity", "arg": "item", "saveAs": "use_item" },
+    { "type": "ensureHeldEntity", "ref": "use_item" },
+    { "type": "resolveArgumentEntity", "arg": "target", "saveAs": "use_target" },
+    {
+      "type": "showText",
+      "messageId": "no_effect_pair",
+      "paramsFromRefs": {
+        "item": "use_item",
+        "target": "use_target"
+      }
+    }
+  ]
+}
+```
+
+This command is useful as a parser-system milestone because it exercises:
+- multi-argument parsing
+- per-argument clarification
+- shared scope rules
+- plan-state reuse
+- dynamic final messaging from resolved refs
 
 ---
 

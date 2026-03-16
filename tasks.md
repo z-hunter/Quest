@@ -8,7 +8,8 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 
 - [x] Introduce parser custom command assets (`Commands.md`, command TA loading, shared command spec format).
 - [x] Expand parser DSL/Core so lower layers can mock richer Stage-2-style plans.
-- [ ] Implement `TELEPORT WITH` as the first custom command scenario driven by command TA.
+- [x] Implement `TELEPORT WITH` as the first custom command scenario driven by command TA.
+- [x] Extend command assets to support multi-argument parsing for flows like `USE X ON Y`.
 
 ## Backlog
 

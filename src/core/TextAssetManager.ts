@@ -228,6 +228,52 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       success: 'You vanish in a flash and arrive somewhere else.',
     },
   },
+  {
+    id: 'use_on',
+    phrases: ['use'],
+    arguments: [
+      {
+        name: 'item',
+        kind: 'entity',
+        required: true,
+        scopes: ['held', 'reachable'],
+        messages: {
+          missing: 'Use what on what?',
+          ambiguous: 'Which item do you mean: {options}?',
+          notFound: "You don't see anything like that here.",
+          noEffect: "That doesn't work.",
+        },
+      },
+      {
+        name: 'target',
+        kind: 'entity',
+        required: true,
+        scopes: ['held', 'reachable'],
+        separatorsBefore: ['on', 'with'],
+        messages: {
+          missing: 'Use it on what?',
+          ambiguous: 'Which target do you mean: {options}?',
+          notFound: "You don't see anything like that here.",
+          noEffect: "That doesn't work.",
+        },
+      },
+    ],
+    plan: [
+      { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
+      { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
+      {
+        type: 'showText',
+        messageId: 'no_effect_pair',
+        paramsFromRefs: {
+          item: 'use_item',
+          target: 'use_target',
+        },
+      },
+    ],
+    messages: {
+      no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    },
+  },
 ];
 
 export class TextAssetManager {
@@ -599,6 +645,9 @@ export class TextAssetManager {
         kind: arg.kind === 'entity' ? 'entity' : 'entity',
         required: arg.required !== false,
         scopes: Array.isArray(arg.scopes) ? arg.scopes.filter(Boolean) : [],
+        separatorsBefore: Array.isArray(arg.separatorsBefore)
+          ? arg.separatorsBefore.map((item) => String(item).trim()).filter(Boolean)
+          : undefined,
         messages: arg.messages || undefined,
         validation: arg.validation
           ? {
