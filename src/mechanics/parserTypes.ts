@@ -111,6 +111,7 @@ export type ParserResult =
       handled: boolean;
       outcomes: GameActionOutcome[];
       actionsExecuted: string[];
+      coreDecision?: ParserCoreDecision;
     }
   | {
       type: 'handoff';
@@ -119,6 +120,19 @@ export type ParserResult =
       actionsExecuted: string[];
       reason: string;
       debug: Record<string, unknown>;
+      coreDecision?: ParserCoreDecision;
+    };
+
+export type ParserCoreDecision =
+  | {
+      kind: 'handoff_up';
+      reason: string;
+      envelope: ParserCascadeEnvelope;
+    }
+  | {
+      kind: 'execute_plan';
+      envelope: ParserCascadeEnvelope;
+      actions: ParserToolAction[];
     };
 
 export type ParserResponse = {

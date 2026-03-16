@@ -17,9 +17,9 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
   - `sceneTargets`
 - [x] Replace ad-hoc resolution helpers with scope-driven resolution.
 - [x] Unify stage outputs so `Stage 1.1` and `Stage 1.2` emit the same Core-facing envelope.
-- [ ] Refactor `Parser Core` around the unified envelope/protocol.
-- [ ] Separate pre-API escalation from post-API escalation in `Parser Core`.
-- [ ] Support linear plan execution in `Parser Core` without requiring LLM.
+- [x] Refactor `Parser Core` around the unified envelope/protocol.
+- [x] Separate pre-API escalation from post-API escalation in `Parser Core`.
+- [x] Support linear plan execution in `Parser Core` without requiring LLM.
 - [ ] Add optional `synonyms` to object TA schema.
 - [x] Include `synonyms` in the default object TA template.
 - [x] Extend parser target resolution to use:
@@ -27,7 +27,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
   - `synonyms`
   - partial matching
   - clarification on ambiguity
-- [ ] Expand `#PEEK` debug output with:
+- [x] Expand `#PEEK` debug output with:
   - scope data
   - unified envelope data
   - Core decision data
@@ -54,12 +54,12 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 ## Plan For Step 3
 
 - [x] Define a single `CascadeEnvelope` shape that both `Stage 1.1` and `Stage 1.2` emit.
-- [ ] Replace the current action/handoff JSON split with the unified envelope.
-- [ ] Make `Parser Core` consume the unified envelope directly instead of inferring behavior from ad-hoc action types.
-- [ ] Split `Parser Core` flow into explicit phases:
+- [x] Replace the current action/handoff JSON split with the unified envelope.
+- [x] Make `Parser Core` consume the unified envelope directly instead of inferring behavior from ad-hoc action types.
+- [x] Split `Parser Core` flow into explicit phases:
   - envelope intake
   - pre-API validation/resolution
   - API plan execution
   - post-API outcome analysis
-- [ ] Introduce a minimal linear plan execution path in `Core` for non-LLM producers.
-- [ ] Expose enough debug data in `#PEEK` to inspect envelope and Core decisions while refactoring.
+- [x] Introduce a minimal linear plan execution path in `Core` for non-LLM producers.
+- [x] Expose enough debug data in `#PEEK` to inspect envelope and Core decisions while refactoring.

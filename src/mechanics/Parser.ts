@@ -11,6 +11,7 @@ import type { Entity } from '../entities/Entity';
 import type { SceneDescriptor } from '../scene/SceneManager';
 import type {
   ParserCascadeEnvelope,
+  ParserCoreDecision,
   ParserPendingState,
   ParserResponse,
   ParserResult,
@@ -45,6 +46,7 @@ export class Parser {
       const context = worldModel.context;
       this.activeScope = worldModel.scope;
       const contextJson = JSON.stringify(context);
+      const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
       let envelope =
         actionEnvelope ||
         (this.game.console?.parserStage1Enabled === false
@@ -63,8 +65,8 @@ export class Parser {
       }
 
       const envelopeJson = JSON.stringify(envelope);
-      const resultJson = this.executeEnvelope(envelope);
-      const response = this.buildResponse(resultJson, envelopeJson, contextJson);
+      const resultJson = this.runParserCore(envelope);
+      const response = this.buildResponse(resultJson, envelopeJson, contextJson, scopeJson);
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
@@ -274,36 +276,78 @@ export class Parser {
     return envelope.output.kind === 'handoff_up';
   }
 
-  private executeEnvelope(envelope: ParserCascadeEnvelope): string {
+  private runParserCore(envelope: ParserCascadeEnvelope): string {
+    const decision = this.makeCoreDecision(envelope);
+    return this.executeCoreDecision(decision);
+  }
+
+  private makeCoreDecision(envelope: ParserCascadeEnvelope): ParserCoreDecision {
+    if (envelope.output.kind === 'handoff_up') {
+      return {
+        kind: 'handoff_up',
+        reason: envelope.output.reason,
+        envelope,
+      };
+    }
+
+    return {
+      kind: 'execute_plan',
+      envelope,
+      actions: envelope.output.actions,
+    };
+  }
+
+  private executeCoreDecision(decision: ParserCoreDecision): string {
     const executedActions: string[] = [];
 
-    if (envelope.output.kind === 'handoff_up') {
+    if (decision.kind === 'handoff_up') {
       const result: ParserResult = {
         type: 'handoff',
         handled: false,
         outcomes: [],
         actionsExecuted: executedActions,
-        reason: envelope.output.reason,
+        reason: decision.reason,
+        coreDecision: decision,
         debug: {
-          envelope,
+          envelope: decision.envelope,
+          phase: 'pre_api',
         },
       };
       return JSON.stringify(result);
     }
 
-    const actions = envelope.output.actions;
-    if (!actions.length) {
+    if (!decision.actions.length) {
       const result: ParserResult = {
         type: 'handoff',
         handled: false,
         outcomes: [],
         actionsExecuted: executedActions,
         reason: 'empty_action_plan',
-        debug: { envelope },
+        coreDecision: decision,
+        debug: {
+          envelope: decision.envelope,
+          phase: 'pre_api',
+        },
       };
       return JSON.stringify(result);
     }
 
+    const outcomes = this.executeCorePlan(decision.actions, executedActions);
+
+    const result: ParserResult = {
+      type: 'outcomes',
+      handled: true,
+      outcomes,
+      actionsExecuted: executedActions,
+      coreDecision: decision,
+    };
+    return JSON.stringify(result);
+  }
+
+  private executeCorePlan(
+    actions: ParserToolAction[],
+    executedActions: string[]
+  ): GameActionOutcome[] {
     const outcomes: GameActionOutcome[] = [];
 
     for (const action of actions) {
@@ -316,13 +360,7 @@ export class Parser {
       }
     }
 
-    const result: ParserResult = {
-      type: 'outcomes',
-      handled: true,
-      outcomes,
-      actionsExecuted: executedActions,
-    };
-    return JSON.stringify(result);
+    return outcomes;
   }
 
   private executeParserAction(action: ParserToolAction): GameActionOutcome {
@@ -651,15 +689,19 @@ export class Parser {
 
   private buildResponse(
     resultJson: string,
-    actionJson: string,
-    contextJson: string
+    envelopeJson: string,
+    contextJson: string,
+    scopeJson: string
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
+    const coreDecisionJson = result.coreDecision ? JSON.stringify(result.coreDecision) : undefined;
     const peekMessages = this.game.console?.parserPeekEnabled
       ? [
           `[Parser peek] context=${contextJson}`,
-          `[Parser peek] actions=${actionJson}`,
+          `[Parser peek] scope=${scopeJson}`,
+          `[Parser peek] envelope=${envelopeJson}`,
+          ...(coreDecisionJson ? [`[Parser peek] core=${coreDecisionJson}`] : []),
           `[Parser peek] result=${resultJson}`,
           ...(nlpDebug ? [`[Parser peek] nlp=${JSON.stringify(nlpDebug)}`] : []),
         ]
@@ -671,7 +713,9 @@ export class Parser {
         nextPendingState: null,
         debugMessages: peekMessages || [
           `[Parser handoff] context=${contextJson}`,
-          `[Parser handoff] actions=${actionJson}`,
+          `[Parser handoff] scope=${scopeJson}`,
+          `[Parser handoff] envelope=${envelopeJson}`,
+          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
           `[Parser handoff] result=${resultJson}`,
         ],
       };
@@ -684,9 +728,9 @@ export class Parser {
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
         nextPendingState: {
-          intent: this.extractPendingIntent(actionJson),
+          intent: this.extractPendingIntent(envelopeJson),
           question: clarification.message || this.game.text('parser.parse_unknown'),
-          originalInput: this.extractRawInput(actionJson),
+          originalInput: this.extractRawInput(envelopeJson),
         },
         debugMessages: peekMessages,
       };
@@ -699,7 +743,9 @@ export class Parser {
         nextPendingState: null,
         debugMessages: peekMessages || [
           `[Parser handoff] context=${contextJson}`,
-          `[Parser handoff] actions=${actionJson}`,
+          `[Parser handoff] scope=${scopeJson}`,
+          `[Parser handoff] envelope=${envelopeJson}`,
+          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
           `[Parser handoff] result=${resultJson}`,
         ],
       };
@@ -767,5 +813,21 @@ export class Parser {
     if (trimmed.startsWith('#') || trimmed.startsWith('-')) return true;
     const firstWord = trimmed.split(/\s+/)[0]?.toUpperCase() || '';
     return getStage1CommandWords(this.game.textAssets.getParserLexicon()).has(firstWord);
+  }
+
+  private buildPeekScopeSummary(scope: ParserScope): Record<string, unknown> {
+    return {
+      visible: scope.visible.map((entity) => entity.name),
+      held: scope.held.map((entity) => entity.name),
+      takable: scope.takable.map((entity) => entity.name),
+      reachable: scope.reachable.map((entity) => entity.name),
+      examinable: scope.examinable.map((entity) => entity.name),
+      subscene: scope.subscene.map((entity) => entity.name),
+      sceneTargets: scope.sceneTargets.map((scene) => ({
+        id: scene.id,
+        name: scene.name,
+        title: scene.title,
+      })),
+    };
   }
 }
