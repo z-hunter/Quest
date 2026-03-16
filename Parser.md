@@ -443,6 +443,12 @@ Parser сначала проверяет:
 - `Game` не делает disambiguation;
 - `Game` не разбирает user input.
 
+Уточнение по UI:
+- текущий UI-клик по объекту считается корректным, если он показывает player-facing `title` объекта в консоли;
+- UI-клик не обязан вызывать `lookEntity(...)`;
+- это presentation-level behavior, а не parser semantics;
+- в будущем parser-side `LOOK` тоже может использовать схожее перечисление видимых названий объектов, не требуя маршрутизации UI через parser.
+
 Следствие:
 - на `Scanline` можно сделать не только parser-driven игру;
 - при расширении полномочий UI на этом же API можно построить чистый point-and-click quest.
@@ -527,6 +533,22 @@ Parser:
 - является parser-owned text knowledge;
 - помогает точнее определять target без обращения к LLM;
 - должно входить в шаблон нового object TA, даже если список пустой.
+
+Поле `details`:
+- является стандартным полем object TA;
+- используется действием `EXAMINE`;
+- тоже входит в стандартный шаблон нового object TA.
+
+Стандартный шаблон нового object TA:
+
+```json
+{
+  "title": "Object",
+  "description": "You see nothing special.",
+  "details": "",
+  "synonyms": []
+}
+```
 
 ### Inventory-aware resolution
 
@@ -987,6 +1009,7 @@ type ParserRelation = {
   - scene/object text resolution
   - parser lexicon assets
   - parser training assets
+  - object fields such as `details`
   - object list fields such as `synonyms`
 
 - `src/core/Console.ts`
@@ -1013,7 +1036,7 @@ type ParserRelation = {
 | Parser Core | `src/mechanics/Parser.ts` | `runParserCore(...)`, `makeCoreDecision(...)`, `executeCoreDecision(...)`, `executeCorePlan(...)` |
 | Scope-driven resolution | `src/mechanics/Parser.ts` | `resolveLookTarget(...)`, `resolveExamineTarget(...)`, `resolveTakeTarget(...)`, `resolveGoToTarget(...)`, `resolveEntityTargetInCandidates(...)` |
 | Shared gameplay API | `src/core/Game.ts`, `src/core/IGame.ts` | `lookScene(...)`, `lookEntity(...)`, `examineEntity(...)`, `takeEntity(...)`, `goToScene(...)`, `goToEntity(...)`, `showInventory()` |
-| Text assets | `src/core/TextAssetManager.ts`, `public/text/system/*.json` | `getParserLexicon()`, `getParserTraining()`, `getResolvedObjectListField(...)` |
+| Text assets | `src/core/TextAssetManager.ts`, `public/text/system/*.json` | `getParserLexicon()`, `getParserTraining()`, `getResolvedObjectField(...)`, `getResolvedObjectListField(...)` |
 | Parser debugging | `src/mechanics/Parser.ts`, `src/core/Console.ts` | `#PEEK`, stage toggles, debug output for `scope/envelope/core/result/nlp` |
 
 ### Separation of concerns
@@ -1083,9 +1106,10 @@ flowchart TD
 10. `Core` может эскалировать как до API, так и после API.
 11. `Core` — центр clarification, orchestration, iteration и final response.
 12. DSL/protocol общения с `Core` должен быть единым для всех каскадов, даже если нижние уровни используют только простой subset.
-13. Object TA может содержать опциональное поле `synonyms` для повышения точности target resolution.
+13. Object TA содержит стандартные parser-relevant поля `title`, `description`, `details`; также может содержать опциональное поле `synonyms` для повышения точности target resolution.
 14. Player-facing messages никогда не должны показывать технические `id`.
 15. Всё language-specific должно жить в text assets.
 16. Console preprocessor работает до gameplay parser-а и отвечает за shorthand-ы и stage toggles.
+17. UI-клик по объекту может показывать `title` напрямую, не вызывая parser semantics `LOOK`.
 
 Эта архитектура делает parser фундаментом для постепенного перехода от классического IF-style command parser-а к полноценному Game Master и orchestrator.

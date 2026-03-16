@@ -259,6 +259,7 @@ export class TextAssetManager {
     return {
       title: fallbackTitle,
       description: fallbackDescription,
+      details: '',
       synonyms: [],
     };
   }
