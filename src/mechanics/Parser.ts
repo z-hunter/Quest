@@ -1,5 +1,6 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import { NlpCascade } from './NlpCascade';
+import { matchParserCommandSpec } from './parserCommands';
 import {
   getStage1CommandWords,
   isLookSceneWord,
@@ -7,11 +8,15 @@ import {
   normalizeTargetForIntent,
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
-import type { Entity } from '../entities/Entity';
+import { Entity } from '../entities/Entity';
 import type { SceneDescriptor } from '../scene/SceneManager';
 import type {
   ParserCascadeEnvelope,
+  ParserCommandActionSpec,
+  ParserCommandArgumentValidation,
+  ParserCommandSpec,
   ParserCoreDecision,
+  ParserPlanState,
   ParserPendingState,
   ParserResponse,
   ParserResult,
@@ -95,6 +100,54 @@ export class Parser {
       return null;
     }
 
+    if (this.pendingState.intent === 'custom') {
+      const pendingEnvelopeJson = this.pendingState.pendingEnvelopeJson;
+      if (!pendingEnvelopeJson) {
+        this.pendingState = null;
+        return null;
+      }
+
+      try {
+        const envelope = JSON.parse(pendingEnvelopeJson) as ParserCascadeEnvelope;
+        if (envelope.output.kind !== 'plan') {
+          this.pendingState = null;
+          return null;
+        }
+
+        const patchedActions = envelope.output.actions.map((action) => {
+          if (
+            action.type === 'resolveArgumentEntity' &&
+            (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg)
+          ) {
+            return {
+              ...action,
+              query: input.trim(),
+            };
+          }
+          return action;
+        });
+
+        return {
+          ...envelope,
+          stage: 'pending-resolution',
+          output: {
+            kind: 'plan',
+            actions: patchedActions,
+          },
+          debug: {
+            ...envelope.debug,
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            noun: input.trim(),
+            pendingIntent: this.pendingState.commandId || 'custom',
+          },
+        };
+      } catch {
+        this.pendingState = null;
+        return null;
+      }
+    }
+
     const action: ParserToolAction = {
       type:
         this.pendingState.intent === 'look'
@@ -127,6 +180,7 @@ export class Parser {
   private runStage1(input: string): ParserCascadeEnvelope {
     const lexicon = this.game.textAssets.getParserLexicon();
     const match = matchStage1Intent(input, lexicon);
+    const commandMatch = matchParserCommandSpec(input, this.game.textAssets.getParserCommands());
     const words = input.trim().split(/\s+/);
     const verb = (words[0] || '').toUpperCase();
     const noun = words.slice(1).join(' ').trim();
@@ -229,6 +283,13 @@ export class Parser {
         };
       }
       default:
+        if (commandMatch) {
+          return this.buildCustomCommandEnvelope(
+            input,
+            commandMatch.command,
+            commandMatch.remainder
+          );
+        }
         return {
           stage: 'regex-v1',
           output: {
@@ -299,6 +360,7 @@ export class Parser {
 
   private executeCoreDecision(decision: ParserCoreDecision): string {
     const executedActions: string[] = [];
+    const planState: ParserPlanState = {};
 
     if (decision.kind === 'handoff_up') {
       const result: ParserResult = {
@@ -332,7 +394,7 @@ export class Parser {
       return JSON.stringify(result);
     }
 
-    const outcomes = this.executeCorePlan(decision.actions, executedActions);
+    const outcomes = this.executeCorePlan(decision.actions, executedActions, planState);
 
     const result: ParserResult = {
       type: 'outcomes',
@@ -346,12 +408,13 @@ export class Parser {
 
   private executeCorePlan(
     actions: ParserToolAction[],
-    executedActions: string[]
+    executedActions: string[],
+    planState: ParserPlanState
   ): GameActionOutcome[] {
     const outcomes: GameActionOutcome[] = [];
 
     for (const action of actions) {
-      const outcome = this.executeParserAction(action);
+      const outcome = this.executeParserAction(action, planState);
       executedActions.push(this.getExecutedActionName(action));
       outcomes.push(outcome);
 
@@ -363,7 +426,10 @@ export class Parser {
     return outcomes;
   }
 
-  private executeParserAction(action: ParserToolAction): GameActionOutcome {
+  private executeParserAction(
+    action: ParserToolAction,
+    planState: ParserPlanState
+  ): GameActionOutcome {
     switch (action.type) {
       case 'lookScene':
         return this.game.lookScene();
@@ -377,6 +443,22 @@ export class Parser {
         return this.game.showInventory();
       case 'goToTarget':
         return this.resolveGoToTarget(action.target);
+      case 'resolveArgumentEntity':
+        return this.executeResolveArgumentEntity(action, planState);
+      case 'ensureHeldEntity':
+        return this.executeEnsureHeldEntity(action, planState);
+      case 'goToSceneById':
+        return this.game.goToScene(action.sceneId);
+      case 'removeInventoryEntity':
+        return this.executeRemoveInventoryEntity(action, planState);
+      case 'showText':
+        return {
+          status: 'ok',
+          code: 'custom_message',
+          message:
+            action.message ||
+            (action.textKey ? this.game.text(action.textKey, action.params) : undefined),
+        };
       default:
         return {
           status: 'escalate',
@@ -401,6 +483,16 @@ export class Parser {
         return 'showInventory';
       case 'goToTarget':
         return 'goTo';
+      case 'resolveArgumentEntity':
+        return 'resolveArgumentEntity';
+      case 'ensureHeldEntity':
+        return 'ensureHeldEntity';
+      case 'goToSceneById':
+        return 'goToSceneById';
+      case 'removeInventoryEntity':
+        return 'removeInventoryEntity';
+      case 'showText':
+        return 'showText';
       default:
         return 'unknown';
     }
@@ -480,6 +572,49 @@ export class Parser {
     }
 
     return { status: 'not_found' };
+  }
+
+  private resolveEntityTargetWithMessages(
+    rawTarget: string | null,
+    candidates: Entity[],
+    messages?: {
+      missing?: string;
+      ambiguous?: string;
+      notFound?: string;
+    }
+  ):
+    | { status: 'found'; entity: Entity }
+    | { status: 'not_found'; message: string }
+    | { status: 'needs_clarification'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    if (!rawTarget) {
+      return {
+        status: 'not_found',
+        message: messages?.missing || this.game.text('parser.parse_unknown'),
+      };
+    }
+
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      candidates,
+      'parser.look_which_one'
+    );
+    if (resolved.status === 'found') return resolved;
+    if (resolved.status === 'escalate') return resolved;
+    if (resolved.status === 'not_found') {
+      return {
+        status: 'not_found',
+        message:
+          messages?.notFound || this.game.text('parser.look_not_found', { target: rawTarget }),
+      };
+    }
+
+    return {
+      status: 'needs_clarification',
+      message:
+        messages?.ambiguous?.replace('{options}', resolved.options.join(', ')) || resolved.message,
+      options: resolved.options,
+    };
   }
 
   private resolveSceneTarget(rawTarget: string): SceneDescriptor | null {
@@ -687,6 +822,194 @@ export class Parser {
     };
   }
 
+  private executeResolveArgumentEntity(
+    action: Extract<ParserToolAction, { type: 'resolveArgumentEntity' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    const resolution = this.resolveEntityTargetWithMessages(
+      action.query,
+      this.getScopeCandidates(action.scopes),
+      action.messages
+    );
+
+    if (resolution.status === 'escalate') {
+      return { status: 'escalate', code: resolution.code, recoverable: true };
+    }
+
+    if (resolution.status === 'not_found') {
+      return {
+        status: action.query ? 'failed' : 'needs_clarification',
+        code: action.query ? 'custom_command_target_not_found' : 'custom_command_missing_argument',
+        message: resolution.message,
+        data: {
+          pendingArg: action.arg,
+          commandId: action.commandId,
+        },
+        recoverable: true,
+      };
+    }
+
+    if (resolution.status === 'needs_clarification') {
+      return {
+        status: 'needs_clarification',
+        code: 'custom_command_ambiguous_argument',
+        message: resolution.message,
+        data: {
+          pendingArg: action.arg,
+          commandId: action.commandId,
+          options: resolution.options,
+        },
+        recoverable: true,
+      };
+    }
+
+    if (!this.isEntityValidForCommandArgument(resolution.entity, action.validation)) {
+      return {
+        status: 'failed',
+        code: 'custom_command_invalid_argument',
+        message: action.messages?.noEffect || this.game.text('parser.command_no_effect'),
+        data: {
+          arg: action.arg,
+          commandId: action.commandId,
+          entityId: resolution.entity.name,
+        },
+        recoverable: true,
+      };
+    }
+
+    planState[action.saveAs] = resolution.entity;
+    return {
+      status: 'ok',
+      code: 'argument_resolved',
+      data: {
+        arg: action.arg,
+        saveAs: action.saveAs,
+        entityId: resolution.entity.name,
+      },
+    };
+  }
+
+  private executeEnsureHeldEntity(
+    action: Extract<ParserToolAction, { type: 'ensureHeldEntity' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    const entity = planState[action.ref];
+    if (!(entity instanceof Entity)) {
+      return {
+        status: 'escalate',
+        code: 'missing_plan_entity_ref',
+        data: { ref: action.ref },
+        recoverable: true,
+      };
+    }
+
+    if (this.game.inventory.includes(entity)) {
+      return {
+        status: 'ok',
+        code: 'entity_already_held',
+        data: { ref: action.ref, entityId: entity.name },
+      };
+    }
+
+    const outcome = this.game.takeEntity(entity);
+    if (outcome.status === 'failed' && action.noEffectMessage) {
+      return {
+        ...outcome,
+        message: action.noEffectMessage,
+      };
+    }
+    return outcome;
+  }
+
+  private executeRemoveInventoryEntity(
+    action: Extract<ParserToolAction, { type: 'removeInventoryEntity' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    const entity = planState[action.ref];
+    if (!(entity instanceof Entity)) {
+      return {
+        status: 'escalate',
+        code: 'missing_plan_entity_ref',
+        data: { ref: action.ref },
+        recoverable: true,
+      };
+    }
+    return this.game.removeInventoryEntity(entity);
+  }
+
+  private buildCustomCommandEnvelope(
+    input: string,
+    command: ParserCommandSpec,
+    remainder: string
+  ): ParserCascadeEnvelope {
+    const actions = command.plan
+      .map((step) => this.mapCommandPlanStep(command, step, remainder))
+      .filter((action): action is ParserToolAction => !!action);
+
+    return {
+      stage: 'regex-v1',
+      output: {
+        kind: 'plan',
+        actions,
+      },
+      debug: {
+        rawInput: input,
+        normalizedInput: input.trim().toUpperCase(),
+        verb: command.id.toUpperCase(),
+        noun: remainder,
+      },
+    };
+  }
+
+  private mapCommandPlanStep(
+    command: ParserCommandSpec,
+    step: ParserCommandActionSpec,
+    remainder: string
+  ): ParserToolAction | null {
+    switch (step.type) {
+      case 'resolveArgumentEntity': {
+        const argSpec = command.arguments.find((arg) => arg.name === step.arg);
+        if (!argSpec) return null;
+        return {
+          type: 'resolveArgumentEntity',
+          commandId: command.id,
+          arg: step.arg,
+          query: remainder || null,
+          scopes: argSpec.scopes,
+          saveAs: step.saveAs,
+          messages: argSpec.messages,
+          validation: argSpec.validation,
+        };
+      }
+      case 'ensureHeldEntity':
+        return {
+          type: 'ensureHeldEntity',
+          ref: step.ref,
+          noEffectMessage:
+            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
+            command.arguments[0]?.messages?.noEffect,
+        };
+      case 'goToSceneById':
+        return {
+          type: 'goToSceneById',
+          sceneId: step.sceneId,
+        };
+      case 'removeInventoryEntity':
+        return {
+          type: 'removeInventoryEntity',
+          ref: step.ref,
+        };
+      case 'showText':
+        return {
+          type: 'showText',
+          message: step.messageId ? command.messages?.[step.messageId] : step.text,
+          params: step.params,
+        };
+      default:
+        return null;
+    }
+  }
+
   private buildResponse(
     resultJson: string,
     envelopeJson: string,
@@ -725,13 +1048,29 @@ export class Parser {
       (outcome) => outcome.status === 'needs_clarification'
     );
     if (clarification) {
+      const clarificationData = (clarification.data || {}) as Record<string, unknown>;
+      const pendingArg =
+        typeof clarificationData.pendingArg === 'string' ? clarificationData.pendingArg : undefined;
+      const commandId =
+        typeof clarificationData.commandId === 'string' ? clarificationData.commandId : undefined;
+      const nextPendingState =
+        pendingArg && commandId
+          ? {
+              intent: 'custom' as const,
+              question: clarification.message || this.game.text('parser.parse_unknown'),
+              originalInput: this.extractRawInput(envelopeJson),
+              pendingEnvelopeJson: envelopeJson,
+              pendingArg,
+              commandId,
+            }
+          : {
+              intent: this.extractPendingIntent(envelopeJson),
+              question: clarification.message || this.game.text('parser.parse_unknown'),
+              originalInput: this.extractRawInput(envelopeJson),
+            };
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
-        nextPendingState: {
-          intent: this.extractPendingIntent(envelopeJson),
-          question: clarification.message || this.game.text('parser.parse_unknown'),
-          originalInput: this.extractRawInput(envelopeJson),
-        },
+        nextPendingState,
         debugMessages: peekMessages,
       };
     }
@@ -812,7 +1151,10 @@ export class Parser {
     if (!trimmed) return false;
     if (trimmed.startsWith('#') || trimmed.startsWith('-')) return true;
     const firstWord = trimmed.split(/\s+/)[0]?.toUpperCase() || '';
-    return getStage1CommandWords(this.game.textAssets.getParserLexicon()).has(firstWord);
+    if (getStage1CommandWords(this.game.textAssets.getParserLexicon()).has(firstWord)) {
+      return true;
+    }
+    return !!matchParserCommandSpec(trimmed, this.game.textAssets.getParserCommands());
   }
 
   private buildPeekScopeSummary(scope: ParserScope): Record<string, unknown> {
@@ -829,5 +1171,37 @@ export class Parser {
         title: scene.title,
       })),
     };
+  }
+
+  private isEntityValidForCommandArgument(
+    entity: Entity,
+    validation?: ParserCommandArgumentValidation
+  ): boolean {
+    if (!validation) return true;
+
+    const normalizedEntityId = entity.name.trim().toUpperCase();
+    const normalizedTitle = (this.getPlayerFacingEntityTitle(entity) || '').trim().toUpperCase();
+    const normalizedSynonyms = this.game.textAssets
+      .getResolvedObjectListField(entity as any, 'synonyms')
+      .map((item: string) => item.trim().toUpperCase())
+      .filter(Boolean);
+
+    const matchesAllowedEntityIds =
+      !validation.allowedEntityIds?.length ||
+      validation.allowedEntityIds.some(
+        (item) => String(item).trim().toUpperCase() === normalizedEntityId
+      );
+    const matchesAllowedTitles =
+      !validation.allowedTitles?.length ||
+      validation.allowedTitles.some(
+        (item) => String(item).trim().toUpperCase() === normalizedTitle
+      );
+    const matchesAllowedSynonyms =
+      !validation.allowedSynonyms?.length ||
+      validation.allowedSynonyms.some((item) =>
+        normalizedSynonyms.includes(String(item).trim().toUpperCase())
+      );
+
+    return matchesAllowedEntityIds && matchesAllowedTitles && matchesAllowedSynonyms;
   }
 }

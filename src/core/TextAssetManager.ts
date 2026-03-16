@@ -1,6 +1,7 @@
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
+import type { ParserCommandSpec } from '../mechanics/parserTypes';
 
 type TextAssetValue = string | string[];
 type TextAssetData = Record<string, TextAssetValue>;
@@ -38,6 +39,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     use_missing_item: "You don't have the {item}.",
     use_no_effect_pair: 'Using the {item} on the {target} does nothing.',
     use_no_effect_single: 'You try to use the {target}, but nothing happens.',
+    command_no_effect: "That doesn't work.",
     parse_unknown: "I don't understand.",
   },
   engine: {
@@ -194,14 +196,50 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   ],
 };
 
+const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
+  {
+    id: 'teleport_with',
+    phrases: ['teleport with', 'teleport'],
+    arguments: [
+      {
+        name: 'item',
+        kind: 'entity',
+        required: true,
+        scopes: ['held', 'takable'],
+        messages: {
+          missing: 'Teleport with what?',
+          ambiguous: 'Which item do you want to teleport with: {options}?',
+          notFound: "You don't have anything like that.",
+          noEffect: "That doesn't work.",
+        },
+        validation: {
+          allowedTitles: ['your ID card'],
+        },
+      },
+    ],
+    plan: [
+      { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'teleport_item' },
+      { type: 'ensureHeldEntity', ref: 'teleport_item', noEffectMessageId: 'no_effect' },
+      { type: 'goToSceneById', sceneId: 'test1' },
+      { type: 'removeInventoryEntity', ref: 'teleport_item' },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      success: 'You vanish in a flash and arrive somewhere else.',
+    },
+  },
+];
+
 export class TextAssetManager {
   private sceneCache = new Map<string, SceneTextAssetData | null>();
   private objectCache = new Map<string, ObjectTextAssetData | null>();
   private serviceCache = new Map<string, TextAssetData>();
   private parserLexiconCache: ParserLexiconAsset = structuredClone(DEFAULT_PARSER_LEXICON);
   private parserTrainingCache: ParserTrainingAsset = structuredClone(DEFAULT_PARSER_TRAINING);
+  private parserCommandsCache: ParserCommandSpec[] = structuredClone(DEFAULT_PARSER_COMMANDS);
   private parserLexiconLoaded = false;
   private parserTrainingLoaded = false;
+  private parserCommandsLoaded = false;
 
   private normalizeId(id: string): string {
     return String(id || '')
@@ -243,6 +281,10 @@ export class TextAssetManager {
 
   getParserTraining(): ParserTrainingAsset {
     return this.parserTrainingCache;
+  }
+
+  getParserCommands(): ParserCommandSpec[] {
+    return this.parserCommandsCache;
   }
 
   buildDefaultSceneAsset(scene: Scene): SceneTextAssetData {
@@ -346,7 +388,11 @@ export class TextAssetManager {
   }
 
   async preloadParserLanguageAssets(): Promise<void> {
-    await Promise.all([this.readParserLexiconAsset(true), this.readParserTrainingAsset(true)]);
+    await Promise.all([
+      this.readParserLexiconAsset(true),
+      this.readParserTrainingAsset(true),
+      this.readParserCommandAssets(true),
+    ]);
   }
 
   clearCaches(): void {
@@ -355,8 +401,10 @@ export class TextAssetManager {
     this.serviceCache.clear();
     this.parserLexiconCache = structuredClone(DEFAULT_PARSER_LEXICON);
     this.parserTrainingCache = structuredClone(DEFAULT_PARSER_TRAINING);
+    this.parserCommandsCache = structuredClone(DEFAULT_PARSER_COMMANDS);
     this.parserLexiconLoaded = false;
     this.parserTrainingLoaded = false;
+    this.parserCommandsLoaded = false;
   }
 
   async readParserLexiconAsset(forceReload: boolean = false): Promise<ParserLexiconAsset> {
@@ -397,6 +445,39 @@ export class TextAssetManager {
     };
     this.parserTrainingLoaded = true;
     return this.parserTrainingCache;
+  }
+
+  async readParserCommandAssets(forceReload: boolean = false): Promise<ParserCommandSpec[]> {
+    if (!forceReload && this.parserCommandsLoaded) {
+      return this.parserCommandsCache;
+    }
+
+    const index = (await this.fetchUnknownJson('/text/system/commands/index.json')) as {
+      commands?: string[];
+    } | null;
+    const ids = Array.isArray(index?.commands) ? index.commands.filter(Boolean) : [];
+
+    if (!ids.length) {
+      this.parserCommandsCache = structuredClone(DEFAULT_PARSER_COMMANDS);
+      this.parserCommandsLoaded = true;
+      return this.parserCommandsCache;
+    }
+
+    const loaded = await Promise.all(
+      ids.map(async (id) => {
+        const asset = (await this.fetchUnknownJson(
+          `/text/system/commands/${id}.json`
+        )) as ParserCommandSpec | null;
+        return this.normalizeParserCommandSpec(asset);
+      })
+    );
+
+    const commands = loaded.filter((command): command is ParserCommandSpec => !!command);
+    this.parserCommandsCache = commands.length
+      ? commands
+      : structuredClone(DEFAULT_PARSER_COMMANDS);
+    this.parserCommandsLoaded = true;
+    return this.parserCommandsCache;
   }
 
   async readServiceAsset(domain: string, forceReload: boolean = false): Promise<TextAssetData> {
@@ -498,6 +579,44 @@ export class TextAssetManager {
 
   private async fetchJson(url: string): Promise<TextAssetData | null> {
     return (await this.fetchUnknownJson(url)) as TextAssetData | null;
+  }
+
+  private normalizeParserCommandSpec(spec: ParserCommandSpec | null): ParserCommandSpec | null {
+    if (
+      !spec?.id ||
+      !Array.isArray(spec.phrases) ||
+      !Array.isArray(spec.arguments) ||
+      !Array.isArray(spec.plan)
+    ) {
+      return null;
+    }
+
+    return {
+      id: String(spec.id),
+      phrases: spec.phrases.map((item) => String(item).trim()).filter(Boolean),
+      arguments: spec.arguments.map((arg) => ({
+        name: String(arg.name),
+        kind: arg.kind === 'entity' ? 'entity' : 'entity',
+        required: arg.required !== false,
+        scopes: Array.isArray(arg.scopes) ? arg.scopes.filter(Boolean) : [],
+        messages: arg.messages || undefined,
+        validation: arg.validation
+          ? {
+              allowedEntityIds: Array.isArray(arg.validation.allowedEntityIds)
+                ? arg.validation.allowedEntityIds.map((item) => String(item).trim()).filter(Boolean)
+                : undefined,
+              allowedTitles: Array.isArray(arg.validation.allowedTitles)
+                ? arg.validation.allowedTitles.map((item) => String(item).trim()).filter(Boolean)
+                : undefined,
+              allowedSynonyms: Array.isArray(arg.validation.allowedSynonyms)
+                ? arg.validation.allowedSynonyms.map((item) => String(item).trim()).filter(Boolean)
+                : undefined,
+            }
+          : undefined,
+      })),
+      plan: spec.plan,
+      messages: spec.messages || undefined,
+    };
   }
 
   private normalizeSceneAssetData(asset: TextAssetData | null): SceneTextAssetData | null {

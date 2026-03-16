@@ -639,6 +639,25 @@ export class Game implements IGame {
     };
   }
 
+  removeInventoryEntity(entity: Entity): GameActionOutcome {
+    const index = this.inventory.indexOf(entity);
+    if (index === -1) {
+      return {
+        status: 'failed',
+        code: 'inventory_item_not_found',
+        recoverable: true,
+      };
+    }
+
+    this.inventory.splice(index, 1);
+    return {
+      status: 'ok',
+      code: 'inventory_item_removed',
+      data: { entityId: entity.name },
+      effects: ['removed_from_inventory'],
+    };
+  }
+
   showInventory(): GameActionOutcome {
     const inventoryTitles = this.inventory
       .map((entity: any) => this.getPlayerFacingEntityTitle(entity))

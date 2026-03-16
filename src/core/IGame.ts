@@ -22,6 +22,7 @@ export interface IGame {
   lookEntity(entity: Entity): GameActionOutcome;
   examineEntity(entity: Entity): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
+  removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
   goToScene(sceneId: string): GameActionOutcome;
   goToEntity(entity: Entity): GameActionOutcome;

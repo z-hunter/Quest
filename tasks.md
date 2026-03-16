@@ -4,6 +4,12 @@
 
 These tasks cover the parser roadmap described in `Parser.md`, excluding the future LLM cascade.
 
+## Current Focus
+
+- [x] Introduce parser custom command assets (`Commands.md`, command TA loading, shared command spec format).
+- [x] Expand parser DSL/Core so lower layers can mock richer Stage-2-style plans.
+- [ ] Implement `TELEPORT WITH` as the first custom command scenario driven by command TA.
+
 ## Backlog
 
 - [x] Replace the separate `ParserContextBuilder` / `ParserScopeBuilder` idea with one `ParserWorldModelBuilder` that returns both `context` and `scope`.

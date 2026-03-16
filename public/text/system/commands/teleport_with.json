@@ -1,0 +1,31 @@
+{
+  "id": "teleport_with",
+  "phrases": ["teleport with", "teleport"],
+  "arguments": [
+    {
+      "name": "item",
+      "kind": "entity",
+      "required": true,
+      "scopes": ["held", "takable"],
+      "validation": {
+        "allowedTitles": ["your ID card"]
+      },
+      "messages": {
+        "missing": "Teleport with what?",
+        "ambiguous": "Which item do you want to teleport with: {options}?",
+        "notFound": "You don't have anything like that.",
+        "noEffect": "That doesn't work."
+      }
+    }
+  ],
+  "plan": [
+    { "type": "resolveArgumentEntity", "arg": "item", "saveAs": "teleport_item" },
+    { "type": "ensureHeldEntity", "ref": "teleport_item", "noEffectMessageId": "no_effect" },
+    { "type": "goToSceneById", "sceneId": "test1" },
+    { "type": "removeInventoryEntity", "ref": "teleport_item" },
+    { "type": "showText", "messageId": "success" }
+  ],
+  "messages": {
+    "success": "You vanish in a flash and arrive somewhere else."
+  }
+}

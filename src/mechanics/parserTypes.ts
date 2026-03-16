@@ -21,9 +21,70 @@ export type ParserInventoryItemContext = {
 };
 
 export type ParserPendingState = {
-  intent: 'look' | 'examine' | 'take' | 'goTo';
+  intent: 'look' | 'examine' | 'take' | 'goTo' | 'custom';
   question: string;
   originalInput: string;
+  pendingEnvelopeJson?: string;
+  pendingArg?: string;
+  commandId?: string;
+};
+
+export type ParserScopeSlice = keyof Omit<ParserScope, 'sceneTargets'>;
+
+export type ParserCommandArgumentMessages = {
+  missing?: string;
+  ambiguous?: string;
+  notFound?: string;
+  noEffect?: string;
+};
+
+export type ParserCommandArgumentValidation = {
+  allowedEntityIds?: string[];
+  allowedTitles?: string[];
+  allowedSynonyms?: string[];
+};
+
+export type ParserCommandArgumentSpec = {
+  name: string;
+  kind: 'entity';
+  required: boolean;
+  scopes: ParserScopeSlice[];
+  messages?: ParserCommandArgumentMessages;
+  validation?: ParserCommandArgumentValidation;
+};
+
+export type ParserCommandActionSpec =
+  | {
+      type: 'resolveArgumentEntity';
+      arg: string;
+      saveAs: string;
+    }
+  | {
+      type: 'ensureHeldEntity';
+      ref: string;
+      noEffectMessageId?: string;
+    }
+  | {
+      type: 'goToSceneById';
+      sceneId: string;
+    }
+  | {
+      type: 'removeInventoryEntity';
+      ref: string;
+    }
+  | {
+      type: 'showText';
+      messageId?: string;
+      text?: string;
+      params?: Record<string, string>;
+    };
+
+export type ParserCommandSpec = {
+  id: string;
+  phrases: string[];
+  arguments: ParserCommandArgumentSpec[];
+  plan: ParserCommandActionSpec[];
+  messages?: Record<string, string>;
 };
 
 export type ParserContext = {
@@ -77,6 +138,35 @@ export type ParserToolAction =
   | {
       type: 'goToTarget';
       target: string | null;
+    }
+  | {
+      type: 'resolveArgumentEntity';
+      commandId: string;
+      arg: string;
+      query: string | null;
+      scopes: ParserScopeSlice[];
+      saveAs: string;
+      messages?: ParserCommandArgumentMessages;
+      validation?: ParserCommandArgumentValidation;
+    }
+  | {
+      type: 'ensureHeldEntity';
+      ref: string;
+      noEffectMessage?: string;
+    }
+  | {
+      type: 'goToSceneById';
+      sceneId: string;
+    }
+  | {
+      type: 'removeInventoryEntity';
+      ref: string;
+    }
+  | {
+      type: 'showText';
+      message?: string;
+      textKey?: string;
+      params?: Record<string, string>;
     };
 
 export type ParserCascadeEnvelope = {
@@ -134,6 +224,8 @@ export type ParserCoreDecision =
       envelope: ParserCascadeEnvelope;
       actions: ParserToolAction[];
     };
+
+export type ParserPlanState = Record<string, unknown>;
 
 export type ParserResponse = {
   playerMessage?: string;
