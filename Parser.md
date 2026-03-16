@@ -19,7 +19,8 @@
 Главный принцип:
 - **вся языковая интерпретация живёт внутри parser-а**;
 - `Game` и runtime не понимают язык игрока и не резолвят текстовые цели;
-- `Game` только исполняет операции над уже понятными сущностями и возвращает structured outcomes.
+- `Game` только исполняет операции над уже понятными сущностями и возвращает structured outcomes;
+- parser — не единственный клиент `Game API`: тем же shared API пользуются UI, scripts и игровая логика.
 
 ---
 
@@ -202,8 +203,8 @@ Stage 1 на самом деле состоит из двух внутренни
 Он:
 - пытается распознать canonical-команду;
 - выделяет базовый `intent`;
-- строит preliminary action candidate;
-- нормализует или очищает `target phrase`.
+- нормализует или очищает `target phrase`;
+- собирает унифицированный envelope для `Core`.
 
 Подходит для:
 - `LOOK`
@@ -221,7 +222,7 @@ Stage 1 на самом деле состоит из двух внутренни
 - определяет `intent` по более свободному вводу;
 - оценивает confidence;
 - очищает `target phrase`;
-- строит тот же action candidate, что и `Stage 1.1`.
+- собирает тот же унифицированный envelope для `Core`, что и `Stage 1.1`.
 
 Он полезен для:
 - `look at the lamp`
@@ -246,8 +247,8 @@ flowchart TD
     CTX --> R1
 
     R1 --> R1A{Intent recognized?}
-    R1A -->|yes| R1B[Build preliminary action candidate]
-    R1B --> R1C[Extract or normalize target phrase]
+    R1A -->|yes| R1B[Extract or normalize target phrase]
+    R1B --> R1C[Build cascade envelope]
     R1C --> CORE[Parser Core]
 
     R1A -->|no| N1[Stage 1.2 NLP Layer]
@@ -256,7 +257,7 @@ flowchart TD
     N1 --> N1A[Classify intent]
     N1A --> N1B{Confidence high enough?}
     N1B -->|yes| N1C[Extract or normalize target phrase]
-    N1C --> N1D[Build preliminary action candidate]
+    N1C --> N1D[Build cascade envelope]
     N1D --> CORE
 
     N1B -->|no| H[Handoff to next cascade]
@@ -265,6 +266,7 @@ flowchart TD
 Что важно:
 - `intent` определяется внутри уровня каскада;
 - `target phrase` выделяется и очищается там же;
+- затем уровень собирает единый envelope/protocol для `Core`;
 - в `Core` приходит уже не сырой ввод, а первичная интерпретация команды.
 
 ## Stage 2 — LLM / Future
@@ -407,9 +409,9 @@ Parser сначала проверяет:
 
 ## Game API Contract
 
-`Game` — это tool layer для parser-а.
+`Game API` — это shared gameplay API движка.
 
-Он не занимается языком игрока.
+Он не принадлежит одному только parser-у и не занимается языком игрока.
 
 Текущий semantic API:
 - `lookScene(scene?)`
@@ -421,10 +423,16 @@ Parser сначала проверяет:
 - `goToEntity(entity)`
 
 Принцип:
+- parser — один из клиентов `Game API`, а не его единственный владелец;
+- тем же API могут пользоваться UI, scripts и игровая логика;
 - parser передаёт в `Game` уже resolved цели;
 - `Game` не подбирает объекты по тексту;
 - `Game` не делает disambiguation;
 - `Game` не разбирает user input.
+
+Следствие:
+- на `Scanline` можно сделать не только parser-driven игру;
+- при расширении полномочий UI на этом же API можно построить чистый point-and-click quest.
 
 ### Что делает Game
 
@@ -469,9 +477,36 @@ Parser сначала проверяет:
 Parser:
 - ищет цели в собственной модели мира;
 - использует только player-facing `title`, а не технические `id`;
+- может использовать опциональные `synonyms`, если они заданы в TA объекта;
 - исключает `disabled` объекты сцены;
 - поддерживает partial matching;
 - поддерживает clarification при неоднозначности.
+
+### Object TA fields relevant to target resolution
+
+Для object TA важны не только:
+- `title`
+- `description`
+- `details`
+
+Но и новое опциональное поле:
+- `synonyms`
+
+Пример:
+
+```json
+{
+  "title": "logo",
+  "description": "You see Scanline Engine logo.",
+  "details": "Extended description here.",
+  "synonyms": ["logotype", "emblem", "scanline symbol"]
+}
+```
+
+Поле `synonyms`:
+- является parser-owned text knowledge;
+- помогает точнее определять target без обращения к LLM;
+- должно входить в шаблон нового object TA, даже если список пустой.
 
 ### Inventory-aware resolution
 
@@ -544,7 +579,7 @@ sequenceDiagram
 
 ---
 
-## Stage 2 Output Model
+## Unified Cascade Output Model
 
 Первые два уровня parser-а по сути формируют пакет данных для одного и того же `Core`.
 
@@ -552,16 +587,19 @@ sequenceDiagram
 - `Stage 1.1` и `Stage 1.2` — это не два разных parser-а;
 - это два разных способа превратить ввод игрока в данные для `Core`.
 
-Нижние уровни обычно возвращают:
-- `intent`
-- `target phrase`
-- preliminary action candidate
+Главный архитектурный вывод:
+- protocol взаимодействия с `Core` должен быть единым для всех каскадов;
+- нижние каскады могут использовать только простой subset этого protocol;
+- старший каскад может использовать более богатые формы того же protocol.
 
-Но старший каскад должен уметь возвращать более богатые инструкции.
+Это важно, потому что:
+- позволяет отлаживать `Core` и execution loop без реальной LLM;
+- позволяет мокать сложные LLM-сценарии через `Stage 1`;
+- позволяет стабилизировать orchestration до подключения непредсказуемой модели.
 
 ---
 
-## Stage 2 DSL (First Draft)
+## Unified Parser DSL (First Draft)
 
 Будущий старший каскад (LLM) должен уметь возвращать не только `intent`, но и richer instructions.
 
@@ -573,6 +611,11 @@ sequenceDiagram
 
 Поэтому нужен **ограниченный parser DSL**.
 
+Важно:
+- этот DSL не должен быть "особым форматом только для Stage 2";
+- это должен быть общий protocol общения cascade layers с `Core`;
+- `Stage 1.1` и `Stage 1.2` просто используют его более простой subset.
+
 ### Общий смысл DSL
 
 LLM возвращает не код, а допустимый план шагов.
@@ -583,9 +626,9 @@ LLM возвращает не код, а допустимый план шаго�
 - собирает outcomes;
 - при необходимости повторно зовёт старший каскад.
 
-### Богатые выходы старшего каскада
+### Богатые выходы каскада
 
-Старший каскад должен уметь возвращать не только `intent`, но и:
+Каскадный уровень должен уметь возвращать не только `intent`, но и:
 - `plan`
 - `clarification`
 - `final_response`
@@ -598,14 +641,22 @@ LLM возвращает не код, а допустимый план шаго�
 ```ts
 type CascadeEnvelope =
   | {
-      stage: 'llm-v3';
+      stage: 'regex-v1' | 'nlp-v2' | 'llm-v3';
+      output: {
+        kind: 'intent';
+        intent: string;
+        target?: string | null;
+      };
+    }
+  | {
+      stage: 'regex-v1' | 'nlp-v2' | 'llm-v3';
       output: {
         kind: 'plan';
         actions: ParserPlannedAction[];
       };
     }
   | {
-      stage: 'llm-v3';
+      stage: 'regex-v1' | 'nlp-v2' | 'llm-v3';
       output: {
         kind: 'clarification';
         question: string;
@@ -613,14 +664,14 @@ type CascadeEnvelope =
       };
     }
   | {
-      stage: 'llm-v3';
+      stage: 'regex-v1' | 'nlp-v2' | 'llm-v3';
       output: {
         kind: 'final_response';
         message: string;
       };
     }
   | {
-      stage: 'llm-v3';
+      stage: 'regex-v1' | 'nlp-v2' | 'llm-v3';
       output: {
         kind: 'handoff_up';
         reason: string;
@@ -656,7 +707,7 @@ type ParserPlannedAction =
 
 Это важно для безопасности и устойчивости архитектуры.
 
-LLM не должна:
+Ни один каскад не должен:
 - писать произвольный код;
 - обращаться к внутренностям runtime напрямую;
 - вносить неконтролируемые side effects.
@@ -672,9 +723,9 @@ LLM не должна:
 Первый вариант DSL лучше делать **линейным**, без встроенных `if/else` и циклов.
 
 То есть:
-- старший каскад предлагает список шагов;
+- каскад предлагает список шагов;
 - `Core` исполняет их по одному;
-- при неожиданном outcome `Core` останавливает план и снова зовёт старший каскад.
+- при неожиданном outcome `Core` останавливает план и снова зовёт следующий подходящий уровень.
 
 Это проще и надёжнее, чем сразу делать полноценный mini-language.
 
@@ -708,6 +759,8 @@ sequenceDiagram
 - `#PEEK-OFF`
 - `#STAGE1-ON`
 - `#STAGE1-OFF`
+- `#STAGE2-ON`
+- `#STAGE2-OFF`
 
 ### PEEK
 
@@ -719,7 +772,10 @@ sequenceDiagram
 
 ### Stage toggles
 
-Можно отключить `Stage 1.1` и отправлять обработку сразу на следующий уровень первого каскада, чтобы изолированно тестировать NLP.
+Можно изолированно тестировать разные уровни:
+- `#STAGE1-ON` / `#STAGE1-OFF` управляют `Stage 1.1`;
+- `#STAGE2-ON` / `#STAGE2-OFF` управляют `Stage 1.2`;
+- это полезно для отладки `Core` и DSL без реальной LLM.
 
 ---
 
@@ -774,14 +830,14 @@ Language assets лучше хранить как **структурирован�
 {
   "stage1Aliases": {
     "look": ["look"],
-    "examine": ["examine", "inspect", "check", "x"],
+    "examine": ["examine", "inspect", "check"],
     "take": ["take", "get", "pickup", "pick up"],
     "goTo": ["go", "walk", "move"],
-    "showInventory": ["inventory", "inv", "i"]
+    "showInventory": ["inventory", "inv"]
   },
   "normalizationPrefixes": {
     "look": ["look at", "tell me about", "what is", "describe"],
-    "examine": ["take a closer look at", "look closely at", "examine", "inspect", "check", "x"],
+    "examine": ["take a closer look at", "look closely at", "examine", "inspect", "check"],
     "take": ["pick up", "take", "get", "grab"],
     "goTo": ["go over to", "go to", "walk to", "move to", "go", "walk", "move"]
   },
@@ -924,16 +980,19 @@ flowchart TD
 ## Core Principles Recap
 
 1. Parser — единственный слой, интерпретирующий язык игрока.
-2. `Game` и runtime не должны парсить текст и резолвить текстовые цели.
-3. `Context Builder` строит context только из состояния игры.
-4. `Player Input` и `Parser Context` — отдельные входы parser-а.
-5. Stage processing последовательный, а не параллельный.
-6. Первый каскад имеет два внутренних уровня: `regex`, затем `NLP`.
-7. Все каскады подают данные в один и тот же `Parser Core`.
-8. `Core` может эскалировать как до API, так и после API.
-9. `Core` — центр clarification, orchestration, iteration и final response.
-10. Старший каскад должен уметь возвращать не только `intent`, но и richer instructions через constrained DSL.
-11. Player-facing messages никогда не должны показывать технические `id`.
-12. Всё language-specific должно жить в text assets.
+2. `Game API` — общий gameplay API для parser-а, UI, scripts и игровой логики.
+3. `Game` и runtime не должны парсить текст и резолвить текстовые цели.
+4. `Context Builder` строит context только из состояния игры.
+5. `Player Input` и `Parser Context` — отдельные входы parser-а.
+6. Stage processing последовательный, а не параллельный.
+7. Первый каскад имеет два внутренних уровня: `regex`, затем `NLP`.
+8. Оба уровня Stage 1 работают по одной логике: `intent -> target -> envelope`.
+9. Все каскады подают данные в один и тот же `Parser Core`.
+10. `Core` может эскалировать как до API, так и после API.
+11. `Core` — центр clarification, orchestration, iteration и final response.
+12. DSL/protocol общения с `Core` должен быть единым для всех каскадов, даже если нижние уровни используют только простой subset.
+13. Object TA может содержать опциональное поле `synonyms` для повышения точности target resolution.
+14. Player-facing messages никогда не должны показывать технические `id`.
+15. Всё language-specific должно жить в text assets.
 
 Эта архитектура делает parser фундаментом для постепенного перехода от классического IF-style command parser-а к полноценному Game Master и orchestrator.
