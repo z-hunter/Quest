@@ -54,7 +54,7 @@ Architecture rules for this initiative:
   - scope data
   - unified envelope data
   - Core decision data
-- [ ] Verify that UI, scripts, and game logic continue using the same shared `Game API`.
+- [x] Verify that UI, scripts, and game logic continue using the same shared `Game API`.
 - [ ] Add regression tests / smoke checks for:
   - `#STAGE1-ON/OFF`
   - `#STAGE2-ON/OFF`
@@ -65,7 +65,7 @@ Architecture rules for this initiative:
   - post-API escalation
   - linear plan execution without LLM
   - manual checklist drafted in `ParserSmoke.md`
-- [ ] Formalize runtime spatial hierarchy in `Game` so relation-aware parser queries (`under`, `in`, `behind`, `near`) can execute against real world data instead of returning the current fallback message.
+- [ ] Extend runtime spatial hierarchy so remaining relation-aware parser queries like `near` can execute against real world data.
 
 ## Spatial Hierarchy Plan
 
@@ -81,14 +81,13 @@ Architecture rules for this initiative:
   - title
   - optional description
   - optional spatial parent link
-- [ ] Decide where subscene spatial metadata lives in scene JSON:
-  - preferably on the `Subscene` component / triggerbox data so migration stays incremental.
 - [x] Build a scene-level spatial index in runtime:
   - node lookup by id
   - children by parent id
   - children grouped by relation
 - [ ] Keep this index separate from render hierarchy and separate from visibility/accessibility logic.
-- [x] Treat `Subscene` as a virtual spatial node while keeping its authored spatial metadata on the `Subscene` component / triggerbox path.
+- [x] Treat `Subscene` as a virtual spatial node.
+- [x] Simplify `Subscene` authored data so spatial identity and nesting come from the owning `Triggerbox`, not duplicate fields on the component.
 - [x] Auto-activate direct spatial children when opening a `Subscene`:
   - direct `Entity` children
   - direct `Triggerbox` children
@@ -121,11 +120,10 @@ Architecture rules for this initiative:
   - parent object / node
   - relation type
 - [ ] Limit parent candidates to valid nodes in the current scene.
-- [x] Add editor UI for `Subscene` to edit:
+- [x] Keep `Subscene` editor UI focused on behavior-facing fields only:
   - title
-  - node id
-  - optional parent node
-  - relation type
+  - description
+  - target group id
 - [x] Add editor UI for `Triggerbox` spatial authoring:
   - parent object / node
   - relation type
@@ -143,7 +141,7 @@ Architecture rules for this initiative:
 
 - [x] Keep existing scenes valid with all spatial fields optional.
 - [x] Preserve current `activeSubscene` / `subsceneEntities` behavior during migration.
-- [ ] Make parser relation grammar continue to work even before a scene defines any spatial metadata.
+- [x] Make parser relation grammar continue to work even before a scene defines any spatial metadata.
 - [ ] Add smoke checks for scenes mixing:
   - direct object nesting
   - object inside subscene
@@ -152,8 +150,8 @@ Architecture rules for this initiative:
 
 ### 5. Documentation
 
-- [ ] Update `Parser.md` so it clearly states spatial hierarchy is owned by `Game`, not parser.
-- [ ] Add or update documentation for scene spatial schema and subscene-as-node behavior.
+- [x] Update `Parser.md` so it clearly states spatial hierarchy is owned by `Game`, not parser.
+- [x] Add or update documentation for scene spatial schema and subscene-as-node behavior.
 - [ ] Document the editor workflow for assigning parent object and relation type.
 
 ## Suggested Order

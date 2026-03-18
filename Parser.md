@@ -450,9 +450,13 @@ Parser сначала проверяет:
 - `lookEntity(entity)`
 - `examineEntity(entity)`
 - `takeEntity(entity)`
+- `removeInventoryEntity(entity)`
 - `showInventory()`
+- `goToSceneTarget(rawTarget)`
 - `goToScene(sceneId)`
 - `goToEntity(entity)`
+- `getSeeMessage(target)`
+- `describeSpatialRelation(anchorNodeId, relation)`
 
 Принцип:
 - parser — один из клиентов `Game API`, а не его единственный владелец;
@@ -482,8 +486,10 @@ Parser сначала проверяет:
 Например:
 - `takeEntity(entity)` проверяет дистанцию и возможность взять предмет;
 - `examineEntity(entity)` проверяет доступность examine;
+- `goToSceneTarget(rawTarget)` оставляет `Game` знание о registry сцен и валидности перехода;
+- `describeSpatialRelation(anchorNodeId, relation)` формирует player-facing spatial response на основе runtime world model;
 - `goToEntity(entity)` запускает movement;
-- `lookEntity(entity)` возвращает краткое описание.
+- `lookEntity(entity)` возвращает краткое описание с учётом spatial parent context, если он есть.
 
 То есть:
 - parser отвечает за язык и выбор цели;
