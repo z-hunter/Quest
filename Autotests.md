@@ -7,6 +7,7 @@ This document describes the current automated test setup on the `autotests` bran
 The first iteration is intentionally narrow:
 - deterministic parser behavior;
 - parser core contracts;
+- direct `Game` semantic API behavior;
 - scene runtime behavior around spatial hierarchy and subscenes;
 - one thin parser + game integration layer.
 
@@ -52,10 +53,14 @@ Out of scope for this iteration:
 ```text
 tests/
   fixtures/
+    gameSemanticFactory.ts
     gameFactory.ts
     parserFactory.ts
     sceneFactory.ts
     textAssetFactory.ts
+  game/
+    navigation-and-spatial.test.ts
+    semantic-api.test.ts
   parser/
     commands.test.ts
     core.test.ts
@@ -95,6 +100,25 @@ Provides a minimal `IGame`-compatible harness:
 - minimal `textAssets`.
 
 This is the base semantic harness used by scene and parser tests.
+
+### `tests/fixtures/gameSemanticFactory.ts`
+
+Builds on top of `gameFactory.ts` and exposes the real `Game` semantic API methods through `Game.prototype`, while still avoiding full `Game` construction and UI bootstrap.
+
+This fixture exists specifically for direct `Game`-layer contract tests.
+
+Use it when the goal is to test:
+- `lookScene`
+- `lookEntity`
+- `examineEntity`
+- `showInventory`
+- `removeInventoryEntity`
+- `goToSceneTarget`
+- `goToScene`
+- `goToEntity`
+- `describeSpatialRelation`
+
+without pulling parser behavior into the assertion.
 
 ### `tests/fixtures/sceneFactory.ts`
 
@@ -201,6 +225,29 @@ Covers:
 - post-API escalation path;
 - linear plan stopping after failure;
 - core behavior independent of UI.
+
+### Game
+
+#### `tests/game/semantic-api.test.ts`
+
+Covers:
+- `lookScene`;
+- `lookEntity`;
+- `examineEntity`;
+- `showInventory`;
+- `removeInventoryEntity`.
+
+This layer verifies `Game` as the shared semantic gameplay API, separate from parser parsing.
+
+#### `tests/game/navigation-and-spatial.test.ts`
+
+Covers:
+- `goToSceneTarget`;
+- `goToScene`;
+- `goToEntity`;
+- `describeSpatialRelation`.
+
+This layer is especially useful for validating the shared boundary between parser and world/game semantics.
 
 ### Thin Integration
 
@@ -311,6 +358,7 @@ They are not necessary for the first iteration.
 - No direct tests for console preprocessor behavior yet.
 - No LLM-stage tests yet.
 - Parser NLP stage is not the focus of the current suite.
+- The direct `Game` tests use a semantic fixture layered on `Game.prototype`, not full `Game` construction.
 
 ## Recommended Next Iteration
 
@@ -328,9 +376,16 @@ The next useful expansions would be:
    - more plan-state transitions;
    - more validation branches.
 
-3. Add tiny serialization/load fixtures if scene loading itself needs coverage.
+3. Add tests for console/preprocessor behavior:
+   - `I`
+   - `X`
+   - `L`
+   - `#STAGE1-ON/OFF`
+   - `#STAGE2-ON/OFF`
 
-4. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
+4. Add tiny serialization/load fixtures if scene loading itself needs coverage.
+
+5. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
 
 ## Practical Rule
 

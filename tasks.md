@@ -125,6 +125,29 @@ Avoid starting with canvas/UI/browser assertions.
 4. [x] Implement parser command/resolution tests.
 5. [x] Add one thin integration test file.
 
+## Next Iteration Candidate: Game Semantic API Tests
+
+- [x] Add `tests/game/semantic-api.test.ts`
+  Cover:
+  - `lookScene`;
+  - `lookEntity`;
+  - `examineEntity`;
+  - `showInventory`;
+  - `removeInventoryEntity`.
+
+- [x] Add `tests/game/navigation-and-spatial.test.ts`
+  Cover:
+  - `goToSceneTarget`;
+  - `goToScene`;
+  - `goToEntity`;
+  - `describeSpatialRelation`.
+
+- [x] Decide whether the current fixture `gameFactory.ts` is sufficient for direct `Game`-layer tests
+  or if a dedicated semantic `Game` harness should be introduced.
+  Result:
+  - keep `gameFactory.ts` as the minimal base harness;
+  - add `tests/fixtures/gameSemanticFactory.ts` for direct `Game` API tests through `Game.prototype`.
+
 ## Success Criteria For Iteration 1
 
 - [x] `npm run test` works locally.
@@ -148,3 +171,5 @@ Avoid starting with canvas/UI/browser assertions.
   - parser resolution, commands, and core tests are green;
   - one thin integration smoke file is green;
   - current status: first autotest iteration is functionally complete.
+  - next logical slice: direct tests for `Game` as the shared semantic gameplay API.
+  - `Game` semantic API tests are now green as well.
