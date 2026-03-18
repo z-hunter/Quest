@@ -51,6 +51,49 @@ export interface WalkBoxComponent {
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  private static getDirectSpatialChildren(
+    rootIds: string[],
+    scene: ActivationSceneContext
+  ): SceneObject[] {
+    const roots = new Set(
+      rootIds.map((value) => String(value || '').trim()).filter((value) => !!value)
+    );
+    if (roots.size === 0) return [];
+
+    const allObjects: SceneObject[] = [
+      ...scene.entities,
+      ...(scene.walkbox || []),
+      ...scene.triggerboxes,
+    ];
+    const result = new Set<SceneObject>();
+
+    for (const obj of allObjects) {
+      const objectParentId =
+        typeof (obj as any).spatial?.parentNodeId === 'string'
+          ? (obj as any).spatial.parentNodeId.trim()
+          : '';
+
+      if (objectParentId && roots.has(objectParentId)) {
+        result.add(obj);
+        continue;
+      }
+
+      const subsceneComponent = obj.components?.find((component: any) => component?.type === 'Subscene') as
+        | SubsceneComponent
+        | undefined;
+      const subsceneParentId =
+        typeof subsceneComponent?.spatial?.parentNodeId === 'string'
+          ? subsceneComponent.spatial.parentNodeId.trim()
+          : '';
+
+      if (subsceneParentId && roots.has(subsceneParentId)) {
+        result.add(obj);
+      }
+    }
+
+    return Array.from(result);
+  }
+
   private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
     const title = game?.textAssets.getResolvedObjectField(entity, 'title');
     return title && title.trim() ? title.trim() : null;
@@ -181,7 +224,8 @@ export class ComponentSystem {
     scene: ActivationSceneContext
   ): boolean {
     const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-    if (!targetStr) return false;
+    const nodeId = sub.nodeId ? sub.nodeId.trim() : '';
+    if (!targetStr && !nodeId) return false;
 
     // Proximity Check (if player exists)
     const player = scene.player;
@@ -216,10 +260,20 @@ export class ComponentSystem {
       }
     }
 
-    scene.activeSubscene = targetStr;
-    scene.subsceneEntities.clear();
+    const spatialRootIds = Array.from(
+      new Set(
+        [nodeId, targetStr, entity.name]
+          .map((value) => String(value || '').trim())
+          .filter((value) => !!value)
+      )
+    );
+    const spatialTargets = this.getDirectSpatialChildren(spatialRootIds, scene);
+    const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
+    const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
+    const activeSubsceneId = nodeId || targetStr;
 
-    const targets = scene.resolveTarget(targetStr);
+    scene.activeSubscene = activeSubsceneId;
+    scene.subsceneEntities.clear();
     targets.forEach((t) => {
       t.disabled = false;
       scene.subsceneEntities.add(t);

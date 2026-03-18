@@ -50,18 +50,24 @@ export const PropertiesPanel: React.FC = () => {
     { value: 'under', label: 'Under' },
     { value: 'behind', label: 'Behind' },
   ];
+  const getSpatialRelationOptions = React.useCallback(
+    (hasParent: boolean) =>
+      hasParent ? spatialRelationOptions.filter((option) => option.value !== '') : spatialRelationOptions,
+    [spatialRelationOptions]
+  );
 
-  const getSceneEntityParentOptions = React.useCallback(() => {
+  const getSceneSpatialParentOptions = React.useCallback(() => {
     const scene = game?.sceneManager?.currentScene;
     if (!scene || !obj) {
       return [{ value: '', label: '(None)' }];
     }
 
-    const options = scene.entities
-      .filter((entity) => entity !== obj)
-      .map((entity) => ({
-        value: entity.name,
-        label: entity.customName?.trim() || entity.name,
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const options = allObjects
+      .filter((item) => item !== obj)
+      .map((item: any) => ({
+        value: item.name,
+        label: item.customName?.trim() || item.name,
       }));
 
     return [{ value: '', label: '(None)' }, ...options];
@@ -1139,11 +1145,11 @@ export const PropertiesPanel: React.FC = () => {
                       obj.spatial = {
                         ...(obj.spatial || {}),
                         parentNodeId: value || null,
-                        relation: value ? obj.spatial?.relation || null : null,
+                        relation: value ? obj.spatial?.relation || 'in' : null,
                       };
                       incrementObjectVersion();
                     }}
-                    options={getSceneEntityParentOptions()}
+                    options={getSceneSpatialParentOptions()}
                     style={{ width: '100%' }}
                   />
                 </div>
@@ -1155,11 +1161,11 @@ export const PropertiesPanel: React.FC = () => {
                       obj.spatial = {
                         ...(obj.spatial || {}),
                         parentNodeId: obj.spatial?.parentNodeId || null,
-                        relation: value || null,
+                        relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
                       };
                       incrementObjectVersion();
                     }}
-                    options={spatialRelationOptions}
+                    options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
                     style={{ width: '100%' }}
                   />
                 </div>
@@ -1462,15 +1468,54 @@ export const PropertiesPanel: React.FC = () => {
             </div>
 
             {selectedObjectType === 'Triggerbox' && (
-              <div className="e-row">
-                <label className="e-label">Layer</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.layer || 0}
-                  onChange={(e) => handleChange('layer', e.target.value, true)}
-                />
-              </div>
+              <>
+                <div className="e-row">
+                  <label className="e-label">Layer</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={obj.layer || 0}
+                    onChange={(e) => handleChange('layer', e.target.value, true)}
+                  />
+                </div>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Parent</label>
+                    <Select
+                      value={obj.spatial?.parentNodeId || ''}
+                      onChange={(value) => {
+                        obj.spatial = {
+                          ...(obj.spatial || {}),
+                          parentNodeId: value || null,
+                          relation: value ? obj.spatial?.relation || 'in' : null,
+                        };
+                        incrementObjectVersion();
+                      }}
+                      options={getSceneSpatialParentOptions()}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Relation</label>
+                    <Select
+                      value={obj.spatial?.parentNodeId ? obj.spatial?.relation || 'in' : obj.spatial?.relation || ''}
+                      onChange={(value) => {
+                        obj.spatial = {
+                          ...(obj.spatial || {}),
+                          parentNodeId: obj.spatial?.parentNodeId || null,
+                          relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
+                        };
+                        incrementObjectVersion();
+                      }}
+                      options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="e-row">
@@ -2335,7 +2380,7 @@ export const PropertiesPanel: React.FC = () => {
                               comp.spatial = {
                                 ...(comp.spatial || {}),
                                 parentNodeId: value || null,
-                                relation: value ? comp.spatial?.relation || null : null,
+                                relation: value ? comp.spatial?.relation || 'in' : null,
                               };
                               incrementObjectVersion();
                             }}
@@ -2350,16 +2395,20 @@ export const PropertiesPanel: React.FC = () => {
                             Relation
                           </label>
                           <Select
-                            value={comp.spatial?.relation || ''}
+                            value={
+                              comp.spatial?.parentNodeId
+                                ? comp.spatial?.relation || 'in'
+                                : comp.spatial?.relation || ''
+                            }
                             onChange={(value) => {
                               comp.spatial = {
                                 ...(comp.spatial || {}),
                                 parentNodeId: comp.spatial?.parentNodeId || null,
-                                relation: value || null,
+                                relation: value || (comp.spatial?.parentNodeId ? 'in' : null),
                               };
                               incrementObjectVersion();
                             }}
-                            options={spatialRelationOptions}
+                            options={getSpatialRelationOptions(!!comp.spatial?.parentNodeId)}
                             style={{ width: '100%' }}
                           />
                         </div>

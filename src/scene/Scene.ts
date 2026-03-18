@@ -126,7 +126,9 @@ export class Scene {
       value.relation === 'under' ||
       value.relation === 'behind'
         ? value.relation
-        : null;
+        : parentNodeId
+          ? 'in'
+          : null;
     if (!parentNodeId && !relation) return null;
     return {
       parentNodeId: parentNodeId || null,
@@ -160,7 +162,7 @@ export class Scene {
         id: (component.nodeId || component.targetGroupId || triggerbox.name || '').trim(),
         kind: 'subscene' as const,
         title: component.title?.trim() || component.name?.trim() || null,
-        placement: this.normalizeSpatialPlacement(component.spatial),
+        placement: this.normalizeSpatialPlacement(component.spatial || (triggerbox as any).spatial),
         sourceName: triggerbox.name,
       })
     );
@@ -198,6 +200,34 @@ export class Scene {
       childrenByParentId,
       childrenByParentAndRelation,
     };
+  }
+
+  getSpatialDescendantObjects(nodeId: string): SceneObject[] {
+    const normalizedId = String(nodeId || '').trim();
+    if (!normalizedId) return [];
+
+    const result = new Set<SceneObject>();
+
+    const allObjects: SceneObject[] = [...this.entities, ...this.walkbox, ...this.triggerboxes];
+    for (const obj of allObjects) {
+      const objectParentId =
+        typeof (obj as any).spatial?.parentNodeId === 'string'
+          ? (obj as any).spatial.parentNodeId.trim()
+          : '';
+      const subsceneComponent = obj.components?.find((component: any) => component?.type === 'Subscene') as
+        | SubsceneComponent
+        | undefined;
+      const subsceneParentId =
+        typeof subsceneComponent?.spatial?.parentNodeId === 'string'
+          ? subsceneComponent.spatial.parentNodeId.trim()
+          : '';
+
+      if (objectParentId === normalizedId || subsceneParentId === normalizedId) {
+        result.add(obj);
+      }
+    }
+
+    return Array.from(result);
   }
 
   constructor(game: IGame, id: string, name: string) {
@@ -554,7 +584,8 @@ export class Scene {
       const sub = obj.components.find((c) => c.type === 'Subscene') as any;
       if (sub) {
         // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
-        if (this.activeSubscene && sub.targetGroupId === this.activeSubscene) {
+        const currentSubsceneId = (sub.nodeId || sub.targetGroupId || '').trim();
+        if (this.activeSubscene && currentSubsceneId && currentSubsceneId === this.activeSubscene) {
           return false;
         }
         return true;

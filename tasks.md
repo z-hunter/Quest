@@ -88,6 +88,14 @@ Architecture rules for this initiative:
   - children by parent id
   - children grouped by relation
 - [ ] Keep this index separate from render hierarchy and separate from visibility/accessibility logic.
+- [x] Treat `Subscene` as a virtual spatial node while keeping its authored spatial metadata on the `Subscene` component / triggerbox path.
+- [x] Auto-activate direct spatial children when opening a `Subscene`:
+  - direct `Entity` children
+  - direct `Triggerbox` children
+  - direct nested `Subscene` children
+- [x] Keep `Subscene` activation non-recursive:
+  - opening parent `Subscene A` reveals only direct children
+  - children of nested `Subscene B` remain inactive until `B` itself is opened
 
 ### 2. Parser Integration
 
@@ -102,7 +110,7 @@ Architecture rules for this initiative:
   - `LOOK IN X`
   - `LOOK BEHIND X`
 - [ ] Keep `near` out of execution until its runtime semantics are clearly defined.
-- [ ] Preserve current clarification behavior:
+- [x] Preserve current clarification behavior:
   - resolve anchor
   - ambiguity handling
   - tie-break rules for non-usable ambiguity
@@ -118,17 +126,23 @@ Architecture rules for this initiative:
   - node id
   - optional parent node
   - relation type
+- [x] Add editor UI for `Triggerbox` spatial authoring:
+  - parent object / node
+  - relation type
 - [ ] Ensure authoring UI does not imply visibility/accessibility behavior that is not implemented yet.
-- [ ] Add serialization/deserialization support for the new spatial fields.
+- [x] Add serialization/deserialization support for the new spatial fields.
 - [x] Show spatial nesting visually in `HierarchyPanel` for scene entities:
   - child entities render below their parent
   - nested entities are indented to the right
   - flat list order remains stable for roots and fallback cases
+- [x] Extend `HierarchyPanel` spatial nesting display to polygon-based scene objects:
+  - `Triggerbox`
+  - `Walkbox`
 
 ### 4. Migration / Compatibility
 
-- [ ] Keep existing scenes valid with all spatial fields optional.
-- [ ] Preserve current `activeSubscene` / `subsceneEntities` behavior during migration.
+- [x] Keep existing scenes valid with all spatial fields optional.
+- [x] Preserve current `activeSubscene` / `subsceneEntities` behavior during migration.
 - [ ] Make parser relation grammar continue to work even before a scene defines any spatial metadata.
 - [ ] Add smoke checks for scenes mixing:
   - direct object nesting
