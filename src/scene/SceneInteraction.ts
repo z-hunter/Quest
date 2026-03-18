@@ -205,8 +205,11 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
     if (subsceneHit) {
       const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
+      const seeMessage = scene.game.getSeeMessage(titleOwner);
       const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
-      if (title && title.trim()) {
+      if (seeMessage) {
+        scene.game.log(seeMessage);
+      } else if (title && title.trim()) {
         scene.game.log(scene.game.text('engine.click_you_see', { title }));
       }
       activateSceneObject(scene, subsceneHit);
@@ -221,8 +224,14 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
   if (hitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, hitObj);
+    const seeMessage = scene.game.getSeeMessage(titleOwner);
     const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
     const activated = activateSceneObject(scene, hitObj);
+
+    if (seeMessage) {
+      scene.game.log(seeMessage);
+      return;
+    }
 
     if (title) {
       scene.game.log(scene.game.text('engine.click_you_see', { title }));
@@ -237,7 +246,12 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   const visibleHitObj = findTopHitObject(scene, x, y) || findVisibleHitObject(scene, x, y);
   if (visibleHitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
+    const seeMessage = scene.game.getSeeMessage(titleOwner);
     const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+    if (seeMessage) {
+      scene.game.log(seeMessage);
+      return;
+    }
     if (title && title.trim()) {
       scene.game.log(scene.game.text('engine.click_you_see', { title }));
       return;

@@ -6,6 +6,7 @@ import { SceneEditor } from '../tools/SceneEditor';
 import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
+import { SceneObject } from '../entities/SceneObject';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
@@ -18,6 +19,7 @@ import { ComponentSystem } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
 import type { Scene } from '../scene/Scene';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 
 export class Game implements IGame {
   public static instance: Game;
@@ -441,6 +443,60 @@ export class Game implements IGame {
     return title && title.trim() ? title.trim() : null;
   }
 
+  private getPlayerFacingObjectTitle(target: SceneObject): string | null {
+    const title = this.textAssets.getResolvedObjectField(target as any, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private getRelationDisplayText(relation: SpatialRelationType): string {
+    switch (relation) {
+      case 'in':
+        return 'in';
+      case 'on':
+        return 'on';
+      case 'under':
+        return 'under';
+      case 'behind':
+        return 'behind';
+      default:
+        return relation;
+    }
+  }
+
+  private capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  private formatTitleList(items: string[]): string {
+    if (items.length <= 1) return items[0] || '';
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+  }
+
+  private getSpatialParentMessage(target: SceneObject): string | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const placement = scene.getSpatialPlacementForObject(target);
+    if (!placement?.parentNodeId || !placement.relation) return null;
+
+    const itemTitle = this.getPlayerFacingObjectTitle(target);
+    const parentNode = scene.getSpatialNode(placement.parentNodeId);
+    const parentTitle = parentNode?.title?.trim() || null;
+    if (!itemTitle || !parentTitle) return null;
+
+    return this.text('parser.relation_contents', {
+      Relation: this.capitalize(this.getRelationDisplayText(placement.relation)),
+      relation: this.getRelationDisplayText(placement.relation),
+      target: parentTitle,
+      items: itemTitle,
+    });
+  }
+
+  getSeeMessage(target: SceneObject): string | null {
+    return this.getSpatialParentMessage(target) || null;
+  }
+
   private isEntityInInventory(entity: Entity): boolean {
     return this.inventory.includes(entity);
   }
@@ -491,6 +547,13 @@ export class Game implements IGame {
       this.textAssets.getResolvedSceneField(targetScene, 'description') ||
       targetScene.description ||
       this.text('parser.look_default_scene', { scene: targetScene.name });
+    // Intentionally disabled for now:
+    // const directItems = this.getDirectSceneLookItems(targetScene);
+    // const contentsMessage = directItems.length
+    //   ? this.text('parser.look_scene_contents', {
+    //       items: this.formatTitleList(directItems),
+    //     })
+    //   : '';
     return {
       status: 'ok',
       code: 'scene_description',
@@ -515,10 +578,11 @@ export class Game implements IGame {
     const description =
       this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
     if (description && description.trim()) {
+      const spatialMessage = this.getSpatialParentMessage(entity);
       return {
         status: 'ok',
         code: 'entity_description',
-        message: description,
+        message: spatialMessage ? `${description.trim()} ${spatialMessage}` : description,
         data: { targetType: 'entity', entityId: entity.name },
       };
     }
@@ -579,6 +643,63 @@ export class Game implements IGame {
       code: 'missing_details',
       data: { targetType: 'entity', entityId: entity.name },
       recoverable: true,
+    };
+  }
+
+  describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const anchorNode = scene.getSpatialNode(anchorNodeId);
+    const anchorTitle = anchorNode?.title?.trim() || null;
+    if (!anchorNode || !anchorTitle) {
+      return {
+        status: 'escalate',
+        code: 'spatial_node_missing_title',
+        recoverable: true,
+      };
+    }
+
+    const childTitles = scene
+      .getDirectSpatialChildren(anchorNodeId, relation)
+      .map((child) => this.getPlayerFacingObjectTitle(child))
+      .filter((title): title is string => !!title);
+
+    if (!childTitles.length) {
+      return {
+        status: 'ok',
+        code: 'relation_empty',
+        message: this.text('parser.relation_empty', {
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+        }),
+        data: {
+          relation,
+          anchorNodeId,
+        },
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'relation_contents',
+      message: this.text('parser.relation_contents', {
+        Relation: this.capitalize(this.getRelationDisplayText(relation)),
+        relation: this.getRelationDisplayText(relation),
+        target: anchorTitle,
+        items: this.formatTitleList(childTitles),
+      }),
+      data: {
+        relation,
+        anchorNodeId,
+      },
     };
   }
 

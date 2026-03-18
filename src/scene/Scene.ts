@@ -202,24 +202,37 @@ export class Scene {
     };
   }
 
-  getSpatialDescendantObjects(nodeId: string): SceneObject[] {
+  getSpatialNode(id: string): SpatialNodeDescriptor | null {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return null;
+    return this.getSpatialIndex().nodeById.get(normalizedId) || null;
+  }
+
+  getDirectSpatialChildren(nodeId: string, relation?: SpatialRelationType): SceneObject[] {
     const normalizedId = String(nodeId || '').trim();
     if (!normalizedId) return [];
 
     const result = new Set<SceneObject>();
-
     const allObjects: SceneObject[] = [...this.entities, ...this.walkbox, ...this.triggerboxes];
+
     for (const obj of allObjects) {
-      const objectParentId =
-        typeof (obj as any).spatial?.parentNodeId === 'string'
-          ? (obj as any).spatial.parentNodeId.trim()
-          : '';
-      if (objectParentId === normalizedId) {
-        result.add(obj);
-      }
+      const placement = this.normalizeSpatialPlacement((obj as any).spatial);
+      if (!placement?.parentNodeId || placement.parentNodeId !== normalizedId) continue;
+      if (relation && placement.relation !== relation) continue;
+      result.add(obj);
     }
 
     return Array.from(result);
+  }
+
+  getSpatialPlacementForObject(obj: SceneObject): SpatialPlacement | null {
+    return this.normalizeSpatialPlacement((obj as any).spatial);
+  }
+
+  getSpatialDescendantObjects(nodeId: string): SceneObject[] {
+    const normalizedId = String(nodeId || '').trim();
+    if (!normalizedId) return [];
+    return this.getDirectSpatialChildren(normalizedId);
   }
 
   constructor(game: IGame, id: string, name: string) {

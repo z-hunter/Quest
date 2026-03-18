@@ -19,6 +19,7 @@ export type ObjectTextAssetData = TextAssetData & {
 const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
   parser: {
     look_default_scene: 'You are in {scene}.',
+    look_scene_contents: 'Here is {items}.',
     look_default_object: 'You see nothing special about the {target}.',
     look_not_found: "You don't see any {target} here.",
     look_which_one: 'Which one do you mean: {options}?',

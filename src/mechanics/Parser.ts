@@ -642,10 +642,6 @@ export class Parser {
     return this.activeWorldModel?.context.spatialNodes || [];
   }
 
-  private getSpatialNodeById(id: string): ParserSpatialNodeContext | null {
-    return this.getSpatialNodes().find((node) => node.id === id) || null;
-  }
-
   private getSpatialNodeDisplayTitle(node: ParserSpatialNodeContext): string {
     const entityContext = this.getContextEntityById(node.id);
     return entityContext?.title?.trim() || node.title?.trim() || '';
@@ -844,10 +840,33 @@ export class Parser {
       this.getScopeCandidates(['examinable']),
       'parser.examine_which_one'
     );
+    const broadResolved =
+      resolved.status === 'not_found'
+        ? this.resolveEntityTargetInCandidates(
+            rawTarget,
+            this.getScopeCandidates(['visible', 'held']),
+            'parser.examine_which_one'
+          )
+        : null;
     if (resolved.status === 'escalate') {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
     if (resolved.status === 'not_found') {
+      if (broadResolved?.status === 'escalate') {
+        return { status: 'escalate', code: broadResolved.code, recoverable: true };
+      }
+      if (broadResolved?.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_examine_target',
+          message: broadResolved.message,
+          data: { target: rawTarget, options: broadResolved.options },
+          recoverable: true,
+        };
+      }
+      if (broadResolved?.status === 'found') {
+        return this.game.examineEntity(broadResolved.entity);
+      }
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -937,63 +956,7 @@ export class Parser {
       };
     }
 
-    const matchingRelation = this.activeWorldModel?.context.spatialRelations?.find(
-      (item) => item.anchorNodeId === resolved.node.id && item.relation === relation
-    );
-    const childNodes = (matchingRelation?.childNodeIds || [])
-      .map((id) => this.getSpatialNodeById(id))
-      .filter((node): node is ParserSpatialNodeContext => !!node);
-    const anchorTitle = this.getSpatialNodeDisplayTitle(resolved.node);
-    if (!anchorTitle) {
-      return {
-        status: 'escalate',
-        code: 'spatial_node_missing_title',
-        recoverable: true,
-      };
-    }
-
-    if (!childNodes.length) {
-      return {
-        status: 'ok',
-        code: 'relation_empty',
-        message: this.game.text('parser.relation_empty', {
-          relation: this.getRelationDisplayText(relation),
-          target: anchorTitle,
-        }),
-        data: {
-          relation,
-          anchorNodeId: resolved.node.id,
-        },
-      };
-    }
-
-    const itemTitles = childNodes
-      .map((node) => this.getSpatialNodeDisplayTitle(node))
-      .filter((title) => !!title);
-    if (itemTitles.length !== childNodes.length) {
-      return {
-        status: 'escalate',
-        code: 'spatial_node_missing_title',
-        recoverable: true,
-      };
-    }
-
-    const items = itemTitles.join(', ');
-    return {
-      status: 'ok',
-      code: 'relation_contents',
-      message: this.game.text('parser.relation_contents', {
-        Relation: this.capitalize(this.getRelationDisplayText(relation)),
-        relation: this.getRelationDisplayText(relation),
-        target: anchorTitle,
-        items,
-      }),
-      data: {
-        relation,
-        anchorNodeId: resolved.node.id,
-        childNodeIds: childNodes.map((node) => node.id),
-      },
-    };
+    return this.game.describeSpatialRelation(resolved.node.id, relation);
   }
 
   private resolveTakeTarget(rawTarget: string | null): GameActionOutcome {
@@ -1591,10 +1554,6 @@ export class Parser {
       default:
         return relation;
     }
-  }
-
-  private capitalize(value: string): string {
-    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
   private isEntityValidForCommandArgument(
