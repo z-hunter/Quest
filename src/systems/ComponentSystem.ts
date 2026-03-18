@@ -4,7 +4,6 @@ import { QuadObject } from '../entities/QuadObject';
 // or just import them. Circular imports are handled by webpack/vite usually, but let's be careful.
 // Actually, using them as Types is fine.
 import type { Actor } from '../entities/Actor';
-import type { SpatialPlacement } from '../scene/spatialTypes';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
@@ -13,11 +12,8 @@ import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
 export interface SubsceneComponent {
   type: 'Subscene';
   targetGroupId: string;
-  name?: string;
-  nodeId?: string;
   title?: string;
   description?: string | null;
-  spatial?: SpatialPlacement;
 }
 
 export interface SwitchComponent {
@@ -78,17 +74,6 @@ export class ComponentSystem {
         continue;
       }
 
-      const subsceneComponent = obj.components?.find((component: any) => component?.type === 'Subscene') as
-        | SubsceneComponent
-        | undefined;
-      const subsceneParentId =
-        typeof subsceneComponent?.spatial?.parentNodeId === 'string'
-          ? subsceneComponent.spatial.parentNodeId.trim()
-          : '';
-
-      if (subsceneParentId && roots.has(subsceneParentId)) {
-        result.add(obj);
-      }
     }
 
     return Array.from(result);
@@ -224,8 +209,7 @@ export class ComponentSystem {
     scene: ActivationSceneContext
   ): boolean {
     const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-    const nodeId = sub.nodeId ? sub.nodeId.trim() : '';
-    if (!targetStr && !nodeId) return false;
+    if (!targetStr && !entity.name) return false;
 
     // Proximity Check (if player exists)
     const player = scene.player;
@@ -262,7 +246,7 @@ export class ComponentSystem {
 
     const spatialRootIds = Array.from(
       new Set(
-        [nodeId, targetStr, entity.name]
+        [targetStr, entity.name]
           .map((value) => String(value || '').trim())
           .filter((value) => !!value)
       )
@@ -270,7 +254,7 @@ export class ComponentSystem {
     const spatialTargets = this.getDirectSpatialChildren(spatialRootIds, scene);
     const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
     const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
-    const activeSubsceneId = nodeId || targetStr;
+    const activeSubsceneId = entity.name || targetStr;
 
     scene.activeSubscene = activeSubsceneId;
     scene.subsceneEntities.clear();

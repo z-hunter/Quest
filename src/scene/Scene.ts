@@ -159,10 +159,10 @@ export class Scene {
 
     const subsceneNodes: SpatialNodeDescriptor[] = this.getSubsceneComponents().map(
       ({ triggerbox, component }) => ({
-        id: (component.nodeId || component.targetGroupId || triggerbox.name || '').trim(),
+        id: (triggerbox.name || component.targetGroupId || '').trim(),
         kind: 'subscene' as const,
-        title: component.title?.trim() || component.name?.trim() || null,
-        placement: this.normalizeSpatialPlacement(component.spatial || (triggerbox as any).spatial),
+        title: component.title?.trim() || null,
+        placement: this.normalizeSpatialPlacement((triggerbox as any).spatial),
         sourceName: triggerbox.name,
       })
     );
@@ -214,15 +214,7 @@ export class Scene {
         typeof (obj as any).spatial?.parentNodeId === 'string'
           ? (obj as any).spatial.parentNodeId.trim()
           : '';
-      const subsceneComponent = obj.components?.find((component: any) => component?.type === 'Subscene') as
-        | SubsceneComponent
-        | undefined;
-      const subsceneParentId =
-        typeof subsceneComponent?.spatial?.parentNodeId === 'string'
-          ? subsceneComponent.spatial.parentNodeId.trim()
-          : '';
-
-      if (objectParentId === normalizedId || subsceneParentId === normalizedId) {
+      if (objectParentId === normalizedId) {
         result.add(obj);
       }
     }
@@ -584,7 +576,7 @@ export class Scene {
       const sub = obj.components.find((c) => c.type === 'Subscene') as any;
       if (sub) {
         // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
-        const currentSubsceneId = (sub.nodeId || sub.targetGroupId || '').trim();
+        const currentSubsceneId = (obj.name || sub.targetGroupId || '').trim();
         if (this.activeSubscene && currentSubsceneId && currentSubsceneId === this.activeSubscene) {
           return false;
         }
