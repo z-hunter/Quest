@@ -10,7 +10,6 @@ import {
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
-import type { SceneDescriptor } from '../scene/SceneManager';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserCascadeEnvelope,
@@ -24,7 +23,9 @@ import type {
   ParserResponse,
   ParserResult,
   ParserScope,
+  ParserSpatialNodeContext,
   ParserToolAction,
+  ParserWorldModel,
 } from './parserTypes';
 
 export class Parser {
@@ -33,6 +34,7 @@ export class Parser {
   pendingState: ParserPendingState | null;
   nlpCascade: NlpCascade;
   worldModelBuilder: ParserWorldModelBuilder;
+  activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
 
   constructor(game: any) {
@@ -41,6 +43,7 @@ export class Parser {
     this.pendingState = null;
     this.nlpCascade = new NlpCascade(() => this.game.textAssets);
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
+    this.activeWorldModel = null;
     this.activeScope = null;
   }
 
@@ -51,10 +54,10 @@ export class Parser {
       this.nlpCascade.clearLastDebugInfo();
       const actionEnvelope = this.resolvePendingAction(trimmed);
       const worldModel = this.worldModelBuilder.build(trimmed, this.pendingState);
+      this.activeWorldModel = worldModel;
       const context = worldModel.context;
       this.activeScope = worldModel.scope;
       const contextJson = JSON.stringify(context);
-      const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
       let envelope =
         actionEnvelope ||
         (this.game.console?.parserStage1Enabled === false
@@ -72,6 +75,7 @@ export class Parser {
         }
       }
 
+      const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
       const envelopeJson = JSON.stringify(envelope);
       const resultJson = this.runParserCore(envelope);
       const response = this.buildResponse(resultJson, envelopeJson, contextJson, scopeJson);
@@ -90,6 +94,7 @@ export class Parser {
       }
     } catch (error) {
       this.pendingState = null;
+      this.activeWorldModel = null;
       this.activeScope = null;
       this.game.console?.log(`[Parser error] ${String(error)}`, 'error');
       this.game.log(this.game.text('parser.parse_unknown'));
@@ -610,13 +615,91 @@ export class Parser {
     })[0];
   }
 
-  private getScopeCandidates(sliceNames: Array<keyof Omit<ParserScope, 'sceneTargets'>>): Entity[] {
+  private getScopeCandidates(sliceNames: Array<keyof ParserScope>): Entity[] {
     const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
     const candidates: Entity[] = [];
     for (const sliceName of sliceNames) {
       candidates.push(...scope[sliceName]);
     }
     return Array.from(new Set(candidates));
+  }
+
+  private getContextEntityById(id: string): { title: string; synonyms?: string[] } | null {
+    const entities = this.activeWorldModel?.context.entities || [];
+    return entities.find((entity) => entity.id === id) || null;
+  }
+
+  private getSpatialNodeLookupTokens(node: ParserSpatialNodeContext): string[] {
+    const entityContext = this.getContextEntityById(node.id);
+    const title = entityContext?.title || node.title;
+    const synonyms = entityContext?.synonyms || [];
+    return Array.from(
+      new Set([title, ...synonyms].filter((item): item is string => !!item?.trim()))
+    ).map((item) => item.trim().toUpperCase());
+  }
+
+  private getSpatialNodes(): ParserSpatialNodeContext[] {
+    return this.activeWorldModel?.context.spatialNodes || [];
+  }
+
+  private getSpatialNodeById(id: string): ParserSpatialNodeContext | null {
+    return this.getSpatialNodes().find((node) => node.id === id) || null;
+  }
+
+  private getSpatialNodeDisplayTitle(node: ParserSpatialNodeContext): string {
+    const entityContext = this.getContextEntityById(node.id);
+    return entityContext?.title?.trim() || node.title?.trim() || '';
+  }
+
+  private resolveSpatialNodeTarget(
+    rawTarget: string,
+    clarificationKey: string
+  ):
+    | { status: 'found'; node: ParserSpatialNodeContext }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    const normalizedTarget = String(rawTarget || '')
+      .trim()
+      .toUpperCase();
+    if (!normalizedTarget) return { status: 'not_found' };
+
+    const nodes = this.getSpatialNodes();
+    const exactMatches = nodes.filter((node) =>
+      this.getSpatialNodeLookupTokens(node).includes(normalizedTarget)
+    );
+    if (exactMatches.length === 1) return { status: 'found', node: exactMatches[0] };
+    if (exactMatches.length > 1) {
+      const options = Array.from(new Set(exactMatches.map((node) => this.getSpatialNodeDisplayTitle(node))));
+      if (options.some((option) => !option) || options.length !== exactMatches.length) {
+        return { status: 'escalate', code: 'ambiguous_spatial_nodes_missing_titles' };
+      }
+      return {
+        status: 'ambiguous',
+        message: this.game.text(clarificationKey, { options: options.join(', ') }),
+        options,
+      };
+    }
+
+    const partialMatches = nodes.filter((node) =>
+      this.getSpatialNodeLookupTokens(node).some((token) => token.includes(normalizedTarget))
+    );
+    if (partialMatches.length === 1) return { status: 'found', node: partialMatches[0] };
+    if (partialMatches.length > 1) {
+      const options = Array.from(
+        new Set(partialMatches.map((node) => this.getSpatialNodeDisplayTitle(node)))
+      );
+      if (options.some((option) => !option) || options.length !== partialMatches.length) {
+        return { status: 'escalate', code: 'ambiguous_spatial_nodes_missing_titles' };
+      }
+      return {
+        status: 'ambiguous',
+        message: this.game.text(clarificationKey, { options: options.join(', ') }),
+        options,
+      };
+    }
+
+    return { status: 'not_found' };
   }
 
   private resolveEntityTargetInCandidates(
@@ -716,24 +799,6 @@ export class Parser {
     };
   }
 
-  private resolveSceneTarget(rawTarget: string): SceneDescriptor | null {
-    const normalized = String(rawTarget || '')
-      .trim()
-      .toUpperCase();
-    if (!normalized) return null;
-    const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
-    for (const descriptor of scope.sceneTargets) {
-      if (
-        descriptor.id.toUpperCase() === normalized ||
-        descriptor.name.toUpperCase() === normalized ||
-        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
-      ) {
-        return descriptor;
-      }
-    }
-    return null;
-  }
-
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
@@ -824,10 +889,7 @@ export class Parser {
 
     const clarificationKey =
       intent === 'look' ? 'parser.look_which_one' : 'parser.examine_which_one';
-    const candidates = this.getScopeCandidates(
-      intent === 'look' ? ['visible', 'held'] : ['examinable']
-    );
-    const resolved = this.resolveEntityTargetInCandidates(anchor, candidates, clarificationKey);
+    const resolved = this.resolveSpatialNodeTarget(anchor, clarificationKey);
 
     if (resolved.status === 'escalate') {
       return { status: 'escalate', code: resolved.code, recoverable: true };
@@ -851,18 +913,86 @@ export class Parser {
       };
     }
 
+    if (relation === 'near') {
+      const nodeTitle = this.getSpatialNodeDisplayTitle(resolved.node);
+      if (!nodeTitle) {
+        return {
+          status: 'escalate',
+          code: 'spatial_node_missing_title',
+          recoverable: true,
+        };
+      }
+      return {
+        status: 'failed',
+        code: 'relation_not_supported',
+        message: this.game.text('parser.relation_not_supported', {
+          relation: this.getRelationDisplayText(relation),
+          target: nodeTitle,
+        }),
+        data: {
+          relation,
+          anchorNodeId: resolved.node.id,
+        },
+        recoverable: true,
+      };
+    }
+
+    const matchingRelation = this.activeWorldModel?.context.spatialRelations?.find(
+      (item) => item.anchorNodeId === resolved.node.id && item.relation === relation
+    );
+    const childNodes = (matchingRelation?.childNodeIds || [])
+      .map((id) => this.getSpatialNodeById(id))
+      .filter((node): node is ParserSpatialNodeContext => !!node);
+    const anchorTitle = this.getSpatialNodeDisplayTitle(resolved.node);
+    if (!anchorTitle) {
+      return {
+        status: 'escalate',
+        code: 'spatial_node_missing_title',
+        recoverable: true,
+      };
+    }
+
+    if (!childNodes.length) {
+      return {
+        status: 'ok',
+        code: 'relation_empty',
+        message: this.game.text('parser.relation_empty', {
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+        }),
+        data: {
+          relation,
+          anchorNodeId: resolved.node.id,
+        },
+      };
+    }
+
+    const itemTitles = childNodes
+      .map((node) => this.getSpatialNodeDisplayTitle(node))
+      .filter((title) => !!title);
+    if (itemTitles.length !== childNodes.length) {
+      return {
+        status: 'escalate',
+        code: 'spatial_node_missing_title',
+        recoverable: true,
+      };
+    }
+
+    const items = itemTitles.join(', ');
     return {
-      status: 'failed',
-      code: 'relation_not_supported',
-      message: this.game.text('parser.relation_not_supported', {
+      status: 'ok',
+      code: 'relation_contents',
+      message: this.game.text('parser.relation_contents', {
+        Relation: this.capitalize(this.getRelationDisplayText(relation)),
         relation: this.getRelationDisplayText(relation),
-        target: this.getPlayerFacingEntityTitle(resolved.entity) || anchor,
+        target: anchorTitle,
+        items,
       }),
       data: {
         relation,
-        anchorEntityId: resolved.entity.name,
+        anchorNodeId: resolved.node.id,
+        childNodeIds: childNodes.map((node) => node.id),
       },
-      recoverable: true,
     };
   }
 
@@ -950,9 +1080,9 @@ export class Parser {
       };
     }
 
-    const sceneMatch = this.resolveSceneTarget(rawTarget);
-    if (sceneMatch) {
-      return this.game.goToScene(sceneMatch.id);
+    const sceneOutcome = this.game.goToSceneTarget(rawTarget);
+    if (sceneOutcome.status === 'ok') {
+      return sceneOutcome;
     }
 
     const resolved = this.resolveEntityTargetInCandidates(
@@ -1059,7 +1189,7 @@ export class Parser {
 
   private resolveDistanceFailureForArgument(
     rawTarget: string,
-    scopes: Array<keyof Omit<ParserScope, 'sceneTargets'>>
+    scopes: Array<keyof ParserScope>
   ): GameActionOutcome | null {
     if (!scopes.includes('reachable') || scopes.includes('visible')) {
       return null;
@@ -1399,11 +1529,6 @@ export class Parser {
       reachable: scope.reachable.map((entity) => entity.name),
       examinable: scope.examinable.map((entity) => entity.name),
       subscene: scope.subscene.map((entity) => entity.name),
-      sceneTargets: scope.sceneTargets.map((scene) => ({
-        id: scene.id,
-        name: scene.name,
-        title: scene.title,
-      })),
     };
   }
 
@@ -1466,6 +1591,10 @@ export class Parser {
       default:
         return relation;
     }
+  }
+
+  private capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
   }
 
   private isEntityValidForCommandArgument(

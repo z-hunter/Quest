@@ -46,6 +46,57 @@ export const HierarchyPanel: React.FC = () => {
   const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
     matchesFilter(item)
   );
+  const filteredEntityOrder = React.useMemo(
+    () => new Map(filteredEntities.map((entity: any, index: number) => [entity.name, index])),
+    [filteredEntities]
+  );
+  const hierarchicalEntities = React.useMemo(() => {
+    const entityByName = new Map(filteredEntities.map((entity: any) => [entity.name, entity]));
+    const childrenByParent = new Map<string, any[]>();
+    const roots: any[] = [];
+
+    const pushChild = (parentId: string, entity: any) => {
+      const children = childrenByParent.get(parentId) || [];
+      children.push(entity);
+      childrenByParent.set(parentId, children);
+    };
+
+    filteredEntities.forEach((entity: any) => {
+      const parentId =
+        typeof entity?.spatial?.parentNodeId === 'string' ? entity.spatial.parentNodeId.trim() : '';
+      if (parentId && parentId !== entity.name && entityByName.has(parentId)) {
+        pushChild(parentId, entity);
+      } else {
+        roots.push(entity);
+      }
+    });
+
+    const sortBySceneOrder = (items: any[]) =>
+      [...items].sort(
+        (left, right) =>
+          (filteredEntityOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) -
+          (filteredEntityOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER)
+      );
+
+    const ordered: Array<{ entity: any; depth: number }> = [];
+    const visited = new Set<string>();
+
+    const walk = (entity: any, depth: number) => {
+      if (!entity || visited.has(entity.name)) return;
+      visited.add(entity.name);
+      ordered.push({ entity, depth });
+      const children = sortBySceneOrder(childrenByParent.get(entity.name) || []);
+      children.forEach((child) => walk(child, depth + 1));
+    };
+
+    sortBySceneOrder(roots).forEach((entity) => walk(entity, 0));
+
+    sortBySceneOrder(filteredEntities)
+      .filter((entity) => !visited.has(entity.name))
+      .forEach((entity) => walk(entity, 0));
+
+    return ordered;
+  }, [filteredEntities, filteredEntityOrder]);
 
   // Helper to resolve display ID for an item, matching how it's identified in the UI
   const getDisplayId = (item: any): string => {
@@ -84,7 +135,12 @@ export const HierarchyPanel: React.FC = () => {
         return;
       }
 
-      const allItems = ['SCENE', ...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
+      const allItems = [
+        'SCENE',
+        ...hierarchicalEntities.map((item) => item.entity),
+        ...filteredWalkboxes,
+        ...filteredTriggers,
+      ];
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -126,7 +182,7 @@ export const HierarchyPanel: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    filteredEntities,
+    hierarchicalEntities,
     filteredWalkboxes,
     filteredTriggers,
     hierarchyVersion,
@@ -303,14 +359,14 @@ export const HierarchyPanel: React.FC = () => {
         </div>
 
         {/* Entities */}
-        {filteredEntities.map((ent: any) => {
+        {hierarchicalEntities.map(({ entity: ent, depth }) => {
           const isSelected = isItemSelected(ent);
           return (
             <div
               key={ent.name}
               style={{
                 padding: '4px',
-                paddingLeft: '15px',
+                paddingLeft: `${8 + depth * 14}px`,
                 marginBottom: '2px',
                 cursor: 'pointer',
                 borderRadius: '4px',

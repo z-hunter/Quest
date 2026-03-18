@@ -122,6 +122,7 @@ flowchart TD
 - текущую сцену (`id`, `name`, `title`, `description`, `activeSubscene`);
 - список текстово значимых объектов сцены;
 - инвентарь игрока;
+- spatial nodes and relation projection, derived from the runtime scene hierarchy;
 - `pending state`, если parser уже ждёт уточнение.
 
 Текущий scope включает:
@@ -162,6 +163,8 @@ flowchart TD
     }
   ],
   "inventory": [],
+  "spatialNodes": [],
+  "spatialRelations": [],
   "pending": null
 }
 ```
@@ -981,15 +984,24 @@ NLP-слой полезен, но не является фундаментом p
 - `examine drawer`
 - `look in drawer`
 
-Пример будущей relation model:
+Runtime relation model is now owned by `Game` / scene data, not by parser. Parser consumes a projection of that model through `ParserWorldModelBuilder`.
+
+Parser-facing relation projection:
 
 ```ts
 type ParserRelation = {
-  type: 'on' | 'under' | 'in' | 'behind' | 'near';
-  sourceId: string;
-  targetId: string;
+  anchorNodeId: string;
+  relation: 'on' | 'under' | 'in' | 'behind';
+  childNodeIds: string[];
 };
 ```
+
+Current state:
+- `LOOK UNDER X`
+- `LOOK IN X`
+- `LOOK BEHIND X`
+
+already execute against real runtime spatial data. `near` remains parser-recognized but is intentionally not executed yet because its runtime semantics are still undefined.
 
 Именно richer context/scope/relations дадут parser-у настоящую "картину мира".
 

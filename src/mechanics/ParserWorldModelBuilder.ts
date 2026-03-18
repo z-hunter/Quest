@@ -1,12 +1,16 @@
 import type { Game } from '../core/Game';
 import type { Entity } from '../entities/Entity';
+import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
   ParserEntityContext,
   ParserInventoryItemContext,
   ParserPendingState,
+  ParserRelationType,
   ParserScope,
+  ParserSpatialNodeContext,
+  ParserSpatialRelationContext,
   ParserWorldModel,
 } from './parserTypes';
 
@@ -27,49 +31,127 @@ export class ParserWorldModelBuilder {
   private buildContext(rawInput: string, pendingState: ParserPendingState | null): ParserContext {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
+    const sceneContext = scene ? this.buildSceneContext(scene) : undefined;
+    const entities = scene ? this.buildEntityContexts(scene) : [];
+    const inventory = this.buildInventoryContexts();
+    const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
+    const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
+    const pending = pendingState
+      ? {
+          intent: pendingState.intent,
+          question: pendingState.question,
+          originalInput: pendingState.originalInput,
+        }
+      : undefined;
 
-    return {
+    return this.compactRecord({
       rawInput,
       normalizedInput,
-      scene: scene
-        ? {
-            id: scene.id,
-            name: scene.name,
-            title: this.game.textAssets.getResolvedSceneField(scene, 'title'),
-            description: this.game.textAssets.getResolvedSceneField(scene, 'description'),
-            activeSubscene: scene.activeSubscene || null,
-          }
-        : null,
-      entities: scene
-        ? (scene.entities || [])
-            .map((entity: any) => ({
-              id: entity.name,
-              type: entity.type,
-              title: this.game.textAssets.getResolvedObjectField(entity, 'title'),
-              synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
-              description: this.game.textAssets.getResolvedObjectField(entity, 'description'),
-              details: this.game.textAssets.getResolvedObjectField(entity, 'details'),
-              interactions: Object.keys(entity.interactions || {}),
-            }))
-            .filter((entity: ParserEntityContext) => !!entity.title?.trim())
-        : [],
-      inventory: (this.game.inventory || [])
-        .map((entity: any) => ({
+      scene: sceneContext,
+      entities,
+      inventory,
+      spatialNodes,
+      spatialRelations,
+      pending,
+    });
+  }
+
+  private buildSceneContext(scene: Scene): NonNullable<ParserContext['scene']> {
+    return this.compactRecord({
+      id: scene.id,
+      title: this.game.textAssets.getResolvedSceneField(scene, 'title') || undefined,
+      description: this.game.textAssets.getResolvedSceneField(scene, 'description') || undefined,
+      activeSubscene: scene.activeSubscene || undefined,
+    });
+  }
+
+  private buildEntityContexts(scene: Scene): ParserEntityContext[] {
+    return (scene.entities || [])
+      .map((entity: any) => {
+        const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
+        if (!title) return null;
+        const synonyms = this.game.textAssets.getResolvedObjectListField(entity, 'synonyms');
+        const interactions = Object.keys(entity.interactions || {});
+        return this.compactRecord<ParserEntityContext>({
           id: entity.name,
-          title: this.game.textAssets.getResolvedObjectField(entity, 'title'),
+          type: entity.type,
+          title,
+          synonyms,
+          description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
+          details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+          interactions,
+        });
+      })
+      .filter((entity): entity is ParserEntityContext => !!entity);
+  }
+
+  private buildInventoryContexts(): ParserInventoryItemContext[] {
+    return (this.game.inventory || [])
+      .map((entity: any) => {
+        const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
+        if (!title) return null;
+        return this.compactRecord<ParserInventoryItemContext>({
+          id: entity.name,
+          title,
           synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
-          description: this.game.textAssets.getResolvedObjectField(entity, 'description'),
-          details: this.game.textAssets.getResolvedObjectField(entity, 'details'),
-        }))
-        .filter((entity: ParserInventoryItemContext) => !!entity.title?.trim()),
-      pending: pendingState
-        ? {
-            intent: pendingState.intent,
-            question: pendingState.question,
-            originalInput: pendingState.originalInput,
-          }
-        : null,
-    };
+          description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
+          details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+        });
+      })
+      .filter((entity): entity is ParserInventoryItemContext => !!entity);
+  }
+
+  private buildSpatialNodes(scene: Scene): ParserSpatialNodeContext[] {
+    const descriptors = scene.getSpatialNodeDescriptors();
+    const spatialIndex = scene.getSpatialIndex();
+    const connectedNodeIds = new Set<string>();
+    for (const [parentId, children] of spatialIndex.childrenByParentId.entries()) {
+      if (children.length) connectedNodeIds.add(parentId);
+      for (const child of children) {
+        connectedNodeIds.add(child.id);
+      }
+    }
+
+    return descriptors
+      .filter((descriptor) => connectedNodeIds.has(descriptor.id))
+      .map((descriptor) => {
+        if (descriptor.kind === 'entity') {
+          return this.compactRecord<ParserSpatialNodeContext>({
+            id: descriptor.id,
+            parentNodeId: descriptor.placement?.parentNodeId || undefined,
+            relation:
+              (descriptor.placement?.relation as Exclude<ParserRelationType, 'near'> | null) ||
+              undefined,
+          });
+        }
+
+        return this.compactRecord<ParserSpatialNodeContext>({
+          id: descriptor.id,
+          subscene: true,
+          title: descriptor.title || undefined,
+          parentNodeId: descriptor.placement?.parentNodeId || undefined,
+          relation:
+            (descriptor.placement?.relation as Exclude<ParserRelationType, 'near'> | null) ||
+            undefined,
+        });
+      });
+  }
+
+  private buildSpatialRelations(scene: Scene): ParserSpatialRelationContext[] {
+    const spatialIndex = scene.getSpatialIndex();
+    const relations: ParserSpatialRelationContext[] = [];
+
+    for (const [anchorNodeId, relationMap] of spatialIndex.childrenByParentAndRelation.entries()) {
+      for (const [relation, nodes] of relationMap.entries()) {
+        relations.push({
+          anchorNodeId,
+          relation,
+          childNodeIds: nodes.map((node) => node.id),
+        });
+      }
+    }
+
+    return relations;
   }
 
   private buildScope(): ParserScope {
@@ -97,8 +179,6 @@ export class ParserWorldModelBuilder {
         )
       : [];
     const examinable = this.uniqueEntities([...held, ...subscene, ...reachable]);
-    const sceneTargets = Array.from(this.game.sceneManager.sceneRegistry.values());
-
     return {
       visible,
       held,
@@ -106,13 +186,32 @@ export class ParserWorldModelBuilder {
       reachable,
       examinable,
       subscene,
-      sceneTargets,
     };
   }
 
   private getPlayerFacingEntityTitle(entity: Entity): string | null {
     const title = this.game.textAssets.getResolvedObjectField(entity, 'title');
     return title && title.trim() ? title.trim() : null;
+  }
+
+  private compactRecord<T extends Record<string, unknown>>(value: T): T {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === null || entry === undefined) continue;
+      if (Array.isArray(entry)) {
+        if (!entry.length) continue;
+        result[key] = entry;
+        continue;
+      }
+      if (typeof entry === 'object') {
+        const nested = this.compactRecord(entry as Record<string, unknown>);
+        if (!Object.keys(nested).length) continue;
+        result[key] = nested;
+        continue;
+      }
+      result[key] = entry;
+    }
+    return result as T;
   }
 
   private uniqueEntities(entities: Entity[]): Entity[] {

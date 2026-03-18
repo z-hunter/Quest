@@ -6,6 +6,10 @@ export interface SubsceneTrigger extends TriggerComponent {
   type: 'Subscene';
   targetGroupId: string;
   name?: string;
+  nodeId?: string;
+  title?: string;
+  description?: string | null;
+  spatial?: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null };
 }
 
 export interface Subtrigger extends TriggerComponent {

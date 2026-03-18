@@ -24,6 +24,7 @@ export interface IGame {
   takeEntity(entity: Entity): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
+  goToSceneTarget(target: string): GameActionOutcome;
   goToScene(sceneId: string): GameActionOutcome;
   goToEntity(entity: Entity): GameActionOutcome;
   showNotification?(text: string): void; // Optional

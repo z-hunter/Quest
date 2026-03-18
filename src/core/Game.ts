@@ -563,6 +563,17 @@ export class Game implements IGame {
       };
     }
 
+    const description =
+      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    if (description && description.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_description_fallback',
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
     return {
       status: 'escalate',
       code: 'missing_details',
@@ -686,6 +697,33 @@ export class Game implements IGame {
       data: {
         count: this.inventory.length,
       },
+    };
+  }
+
+  goToSceneTarget(target: string): GameActionOutcome {
+    const normalized = String(target || '').trim().toUpperCase();
+    if (!normalized) {
+      return {
+        status: 'failed',
+        code: 'destination_not_found',
+        recoverable: true,
+      };
+    }
+
+    for (const descriptor of this.sceneManager.sceneRegistry.values()) {
+      if (
+        descriptor.id.toUpperCase() === normalized ||
+        descriptor.name.toUpperCase() === normalized ||
+        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
+      ) {
+        return this.goToScene(descriptor.id);
+      }
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      recoverable: true,
     };
   }
 

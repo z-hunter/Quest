@@ -43,6 +43,58 @@ export const PropertiesPanel: React.FC = () => {
   const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
     ? game.editor.selectionManager.getSelectedObjects()
     : [];
+  const spatialRelationOptions = [
+    { value: '', label: '(None)' },
+    { value: 'in', label: 'In' },
+    { value: 'on', label: 'On' },
+    { value: 'under', label: 'Under' },
+    { value: 'behind', label: 'Behind' },
+  ];
+
+  const getSceneEntityParentOptions = React.useCallback(() => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !obj) {
+      return [{ value: '', label: '(None)' }];
+    }
+
+    const options = scene.entities
+      .filter((entity) => entity !== obj)
+      .map((entity) => ({
+        value: entity.name,
+        label: entity.customName?.trim() || entity.name,
+      }));
+
+    return [{ value: '', label: '(None)' }, ...options];
+  }, [game, obj]);
+
+  const getSubsceneNodeOptions = React.useCallback(
+    (currentNodeId?: string) => {
+      const scene = game?.sceneManager?.currentScene;
+      if (!scene) {
+        return [{ value: '', label: '(None)' }];
+      }
+
+      const entityOptions = scene.entities.map((entity) => ({
+        value: entity.name,
+        label: entity.customName?.trim() || entity.name,
+      }));
+
+      const subsceneOptions = scene
+        .getSubsceneComponents()
+        .map(({ triggerbox, component }) => {
+          const nodeId = (component.nodeId || component.targetGroupId || triggerbox.name || '').trim();
+          if (!nodeId || nodeId === currentNodeId) return null;
+          return {
+            value: nodeId,
+            label: component.title?.trim() || component.name?.trim() || nodeId,
+          };
+        })
+        .filter((item): item is { value: string; label: string } => !!item);
+
+      return [{ value: '', label: '(None)' }, ...entityOptions, ...subsceneOptions];
+    },
+    [game]
+  );
 
   const getSharedValue = (arr: any[], getter: (o: any) => any) => {
     if (!arr.length) return '';
@@ -1072,6 +1124,48 @@ export const PropertiesPanel: React.FC = () => {
               </div>
             </div>
 
+            {(selectedObjectType === 'Entity' ||
+              selectedObjectType === 'Actor' ||
+              selectedObjectType === 'Static') && (
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+              >
+                <div>
+                  <label className="e-label">Parent</label>
+                  <Select
+                    value={obj.spatial?.parentNodeId || ''}
+                    onChange={(value) => {
+                      obj.spatial = {
+                        ...(obj.spatial || {}),
+                        parentNodeId: value || null,
+                        relation: value ? obj.spatial?.relation || null : null,
+                      };
+                      incrementObjectVersion();
+                    }}
+                    options={getSceneEntityParentOptions()}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Relation</label>
+                  <Select
+                    value={obj.spatial?.relation || ''}
+                    onChange={(value) => {
+                      obj.spatial = {
+                        ...(obj.spatial || {}),
+                        parentNodeId: obj.spatial?.parentNodeId || null,
+                        relation: value || null,
+                      };
+                      incrementObjectVersion();
+                    }}
+                    options={spatialRelationOptions}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Color & Blend Mode */}
             <div
               className="e-row"
@@ -1907,7 +2001,15 @@ export const PropertiesPanel: React.FC = () => {
                     if (!obj.components) obj.components = [];
 
                     if (type === 'Subscene') {
-                      obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                      obj.components.push({
+                        type: 'Subscene',
+                        targetGroupId: '',
+                        name: '',
+                        nodeId: '',
+                        title: '',
+                        description: '',
+                        spatial: { parentNodeId: null, relation: null },
+                      });
                     } else if (type === 'Subtrigger') {
                       obj.components.push({ type: 'Subtrigger', target: '' });
                     } else if (type === 'Item') {
@@ -2176,6 +2278,91 @@ export const PropertiesPanel: React.FC = () => {
                             incrementObjectVersion();
                           }}
                         />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Node ID
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={comp.nodeId || ''}
+                          onChange={(e) => {
+                            comp.nodeId = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={comp.title || ''}
+                          onChange={(e) => {
+                            comp.title = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Description
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={comp.description || ''}
+                          onChange={(e) => {
+                            comp.description = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div
+                        className="e-row"
+                        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                      >
+                        <div>
+                          <label className="e-label" style={{ fontSize: '10px' }}>
+                            Parent Node
+                          </label>
+                          <Select
+                            value={comp.spatial?.parentNodeId || ''}
+                            onChange={(value) => {
+                              comp.spatial = {
+                                ...(comp.spatial || {}),
+                                parentNodeId: value || null,
+                                relation: value ? comp.spatial?.relation || null : null,
+                              };
+                              incrementObjectVersion();
+                            }}
+                            options={getSubsceneNodeOptions(
+                              (comp.nodeId || comp.targetGroupId || obj.name || '').trim()
+                            )}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <label className="e-label" style={{ fontSize: '10px' }}>
+                            Relation
+                          </label>
+                          <Select
+                            value={comp.spatial?.relation || ''}
+                            onChange={(value) => {
+                              comp.spatial = {
+                                ...(comp.spatial || {}),
+                                parentNodeId: comp.spatial?.parentNodeId || null,
+                                relation: value || null,
+                              };
+                              incrementObjectVersion();
+                            }}
+                            options={spatialRelationOptions}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
                       </div>
                     </>
                   )}

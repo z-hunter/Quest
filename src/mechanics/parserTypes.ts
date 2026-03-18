@@ -1,23 +1,36 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
-import type { SceneDescriptor } from '../scene/SceneManager';
 
 export type ParserEntityContext = {
   id: string;
   type: string;
-  title: string | null;
-  synonyms: string[];
-  description: string | null;
-  details: string | null;
-  interactions: string[];
+  title: string;
+  synonyms?: string[];
+  description?: string;
+  details?: string;
+  interactions?: string[];
 };
 
 export type ParserInventoryItemContext = {
   id: string;
-  title: string | null;
-  synonyms: string[];
-  description: string | null;
-  details: string | null;
+  title: string;
+  synonyms?: string[];
+  description?: string;
+  details?: string;
+};
+
+export type ParserSpatialNodeContext = {
+  id: string;
+  subscene?: true;
+  title?: string;
+  parentNodeId?: string;
+  relation?: Exclude<ParserRelationType, 'near'>;
+};
+
+export type ParserSpatialRelationContext = {
+  anchorNodeId: string;
+  relation: Exclude<ParserRelationType, 'near'>;
+  childNodeIds: string[];
 };
 
 export type ParserPendingState = {
@@ -31,7 +44,7 @@ export type ParserPendingState = {
 
 export type ParserRelationType = 'on' | 'under' | 'in' | 'behind' | 'near';
 
-export type ParserScopeSlice = keyof Omit<ParserScope, 'sceneTargets'>;
+export type ParserScopeSlice = keyof ParserScope;
 
 export type ParserCommandArgumentMessages = {
   missing?: string;
@@ -94,16 +107,17 @@ export type ParserCommandSpec = {
 export type ParserContext = {
   rawInput: string;
   normalizedInput: string;
-  scene: {
+  scene?: {
     id: string;
-    name: string;
-    title: string | null;
-    description: string | null;
-    activeSubscene: string | null;
-  } | null;
-  entities: ParserEntityContext[];
-  inventory: ParserInventoryItemContext[];
-  pending: ParserPendingState | null;
+    title?: string;
+    description?: string;
+    activeSubscene?: string;
+  };
+  entities?: ParserEntityContext[];
+  inventory?: ParserInventoryItemContext[];
+  spatialNodes?: ParserSpatialNodeContext[];
+  spatialRelations?: ParserSpatialRelationContext[];
+  pending?: ParserPendingState;
 };
 
 export type ParserScope = {
@@ -113,7 +127,6 @@ export type ParserScope = {
   reachable: Entity[];
   examinable: Entity[];
   subscene: Entity[];
-  sceneTargets: SceneDescriptor[];
 };
 
 export type ParserWorldModel = {

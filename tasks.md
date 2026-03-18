@@ -12,6 +12,21 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 - [x] Extend command assets to support multi-argument parsing for flows like `USE X ON Y`.
 - [x] Add parser-side relation grammar recognition for queries like `LOOK UNDER TABLE` and `EXAMINE IN DRAWER`.
 
+## Next Initiative: Spatial Hierarchy In Game
+
+Goal:
+- move spatial world structure into `Game` / scene runtime instead of keeping it as parser-only semantics;
+- keep `visibility` and `accessibility` explicitly out of scope for this step;
+- let parser consume spatial data as part of world context rather than owning it;
+- add editor support so scene authors can assign parent object and relation type.
+
+Architecture rules for this initiative:
+- `spatial` belongs to the world model, not to the parser;
+- parser should only read spatial structure through `ParserWorldModelBuilder`;
+- visibility/accessibility remain separate concerns and are not part of this task;
+- both direct object-to-object nesting and object/subscene nesting must be supported;
+- subscene should act as a virtual spatial node as well as a focus/interaction mechanism.
+
 ## Backlog
 
 - [x] Replace the separate `ParserContextBuilder` / `ParserScopeBuilder` idea with one `ParserWorldModelBuilder` that returns both `context` and `scope`.
@@ -50,7 +65,82 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
   - post-API escalation
   - linear plan execution without LLM
   - manual checklist drafted in `ParserSmoke.md`
-- [ ] Formalize runtime scene relations so relation-aware parser queries (`under`, `in`, `behind`, `near`) can execute against real world data instead of returning the current fallback message.
+- [ ] Formalize runtime spatial hierarchy in `Game` so relation-aware parser queries (`under`, `in`, `behind`, `near`) can execute against real world data instead of returning the current fallback message.
+
+## Spatial Hierarchy Plan
+
+### 1. Runtime / Scene Model
+
+- [x] Define shared runtime types for spatial placement:
+  - `parentNodeId`
+  - `relation`
+  - relation enum: `in`, `on`, `under`, `behind`
+- [x] Add optional spatial metadata to regular scene entities.
+- [x] Extend subscene data so a subscene can act as a virtual spatial node:
+  - stable node id
+  - title
+  - optional description
+  - optional spatial parent link
+- [ ] Decide where subscene spatial metadata lives in scene JSON:
+  - preferably on the `Subscene` component / triggerbox data so migration stays incremental.
+- [x] Build a scene-level spatial index in runtime:
+  - node lookup by id
+  - children by parent id
+  - children grouped by relation
+- [ ] Keep this index separate from render hierarchy and separate from visibility/accessibility logic.
+
+### 2. Parser Integration
+
+- [x] Extend `ParserWorldModelBuilder` so parser context includes spatial data projected from runtime.
+- [x] Define parser-facing relation projection:
+  - anchor node id
+  - relation type
+  - child node ids
+- [x] Replace the current relation-query fallback path with real lookup against runtime spatial data.
+- [x] Support first real execution cases:
+  - `LOOK UNDER X`
+  - `LOOK IN X`
+  - `LOOK BEHIND X`
+- [ ] Keep `near` out of execution until its runtime semantics are clearly defined.
+- [ ] Preserve current clarification behavior:
+  - resolve anchor
+  - ambiguity handling
+  - tie-break rules for non-usable ambiguity
+
+### 3. Editor / UI Authoring
+
+- [x] Add editor UI for every scene `Entity` to choose:
+  - parent object / node
+  - relation type
+- [ ] Limit parent candidates to valid nodes in the current scene.
+- [x] Add editor UI for `Subscene` to edit:
+  - title
+  - node id
+  - optional parent node
+  - relation type
+- [ ] Ensure authoring UI does not imply visibility/accessibility behavior that is not implemented yet.
+- [ ] Add serialization/deserialization support for the new spatial fields.
+- [x] Show spatial nesting visually in `HierarchyPanel` for scene entities:
+  - child entities render below their parent
+  - nested entities are indented to the right
+  - flat list order remains stable for roots and fallback cases
+
+### 4. Migration / Compatibility
+
+- [ ] Keep existing scenes valid with all spatial fields optional.
+- [ ] Preserve current `activeSubscene` / `subsceneEntities` behavior during migration.
+- [ ] Make parser relation grammar continue to work even before a scene defines any spatial metadata.
+- [ ] Add smoke checks for scenes mixing:
+  - direct object nesting
+  - object inside subscene
+  - subscene inside object
+  - nested subscene chains
+
+### 5. Documentation
+
+- [ ] Update `Parser.md` so it clearly states spatial hierarchy is owned by `Game`, not parser.
+- [ ] Add or update documentation for scene spatial schema and subscene-as-node behavior.
+- [ ] Document the editor workflow for assigning parent object and relation type.
 
 ## Suggested Order
 
@@ -60,6 +150,7 @@ These tasks cover the parser roadmap described in `Parser.md`, excluding the fut
 4. Add `synonyms` support to TA and target resolution.
 5. Improve `#PEEK`.
 6. Run regression checks and clean up boundaries with `Game API`.
+7. Introduce runtime spatial hierarchy and then reconnect parser relation queries to it.
 
 ## Plan For Step 3
 

@@ -13,6 +13,13 @@ import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import { handleSceneClick, activateSceneObject } from './SceneInteraction';
 import { useEditorStore } from '../store/editorStore';
+import type {
+  SpatialIndex,
+  SpatialNodeDescriptor,
+  SpatialPlacement,
+  SpatialRelationType,
+} from './spatialTypes';
+import type { SubsceneComponent } from '../systems/ComponentSystem';
 
 export interface SceneScaling {
   enabled: boolean;
@@ -33,7 +40,12 @@ export interface SceneData {
     name: string;
     mode?: 'Invert' | 'Add' | 'Subtract';
   }[];
-  triggerboxes: { poly: { x: number; y: number }[]; name: string; script: string }[];
+  triggerboxes: {
+    poly: { x: number; y: number }[];
+    name: string;
+    script: string;
+    components?: any[];
+  }[];
   scaling: SceneScaling;
   entities: EntityData[];
   camera?: { x: number; y: number; zoom: number };
@@ -103,6 +115,89 @@ export class Scene {
     }
 
     this._activeSubscene = value;
+  }
+
+  private normalizeSpatialPlacement(value: SpatialPlacement | undefined | null): SpatialPlacement | null {
+    if (!value) return null;
+    const parentNodeId = typeof value.parentNodeId === 'string' ? value.parentNodeId.trim() : '';
+    const relation =
+      value.relation === 'in' ||
+      value.relation === 'on' ||
+      value.relation === 'under' ||
+      value.relation === 'behind'
+        ? value.relation
+        : null;
+    if (!parentNodeId && !relation) return null;
+    return {
+      parentNodeId: parentNodeId || null,
+      relation,
+    };
+  }
+
+  getSubsceneComponents(): Array<{ triggerbox: Triggerbox; component: SubsceneComponent }> {
+    const result: Array<{ triggerbox: Triggerbox; component: SubsceneComponent }> = [];
+    for (const triggerbox of this.triggerboxes) {
+      for (const component of triggerbox.components || []) {
+        if (component?.type === 'Subscene') {
+          result.push({ triggerbox, component: component as SubsceneComponent });
+        }
+      }
+    }
+    return result;
+  }
+
+  getSpatialNodeDescriptors(): SpatialNodeDescriptor[] {
+    const entityNodes: SpatialNodeDescriptor[] = this.entities.map((entity) => ({
+      id: entity.name,
+      kind: 'entity',
+      title: this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim() || null,
+      placement: this.normalizeSpatialPlacement((entity as any).spatial),
+      sourceName: entity.name,
+    }));
+
+    const subsceneNodes: SpatialNodeDescriptor[] = this.getSubsceneComponents().map(
+      ({ triggerbox, component }) => ({
+        id: (component.nodeId || component.targetGroupId || triggerbox.name || '').trim(),
+        kind: 'subscene' as const,
+        title: component.title?.trim() || component.name?.trim() || null,
+        placement: this.normalizeSpatialPlacement(component.spatial),
+        sourceName: triggerbox.name,
+      })
+    );
+
+    return [...entityNodes, ...subsceneNodes].filter((node) => !!node.id);
+  }
+
+  getSpatialIndex(): SpatialIndex {
+    const nodeById = new Map<string, SpatialNodeDescriptor>();
+    const childrenByParentId = new Map<string, SpatialNodeDescriptor[]>();
+    const childrenByParentAndRelation = new Map<
+      string,
+      Map<SpatialRelationType, SpatialNodeDescriptor[]>
+    >();
+
+    for (const node of this.getSpatialNodeDescriptors()) {
+      nodeById.set(node.id, node);
+      const parentId = node.placement?.parentNodeId?.trim();
+      const relation = node.placement?.relation || null;
+      if (!parentId || !relation) continue;
+
+      const existingChildren = childrenByParentId.get(parentId) || [];
+      existingChildren.push(node);
+      childrenByParentId.set(parentId, existingChildren);
+
+      const relationMap = childrenByParentAndRelation.get(parentId) || new Map();
+      const relationChildren = relationMap.get(relation) || [];
+      relationChildren.push(node);
+      relationMap.set(relation, relationChildren);
+      childrenByParentAndRelation.set(parentId, relationMap);
+    }
+
+    return {
+      nodeById,
+      childrenByParentId,
+      childrenByParentAndRelation,
+    };
   }
 
   constructor(game: IGame, id: string, name: string) {

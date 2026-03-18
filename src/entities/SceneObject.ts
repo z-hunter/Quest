@@ -19,6 +19,8 @@ export class SceneObject {
 
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)
+  spatial: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null } =
+    {};
 
   /**
    * List of properties to be serialized to/from JSON.
@@ -36,6 +38,7 @@ export class SceneObject {
     'components',
     'layer',
     'visible',
+    'spatial',
   ];
 
   constructor(name: string, type: string) {
@@ -45,6 +48,7 @@ export class SceneObject {
     this.disabled = false;
     this.layer = 0;
     this.visible = true;
+    this.spatial = {};
     this.customName = '';
     this.textRedirects = {};
     this.interactions = {};

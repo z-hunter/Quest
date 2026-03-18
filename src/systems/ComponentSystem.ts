@@ -4,6 +4,7 @@ import { QuadObject } from '../entities/QuadObject';
 // or just import them. Circular imports are handled by webpack/vite usually, but let's be careful.
 // Actually, using them as Types is fine.
 import type { Actor } from '../entities/Actor';
+import type { SpatialPlacement } from '../scene/spatialTypes';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
@@ -12,6 +13,11 @@ import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
 export interface SubsceneComponent {
   type: 'Subscene';
   targetGroupId: string;
+  name?: string;
+  nodeId?: string;
+  title?: string;
+  description?: string | null;
+  spatial?: SpatialPlacement;
 }
 
 export interface SwitchComponent {

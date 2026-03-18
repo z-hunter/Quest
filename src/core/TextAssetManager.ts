@@ -26,6 +26,8 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     examine_which_one: 'Which one do you want to examine: {options}?',
     look_relation_prompt: 'Look where?',
     examine_relation_prompt: 'Examine what area?',
+    relation_empty: 'You see nothing {relation} the {target}.',
+    relation_contents: '{Relation} the {target} you see: {items}.',
     relation_not_supported: "You can't determine what is {relation} the {target} from here.",
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
