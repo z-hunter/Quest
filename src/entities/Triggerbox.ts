@@ -1,5 +1,5 @@
 import { PolygonObject } from './PolygonObject';
-import type { AnyTriggerComponent } from './TriggerComponents';
+import { normalizeTriggerComponents, type AnyTriggerComponent } from './TriggerComponents';
 
 export class Triggerbox extends PolygonObject {
   script: string;
@@ -17,6 +17,13 @@ export class Triggerbox extends PolygonObject {
   }
 
   toJSON(): any {
-    return super.toJSON();
+    const json = super.toJSON();
+    json.components = normalizeTriggerComponents(json.components);
+    return json;
+  }
+
+  override load(data: any): void {
+    super.load(data);
+    this.components = normalizeTriggerComponents(this.components);
   }
 }

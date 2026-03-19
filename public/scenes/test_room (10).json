@@ -17,7 +17,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "poly": [
         {
           "x": -79,
@@ -50,7 +49,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "poly": [
         {
           "x": 82,
@@ -117,13 +115,15 @@
       "components": [
         {
           "type": "Subscene",
-          "targetGroupId": "#D",
-          "name": ""
+          "targetGroupId": "#D"
         }
       ],
-      "layer": 0,
+      "layer": 1,
       "visible": true,
-      "spatial": {},
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": 27,
@@ -218,7 +218,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "poly": [],
       "script": ""
     },
@@ -244,7 +243,6 @@
       ],
       "layer": 1,
       "visible": true,
-      "spatial": {},
       "poly": [
         {
           "x": -156.29411764705878,
@@ -266,44 +264,93 @@
       "script": ""
     },
     {
-      "name": "Drawer3",
+      "name": "Desk",
       "type": "Triggerbox",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Subscene",
-          "targetGroupId": "",
-          "title": "",
-          "description": ""
-        }
-      ],
-      "layer": 0,
+      "components": [],
+      "layer": 1,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Trig_sub_D",
-        "relation": "in"
-      },
       "poly": [
         {
-          "x": -106,
-          "y": 4
+          "x": -210,
+          "y": 211
         },
         {
-          "x": 389,
-          "y": 3
+          "x": -192,
+          "y": 213
         },
         {
-          "x": 375,
+          "x": -192,
+          "y": 197
+        },
+        {
+          "x": -171,
+          "y": 189
+        },
+        {
+          "x": -159,
+          "y": 211
+        },
+        {
+          "x": -136,
+          "y": 217
+        },
+        {
+          "x": -131,
+          "y": 242
+        },
+        {
+          "x": -109,
+          "y": 243
+        },
+        {
+          "x": -110,
+          "y": 146
+        },
+        {
+          "x": -18,
+          "y": 129
+        },
+        {
+          "x": -16,
+          "y": 201
+        },
+        {
+          "x": 26,
+          "y": 207
+        },
+        {
+          "x": 82,
+          "y": 193
+        },
+        {
+          "x": 87,
           "y": 95
         },
         {
-          "x": -107,
-          "y": 91
+          "x": -70,
+          "y": 78
+        },
+        {
+          "x": -236,
+          "y": 115
+        },
+        {
+          "x": -235,
+          "y": 173
+        },
+        {
+          "x": -218,
+          "y": 182
+        },
+        {
+          "x": -212,
+          "y": 211
         }
       ],
       "script": ""
@@ -329,7 +376,6 @@
       "components": [],
       "layer": -2,
       "visible": true,
-      "spatial": {},
       "x": 119.67896209456934,
       "y": 234,
       "width": 821.6,
@@ -361,7 +407,6 @@
       "components": [],
       "layer": -1,
       "visible": true,
-      "spatial": {},
       "x": 199,
       "y": 297,
       "width": 884.8,
@@ -393,7 +438,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": 100,
       "y": 249,
       "width": 116.89999999999999,
@@ -425,20 +469,19 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
-      "x": 251.49445909180304,
-      "y": 256.5381551800198,
-      "width": 69.81706443264875,
-      "height": 285.0863464333157,
+      "x": 396.14497334712604,
+      "y": 211.843824888123,
+      "width": 66.1903653250774,
+      "height": 270.2773250773994,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 88,
       "colliderHeight": 4,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.7272610878400911,
+      "scale": 0.6894829721362229,
       "modelScale": 0.74,
-      "parallax": 1.046112265312777,
+      "parallax": 1.016927024539739,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "opacity": 1,
@@ -476,7 +519,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": -328,
       "y": 307,
       "width": 171.2340644206598,
@@ -508,7 +550,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": 135,
       "y": 310,
       "width": 614.4,
@@ -545,7 +586,6 @@
       ],
       "layer": 3,
       "visible": true,
-      "spatial": {},
       "x": 134,
       "y": 311,
       "width": 614.4,
@@ -577,7 +617,6 @@
       "components": [],
       "layer": 4,
       "visible": true,
-      "spatial": {},
       "x": 136,
       "y": -4,
       "width": 614.4,
@@ -684,7 +723,6 @@
       "components": [],
       "layer": 6,
       "visible": true,
-      "spatial": {},
       "x": 135,
       "y": -176,
       "width": 614.4,
@@ -721,7 +759,6 @@
       ],
       "layer": 6,
       "visible": true,
-      "spatial": {},
       "x": 135,
       "y": 66,
       "width": 614.4,
@@ -757,7 +794,6 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": -146.13725490196006,
       "y": 289.60784313725503,
       "parallax": 1,
@@ -808,9 +844,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": 222.90433731748038,
-      "y": 306.9284515529542,
+      "y": 306.9284515529541,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -844,7 +879,6 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
       "x": -152,
       "y": -11,
       "width": 112,
@@ -979,7 +1013,7 @@
     "y": 29,
     "zoom": 0.51
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,

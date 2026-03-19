@@ -94,4 +94,20 @@ describe('Parser resolution', () => {
 
     expect(result.messages.at(-1)).toBe('Near coin.');
   });
+
+  it('matches a triggerbox by title in the text layer', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addTriggerbox('tb_desk_drawer', {
+      title: 'Desk Drawer',
+      description: 'A shallow desk drawer.',
+      details: 'The upper desk drawer is open and mostly empty.',
+    });
+
+    const lookResult = await fixture.run('look desk drawer');
+    expect(lookResult.messages.at(-1)).toBe('A shallow desk drawer.');
+
+    const examineResult = await fixture.run('examine desk drawer');
+    expect(examineResult.messages.at(-1)).toBe('The upper desk drawer is open and mostly empty.');
+  });
 });

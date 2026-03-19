@@ -1,5 +1,6 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
+import type { SceneObject } from '../entities/SceneObject';
 
 export type ParserEntityContext = {
   id: string;
@@ -121,12 +122,12 @@ export type ParserContext = {
 };
 
 export type ParserScope = {
-  visible: Entity[];
+  visible: SceneObject[];
   held: Entity[];
   takable: Entity[];
-  reachable: Entity[];
-  examinable: Entity[];
-  subscene: Entity[];
+  reachable: SceneObject[];
+  examinable: SceneObject[];
+  subscene: SceneObject[];
 };
 
 export type ParserWorldModel = {

@@ -22,9 +22,9 @@ export interface IGame {
   text(key: string, params?: Record<string, string | number>): string;
   getSeeMessage(target: SceneObject): string | null;
   lookScene(scene?: Scene | null): GameActionOutcome;
-  lookEntity(entity: Entity): GameActionOutcome;
+  lookEntity(entity: SceneObject): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
-  examineEntity(entity: Entity): GameActionOutcome;
+  examineEntity(entity: SceneObject): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;

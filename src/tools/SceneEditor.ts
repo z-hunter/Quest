@@ -4,6 +4,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { normalizeTriggerComponents } from '../entities/TriggerComponents';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
@@ -670,7 +671,7 @@ export class SceneEditor {
         }
         newObj = new Triggerbox(poly, data.name, data.script || '');
         if (data.groupID) newObj.groupID = data.groupID;
-        if (data.components) newObj.components = JSON.parse(JSON.stringify(data.components));
+        if (data.components) newObj.components = normalizeTriggerComponents(data.components);
         if (data.locked) newObj.locked = data.locked;
         if (data.disabled) newObj.disabled = data.disabled;
         if (data.customName) newObj.customName = data.customName;

@@ -63,6 +63,16 @@ export class SceneObject {
     props.forEach((prop) => {
       const value = (this as any)[prop];
       if (value !== undefined) {
+        if (
+          prop === 'spatial' &&
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !value.parentNodeId &&
+          !value.relation
+        ) {
+          return;
+        }
         // Deep clone objects and arrays to prevent reference sharing
         if (typeof value === 'object' && value !== null) {
           json[prop] = JSON.parse(JSON.stringify(value));

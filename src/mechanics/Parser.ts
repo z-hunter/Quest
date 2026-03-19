@@ -10,6 +10,7 @@ import {
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
+import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserCascadeEnvelope,
@@ -542,39 +543,39 @@ export class Parser {
     }
   }
 
-  private getPlayerFacingEntityTitle(entity: Entity): string | null {
-    const title = this.game.textAssets.getResolvedObjectField(entity, 'title');
+  private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
+    const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
   }
 
-  private getEntityLookupTokens(entity: Entity): string[] {
-    const title = this.getPlayerFacingEntityTitle(entity);
-    const synonyms = this.game.textAssets.getResolvedObjectListField(entity as any, 'synonyms');
+  private getObjectLookupTokens(sceneObject: SceneObject): string[] {
+    const title = this.getPlayerFacingObjectTitle(sceneObject);
+    const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
     return Array.from(
       new Set([title, ...synonyms].filter((item): item is string => !!item && !!item.trim()))
     ).map((item) => item.toUpperCase());
   }
 
-  private getResolutionOptionTitles(entities: Entity[]): string[] | null {
-    const titles = entities
-      .map((entity) => this.getPlayerFacingEntityTitle(entity))
+  private getResolutionOptionTitles(sceneObjects: SceneObject[]): string[] | null {
+    const titles = sceneObjects
+      .map((sceneObject) => this.getPlayerFacingObjectTitle(sceneObject))
       .filter((title): title is string => !!title);
-    if (titles.length !== entities.length) return null;
+    if (titles.length !== sceneObjects.length) return null;
     return Array.from(new Set(titles));
   }
 
-  private areResolutionOptionsDistinct(entities: Entity[]): boolean {
-    const titles = this.getResolutionOptionTitles(entities);
+  private areResolutionOptionsDistinct(sceneObjects: SceneObject[]): boolean {
+    const titles = this.getResolutionOptionTitles(sceneObjects);
     if (!titles) return false;
-    return titles.length === entities.length;
+    return titles.length === sceneObjects.length;
   }
 
-  private getEntitySelectionPriority(entity: Entity): {
+  private getSceneObjectSelectionPriority(sceneObject: SceneObject): {
     bucket: number;
     order: number;
     distance: number;
   } {
-    const inventoryIndex = this.game.inventory.indexOf(entity);
+    const inventoryIndex = this.game.inventory.indexOf(sceneObject as any);
     if (inventoryIndex >= 0) {
       return {
         bucket: 0,
@@ -586,8 +587,9 @@ export class Parser {
     const scene = this.game.sceneManager.currentScene;
     const player = scene?.player;
     if (player) {
-      const dx = (entity.x || 0) - (player.x || 0);
-      const dy = (entity.y || 0) - (player.y || 0);
+      const location = this.getSceneObjectReferencePoint(sceneObject);
+      const dx = location.x - (player.x || 0);
+      const dy = location.y - (player.y || 0);
       return {
         bucket: 1,
         order: Number.MAX_SAFE_INTEGER,
@@ -602,11 +604,32 @@ export class Parser {
     };
   }
 
-  private choosePreferredEntity(entities: Entity[]): Entity | null {
-    if (!entities.length) return null;
-    return [...entities].sort((left, right) => {
-      const a = this.getEntitySelectionPriority(left);
-      const b = this.getEntitySelectionPriority(right);
+  private getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
+    const polygon = (sceneObject as any).poly;
+    if (Array.isArray(polygon) && polygon.length) {
+      const sum = polygon.reduce(
+        (acc: { x: number; y: number }, point: { x: number; y: number }) => ({
+          x: acc.x + (point?.x || 0),
+          y: acc.y + (point?.y || 0),
+        }),
+        { x: 0, y: 0 }
+      );
+      return {
+        x: sum.x / polygon.length,
+        y: sum.y / polygon.length,
+      };
+    }
+    return {
+      x: Number((sceneObject as any).x) || 0,
+      y: Number((sceneObject as any).y) || 0,
+    };
+  }
+
+  private choosePreferredObject<T extends SceneObject>(sceneObjects: T[]): T | null {
+    if (!sceneObjects.length) return null;
+    return [...sceneObjects].sort((left, right) => {
+      const a = this.getSceneObjectSelectionPriority(left);
+      const b = this.getSceneObjectSelectionPriority(right);
 
       if (a.bucket !== b.bucket) return a.bucket - b.bucket;
       if (a.order !== b.order) return a.order - b.order;
@@ -615,11 +638,11 @@ export class Parser {
     })[0];
   }
 
-  private getScopeCandidates(sliceNames: Array<keyof ParserScope>): Entity[] {
+  private getScopeCandidates(sliceNames: Array<keyof ParserScope>): SceneObject[] {
     const scope = this.activeScope || this.worldModelBuilder.build('', this.pendingState).scope;
-    const candidates: Entity[] = [];
+    const candidates: SceneObject[] = [];
     for (const sliceName of sliceNames) {
-      candidates.push(...scope[sliceName]);
+      candidates.push(...(scope[sliceName] as SceneObject[]));
     }
     return Array.from(new Set(candidates));
   }
@@ -700,10 +723,10 @@ export class Parser {
 
   private resolveEntityTargetInCandidates(
     rawTarget: string,
-    candidates: Entity[],
+    candidates: SceneObject[],
     clarificationKey: string
   ):
-    | { status: 'found'; entity: Entity }
+    | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
     | { status: 'ambiguous'; message: string; options: string[] }
     | { status: 'escalate'; code: string } {
@@ -712,13 +735,13 @@ export class Parser {
       .toUpperCase();
     if (!normalizedTarget) return { status: 'not_found' };
 
-    const exactMatches = candidates.filter((entity: Entity) =>
-      this.getEntityLookupTokens(entity).includes(normalizedTarget)
+    const exactMatches = candidates.filter((sceneObject: SceneObject) =>
+      this.getObjectLookupTokens(sceneObject).includes(normalizedTarget)
     );
     if (exactMatches.length === 1) return { status: 'found', entity: exactMatches[0] };
     if (exactMatches.length > 1) {
       if (!this.areResolutionOptionsDistinct(exactMatches)) {
-        const preferred = this.choosePreferredEntity(exactMatches);
+        const preferred = this.choosePreferredObject(exactMatches);
         if (preferred) return { status: 'found', entity: preferred };
       }
       const optionTitles = this.getResolutionOptionTitles(exactMatches);
@@ -730,14 +753,14 @@ export class Parser {
       };
     }
 
-    const partialMatches = candidates.filter((entity: Entity) => {
-      const lookupTokens = this.getEntityLookupTokens(entity);
+    const partialMatches = candidates.filter((sceneObject: SceneObject) => {
+      const lookupTokens = this.getObjectLookupTokens(sceneObject);
       return lookupTokens.some((token) => token.includes(normalizedTarget));
     });
     if (partialMatches.length === 1) return { status: 'found', entity: partialMatches[0] };
     if (partialMatches.length > 1) {
       if (!this.areResolutionOptionsDistinct(partialMatches)) {
-        const preferred = this.choosePreferredEntity(partialMatches);
+        const preferred = this.choosePreferredObject(partialMatches);
         if (preferred) return { status: 'found', entity: preferred };
       }
       const optionTitles = this.getResolutionOptionTitles(partialMatches);
@@ -754,14 +777,14 @@ export class Parser {
 
   private resolveEntityTargetWithMessages(
     rawTarget: string | null,
-    candidates: Entity[],
+    candidates: SceneObject[],
     messages?: {
       missing?: string;
       ambiguous?: string;
       notFound?: string;
     }
   ):
-    | { status: 'found'; entity: Entity }
+    | { status: 'found'; entity: SceneObject }
     | { status: 'not_found'; message: string }
     | { status: 'needs_clarification'; message: string; options: string[] }
     | { status: 'escalate'; code: string } {
@@ -822,7 +845,7 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.lookEntity(resolved.entity);
+    return this.game.lookEntity(resolved.entity as any);
   }
 
   private resolveExamineTarget(rawTarget: string | null): GameActionOutcome {
@@ -865,7 +888,7 @@ export class Parser {
         };
       }
       if (broadResolved?.status === 'found') {
-        return this.game.examineEntity(broadResolved.entity);
+        return this.game.examineEntity(broadResolved.entity as any);
       }
       return {
         status: 'failed',
@@ -884,7 +907,7 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.examineEntity(resolved.entity);
+    return this.game.examineEntity(resolved.entity as any);
   }
 
   private resolveRelationTarget(
@@ -1030,7 +1053,7 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.takeEntity(resolved.entity);
+    return this.game.takeEntity(resolved.entity as Entity);
   }
 
   private resolveGoToTarget(rawTarget: string | null): GameActionOutcome {
@@ -1050,7 +1073,7 @@ export class Parser {
 
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['visible']),
+      this.getScopeCandidates(['visible']).filter((candidate): candidate is Entity => candidate instanceof Entity),
       'parser.go_to_which_one'
     );
     if (resolved.status === 'escalate') {
@@ -1066,7 +1089,7 @@ export class Parser {
       };
     }
     if (resolved.status === 'found') {
-      return this.game.goToEntity(resolved.entity);
+      return this.game.goToEntity(resolved.entity as any);
     }
     return {
       status: 'failed',
@@ -1083,7 +1106,7 @@ export class Parser {
   ): GameActionOutcome {
     const resolution = this.resolveEntityTargetWithMessages(
       action.query,
-      this.getScopeCandidates(action.scopes),
+      this.getScopeCandidates(action.scopes).filter((candidate): candidate is Entity => candidate instanceof Entity),
       action.messages
     );
 
@@ -1124,7 +1147,7 @@ export class Parser {
       };
     }
 
-    if (!this.isEntityValidForCommandArgument(resolution.entity, action.validation)) {
+    if (!this.isEntityValidForCommandArgument(resolution.entity as Entity, action.validation)) {
       return {
         status: 'failed',
         code: 'custom_command_invalid_argument',
@@ -1515,7 +1538,7 @@ export class Parser {
 
   private getPlanStateDisplayValue(value: unknown): string | null {
     if (value instanceof Entity) {
-      return this.getPlayerFacingEntityTitle(value) || null;
+      return this.getPlayerFacingObjectTitle(value) || null;
     }
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       return String(value);
@@ -1563,7 +1586,7 @@ export class Parser {
     if (!validation) return true;
 
     const normalizedEntityId = entity.name.trim().toUpperCase();
-    const normalizedTitle = (this.getPlayerFacingEntityTitle(entity) || '').trim().toUpperCase();
+    const normalizedTitle = (this.getPlayerFacingObjectTitle(entity) || '').trim().toUpperCase();
     const normalizedSynonyms = this.game.textAssets
       .getResolvedObjectListField(entity as any, 'synonyms')
       .map((item: string) => item.trim().toUpperCase())
