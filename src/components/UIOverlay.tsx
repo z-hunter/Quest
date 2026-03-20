@@ -120,10 +120,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     const preprocessed = game.console.preprocessGameplayInput(val);
 
                     // 1. Log Command to Buffer
-                    game.console.log(val, 'command');
+                    game.console.log(preprocessed, 'command');
 
                     // 2. Add to History
-                    game.console.addHistory(val);
+                    game.console.addHistory(preprocessed);
 
                     // 3. Send to gameplay parser
                     void game.parser.parse(preprocessed);
