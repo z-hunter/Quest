@@ -246,19 +246,22 @@ export class Game implements IGame {
       this.editor.update(deltaTime);
     }
 
-    // Cursor Logic: Change to 'eye' if hovering over Subscene object in Game Mode
+    // Cursor Logic: Change to contextual cursor if hovering over interactive object in Game Mode
     if (!this.editor.enabled && this.sceneManager.currentScene) {
-      const hovered = this.sceneManager.currentScene.checkHover(
+      const hoverCursor = this.sceneManager.currentScene.checkHover(
         this.input.mouse.x,
         this.input.mouse.y
       );
-      if (hovered) {
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
+      if (hoverCursor === 'eye') {
         this.canvas.classList.add('cursor-eye');
-      } else {
-        this.canvas.classList.remove('cursor-eye');
+      } else if (hoverCursor === 'hand') {
+        this.canvas.classList.add('cursor-hand');
+      } else if (hoverCursor === 'back') {
+        this.canvas.classList.add('cursor-back');
       }
     } else {
-      this.canvas.classList.remove('cursor-eye');
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
     }
   }
 
@@ -575,11 +578,10 @@ export class Game implements IGame {
       typeof (entity as any).description === 'string' ? (entity as any).description : null;
     const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
-      const spatialMessage = this.getSpatialParentMessage(entity);
       return {
         status: 'ok',
         code: 'entity_description',
-        message: spatialMessage ? `${description.trim()} ${spatialMessage}` : description,
+        message: description,
         data: { targetType: 'entity', entityId: entity.name },
       };
     }
@@ -587,11 +589,10 @@ export class Game implements IGame {
     const targetTitle = this.getPlayerFacingObjectTitle(entity);
     if (targetTitle) {
       const genericMessage = this.text('parser.look_default_object', { target: targetTitle });
-      const spatialMessage = this.getSpatialParentMessage(entity);
       return {
         status: 'ok',
         code: 'entity_generic_description',
-        message: spatialMessage ? `${genericMessage} ${spatialMessage}` : genericMessage,
+        message: genericMessage,
         data: { targetType: 'entity', entityId: entity.name },
       };
     }

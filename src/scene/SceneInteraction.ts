@@ -3,6 +3,8 @@ import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { ComponentSystem } from '../systems/ComponentSystem';
 
+export type HoverCursor = 'eye' | 'hand' | 'back';
+
 function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
   const screenW = 420;
   const screenH = 300;
@@ -149,6 +151,34 @@ function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
   return hasClickOutput(scene, obj) || canActivateOnClick(obj);
 }
 
+function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | null {
+  if (obj.components) {
+    const sub = obj.components.find((c) => c.type === 'Subscene') as any;
+    if (sub) {
+      const currentSubsceneId = (obj.name || sub.targetGroupId || '').trim();
+      if (scene.activeSubscene && currentSubsceneId && currentSubsceneId === scene.activeSubscene) {
+        return null;
+      }
+      return 'eye';
+    }
+
+    const hasHandTriggerComponent = obj.components.some((c) =>
+      ['Subtrigger', 'Switch'].includes(c?.type)
+    );
+    if (hasHandTriggerComponent) {
+      return 'hand';
+    }
+  }
+
+  const isScriptTrigger = obj instanceof Triggerbox && obj.script && obj.script.length > 0;
+  const hasInteractions = !!(obj.interactions && Object.keys(obj.interactions).length > 0);
+  if (isScriptTrigger || hasInteractions) {
+    return 'hand';
+  }
+
+  return null;
+}
+
 function findTopLayerHitCandidatesAtScreenPoint(
   scene: Scene,
   candidates: SceneObject[],
@@ -202,6 +232,45 @@ function findBestMeaningfulHit(
   for (const candidate of topLayerHits) {
     if (hasMeaningfulClickResult(scene, candidate)) {
       return candidate;
+    }
+  }
+  return null;
+}
+
+export function getHoverCursorAtScreenPoint(
+  scene: Scene,
+  screenX: number,
+  screenY: number
+): HoverCursor | null {
+  if (scene.activeSubscene) {
+    const world = toWorld(scene, screenX, screenY);
+    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
+      (obj) => !obj.disabled && obj.visible
+    );
+    const topLayerHits = findTopLayerHitCandidatesAtWorldPoint(
+      subsceneCandidates,
+      world.x,
+      world.y
+    );
+    for (const obj of topLayerHits) {
+      const hoverCursor = getHoverCursorForObject(scene, obj);
+      if (hoverCursor) {
+        return hoverCursor;
+      }
+    }
+    return topLayerHits.length > 0 ? null : 'back';
+  }
+
+  const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
+    scene,
+    getSortedClickableCandidates(scene),
+    screenX,
+    screenY
+  );
+  for (const obj of topLayerHits) {
+    const hoverCursor = getHoverCursorForObject(scene, obj);
+    if (hoverCursor) {
+      return hoverCursor;
     }
   }
   return null;

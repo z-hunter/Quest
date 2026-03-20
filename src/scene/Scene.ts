@@ -11,7 +11,12 @@ import type { IGame } from '../core/IGame';
 import { toVisualPosition } from '../utils/Parallax';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
-import { handleSceneClick, activateSceneObject } from './SceneInteraction';
+import {
+  handleSceneClick,
+  activateSceneObject,
+  getHoverCursorAtScreenPoint,
+  type HoverCursor,
+} from './SceneInteraction';
 import { useEditorStore } from '../store/editorStore';
 import type {
   SpatialIndex,
@@ -574,30 +579,8 @@ export class Scene {
     return null;
   }
 
-  checkHover(x: number, y: number): boolean {
-    // Transform Screen Coordinates to World Coordinates
-    const screenW = 420;
-    const screenH = 300;
-    const halfW = screenW / 2;
-    const halfH = screenH / 2;
-    const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
-    const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
-
-    const obj = this.getHitObject(worldX, worldY);
-
-    if (obj && obj.components) {
-      const sub = obj.components.find((c) => c.type === 'Subscene') as any;
-      if (sub) {
-        // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
-        const currentSubsceneId = (obj.name || sub.targetGroupId || '').trim();
-        if (this.activeSubscene && currentSubsceneId && currentSubsceneId === this.activeSubscene) {
-          return false;
-        }
-        return true;
-      }
-    }
-
-    return false;
+  checkHover(x: number, y: number): HoverCursor | null {
+    return getHoverCursorAtScreenPoint(this, x, y);
   }
 
   onClick(x: number, y: number): void {
