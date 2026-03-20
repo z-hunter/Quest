@@ -718,6 +718,34 @@ export class Parser {
       };
     }
 
+    const broadResolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['visible', 'held']),
+      clarificationKey
+    );
+    if (broadResolved.status === 'found') {
+      return {
+        status: 'found',
+        node: {
+          id: broadResolved.entity.name,
+          title: this.getPlayerFacingObjectTitle(broadResolved.entity) || undefined,
+        },
+      };
+    }
+    if (broadResolved.status === 'ambiguous') {
+      return {
+        status: 'ambiguous',
+        message: broadResolved.message,
+        options: broadResolved.options,
+      };
+    }
+    if (broadResolved.status === 'escalate') {
+      return {
+        status: 'escalate',
+        code: broadResolved.code,
+      };
+    }
+
     return { status: 'not_found' };
   }
 

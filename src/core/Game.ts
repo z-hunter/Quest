@@ -687,8 +687,16 @@ export class Game implements IGame {
     }
 
     const anchorNode = scene.getSpatialNode(anchorNodeId);
-    const anchorTitle = anchorNode?.title?.trim() || null;
-    if (!anchorNode || !anchorTitle) {
+    const anchorObject =
+      scene.entities.find((entity) => entity.name === anchorNodeId) ||
+      scene.triggerboxes.find((triggerbox) => triggerbox.name === anchorNodeId) ||
+      scene.walkbox.find((walkbox) => walkbox.name === anchorNodeId) ||
+      null;
+    const anchorTitle =
+      anchorNode?.title?.trim() ||
+      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject)?.trim() : null) ||
+      null;
+    if (!anchorTitle) {
       return {
         status: 'escalate',
         code: 'spatial_node_missing_title',
