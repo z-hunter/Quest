@@ -2,7 +2,6 @@ import type { Scene } from './Scene';
 import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { Geometry } from '../utils/Geometry';
 
 function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
   const screenW = 420;
@@ -32,48 +31,7 @@ function toWorldForParallax(
 }
 
 function findVisibleHitObject(scene: Scene, screenX: number, screenY: number): SceneObject | null {
-  const screenW = 420;
-  const screenH = 300;
-  const halfW = screenW / 2;
-  const halfH = screenH / 2;
-  const camX = scene.camera.x;
-  const camY = scene.camera.y;
-  const zoom = scene.camera.zoom;
-
-  const entities = scene.entities || [];
-  for (let i = entities.length - 1; i >= 0; i--) {
-    const entity = entities[i];
-    if (entity.disabled || !entity.visible) continue;
-
-    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-    const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-    const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-    const worldX = (screenX - halfW) / zoom + camX * p - vOx;
-    const worldY = (screenY - halfH) / zoom + camY * p - vOy;
-
-    if (entity.hitTest(worldX, worldY)) return entity;
-  }
-
-  const worldPos = {
-    x: (screenX - halfW) / zoom + camX,
-    y: (screenY - halfH) / zoom + camY,
-  };
-
-  if (scene.triggerboxes) {
-    for (const tb of scene.triggerboxes) {
-      if (tb.disabled || !tb.visible) continue;
-      if (Geometry.isPointInPolygon(worldPos, tb.poly)) return tb;
-    }
-  }
-
-  if (scene.walkbox) {
-    for (const wb of scene.walkbox) {
-      if (wb.disabled || !wb.visible) continue;
-      if (Geometry.isPointInPolygon(worldPos, wb.poly)) return wb;
-    }
-  }
-
-  return null;
+  return findTopHitInCandidates(scene, getSortedClickableCandidates(scene), screenX, screenY);
 }
 
 function isHitAtScreenPoint(
@@ -107,12 +65,22 @@ function isHitAtScreenPoint(
   return obj.hitTest(worldPos.x, worldPos.y);
 }
 
+function getClickableTypePriority(obj: SceneObject): number {
+  if (obj.type === 'Walkbox') return 30;
+  if (obj.type === 'Triggerbox') return 10;
+  return 0;
+}
+
 function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
   const sorted = [...candidates];
   sorted.sort((a, b) => {
     const layerA = a.layer || 0;
     const layerB = b.layer || 0;
     if (layerA !== layerB) return layerB - layerA;
+
+    const typePriorityA = getClickableTypePriority(a);
+    const typePriorityB = getClickableTypePriority(b);
+    if (typePriorityA !== typePriorityB) return typePriorityA - typePriorityB;
 
     const hasXYA = 'x' in (a as any) && 'y' in (a as any);
     const hasXYB = 'x' in (b as any) && 'y' in (b as any);
@@ -126,7 +94,7 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
 
 function getSortedClickableCandidates(scene: Scene): SceneObject[] {
   return sortClickableCandidates([
-    ...scene.entities.filter((e) => !e.disabled && e.visible),
+    ...scene.entities.filter((e) => !e.disabled && e.visible && !(e as any).isPlayer),
     ...(scene.triggerboxes?.filter((t) => !t.disabled && t.visible) || []),
     ...(scene.walkbox?.filter((w) => !w.disabled && w.visible) || []),
   ]);
@@ -146,23 +114,6 @@ function findTopHitInCandidates(
   return null;
 }
 
-function findTopHitInWorldCandidates(
-  candidates: SceneObject[],
-  worldX: number,
-  worldY: number
-): SceneObject | null {
-  for (const candidate of sortClickableCandidates(candidates)) {
-    if (candidate.hitTest(worldX, worldY)) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function findTopHitObject(scene: Scene, screenX: number, screenY: number): SceneObject | null {
-  return findTopHitInCandidates(scene, getSortedClickableCandidates(scene), screenX, screenY);
-}
-
 function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
   const subtrigger = obj.components?.find((c: any) => c?.type === 'Subtrigger') as
     | { target?: string }
@@ -173,6 +124,87 @@ function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
     scene.triggerboxes.find((t) => t.name === subtrigger.target) ||
     scene.entities.find((e) => e.name === subtrigger.target);
   return target || obj;
+}
+
+function canActivateOnClick(obj: SceneObject): boolean {
+  if (obj instanceof Triggerbox && obj.script) return true;
+  if (obj.interactions && Object.keys(obj.interactions).length > 0) return true;
+  if (!obj.components || obj.components.length === 0) return false;
+
+  return obj.components.some((component: any) =>
+    ['Subtrigger', 'Subscene', 'Switch'].includes(component?.type)
+  );
+}
+
+function hasClickOutput(scene: Scene, obj: SceneObject): boolean {
+  const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const seeMessage = scene.game.getSeeMessage(titleOwner);
+  if (seeMessage) return true;
+
+  const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+  return !!(title && title.trim());
+}
+
+function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
+  return hasClickOutput(scene, obj) || canActivateOnClick(obj);
+}
+
+function findTopLayerHitCandidatesAtScreenPoint(
+  scene: Scene,
+  candidates: SceneObject[],
+  screenX: number,
+  screenY: number
+): SceneObject[] {
+  const hits: SceneObject[] = [];
+  let topLayer: number | null = null;
+
+  for (const candidate of sortClickableCandidates(candidates)) {
+    if (!isHitAtScreenPoint(scene, candidate, screenX, screenY)) continue;
+    const candidateLayer = candidate.layer || 0;
+    if (topLayer === null) {
+      topLayer = candidateLayer;
+    }
+    if (candidateLayer !== topLayer) break;
+    hits.push(candidate);
+  }
+
+  return hits;
+}
+
+function findTopLayerHitCandidatesAtWorldPoint(
+  candidates: SceneObject[],
+  worldX: number,
+  worldY: number
+): SceneObject[] {
+  const hits: SceneObject[] = [];
+  let topLayer: number | null = null;
+
+  for (const candidate of sortClickableCandidates(candidates)) {
+    if (!candidate.hitTest(worldX, worldY)) continue;
+    const candidateLayer = candidate.layer || 0;
+    if (topLayer === null) {
+      topLayer = candidateLayer;
+    }
+    if (candidateLayer !== topLayer) break;
+    hits.push(candidate);
+  }
+
+  return hits;
+}
+
+function findBestMeaningfulHit(
+  scene: Scene,
+  candidates: SceneObject[],
+  screenX: number,
+  screenY: number
+): SceneObject | null {
+  const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(scene, candidates, screenX, screenY);
+  for (const candidate of topLayerHits) {
+    if (hasMeaningfulClickResult(scene, candidate)) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 export function activateSceneObject(scene: Scene, obj: SceneObject, depth: number = 0): boolean {
@@ -197,11 +229,16 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   const world = toWorld(scene, x, y);
 
   if (scene.activeSubscene) {
-    const subsceneHit = findTopHitInWorldCandidates(
-      Array.from(scene.subsceneEntities).filter((obj) => !obj.disabled && obj.visible),
+    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
+      (obj) => !obj.disabled && obj.visible
+    );
+    const subsceneHitCandidates = findTopLayerHitCandidatesAtWorldPoint(
+      subsceneCandidates,
       world.x,
       world.y
     );
+    const subsceneHit =
+      subsceneHitCandidates.find((obj) => hasMeaningfulClickResult(scene, obj)) || null;
 
     if (subsceneHit) {
       const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
@@ -220,7 +257,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     return;
   }
 
-  const hitObj = findTopHitObject(scene, x, y);
+  const hitObj = findBestMeaningfulHit(scene, getSortedClickableCandidates(scene), x, y);
 
   if (hitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, hitObj);
@@ -243,7 +280,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     }
   }
 
-  const visibleHitObj = findTopHitObject(scene, x, y) || findVisibleHitObject(scene, x, y);
+  const visibleHitObj = findVisibleHitObject(scene, x, y);
   if (visibleHitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
     const seeMessage = scene.game.getSeeMessage(titleOwner);
