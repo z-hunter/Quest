@@ -51,7 +51,7 @@
 .editor-sidebar {
   width: 260px;
   background: rgba(10, 10, 10, 0.95);
-  border: 1px solid #333;
+  border: 1px solid rgba(10, 10, 10, 0.95);
   color: #ddd;
   display: flex;
   flex-direction: column;
@@ -62,12 +62,11 @@
 }
 
 .editor-sidebar.left {
-  border-right: 1px solid var(--ui-main-color);
-  /* Retro Green accent */
+  border-right: 1px solid rgba(10, 10, 10, 0.95);
 }
 
 .editor-sidebar.right {
-  border-left: 1px solid var(--ui-main-color);
+  border-left: 1px solid rgba(10, 10, 10, 0.95);
 }
 
 .editor-center-spacer {
