@@ -1,180 +1,175 @@
-# Parser Tasks
+# Autotests Plan
 
-## Current Scope
+## Goal
 
-These tasks cover the parser roadmap described in `Parser.md`, excluding the future LLM cascade.
+Introduce the first iteration of automated tests for `Scanline` / `Blue Signal` with focus on deterministic parser, core, and scene-runtime behavior.
 
-## Current Focus
+This iteration should:
+- cover the most fragile gameplay contracts;
+- avoid heavy browser/UI end-to-end coverage;
+- use small dedicated fixtures instead of live content scenes;
+- be cheap to maintain while the architecture is still evolving.
 
-- [x] Introduce parser custom command assets (`Commands.md`, command TA loading, shared command spec format).
-- [x] Expand parser DSL/Core so lower layers can mock richer Stage-2-style plans.
-- [x] Implement `TELEPORT WITH` as the first custom command scenario driven by command TA.
-- [x] Extend command assets to support multi-argument parsing for flows like `USE X ON Y`.
-- [x] Add parser-side relation grammar recognition for queries like `LOOK UNDER TABLE` and `EXAMINE IN DRAWER`.
+Out of scope for this iteration:
+- full Playwright coverage;
+- LLM-stage testing;
+- testing against large real content scenes as the main source of truth.
 
-## Next Initiative: Spatial Hierarchy In Game
+## Target Stack
 
-Goal:
-- move spatial world structure into `Game` / scene runtime instead of keeping it as parser-only semantics;
-- keep `visibility` and `accessibility` explicitly out of scope for this step;
-- let parser consume spatial data as part of world context rather than owning it;
-- add editor support so scene authors can assign parent object and relation type.
+- [x] Add `vitest` as the test runner.
+- [x] Add `npm run test` script.
+- [x] Keep the first iteration in a lightweight test environment:
+  - prefer `node` environment;
+  - use `jsdom` only if a specific test truly needs it.
 
-Architecture rules for this initiative:
-- `spatial` belongs to the world model, not to the parser;
-- parser should only read spatial structure through `ParserWorldModelBuilder`;
-- visibility/accessibility remain separate concerns and are not part of this task;
-- both direct object-to-object nesting and object/subscene nesting must be supported;
-- subscene should act as a virtual spatial node as well as a focus/interaction mechanism.
+## Test Architecture
 
-## Backlog
+The first iteration should use three layers:
 
-- [x] Replace the separate `ParserContextBuilder` / `ParserScopeBuilder` idea with one `ParserWorldModelBuilder` that returns both `context` and `scope`.
-- [x] Define explicit scope slices:
-  - `visible`
-  - `held`
-  - `takable`
-  - `reachable`
-  - `examinable`
-  - `subscene`
-  - `sceneTargets`
-- [x] Replace ad-hoc resolution helpers with scope-driven resolution.
-- [x] Unify stage outputs so `Stage 1.1` and `Stage 1.2` emit the same Core-facing envelope.
-- [x] Refactor `Parser Core` around the unified envelope/protocol.
-- [x] Separate pre-API escalation from post-API escalation in `Parser Core`.
-- [x] Support linear plan execution in `Parser Core` without requiring LLM.
-- [x] Add optional `synonyms` to object TA schema.
-- [x] Include `synonyms` in the default object TA template.
-- [x] Extend parser target resolution to use:
-  - `title`
-  - `synonyms`
-  - partial matching
-  - clarification on ambiguity
-- [x] Expand `#PEEK` debug output with:
-  - scope data
-  - unified envelope data
-  - Core decision data
-- [ ] Verify that UI, scripts, and game logic continue using the same shared `Game API`.
-- [ ] Add regression tests / smoke checks for:
-  - `#STAGE1-ON/OFF`
-  - `#STAGE2-ON/OFF`
-  - clarification flows
-  - inventory-aware resolution
-  - `synonyms`
-  - pre-API escalation
-  - post-API escalation
-  - linear plan execution without LLM
-  - manual checklist drafted in `ParserSmoke.md`
-- [ ] Formalize runtime spatial hierarchy in `Game` so relation-aware parser queries (`under`, `in`, `behind`, `near`) can execute against real world data instead of returning the current fallback message.
+1. Unit tests for parser and helpers.
+2. Runtime tests for scene/spatial/subscene behavior.
+3. Thin integration tests for parser + game on tiny fixtures.
 
-## Spatial Hierarchy Plan
+Avoid starting with canvas/UI/browser assertions.
 
-### 1. Runtime / Scene Model
+## Fixtures and Helpers
 
-- [x] Define shared runtime types for spatial placement:
-  - `parentNodeId`
-  - `relation`
-  - relation enum: `in`, `on`, `under`, `behind`
-- [x] Add optional spatial metadata to regular scene entities.
-- [x] Extend subscene data so a subscene can act as a virtual spatial node:
-  - stable node id
-  - title
-  - optional description
-  - optional spatial parent link
-- [ ] Decide where subscene spatial metadata lives in scene JSON:
-  - preferably on the `Subscene` component / triggerbox data so migration stays incremental.
-- [x] Build a scene-level spatial index in runtime:
-  - node lookup by id
-  - children by parent id
-  - children grouped by relation
-- [ ] Keep this index separate from render hierarchy and separate from visibility/accessibility logic.
-- [x] Treat `Subscene` as a virtual spatial node while keeping its authored spatial metadata on the `Subscene` component / triggerbox path.
-- [x] Auto-activate direct spatial children when opening a `Subscene`:
-  - direct `Entity` children
-  - direct `Triggerbox` children
-  - direct nested `Subscene` children
-- [x] Keep `Subscene` activation non-recursive:
-  - opening parent `Subscene A` reveals only direct children
-  - children of nested `Subscene B` remain inactive until `B` itself is opened
+- [x] Create `tests/fixtures/sceneFactory.ts`
+  - helpers for minimal `Scene` setup;
+  - helpers for entities, triggerboxes, subscenes, switches, and spatial links.
 
-### 2. Parser Integration
+- [x] Create `tests/fixtures/gameFactory.ts`
+  - minimal `Game`/`IGame` test harness;
+  - controllable logging, messages, sounds, and inventory.
 
-- [x] Extend `ParserWorldModelBuilder` so parser context includes spatial data projected from runtime.
-- [x] Define parser-facing relation projection:
-  - anchor node id
-  - relation type
-  - child node ids
-- [x] Replace the current relation-query fallback path with real lookup against runtime spatial data.
-- [x] Support first real execution cases:
-  - `LOOK UNDER X`
-  - `LOOK IN X`
-  - `LOOK BEHIND X`
-- [ ] Keep `near` out of execution until its runtime semantics are clearly defined.
-- [x] Preserve current clarification behavior:
-  - resolve anchor
-  - ambiguity handling
-  - tie-break rules for non-usable ambiguity
+- [x] Create `tests/fixtures/parserFactory.ts`
+  - build parser with small fixture world;
+  - helpers for running parser input and reading outcomes.
 
-### 3. Editor / UI Authoring
+- [x] Create `tests/fixtures/textAssetFactory.ts`
+  - minimal parser/engine text assets for tests;
+  - keep messages stable and deterministic.
 
-- [x] Add editor UI for every scene `Entity` to choose:
-  - parent object / node
-  - relation type
-- [ ] Limit parent candidates to valid nodes in the current scene.
-- [x] Add editor UI for `Subscene` to edit:
-  - title
-  - node id
-  - optional parent node
-  - relation type
-- [x] Add editor UI for `Triggerbox` spatial authoring:
-  - parent object / node
-  - relation type
-- [ ] Ensure authoring UI does not imply visibility/accessibility behavior that is not implemented yet.
-- [x] Add serialization/deserialization support for the new spatial fields.
-- [x] Show spatial nesting visually in `HierarchyPanel` for scene entities:
-  - child entities render below their parent
-  - nested entities are indented to the right
-  - flat list order remains stable for roots and fallback cases
-- [x] Extend `HierarchyPanel` spatial nesting display to polygon-based scene objects:
-  - `Triggerbox`
-  - `Walkbox`
+- [x] Decide fixture style for first iteration:
+  - start with programmatic fixtures;
+  - add tiny JSON fixture scenes later only if load/serialization tests need them.
 
-### 4. Migration / Compatibility
+## First Test Files
 
-- [x] Keep existing scenes valid with all spatial fields optional.
-- [x] Preserve current `activeSubscene` / `subsceneEntities` behavior during migration.
-- [ ] Make parser relation grammar continue to work even before a scene defines any spatial metadata.
-- [ ] Add smoke checks for scenes mixing:
-  - direct object nesting
-  - object inside subscene
-  - subscene inside object
-  - nested subscene chains
+### Parser
 
-### 5. Documentation
+- [x] `tests/parser/resolution.test.ts`
+  Cover:
+  - exact title match;
+  - synonym match;
+  - partial match;
+  - ambiguity clarification;
+  - deterministic tie-break:
+    - inventory first;
+    - nearest scene object when needed.
 
-- [ ] Update `Parser.md` so it clearly states spatial hierarchy is owned by `Game`, not parser.
-- [ ] Add or update documentation for scene spatial schema and subscene-as-node behavior.
-- [ ] Document the editor workflow for assigning parent object and relation type.
+- [x] `tests/parser/commands.test.ts`
+  Cover:
+  - `teleport with id`;
+  - wrong item -> no effect;
+  - `use id on boombox`;
+  - multi-argument parsing for `USE X ON Y`;
+  - missing-argument prompt cases.
 
-## Suggested Order
+- [x] `tests/parser/core.test.ts`
+  Cover:
+  - unified envelope intake;
+  - pre-API escalation;
+  - post-API escalation;
+  - linear plan execution;
+  - custom command validation path.
 
-1. Extract a single world-model builder that produces context and scope together.
-2. Unify cascade envelopes.
-3. Refactor `Parser Core` around the unified protocol.
-4. Add `synonyms` support to TA and target resolution.
-5. Improve `#PEEK`.
-6. Run regression checks and clean up boundaries with `Game API`.
-7. Introduce runtime spatial hierarchy and then reconnect parser relation queries to it.
+### Scene / Runtime
 
-## Plan For Step 3
+- [x] `tests/scene/spatial-index.test.ts`
+  Cover:
+  - direct parent/child lookup;
+  - relation grouping (`in`, `on`, `under`, `behind`);
+  - direct-child helper stays non-recursive.
 
-- [x] Define a single `CascadeEnvelope` shape that both `Stage 1.1` and `Stage 1.2` emit.
-- [x] Replace the current action/handoff JSON split with the unified envelope.
-- [x] Make `Parser Core` consume the unified envelope directly instead of inferring behavior from ad-hoc action types.
-- [x] Split `Parser Core` flow into explicit phases:
-  - envelope intake
-  - pre-API validation/resolution
-  - API plan execution
-  - post-API outcome analysis
-- [x] Introduce a minimal linear plan execution path in `Core` for non-LLM producers.
-- [x] Expose enough debug data in `#PEEK` to inspect envelope and Core decisions while refactoring.
+- [x] `tests/scene/subscene-activation.test.ts`
+  Cover:
+  - direct entity child activates;
+  - direct triggerbox child activates;
+  - nested subscene becomes available;
+  - grandchildren do not activate automatically.
+
+- [x] `tests/scene/subscene-cleanup.test.ts`
+  Cover:
+  - switch reset on subscene close;
+  - `sound1` path fires correctly;
+  - spatially included switch resets too, not only group-based targets.
+
+### Thin Integration
+
+- [x] `tests/integration/parser-game.test.ts`
+  Cover only a few end-to-end flows on tiny fixtures:
+  - `look under chair`;
+  - `teleport with your id card`;
+  - one far-but-visible `examine` case.
+
+## Recommended Implementation Order
+
+1. [x] Add `vitest` infrastructure.
+2. [x] Add factories/helpers.
+3. [x] Implement spatial runtime tests first:
+   - `spatial-index.test.ts`
+   - `subscene-activation.test.ts`
+   - `subscene-cleanup.test.ts`
+4. [x] Implement parser command/resolution tests.
+5. [x] Add one thin integration test file.
+
+## Next Iteration Candidate: Game Semantic API Tests
+
+- [x] Add `tests/game/semantic-api.test.ts`
+  Cover:
+  - `lookScene`;
+  - `lookEntity`;
+  - `examineEntity`;
+  - `showInventory`;
+  - `removeInventoryEntity`.
+
+- [x] Add `tests/game/navigation-and-spatial.test.ts`
+  Cover:
+  - `goToSceneTarget`;
+  - `goToScene`;
+  - `goToEntity`;
+  - `describeSpatialRelation`.
+
+- [x] Decide whether the current fixture `gameFactory.ts` is sufficient for direct `Game`-layer tests
+  or if a dedicated semantic `Game` harness should be introduced.
+  Result:
+  - keep `gameFactory.ts` as the minimal base harness;
+  - add `tests/fixtures/gameSemanticFactory.ts` for direct `Game` API tests through `Game.prototype`.
+
+## Success Criteria For Iteration 1
+
+- [x] `npm run test` works locally.
+- [x] Tests do not depend on large mutable content scenes.
+- [x] The most fragile parser/runtime contracts are covered.
+- [x] Failing tests point to a specific layer:
+  - parser;
+  - core;
+  - scene runtime;
+  - subscene behavior.
+
+## Notes
+
+- Keep UI click behavior out of the first iteration unless a contract cannot be tested elsewhere.
+- Prefer deterministic fixtures over browser automation.
+- Keep tests readable enough that they double as executable architecture documentation.
+- `Autotests.md` is the current developer-facing description of the test system, fixtures, coverage, and usage workflow.
+- Current progress:
+  - `vitest` bootstrap is in place;
+  - runtime spatial/subscene tests are green;
+  - parser resolution, commands, and core tests are green;
+  - one thin integration smoke file is green;
+  - current status: first autotest iteration is functionally complete.
+  - next logical slice: direct tests for `Game` as the shared semantic gameplay API.
+  - `Game` semantic API tests are now green as well.
