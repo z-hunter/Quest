@@ -2,6 +2,7 @@ import { Animator } from '../core/Animator';
 import type { IGame } from '../core/IGame';
 import { SceneObject } from './SceneObject';
 import { Theme } from '../utils/Theme';
+import type { SpatialPlacement } from '../scene/spatialTypes';
 
 export interface EntityData {
   type: string;
@@ -36,6 +37,7 @@ export interface EntityData {
   opacity?: number; // Added
   blendMode?: string; // Added
   blur?: number; // Added
+  spatial?: SpatialPlacement;
 }
 
 export class Entity extends SceneObject {

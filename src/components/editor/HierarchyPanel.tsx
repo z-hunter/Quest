@@ -46,6 +46,61 @@ export const HierarchyPanel: React.FC = () => {
   const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
     matchesFilter(item)
   );
+  const filteredObjects = React.useMemo(
+    () => [...filteredEntities, ...filteredWalkboxes, ...filteredTriggers],
+    [filteredEntities, filteredWalkboxes, filteredTriggers]
+  );
+  const filteredObjectOrder = React.useMemo(
+    () => new Map(filteredObjects.map((item: any, index: number) => [item.name, index])),
+    [filteredObjects]
+  );
+  const hierarchicalObjects = React.useMemo(() => {
+    const objectByName = new Map(filteredObjects.map((item: any) => [item.name, item]));
+    const childrenByParent = new Map<string, any[]>();
+    const roots: any[] = [];
+
+    const pushChild = (parentId: string, item: any) => {
+      const children = childrenByParent.get(parentId) || [];
+      children.push(item);
+      childrenByParent.set(parentId, children);
+    };
+
+    filteredObjects.forEach((item: any) => {
+      const parentId =
+        typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+      if (parentId && parentId !== item.name && objectByName.has(parentId)) {
+        pushChild(parentId, item);
+      } else {
+        roots.push(item);
+      }
+    });
+
+    const sortBySceneOrder = (items: any[]) =>
+      [...items].sort(
+        (left, right) =>
+          (filteredObjectOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) -
+          (filteredObjectOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER)
+      );
+
+    const ordered: Array<{ item: any; depth: number }> = [];
+    const visited = new Set<string>();
+
+    const walk = (item: any, depth: number) => {
+      if (!item || visited.has(item.name)) return;
+      visited.add(item.name);
+      ordered.push({ item, depth });
+      const children = sortBySceneOrder(childrenByParent.get(item.name) || []);
+      children.forEach((child) => walk(child, depth + 1));
+    };
+
+    sortBySceneOrder(roots).forEach((item) => walk(item, 0));
+
+    sortBySceneOrder(filteredObjects)
+      .filter((item) => !visited.has(item.name))
+      .forEach((item) => walk(item, 0));
+
+    return ordered;
+  }, [filteredObjects, filteredObjectOrder]);
 
   // Helper to resolve display ID for an item, matching how it's identified in the UI
   const getDisplayId = (item: any): string => {
@@ -84,7 +139,10 @@ export const HierarchyPanel: React.FC = () => {
         return;
       }
 
-      const allItems = ['SCENE', ...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
+      const allItems = [
+        'SCENE',
+        ...hierarchicalObjects.map((entry) => entry.item),
+      ];
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -126,9 +184,7 @@ export const HierarchyPanel: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    filteredEntities,
-    filteredWalkboxes,
-    filteredTriggers,
+    hierarchicalObjects,
     hierarchyVersion,
     selectedObjectId,
     game.editor,
@@ -302,15 +358,30 @@ export const HierarchyPanel: React.FC = () => {
           Scene
         </div>
 
-        {/* Entities */}
-        {filteredEntities.map((ent: any) => {
-          const isSelected = isItemSelected(ent);
+        {hierarchicalObjects.map(({ item, depth }, i) => {
+          const isSelected = isItemSelected(item);
+          const icon =
+            item.type === 'Actor'
+              ? '👤'
+              : item.type === 'Quad'
+                ? '▰'
+                : item.type === 'Walkbox'
+                  ? '👣'
+                  : item.type === 'Triggerbox'
+                    ? '⚡'
+                    : '📦';
+          const label =
+            item.type === 'Walkbox'
+              ? item.name || `Walkbox ${i}`
+              : item.type === 'Triggerbox'
+                ? item.name || `Trigger ${i}`
+                : item.name;
           return (
             <div
-              key={ent.name}
+              key={`${item.type}:${item.name || i}`}
               style={{
                 padding: '4px',
-                paddingLeft: '15px',
+                paddingLeft: `${8 + depth * 14}px`,
                 marginBottom: '2px',
                 cursor: 'pointer',
                 borderRadius: '4px',
@@ -321,13 +392,17 @@ export const HierarchyPanel: React.FC = () => {
                 justifyContent: 'space-between',
               }}
               onClick={(e) => {
-                if (e.ctrlKey) game.editor.toggleObjectSelection(ent);
-                else game.editor.selectObject(ent);
+                if (e.ctrlKey) game.editor.toggleObjectSelection(item);
+                else game.editor.selectObject(item);
               }}
-              onDoubleClick={() => centerCameraOn(ent)}
+              onDoubleClick={() => centerCameraOn(item)}
             >
               <div
-                style={{ display: 'flex', alignItems: 'center', opacity: ent.disabled ? 0.5 : 1.0 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  opacity: item.disabled ? 0.5 : 1.0,
+                }}
               >
                 <span
                   style={{
@@ -336,106 +411,14 @@ export const HierarchyPanel: React.FC = () => {
                       : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
                     marginRight: '6px',
                     display: 'inline-block',
-                    textDecoration: ent.disabled ? 'line-through' : 'none',
+                    textDecoration: item.disabled ? 'line-through' : 'none',
                   }}
                 >
-                  {ent.type === 'Actor' ? '👤' : ent.type === 'Quad' ? '▰' : '📦'}
+                  {icon}
                 </span>
-                {ent.name}
+                {label}
               </div>
-              {ent.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
-            </div>
-          );
-        })}
-
-        {/* Walkboxes */}
-        {filteredWalkboxes.map((wb: any, i: number) => {
-          const isSelected = isItemSelected(wb);
-          return (
-            <div
-              key={wb.name || i}
-              style={{
-                padding: '4px',
-                paddingLeft: '15px',
-                marginBottom: '2px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                background: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
-                color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-              onClick={(e) => {
-                if (e.ctrlKey) game.editor.toggleObjectSelection(wb);
-                else game.editor.selectObject(wb);
-              }}
-              onDoubleClick={() => centerCameraOn(wb)}
-            >
-              <div
-                style={{ display: 'flex', alignItems: 'center', opacity: wb.disabled ? 0.5 : 1.0 }}
-              >
-                <span
-                  style={{
-                    filter: isSelected
-                      ? 'grayscale(100%) brightness(0)'
-                      : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
-                    marginRight: '6px',
-                    display: 'inline-block',
-                    textDecoration: wb.disabled ? 'line-through' : 'none',
-                  }}
-                >
-                  👣
-                </span>
-                {wb.name || `Walkbox ${i}`}
-              </div>
-              {wb.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
-            </div>
-          );
-        })}
-
-        {/* Triggers */}
-        {filteredTriggers.map((tb: any, i: number) => {
-          const isSelected = isItemSelected(tb);
-          return (
-            <div
-              key={tb.name || i}
-              style={{
-                padding: '4px',
-                paddingLeft: '15px',
-                marginBottom: '2px',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                background: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
-                color: isSelected ? 'var(--ui-selection-text)' : '#aaa',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-              onClick={(e) => {
-                if (e.ctrlKey) game.editor.toggleObjectSelection(tb);
-                else game.editor.selectObject(tb);
-              }}
-              onDoubleClick={() => centerCameraOn(tb)}
-            >
-              <div
-                style={{ display: 'flex', alignItems: 'center', opacity: tb.disabled ? 0.5 : 1.0 }}
-              >
-                <span
-                  style={{
-                    filter: isSelected
-                      ? 'grayscale(100%) brightness(0)'
-                      : 'grayscale(100%) sepia(100%) hue-rotate(75deg) saturate(400%)',
-                    marginRight: '6px',
-                    display: 'inline-block',
-                    textDecoration: tb.disabled ? 'line-through' : 'none',
-                  }}
-                >
-                  ⚡
-                </span>
-                {tb.name || `Trigger ${i}`}
-              </div>
-              {tb.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
+              {item.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
             </div>
           );
         })}

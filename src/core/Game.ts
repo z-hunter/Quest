@@ -6,14 +6,20 @@ import { SceneEditor } from '../tools/SceneEditor';
 import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
+import { SceneObject } from '../entities/SceneObject';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
+import type { GameActionOutcome } from './GameActionTypes';
 
 import { Console } from './Console';
+import { ScriptRegistry } from './ScriptRegistry';
+import { ComponentSystem } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
+import type { Scene } from '../scene/Scene';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 
 export class Game implements IGame {
   public static instance: Game;
@@ -153,7 +159,19 @@ export class Game implements IGame {
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
+    void this.textAssets.preloadParserLanguageAssets();
     this.sceneManager = new SceneManager(this);
+    if (typeof window !== 'undefined') {
+      const debugWindow = window as Window & {
+        __QUEST_DEBUG__?: Record<string, unknown>;
+      };
+      debugWindow.__QUEST_DEBUG__ = {
+        ...(debugWindow.__QUEST_DEBUG__ || {}),
+        game: this,
+        profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
+        profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
+      };
+    }
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);
 
@@ -418,6 +436,472 @@ export class Game implements IGame {
 
   text(key: string, params?: Record<string, string | number>): string {
     return this.textAssets.getServiceText(key, params);
+  }
+
+  private getPlayerFacingEntityTitle(entity: Entity): string | null {
+    const title = this.textAssets.getResolvedObjectField(entity, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private getPlayerFacingObjectTitle(target: SceneObject): string | null {
+    const title = this.textAssets.getResolvedObjectField(target as any, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private getRelationDisplayText(relation: SpatialRelationType): string {
+    switch (relation) {
+      case 'in':
+        return 'in';
+      case 'on':
+        return 'on';
+      case 'under':
+        return 'under';
+      case 'behind':
+        return 'behind';
+      default:
+        return relation;
+    }
+  }
+
+  private capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  private formatTitleList(items: string[]): string {
+    if (items.length <= 1) return items[0] || '';
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+  }
+
+  private getSpatialParentMessage(target: SceneObject): string | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const placement = scene.getSpatialPlacementForObject(target);
+    if (!placement?.parentNodeId || !placement.relation) return null;
+
+    const itemTitle = this.getPlayerFacingObjectTitle(target);
+    const parentNode = scene.getSpatialNode(placement.parentNodeId);
+    const parentTitle = parentNode?.title?.trim() || null;
+    if (!itemTitle || !parentTitle) return null;
+
+    return this.text('parser.relation_contents', {
+      Relation: this.capitalize(this.getRelationDisplayText(placement.relation)),
+      relation: this.getRelationDisplayText(placement.relation),
+      target: parentTitle,
+      items: itemTitle,
+    });
+  }
+
+  getSeeMessage(target: SceneObject): string | null {
+    return this.getSpatialParentMessage(target) || null;
+  }
+
+  private isEntityInInventory(entity: Entity): boolean {
+    return this.inventory.includes(entity);
+  }
+
+  private canExamineEntity(entity: Entity): GameActionOutcome | null {
+    if (this.isEntityInInventory(entity)) return null;
+
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    if (scene.activeSubscene && scene.subsceneEntities.has(entity as any)) {
+      return null;
+    }
+
+    const distanceError = ComponentSystem.getInteractionDistanceError(entity as any, scene.player);
+    if (distanceError) {
+      return {
+        status: 'failed',
+        code: 'too_far_to_examine',
+        message: distanceError,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  }
+
+  lookScene(scene?: Scene | null): GameActionOutcome {
+    const targetScene = scene || this.sceneManager.currentScene;
+    if (!targetScene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const sceneDescription =
+      this.textAssets.getResolvedSceneField(targetScene, 'description') ||
+      targetScene.description ||
+      this.text('parser.look_default_scene', { scene: targetScene.name });
+    // Intentionally disabled for now:
+    // const directItems = this.getDirectSceneLookItems(targetScene);
+    // const contentsMessage = directItems.length
+    //   ? this.text('parser.look_scene_contents', {
+    //       items: this.formatTitleList(directItems),
+    //     })
+    //   : '';
+    return {
+      status: 'ok',
+      code: 'scene_description',
+      message: sceneDescription,
+      data: { targetType: 'scene', sceneId: targetScene.id },
+    };
+  }
+
+  lookEntity(entity: Entity): GameActionOutcome {
+    const interactionId =
+      entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const description =
+      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    if (description && description.trim()) {
+      const spatialMessage = this.getSpatialParentMessage(entity);
+      return {
+        status: 'ok',
+        code: 'entity_description',
+        message: spatialMessage ? `${description.trim()} ${spatialMessage}` : description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_description',
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  examineEntity(entity: Entity): GameActionOutcome {
+    const accessError = this.canExamineEntity(entity);
+    if (accessError) return accessError;
+
+    const interactionId =
+      entity.interactions &&
+      (entity.interactions.examine ||
+        entity.interactions.EXAMINE ||
+        entity.interactions.inspect ||
+        entity.interactions.INSPECT ||
+        entity.interactions.check ||
+        entity.interactions.CHECK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const details = this.textAssets.getResolvedObjectField(entity, 'details');
+    if (details && details.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_details',
+        message: details,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    const description =
+      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    if (description && description.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_description_fallback',
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_details',
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const anchorNode = scene.getSpatialNode(anchorNodeId);
+    const anchorTitle = anchorNode?.title?.trim() || null;
+    if (!anchorNode || !anchorTitle) {
+      return {
+        status: 'escalate',
+        code: 'spatial_node_missing_title',
+        recoverable: true,
+      };
+    }
+
+    const childTitles = scene
+      .getDirectSpatialChildren(anchorNodeId, relation)
+      .map((child) => this.getPlayerFacingObjectTitle(child))
+      .filter((title): title is string => !!title);
+
+    if (!childTitles.length) {
+      return {
+        status: 'ok',
+        code: 'relation_empty',
+        message: this.text('parser.relation_empty', {
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+        }),
+        data: {
+          relation,
+          anchorNodeId,
+        },
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'relation_contents',
+      message: this.text('parser.relation_contents', {
+        Relation: this.capitalize(this.getRelationDisplayText(relation)),
+        relation: this.getRelationDisplayText(relation),
+        target: anchorTitle,
+        items: this.formatTitleList(childTitles),
+      }),
+      data: {
+        relation,
+        anchorNodeId,
+      },
+    };
+  }
+
+  takeEntity(entity: Entity): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const interactionId =
+      entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
+    if (isItem || entity.isTakeable) {
+      scene.removeEntity(entity);
+      this.inventory.push(entity);
+      const itemTitle = this.getPlayerFacingEntityTitle(entity);
+      if (!itemTitle) {
+        return {
+          status: 'escalate',
+          code: 'taken_item_missing_title',
+          data: { entityId: entity.name },
+          effects: ['moved_to_inventory'],
+          recoverable: true,
+        };
+      }
+      return {
+        status: 'ok',
+        code: 'item_taken',
+        message: this.text('parser.take_pickup_success', {
+          item: itemTitle,
+        }),
+        data: { entityId: entity.name },
+        effects: ['moved_to_inventory'],
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'not_takeable',
+      message: this.text('parser.take_cannot'),
+      data: { entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  removeInventoryEntity(entity: Entity): GameActionOutcome {
+    const index = this.inventory.indexOf(entity);
+    if (index === -1) {
+      return {
+        status: 'failed',
+        code: 'inventory_item_not_found',
+        recoverable: true,
+      };
+    }
+
+    this.inventory.splice(index, 1);
+    return {
+      status: 'ok',
+      code: 'inventory_item_removed',
+      data: { entityId: entity.name },
+      effects: ['removed_from_inventory'],
+    };
+  }
+
+  showInventory(): GameActionOutcome {
+    const inventoryTitles = this.inventory
+      .map((entity: any) => this.getPlayerFacingEntityTitle(entity))
+      .filter((title): title is string => !!title);
+
+    if (inventoryTitles.length !== this.inventory.length) {
+      return {
+        status: 'escalate',
+        code: 'inventory_item_missing_title',
+        data: {
+          count: this.inventory.length,
+        },
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'inventory_list',
+      message:
+        this.inventory.length === 0
+          ? this.text('parser.inventory_empty')
+          : this.text('parser.inventory_items', {
+              items: inventoryTitles.join(', '),
+            }),
+      data: {
+        count: this.inventory.length,
+      },
+    };
+  }
+
+  goToSceneTarget(target: string): GameActionOutcome {
+    const normalized = String(target || '').trim().toUpperCase();
+    if (!normalized) {
+      return {
+        status: 'failed',
+        code: 'destination_not_found',
+        recoverable: true,
+      };
+    }
+
+    for (const descriptor of this.sceneManager.sceneRegistry.values()) {
+      if (
+        descriptor.id.toUpperCase() === normalized ||
+        descriptor.name.toUpperCase() === normalized ||
+        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
+      ) {
+        return this.goToScene(descriptor.id);
+      }
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      recoverable: true,
+    };
+  }
+
+  goToScene(sceneId: string): GameActionOutcome {
+    const currentScene = this.sceneManager.currentScene;
+    const activeScene = this.sceneManager.scenes.get(sceneId);
+    if (!activeScene && !this.sceneManager.sceneRegistry.get(sceneId)) {
+      return {
+        status: 'failed',
+        code: 'destination_not_found',
+        recoverable: true,
+      };
+    }
+
+    this.sceneManager.switchTo(sceneId);
+    const switchedScene = this.sceneManager.currentScene;
+    return {
+      status: 'ok',
+      code: 'scene_switched',
+      message:
+        (switchedScene && this.textAssets.getResolvedSceneField(switchedScene, 'description')) ||
+        switchedScene?.description ||
+        undefined,
+      data: { targetType: 'scene', sceneId },
+      effects: currentScene?.id !== sceneId ? ['scene_changed'] : [],
+    };
+  }
+
+  goToEntity(entity: Entity): GameActionOutcome {
+    const currentScene = this.sceneManager.currentScene;
+    if (currentScene?.player && 'x' in entity && 'y' in entity) {
+      const entityTitle = this.getPlayerFacingEntityTitle(entity);
+      if (!entityTitle) {
+        return {
+          status: 'escalate',
+          code: 'destination_missing_title',
+          data: { targetType: 'entity', entityId: entity.name },
+          recoverable: true,
+        };
+      }
+      currentScene.player.moveTo((entity as any).x, (entity as any).y);
+      return {
+        status: 'ok',
+        code: 'player_moving',
+        message: this.text('parser.go_to_success', {
+          target: entityTitle,
+        }),
+        data: { targetType: 'entity', entityId: entity.name },
+        effects: ['player_move_started'],
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      recoverable: true,
+    };
   }
 
   showNotification(text: string): void {

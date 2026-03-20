@@ -35,9 +35,43 @@ export const PropertiesPanel: React.FC = () => {
   }
 
   const uiScale = game?.settings?.editor?.uiScale || 1.0;
+  const supportsTextAsset =
+    selectedObjectType === 'SCENE' ||
+    (selectedObjectType !== 'MULTI' &&
+      selectedObjectType !== 'SETTINGS' &&
+      game?.editor?.selectedObject?.type !== 'Walkbox');
   const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
     ? game.editor.selectionManager.getSelectedObjects()
     : [];
+  const spatialRelationOptions = [
+    { value: '', label: '(None)' },
+    { value: 'in', label: 'In' },
+    { value: 'on', label: 'On' },
+    { value: 'under', label: 'Under' },
+    { value: 'behind', label: 'Behind' },
+  ];
+  const getSpatialRelationOptions = React.useCallback(
+    (hasParent: boolean) =>
+      hasParent ? spatialRelationOptions.filter((option) => option.value !== '') : spatialRelationOptions,
+    [spatialRelationOptions]
+  );
+
+  const getSceneSpatialParentOptions = React.useCallback(() => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !obj) {
+      return [{ value: '', label: '(None)' }];
+    }
+
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const options = allObjects
+      .filter((item) => item !== obj)
+      .map((item: any) => ({
+        value: item.name,
+        label: item.customName?.trim() || item.name,
+      }));
+
+    return [{ value: '', label: '(None)' }, ...options];
+  }, [game, obj]);
 
   const getSharedValue = (arr: any[], getter: (o: any) => any) => {
     if (!arr.length) return '';
@@ -68,6 +102,14 @@ export const PropertiesPanel: React.FC = () => {
       if (!game || !obj || selectedObjectType === 'MULTI' || selectedObjectType === 'SETTINGS') {
         setResolvedTitle('');
         setTextAssetPath('');
+        setHasTextAsset(false);
+        return;
+      }
+
+      if (!supportsTextAsset) {
+        setResolvedTitle('');
+        setTextAssetPath('');
+        setHasTextAsset(false);
         return;
       }
 
@@ -93,7 +135,7 @@ export const PropertiesPanel: React.FC = () => {
         setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
       }
     },
-    [game, obj, selectedObjectType]
+    [game, obj, selectedObjectType, supportsTextAsset]
   );
 
   React.useEffect(() => {
@@ -874,38 +916,40 @@ export const PropertiesPanel: React.FC = () => {
                 }}
               />
             </div>
-            <div className="e-row">
-              <label className="e-label">Title</label>
-              <input
-                type="text"
-                className="e-input"
-                value={resolvedTitle}
-                readOnly
-                tabIndex={-1}
-                onFocus={(e) => e.currentTarget.blur()}
-                style={{ pointerEvents: 'none', color: '#888' }}
-              />
-              {textAssetPath && (
-                <>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <button className="e-btn" onClick={handleOpenTA}>
-                      {hasTextAsset ? 'Open TA' : 'Create TA'}
-                    </button>
-                    <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
-                      {isReadingTA ? 'Syncing...' : 'Sync TA'}
-                    </button>
-                    {hasTextAsset && (
-                      <button className="e-btn" onClick={handleDeleteTA}>
-                        Delete TA
+            {supportsTextAsset && (
+              <div className="e-row">
+                <label className="e-label">Title</label>
+                <input
+                  type="text"
+                  className="e-input"
+                  value={resolvedTitle}
+                  readOnly
+                  tabIndex={-1}
+                  onFocus={(e) => e.currentTarget.blur()}
+                  style={{ pointerEvents: 'none', color: '#888' }}
+                />
+                {textAssetPath && (
+                  <>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                      <button className="e-btn" onClick={handleOpenTA}>
+                        {hasTextAsset ? 'Open TA' : 'Create TA'}
                       </button>
-                    )}
-                  </div>
-                  <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
-                    {textAssetPath}
-                  </div>
-                </>
-              )}
-            </div>
+                      <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
+                        {isReadingTA ? 'Syncing...' : 'Sync TA'}
+                      </button>
+                      {hasTextAsset && (
+                        <button className="e-btn" onClick={handleDeleteTA}>
+                          Delete TA
+                        </button>
+                      )}
+                    </div>
+                    <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+                      {textAssetPath}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -1056,6 +1100,48 @@ export const PropertiesPanel: React.FC = () => {
                 />
               </div>
             </div>
+
+            {(selectedObjectType === 'Entity' ||
+              selectedObjectType === 'Actor' ||
+              selectedObjectType === 'Static') && (
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+              >
+                <div>
+                  <label className="e-label">Parent</label>
+                  <Select
+                    value={obj.spatial?.parentNodeId || ''}
+                    onChange={(value) => {
+                      obj.spatial = {
+                        ...(obj.spatial || {}),
+                        parentNodeId: value || null,
+                        relation: value ? obj.spatial?.relation || 'in' : null,
+                      };
+                      incrementObjectVersion();
+                    }}
+                    options={getSceneSpatialParentOptions()}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Relation</label>
+                  <Select
+                    value={obj.spatial?.relation || ''}
+                    onChange={(value) => {
+                      obj.spatial = {
+                        ...(obj.spatial || {}),
+                        parentNodeId: obj.spatial?.parentNodeId || null,
+                        relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
+                      };
+                      incrementObjectVersion();
+                    }}
+                    options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Color & Blend Mode */}
             <div
@@ -1353,15 +1439,54 @@ export const PropertiesPanel: React.FC = () => {
             </div>
 
             {selectedObjectType === 'Triggerbox' && (
-              <div className="e-row">
-                <label className="e-label">Layer</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.layer || 0}
-                  onChange={(e) => handleChange('layer', e.target.value, true)}
-                />
-              </div>
+              <>
+                <div className="e-row">
+                  <label className="e-label">Layer</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={obj.layer || 0}
+                    onChange={(e) => handleChange('layer', e.target.value, true)}
+                  />
+                </div>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Parent</label>
+                    <Select
+                      value={obj.spatial?.parentNodeId || ''}
+                      onChange={(value) => {
+                        obj.spatial = {
+                          ...(obj.spatial || {}),
+                          parentNodeId: value || null,
+                          relation: value ? obj.spatial?.relation || 'in' : null,
+                        };
+                        incrementObjectVersion();
+                      }}
+                      options={getSceneSpatialParentOptions()}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Relation</label>
+                    <Select
+                      value={obj.spatial?.parentNodeId ? obj.spatial?.relation || 'in' : obj.spatial?.relation || ''}
+                      onChange={(value) => {
+                        obj.spatial = {
+                          ...(obj.spatial || {}),
+                          parentNodeId: obj.spatial?.parentNodeId || null,
+                          relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
+                        };
+                        incrementObjectVersion();
+                      }}
+                      options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="e-row">
@@ -1892,7 +2017,12 @@ export const PropertiesPanel: React.FC = () => {
                     if (!obj.components) obj.components = [];
 
                     if (type === 'Subscene') {
-                      obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                      obj.components.push({
+                        type: 'Subscene',
+                        targetGroupId: '',
+                        title: '',
+                        description: '',
+                      });
                     } else if (type === 'Subtrigger') {
                       obj.components.push({ type: 'Subtrigger', target: '' });
                     } else if (type === 'Item') {
@@ -2150,14 +2280,28 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                       <div className="e-row">
                         <label className="e-label" style={{ fontSize: '10px' }}>
-                          Name (Optional)
+                          Title
                         </label>
                         <input
                           type="text"
                           className="e-input"
-                          value={comp.name || ''}
+                          value={comp.title || ''}
                           onChange={(e) => {
-                            comp.name = e.target.value;
+                            comp.title = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Description
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={comp.description || ''}
+                          onChange={(e) => {
+                            comp.description = e.target.value;
                             incrementObjectVersion();
                           }}
                         />

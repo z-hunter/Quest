@@ -4,6 +4,10 @@ import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
 import { TextAssetManager } from './TextAssetManager';
+import type { GameActionOutcome } from './GameActionTypes';
+import type { Scene } from '../scene/Scene';
+import type { SceneObject } from '../entities/SceneObject';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 
 export interface IGame {
   assets: AssetLoader;
@@ -16,6 +20,17 @@ export interface IGame {
   showMessage(text: string): void;
   log(text: string): void;
   text(key: string, params?: Record<string, string | number>): string;
+  getSeeMessage(target: SceneObject): string | null;
+  lookScene(scene?: Scene | null): GameActionOutcome;
+  lookEntity(entity: Entity): GameActionOutcome;
+  describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
+  examineEntity(entity: Entity): GameActionOutcome;
+  takeEntity(entity: Entity): GameActionOutcome;
+  removeInventoryEntity(entity: Entity): GameActionOutcome;
+  showInventory(): GameActionOutcome;
+  goToSceneTarget(target: string): GameActionOutcome;
+  goToScene(sceneId: string): GameActionOutcome;
+  goToEntity(entity: Entity): GameActionOutcome;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;

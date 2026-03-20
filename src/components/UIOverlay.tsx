@@ -112,14 +112,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 // GDD: "Input command... displayed in buffer... then sent to parser"
 
                 if (val && game) {
-                  // 1. Log Command to Buffer
-                  game.console.log(val, 'command');
+                  const firstWord = val.split(/\s+/)[0] || '';
 
-                  // 2. Add to History
-                  game.console.addHistory(val);
+                  if (firstWord.startsWith('#')) {
+                    game.console.processCommand(val);
+                  } else {
+                    const preprocessed = game.console.preprocessGameplayInput(val);
 
-                  // 3. Send to Parser (Parser handles command casing, Console handles arguments)
-                  game.parser.parse(val);
+                    // 1. Log Command to Buffer
+                    game.console.log(val, 'command');
+
+                    // 2. Add to History
+                    game.console.addHistory(val);
+
+                    // 3. Send to gameplay parser
+                    void game.parser.parse(preprocessed);
+                  }
 
                   e.currentTarget.value = '';
                   setHistoryIndex(-1); // Reset history index on submit

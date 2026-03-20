@@ -14,8 +14,10 @@ export interface ActivationSceneContext {
   activeSubscene: string | null;
   subsceneEntities: Set<SceneObject>;
   resolveTarget(target: string): SceneObject[];
+  getSpatialDescendantObjects?(nodeId: string): SceneObject[];
   activateObject(obj: SceneObject, depth?: number): void;
   findEntity(name: string): Entity | undefined;
   entities: Entity[];
   triggerboxes: SceneObject[];
+  walkbox?: SceneObject[];
 }

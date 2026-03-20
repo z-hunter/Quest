@@ -37,7 +37,10 @@ export function resolveSceneTargets(scene: Scene, targetStr: string): SceneObjec
 }
 
 export function cleanupClosingSubscene(scene: Scene, closingId: string): void {
-  const closingTargets = resolveSceneTargets(scene, closingId);
+  const closingTargets = new Set<SceneObject>([
+    ...resolveSceneTargets(scene, closingId),
+    ...Array.from(scene.subsceneEntities),
+  ]);
 
   closingTargets.forEach((obj) => {
     if (!obj.components) return;

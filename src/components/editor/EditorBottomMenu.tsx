@@ -7,10 +7,15 @@ export const EditorBottomMenu: React.FC = () => {
   const { toggle, toggleSpriteEditor } = useEditorStore();
 
   const [fps, setFps] = React.useState(0);
+  const [sceneMem, setSceneMem] = React.useState(0);
+  const [sceneCount, setSceneCount] = React.useState(0);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
       setFps(game.fps);
+      const stats = game.sceneManager.getSceneCacheStats();
+      setSceneMem(stats.estimatedMemory);
+      setSceneCount(stats.loadedScenes);
     }, 500);
     return () => clearInterval(interval);
   }, [game]);
@@ -54,6 +59,7 @@ export const EditorBottomMenu: React.FC = () => {
 
   return (
     <div className="editor-bottom-menu" style={{ zIndex: 2000 }}>
+      <div className="mem-counter">{`MEM ${sceneMem} | ${sceneCount}`}</div>
       {keys.map((k) => (
         <button key={k.label} className="e-menu-btn" onClick={() => handleAction(k.action)}>
           <span className="hotkey-accent">{k.label.split(' ')[0]}</span>
