@@ -253,6 +253,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
       return;
     }
 
+    if (subsceneHitCandidates.length > 0) {
+      return;
+    }
+
     scene.activeSubscene = null;
     return;
   }
