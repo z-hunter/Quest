@@ -85,7 +85,6 @@ export class EditorUI {
       // Restore Parser
       if (parserInput) {
         parserInput.disabled = false;
-        parserInput.focus();
       }
     }
 

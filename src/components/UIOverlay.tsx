@@ -63,6 +63,21 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   }, [game]);
 
   useEffect(() => {
+    if (!game) return;
+    if (editorEnabled || isConsoleOpen) return;
+
+    const timer = window.setTimeout(() => {
+      const input = parserInputRef.current;
+      if (!input || input.disabled) return;
+      input.focus();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [game, editorEnabled, isConsoleOpen]);
+
+  useEffect(() => {
     if (message) {
       const timer = setTimeout(() => {
         setMessage(null);
