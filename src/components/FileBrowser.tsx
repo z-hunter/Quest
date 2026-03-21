@@ -311,6 +311,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           display: 'flex',
           flexDirection: 'column',
           padding: '10px',
+          fontSize: '12px',
         }}
       >
         <div
@@ -421,25 +422,15 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button
               onClick={onCancel}
-              style={{
-                padding: '5px 15px',
-                cursor: 'pointer',
-                background: '#333',
-                color: '#fff',
-                border: '1px solid #666',
-              }}
+              className="e-btn"
+              style={{ padding: '5px 15px' }}
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              style={{
-                padding: '5px 15px',
-                cursor: 'pointer',
-                background: 'var(--ui-selection-bg)',
-                color: 'var(--ui-selection-text)',
-                border: '1px solid var(--ui-main-color)',
-              }}
+              className="e-btn e-btn-enter"
+              style={{ padding: '5px 15px' }}
             >
               {mode === 'save' ? 'Save' : 'Load'}
             </button>

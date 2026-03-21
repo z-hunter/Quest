@@ -61,6 +61,11 @@
   flex-shrink: 0;
 }
 
+#editor-panel.editor-sidebar,
+#se-panel.editor-sidebar {
+  padding: 0;
+}
+
 .editor-sidebar.left {
   border-right: 1px solid rgba(10, 10, 10, 0.95);
 }
@@ -98,9 +103,9 @@
 
 /* Controls */
 .e-btn {
-  background: #111;
-  border: 1px solid #555;
-  color: #eee;
+  background: transparent;
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-fkey-text);
   padding: 4px 8px;
   font-family: var(--ui-display-font);
   font-weight: 500;
@@ -113,9 +118,9 @@
 }
 
 .e-btn:hover {
-  background: #333;
+  background: var(--ui-main-color);
   border-color: var(--ui-main-color);
-  color: #fff;
+  color: #000;
 }
 
 .e-btn-red {
@@ -130,6 +135,11 @@
 .e-btn-yellow {
   border-color: #990;
   color: #ffa;
+}
+
+.e-btn-enter {
+  border-color: var(--ui-input-focus-border);
+  box-shadow: 0 0 5px rgba(121, 239, 164, 0.2);
 }
 
 .e-btn-small {
