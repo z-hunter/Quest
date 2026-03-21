@@ -23,6 +23,7 @@ export const PropertiesPanel: React.FC = () => {
   const [textAssetPath, setTextAssetPath] = React.useState('');
   const [isReadingTA, setIsReadingTA] = React.useState(false);
   const [hasTextAsset, setHasTextAsset] = React.useState(false);
+  const lastUndoObjectKeyRef = React.useRef<string | null>(null);
 
   // Derived Object Binding (Source of Truth)
   // We re-render whenever objectVersion changes.
@@ -311,6 +312,7 @@ export const PropertiesPanel: React.FC = () => {
   };
 
   React.useEffect(() => {
+    lastUndoObjectKeyRef.current = null;
     if (selectedObjectType !== 'MULTI') {
       setGroupIdDraft('');
     }
@@ -326,6 +328,9 @@ export const PropertiesPanel: React.FC = () => {
         }}
         onMouseLeave={() => {
           if (game) game.isMouseOverUI = false;
+        }}
+        onBlurCapture={() => {
+          lastUndoObjectKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
@@ -377,6 +382,9 @@ export const PropertiesPanel: React.FC = () => {
         }}
         onMouseLeave={() => {
           if (game) game.isMouseOverUI = false;
+        }}
+        onBlurCapture={() => {
+          lastUndoObjectKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
@@ -891,6 +899,16 @@ export const PropertiesPanel: React.FC = () => {
 
   const handleChange = (field: string, value: any, enforceNumber = false) => {
     if (!obj) return;
+
+    if (selectedObjectType !== 'SETTINGS' && game?.editor) {
+      const objectKey = selectedObjectType === 'SCENE'
+        ? `SCENE:${obj.id || ''}`
+        : `${selectedObjectType || 'Object'}:${obj.name || ''}`;
+      if (lastUndoObjectKeyRef.current !== objectKey) {
+        game.editor.saveUndoState();
+        lastUndoObjectKeyRef.current = objectKey;
+      }
+    }
 
     let finalVal = value;
     if (enforceNumber) {
