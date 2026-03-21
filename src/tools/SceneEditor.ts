@@ -856,7 +856,7 @@ export class SceneEditor {
       ctx.translate(-camX, -camY); // Apply Camera
 
       ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1);
+      ctx.lineWidth = 1.25 / (scene && scene.camera ? scene.camera.zoom : 1);
       ctx.beginPath();
       ctx.moveTo(
         this.transformManager.currentPolygon[0].x,
@@ -927,12 +927,12 @@ export class SceneEditor {
             ctx.closePath();
 
             ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2 / zoom;
+            ctx.lineWidth = 1.25 / zoom;
             ctx.stroke();
 
             // Draw Vertices
             ctx.fillStyle = '#00ff00';
-            const handleSize = 6 / zoom;
+            const handleSize = 5 / zoom;
             verts.forEach((v: any, i: number) => {
               const p = getDrawPos(v);
               // Highlight dragging vertex
@@ -1008,7 +1008,7 @@ export class SceneEditor {
             ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed, thin line
           } else {
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2 / zoom;
+            ctx.lineWidth = 1.25 / zoom;
             ctx.setLineDash([4 / zoom, 4 / zoom]);
           }
 
@@ -1027,7 +1027,7 @@ export class SceneEditor {
           // Draw Resize Handles (Only if NOT locked)
           if (!entity.locked) {
             ctx.fillStyle = '#ffffff';
-            const hSize = 6 / zoom; // Handle size
+            const hSize = 5 / zoom; // Handle size
 
             const l = drawX - entity.width / 2;
             const r = drawX + entity.width / 2;
@@ -1064,10 +1064,10 @@ export class SceneEditor {
 
         if (selected.locked) {
           // Locked Style
-          ctx.lineWidth = 1.5 / zoom;
+          ctx.lineWidth = 1 / zoom;
           ctx.setLineDash([]);
         } else {
-          ctx.lineWidth = 3 / zoom;
+          ctx.lineWidth = 1.75 / zoom;
           ctx.setLineDash([]);
         }
 
@@ -1086,7 +1086,7 @@ export class SceneEditor {
             if (selected instanceof Walkbox) ctx.fillStyle = '#ff0000';
             else ctx.fillStyle = '#ff00ff';
 
-            const handleSize = 6 / zoom;
+            const handleSize = 5 / zoom;
             for (const pt of poly) {
               ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
             }
@@ -1107,7 +1107,7 @@ export class SceneEditor {
         ctx.save();
         ctx.strokeStyle = '#79EFA4';
         ctx.fillStyle = 'rgba(121, 239, 164, 0.12)';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 0.75;
         ctx.setLineDash([4, 3]);
         ctx.fillRect(x, y, w, h);
         ctx.strokeRect(x, y, w, h);
@@ -1124,7 +1124,7 @@ export class SceneEditor {
       (this.selectedObject as any) === 'SCENE'
     ) {
       ctx.save();
-      ctx.font = '10px monospace';
+      ctx.font = '5px monospace';
 
       const zoom = scene.camera ? scene.camera.zoom : 1;
       const camY = scene.camera ? scene.camera.y : 0;

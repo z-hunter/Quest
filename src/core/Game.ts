@@ -25,12 +25,14 @@ export class Game implements IGame {
   public static instance: Game;
 
   canvas: HTMLCanvasElement; // UI Canvas
+  editorOverlayCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
   bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
   rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
   uiCtx: CanvasRenderingContext2D | null;
+  editorOverlayCtx: CanvasRenderingContext2D | null;
 
   crtFilter: CRTFilter | null;
   lastTime: number;
@@ -101,13 +103,16 @@ export class Game implements IGame {
 
   constructor(
     rendererCanvas: HTMLCanvasElement, // The main visual canvas (WebGL)
-    uiCanvas: HTMLCanvasElement // The UI overlay canvas (2D)
+    uiCanvas: HTMLCanvasElement, // The UI overlay canvas (2D)
+    editorOverlayCanvas?: HTMLCanvasElement // High-res editor overlay canvas
   ) {
     Game.instance = this;
     this.rendererCanvas = rendererCanvas;
     this.canvas = uiCanvas;
+    this.editorOverlayCanvas = editorOverlayCanvas || null;
 
     this.uiCtx = this.canvas.getContext('2d');
+    this.editorOverlayCtx = this.editorOverlayCanvas?.getContext('2d') || null;
 
     // Create an offscreen buffer for the game to draw onto
     this.bufferCanvas = document.createElement('canvas');
@@ -150,6 +155,7 @@ export class Game implements IGame {
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
+    if (this.editorOverlayCtx) this.editorOverlayCtx.imageSmoothingEnabled = true;
 
     // (Previously corrupted lines removed)
     this.input = new Input(this);
@@ -324,16 +330,40 @@ export class Game implements IGame {
       }
     }
 
-    // 3. Render UI/Editor to UI Canvas (Overlay)
+    // 3. Render UI/Editor overlays
     if (this.uiCtx) {
       this.uiCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    if (this.editorOverlayCtx && this.editorOverlayCanvas) {
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.editorOverlayCtx.clearRect(
+        0,
+        0,
+        this.editorOverlayCanvas.width,
+        this.editorOverlayCanvas.height
+      );
+    }
 
+    if (this.uiCtx) {
       // Sprite Editor Overlay (Takes over screen if active)
       if (this.spriteEditor.active) {
         this.spriteEditor.render(this.uiCtx);
-      } else {
+      } else if (!this.editorOverlayCtx) {
         this.editor.render(this.uiCtx);
       }
+    }
+
+    if (
+      this.editorOverlayCtx &&
+      this.editorOverlayCanvas &&
+      !this.spriteEditor.active &&
+      this.editor.enabled
+    ) {
+      const scaleX = this.editorOverlayCanvas.width / this.canvas.width;
+      const scaleY = this.editorOverlayCanvas.height / this.canvas.height;
+      this.editorOverlayCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      this.editor.render(this.editorOverlayCtx);
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
 

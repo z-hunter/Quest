@@ -246,7 +246,7 @@ export const PropertiesPanel: React.FC = () => {
         <div className="editor-header">
           <span>{selectedObjectId === 'SETTINGS' ? 'SETTINGS (Loading...)' : 'PROPERTIES'}</span>
         </div>
-        <div className="editor-content" style={{ color: '#888', fontStyle: 'italic' }}>
+        <div className="editor-content ui-text-muted ui-text-italic">
           {selectedObjectId === 'SETTINGS' ? 'Loading Settings...' : 'No Selection'}
         </div>
       </div>
@@ -302,7 +302,7 @@ export const PropertiesPanel: React.FC = () => {
         <div className="editor-content">
           <div className="e-row">
             <label className="e-label">Group #ID</label>
-            <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+            <div className="e-label ui-text-muted ui-text-small">
               (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
             </div>
             <input
@@ -450,7 +450,7 @@ export const PropertiesPanel: React.FC = () => {
                 <input
                   type="number"
                   step="0.1"
-                  className="e-input"
+                  className="e-input ui-text-muted"
                   placeholder="mixed"
                   value={sharedParallax === '' ? '' : sharedParallax}
                   onChange={(e) => {
@@ -926,7 +926,7 @@ export const PropertiesPanel: React.FC = () => {
                   readOnly
                   tabIndex={-1}
                   onFocus={(e) => e.currentTarget.blur()}
-                  style={{ pointerEvents: 'none', color: '#888' }}
+                  style={{ pointerEvents: 'none' }}
                 />
                 {textAssetPath && (
                   <>
@@ -943,7 +943,7 @@ export const PropertiesPanel: React.FC = () => {
                         </button>
                       )}
                     </div>
-                    <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
+                    <div className="e-label ui-text-muted ui-text-small">
                       {textAssetPath}
                     </div>
                   </>
@@ -1299,10 +1299,7 @@ export const PropertiesPanel: React.FC = () => {
               </label>
             </div>
             <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
+              <label className="e-label ui-inline-flex-center ui-text-accent-red">
                 <input
                   type="checkbox"
                   style={{ marginRight: '5px' }}
@@ -1314,18 +1311,10 @@ export const PropertiesPanel: React.FC = () => {
             </div>
 
             {/* Interactions */}
-            <div
-              className="e-row"
-              style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: '5px' }}
-            >
+            <div className="e-row ui-divider-blue" style={{ marginTop: '10px', paddingTop: '5px' }}>
               <div
-                className="e-label"
-                style={{
-                  color: '#aaf',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
+                className="e-label ui-text-accent-blue ui-font-bold"
+                style={{ display: 'flex', justifyContent: 'space-between' }}
               >
                 <span>SCRIPT EVENTS</span>
                 <Select
@@ -1363,7 +1352,7 @@ export const PropertiesPanel: React.FC = () => {
                     key={verb}
                     style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}
                   >
-                    <div style={{ width: '40px', fontSize: '0.85em', color: '#ccc' }}>
+                    <div className="ui-text-light" style={{ width: '40px', fontSize: '0.85em' }}>
                       {verb.toUpperCase()}
                     </div>
                     <input
@@ -1502,10 +1491,7 @@ export const PropertiesPanel: React.FC = () => {
               </label>
             </div>
             <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
+              <label className="e-label ui-inline-flex-center ui-text-accent-red">
                 <input
                   type="checkbox"
                   style={{ marginRight: '5px' }}
@@ -1747,7 +1733,7 @@ export const PropertiesPanel: React.FC = () => {
                       border: isSelected ? '1px solid yellow' : '1px solid transparent',
                     }}
                   >
-                    <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>
+                    <div className="ui-text-muted ui-text-tiny" style={{ marginBottom: '2px' }}>
                       Vertex {i}{' '}
                       {i === 0
                         ? '(TL)'
@@ -1955,10 +1941,7 @@ export const PropertiesPanel: React.FC = () => {
               </label>
             </div>
             <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
+              <label className="e-label ui-inline-flex-center ui-text-accent-red">
                 <input
                   type="checkbox"
                   style={{ marginRight: '5px' }}
@@ -1978,19 +1961,10 @@ export const PropertiesPanel: React.FC = () => {
           selectedObjectType === 'Actor' ||
           selectedObjectType === 'Static' ||
           selectedObjectType === 'Quad') && (
-          <div
-            className="e-row"
-            style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}
-          >
+          <div className="e-row ui-divider-red" style={{ paddingTop: '5px', marginTop: '5px' }}>
             <div
-              className="e-label"
-              style={{
-                color: '#faa',
-                fontWeight: 'bold',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
+              className="e-label ui-text-accent-red ui-font-bold"
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
               <span>COMPONENTS</span>
               <div>
@@ -2093,7 +2067,7 @@ export const PropertiesPanel: React.FC = () => {
                       marginBottom: '5px',
                     }}
                   >
-                    <span style={{ fontWeight: 'bold', color: '#fb8' }}>{comp.type}</span>
+                    <span className="ui-font-bold" style={{ color: '#fb8' }}>{comp.type}</span>
                     <button
                       className="e-btn e-btn-red"
                       style={{ padding: '0 5px' }}
@@ -2240,13 +2214,8 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                       <div className="e-row">
                         <label
-                          className="e-label"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            color: '#aaf',
-                            fontSize: '10px',
-                          }}
+                          className="e-label ui-text-accent-blue ui-inline-flex-center"
+                          style={{ fontSize: '10px' }}
                         >
                           <input
                             type="checkbox"
@@ -2640,13 +2609,11 @@ export const PropertiesPanel: React.FC = () => {
 
         {selectedObjectType === 'Quad' && (
           <div
-            className="e-label"
+            className="e-label ui-text-dim"
             style={{
               marginTop: '10px',
               fontSize: '10px',
-              color: '#666',
               fontStyle: 'italic',
-              borderTop: '1px solid #444',
               paddingTop: '5px',
             }}
           >
@@ -2658,18 +2625,15 @@ export const PropertiesPanel: React.FC = () => {
 
         {selectedObjectType === 'Actor' && (
           <>
-            <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-              <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
+            <div className="e-row ui-divider-blue" style={{ paddingTop: '5px' }}>
+              <div className="e-label ui-text-accent-blue ui-font-bold">
                 ACTOR PROPERTIES
               </div>
             </div>
 
             {/* Is Player */}
             <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#aaf' }}
-              >
+              <label className="e-label ui-inline-flex-center ui-text-accent-blue">
                 <input
                   type="checkbox"
                   style={{ marginRight: '5px' }}
@@ -2731,13 +2695,8 @@ export const PropertiesPanel: React.FC = () => {
             {/* Animation Sets */}
             <div className="e-row" style={{ marginTop: '10px' }}>
               <div
-                className="e-label"
-                style={{
-                  color: '#aaf',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
+                className="e-label ui-text-accent-blue ui-font-bold"
+                style={{ display: 'flex', justifyContent: 'space-between' }}
               >
                 <span>ANIMATION SETS</span>
                 <button
@@ -2856,7 +2815,7 @@ export const PropertiesPanel: React.FC = () => {
                           alignItems: 'center',
                         }}
                       >
-                        <div style={{ width: '30px', fontSize: '10px', color: '#888' }}>
+                        <div className="ui-text-muted ui-text-micro" style={{ width: '30px' }}>
                           {dir.toUpperCase()}
                         </div>
                         <input
@@ -2901,8 +2860,8 @@ export const PropertiesPanel: React.FC = () => {
           <>
             {/* Camera properties */}
             {(obj.camera || obj.defaultCamera) && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
+              <div className="e-row ui-divider-blue" style={{ paddingTop: '5px' }}>
+                <div className="e-label ui-text-accent-blue ui-font-bold">
                   CAMERA
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
@@ -3003,7 +2962,7 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
                 <>
                   <div className="e-row" style={{ marginTop: '5px' }}>
-                    <div className="e-label" style={{ color: '#aaf' }}>
+                    <div className="e-label ui-text-accent-blue">
                       Camera Bounds (Min/Max)
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
@@ -3079,8 +3038,8 @@ export const PropertiesPanel: React.FC = () => {
 
             {/* Default Camera (Start Position) */}
             {obj.defaultCamera && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
+              <div className="e-row ui-divider-blue" style={{ paddingTop: '5px' }}>
+                <div className="e-label ui-text-accent-blue ui-font-bold">
                   DEFAULT CAMERA
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
@@ -3143,8 +3102,8 @@ export const PropertiesPanel: React.FC = () => {
 
             {/* Scaling Settings */}
             {game.sceneManager.currentScene && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#ffaa00', fontWeight: 'bold' }}>
+              <div className="e-row ui-divider-yellow" style={{ paddingTop: '5px' }}>
+                <div className="e-label ui-text-accent-yellow ui-font-bold">
                   SCALING
                 </div>
                 {(() => {
@@ -3237,8 +3196,8 @@ export const PropertiesPanel: React.FC = () => {
           <>
             <div className="e-row">
               <label
-                className="e-label"
-                style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}
+                className="e-label ui-text-accent-green ui-font-bold"
+                style={{ marginBottom: '10px' }}
               >
                 EDITOR SETTINGS
               </label>
@@ -3273,8 +3232,8 @@ export const PropertiesPanel: React.FC = () => {
 
             <div className="e-row" style={{ marginTop: '10px' }}>
               <label
-                className="e-label"
-                style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}
+                className="e-label ui-text-accent-green ui-font-bold"
+                style={{ marginBottom: '10px' }}
               >
                 CRT EFFECT SETTINGS
               </label>
@@ -3459,10 +3418,7 @@ export const PropertiesPanel: React.FC = () => {
               </>
             )}
 
-            <div
-              className="e-row"
-              style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '10px' }}
-            >
+            <div className="e-row ui-divider-neutral" style={{ marginTop: '20px', paddingTop: '10px' }}>
               <button
                 className="e-btn"
                 style={{ width: '100%', padding: '8px' }}

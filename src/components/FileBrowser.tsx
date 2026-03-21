@@ -281,53 +281,12 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   }, [onCancel]);
 
   return (
-    <div
-      className="modal-overlay"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'monospace',
-        color: 'var(--ui-main-color)',
-      }}
-    >
-      <div
-        ref={modalRef}
-        className="file-browser"
-        style={{
-          width: '500px',
-          maxWidth: '95vw',
-          height: '600px',
-          maxHeight: '90vh',
-          backgroundColor: '#000',
-          border: '2px solid var(--ui-main-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '10px',
-          fontSize: '12px',
-        }}
-      >
-        <div
-          className="browser-header"
-          style={{
-            borderBottom: '1px solid var(--ui-main-color)',
-            marginBottom: '10px',
-            paddingBottom: '5px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+    <div className="file-browser-modal">
+      <div ref={modalRef} className="file-browser-window">
+        <div className="file-browser-header">
+          <div className="file-browser-title-row">
             <h3 style={{ margin: 0 }}>{title || (mode === 'save' ? 'Save File' : 'Load File')}</h3>
-            <span style={{ fontSize: '12px', color: '#888' }}>{currentPath}</span>
+            <span className="file-browser-path">{currentPath}</span>
           </div>
           <button
             onClick={() => {
@@ -345,22 +304,9 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           </button>
         </div>
 
-        <div
-          className="file-list"
-          ref={listRef}
-          tabIndex={0}
-          onKeyDown={handleListKeyDown}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            border: '1px solid #333',
-            marginBottom: '10px',
-            outline: 'none',
-            position: 'relative',
-          }}
-        >
+        <div className="file-browser-list" ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown}>
           {isLoading && <div>Loading...</div>}
-          {error && <div style={{ color: 'red' }}>Error: {error}</div>}
+          {error && <div className="file-browser-error">Error: {error}</div>}
 
           {!isLoading &&
             !error &&
@@ -381,32 +327,20 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                     if (item.isUp) handleUp();
                     else handleDoubleClick(item);
                   }}
-                  style={{
-                    padding: '5px',
-                    cursor: 'pointer',
-                    backgroundColor: isSelected ? 'var(--ui-selection-bg)' : 'transparent',
-                    color: item.isDir
-                      ? '#ffff00'
-                      : isSelected
-                        ? 'var(--ui-selection-text)'
-                        : 'var(--ui-main-color)',
-                    border: isSelected
-                      ? '1px solid var(--ui-selection-bg)'
-                      : '1px solid transparent',
-                  }}
+                  className={`file-browser-item ${item.isDir ? 'is-dir' : ''} ${isSelected ? 'is-selected' : ''}`}
                 >
                   {item.isDir ? '📁' : '📄'} {item.name}
                 </div>
               );
             })}
           {!isLoading && displayItems.length === 0 && (
-            <div style={{ color: '#666', padding: '5px' }}>Directory is empty</div>
+            <div className="file-browser-empty">Directory is empty</div>
           )}
         </div>
 
         <div className="browser-footer">
-          <div style={{ display: 'flex', marginBottom: '10px' }}>
-            <label style={{ width: '60px' }}>Name:</label>
+          <div className="file-browser-form-row">
+            <label className="file-browser-label">Name:</label>
             <input
               type="text"
               value={filename}
@@ -419,19 +353,11 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
               autoFocus
             />
           </div>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={onCancel}
-              className="e-btn"
-              style={{ padding: '5px 15px' }}
-            >
+          <div className="file-browser-actions">
+            <button onClick={onCancel} className="e-btn" style={{ padding: '5px 15px' }}>
               Cancel
             </button>
-            <button
-              onClick={handleConfirm}
-              className="e-btn e-btn-enter"
-              style={{ padding: '5px 15px' }}
-            >
+            <button onClick={handleConfirm} className="e-btn e-btn-enter" style={{ padding: '5px 15px' }}>
               {mode === 'save' ? 'Save' : 'Load'}
             </button>
           </div>
