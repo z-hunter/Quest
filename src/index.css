@@ -401,6 +401,14 @@ textarea,
   letter-spacing: -0.03em;
 }
 
+.custom-select-container.parent-id-select,
+.custom-select-container.parent-id-select .custom-select-trigger,
+.custom-select-container.parent-id-select .custom-select-options,
+.custom-select-container.parent-id-select .custom-option {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .custom-option:hover,
 .custom-option.focused {
   background: var(--ui-main-color);

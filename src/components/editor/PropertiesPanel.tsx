@@ -833,6 +833,7 @@ export const PropertiesPanel: React.FC = () => {
           <div className="e-row">
             <label className="e-label">Parent</label>
             <Select
+              className="parent-id-select"
               value={multiSpatialParentDraft}
               onChange={(value) => {
                 const nextRelation = !value ? '' : multiSpatialRelationDraft || 'in';
@@ -1258,6 +1259,7 @@ export const PropertiesPanel: React.FC = () => {
                 <div>
                   <label className="e-label">Parent</label>
                   <Select
+                    className="parent-id-select"
                     value={obj.spatial?.parentNodeId || ''}
                     onChange={(value) => {
                       game.editor.saveUndoState();
@@ -1597,6 +1599,7 @@ export const PropertiesPanel: React.FC = () => {
                   <div>
                     <label className="e-label">Parent</label>
                     <Select
+                      className="parent-id-select"
                       value={obj.spatial?.parentNodeId || ''}
                       onChange={(value) => {
                         game.editor.saveUndoState();
