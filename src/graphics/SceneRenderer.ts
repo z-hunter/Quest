@@ -12,7 +12,7 @@ export class SceneRenderer {
   }
 
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
-    const { camera, entities, activeSubscene, subsceneEntities } = scene;
+    const { camera, entities, activeSubscene, subsceneEntities, pickupAnimations } = scene;
 
     // Sorting Logic moved from Scene.render
     // Sort by Y (Depth) and Parallax
@@ -118,6 +118,17 @@ export class SceneRenderer {
 
     // 3. Render Subscene Layer
     this.renderLayer(ctx, subsceneLayer, scene, halfW, halfH);
+
+    // 3.5. Render transient pickup effects above scene objects.
+    if (pickupAnimations.length > 0) {
+      this.renderLayer(
+        ctx,
+        pickupAnimations.map((anim) => anim.entity),
+        scene,
+        halfW,
+        halfH
+      );
+    }
 
     // 4. Debug Rendering (Walkboxes/Triggers)
     if (this.game && this.game.editor && this.game.editor.enabled) {

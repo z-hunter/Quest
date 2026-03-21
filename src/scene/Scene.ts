@@ -26,6 +26,15 @@ import type {
 } from './spatialTypes';
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 
+interface PickupAnimation {
+  entity: Entity;
+  startY: number;
+  lift: number;
+  duration: number;
+  elapsed: number;
+  baseModelScale: number;
+}
+
 export interface SceneScaling {
   enabled: boolean;
   min: number;
@@ -74,6 +83,7 @@ export class Scene {
   filename: string;
   background: HTMLImageElement | null;
   entities: Entity[];
+  pickupAnimations: PickupAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
   scaling: SceneScaling;
@@ -287,6 +297,28 @@ export class Scene {
         this.player = null;
       }
     }
+  }
+
+  playPickupAnimation(entity: Entity): void {
+    const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
+    clone.disabled = false;
+    clone.visible = true;
+    clone.locked = true;
+    clone.groupID = null;
+    clone.components = [];
+    clone.interactions = {};
+    clone.opacity = entity.opacity ?? 1.0;
+    // @ts-ignore
+    clone.scene = this;
+
+    this.pickupAnimations.push({
+      entity: clone,
+      startY: clone.y,
+      lift: 26,
+      duration: 260,
+      elapsed: 0,
+      baseModelScale: clone.modelScale || 1,
+    });
   }
 
   findEntity(name: string): Entity | undefined {
@@ -610,6 +642,23 @@ export class Scene {
         entity.update(deltaTime);
       }
     });
+
+    if (this.pickupAnimations.length > 0) {
+      const nextAnimations: PickupAnimation[] = [];
+      for (const anim of this.pickupAnimations) {
+        anim.elapsed += deltaTime;
+        const progress = Math.min(anim.elapsed / anim.duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 2);
+        anim.entity.y = anim.startY - anim.lift * eased;
+        anim.entity.opacity = Math.max(0, 1 - progress);
+        anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * eased);
+        anim.entity.update(deltaTime);
+        if (progress < 1) {
+          nextAnimations.push(anim);
+        }
+      }
+      this.pickupAnimations = nextAnimations;
+    }
   }
 
   // -----------------------------------------------------

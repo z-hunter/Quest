@@ -807,6 +807,7 @@ export class Game implements IGame {
 
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (isItem || entity.isTakeable) {
+      scene.playPickupAnimation(entity);
       scene.removeEntity(entity);
       this.inventory.push(entity);
       const itemTitle = this.getPlayerFacingObjectTitle(entity);
