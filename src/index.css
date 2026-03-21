@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap');
+
 body {
   background-color: #000;
   color: #fff;
@@ -41,6 +43,7 @@ body {
   --ui-bg-color: #000000;
   --ui-panel-header-bg: #222222;
   --ui-label-color: #888888;
+  --ui-display-font: 'Space Grotesk', 'Segoe UI', sans-serif;
 
   /* Selection & Active States */
   --ui-selection-bg: #4ca149;
@@ -287,6 +290,10 @@ canvas {
   align-items: center;
   border-bottom: 1px solid var(--ui-main-color);
   margin-bottom: 10px;
+  font-family: var(--ui-display-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
 }
 
 .editor-section {
@@ -298,6 +305,10 @@ canvas {
 .editor-section h4 {
   margin: 0 0 5px 0;
   color: #fff;
+  font-family: var(--ui-display-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
 }
 
 button {
@@ -306,7 +317,10 @@ button {
   color: var(--ui-btn-text);
   cursor: pointer;
   padding: 2px 5px;
-  font-family: monospace;
+  font-family: var(--ui-display-font);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
 }
 
 button:hover {
@@ -364,10 +378,13 @@ textarea,
   color: var(--ui-dropdown-text);
   box-sizing: border-box;
   box-sizing: border-box;
-  font-family: sans-serif;
+  font-family: var(--ui-display-font);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
 }
 
-.custom-select-container:focus,
+.custom-select-container:focus-visible,
 .custom-select-container:hover {
   border-color: var(--ui-input-focus-border);
   box-shadow: 0 0 5px rgba(121, 239, 164, 0.3);
@@ -378,6 +395,10 @@ textarea,
   border: 1px solid var(--ui-main-color);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
   font-size: 0.9em;
+  font-family: var(--ui-display-font);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
 }
 
 .custom-option:hover,

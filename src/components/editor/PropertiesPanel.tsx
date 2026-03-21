@@ -1330,6 +1330,7 @@ export const PropertiesPanel: React.FC = () => {
                 <span>SCRIPT EVENTS</span>
                 <Select
                   value=""
+                  className="compact-action-select"
                   placeholder="+ ADD"
                   onChange={(value) => {
                     const verb = value;
@@ -1352,7 +1353,7 @@ export const PropertiesPanel: React.FC = () => {
                     { value: 'talk', label: 'Talk' },
                     { value: 'pickup', label: 'Pickup' },
                   ]}
-                  style={{ width: '80px', fontSize: '0.85em' }}
+                  style={{ width: '8em' }}
                 />
               </div>
 
@@ -2067,7 +2068,7 @@ export const PropertiesPanel: React.FC = () => {
                     incrementObjectVersion();
                     // No need to reset value as Select component handles it or we pass empty value
                   }}
-                  style={{ width: '100px', fontSize: '0.8em' }}
+                  style={{ width: '100%' }}
                   value=""
                 />
               </div>
@@ -2376,7 +2377,7 @@ export const PropertiesPanel: React.FC = () => {
                               { value: 'Add', label: 'Add (Walk Inside)' },
                               { value: 'Subtract', label: 'Subtract (Hole)' },
                             ]}
-                            style={{ width: '120px' }}
+                            style={{ width: '100%' }}
                           />
                         </div>
                       </div>
