@@ -5,9 +5,16 @@ import { ComponentSystem } from '../systems/ComponentSystem';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
+function getScreenSize(scene: Scene): { width: number; height: number } {
+  const canvas = scene.game?.canvas;
+  return {
+    width: canvas?.width || 420,
+    height: canvas?.height || 300,
+  };
+}
+
 function toWorld(scene: Scene, x: number, y: number): { x: number; y: number } {
-  const screenW = 420;
-  const screenH = 300;
+  const { width: screenW, height: screenH } = getScreenSize(scene);
   const halfW = screenW / 2;
   const halfH = screenH / 2;
   return {
@@ -22,8 +29,7 @@ function toWorldForParallax(
   y: number,
   parallax: number = 1.0
 ): { x: number; y: number } {
-  const screenW = 420;
-  const screenH = 300;
+  const { width: screenW, height: screenH } = getScreenSize(scene);
   const halfW = screenW / 2;
   const halfH = screenH / 2;
   return {
@@ -42,8 +48,7 @@ function isHitAtScreenPoint(
   screenX: number,
   screenY: number
 ): boolean {
-  const screenW = 420;
-  const screenH = 300;
+  const { width: screenW, height: screenH } = getScreenSize(scene);
   const halfW = screenW / 2;
   const halfH = screenH / 2;
   const camX = scene.camera.x;
