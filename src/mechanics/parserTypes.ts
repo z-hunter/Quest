@@ -4,8 +4,10 @@ import type { SceneObject } from '../entities/SceneObject';
 
 export type ParserEntityContext = {
   id: string;
-  type: string;
   title: string;
+  item?: true;
+  x?: number;
+  y?: number;
   synonyms?: string[];
   description?: string;
   details?: string;
@@ -108,6 +110,10 @@ export type ParserCommandSpec = {
 export type ParserContext = {
   rawInput: string;
   normalizedInput: string;
+  player?: {
+    x: number;
+    y: number;
+  };
   scene?: {
     id: string;
     title?: string;

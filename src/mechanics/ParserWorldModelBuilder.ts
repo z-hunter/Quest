@@ -32,6 +32,12 @@ export class ParserWorldModelBuilder {
   private buildContext(rawInput: string, pendingState: ParserPendingState | null): ParserContext {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
+    const playerContext = scene?.player
+      ? this.compactRecord({
+          x: Math.round(scene.player.x),
+          y: Math.round(scene.player.y),
+        })
+      : undefined;
     const sceneContext = scene ? this.buildSceneContext(scene) : undefined;
     const entities = scene ? this.buildEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
@@ -48,6 +54,7 @@ export class ParserWorldModelBuilder {
     return this.compactRecord({
       rawInput,
       normalizedInput,
+      player: playerContext,
       scene: sceneContext,
       entities,
       inventory,
@@ -74,10 +81,15 @@ export class ParserWorldModelBuilder {
         if (!title) return null;
         const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
         const interactions = Object.keys(sceneObject.interactions || {});
+        const isItem = !!sceneObject.components?.find((component: any) => component?.type === 'Item');
+        const coordinates = this.isDirectSceneObject(scene, sceneObject)
+          ? this.getSceneObjectCoordinates(sceneObject)
+          : undefined;
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
-          type: sceneObject.type,
           title,
+          item: isItem || undefined,
+          ...coordinates,
           synonyms,
           description:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') || undefined,
@@ -198,6 +210,30 @@ export class ParserWorldModelBuilder {
   private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
     const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
+  }
+
+  private isDirectSceneObject(scene: Scene, sceneObject: SceneObject): boolean {
+    const placement = scene.getSpatialPlacementForObject(sceneObject);
+    return !placement?.parentNodeId;
+  }
+
+  private getSceneObjectCoordinates(sceneObject: SceneObject): { x: number; y: number } | undefined {
+    if (typeof (sceneObject as any).x === 'number' && typeof (sceneObject as any).y === 'number') {
+      return {
+        x: Math.round((sceneObject as any).x),
+        y: Math.round((sceneObject as any).y),
+      };
+    }
+
+    const poly = Array.isArray((sceneObject as any).poly) ? (sceneObject as any).poly : null;
+    if (!poly?.length) return undefined;
+
+    const xs = poly.map((point: { x: number; y: number }) => point.x);
+    const ys = poly.map((point: { x: number; y: number }) => point.y);
+    return {
+      x: Math.round((Math.min(...xs) + Math.max(...xs)) / 2),
+      y: Math.round((Math.min(...ys) + Math.max(...ys)) / 2),
+    };
   }
 
   private compactRecord<T extends Record<string, unknown>>(value: T): T {
