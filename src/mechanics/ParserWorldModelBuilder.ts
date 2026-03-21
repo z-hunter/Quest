@@ -82,13 +82,18 @@ export class ParserWorldModelBuilder {
         const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
         const interactions = Object.keys(sceneObject.interactions || {});
         const isItem = !!sceneObject.components?.find((component: any) => component?.type === 'Item');
-        const coordinates = this.isDirectSceneObject(scene, sceneObject)
-          ? this.getSceneObjectCoordinates(sceneObject)
-          : undefined;
+        const isDirectSceneObject = this.isDirectSceneObject(scene, sceneObject);
+        const coordinates = isDirectSceneObject ? this.getSceneObjectCoordinates(sceneObject) : undefined;
+        const reachable =
+          isDirectSceneObject &&
+          !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
+            ? true
+            : undefined;
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title,
           item: isItem || undefined,
+          reachable,
           ...coordinates,
           synonyms,
           description:

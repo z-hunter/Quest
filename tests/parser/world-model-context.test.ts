@@ -33,12 +33,14 @@ describe('Parser world model context', () => {
           id: 'note',
           title: 'Piece of paper',
           item: true,
+          reachable: true,
           x: 0,
           y: 0,
         }),
         expect.objectContaining({
           id: 'Desk',
           title: 'Desk',
+          reachable: true,
           x: 5,
           y: 5,
         }),
@@ -51,5 +53,6 @@ describe('Parser world model context', () => {
     const nestedContext = entities.find((entity) => entity.id === 'drawer_note');
     expect(nestedContext && 'x' in nestedContext).toBe(false);
     expect(nestedContext && 'y' in nestedContext).toBe(false);
+    expect(nestedContext && 'reachable' in nestedContext).toBe(false);
   });
 });

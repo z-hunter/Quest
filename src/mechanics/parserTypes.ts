@@ -6,6 +6,7 @@ export type ParserEntityContext = {
   id: string;
   title: string;
   item?: true;
+  reachable?: true;
   x?: number;
   y?: number;
   synonyms?: string[];
