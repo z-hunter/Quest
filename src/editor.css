@@ -103,7 +103,7 @@
 
 /* Controls */
 .e-btn {
-  background: transparent;
+  background: #111;
   border: 1px solid var(--ui-input-border);
   color: var(--ui-fkey-text);
   padding: 4px 8px;
