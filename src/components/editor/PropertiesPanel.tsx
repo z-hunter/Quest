@@ -12,18 +12,22 @@ export const PropertiesPanel: React.FC = () => {
     selectedObjectType,
     incrementHierarchyVersion,
     incrementObjectVersion,
+    objectVersion,
     mode,
     selectedVertexIndex,
   } = useEditorStore();
   const [groupIdDraft, setGroupIdDraft] = React.useState('');
+  const [multiSpatialParentDraft, setMultiSpatialParentDraft] = React.useState('');
+  const [multiSpatialRelationDraft, setMultiSpatialRelationDraft] = React.useState('');
   const [resolvedTitle, setResolvedTitle] = React.useState('');
   const [textAssetPath, setTextAssetPath] = React.useState('');
   const [isReadingTA, setIsReadingTA] = React.useState(false);
   const [hasTextAsset, setHasTextAsset] = React.useState(false);
 
   // Derived Object Binding (Source of Truth)
-  // We re-render whenever objectVersion changes (subscribed via store hook)
+  // We re-render whenever objectVersion changes.
   let obj: any = null;
+  void objectVersion;
   if (game) {
     if (selectedObjectId === 'SETTINGS') {
       obj = game.settings;
@@ -73,6 +77,24 @@ export const PropertiesPanel: React.FC = () => {
     return [{ value: '', label: '(None)' }, ...options];
   }, [game, obj]);
 
+  const getMultiSpatialParentOptions = React.useCallback(() => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !multiObjects.length) {
+      return [{ value: '', label: '(None)' }];
+    }
+
+    const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const options = allObjects
+      .filter((item: any) => item && !selectedNames.has(item.name))
+      .map((item: any) => ({
+        value: item.name,
+        label: item.customName?.trim() || item.name,
+      }));
+
+    return [{ value: '', label: '(None)' }, ...options];
+  }, [game, multiObjects]);
+
   const getSharedValue = (arr: any[], getter: (o: any) => any) => {
     if (!arr.length) return '';
     const first = getter(arr[0]);
@@ -96,6 +118,23 @@ export const PropertiesPanel: React.FC = () => {
     incrementObjectVersion();
     incrementHierarchyVersion();
   };
+
+  React.useEffect(() => {
+    if (selectedObjectType !== 'MULTI' || multiObjects.length <= 1) {
+      setMultiSpatialParentDraft('');
+      setMultiSpatialRelationDraft('');
+      return;
+    }
+
+    const sharedParent = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
+    const sharedRelation = getSharedValue(
+      multiObjects,
+      (o: any) => (o.spatial?.parentNodeId ? o.spatial?.relation || 'in' : o.spatial?.relation || '')
+    );
+
+    setMultiSpatialParentDraft(sharedParent === '' ? '' : sharedParent);
+    setMultiSpatialRelationDraft(sharedRelation === '' ? '' : sharedRelation);
+  }, [selectedObjectType, selectedObjectId, objectVersion, multiObjects.length]);
 
   const loadResolvedTitle = React.useCallback(
     async (forceReload: boolean = false) => {
@@ -278,6 +317,7 @@ export const PropertiesPanel: React.FC = () => {
       entitiesAndQuads,
       (o: any) => !!o.ignoreScaling
     );
+    const sharedParentNodeId = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
     const sharedLocked = getSharedBooleanState(multiObjects, (o: any) => !!o.locked);
     const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
@@ -733,6 +773,49 @@ export const PropertiesPanel: React.FC = () => {
               />
               Lock
             </label>
+          </div>
+
+          <div className="e-row">
+            <label className="e-label">Parent</label>
+            <Select
+              value={multiSpatialParentDraft}
+              onChange={(value) => {
+                setMultiSpatialParentDraft(value || '');
+                if (!value) {
+                  setMultiSpatialRelationDraft('');
+                } else if (!multiSpatialRelationDraft) {
+                  setMultiSpatialRelationDraft('in');
+                }
+                applyToMulti((o: any) => {
+                  o.spatial = {
+                    ...(o.spatial || {}),
+                    parentNodeId: value || null,
+                    relation: value ? o.spatial?.relation || 'in' : null,
+                  };
+                });
+              }}
+              options={getMultiSpatialParentOptions()}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="e-row">
+            <label className="e-label">Relation</label>
+            <Select
+              value={multiSpatialRelationDraft}
+              onChange={(value) => {
+                setMultiSpatialRelationDraft(value || '');
+                applyToMulti((o: any) => {
+                  o.spatial = {
+                    ...(o.spatial || {}),
+                    parentNodeId: o.spatial?.parentNodeId || null,
+                    relation: value || (o.spatial?.parentNodeId ? 'in' : null),
+                  };
+                });
+              }}
+              options={getSpatialRelationOptions(!!sharedParentNodeId)}
+              style={{ width: '100%' }}
+            />
           </div>
 
           <div className="e-row">
