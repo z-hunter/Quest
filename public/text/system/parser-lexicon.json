@@ -50,7 +50,7 @@
   "relationMarkers": {
     "on": ["on"],
     "under": ["under", "beneath"],
-    "in": ["in", "inside"],
+    "in": ["in", "inside", "into"],
     "behind": ["behind"],
     "near": ["near", "next to", "by"]
   }
