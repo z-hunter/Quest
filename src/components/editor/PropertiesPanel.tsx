@@ -60,22 +60,56 @@ export const PropertiesPanel: React.FC = () => {
     [spatialRelationOptions]
   );
 
+  const getSpatialDescendantNames = React.useCallback((rootNames: string[]) => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !rootNames.length) return new Set<string>();
+
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const childrenByParent = new Map<string, string[]>();
+
+    allObjects.forEach((item: any) => {
+      const parentId = typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      if (!parentId || !name) return;
+      const children = childrenByParent.get(parentId) || [];
+      children.push(name);
+      childrenByParent.set(parentId, children);
+    });
+
+    const visited = new Set<string>();
+    const stack = [...rootNames.filter(Boolean)];
+    while (stack.length) {
+      const current = stack.pop()!;
+      const children = childrenByParent.get(current) || [];
+      children.forEach((child) => {
+        if (visited.has(child)) return;
+        visited.add(child);
+        stack.push(child);
+      });
+    }
+
+    return visited;
+  }, [game]);
+
   const getSceneSpatialParentOptions = React.useCallback(() => {
     const scene = game?.sceneManager?.currentScene;
     if (!scene || !obj) {
       return [{ value: '', label: '(None)' }];
     }
 
+    const excludedNames = new Set<string>([obj?.name].filter(Boolean));
+    getSpatialDescendantNames([obj?.name]).forEach((name) => excludedNames.add(name));
+
     const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
     const options = allObjects
-      .filter((item) => item !== obj)
+      .filter((item: any) => item && !excludedNames.has(item.name))
       .map((item: any) => ({
         value: item.name,
         label: item.customName?.trim() || item.name,
       }));
 
     return [{ value: '', label: '(None)' }, ...options];
-  }, [game, obj]);
+  }, [game, obj, getSpatialDescendantNames]);
 
   const getMultiSpatialParentOptions = React.useCallback(() => {
     const scene = game?.sceneManager?.currentScene;
@@ -84,6 +118,8 @@ export const PropertiesPanel: React.FC = () => {
     }
 
     const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
+    getSpatialDescendantNames(Array.from(selectedNames)).forEach((name) => selectedNames.add(name));
+
     const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
     const options = allObjects
       .filter((item: any) => item && !selectedNames.has(item.name))
@@ -93,7 +129,7 @@ export const PropertiesPanel: React.FC = () => {
       }));
 
     return [{ value: '', label: '(None)' }, ...options];
-  }, [game, multiObjects]);
+  }, [game, multiObjects, getSpatialDescendantNames]);
 
   const getSharedValue = (arr: any[], getter: (o: any) => any) => {
     if (!arr.length) return '';
@@ -115,6 +151,17 @@ export const PropertiesPanel: React.FC = () => {
 
   const applyToMulti = (fn: (o: any) => void) => {
     multiObjects.forEach(fn);
+    incrementObjectVersion();
+    incrementHierarchyVersion();
+  };
+
+  const applyToMultiRoots = (fn: (o: any) => void) => {
+    const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
+    multiObjects.forEach((o: any) => {
+      const parentId = typeof o?.spatial?.parentNodeId === 'string' ? o.spatial.parentNodeId.trim() : '';
+      if (parentId && selectedNames.has(parentId)) return;
+      fn(o);
+    });
     incrementObjectVersion();
     incrementHierarchyVersion();
   };
@@ -780,17 +827,15 @@ export const PropertiesPanel: React.FC = () => {
             <Select
               value={multiSpatialParentDraft}
               onChange={(value) => {
+                const nextRelation = !value ? '' : multiSpatialRelationDraft || 'in';
+                game.editor.saveUndoState();
                 setMultiSpatialParentDraft(value || '');
-                if (!value) {
-                  setMultiSpatialRelationDraft('');
-                } else if (!multiSpatialRelationDraft) {
-                  setMultiSpatialRelationDraft('in');
-                }
-                applyToMulti((o: any) => {
+                setMultiSpatialRelationDraft(nextRelation);
+                applyToMultiRoots((o: any) => {
                   o.spatial = {
                     ...(o.spatial || {}),
                     parentNodeId: value || null,
-                    relation: value ? o.spatial?.relation || 'in' : null,
+                    relation: value ? nextRelation || 'in' : null,
                   };
                 });
               }}
@@ -804,8 +849,9 @@ export const PropertiesPanel: React.FC = () => {
             <Select
               value={multiSpatialRelationDraft}
               onChange={(value) => {
+                game.editor.saveUndoState();
                 setMultiSpatialRelationDraft(value || '');
-                applyToMulti((o: any) => {
+                applyToMultiRoots((o: any) => {
                   o.spatial = {
                     ...(o.spatial || {}),
                     parentNodeId: o.spatial?.parentNodeId || null,
@@ -1196,12 +1242,14 @@ export const PropertiesPanel: React.FC = () => {
                   <Select
                     value={obj.spatial?.parentNodeId || ''}
                     onChange={(value) => {
+                      game.editor.saveUndoState();
                       obj.spatial = {
                         ...(obj.spatial || {}),
                         parentNodeId: value || null,
                         relation: value ? obj.spatial?.relation || 'in' : null,
                       };
                       incrementObjectVersion();
+                      incrementHierarchyVersion();
                     }}
                     options={getSceneSpatialParentOptions()}
                     style={{ width: '100%' }}
@@ -1212,12 +1260,14 @@ export const PropertiesPanel: React.FC = () => {
                   <Select
                     value={obj.spatial?.relation || ''}
                     onChange={(value) => {
+                      game.editor.saveUndoState();
                       obj.spatial = {
                         ...(obj.spatial || {}),
                         parentNodeId: obj.spatial?.parentNodeId || null,
                         relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
                       };
                       incrementObjectVersion();
+                      incrementHierarchyVersion();
                     }}
                     options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
                     style={{ width: '100%' }}
@@ -1531,12 +1581,14 @@ export const PropertiesPanel: React.FC = () => {
                     <Select
                       value={obj.spatial?.parentNodeId || ''}
                       onChange={(value) => {
+                        game.editor.saveUndoState();
                         obj.spatial = {
                           ...(obj.spatial || {}),
                           parentNodeId: value || null,
                           relation: value ? obj.spatial?.relation || 'in' : null,
                         };
                         incrementObjectVersion();
+                        incrementHierarchyVersion();
                       }}
                       options={getSceneSpatialParentOptions()}
                       style={{ width: '100%' }}
@@ -1547,12 +1599,14 @@ export const PropertiesPanel: React.FC = () => {
                     <Select
                       value={obj.spatial?.parentNodeId ? obj.spatial?.relation || 'in' : obj.spatial?.relation || ''}
                       onChange={(value) => {
+                        game.editor.saveUndoState();
                         obj.spatial = {
                           ...(obj.spatial || {}),
                           parentNodeId: obj.spatial?.parentNodeId || null,
                           relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
                         };
                         incrementObjectVersion();
+                        incrementHierarchyVersion();
                       }}
                       options={getSpatialRelationOptions(!!obj.spatial?.parentNodeId)}
                       style={{ width: '100%' }}
