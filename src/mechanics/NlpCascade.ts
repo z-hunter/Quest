@@ -3,6 +3,7 @@ import type { ParserCascadeEnvelope, ParserContext, ParserToolAction } from './p
 import type { TextAssetManager } from '../core/TextAssetManager';
 
 const NLP_CONFIDENCE_THRESHOLD = 0.58;
+const NLP_MODEL_CACHE_PREFIX = 'quest:nlp:model:v1:';
 
 type SupportedIntent = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
 
@@ -81,12 +82,25 @@ export class NlpCascade {
         container
       );
 
+      const cacheKey = this.getModelCacheKey(trainingData);
+      const cachedModel = this.readCachedModel(cacheKey);
+      if (cachedModel) {
+        try {
+          this.manager.import(cachedModel);
+          this.ready = true;
+          return;
+        } catch {
+          this.removeCachedModel(cacheKey);
+        }
+      }
+
       for (const [intent, utterances] of Object.entries(trainingData)) {
         for (const utterance of utterances) {
           this.manager.addDocument('en', utterance, intent);
         }
       }
       await this.manager.train();
+      this.writeCachedModel(cacheKey, this.manager.export(true));
       this.ready = true;
     })();
 
@@ -234,5 +248,46 @@ export class NlpCascade {
       /\bcarry\b/.test(lowered) ||
       /\bhave\b/.test(lowered)
     );
+  }
+
+  private getStorage(): Storage | null {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage;
+  }
+
+  private getModelCacheKey(trainingData: Record<string, string[]>): string {
+    return `${NLP_MODEL_CACHE_PREFIX}${this.hashString(JSON.stringify(trainingData))}`;
+  }
+
+  private readCachedModel(cacheKey: string): string | null {
+    try {
+      return this.getStorage()?.getItem(cacheKey) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeCachedModel(cacheKey: string, data: string): void {
+    try {
+      this.getStorage()?.setItem(cacheKey, data);
+    } catch {
+      // Ignore storage quota/privacy mode failures and keep runtime behavior unchanged.
+    }
+  }
+
+  private removeCachedModel(cacheKey: string): void {
+    try {
+      this.getStorage()?.removeItem(cacheKey);
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  private hashString(value: string): string {
+    let hash = 5381;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 33) ^ value.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(36);
   }
 }
