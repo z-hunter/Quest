@@ -25,6 +25,7 @@ export const PropertiesPanel: React.FC = () => {
   const [hasTextAsset, setHasTextAsset] = React.useState(false);
   const [polygonScaleDraft, setPolygonScaleDraft] = React.useState('1');
   const lastUndoObjectKeyRef = React.useRef<string | null>(null);
+  const lastUndoMultiKeyRef = React.useRef<string | null>(null);
   const lastPolygonScaleObjectKeyRef = React.useRef<string | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
@@ -316,12 +317,22 @@ export const PropertiesPanel: React.FC = () => {
   );
 
   const applyToMulti = (fn: (o: any) => void) => {
+    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+      game.editor.saveUndoState();
+      lastUndoMultiKeyRef.current = multiKey;
+    }
     multiObjects.forEach(fn);
     incrementObjectVersion();
     incrementHierarchyVersion();
   };
 
   const applyToMultiRoots = (fn: (o: any) => void) => {
+    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+      game.editor.saveUndoState();
+      lastUndoMultiKeyRef.current = multiKey;
+    }
     const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
     multiObjects.forEach((o: any) => {
       const parentId = typeof o?.spatial?.parentNodeId === 'string' ? o.spatial.parentNodeId.trim() : '';
@@ -481,8 +492,28 @@ export const PropertiesPanel: React.FC = () => {
     }
   };
 
+  const renderSection = (
+    section: number,
+    title: string | null,
+    color: 'blue' | 'red' | 'yellow' | 'purple' | 'neutral',
+    children: React.ReactNode
+  ) => (
+    <div ref={setSectionRef(section)} className="properties-section-block" data-section={section}>
+      {title !== null && (
+        <div className={`properties-section-header properties-section-${color}`}>
+          <div className="properties-section-title">
+            <span className={`properties-section-number properties-section-${color}`}>{section}</span>
+            <span className="properties-section-label">{title}</span>
+          </div>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+
   React.useEffect(() => {
     lastUndoObjectKeyRef.current = null;
+    lastUndoMultiKeyRef.current = null;
     if (selectedObjectType !== 'MULTI') {
       setGroupIdDraft('');
     }
@@ -504,6 +535,7 @@ export const PropertiesPanel: React.FC = () => {
         }}
         onBlurCapture={() => {
           lastUndoObjectKeyRef.current = null;
+          lastUndoMultiKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
@@ -561,6 +593,7 @@ export const PropertiesPanel: React.FC = () => {
         }}
         onBlurCapture={() => {
           lastUndoObjectKeyRef.current = null;
+          lastUndoMultiKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
@@ -571,506 +604,563 @@ export const PropertiesPanel: React.FC = () => {
           </button>
         </div>
         <div ref={contentRef} className="editor-content">
-          <div className="e-row">
-            <label className="e-label">Group #ID</label>
-            <div className="e-label ui-text-muted ui-text-small">
-              (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
-            </div>
-            <input
-              type="text"
-              className="e-input"
-              value={groupIdDraft}
-              placeholder="#group"
-              onChange={(e) => setGroupIdDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const raw = groupIdDraft.trim();
-                if (!raw) return;
-                const prepared = raw
-                  .split(',')
-                  .map((x) => x.trim())
-                  .filter(Boolean)
-                  .map((x) => (x.startsWith('#') ? x : `#${x}`));
-
-                let changedCount = 0;
-                multiObjects.forEach((o: any) => {
-                  const existing = (o.groupID || '')
-                    .split(',')
-                    .map((x: string) => x.trim())
-                    .filter(Boolean);
-
-                  if (e.ctrlKey) {
-                    const filtered = existing.filter((x: string) => !prepared.includes(x));
-                    if (filtered.length !== existing.length) {
-                      changedCount++;
-                    }
-                    o.groupID = filtered.join(',');
-                    return;
-                  }
-
-                  const merged = [...new Set([...existing, ...prepared])];
-                  if (merged.length !== existing.length) {
-                    changedCount++;
-                  }
-                  o.groupID = merged.join(',');
-                });
-
-                if (changedCount > 0) {
-                  incrementObjectVersion();
-                  incrementHierarchyVersion();
-                  const tagsText = prepared.join(', ');
-                  if (e.ctrlKey) {
-                    game.showNotification(
-                      `Removed ${tagsText} from ${changedCount} object${changedCount === 1 ? '' : 's'}`
-                    );
-                  } else {
-                    game.showNotification(
-                      `Appended ${tagsText} to ${changedCount} object${changedCount === 1 ? '' : 's'}`
-                    );
-                  }
-                }
-                setGroupIdDraft('');
-              }}
-            />
-          </div>
-
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div>
-              <label className="e-label">Group X</label>
-              <input
-                type="number"
-                className="e-input"
-                value={group.offsetX.toFixed(2)}
-                onChange={(e) => {
-                  const x = parseFloat(e.target.value);
-                  game.editor.selectionManager.applyGroupTransform(
-                    isNaN(x) ? 0 : x,
-                    group.offsetY,
-                    group.scale
-                  );
-                  incrementObjectVersion();
-                }}
-              />
-            </div>
-            <div>
-              <label className="e-label">Group Y</label>
-              <input
-                type="number"
-                className="e-input"
-                value={group.offsetY.toFixed(2)}
-                onChange={(e) => {
-                  const y = parseFloat(e.target.value);
-                  game.editor.selectionManager.applyGroupTransform(
-                    group.offsetX,
-                    isNaN(y) ? 0 : y,
-                    group.scale
-                  );
-                  incrementObjectVersion();
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="e-row">
-            <label className="e-label">Group Scale</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="e-input"
-              value={group.scale.toFixed(3)}
-              onChange={(e) => {
-                const s = parseFloat(e.target.value);
-                game.editor.selectionManager.applyGroupTransform(
-                  group.offsetX,
-                  group.offsetY,
-                  isNaN(s) ? 1 : s
-                );
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div>
-              <label className="e-label">Layer</label>
-              <input
-                type="number"
-                className="e-input"
-                placeholder="mixed"
-                value={sharedLayer === '' ? '' : sharedLayer}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value);
-                  if (isNaN(v)) return;
-                  applyToMulti((o) => {
-                    o.layer = v;
-                  });
-                }}
-              />
-            </div>
-            {entitiesAndQuads.length > 0 ? (
-              <div>
-                <label className="e-label">Parallax</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="e-input ui-text-muted"
-                  placeholder="mixed"
-                  value={sharedParallax === '' ? '' : sharedParallax}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.parallax = v;
-                    });
-                  }}
-                />
+          {renderSection(
+            0,
+            null,
+            'neutral',
+            <>
+              <div className="e-row">
+                <label className="e-label">Selected</label>
+                <div className="e-label ui-text-muted ui-text-small">{multiObjects.length} objects</div>
               </div>
-            ) : (
-              <div />
-            )}
-          </div>
 
-          {entitiesAndQuads.length > 0 && (
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-            >
-              <div>
-                <label className="e-label">Opacity</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="1"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedOpacity === '' ? '' : sharedOpacity}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.opacity = v;
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <label className="e-label">Blur</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedBlur === '' ? '' : sharedBlur}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.blur = v;
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {entitiesAndQuads.length > 0 && (
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-            >
-              <div>
-                <label className="e-label">Fill Color</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{ width: '32px', padding: 0 }}
-                    value={sharedColor === '' ? '#ffffff' : sharedColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if (o.color !== undefined) o.color = v;
-                      });
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedColor === '' ? '' : sharedColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if (o.color !== undefined) o.color = v;
-                      });
-                    }}
-                  />
+              <div className="e-row">
+                <label className="e-label">Group #ID</label>
+                <div className="e-label ui-text-muted ui-text-small">
+                  (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
                 </div>
+                <input
+                  type="text"
+                  className="e-input"
+                  value={groupIdDraft}
+                  placeholder="#group"
+                  onChange={(e) => setGroupIdDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    const raw = groupIdDraft.trim();
+                    if (!raw) return;
+                    const prepared = raw
+                      .split(',')
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                      .map((x) => (x.startsWith('#') ? x : `#${x}`));
+
+                    let changedCount = 0;
+                    multiObjects.forEach((o: any) => {
+                      const existing = (o.groupID || '')
+                        .split(',')
+                        .map((x: string) => x.trim())
+                        .filter(Boolean);
+
+                      if (e.ctrlKey) {
+                        const filtered = existing.filter((x: string) => !prepared.includes(x));
+                        if (filtered.length !== existing.length) changedCount++;
+                        o.groupID = filtered.join(',');
+                        return;
+                      }
+
+                      const merged = [...new Set([...existing, ...prepared])];
+                      if (merged.length !== existing.length) changedCount++;
+                      o.groupID = merged.join(',');
+                    });
+
+                    if (changedCount > 0) {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      incrementObjectVersion();
+                      incrementHierarchyVersion();
+                      const tagsText = prepared.join(', ');
+                      if (e.ctrlKey) {
+                        game.showNotification(
+                          `Removed ${tagsText} from ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                        );
+                      } else {
+                        game.showNotification(
+                          `Appended ${tagsText} to ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                        );
+                      }
+                    }
+                    setGroupIdDraft('');
+                  }}
+                />
               </div>
-              <div style={{ display: 'flex', alignItems: 'end' }}>
-                <div style={{ width: '100%' }}>
-                  <label className="e-label">Blend</label>
+
+              <div className="e-row">
+                <label className="e-label">Parent</label>
+                <Select
+                  className="parent-id-select"
+                  value={multiSpatialParentDraft}
+                  onChange={(value) => {
+                    const nextRelation = !value ? '' : multiSpatialRelationDraft || 'in';
+                    setMultiSpatialParentDraft(value || '');
+                    setMultiSpatialRelationDraft(nextRelation);
+                    applyToMultiRoots((o: any) => {
+                      o.spatial = {
+                        ...(o.spatial || {}),
+                        parentNodeId: value || null,
+                        relation: value ? nextRelation || 'in' : null,
+                      };
+                    });
+                  }}
+                  options={getMultiSpatialParentOptions()}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {sharedParentNodeId && (
+                <div className="e-row">
+                  <label className="e-label">Relation</label>
                   <Select
-                    value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                    value={multiSpatialRelationDraft}
                     onChange={(value) => {
-                      applyToMulti((o: any) => {
-                        if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                      setMultiSpatialRelationDraft(value || '');
+                      applyToMultiRoots((o: any) => {
+                        o.spatial = {
+                          ...(o.spatial || {}),
+                          parentNodeId: o.spatial?.parentNodeId || null,
+                          relation: value || (o.spatial?.parentNodeId ? 'in' : null),
+                        };
                       });
                     }}
-                    options={[
-                      { value: 'source-over', label: 'Normal' },
-                      { value: 'multiply', label: 'Multiply' },
-                      { value: 'screen', label: 'Screen' },
-                      { value: 'overlay', label: 'Overlay' },
-                      { value: 'lighter', label: 'Add' },
-                      { value: 'difference', label: 'Diff' },
-                    ]}
+                    options={getSpatialRelationOptions(true)}
                     style={{ width: '100%' }}
                   />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {quads.length > 0 && (
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={sharedIsGrid === 'on'}
-                  ref={(el) => {
-                    if (el) el.indeterminate = sharedIsGrid === 'mixed';
-                  }}
-                  onChange={(e) => {
-                    applyToMulti((o: any) => {
-                      if ((o as any).type === 'Quad') (o as any).isGrid = e.target.checked;
-                    });
-                  }}
-                />
-                Retro Grid
-              </label>
-            </div>
-          )}
-
-          {quads.length > 0 && sharedIsGrid !== 'off' && (
-            <>
-              <div
-                className="e-row"
-                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
-              >
-                <div>
-                  <label className="e-label">Grid X</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridX === '' ? '' : sharedGridX}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridLinesX = v;
-                      });
-                    }}
-                    min={1}
-                    max={50}
-                  />
-                </div>
-                <div>
-                  <label className="e-label">Grid Y</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridY === '' ? '' : sharedGridY}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridLinesY = v;
-                      });
-                    }}
-                    min={1}
-                    max={50}
-                  />
-                </div>
-                <div>
-                  <label className="e-label">Width</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridWidth === '' ? '' : sharedGridWidth}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).lineWidth = v;
-                      });
-                    }}
-                    step={0.1}
-                    min={0.1}
-                    max={10}
-                  />
-                </div>
-              </div>
-              <div className="e-row">
-                <label className="e-label">Grid Color</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{ width: '32px', padding: 0 }}
-                    value={sharedGridColor === '' ? '#ffffff' : sharedGridColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                      });
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridColor === '' ? '' : sharedGridColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                      });
-                    }}
-                  />
-                </div>
-              </div>
+              )}
             </>
           )}
 
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'end' }}>
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+          {renderSection(
+            1,
+            'Transform',
+            'blue',
+            <>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
               >
-                <input
-                  type="checkbox"
-                  checked={sharedIgnoreScaling === 'on'}
-                  ref={(el) => {
-                    if (el) el.indeterminate = sharedIgnoreScaling === 'mixed';
-                  }}
-                  onChange={(e) => {
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.ignoreScaling = e.target.checked;
-                    });
-                  }}
-                />
-                Disable Depth Scaling
-              </label>
-            </div>
-            <label
-              className="e-label"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
-            >
-              <input
-                type="checkbox"
-                checked={sharedLocked === 'on'}
-                ref={(el) => {
-                  if (el) el.indeterminate = sharedLocked === 'mixed';
-                }}
-                onChange={(e) => {
-                  applyToMulti((o: any) => {
-                    o.locked = e.target.checked;
-                  });
-                }}
-              />
-              Lock
-            </label>
-          </div>
+                <div>
+                  <label className="e-label">Group X</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={group.offsetX.toFixed(2)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const x = parseFloat(e.target.value);
+                      game.editor.selectionManager.applyGroupTransform(
+                        isNaN(x) ? 0 : x,
+                        group.offsetY,
+                        group.scale
+                      );
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Group Y</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={group.offsetY.toFixed(2)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const y = parseFloat(e.target.value);
+                      game.editor.selectionManager.applyGroupTransform(
+                        group.offsetX,
+                        isNaN(y) ? 0 : y,
+                        group.scale
+                      );
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              </div>
 
-          <div className="e-row">
-            <label className="e-label">Parent</label>
-            <Select
-              className="parent-id-select"
-              value={multiSpatialParentDraft}
-              onChange={(value) => {
-                const nextRelation = !value ? '' : multiSpatialRelationDraft || 'in';
-                game.editor.saveUndoState();
-                setMultiSpatialParentDraft(value || '');
-                setMultiSpatialRelationDraft(nextRelation);
-                applyToMultiRoots((o: any) => {
-                  o.spatial = {
-                    ...(o.spatial || {}),
-                    parentNodeId: value || null,
-                    relation: value ? nextRelation || 'in' : null,
-                  };
-                });
-              }}
-              options={getMultiSpatialParentOptions()}
-              style={{ width: '100%' }}
-            />
-          </div>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}
+              >
+                <div>
+                  <label className="e-label">Group Scale</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="e-input"
+                    value={group.scale.toFixed(2)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const s = parseFloat(e.target.value);
+                      if (isNaN(s) || s <= 0) return;
+                      game.editor.selectionManager.applyGroupTransform(group.offsetX, group.offsetY, s);
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Layer</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedLayer === '' ? '' : sharedLayer}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (isNaN(v)) return;
+                      applyToMulti((o) => {
+                        o.layer = v;
+                      });
+                    }}
+                  />
+                </div>
+                <div>
+                  {entitiesAndQuads.length > 0 ? (
+                    <>
+                      <label className="e-label">Parallax</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input ui-text-muted"
+                        placeholder="mixed"
+                        value={sharedParallax === '' ? '' : sharedParallax}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if (o instanceof Entity) o.parallax = v;
+                          });
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div />
+                  )}
+                </div>
+              </div>
 
-          {sharedParentNodeId && (
-            <div className="e-row">
-              <label className="e-label">Relation</label>
-              <Select
-                value={multiSpatialRelationDraft}
-                onChange={(value) => {
-                  game.editor.saveUndoState();
-                  setMultiSpatialRelationDraft(value || '');
-                  applyToMultiRoots((o: any) => {
-                    o.spatial = {
-                      ...(o.spatial || {}),
-                      parentNodeId: o.spatial?.parentNodeId || null,
-                      relation: value || (o.spatial?.parentNodeId ? 'in' : null),
-                    };
-                  });
-                }}
-                options={getSpatialRelationOptions(true)}
-                style={{ width: '100%' }}
-              />
-            </div>
+              {entitiesAndQuads.length > 0 && (
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sharedIgnoreScaling === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedIgnoreScaling === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if (o instanceof Entity) o.ignoreScaling = e.target.checked;
+                        });
+                      }}
+                    />
+                    Disable Depth Scaling
+                  </label>
+                </div>
+              )}
+            </>
           )}
 
-          <div className="e-row">
-            <label
-              className="e-label"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
-            >
-              <input
-                type="checkbox"
-                checked={sharedDisabled === 'on'}
-                ref={(el) => {
-                  if (el) el.indeterminate = sharedDisabled === 'mixed';
-                }}
-                onChange={(e) => {
-                  applyToMulti((o: any) => {
-                    o.disabled = e.target.checked;
-                  });
-                }}
-              />
-              Disabled
-            </label>
-          </div>
+          {renderSection(
+            2,
+            'Visual',
+            'yellow',
+            <>
+              {entitiesAndQuads.length > 0 && (
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+                >
+                  <div>
+                    <label className="e-label">Opacity</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      className="e-input"
+                      placeholder="mixed"
+                      value={sharedOpacity === '' ? '' : sharedOpacity}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if (isNaN(v)) return;
+                        applyToMulti((o: any) => {
+                          if (o instanceof Entity) o.opacity = v;
+                        });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Blur</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      placeholder="mixed"
+                      value={sharedBlur === '' ? '' : sharedBlur}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (isNaN(v)) return;
+                        applyToMulti((o: any) => {
+                          if (o instanceof Entity) o.blur = v;
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {entitiesAndQuads.length > 0 && (
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+                >
+                  <div>
+                    <label className="e-label">Fill Color</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <input
+                        type="color"
+                        className="e-input"
+                        style={{ width: '32px', padding: 0 }}
+                        value={sharedColor === '' ? '#ffffff' : sharedColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if (o.color !== undefined) o.color = v;
+                          });
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedColor === '' ? '' : sharedColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if (o.color !== undefined) o.color = v;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'end' }}>
+                    <div style={{ width: '100%' }}>
+                      <label className="e-label">Blend Mode</label>
+                      <Select
+                        value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                        onChange={(value) => {
+                          applyToMulti((o: any) => {
+                            if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                          });
+                        }}
+                        options={[
+                          { value: 'source-over', label: 'Normal' },
+                          { value: 'multiply', label: 'Multiply' },
+                          { value: 'screen', label: 'Screen' },
+                          { value: 'overlay', label: 'Overlay' },
+                          { value: 'lighter', label: 'Add' },
+                          { value: 'difference', label: 'Diff' },
+                        ]}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {quads.length > 0 && (
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ marginRight: '5px' }}
+                      checked={sharedIsGrid === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedIsGrid === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).isGrid = e.target.checked;
+                        });
+                      }}
+                    />
+                    Retro Grid
+                  </label>
+                </div>
+              )}
+
+              {quads.length > 0 && sharedIsGrid !== 'off' && (
+                <>
+                  <div
+                    className="e-row"
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                  >
+                    <div>
+                      <label className="e-label">Grid X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridX === '' ? '' : sharedGridX}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridLinesX = v;
+                          });
+                        }}
+                        min={1}
+                        max={50}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Grid Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridY === '' ? '' : sharedGridY}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridLinesY = v;
+                          });
+                        }}
+                        min={1}
+                        max={50}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Width</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridWidth === '' ? '' : sharedGridWidth}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).lineWidth = v;
+                          });
+                        }}
+                        step={0.1}
+                        min={0.1}
+                        max={10}
+                      />
+                    </div>
+                  </div>
+                  <div className="e-row">
+                    <label className="e-label">Grid Color</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <input
+                        type="color"
+                        className="e-input"
+                        style={{ width: '32px', padding: 0 }}
+                        value={sharedGridColor === '' ? '#ffffff' : sharedGridColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                          });
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridColor === '' ? '' : sharedGridColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {renderSection(
+            6,
+            null,
+            'neutral',
+            <>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+              >
+                <label
+                  className="e-label"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={sharedLocked === 'on'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sharedLocked === 'mixed';
+                    }}
+                    onChange={(e) => {
+                      applyToMulti((o: any) => {
+                        o.locked = e.target.checked;
+                      });
+                    }}
+                  />
+                  Lock Object
+                </label>
+
+                <label
+                  className="e-label"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={sharedDisabled === 'on'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sharedDisabled === 'mixed';
+                    }}
+                    onChange={(e) => {
+                      applyToMulti((o: any) => {
+                        o.disabled = e.target.checked;
+                      });
+                    }}
+                  />
+                  Disabled
+                </label>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1156,25 +1246,6 @@ export const PropertiesPanel: React.FC = () => {
       }
     }
   };
-
-  const renderSection = (
-    section: number,
-    title: string | null,
-    color: 'blue' | 'red' | 'yellow' | 'purple' | 'neutral',
-    children: React.ReactNode
-  ) => (
-    <div ref={setSectionRef(section)} className="properties-section-block" data-section={section}>
-      {title !== null && (
-        <div className={`properties-section-header properties-section-${color}`}>
-          <div className="properties-section-title">
-            <span className={`properties-section-number properties-section-${color}`}>{section}</span>
-            <span className="properties-section-label">{title}</span>
-          </div>
-        </div>
-      )}
-      {children}
-    </div>
-  );
 
   const isEntityLike =
     selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static';

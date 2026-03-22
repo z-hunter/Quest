@@ -68,17 +68,39 @@ Contains all remaining object-specific controls not covered above.
 
 ## Implementation Steps
 
-- [ ] Add reusable section wrapper API in `PropertiesPanel.tsx`
-- [ ] Add purple section accent style in CSS
-- [ ] Add section number badge style (inverse accent)
-- [ ] Add Properties-panel hotkey scroll navigation for digits `0..6`
-- [ ] Reorganize multi-selection layout into the new section model
-- [ ] Reorganize `Entity` / `Actor` / `Static`
-- [ ] Reorganize `Quad`
-- [ ] Reorganize `Triggerbox`
+- [x] Add reusable section wrapper API in `PropertiesPanel.tsx`
+- [x] Add purple section accent style in CSS
+- [x] Add section number badge style (inverse accent)
+- [x] Add Properties-panel hotkey scroll navigation for digits `0..6`
+- [x] Reorganize multi-selection layout into the new section model
+- [x] Reorganize `Entity` / `Actor` / `Static`
+- [x] Reorganize `Quad`
+- [x] Reorganize `Triggerbox`
 - [ ] Keep `Walkbox` layout unchanged
 - [ ] Keep `SETTINGS` layout unchanged
-- [ ] Verify build and manual editor navigation behavior
+- [x] Verify build after section restructuring
+- [ ] Manual audit of section contents and navigation behavior
+- [ ] Final visual audit of multi-selection panel
+- [ ] Update any remaining field placement mismatches found during QA
+
+## Current Status
+
+Already implemented:
+- shared numbered section headers with common layout;
+- inverse section badges with blue / red / yellow / purple / neutral accents;
+- Properties-panel digit hotkeys `0..6` with guarded focus behavior;
+- single-object common section `0` for ID / Title / TA / Group ID / Parent / Relation;
+- `Entity` / `Actor` / `Static` regrouped into `TRANSFORM`, `VISUAL`, `COMPONENTS`, `ACTOR PROP.`, `SCRIPT EVENTS`, and bottom misc section;
+- `Quad` regrouped into `TRANSFORM` and `VISUAL`, with `Vertices` inside `TRANSFORM`;
+- `Triggerbox` regrouped into the same section model where applicable;
+- multi-selection regrouped into sections `0`, `1`, `2`, and `6`;
+- `Lock Object` and `Disabled` moved to the bottom misc section for single-object editing with `Alt-L` / `Alt-D` tooltips.
+
+Still to verify manually:
+- `Walkbox` still behaves and looks unchanged;
+- `SETTINGS` remains unaffected by the redesign;
+- section hotkeys consistently scroll with section headers visible;
+- no field remains in the wrong section after live QA across object types.
 
 ## Notes
 
