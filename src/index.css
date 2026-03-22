@@ -587,6 +587,10 @@ input[type='file'] {
   color: #00ffff !important;
 }
 
+.ui-text-accent-purple {
+  color: #f0aaff !important;
+}
+
 .ui-text-light {
   color: #ccc;
 }
@@ -634,6 +638,10 @@ input[type='file'] {
 
 .ui-divider-neutral {
   border-top: 1px solid #333;
+}
+
+.ui-divider-purple {
+  border-top: 1px solid #f0aaff;
 }
 
 .ui-panel-card {

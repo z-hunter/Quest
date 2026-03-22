@@ -179,6 +179,112 @@
   margin-bottom: 2px;
 }
 
+.properties-section-block {
+  margin-bottom: 12px;
+  scroll-margin-top: 8px;
+}
+
+.properties-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 8px 0;
+  padding-top: 0;
+  position: relative;
+  font-family: var(--ui-display-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+}
+
+.properties-section-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-top: 1px solid currentColor;
+}
+
+.properties-section-title {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.properties-section-label {
+  display: inline-block;
+  padding-top: 4px;
+}
+
+.properties-section-actions {
+  position: relative;
+  z-index: 1;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.properties-section-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 22px;
+  padding: 0 4px;
+  font-size: 0.75em;
+  line-height: 1;
+  color: #000;
+  margin-top: 0;
+}
+
+.properties-section-header.properties-section-blue {
+  color: #aaf;
+  border-color: #aaf;
+}
+
+.properties-section-header.properties-section-red {
+  color: #faa;
+  border-color: #faa;
+}
+
+.properties-section-header.properties-section-yellow {
+  color: #ffaa00;
+  border-color: #ffaa00;
+}
+
+.properties-section-header.properties-section-purple {
+  color: #f0aaff;
+  border-color: #f0aaff;
+}
+
+.properties-section-header.properties-section-neutral {
+  color: #aaa;
+  border-color: #333;
+}
+
+.properties-section-number.properties-section-blue {
+  background: #aaf;
+}
+
+.properties-section-number.properties-section-red {
+  background: #faa;
+}
+
+.properties-section-number.properties-section-yellow {
+  background: #ffaa00;
+}
+
+.properties-section-number.properties-section-purple {
+  background: #f0aaff;
+}
+
+.properties-section-number.properties-section-neutral {
+  background: #aaa;
+}
+
 /* Bottom Menu */
 .editor-bottom-menu {
   height: 32px;
