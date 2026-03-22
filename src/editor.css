@@ -346,6 +346,20 @@
   /* reset on hover */
 }
 
+.e-menu-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.e-menu-btn:disabled:hover {
+  background: transparent;
+  color: var(--ui-fkey-text);
+}
+
+.e-menu-btn:disabled:hover .hotkey-accent {
+  color: var(--ui-fkey-hotkey);
+}
+
 .fps-counter {
   position: absolute;
   right: 10px;

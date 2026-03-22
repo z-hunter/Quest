@@ -317,7 +317,7 @@ export class SceneEditor {
     switch (e.key.toLowerCase()) {
       case 'f2':
         e.preventDefault();
-        if (e.shiftKey)
+        if (e.shiftKey || e.altKey)
           this.persistenceManager.saveScene(true); // Save As
         else this.persistenceManager.saveScene(false); // Quick Save
         break;
