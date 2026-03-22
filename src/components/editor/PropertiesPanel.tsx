@@ -511,6 +511,52 @@ export const PropertiesPanel: React.FC = () => {
     </div>
   );
 
+  const renderOpacityBlurControls = (
+    opacityValue: number | '',
+    blurValue: number | '',
+    onOpacityChange: (nextOpacity: number) => void,
+    onBlurChange: (nextBlur: number) => void
+  ) => {
+    const normalizedOpacity = opacityValue === '' ? 1 : Number(opacityValue);
+    const normalizedBlur = blurValue === '' ? 0 : Number(blurValue);
+    const opacityUi = Math.round((1 - normalizedOpacity) * 100);
+    const blurUi = Math.max(0, Math.min(50, Math.round(normalizedBlur)));
+
+    return (
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+      >
+        <div>
+          <label className="e-label">Opacity ({opacityUi}%)</label>
+          <input
+            type="range"
+            className="e-input"
+            style={{ width: '100%' }}
+            min="0"
+            max="100"
+            step="5"
+            value={opacityUi}
+            onChange={(e) => onOpacityChange(1 - parseInt(e.target.value, 10) / 100)}
+          />
+        </div>
+        <div>
+          <label className="e-label">Blur ({blurUi}px)</label>
+          <input
+            type="range"
+            className="e-input"
+            style={{ width: '100%' }}
+            min="0"
+            max="50"
+            step="1"
+            value={blurUi}
+            onChange={(e) => onBlurChange(parseInt(e.target.value, 10))}
+          />
+        </div>
+      </div>
+    );
+  };
+
   React.useEffect(() => {
     lastUndoObjectKeyRef.current = null;
     lastUndoMultiKeyRef.current = null;
@@ -609,11 +655,6 @@ export const PropertiesPanel: React.FC = () => {
             null,
             'neutral',
             <>
-              <div className="e-row">
-                <label className="e-label">Selected</label>
-                <div className="e-label ui-text-muted ui-text-small">{multiObjects.length} objects</div>
-              </div>
-
               <div className="e-row">
                 <label className="e-label">Group #ID</label>
                 <div className="e-label ui-text-muted ui-text-small">
@@ -887,46 +928,20 @@ export const PropertiesPanel: React.FC = () => {
             'yellow',
             <>
               {entitiesAndQuads.length > 0 && (
-                <div
-                  className="e-row"
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-                >
-                  <div>
-                    <label className="e-label">Opacity</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="1"
-                      className="e-input"
-                      placeholder="mixed"
-                      value={sharedOpacity === '' ? '' : sharedOpacity}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (isNaN(v)) return;
-                        applyToMulti((o: any) => {
-                          if (o instanceof Entity) o.opacity = v;
-                        });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Blur</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      placeholder="mixed"
-                      value={sharedBlur === '' ? '' : sharedBlur}
-                      onChange={(e) => {
-                        const v = parseInt(e.target.value);
-                        if (isNaN(v)) return;
-                        applyToMulti((o: any) => {
-                          if (o instanceof Entity) o.blur = v;
-                        });
-                      }}
-                    />
-                  </div>
-                </div>
+                renderOpacityBlurControls(
+                  sharedOpacity,
+                  sharedBlur,
+                  (nextOpacity) => {
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.opacity = nextOpacity;
+                    });
+                  },
+                  (nextBlur) => {
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.blur = nextBlur;
+                    });
+                  }
+                )
               )}
 
               {entitiesAndQuads.length > 0 && (
@@ -1638,39 +1653,12 @@ export const PropertiesPanel: React.FC = () => {
                   </div>
                 </div>
 
-                <div
-                  className="e-row"
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-                >
-                  <div>
-                    <label className="e-label">
-                      Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)
-                    </label>
-                    <input
-                      type="range"
-                      className="e-input"
-                      style={{ width: '100%' }}
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={obj.opacity !== undefined ? obj.opacity : 1.0}
-                      onChange={(e) => handleChange('opacity', e.target.value, true)}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Blur ({obj.blur || 0}px)</label>
-                    <input
-                      type="range"
-                      className="e-input"
-                      style={{ width: '100%', direction: 'ltr' }}
-                      min="0"
-                      max="50"
-                      step="1"
-                      value={50 - (obj.blur || 0)}
-                      onChange={(e) => handleChange('blur', 50 - parseInt(e.target.value))}
-                    />
-                  </div>
-                </div>
+                {renderOpacityBlurControls(
+                  obj.opacity !== undefined ? obj.opacity : 1.0,
+                  obj.blur || 0,
+                  (nextOpacity) => handleChange('opacity', nextOpacity, true),
+                  (nextBlur) => handleChange('blur', nextBlur)
+                )}
 
                 <div className="e-row">
                   <label className="e-label">Sprite</label>
@@ -2083,39 +2071,12 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">
-                  Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)
-                </label>
-                <input
-                  type="range"
-                  className="e-input"
-                  style={{ width: '100%' }}
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={obj.opacity !== undefined ? obj.opacity : 1.0}
-                  onChange={(e) => handleChange('opacity', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Blur ({obj.blur || 0}px)</label>
-                <input
-                  type="range"
-                  className="e-input"
-                  style={{ width: '100%', direction: 'ltr' }}
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={50 - (obj.blur || 0)}
-                  onChange={(e) => handleChange('blur', 50 - parseInt(e.target.value))}
-                />
-              </div>
-            </div>
+            {renderOpacityBlurControls(
+              obj.opacity !== undefined ? obj.opacity : 1.0,
+              obj.blur || 0,
+              (nextOpacity) => handleChange('opacity', nextOpacity, true),
+              (nextBlur) => handleChange('blur', nextBlur)
+            )}
 
             {/* Fill Color */}
             <div className="e-row">
@@ -3306,113 +3267,106 @@ export const PropertiesPanel: React.FC = () => {
         {/* SCENE Properties */}
         {selectedObjectType === 'SCENE' && (
           <>
-            {/* Camera properties */}
-            {(obj.camera || obj.defaultCamera) && (
-              <div className="e-row ui-divider-blue" style={{ paddingTop: '5px' }}>
-                <div className="e-label ui-text-accent-blue ui-font-bold">
-                  CAMERA
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
-                  <div>
-                    <label className="e-label">Cam X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camera ? Math.round(obj.camera.x) : 0}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.x = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Cam Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camera ? Math.round(obj.camera.y) : 0}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.y = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Zoom</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.camera ? obj.camera.zoom : 1}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.zoom = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="e-row" style={{ marginTop: '5px' }}>
-                  <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      style={{ marginRight: '5px' }}
-                      checked={!!obj.autoCenter}
-                      onChange={(e) => handleChange('autoCenter', e.target.checked)}
-                    />
-                    Auto-Center on Player
-                  </label>
-                </div>
-                <div
-                  className="e-row"
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
-                >
-                  <div>
-                    <label className="e-label">Cam Spd</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.cameraSpeed || 5}
-                      onChange={(e) =>
-                        handleChange('cameraSpeed', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Dead X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50}
-                      onChange={(e) =>
-                        handleChange('camDeadzoneX', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Dead Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30}
-                      onChange={(e) =>
-                        handleChange('camDeadzoneY', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                </div>
+            {(obj.camera || obj.defaultCamera) &&
+              renderSection(
+                1,
+                'Camera',
+                'blue',
                 <>
-                  <div className="e-row" style={{ marginTop: '5px' }}>
-                    <div className="e-label ui-text-accent-blue">
-                      Camera Bounds (Min/Max)
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                    <div>
+                      <label className="e-label">Cam X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camera ? Math.round(obj.camera.x) : 0}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.x = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
                     </div>
+                    <div>
+                      <label className="e-label">Cam Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camera ? Math.round(obj.camera.y) : 0}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.y = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Zoom</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input"
+                        value={obj.camera ? obj.camera.zoom : 1}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.zoom = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="e-row" style={{ marginTop: '5px' }}>
+                    <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        style={{ marginRight: '5px' }}
+                        checked={!!obj.autoCenter}
+                        onChange={(e) => handleChange('autoCenter', e.target.checked)}
+                      />
+                      Auto-Center on Player
+                    </label>
+                  </div>
+
+                  <div
+                    className="e-row"
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                  >
+                    <div>
+                      <label className="e-label">Cam Spd</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input"
+                        value={obj.cameraSpeed || 5}
+                        onChange={(e) => handleChange('cameraSpeed', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Dead X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50}
+                        onChange={(e) => handleChange('camDeadzoneX', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Dead Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30}
+                        onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="e-row" style={{ marginTop: '5px' }}>
+                    <div className="e-label ui-text-accent-blue">Camera Bounds (Min/Max)</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                       <div>
                         <label className="e-label">Min X</label>
@@ -3480,89 +3434,81 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {obj.defaultCamera && (
+                    <div className="e-row" style={{ marginTop: '5px' }}>
+                      <div className="e-label ui-text-accent-blue">Default Camera</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                        <div>
+                          <label className="e-label">Def X</label>
+                          <input
+                            type="number"
+                            className="e-input"
+                            value={Math.round(obj.defaultCamera.x)}
+                            onChange={(e) => {
+                              obj.defaultCamera.x = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="e-label">Def Y</label>
+                          <input
+                            type="number"
+                            className="e-input"
+                            value={Math.round(obj.defaultCamera.y)}
+                            onChange={(e) => {
+                              obj.defaultCamera.y = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="e-label">Def Zoom</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="e-input"
+                            value={obj.defaultCamera.zoom}
+                            onChange={(e) => {
+                              obj.defaultCamera.zoom = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="e-row" style={{ marginTop: '5px' }}>
+                        <button
+                          className="e-btn"
+                          style={{ width: '100%' }}
+                          onClick={() => {
+                            if (obj.camera && obj.defaultCamera) {
+                              obj.defaultCamera.x = obj.camera.x;
+                              obj.defaultCamera.y = obj.camera.y;
+                              obj.defaultCamera.zoom = obj.camera.zoom;
+                              incrementObjectVersion();
+                            }
+                          }}
+                        >
+                          Set Current as Default
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
-              </div>
-            )}
+              )}
 
-            {/* Default Camera (Start Position) */}
-            {obj.defaultCamera && (
-              <div className="e-row ui-divider-blue" style={{ paddingTop: '5px' }}>
-                <div className="e-label ui-text-accent-blue ui-font-bold">
-                  DEFAULT CAMERA
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
-                  <div>
-                    <label className="e-label">Def X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={Math.round(obj.defaultCamera.x)}
-                      onChange={(e) => {
-                        obj.defaultCamera.x = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Def Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={Math.round(obj.defaultCamera.y)}
-                      onChange={(e) => {
-                        obj.defaultCamera.y = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Def Zoom</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.defaultCamera.zoom}
-                      onChange={(e) => {
-                        obj.defaultCamera.zoom = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="e-row" style={{ marginTop: '5px' }}>
-                  <button
-                    className="e-btn"
-                    style={{ width: '100%' }}
-                    onClick={() => {
-                      if (obj.camera && obj.defaultCamera) {
-                        obj.defaultCamera.x = obj.camera.x;
-                        obj.defaultCamera.y = obj.camera.y;
-                        obj.defaultCamera.zoom = obj.camera.zoom;
-                        incrementObjectVersion();
-                      }
-                    }}
-                  >
-                    Set Current as Default
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Scaling Settings */}
-            {game.sceneManager.currentScene && (
-              <div className="e-row ui-divider-yellow" style={{ paddingTop: '5px' }}>
-                <div className="e-label ui-text-accent-yellow ui-font-bold">
-                  SCALING
-                </div>
-                {(() => {
+            {game.sceneManager.currentScene &&
+              renderSection(
+                2,
+                'Scaling',
+                'yellow',
+                (() => {
                   const s = game.sceneManager.currentScene.scaling;
                   return (
                     <>
                       <div className="e-row">
-                        <label
-                          className="e-label"
-                          style={{ display: 'flex', alignItems: 'center' }}
-                        >
+                        <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                           <input
                             type="checkbox"
                             style={{ marginRight: '5px' }}
@@ -3576,9 +3522,7 @@ export const PropertiesPanel: React.FC = () => {
                         </label>
                       </div>
                       {s.enabled && (
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-                        >
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                           <div>
                             <label className="e-label">Min</label>
                             <input
@@ -3633,9 +3577,8 @@ export const PropertiesPanel: React.FC = () => {
                       )}
                     </>
                   );
-                })()}
-              </div>
-            )}
+                })()
+              )}
           </>
         )}
 
