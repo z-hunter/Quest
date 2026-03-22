@@ -179,6 +179,14 @@
   margin-bottom: 2px;
 }
 
+.e-tooltip-label {
+  cursor: help;
+}
+
+.e-tooltip-label:hover {
+  color: var(--ui-main-color);
+}
+
 .properties-section-block {
   margin-bottom: 12px;
   scroll-margin-top: 8px;
