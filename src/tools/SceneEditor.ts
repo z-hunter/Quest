@@ -1052,9 +1052,10 @@ export class SceneEditor {
         ctx.restore();
       } else if (selected instanceof Walkbox || selected instanceof Triggerbox) {
         // Triggerbox/Walkbox
+        const p = (selected as any).parallax !== undefined ? (selected as any).parallax : 1.0;
         ctx.translate(halfW, halfH);
         ctx.scale(zoom, zoom);
-        ctx.translate(-camX, -camY);
+        ctx.translate(-camX * p, -camY * p);
 
         const poly = selected.poly;
 

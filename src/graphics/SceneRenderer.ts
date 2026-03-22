@@ -342,7 +342,7 @@ export class SceneRenderer {
 
     const halfW = ctx.canvas.width / 2;
     const halfH = ctx.canvas.height / 2;
-    const p = 1.0; // Debug shapes usually 1.0 parallax? Walkboxes are on floor, maybe 1.0.
+    const p = (obj as any).parallax !== undefined ? (obj as any).parallax : 1.0;
 
     ctx.save();
     ctx.translate(halfW, halfH);

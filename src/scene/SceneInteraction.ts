@@ -66,8 +66,8 @@ function isHitAtScreenPoint(
   }
 
   const worldPos = {
-    x: (screenX - halfW) / zoom + camX,
-    y: (screenY - halfH) / zoom + camY,
+    x: (screenX - halfW) / zoom + camX * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
+    y: (screenY - halfH) / zoom + camY * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
   };
   return obj.hitTest(worldPos.x, worldPos.y);
 }

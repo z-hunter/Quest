@@ -4,6 +4,7 @@ import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { QuadObject } from '../../entities/QuadObject';
 import { Entity } from '../../entities/Entity';
+import { Triggerbox } from '../../entities/Triggerbox';
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
@@ -631,9 +632,12 @@ export const PropertiesPanel: React.FC = () => {
   if (selectedObjectType === 'MULTI' && multiObjects.length > 1) {
     const group = game.editor.selectionManager.getGroupTransform();
     const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
+    const parallaxObjects = multiObjects.filter(
+      (o: any) => o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad'
+    );
     const quads = multiObjects.filter((o: any) => (o as any).type === 'Quad');
     const sharedLayer = getSharedValue(multiObjects, (o) => o.layer ?? 0);
-    const sharedParallax = getSharedValue(entitiesAndQuads, (o: any) => o.parallax ?? 1);
+    const sharedParallax = getSharedValue(parallaxObjects, (o: any) => o.parallax ?? 1);
     const sharedBlendMode = getSharedValue(
       entitiesAndQuads,
       (o: any) => o.blendMode || 'source-over'
@@ -906,7 +910,7 @@ export const PropertiesPanel: React.FC = () => {
                   />
                 </div>
                 <div>
-                  {entitiesAndQuads.length > 0 ? (
+                  {parallaxObjects.length > 0 ? (
                     <>
                       <label className="e-label">Parallax</label>
                       <input
@@ -919,7 +923,9 @@ export const PropertiesPanel: React.FC = () => {
                           const v = parseFloat(e.target.value);
                           if (isNaN(v)) return;
                           applyToMulti((o: any) => {
-                            if (o instanceof Entity) o.parallax = v;
+                            if (o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad') {
+                              o.parallax = v;
+                            }
                           });
                         }}
                       />
@@ -1785,7 +1791,7 @@ export const PropertiesPanel: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
                   <div>
                     <label className="e-label">Scale</label>
                     <input
@@ -1804,6 +1810,30 @@ export const PropertiesPanel: React.FC = () => {
                       className="e-input"
                       value={formatPanelNumber(obj.layer || 0)}
                       onChange={(e) => handleChange('layer', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Parallax</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="e-input"
+                      value={formatPanelNumber(obj.parallax ?? 1)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const newP = isNaN(val) ? 1.0 : val;
+                        const oldP = obj.parallax !== undefined ? obj.parallax : 1.0;
+                        const scene = game.sceneManager.currentScene;
+                        if (scene && obj.poly?.length) {
+                          const dx = scene.camera.x * (newP - oldP);
+                          const dy = scene.camera.y * (newP - oldP);
+                          obj.poly = obj.poly.map((pt: any) => ({
+                            x: Math.round(pt.x + dx),
+                            y: Math.round(pt.y + dy),
+                          }));
+                        }
+                        handleChange('parallax', newP, true);
+                      }}
                     />
                   </div>
                 </div>
