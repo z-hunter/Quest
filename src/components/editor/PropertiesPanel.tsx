@@ -27,6 +27,7 @@ export const PropertiesPanel: React.FC = () => {
   const lastUndoObjectKeyRef = React.useRef<string | null>(null);
   const lastUndoMultiKeyRef = React.useRef<string | null>(null);
   const lastPolygonScaleObjectKeyRef = React.useRef<string | null>(null);
+  const polygonScaleSnapshotRef = React.useRef<any>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const sectionRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
@@ -157,6 +158,13 @@ export const PropertiesPanel: React.FC = () => {
     return first ? 'on' : 'off';
   };
 
+  const formatPanelNumber = React.useCallback((value: any): number | string => {
+    if (value === '' || value === null || value === undefined) return '';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return value;
+    return Number(n.toFixed(3));
+  }, []);
+
   const setSectionRef = React.useCallback(
     (section: number) => (node: HTMLDivElement | null) => {
       sectionRefs.current[section] = node;
@@ -274,29 +282,54 @@ export const PropertiesPanel: React.FC = () => {
       if (!Number.isFinite(nextScale) || nextScale <= 0) return;
 
       const objectKey = `${selectedObjectType || 'Object'}:${obj.name || ''}`;
-      const previousScale =
-        lastPolygonScaleObjectKeyRef.current === objectKey ? parseFloat(polygonScaleDraft) || 1 : 1;
-      const factor = nextScale / previousScale;
-      if (!Number.isFinite(factor) || factor <= 0 || Math.abs(factor - 1) < 0.0001) {
+      if (lastPolygonScaleObjectKeyRef.current !== objectKey) {
+        game?.editor?.saveUndoState();
+        if (selectedObjectType === 'Quad' && obj.vertices?.length) {
+          polygonScaleSnapshotRef.current = {
+            key: objectKey,
+            kind: 'quad',
+            vertices: obj.vertices.map((v: any) => ({ ...v })),
+          };
+        } else if (obj.poly?.length) {
+          polygonScaleSnapshotRef.current = {
+            key: objectKey,
+            kind: 'poly',
+            poly: obj.poly.map((pt: any) => ({ x: pt.x, y: pt.y })),
+          };
+        } else {
+          polygonScaleSnapshotRef.current = null;
+        }
+      }
+
+      const snapshot = polygonScaleSnapshotRef.current;
+      if (!snapshot || snapshot.key !== objectKey) {
         setPolygonScaleDraft(nextScaleRaw);
         lastPolygonScaleObjectKeyRef.current = objectKey;
         return;
       }
 
-      game?.editor?.saveUndoState();
-
-      if (selectedObjectType === 'Quad' && obj.vertices?.length) {
-        const centroid = getQuadCentroid(obj);
-        obj.vertices = scaleQuadVerticesByFactor(obj.vertices, factor, centroid.x, centroid.y);
+      if (snapshot.kind === 'quad' && selectedObjectType === 'Quad' && snapshot.vertices?.length) {
+        const sourceVertices = snapshot.vertices.map((v: any) => ({ ...v }));
+        const sourceCentroid = {
+          x: sourceVertices.reduce((acc: number, v: any) => acc + v.x, 0) / sourceVertices.length,
+          y: sourceVertices.reduce((acc: number, v: any) => acc + v.y, 0) / sourceVertices.length,
+        };
+        obj.vertices = scaleQuadVerticesByFactor(
+          sourceVertices,
+          nextScale,
+          sourceCentroid.x,
+          sourceCentroid.y
+        );
         obj.x = Math.round(
           obj.vertices.reduce((acc: number, v: any) => acc + v.x, 0) / obj.vertices.length
         );
         obj.y = Math.round(
           obj.vertices.reduce((acc: number, v: any) => acc + v.y, 0) / obj.vertices.length
         );
-      } else if (obj.poly?.length) {
-        const centroid = getPolyCentroid(obj.poly);
-        obj.poly = scalePolyByFactor(obj.poly, factor, centroid.x, centroid.y);
+      } else if (snapshot.kind === 'poly' && snapshot.poly?.length) {
+        const sourcePoly = snapshot.poly.map((pt: any) => ({ x: pt.x, y: pt.y }));
+        const sourceCentroid = getPolyCentroid(sourcePoly);
+        obj.poly = scalePolyByFactor(sourcePoly, nextScale, sourceCentroid.x, sourceCentroid.y);
       }
 
       setPolygonScaleDraft(nextScaleRaw);
@@ -309,7 +342,6 @@ export const PropertiesPanel: React.FC = () => {
       getQuadCentroid,
       incrementObjectVersion,
       obj,
-      polygonScaleDraft,
       scalePolyByFactor,
       scaleQuadVerticesByFactor,
       selectedObjectType,
@@ -363,6 +395,7 @@ export const PropertiesPanel: React.FC = () => {
   React.useEffect(() => {
     setPolygonScaleDraft('1');
     lastPolygonScaleObjectKeyRef.current = null;
+    polygonScaleSnapshotRef.current = null;
   }, [selectedObjectType, selectedObjectId]);
 
   const loadResolvedTitle = React.useCallback(
@@ -525,7 +558,7 @@ export const PropertiesPanel: React.FC = () => {
     return (
       <div
         className="e-row"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}
       >
         <div>
           <label className="e-label">Opacity ({opacityUi}%)</label>
@@ -782,7 +815,7 @@ export const PropertiesPanel: React.FC = () => {
                   <input
                     type="number"
                     className="e-input"
-                    value={group.offsetX.toFixed(2)}
+                    value={formatPanelNumber(group.offsetX)}
                     onChange={(e) => {
                       const multiKey = `MULTI:${multiObjects
                         .map((item: any) => item?.name || '')
@@ -807,7 +840,7 @@ export const PropertiesPanel: React.FC = () => {
                   <input
                     type="number"
                     className="e-input"
-                    value={group.offsetY.toFixed(2)}
+                    value={formatPanelNumber(group.offsetY)}
                     onChange={(e) => {
                       const multiKey = `MULTI:${multiObjects
                         .map((item: any) => item?.name || '')
@@ -839,7 +872,7 @@ export const PropertiesPanel: React.FC = () => {
                     type="number"
                     step="0.01"
                     className="e-input"
-                    value={group.scale.toFixed(2)}
+                    value={formatPanelNumber(group.scale)}
                     onChange={(e) => {
                       const multiKey = `MULTI:${multiObjects
                         .map((item: any) => item?.name || '')
@@ -862,7 +895,7 @@ export const PropertiesPanel: React.FC = () => {
                     type="number"
                     className="e-input"
                     placeholder="mixed"
-                    value={sharedLayer === '' ? '' : sharedLayer}
+                    value={sharedLayer === '' ? '' : formatPanelNumber(sharedLayer)}
                     onChange={(e) => {
                       const v = parseInt(e.target.value);
                       if (isNaN(v)) return;
@@ -881,7 +914,7 @@ export const PropertiesPanel: React.FC = () => {
                         step="0.1"
                         className="e-input ui-text-muted"
                         placeholder="mixed"
-                        value={sharedParallax === '' ? '' : sharedParallax}
+                        value={sharedParallax === '' ? '' : formatPanelNumber(sharedParallax)}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value);
                           if (isNaN(v)) return;
@@ -1043,7 +1076,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         className="e-input"
                         placeholder="mixed"
-                        value={sharedGridX === '' ? '' : sharedGridX}
+                        value={sharedGridX === '' ? '' : formatPanelNumber(sharedGridX)}
                         onChange={(e) => {
                           const v = parseInt(e.target.value);
                           if (isNaN(v)) return;
@@ -1061,7 +1094,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         className="e-input"
                         placeholder="mixed"
-                        value={sharedGridY === '' ? '' : sharedGridY}
+                        value={sharedGridY === '' ? '' : formatPanelNumber(sharedGridY)}
                         onChange={(e) => {
                           const v = parseInt(e.target.value);
                           if (isNaN(v)) return;
@@ -1079,7 +1112,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         className="e-input"
                         placeholder="mixed"
-                        value={sharedGridWidth === '' ? '' : sharedGridWidth}
+                        value={sharedGridWidth === '' ? '' : formatPanelNumber(sharedGridWidth)}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value);
                           if (isNaN(v)) return;
@@ -1138,10 +1171,12 @@ export const PropertiesPanel: React.FC = () => {
               >
                 <label
                   className="e-label"
+                  title="Toggle lock hotkey: Alt-L"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
                 >
                   <input
                     type="checkbox"
+                    title="Alt-L"
                     checked={sharedLocked === 'on'}
                     ref={(el) => {
                       if (el) el.indeterminate = sharedLocked === 'mixed';
@@ -1157,10 +1192,12 @@ export const PropertiesPanel: React.FC = () => {
 
                 <label
                   className="e-label"
+                  title="Toggle disabled hotkey: Alt-D"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
                 >
                   <input
                     type="checkbox"
+                    title="Alt-D"
                     checked={sharedDisabled === 'on'}
                     ref={(el) => {
                       if (el) el.indeterminate = sharedDisabled === 'mixed';
@@ -1485,7 +1522,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.x ?? 0}
+                      value={formatPanelNumber(obj.x ?? 0)}
                       onChange={(e) => handleChange('x', e.target.value, true)}
                     />
                   </div>
@@ -1494,7 +1531,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.y ?? 0}
+                      value={formatPanelNumber(obj.y ?? 0)}
                       onChange={(e) => handleChange('y', e.target.value, true)}
                     />
                   </div>
@@ -1503,7 +1540,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.height ?? 0}
+                      value={formatPanelNumber(obj.height ?? 0)}
                       onChange={(e) => handleChange('height', e.target.value, true)}
                     />
                   </div>
@@ -1512,7 +1549,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.width ?? 0}
+                      value={formatPanelNumber(obj.width ?? 0)}
                       onChange={(e) => handleChange('width', e.target.value, true)}
                     />
                   </div>
@@ -1528,7 +1565,7 @@ export const PropertiesPanel: React.FC = () => {
                       type="number"
                       step="0.1"
                       className="e-input"
-                      value={obj.modelScale || 1}
+                      value={formatPanelNumber(obj.modelScale || 1)}
                       onChange={(e) => handleChange('modelScale', e.target.value, true)}
                     />
                   </div>
@@ -1537,7 +1574,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.layer || 0}
+                      value={formatPanelNumber(obj.layer || 0)}
                       onChange={(e) => handleChange('layer', e.target.value, true)}
                     />
                   </div>
@@ -1547,7 +1584,7 @@ export const PropertiesPanel: React.FC = () => {
                       type="number"
                       step="0.1"
                       className="e-input"
-                      value={obj.parallax ?? 1}
+                      value={formatPanelNumber(obj.parallax ?? 1)}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
                         const newP = isNaN(val) ? 1.0 : val;
@@ -1578,7 +1615,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.colliderHeight ?? 0}
+                      value={formatPanelNumber(obj.colliderHeight ?? 0)}
                       onChange={(e) => handleChange('colliderHeight', e.target.value, true)}
                     />
                   </div>
@@ -1587,7 +1624,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.colliderWidth ?? 0}
+                      value={formatPanelNumber(obj.colliderWidth ?? 0)}
                       onChange={(e) => handleChange('colliderWidth', e.target.value, true)}
                     />
                   </div>
@@ -1734,7 +1771,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={Math.round(getPolyCentroid(obj.poly).x)}
+                      value={formatPanelNumber(getPolyCentroid(obj.poly).x)}
                       onChange={(e) => translatePolyTo(parseFloat(e.target.value) || 0, getPolyCentroid(obj.poly).y)}
                     />
                   </div>
@@ -1743,7 +1780,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={Math.round(getPolyCentroid(obj.poly).y)}
+                      value={formatPanelNumber(getPolyCentroid(obj.poly).y)}
                       onChange={(e) => translatePolyTo(getPolyCentroid(obj.poly).x, parseFloat(e.target.value) || 0)}
                     />
                   </div>
@@ -1765,7 +1802,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.layer || 0}
+                      value={formatPanelNumber(obj.layer || 0)}
                       onChange={(e) => handleChange('layer', e.target.value, true)}
                     />
                   </div>
@@ -1797,7 +1834,7 @@ export const PropertiesPanel: React.FC = () => {
                 <input
                   type="number"
                   className="e-input"
-                  value={Math.round(getQuadCentroid(obj).x)}
+                  value={formatPanelNumber(getQuadCentroid(obj).x)}
                   onChange={(e) => translateQuadTo(parseFloat(e.target.value) || 0, getQuadCentroid(obj).y)}
                 />
               </div>
@@ -1806,7 +1843,7 @@ export const PropertiesPanel: React.FC = () => {
                 <input
                   type="number"
                   className="e-input"
-                  value={Math.round(getQuadCentroid(obj).y)}
+                  value={formatPanelNumber(getQuadCentroid(obj).y)}
                   onChange={(e) => translateQuadTo(getQuadCentroid(obj).x, parseFloat(e.target.value) || 0)}
                 />
               </div>
@@ -1815,7 +1852,7 @@ export const PropertiesPanel: React.FC = () => {
                 <input
                   type="number"
                   className="e-input"
-                  value={obj.layer || 0}
+                  value={formatPanelNumber(obj.layer || 0)}
                   onChange={(e) => handleChange('layer', e.target.value, true)}
                 />
               </div>
@@ -1831,7 +1868,7 @@ export const PropertiesPanel: React.FC = () => {
                   type="number"
                   step="0.1"
                   className="e-input"
-                  value={obj.parallax ?? 1}
+                  value={formatPanelNumber(obj.parallax ?? 1)}
                   onChange={(e) => handleChange('parallax', e.target.value, true)}
                 />
               </div>
@@ -1965,7 +2002,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         className="e-input"
                         style={{ width: '33%' }}
-                        value={Math.round(v.x)}
+                        value={formatPanelNumber(v.x)}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           if (v.x !== val) {
@@ -1993,7 +2030,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         className="e-input"
                         style={{ width: '33%' }}
-                        value={Math.round(v.y)}
+                        value={formatPanelNumber(v.y)}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           if (v.y !== val) {
@@ -2022,7 +2059,7 @@ export const PropertiesPanel: React.FC = () => {
                         className="e-input"
                         style={{ width: '33%' }}
                         step="0.1"
-                        value={v.p}
+                        value={formatPanelNumber(v.p)}
                         onChange={(e) => {
                           const newP = parseFloat(e.target.value);
                           const oldP = v.p;
@@ -2148,7 +2185,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.gridLinesX ?? 5}
+                      value={formatPanelNumber(obj.gridLinesX ?? 5)}
                       onChange={(e) => handleChange('gridLinesX', parseInt(e.target.value))}
                       min={1}
                       max={50}
@@ -2159,7 +2196,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.gridLinesY ?? 5}
+                      value={formatPanelNumber(obj.gridLinesY ?? 5)}
                       onChange={(e) => handleChange('gridLinesY', parseInt(e.target.value))}
                       min={1}
                       max={50}
@@ -2170,7 +2207,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.lineWidth ?? 1.0}
+                      value={formatPanelNumber(obj.lineWidth ?? 1.0)}
                       onChange={(e) => handleChange('lineWidth', parseFloat(e.target.value))}
                       step={0.1}
                       min={0.1}
@@ -2834,7 +2871,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={comp.offsetX || 0}
+                            value={formatPanelNumber(comp.offsetX || 0)}
                             onChange={(e) => {
                               comp.offsetX = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -2848,7 +2885,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={comp.offsetY || 0}
+                            value={formatPanelNumber(comp.offsetY || 0)}
                             onChange={(e) => {
                               comp.offsetY = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -2932,7 +2969,7 @@ export const PropertiesPanel: React.FC = () => {
                 type="number"
                 step="0.01"
                 className="e-input"
-                value={obj.speed !== undefined ? obj.speed : 0.1}
+                value={formatPanelNumber(obj.speed !== undefined ? obj.speed : 0.1)}
                 onChange={(e) => handleChange('speed', e.target.value, true)}
               />
             </div>
@@ -2944,7 +2981,7 @@ export const PropertiesPanel: React.FC = () => {
                 type="number"
                 step="10"
                 className="e-input"
-                value={obj.animationSpeed !== undefined ? obj.animationSpeed : 150}
+                value={formatPanelNumber(obj.animationSpeed !== undefined ? obj.animationSpeed : 150)}
                 onChange={(e) => handleChange('animationSpeed', e.target.value, true)}
               />
             </div>
@@ -3230,31 +3267,37 @@ export const PropertiesPanel: React.FC = () => {
               </div>
             )}
 
-            <div className="e-row" style={{ marginTop: isTriggerbox || selectedObjectType === 'Quad' ? '10px' : 0 }}>
+            <div
+              className="e-row"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '6px',
+                marginTop: isTriggerbox || selectedObjectType === 'Quad' ? '10px' : 0,
+              }}
+            >
               <label
                 className="e-label"
                 title="Toggle lock hotkey: Alt-L"
-                style={{ display: 'flex', alignItems: 'center' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
               >
                 <input
                   type="checkbox"
                   title="Alt-L"
-                  style={{ marginRight: '5px' }}
                   checked={!!obj.locked}
                   onChange={(e) => handleChange('locked', e.target.checked)}
                 />
                 Lock Object
               </label>
-            </div>
-            <div className="e-row">
+
               <label
-                className="e-label ui-inline-flex-center ui-text-accent-red"
+                className="e-label"
                 title="Toggle disabled hotkey: Alt-D"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
               >
                 <input
                   type="checkbox"
                   title="Alt-D"
-                  style={{ marginRight: '5px' }}
                   checked={!!obj.disabled}
                   onChange={(e) => handleChange('disabled', e.target.checked)}
                 />
@@ -3279,7 +3322,7 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={obj.camera ? Math.round(obj.camera.x) : 0}
+                        value={obj.camera ? formatPanelNumber(obj.camera.x) : 0}
                         onChange={(e) => {
                           if (obj.camera) {
                             obj.camera.x = parseFloat(e.target.value);
@@ -3293,7 +3336,7 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={obj.camera ? Math.round(obj.camera.y) : 0}
+                        value={obj.camera ? formatPanelNumber(obj.camera.y) : 0}
                         onChange={(e) => {
                           if (obj.camera) {
                             obj.camera.y = parseFloat(e.target.value);
@@ -3308,7 +3351,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         step="0.1"
                         className="e-input"
-                        value={obj.camera ? obj.camera.zoom : 1}
+                        value={obj.camera ? formatPanelNumber(obj.camera.zoom) : 1}
                         onChange={(e) => {
                           if (obj.camera) {
                             obj.camera.zoom = parseFloat(e.target.value);
@@ -3341,7 +3384,7 @@ export const PropertiesPanel: React.FC = () => {
                         type="number"
                         step="0.1"
                         className="e-input"
-                        value={obj.cameraSpeed || 5}
+                        value={formatPanelNumber(obj.cameraSpeed || 5)}
                         onChange={(e) => handleChange('cameraSpeed', parseFloat(e.target.value), true)}
                       />
                     </div>
@@ -3350,7 +3393,7 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50}
+                        value={formatPanelNumber(obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50)}
                         onChange={(e) => handleChange('camDeadzoneX', parseFloat(e.target.value), true)}
                       />
                     </div>
@@ -3359,7 +3402,7 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30}
+                        value={formatPanelNumber(obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30)}
                         onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
                       />
                     </div>
@@ -3374,7 +3417,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMinX !== undefined ? obj.camMinX : ''}
+                          value={obj.camMinX !== undefined ? formatPanelNumber(obj.camMinX) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMinX',
@@ -3390,7 +3433,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMaxX !== undefined ? obj.camMaxX : ''}
+                          value={obj.camMaxX !== undefined ? formatPanelNumber(obj.camMaxX) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMaxX',
@@ -3406,7 +3449,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMinY !== undefined ? obj.camMinY : ''}
+                          value={obj.camMinY !== undefined ? formatPanelNumber(obj.camMinY) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMinY',
@@ -3422,7 +3465,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMaxY !== undefined ? obj.camMaxY : ''}
+                          value={obj.camMaxY !== undefined ? formatPanelNumber(obj.camMaxY) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMaxY',
@@ -3444,7 +3487,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={Math.round(obj.defaultCamera.x)}
+                            value={formatPanelNumber(obj.defaultCamera.x)}
                             onChange={(e) => {
                               obj.defaultCamera.x = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -3456,7 +3499,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={Math.round(obj.defaultCamera.y)}
+                            value={formatPanelNumber(obj.defaultCamera.y)}
                             onChange={(e) => {
                               obj.defaultCamera.y = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -3469,7 +3512,7 @@ export const PropertiesPanel: React.FC = () => {
                             type="number"
                             step="0.1"
                             className="e-input"
-                            value={obj.defaultCamera.zoom}
+                            value={formatPanelNumber(obj.defaultCamera.zoom)}
                             onChange={(e) => {
                               obj.defaultCamera.zoom = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -3529,7 +3572,7 @@ export const PropertiesPanel: React.FC = () => {
                               type="number"
                               step="0.1"
                               className="e-input"
-                              value={s.min}
+                              value={formatPanelNumber(s.min)}
                               onChange={(e) => {
                                 s.min = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -3542,7 +3585,7 @@ export const PropertiesPanel: React.FC = () => {
                               type="number"
                               step="0.1"
                               className="e-input"
-                              value={s.max}
+                              value={formatPanelNumber(s.max)}
                               onChange={(e) => {
                                 s.max = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -3554,7 +3597,7 @@ export const PropertiesPanel: React.FC = () => {
                             <input
                               type="number"
                               className="e-input"
-                              value={s.horizon}
+                              value={formatPanelNumber(s.horizon)}
                               onChange={(e) => {
                                 s.horizon = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -3566,7 +3609,7 @@ export const PropertiesPanel: React.FC = () => {
                             <input
                               type="number"
                               className="e-input"
-                              value={s.front}
+                              value={formatPanelNumber(s.front)}
                               onChange={(e) => {
                                 s.front = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -3600,7 +3643,7 @@ export const PropertiesPanel: React.FC = () => {
                 className="e-label"
                 style={{ display: 'flex', justifyContent: 'space-between' }}
               >
-                UI Scale <span>{(obj.editor?.uiScale || 1.0).toFixed(1)}x</span>
+                UI Scale <span>{formatPanelNumber(obj.editor?.uiScale || 1.0)}x</span>
               </label>
               <input
                 type="number"
@@ -3608,7 +3651,7 @@ export const PropertiesPanel: React.FC = () => {
                 min="0.5"
                 max="2.0"
                 step="0.1"
-                value={obj.editor?.uiScale || 1.0}
+                value={formatPanelNumber(obj.editor?.uiScale || 1.0)}
                 onChange={(e) => {
                   if (!obj.editor) obj.editor = { uiScale: 1.0 };
                   obj.editor.uiScale = parseFloat(e.target.value);
@@ -3656,7 +3699,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Curvature <span>{obj.crt.curvature.toFixed(2)}</span>
+                    Curvature <span>{formatPanelNumber(obj.crt.curvature)}</span>
                   </label>
                   <input
                     type="range"
@@ -3664,7 +3707,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="0.5"
                     step="0.01"
-                    value={obj.crt.curvature}
+                    value={formatPanelNumber(obj.crt.curvature)}
                     onChange={(e) => {
                       obj.crt.curvature = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3676,7 +3719,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Vignette <span>{obj.crt.vignette.toFixed(2)}</span>
+                    Vignette <span>{formatPanelNumber(obj.crt.vignette)}</span>
                   </label>
                   <input
                     type="range"
@@ -3684,7 +3727,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.vignette}
+                    value={formatPanelNumber(obj.crt.vignette)}
                     onChange={(e) => {
                       obj.crt.vignette = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3696,7 +3739,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Scanline Count <span>{Math.round(obj.crt.scanlineCount)}</span>
+                    Scanline Count <span>{formatPanelNumber(obj.crt.scanlineCount)}</span>
                   </label>
                   <input
                     type="range"
@@ -3704,7 +3747,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="100"
                     max="2000"
                     step="50"
-                    value={obj.crt.scanlineCount}
+                    value={formatPanelNumber(obj.crt.scanlineCount)}
                     onChange={(e) => {
                       obj.crt.scanlineCount = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3716,7 +3759,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Scanline Intensity <span>{obj.crt.scanlineIntensity.toFixed(2)}</span>
+                    Scanline Intensity <span>{formatPanelNumber(obj.crt.scanlineIntensity)}</span>
                   </label>
                   <input
                     type="range"
@@ -3724,7 +3767,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.scanlineIntensity}
+                    value={formatPanelNumber(obj.crt.scanlineIntensity)}
                     onChange={(e) => {
                       obj.crt.scanlineIntensity = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3736,7 +3779,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    RGB Split <span>{obj.crt.aberration.toFixed(1)}</span>
+                    RGB Split <span>{formatPanelNumber(obj.crt.aberration)}</span>
                   </label>
                   <input
                     type="range"
@@ -3744,7 +3787,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="5"
                     step="0.1"
-                    value={obj.crt.aberration}
+                    value={formatPanelNumber(obj.crt.aberration)}
                     onChange={(e) => {
                       obj.crt.aberration = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3756,7 +3799,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Bloom <span>{obj.crt.bloom.toFixed(2)}</span>
+                    Bloom <span>{formatPanelNumber(obj.crt.bloom)}</span>
                   </label>
                   <input
                     type="range"
@@ -3764,7 +3807,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.bloom}
+                    value={formatPanelNumber(obj.crt.bloom)}
                     onChange={(e) => {
                       obj.crt.bloom = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3777,7 +3820,7 @@ export const PropertiesPanel: React.FC = () => {
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
                     Phosphor / Grain{' '}
-                    <span>{obj.crt.phosphor ? obj.crt.phosphor.toFixed(2) : '0.00'}</span>
+                    <span>{formatPanelNumber(obj.crt.phosphor || 0)}</span>
                   </label>
                   <input
                     type="range"
@@ -3785,7 +3828,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.phosphor || 0}
+                    value={formatPanelNumber(obj.crt.phosphor || 0)}
                     onChange={(e) => {
                       obj.crt.phosphor = parseFloat(e.target.value);
                       incrementObjectVersion();
