@@ -907,17 +907,13 @@ export class SceneEditor {
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
       if (this.selectedObject instanceof Walkbox) {
-        const index = scene.walkbox.indexOf(this.selectedObject);
-        if (index > -1) scene.walkbox.splice(index, 1);
+        scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
-        const index = scene.triggerboxes.indexOf(this.selectedObject);
-        if (index > -1) scene.triggerboxes.splice(index, 1);
+        scene.removeTriggerbox(this.selectedObject);
       } else if (this.selectedObject instanceof Entity) {
-        const index = scene.entities.indexOf(this.selectedObject);
-        if (index > -1) scene.entities.splice(index, 1);
+        scene.removeEntity(this.selectedObject);
       } else if (this.selectedObject instanceof Actor) {
-        const index = scene.entities.indexOf(this.selectedObject);
-        if (index > -1) scene.entities.splice(index, 1);
+        scene.removeEntity(this.selectedObject);
       }
     }
 

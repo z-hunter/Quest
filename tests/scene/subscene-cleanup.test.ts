@@ -41,4 +41,42 @@ describe('Subscene cleanup', () => {
     expect(fixture.sounds).toEqual(['group-close']);
     expect(groupSwitch.disabled).toBe(true);
   });
+
+  it('removes deleted entity children from active subscene membership immediately', () => {
+    const fixture = createSceneFixture();
+    const rootSubscene = fixture.addTriggerbox('Trig_A', {
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const child = fixture.addEntity('Coin', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+      components: [{ type: 'Item' }],
+    });
+
+    ComponentSystem.handleActivation(rootSubscene, fixture.scene);
+    expect(fixture.scene.subsceneEntities.has(child)).toBe(true);
+
+    fixture.scene.removeEntity(child);
+
+    expect(fixture.scene.subsceneEntities.has(child)).toBe(false);
+  });
+
+  it('removes deleted triggerbox children from active subscene membership immediately', () => {
+    const fixture = createSceneFixture();
+    const rootSubscene = fixture.addTriggerbox('Trig_A', {
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const childTrigger = fixture.addTriggerbox('NestedSwitch', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+      components: [{ type: 'Switch', state: 1 }],
+    });
+
+    ComponentSystem.handleActivation(rootSubscene, fixture.scene);
+    expect(fixture.scene.subsceneEntities.has(childTrigger)).toBe(true);
+
+    fixture.scene.removeTriggerbox(childTrigger);
+
+    expect(fixture.scene.subsceneEntities.has(childTrigger)).toBe(false);
+  });
 });

@@ -304,6 +304,29 @@ export class Scene {
     }
   }
 
+  removeTriggerbox(triggerbox: Triggerbox): void {
+    const index = this.triggerboxes.indexOf(triggerbox);
+    if (index > -1) {
+      this.triggerboxes.splice(index, 1);
+      if (this.subsceneEntities.has(triggerbox)) {
+        this.subsceneEntities.delete(triggerbox);
+      }
+      if (this.activeSubscene && triggerbox.name === this.activeSubscene) {
+        this.activeSubscene = null;
+      }
+    }
+  }
+
+  removeWalkbox(walkbox: Walkbox): void {
+    const index = this.walkbox.indexOf(walkbox);
+    if (index > -1) {
+      this.walkbox.splice(index, 1);
+      if (this.subsceneEntities.has(walkbox)) {
+        this.subsceneEntities.delete(walkbox);
+      }
+    }
+  }
+
   playPickupAnimation(entity: Entity): void {
     const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
     clone.disabled = false;
