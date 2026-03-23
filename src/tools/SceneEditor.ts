@@ -23,6 +23,7 @@ export class SceneEditor {
 
   game: any;
   enabled: boolean;
+  selectionSlots: Array<string[] | null>;
   // State Properties
   get selectedObject(): SceneObject | null {
     return this.selectionManager.selectedObject;
@@ -31,6 +32,7 @@ export class SceneEditor {
     this.selectionManager.selectedObject = val;
   }
   lastMousePos: { x: number; y: number };
+  lastClientMousePos: { x: number; y: number };
 
   // Callbacks
   // Refactored: Use this.game.openFileBrowser instead of local property
@@ -51,9 +53,11 @@ export class SceneEditor {
     this.persistenceManager = new EditorPersistenceManager(this);
     this.ui = new EditorUI(this);
     this.enabled = false;
+    this.selectionSlots = [null, null];
 
     this.selectionManager.selectedObject = null;
     this.lastMousePos = { x: 0, y: 0 };
+    this.lastClientMousePos = { x: 0, y: 0 };
 
     // Bind handlers once for cleanup
 
@@ -128,14 +132,17 @@ export class SceneEditor {
   }
 
   handleGlobalKey(e: KeyboardEvent): void {
+    const isTypingInField =
+      document.activeElement instanceof HTMLInputElement ||
+      document.activeElement instanceof HTMLTextAreaElement;
+
     if (
       this.enabled &&
       e.key === '/' &&
       !e.ctrlKey &&
       !e.metaKey &&
       !e.altKey &&
-      !(document.activeElement instanceof HTMLInputElement) &&
-      !(document.activeElement instanceof HTMLTextAreaElement)
+      !isTypingInField
     ) {
       const filterInput = document.getElementById(
         'hierarchy-filter-input'
@@ -257,6 +264,24 @@ export class SceneEditor {
 
     // Allows opening editor with F1 or F5 even if disabled
     if (!this.enabled && e.key !== 'F1' && e.key !== 'F5') return;
+
+    if (
+      this.enabled &&
+      !isTypingInField &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.code === 'Digit1' || e.code === 'Digit2') &&
+      this.isSelectionSlotHotkeyContext()
+    ) {
+      const slotIndex = e.code === 'Digit1' ? 0 : 1;
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.saveSelectionSlot(slotIndex);
+      } else if (!e.altKey) {
+        this.restoreSelectionSlot(slotIndex);
+      }
+      return;
+    }
 
     // F1: Toggle Scene Editor
     if (e.key === 'F1') {
@@ -552,6 +577,7 @@ export class SceneEditor {
 
   onMouseMove(e: MouseEvent): void {
     this.lastMousePos = this.getMousePos(e);
+    this.lastClientMousePos = { x: e.clientX, y: e.clientY };
     this.transformManager.onMouseMove(e);
   }
 
@@ -577,6 +603,108 @@ export class SceneEditor {
 
   getSelectedObjects(): SceneObject[] {
     return this.selectionManager.getSelectedObjects();
+  }
+
+  private getObjectKey(obj: any): string | null {
+    if (!obj) return null;
+    if (obj.type === 'Quad') return `Quad:${obj.name}`;
+    if (obj instanceof Actor) return `Actor:${obj.name}`;
+    if (obj instanceof Entity) return `Entity:${obj.name}`;
+    if (obj instanceof Walkbox) return `Walkbox:${obj.name || 'Walkbox'}`;
+    if (obj instanceof Triggerbox) return `Triggerbox:${obj.name || 'Triggerbox'}`;
+    return null;
+  }
+
+  private findObjectBySelectionKey(key: string): SceneObject | null {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene || !key) return null;
+
+    const sep = key.indexOf(':');
+    const type = sep >= 0 ? key.slice(0, sep) : '';
+    const name = sep >= 0 ? key.slice(sep + 1) : key;
+    if (!type || !name) return null;
+
+    if (type === 'Entity' || type === 'Actor') {
+      return (scene.entities || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Walkbox') {
+      return (scene.walkbox || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Triggerbox') {
+      return (scene.triggerboxes || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Quad') {
+      return (
+        (scene.entities || []).find((obj: any) => obj?.type === 'Quad' && obj?.name === name) ||
+        null
+      );
+    }
+
+    return null;
+  }
+
+  private getCurrentObjectSelectionKeys(): string[] {
+    if (this.selectionManager.hasMultiSelection()) {
+      return this.selectionManager
+        .getSelectedObjects()
+        .map((obj) => this.getObjectKey(obj))
+        .filter((key): key is string => !!key);
+    }
+
+    const key = this.getObjectKey(this.selectedObject);
+    return key ? [key] : [];
+  }
+
+  private isSelectionSlotHotkeyContext(): boolean {
+    const { x, y } = this.lastClientMousePos;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const hovered = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (!hovered) return false;
+    if (hovered.closest('#hierarchy-panel')) return true;
+    if (this.game.canvas?.contains(hovered) || hovered === this.game.canvas) return true;
+    return false;
+  }
+
+  saveSelectionSlot(slotIndex: number): void {
+    const keys = this.getCurrentObjectSelectionKeys();
+    const slotNumber = slotIndex + 1;
+    if (!keys.length) {
+      this.game.showNotification(`Nothing selected to save in slot ${slotNumber}`);
+      return;
+    }
+
+    this.selectionSlots[slotIndex] = [...keys];
+    const label = keys.length === 1 ? 'object' : 'objects';
+    this.game.showNotification(`Saved ${keys.length} ${label} to selection slot ${slotNumber}`);
+  }
+
+  restoreSelectionSlot(slotIndex: number): void {
+    const slotNumber = slotIndex + 1;
+    const stored = this.selectionSlots[slotIndex];
+    if (!stored || stored.length === 0) {
+      this.game.showNotification(`Selection slot ${slotNumber} is empty`);
+      return;
+    }
+
+    const objects = stored
+      .map((key) => this.findObjectBySelectionKey(key))
+      .filter((obj): obj is SceneObject => !!obj);
+
+    if (!objects.length) {
+      this.game.showNotification(`Saved selection in slot ${slotNumber} is no longer available`);
+      return;
+    }
+
+    if (objects.length === 1) {
+      this.selectObject(objects[0]);
+    } else {
+      this.setMultiSelection(objects);
+    }
+
+    const label = objects.length === 1 ? 'object' : 'objects';
+    this.game.showNotification(
+      `Restored ${objects.length} ${label} from selection slot ${slotNumber}`
+    );
   }
 
   newScene(): void {

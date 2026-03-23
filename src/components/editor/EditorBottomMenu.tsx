@@ -119,6 +119,12 @@ export const EditorBottomMenu: React.FC = () => {
       case 'SaveAs':
         editor.saveScene(true);
         break;
+      case 'SaveSelectionSlot1':
+        editor.saveSelectionSlot(0);
+        break;
+      case 'SaveSelectionSlot2':
+        editor.saveSelectionSlot(1);
+        break;
       case 'F3':
         editor.promptLoadScene();
         break;
@@ -178,7 +184,11 @@ export const EditorBottomMenu: React.FC = () => {
     { hotkey: 'F9', text: 'Settings', action: 'F9' },
   ];
 
-  const shiftKeys: MenuEntry[] = [{ hotkey: 'F2', text: 'Save As', action: 'SaveAs' }];
+  const shiftKeys: MenuEntry[] = [
+    { hotkey: 'F2', text: 'Save As', action: 'SaveAs' },
+    { hotkey: '1', text: 'Save Sel. 1', action: 'SaveSelectionSlot1', enabled: hasObjectSelection },
+    { hotkey: '2', text: 'Save Sel. 2', action: 'SaveSelectionSlot2', enabled: hasObjectSelection },
+  ];
 
   const altKeys: MenuEntry[] = [
     { hotkey: 'F2', text: 'Save As', action: 'SaveAs' },
