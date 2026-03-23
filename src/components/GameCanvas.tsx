@@ -8,15 +8,16 @@ interface GameCanvasProps {
 export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const uiCanvasRef = useRef<HTMLCanvasElement>(null);
+  const editorOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (canvasRef.current && uiCanvasRef.current && !gameRef.current) {
+    if (canvasRef.current && uiCanvasRef.current && editorOverlayCanvasRef.current && !gameRef.current) {
       // Initialize Game with BOTH canvases
       // canvasRef -> WebGL (CRT)
       // uiCanvasRef -> 2D (UI/Input)
-      const game = new Game(canvasRef.current, uiCanvasRef.current);
+      const game = new Game(canvasRef.current, uiCanvasRef.current, editorOverlayCanvasRef.current);
       gameRef.current = game;
 
       // Start Game Loop
@@ -43,6 +44,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         // Set RENDERER canvas size to display size * dpr for sharp rendering
         canvasRef.current.width = clientWidth * dpr;
         canvasRef.current.height = clientHeight * dpr;
+
+        if (editorOverlayCanvasRef.current) {
+          editorOverlayCanvasRef.current.width = clientWidth * dpr;
+          editorOverlayCanvasRef.current.height = clientHeight * dpr;
+        }
 
         // Notify game of resize
         gameRef.current.resize(canvasRef.current.width, canvasRef.current.height);
@@ -125,6 +131,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
           backgroundColor: 'transparent',
           imageRendering: 'pixelated',
           pointerEvents: 'auto',
+        }}
+      />
+
+      <canvas
+        ref={editorOverlayCanvasRef}
+        id="editor-overlay-canvas"
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          zIndex: 3,
+          backgroundColor: 'transparent',
+          pointerEvents: 'none',
         }}
       />
     </div>

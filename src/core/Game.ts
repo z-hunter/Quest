@@ -25,12 +25,14 @@ export class Game implements IGame {
   public static instance: Game;
 
   canvas: HTMLCanvasElement; // UI Canvas
+  editorOverlayCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
   bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
   rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
   uiCtx: CanvasRenderingContext2D | null;
+  editorOverlayCtx: CanvasRenderingContext2D | null;
 
   crtFilter: CRTFilter | null;
   lastTime: number;
@@ -73,7 +75,16 @@ export class Game implements IGame {
         dir: string,
         onConfirm: (f: string) => void,
         extension?: string,
-        title?: string
+        title?: string,
+        onCancel?: () => void
+      ) => void)
+    | null = null;
+  onRequestChoiceDialog:
+    | ((
+        title: string,
+        message: string,
+        options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>,
+        onResolve: (choiceId: string | null) => void
       ) => void)
     | null = null;
 
@@ -89,25 +100,44 @@ export class Game implements IGame {
     dir: string,
     onConfirm: (f: string) => void,
     extension?: string,
-    title?: string
+    title?: string,
+    onCancel?: () => void
   ): void {
     if (this.onRequestFileBrowser) {
-      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title);
+      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title, onCancel);
     } else {
       console.error('File Browser UI not hooked up!');
       alert('File Browser Unavailable');
     }
   }
 
+  requestChoiceDialog(
+    title: string,
+    message: string,
+    options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>
+  ): Promise<string | null> {
+    if (!this.onRequestChoiceDialog) {
+      console.error('Choice Dialog UI not hooked up!');
+      return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+      this.onRequestChoiceDialog!(title, message, options, resolve);
+    });
+  }
+
   constructor(
     rendererCanvas: HTMLCanvasElement, // The main visual canvas (WebGL)
-    uiCanvas: HTMLCanvasElement // The UI overlay canvas (2D)
+    uiCanvas: HTMLCanvasElement, // The UI overlay canvas (2D)
+    editorOverlayCanvas?: HTMLCanvasElement // High-res editor overlay canvas
   ) {
     Game.instance = this;
     this.rendererCanvas = rendererCanvas;
     this.canvas = uiCanvas;
+    this.editorOverlayCanvas = editorOverlayCanvas || null;
 
     this.uiCtx = this.canvas.getContext('2d');
+    this.editorOverlayCtx = this.editorOverlayCanvas?.getContext('2d') || null;
 
     // Create an offscreen buffer for the game to draw onto
     this.bufferCanvas = document.createElement('canvas');
@@ -123,14 +153,14 @@ export class Game implements IGame {
     this.settings = {
       crt: {
         enabled: true,
-        curvature: 0.1,
-        scanlineCount: 800,
-        scanlineIntensity: 0.5,
-        aberration: 1.0,
-        vignette: 0.3,
-        phosphor: 0.0,
-        bezelGlow: false,
-        bloom: 0.0,
+        curvature: 0.16,
+        scanlineCount: 200,
+        scanlineIntensity: 0.4,
+        aberration: 0.2,
+        vignette: 0.9,
+        phosphor: 1.0,
+        bezelGlow: true,
+        bloom: 0.05,
       },
       editor: {
         uiScale: 1.0,
@@ -150,6 +180,7 @@ export class Game implements IGame {
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
+    if (this.editorOverlayCtx) this.editorOverlayCtx.imageSmoothingEnabled = true;
 
     // (Previously corrupted lines removed)
     this.input = new Input(this);
@@ -246,19 +277,22 @@ export class Game implements IGame {
       this.editor.update(deltaTime);
     }
 
-    // Cursor Logic: Change to 'eye' if hovering over Subscene object in Game Mode
+    // Cursor Logic: Change to contextual cursor if hovering over interactive object in Game Mode
     if (!this.editor.enabled && this.sceneManager.currentScene) {
-      const hovered = this.sceneManager.currentScene.checkHover(
+      const hoverCursor = this.sceneManager.currentScene.checkHover(
         this.input.mouse.x,
         this.input.mouse.y
       );
-      if (hovered) {
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
+      if (hoverCursor === 'eye') {
         this.canvas.classList.add('cursor-eye');
-      } else {
-        this.canvas.classList.remove('cursor-eye');
+      } else if (hoverCursor === 'hand') {
+        this.canvas.classList.add('cursor-hand');
+      } else if (hoverCursor === 'back') {
+        this.canvas.classList.add('cursor-back');
       }
     } else {
-      this.canvas.classList.remove('cursor-eye');
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
     }
   }
 
@@ -321,16 +355,40 @@ export class Game implements IGame {
       }
     }
 
-    // 3. Render UI/Editor to UI Canvas (Overlay)
+    // 3. Render UI/Editor overlays
     if (this.uiCtx) {
       this.uiCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    if (this.editorOverlayCtx && this.editorOverlayCanvas) {
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.editorOverlayCtx.clearRect(
+        0,
+        0,
+        this.editorOverlayCanvas.width,
+        this.editorOverlayCanvas.height
+      );
+    }
 
+    if (this.uiCtx) {
       // Sprite Editor Overlay (Takes over screen if active)
       if (this.spriteEditor.active) {
         this.spriteEditor.render(this.uiCtx);
-      } else {
+      } else if (!this.editorOverlayCtx) {
         this.editor.render(this.uiCtx);
       }
+    }
+
+    if (
+      this.editorOverlayCtx &&
+      this.editorOverlayCanvas &&
+      !this.spriteEditor.active &&
+      this.editor.enabled
+    ) {
+      const scaleX = this.editorOverlayCanvas.width / this.canvas.width;
+      const scaleY = this.editorOverlayCanvas.height / this.canvas.height;
+      this.editorOverlayCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      this.editor.render(this.editorOverlayCtx);
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
 
@@ -438,11 +496,6 @@ export class Game implements IGame {
     return this.textAssets.getServiceText(key, params);
   }
 
-  private getPlayerFacingEntityTitle(entity: Entity): string | null {
-    const title = this.textAssets.getResolvedObjectField(entity, 'title');
-    return title && title.trim() ? title.trim() : null;
-  }
-
   private getPlayerFacingObjectTitle(target: SceneObject): string | null {
     const title = this.textAssets.getResolvedObjectField(target as any, 'title');
     return title && title.trim() ? title.trim() : null;
@@ -501,8 +554,8 @@ export class Game implements IGame {
     return this.inventory.includes(entity);
   }
 
-  private canExamineEntity(entity: Entity): GameActionOutcome | null {
-    if (this.isEntityInInventory(entity)) return null;
+  private canExamineObject(entity: SceneObject): GameActionOutcome | null {
+    if (entity instanceof Entity && this.isEntityInInventory(entity)) return null;
 
     const scene = this.sceneManager.currentScene;
     if (!scene) {
@@ -562,7 +615,7 @@ export class Game implements IGame {
     };
   }
 
-  lookEntity(entity: Entity): GameActionOutcome {
+  lookEntity(entity: SceneObject): GameActionOutcome {
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
     if (interactionId) {
@@ -575,14 +628,26 @@ export class Game implements IGame {
       };
     }
 
-    const description =
-      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription =
+      typeof (entity as any).description === 'string' ? (entity as any).description : null;
+    const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
-      const spatialMessage = this.getSpatialParentMessage(entity);
       return {
         status: 'ok',
         code: 'entity_description',
-        message: spatialMessage ? `${description.trim()} ${spatialMessage}` : description,
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    const targetTitle = this.getPlayerFacingObjectTitle(entity);
+    if (targetTitle) {
+      const genericMessage = this.text('parser.look_default_object', { target: targetTitle });
+      return {
+        status: 'ok',
+        code: 'entity_generic_description',
+        message: genericMessage,
         data: { targetType: 'entity', entityId: entity.name },
       };
     }
@@ -595,9 +660,29 @@ export class Game implements IGame {
     };
   }
 
-  examineEntity(entity: Entity): GameActionOutcome {
-    const accessError = this.canExamineEntity(entity);
+  examineEntity(entity: SceneObject): GameActionOutcome {
+    const accessError = this.canExamineObject(entity);
     if (accessError) return accessError;
+
+    const subsceneComponent = entity.components?.find(
+      (component: any) => component?.type === 'Subscene'
+    );
+    if (subsceneComponent && this.sceneManager.currentScene) {
+      this.sceneManager.currentScene.activateObject(entity);
+      const seeMessage = this.getSeeMessage(entity);
+      const targetTitle = this.getPlayerFacingObjectTitle(entity);
+      return {
+        status: 'ok',
+        code: 'subscene_activated',
+        ...(seeMessage
+          ? { message: seeMessage }
+          : targetTitle
+            ? { message: this.text('engine.click_you_see', { title: targetTitle }) }
+            : {}),
+        data: { targetType: 'entity', entityId: entity.name },
+        effects: ['subscene_opened'],
+      };
+    }
 
     const interactionId =
       entity.interactions &&
@@ -627,8 +712,10 @@ export class Game implements IGame {
       };
     }
 
-    const description =
-      this.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
+    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription =
+      typeof (entity as any).description === 'string' ? (entity as any).description : null;
+    const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
       return {
         status: 'ok',
@@ -658,8 +745,16 @@ export class Game implements IGame {
     }
 
     const anchorNode = scene.getSpatialNode(anchorNodeId);
-    const anchorTitle = anchorNode?.title?.trim() || null;
-    if (!anchorNode || !anchorTitle) {
+    const anchorObject =
+      scene.entities.find((entity) => entity.name === anchorNodeId) ||
+      scene.triggerboxes.find((triggerbox) => triggerbox.name === anchorNodeId) ||
+      scene.walkbox.find((walkbox) => walkbox.name === anchorNodeId) ||
+      null;
+    const anchorTitle =
+      anchorNode?.title?.trim() ||
+      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject)?.trim() : null) ||
+      null;
+    if (!anchorTitle) {
       return {
         status: 'escalate',
         code: 'spatial_node_missing_title',
@@ -739,9 +834,10 @@ export class Game implements IGame {
 
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (isItem || entity.isTakeable) {
+      scene.playPickupAnimation(entity);
       scene.removeEntity(entity);
       this.inventory.push(entity);
-      const itemTitle = this.getPlayerFacingEntityTitle(entity);
+      const itemTitle = this.getPlayerFacingObjectTitle(entity);
       if (!itemTitle) {
         return {
           status: 'escalate',
@@ -792,7 +888,7 @@ export class Game implements IGame {
 
   showInventory(): GameActionOutcome {
     const inventoryTitles = this.inventory
-      .map((entity: any) => this.getPlayerFacingEntityTitle(entity))
+      .map((entity: any) => this.getPlayerFacingObjectTitle(entity))
       .filter((title): title is string => !!title);
 
     if (inventoryTitles.length !== this.inventory.length) {
@@ -822,7 +918,9 @@ export class Game implements IGame {
   }
 
   goToSceneTarget(target: string): GameActionOutcome {
-    const normalized = String(target || '').trim().toUpperCase();
+    const normalized = String(target || '')
+      .trim()
+      .toUpperCase();
     if (!normalized) {
       return {
         status: 'failed',
@@ -876,7 +974,7 @@ export class Game implements IGame {
   goToEntity(entity: Entity): GameActionOutcome {
     const currentScene = this.sceneManager.currentScene;
     if (currentScene?.player && 'x' in entity && 'y' in entity) {
-      const entityTitle = this.getPlayerFacingEntityTitle(entity);
+      const entityTitle = this.getPlayerFacingObjectTitle(entity);
       if (!entityTitle) {
         return {
           status: 'escalate',

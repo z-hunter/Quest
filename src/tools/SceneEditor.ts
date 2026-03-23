@@ -4,6 +4,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { normalizeTriggerComponents } from '../entities/TriggerComponents';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
@@ -22,6 +23,7 @@ export class SceneEditor {
 
   game: any;
   enabled: boolean;
+  selectionSlots: Array<string[] | null>;
   // State Properties
   get selectedObject(): SceneObject | null {
     return this.selectionManager.selectedObject;
@@ -30,6 +32,7 @@ export class SceneEditor {
     this.selectionManager.selectedObject = val;
   }
   lastMousePos: { x: number; y: number };
+  lastClientMousePos: { x: number; y: number };
 
   // Callbacks
   // Refactored: Use this.game.openFileBrowser instead of local property
@@ -50,9 +53,11 @@ export class SceneEditor {
     this.persistenceManager = new EditorPersistenceManager(this);
     this.ui = new EditorUI(this);
     this.enabled = false;
+    this.selectionSlots = [null, null];
 
     this.selectionManager.selectedObject = null;
     this.lastMousePos = { x: 0, y: 0 };
+    this.lastClientMousePos = { x: 0, y: 0 };
 
     // Bind handlers once for cleanup
 
@@ -77,6 +82,8 @@ export class SceneEditor {
   lastCameraPos: { x: number; y: number } = { x: 0, y: 0 };
 
   update(_deltaTime?: number): void {
+    this.persistenceManager.ensureCurrentSceneBaseline();
+
     // Check for Camera changes to update UI
     if (this.game.sceneManager.currentScene) {
       const cam = this.game.sceneManager.currentScene.camera;
@@ -127,14 +134,17 @@ export class SceneEditor {
   }
 
   handleGlobalKey(e: KeyboardEvent): void {
+    const isTypingInField =
+      document.activeElement instanceof HTMLInputElement ||
+      document.activeElement instanceof HTMLTextAreaElement;
+
     if (
       this.enabled &&
       e.key === '/' &&
       !e.ctrlKey &&
       !e.metaKey &&
       !e.altKey &&
-      !(document.activeElement instanceof HTMLInputElement) &&
-      !(document.activeElement instanceof HTMLTextAreaElement)
+      !isTypingInField
     ) {
       const filterInput = document.getElementById(
         'hierarchy-filter-input'
@@ -257,6 +267,24 @@ export class SceneEditor {
     // Allows opening editor with F1 or F5 even if disabled
     if (!this.enabled && e.key !== 'F1' && e.key !== 'F5') return;
 
+    if (
+      this.enabled &&
+      !isTypingInField &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      (e.code === 'Digit1' || e.code === 'Digit2') &&
+      this.isSelectionSlotHotkeyContext()
+    ) {
+      const slotIndex = e.code === 'Digit1' ? 0 : 1;
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.saveSelectionSlot(slotIndex);
+      } else if (!e.altKey) {
+        this.restoreSelectionSlot(slotIndex);
+      }
+      return;
+    }
+
     // F1: Toggle Scene Editor
     if (e.key === 'F1') {
       e.preventDefault();
@@ -316,7 +344,7 @@ export class SceneEditor {
     switch (e.key.toLowerCase()) {
       case 'f2':
         e.preventDefault();
-        if (e.shiftKey)
+        if (e.shiftKey || e.altKey)
           this.persistenceManager.saveScene(true); // Save As
         else this.persistenceManager.saveScene(false); // Quick Save
         break;
@@ -537,7 +565,7 @@ export class SceneEditor {
     return this.persistenceManager.loadObject(mode);
   }
 
-  saveScene(saveAs: boolean = false): Promise<void> {
+  saveScene(saveAs: boolean = false): Promise<boolean> {
     return this.persistenceManager.saveScene(saveAs);
   }
 
@@ -551,6 +579,7 @@ export class SceneEditor {
 
   onMouseMove(e: MouseEvent): void {
     this.lastMousePos = this.getMousePos(e);
+    this.lastClientMousePos = { x: e.clientX, y: e.clientY };
     this.transformManager.onMouseMove(e);
   }
 
@@ -578,18 +607,123 @@ export class SceneEditor {
     return this.selectionManager.getSelectedObjects();
   }
 
+  private getObjectKey(obj: any): string | null {
+    if (!obj) return null;
+    if (obj.type === 'Quad') return `Quad:${obj.name}`;
+    if (obj instanceof Actor) return `Actor:${obj.name}`;
+    if (obj instanceof Entity) return `Entity:${obj.name}`;
+    if (obj instanceof Walkbox) return `Walkbox:${obj.name || 'Walkbox'}`;
+    if (obj instanceof Triggerbox) return `Triggerbox:${obj.name || 'Triggerbox'}`;
+    return null;
+  }
+
+  private findObjectBySelectionKey(key: string): SceneObject | null {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene || !key) return null;
+
+    const sep = key.indexOf(':');
+    const type = sep >= 0 ? key.slice(0, sep) : '';
+    const name = sep >= 0 ? key.slice(sep + 1) : key;
+    if (!type || !name) return null;
+
+    if (type === 'Entity' || type === 'Actor') {
+      return (scene.entities || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Walkbox') {
+      return (scene.walkbox || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Triggerbox') {
+      return (scene.triggerboxes || []).find((obj: any) => obj?.name === name) || null;
+    }
+    if (type === 'Quad') {
+      return (
+        (scene.entities || []).find((obj: any) => obj?.type === 'Quad' && obj?.name === name) ||
+        null
+      );
+    }
+
+    return null;
+  }
+
+  private getCurrentObjectSelectionKeys(): string[] {
+    if (this.selectionManager.hasMultiSelection()) {
+      return this.selectionManager
+        .getSelectedObjects()
+        .map((obj) => this.getObjectKey(obj))
+        .filter((key): key is string => !!key);
+    }
+
+    const key = this.getObjectKey(this.selectedObject);
+    return key ? [key] : [];
+  }
+
+  private isSelectionSlotHotkeyContext(): boolean {
+    const { x, y } = this.lastClientMousePos;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const hovered = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (!hovered) return false;
+    if (hovered.closest('#hierarchy-panel')) return true;
+    if (this.game.canvas?.contains(hovered) || hovered === this.game.canvas) return true;
+    return false;
+  }
+
+  saveSelectionSlot(slotIndex: number): void {
+    const keys = this.getCurrentObjectSelectionKeys();
+    const slotNumber = slotIndex + 1;
+    if (!keys.length) {
+      this.game.showNotification(`Nothing selected to save in slot ${slotNumber}`);
+      return;
+    }
+
+    this.selectionSlots[slotIndex] = [...keys];
+    const label = keys.length === 1 ? 'object' : 'objects';
+    this.game.showNotification(`Saved ${keys.length} ${label} to selection slot ${slotNumber}`);
+  }
+
+  restoreSelectionSlot(slotIndex: number): void {
+    const slotNumber = slotIndex + 1;
+    const stored = this.selectionSlots[slotIndex];
+    if (!stored || stored.length === 0) {
+      this.game.showNotification(`Selection slot ${slotNumber} is empty`);
+      return;
+    }
+
+    const objects = stored
+      .map((key) => this.findObjectBySelectionKey(key))
+      .filter((obj): obj is SceneObject => !!obj);
+
+    if (!objects.length) {
+      this.game.showNotification(`Saved selection in slot ${slotNumber} is no longer available`);
+      return;
+    }
+
+    if (objects.length === 1) {
+      this.selectObject(objects[0]);
+    } else {
+      this.setMultiSelection(objects);
+    }
+
+    const label = objects.length === 1 ? 'object' : 'objects';
+    this.game.showNotification(
+      `Restored ${objects.length} ${label} from selection slot ${slotNumber}`
+    );
+  }
+
   newScene(): void {
-    const newScene = new Scene(this.game, 'new_scene', 'New Scene');
-    // Add default scale
-    newScene.scaling.enabled = true;
-    this.game.sceneManager.addScene(newScene);
-    this.game.sceneManager.switchTo(newScene.id);
-    this.game.textAssets.ensureSceneAssetFile(newScene).catch((err: unknown) => {
-      console.error('Failed to create default scene text asset:', err);
+    void this.persistenceManager.runWithUnsavedChangesGuard(async () => {
+      const newScene = new Scene(this.game, 'new_scene', 'New Scene');
+      // Add default scale
+      newScene.scaling.enabled = true;
+      this.game.sceneManager.addScene(newScene);
+      this.game.sceneManager.switchTo(newScene.id);
+      this.persistenceManager.ensureCurrentSceneBaseline();
+      this.game.textAssets.ensureSceneAssetFile(newScene).catch((err: unknown) => {
+        console.error('Failed to create default scene text asset:', err);
+      });
+      this.syncUI();
+      this.refreshHierarchy();
+      this.selectObject('SCENE');
     });
-    this.syncUI();
-    this.refreshHierarchy();
-    this.selectObject('SCENE');
   }
 
   refreshHierarchy(): void {
@@ -670,7 +804,7 @@ export class SceneEditor {
         }
         newObj = new Triggerbox(poly, data.name, data.script || '');
         if (data.groupID) newObj.groupID = data.groupID;
-        if (data.components) newObj.components = JSON.parse(JSON.stringify(data.components));
+        if (data.components) newObj.components = normalizeTriggerComponents(data.components);
         if (data.locked) newObj.locked = data.locked;
         if (data.disabled) newObj.disabled = data.disabled;
         if (data.customName) newObj.customName = data.customName;
@@ -778,17 +912,13 @@ export class SceneEditor {
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
       if (this.selectedObject instanceof Walkbox) {
-        const index = scene.walkbox.indexOf(this.selectedObject);
-        if (index > -1) scene.walkbox.splice(index, 1);
+        scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
-        const index = scene.triggerboxes.indexOf(this.selectedObject);
-        if (index > -1) scene.triggerboxes.splice(index, 1);
+        scene.removeTriggerbox(this.selectedObject);
       } else if (this.selectedObject instanceof Entity) {
-        const index = scene.entities.indexOf(this.selectedObject);
-        if (index > -1) scene.entities.splice(index, 1);
+        scene.removeEntity(this.selectedObject);
       } else if (this.selectedObject instanceof Actor) {
-        const index = scene.entities.indexOf(this.selectedObject);
-        if (index > -1) scene.entities.splice(index, 1);
+        scene.removeEntity(this.selectedObject);
       }
     }
 
@@ -855,7 +985,7 @@ export class SceneEditor {
       ctx.translate(-camX, -camY); // Apply Camera
 
       ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 2 / (scene && scene.camera ? scene.camera.zoom : 1);
+      ctx.lineWidth = 1.25 / (scene && scene.camera ? scene.camera.zoom : 1);
       ctx.beginPath();
       ctx.moveTo(
         this.transformManager.currentPolygon[0].x,
@@ -926,12 +1056,12 @@ export class SceneEditor {
             ctx.closePath();
 
             ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2 / zoom;
+            ctx.lineWidth = 1.25 / zoom;
             ctx.stroke();
 
             // Draw Vertices
             ctx.fillStyle = '#00ff00';
-            const handleSize = 6 / zoom;
+            const handleSize = 5 / zoom;
             verts.forEach((v: any, i: number) => {
               const p = getDrawPos(v);
               // Highlight dragging vertex
@@ -1007,7 +1137,7 @@ export class SceneEditor {
             ctx.setLineDash([4 / zoom, 4 / zoom]); // Dashed, thin line
           } else {
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2 / zoom;
+            ctx.lineWidth = 1.25 / zoom;
             ctx.setLineDash([4 / zoom, 4 / zoom]);
           }
 
@@ -1026,7 +1156,7 @@ export class SceneEditor {
           // Draw Resize Handles (Only if NOT locked)
           if (!entity.locked) {
             ctx.fillStyle = '#ffffff';
-            const hSize = 6 / zoom; // Handle size
+            const hSize = 5 / zoom; // Handle size
 
             const l = drawX - entity.width / 2;
             const r = drawX + entity.width / 2;
@@ -1051,9 +1181,10 @@ export class SceneEditor {
         ctx.restore();
       } else if (selected instanceof Walkbox || selected instanceof Triggerbox) {
         // Triggerbox/Walkbox
+        const p = (selected as any).parallax !== undefined ? (selected as any).parallax : 1.0;
         ctx.translate(halfW, halfH);
         ctx.scale(zoom, zoom);
-        ctx.translate(-camX, -camY);
+        ctx.translate(-camX * p, -camY * p);
 
         const poly = selected.poly;
 
@@ -1063,10 +1194,10 @@ export class SceneEditor {
 
         if (selected.locked) {
           // Locked Style
-          ctx.lineWidth = 1.5 / zoom;
+          ctx.lineWidth = 1 / zoom;
           ctx.setLineDash([]);
         } else {
-          ctx.lineWidth = 3 / zoom;
+          ctx.lineWidth = 1.75 / zoom;
           ctx.setLineDash([]);
         }
 
@@ -1085,7 +1216,7 @@ export class SceneEditor {
             if (selected instanceof Walkbox) ctx.fillStyle = '#ff0000';
             else ctx.fillStyle = '#ff00ff';
 
-            const handleSize = 6 / zoom;
+            const handleSize = 5 / zoom;
             for (const pt of poly) {
               ctx.fillRect(pt.x - handleSize / 2, pt.y - handleSize / 2, handleSize, handleSize);
             }
@@ -1106,7 +1237,7 @@ export class SceneEditor {
         ctx.save();
         ctx.strokeStyle = '#79EFA4';
         ctx.fillStyle = 'rgba(121, 239, 164, 0.12)';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 0.75;
         ctx.setLineDash([4, 3]);
         ctx.fillRect(x, y, w, h);
         ctx.strokeRect(x, y, w, h);
@@ -1123,7 +1254,7 @@ export class SceneEditor {
       (this.selectedObject as any) === 'SCENE'
     ) {
       ctx.save();
-      ctx.font = '10px monospace';
+      ctx.font = '5px monospace';
 
       const zoom = scene.camera ? scene.camera.zoom : 1;
       const camY = scene.camera ? scene.camera.y : 0;

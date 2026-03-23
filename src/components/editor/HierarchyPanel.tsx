@@ -416,7 +416,7 @@ export const HierarchyPanel: React.FC = () => {
                 >
                   {icon}
                 </span>
-                {label}
+                <span className="hierarchy-id-text">{label}</span>
               </div>
               {item.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
             </div>

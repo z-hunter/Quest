@@ -1,10 +1,14 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
+import type { SceneObject } from '../entities/SceneObject';
 
 export type ParserEntityContext = {
   id: string;
-  type: string;
   title: string;
+  item?: true;
+  reachable?: true;
+  x?: number;
+  y?: number;
   synonyms?: string[];
   description?: string;
   details?: string;
@@ -107,6 +111,10 @@ export type ParserCommandSpec = {
 export type ParserContext = {
   rawInput: string;
   normalizedInput: string;
+  player?: {
+    x: number;
+    y: number;
+  };
   scene?: {
     id: string;
     title?: string;
@@ -121,12 +129,12 @@ export type ParserContext = {
 };
 
 export type ParserScope = {
-  visible: Entity[];
+  visible: SceneObject[];
   held: Entity[];
   takable: Entity[];
-  reachable: Entity[];
-  examinable: Entity[];
-  subscene: Entity[];
+  reachable: SceneObject[];
+  examinable: SceneObject[];
+  subscene: SceneObject[];
 };
 
 export type ParserWorldModel = {

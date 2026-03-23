@@ -11,7 +11,12 @@ import type { IGame } from '../core/IGame';
 import { toVisualPosition } from '../utils/Parallax';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
-import { handleSceneClick, activateSceneObject } from './SceneInteraction';
+import {
+  handleSceneClick,
+  activateSceneObject,
+  getHoverCursorAtScreenPoint,
+  type HoverCursor,
+} from './SceneInteraction';
 import { useEditorStore } from '../store/editorStore';
 import type {
   SpatialIndex,
@@ -20,6 +25,15 @@ import type {
   SpatialRelationType,
 } from './spatialTypes';
 import type { SubsceneComponent } from '../systems/ComponentSystem';
+
+interface PickupAnimation {
+  entity: Entity;
+  startY: number;
+  lift: number;
+  duration: number;
+  elapsed: number;
+  baseModelScale: number;
+}
 
 export interface SceneScaling {
   enabled: boolean;
@@ -69,6 +83,7 @@ export class Scene {
   filename: string;
   background: HTMLImageElement | null;
   entities: Entity[];
+  pickupAnimations: PickupAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
   scaling: SceneScaling;
@@ -117,7 +132,9 @@ export class Scene {
     this._activeSubscene = value;
   }
 
-  private normalizeSpatialPlacement(value: SpatialPlacement | undefined | null): SpatialPlacement | null {
+  private normalizeSpatialPlacement(
+    value: SpatialPlacement | undefined | null
+  ): SpatialPlacement | null {
     if (!value) return null;
     const parentNodeId = typeof value.parentNodeId === 'string' ? value.parentNodeId.trim() : '';
     const relation =
@@ -278,10 +295,58 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
+      if (this.subsceneEntities.has(entity)) {
+        this.subsceneEntities.delete(entity);
+      }
       if (this.player === entity) {
         this.player = null;
       }
     }
+  }
+
+  removeTriggerbox(triggerbox: Triggerbox): void {
+    const index = this.triggerboxes.indexOf(triggerbox);
+    if (index > -1) {
+      this.triggerboxes.splice(index, 1);
+      if (this.subsceneEntities.has(triggerbox)) {
+        this.subsceneEntities.delete(triggerbox);
+      }
+      if (this.activeSubscene && triggerbox.name === this.activeSubscene) {
+        this.activeSubscene = null;
+      }
+    }
+  }
+
+  removeWalkbox(walkbox: Walkbox): void {
+    const index = this.walkbox.indexOf(walkbox);
+    if (index > -1) {
+      this.walkbox.splice(index, 1);
+      if (this.subsceneEntities.has(walkbox)) {
+        this.subsceneEntities.delete(walkbox);
+      }
+    }
+  }
+
+  playPickupAnimation(entity: Entity): void {
+    const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
+    clone.disabled = false;
+    clone.visible = true;
+    clone.locked = true;
+    clone.groupID = null;
+    clone.components = [];
+    clone.interactions = {};
+    clone.opacity = entity.opacity ?? 1.0;
+    // @ts-ignore
+    clone.scene = this;
+
+    this.pickupAnimations.push({
+      entity: clone,
+      startY: clone.y,
+      lift: 26,
+      duration: 260,
+      elapsed: 0,
+      baseModelScale: clone.modelScale || 1,
+    });
   }
 
   findEntity(name: string): Entity | undefined {
@@ -574,30 +639,8 @@ export class Scene {
     return null;
   }
 
-  checkHover(x: number, y: number): boolean {
-    // Transform Screen Coordinates to World Coordinates
-    const screenW = 420;
-    const screenH = 300;
-    const halfW = screenW / 2;
-    const halfH = screenH / 2;
-    const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
-    const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
-
-    const obj = this.getHitObject(worldX, worldY);
-
-    if (obj && obj.components) {
-      const sub = obj.components.find((c) => c.type === 'Subscene') as any;
-      if (sub) {
-        // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
-        const currentSubsceneId = (obj.name || sub.targetGroupId || '').trim();
-        if (this.activeSubscene && currentSubsceneId && currentSubsceneId === this.activeSubscene) {
-          return false;
-        }
-        return true;
-      }
-    }
-
-    return false;
+  checkHover(x: number, y: number): HoverCursor | null {
+    return getHoverCursorAtScreenPoint(this, x, y);
   }
 
   onClick(x: number, y: number): void {
@@ -627,6 +670,23 @@ export class Scene {
         entity.update(deltaTime);
       }
     });
+
+    if (this.pickupAnimations.length > 0) {
+      const nextAnimations: PickupAnimation[] = [];
+      for (const anim of this.pickupAnimations) {
+        anim.elapsed += deltaTime;
+        const progress = Math.min(anim.elapsed / anim.duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 2);
+        anim.entity.y = anim.startY - anim.lift * eased;
+        anim.entity.opacity = Math.max(0, 1 - progress);
+        anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * eased);
+        anim.entity.update(deltaTime);
+        if (progress < 1) {
+          nextAnimations.push(anim);
+        }
+      }
+      this.pickupAnimations = nextAnimations;
+    }
   }
 
   // -----------------------------------------------------

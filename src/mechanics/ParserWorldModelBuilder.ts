@@ -1,5 +1,6 @@
 import type { Game } from '../core/Game';
-import type { Entity } from '../entities/Entity';
+import { Entity } from '../entities/Entity';
+import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
@@ -31,6 +32,12 @@ export class ParserWorldModelBuilder {
   private buildContext(rawInput: string, pendingState: ParserPendingState | null): ParserContext {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
+    const playerContext = scene?.player
+      ? this.compactRecord({
+          x: Math.round(scene.player.x),
+          y: Math.round(scene.player.y),
+        })
+      : undefined;
     const sceneContext = scene ? this.buildSceneContext(scene) : undefined;
     const entities = scene ? this.buildEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
@@ -47,6 +54,7 @@ export class ParserWorldModelBuilder {
     return this.compactRecord({
       rawInput,
       normalizedInput,
+      player: playerContext,
       scene: sceneContext,
       entities,
       inventory,
@@ -66,19 +74,32 @@ export class ParserWorldModelBuilder {
   }
 
   private buildEntityContexts(scene: Scene): ParserEntityContext[] {
-    return (scene.entities || [])
-      .map((entity: any) => {
-        const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
+    const sceneObjects: SceneObject[] = [...(scene.entities || []), ...(scene.triggerboxes || [])];
+    return sceneObjects
+      .map((sceneObject) => {
+        const title = this.getPlayerFacingObjectTitle(sceneObject);
         if (!title) return null;
-        const synonyms = this.game.textAssets.getResolvedObjectListField(entity, 'synonyms');
-        const interactions = Object.keys(entity.interactions || {});
+        const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
+        const interactions = Object.keys(sceneObject.interactions || {});
+        const isItem = !!sceneObject.components?.find((component: any) => component?.type === 'Item');
+        const isDirectSceneObject = this.isDirectSceneObject(scene, sceneObject);
+        const coordinates = isDirectSceneObject ? this.getSceneObjectCoordinates(sceneObject) : undefined;
+        const reachable =
+          isDirectSceneObject &&
+          !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
+            ? true
+            : undefined;
         return this.compactRecord<ParserEntityContext>({
-          id: entity.name,
-          type: entity.type,
+          id: sceneObject.name,
           title,
+          item: isItem || undefined,
+          reachable,
+          ...coordinates,
           synonyms,
-          description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
-          details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+          description:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') || undefined,
+          details:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           interactions,
         });
       })
@@ -156,29 +177,25 @@ export class ParserWorldModelBuilder {
 
   private buildScope(): ParserScope {
     const scene = this.game.sceneManager.currentScene;
-    const visible = scene
-      ? (scene.entities || []).filter(
-          (entity: Entity) => !entity.disabled && !!this.getPlayerFacingEntityTitle(entity)
-        )
-      : [];
+    const visible = scene ? this.getTextVisibleSceneObjects(scene) : [];
     const held = (this.game.inventory || []).filter(
-      (entity: Entity) => !!this.getPlayerFacingEntityTitle(entity)
+      (entity: Entity) => !!this.getPlayerFacingObjectTitle(entity)
     );
-    const takable = visible.filter((entity: Entity) => {
+    const takable = visible.filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity).filter((entity: Entity) => {
       const isItem =
         entity.components && entity.components.find((component: any) => component.type === 'Item');
       return !!isItem || !!entity.isTakeable;
     });
     const subscene = scene?.activeSubscene
-      ? visible.filter((entity: Entity) => scene.subsceneEntities.has(entity as any))
+      ? visible.filter((sceneObject: SceneObject) => scene.subsceneEntities.has(sceneObject as any))
       : [];
     const reachable = scene
       ? visible.filter(
-          (entity: Entity) =>
-            !ComponentSystem.getInteractionDistanceError(entity as any, scene.player)
+          (sceneObject: SceneObject) =>
+            !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
         )
       : [];
-    const examinable = this.uniqueEntities([...held, ...subscene, ...reachable]);
+    const examinable = this.uniqueObjects([...held, ...subscene, ...reachable]);
     return {
       visible,
       held,
@@ -189,9 +206,39 @@ export class ParserWorldModelBuilder {
     };
   }
 
-  private getPlayerFacingEntityTitle(entity: Entity): string | null {
-    const title = this.game.textAssets.getResolvedObjectField(entity, 'title');
+  private getTextVisibleSceneObjects(scene: Scene): SceneObject[] {
+    return [...(scene.entities || []), ...(scene.triggerboxes || [])].filter(
+      (sceneObject: SceneObject) => !sceneObject.disabled && !!this.getPlayerFacingObjectTitle(sceneObject)
+    );
+  }
+
+  private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
+    const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
+  }
+
+  private isDirectSceneObject(scene: Scene, sceneObject: SceneObject): boolean {
+    const placement = scene.getSpatialPlacementForObject(sceneObject);
+    return !placement?.parentNodeId;
+  }
+
+  private getSceneObjectCoordinates(sceneObject: SceneObject): { x: number; y: number } | undefined {
+    if (typeof (sceneObject as any).x === 'number' && typeof (sceneObject as any).y === 'number') {
+      return {
+        x: Math.round((sceneObject as any).x),
+        y: Math.round((sceneObject as any).y),
+      };
+    }
+
+    const poly = Array.isArray((sceneObject as any).poly) ? (sceneObject as any).poly : null;
+    if (!poly?.length) return undefined;
+
+    const xs = poly.map((point: { x: number; y: number }) => point.x);
+    const ys = poly.map((point: { x: number; y: number }) => point.y);
+    return {
+      x: Math.round((Math.min(...xs) + Math.max(...xs)) / 2),
+      y: Math.round((Math.min(...ys) + Math.max(...ys)) / 2),
+    };
   }
 
   private compactRecord<T extends Record<string, unknown>>(value: T): T {
@@ -214,7 +261,7 @@ export class ParserWorldModelBuilder {
     return result as T;
   }
 
-  private uniqueEntities(entities: Entity[]): Entity[] {
-    return Array.from(new Set(entities));
+  private uniqueObjects<T extends SceneObject>(sceneObjects: T[]): T[] {
+    return Array.from(new Set(sceneObjects));
   }
 }

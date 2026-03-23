@@ -141,8 +141,23 @@ export class ComponentSystem {
     const game = (entity as any).game as IGame | undefined;
     if (!player || options?.ignoreDistance) return null;
 
-    const e = entity as unknown as { x: number; y: number };
-    const dist = Math.hypot(player.x - e.x, player.y - e.y);
+    let targetX = 0;
+    let targetY = 0;
+
+    if (
+      Array.isArray((entity as any).poly) &&
+      (entity as any).poly.length > 0
+    ) {
+      const poly = (entity as any).poly as Array<{ x: number; y: number }>;
+      targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
+      targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
+    } else {
+      const e = entity as unknown as { x?: number; y?: number };
+      targetX = e.x || 0;
+      targetY = e.y || 0;
+    }
+
+    const dist = Math.hypot(player.x - targetX, player.y - targetY);
     const allowedDist = (player.width || 30) * 4;
 
     if (dist > allowedDist) {

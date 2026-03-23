@@ -29,6 +29,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     examine_relation_prompt: 'Examine what area?',
     relation_empty: 'You see nothing {relation} the {target}.',
     relation_contents: '{Relation} the {target} you see: {items}.',
+    relation_location: 'It is {relation} the {target}.',
     relation_not_supported: "You can't determine what is {relation} the {target} from here.",
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
@@ -115,7 +116,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   relationMarkers: {
     on: ['on'],
     under: ['under', 'beneath'],
-    in: ['in', 'inside'],
+    in: ['in', 'inside', 'into'],
     behind: ['behind'],
     near: ['near', 'next to', 'by'],
   },
@@ -355,8 +356,23 @@ export class TextAssetManager {
   }
 
   buildDefaultObjectAsset(obj: SceneObject): ObjectTextAssetData {
-    const fallbackTitle = (obj as any).customName || obj.name || obj.type || 'Object';
-    const fallbackDescription = (obj as any).description || 'You see nothing special.';
+    const subsceneComponent = Array.isArray((obj as any).components)
+      ? (obj as any).components.find((component: any) => component?.type === 'Subscene')
+      : null;
+    const fallbackTitle =
+      (obj as any).customName ||
+      (typeof subsceneComponent?.title === 'string' && subsceneComponent.title.trim()
+        ? subsceneComponent.title.trim()
+        : '') ||
+      obj.name ||
+      obj.type ||
+      'Object';
+    const fallbackDescription =
+      (typeof subsceneComponent?.description === 'string' && subsceneComponent.description.trim()
+        ? subsceneComponent.description
+        : '') ||
+      (obj as any).description ||
+      'You see nothing special.';
     return {
       title: fallbackTitle,
       description: fallbackDescription,
@@ -437,7 +453,9 @@ export class TextAssetManager {
   async preloadScene(scene: Scene): Promise<void> {
     await this.readSceneAsset(scene, true);
     await Promise.all(
-      (scene.entities || []).map((entity: SceneObject) => this.readObjectAsset(entity, true))
+      [...(scene.entities || []), ...(scene.triggerboxes || [])].map((object: SceneObject) =>
+        this.readObjectAsset(object, true)
+      )
     );
   }
 

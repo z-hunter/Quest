@@ -11,7 +11,7 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('You are in Test Scene.');
   });
 
-  it('lookEntity appends spatial parent context when present', () => {
+  it('lookEntity stays descriptive even when spatial parent context exists', () => {
     const fixture = createGameSemanticFixture();
     fixture.addEntity('Table', {
       title: 'Table',
@@ -26,7 +26,7 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.lookEntity(note);
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('A folded note. Under the Table you see: Piece of paper.');
+    expect(outcome.message).toBe('A folded note.');
   });
 
   it('examineEntity prefers details and falls back to description', () => {

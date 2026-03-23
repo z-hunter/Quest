@@ -25,6 +25,7 @@ export type TestTextAssets = TextAssetLike & {
 };
 
 const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+  'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
   'engine.locked_needs': 'Locked. Needs {item}',

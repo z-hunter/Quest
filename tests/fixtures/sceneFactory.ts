@@ -16,6 +16,9 @@ type EntityOptions = {
 };
 
 type TriggerboxOptions = {
+  title?: string;
+  description?: string;
+  details?: string;
   disabled?: boolean;
   groupID?: string | null;
   components?: any[];
@@ -90,8 +93,9 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       triggerbox.spatial = options.spatial || {};
       scene.triggerboxes.push(triggerbox);
       harness.textAssets.setObject(name, {
-        title: name,
-        description: `${name} triggerbox`,
+        title: options.title || name,
+        description: options.description || `${name} triggerbox`,
+        details: options.details,
       });
       return triggerbox;
     },

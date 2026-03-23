@@ -17,6 +17,13 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     onConfirm: (f: string) => void;
     extension?: string;
     title?: string;
+    onCancel?: () => void;
+  } | null>(null);
+  const [choiceDialog, setChoiceDialog] = useState<{
+    title: string;
+    message: string;
+    options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>;
+    onResolve: (choiceId: string | null) => void;
   } | null>(null);
 
   // Console History State
@@ -35,8 +42,11 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
       game.onMessage = (text) => setMessage({ id: Date.now(), text });
 
       // Bind File Browser Request
-      game.onRequestFileBrowser = (mode, dir, onConfirm, extension, title) => {
-        setFileBrowser({ open: true, mode, dir, onConfirm, extension, title });
+      game.onRequestFileBrowser = (mode, dir, onConfirm, extension, title, onCancel) => {
+        setFileBrowser({ open: true, mode, dir, onConfirm, extension, title, onCancel });
+      };
+      game.onRequestChoiceDialog = (title, dialogMessage, options, onResolve) => {
+        setChoiceDialog({ title, message: dialogMessage, options, onResolve });
       };
 
       // Initialize UI bindings
@@ -63,6 +73,21 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   }, [game]);
 
   useEffect(() => {
+    if (!game) return;
+    if (editorEnabled || isConsoleOpen) return;
+
+    const timer = window.setTimeout(() => {
+      const input = parserInputRef.current;
+      if (!input || input.disabled) return;
+      input.focus();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [game, editorEnabled, isConsoleOpen]);
+
+  useEffect(() => {
     if (message) {
       const timer = setTimeout(() => {
         setMessage(null);
@@ -77,6 +102,36 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
       setFileBrowser(null);
     }
   };
+
+  const handleBrowserCancel = () => {
+    if (fileBrowser?.onCancel) {
+      fileBrowser.onCancel();
+    }
+    setFileBrowser(null);
+  };
+
+  const handleChoiceResolve = React.useCallback((choiceId: string | null) => {
+    setChoiceDialog((currentDialog) => {
+      if (currentDialog) {
+        currentDialog.onResolve(choiceId);
+      }
+      return null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!choiceDialog) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleChoiceResolve(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [choiceDialog, handleChoiceResolve]);
 
   return (
     <>
@@ -120,10 +175,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     const preprocessed = game.console.preprocessGameplayInput(val);
 
                     // 1. Log Command to Buffer
-                    game.console.log(val, 'command');
+                    game.console.log(preprocessed, 'command');
 
                     // 2. Add to History
-                    game.console.addHistory(val);
+                    game.console.addHistory(preprocessed);
 
                     // 3. Send to gameplay parser
                     void game.parser.parse(preprocessed);
@@ -205,6 +260,26 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
         </div>
       )}
 
+      {choiceDialog && (
+        <div className="editor-choice-dialog-backdrop" style={{ pointerEvents: 'auto' }}>
+          <div className="editor-choice-dialog">
+            <div className="editor-choice-dialog-title">{choiceDialog.title}</div>
+            <div className="editor-choice-dialog-message">{choiceDialog.message}</div>
+            <div className="editor-choice-dialog-actions">
+              {choiceDialog.options.map((option) => (
+                <button
+                  key={option.id}
+                  className={`e-btn editor-choice-btn editor-choice-btn-${option.variant || 'neutral'}`}
+                  onClick={() => handleChoiceResolve(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Virtual Console Overlay (High Res, Open State) */}
       {game && <ConsoleOverlay game={game} />}
 
@@ -225,7 +300,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             mode={fileBrowser.mode}
             directory={fileBrowser.dir}
             onConfirm={handleBrowserConfirm}
-            onCancel={() => setFileBrowser(null)}
+            onCancel={handleBrowserCancel}
             extension={fileBrowser.extension}
             title={fileBrowser.title}
           />
