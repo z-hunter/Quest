@@ -132,7 +132,9 @@ export class Scene {
     this._activeSubscene = value;
   }
 
-  private normalizeSpatialPlacement(value: SpatialPlacement | undefined | null): SpatialPlacement | null {
+  private normalizeSpatialPlacement(
+    value: SpatialPlacement | undefined | null
+  ): SpatialPlacement | null {
     if (!value) return null;
     const parentNodeId = typeof value.parentNodeId === 'string' ? value.parentNodeId.trim() : '';
     const relation =
@@ -293,6 +295,9 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
+      if (this.subsceneEntities.has(entity)) {
+        this.subsceneEntities.delete(entity);
+      }
       if (this.player === entity) {
         this.player = null;
       }
