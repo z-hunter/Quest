@@ -38,7 +38,9 @@ export interface IGame {
     mode: 'load' | 'save',
     dir: string,
     callback: (file: string) => void,
-    extension?: string
+    extension?: string,
+    title?: string,
+    onCancel?: () => void
   ): void;
   setCommandInput(input: HTMLInputElement | null): void;
   getCommandInput(): HTMLInputElement | null;

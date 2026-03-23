@@ -71,12 +71,21 @@ export class Game implements IGame {
   onMessage: ((text: string) => void) | null = null;
   onRequestFileBrowser:
     | ((
-      mode: 'save' | 'load',
-      dir: string,
-      onConfirm: (f: string) => void,
-      extension?: string,
-      title?: string
-    ) => void)
+        mode: 'save' | 'load',
+        dir: string,
+        onConfirm: (f: string) => void,
+        extension?: string,
+        title?: string,
+        onCancel?: () => void
+      ) => void)
+    | null = null;
+  onRequestChoiceDialog:
+    | ((
+        title: string,
+        message: string,
+        options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>,
+        onResolve: (choiceId: string | null) => void
+      ) => void)
     | null = null;
 
   settings: {
@@ -91,14 +100,30 @@ export class Game implements IGame {
     dir: string,
     onConfirm: (f: string) => void,
     extension?: string,
-    title?: string
+    title?: string,
+    onCancel?: () => void
   ): void {
     if (this.onRequestFileBrowser) {
-      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title);
+      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title, onCancel);
     } else {
       console.error('File Browser UI not hooked up!');
       alert('File Browser Unavailable');
     }
+  }
+
+  requestChoiceDialog(
+    title: string,
+    message: string,
+    options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>
+  ): Promise<string | null> {
+    if (!this.onRequestChoiceDialog) {
+      console.error('Choice Dialog UI not hooked up!');
+      return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+      this.onRequestChoiceDialog!(title, message, options, resolve);
+    });
   }
 
   constructor(
@@ -639,7 +664,9 @@ export class Game implements IGame {
     const accessError = this.canExamineObject(entity);
     if (accessError) return accessError;
 
-    const subsceneComponent = entity.components?.find((component: any) => component?.type === 'Subscene');
+    const subsceneComponent = entity.components?.find(
+      (component: any) => component?.type === 'Subscene'
+    );
     if (subsceneComponent && this.sceneManager.currentScene) {
       this.sceneManager.currentScene.activateObject(entity);
       const seeMessage = this.getSeeMessage(entity);
@@ -882,8 +909,8 @@ export class Game implements IGame {
         this.inventory.length === 0
           ? this.text('parser.inventory_empty')
           : this.text('parser.inventory_items', {
-            items: inventoryTitles.join(', '),
-          }),
+              items: inventoryTitles.join(', '),
+            }),
       data: {
         count: this.inventory.length,
       },
@@ -891,7 +918,9 @@ export class Game implements IGame {
   }
 
   goToSceneTarget(target: string): GameActionOutcome {
-    const normalized = String(target || '').trim().toUpperCase();
+    const normalized = String(target || '')
+      .trim()
+      .toUpperCase();
     if (!normalized) {
       return {
         status: 'failed',

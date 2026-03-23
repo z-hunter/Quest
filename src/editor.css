@@ -137,6 +137,29 @@
   color: #ffa;
 }
 
+.editor-choice-btn-primary {
+  background: #214e3f;
+  border-color: #2d6a55;
+  color: #d9f8ea;
+}
+
+.editor-choice-btn-primary:hover {
+  background: var(--ui-main-color);
+  border-color: var(--ui-main-color);
+  color: #000;
+}
+
+.editor-choice-btn-danger {
+  color: #ffb1b1;
+  border-color: #7a3434;
+}
+
+.editor-choice-btn-danger:hover {
+  background: #7a3434;
+  border-color: #7a3434;
+  color: #fff;
+}
+
 .e-btn-enter {
   border-color: var(--ui-input-focus-border);
   box-shadow: 0 0 5px rgba(121, 239, 164, 0.2);

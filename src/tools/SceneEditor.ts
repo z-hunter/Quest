@@ -82,6 +82,8 @@ export class SceneEditor {
   lastCameraPos: { x: number; y: number } = { x: 0, y: 0 };
 
   update(_deltaTime?: number): void {
+    this.persistenceManager.ensureCurrentSceneBaseline();
+
     // Check for Camera changes to update UI
     if (this.game.sceneManager.currentScene) {
       const cam = this.game.sceneManager.currentScene.camera;
@@ -563,7 +565,7 @@ export class SceneEditor {
     return this.persistenceManager.loadObject(mode);
   }
 
-  saveScene(saveAs: boolean = false): Promise<void> {
+  saveScene(saveAs: boolean = false): Promise<boolean> {
     return this.persistenceManager.saveScene(saveAs);
   }
 
@@ -708,17 +710,20 @@ export class SceneEditor {
   }
 
   newScene(): void {
-    const newScene = new Scene(this.game, 'new_scene', 'New Scene');
-    // Add default scale
-    newScene.scaling.enabled = true;
-    this.game.sceneManager.addScene(newScene);
-    this.game.sceneManager.switchTo(newScene.id);
-    this.game.textAssets.ensureSceneAssetFile(newScene).catch((err: unknown) => {
-      console.error('Failed to create default scene text asset:', err);
+    void this.persistenceManager.runWithUnsavedChangesGuard(async () => {
+      const newScene = new Scene(this.game, 'new_scene', 'New Scene');
+      // Add default scale
+      newScene.scaling.enabled = true;
+      this.game.sceneManager.addScene(newScene);
+      this.game.sceneManager.switchTo(newScene.id);
+      this.persistenceManager.markSceneSaved(newScene);
+      this.game.textAssets.ensureSceneAssetFile(newScene).catch((err: unknown) => {
+        console.error('Failed to create default scene text asset:', err);
+      });
+      this.syncUI();
+      this.refreshHierarchy();
+      this.selectObject('SCENE');
     });
-    this.syncUI();
-    this.refreshHierarchy();
-    this.selectObject('SCENE');
   }
 
   refreshHierarchy(): void {

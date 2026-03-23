@@ -671,6 +671,48 @@ input[type='file'] {
   color: var(--ui-main-color);
 }
 
+.editor-choice-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5200;
+}
+
+.editor-choice-dialog {
+  width: min(28rem, calc(100vw - 40px));
+  background: rgba(10, 10, 10, 0.96);
+  border: 1px solid var(--ui-input-focus-border);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  padding: 14px;
+  color: var(--ui-input-text);
+  font-size: 12px;
+}
+
+.editor-choice-dialog-title {
+  font-family: var(--ui-display-font);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  color: var(--ui-main-color);
+  margin-bottom: 10px;
+}
+
+.editor-choice-dialog-message {
+  color: #c7d9d1;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+
+.editor-choice-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .file-browser-window {
   width: 500px;
   max-width: 95vw;

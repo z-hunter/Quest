@@ -1,20 +1,81 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { SceneObject } from '../../entities/SceneObject';
+import { Scene } from '../../scene/Scene';
 import { useEditorStore } from '../../store/editorStore';
 
 export class EditorPersistenceManager {
   private editor: SceneEditor;
+  private lastSavedSceneId: string | null = null;
+  private lastSavedSceneSnapshot: string | null = null;
 
   constructor(editor: SceneEditor) {
     this.editor = editor;
   }
 
-  // --- Scene Saving ---
+  private serializeScene(scene: Scene): string {
+    return JSON.stringify(scene.toJSON());
+  }
 
-  async saveScene(saveAs: boolean = false): Promise<void> {
+  ensureCurrentSceneBaseline(): void {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return;
+    if (this.lastSavedSceneId === scene.id && this.lastSavedSceneSnapshot !== null) return;
+    this.markSceneSaved(scene);
+  }
+
+  markSceneSaved(scene: Scene): void {
+    this.lastSavedSceneId = scene.id;
+    this.lastSavedSceneSnapshot = this.serializeScene(scene);
+  }
+
+  isCurrentSceneDirty(): boolean {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return false;
+    if (this.lastSavedSceneId !== scene.id || this.lastSavedSceneSnapshot === null) {
+      return false;
+    }
+    return this.serializeScene(scene) !== this.lastSavedSceneSnapshot;
+  }
+
+  private async confirmProceedWithUnsavedChanges(): Promise<'save' | 'discard' | 'cancel'> {
+    const game = this.editor.game;
+    const choice = await game.requestChoiceDialog(
+      'Unsaved Changes',
+      'The current scene has unsaved changes. What would you like to do?',
+      [
+        { id: 'save', label: 'Save and Continue', variant: 'primary' },
+        { id: 'discard', label: 'Continue Without Saving', variant: 'danger' },
+        { id: 'cancel', label: 'Cancel', variant: 'neutral' },
+      ]
+    );
+
+    if (choice === 'save' || choice === 'discard') return choice;
+    return 'cancel';
+  }
+
+  async runWithUnsavedChangesGuard(action: () => Promise<void> | void): Promise<void> {
+    if (!this.isCurrentSceneDirty()) {
+      await action();
+      return;
+    }
+
+    const choice = await this.confirmProceedWithUnsavedChanges();
+    if (choice === 'cancel') return;
+
+    if (choice === 'save') {
+      const saved = await this.saveScene(false);
+      if (!saved) return;
+    }
+
+    await action();
+  }
+
+  // --- Scene Saving ---
+
+  async saveScene(saveAs: boolean = false): Promise<boolean> {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return false;
     const previousSceneId = scene.id || '';
 
     const id = scene.id || '';
@@ -25,30 +86,39 @@ export class EditorPersistenceManager {
       // Smart Save
       // Ensure filename property matches ID (normalized for file system)
       scene.filename = id.replace(/\\/g, '/');
-      this.performSaveScene(scene.filename, previousSceneId);
-      return;
+      return this.performSaveScene(scene.filename, previousSceneId);
     }
 
     // Fallback / Save As
-    this.editor.game.openFileBrowser('save', 'public/scenes', (filename: string) => {
-      // Update Filename from browser selection
-      const name = filename.replace('.json', '');
+    return new Promise((resolve) => {
+      this.editor.game.openFileBrowser(
+        'save',
+        'public/scenes',
+        async (filename: string) => {
+          // Update Filename from browser selection
+          const name = filename.replace('.json', '');
 
-      // Normalize slashes for ID: use backslash for subfolders
-      const idFromName = name.replace(/\//g, '\\');
+          // Normalize slashes for ID: use backslash for subfolders
+          const idFromName = name.replace(/\//g, '\\');
 
-      scene.filename = name;
-      scene.id = idFromName;
-      this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId);
+          scene.filename = name;
+          scene.id = idFromName;
+          this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId);
 
-      this.editor.syncUI(); // Refresh UI to show new Filename
-      this.performSaveScene(scene.filename, previousSceneId);
+          this.editor.syncUI(); // Refresh UI to show new Filename
+          const result = await this.performSaveScene(scene.filename, previousSceneId);
+          resolve(result);
+        },
+        undefined,
+        undefined,
+        () => resolve(false)
+      );
     });
   }
 
-  async performSaveScene(filenameId: string, previousSceneId?: string): Promise<void> {
+  async performSaveScene(filenameId: string, previousSceneId?: string): Promise<boolean> {
     const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return;
+    if (!scene) return false;
 
     // Ensure filenameId uses forward slashes for URL/Path
     const normalizedPath = filenameId.replace(/\\/g, '/');
@@ -67,25 +137,34 @@ export class EditorPersistenceManager {
       if (response.ok) {
         this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
         await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
+        this.markSceneSaved(scene);
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
+        return true;
       } else {
         throw new Error(await response.text());
       }
     } catch (e) {
       console.error('Failed to save scene:', e);
       this.editor.game.showNotification(`Error saving scene: ${e}`);
+      return false;
     }
   }
 
   // --- Scene Loading ---
 
   promptLoadScene(): void {
-    this.editor.game.openFileBrowser('load', 'public/scenes', async (filename: string) => {
-      await this.editor.game.sceneManager.loadScene(filename);
-      this.editor.syncUI();
-      this.editor.refreshHierarchy();
-      this.editor.selectObject(null);
+    void this.runWithUnsavedChangesGuard(async () => {
+      this.editor.game.openFileBrowser('load', 'public/scenes', async (filename: string) => {
+        await this.editor.game.sceneManager.loadScene(filename);
+        this.editor.syncUI();
+        this.editor.refreshHierarchy();
+        this.editor.selectObject(null);
+        const scene = this.editor.game.sceneManager.currentScene;
+        if (scene) {
+          this.markSceneSaved(scene);
+        }
+      });
     });
   }
 
