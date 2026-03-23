@@ -716,7 +716,7 @@ export class SceneEditor {
       newScene.scaling.enabled = true;
       this.game.sceneManager.addScene(newScene);
       this.game.sceneManager.switchTo(newScene.id);
-      this.persistenceManager.markSceneSaved(newScene);
+      this.persistenceManager.ensureCurrentSceneBaseline();
       this.game.textAssets.ensureSceneAssetFile(newScene).catch((err: unknown) => {
         console.error('Failed to create default scene text asset:', err);
       });

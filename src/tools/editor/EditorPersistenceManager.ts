@@ -1,41 +1,31 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { SceneObject } from '../../entities/SceneObject';
-import { Scene } from '../../scene/Scene';
 import { useEditorStore } from '../../store/editorStore';
 
 export class EditorPersistenceManager {
   private editor: SceneEditor;
-  private lastSavedSceneId: string | null = null;
-  private lastSavedSceneSnapshot: string | null = null;
+  private trackedSceneRef: object | null = null;
+  private pendingSceneSave: Promise<boolean> | null = null;
 
   constructor(editor: SceneEditor) {
     this.editor = editor;
   }
 
-  private serializeScene(scene: Scene): string {
-    return JSON.stringify(scene.toJSON());
-  }
-
   ensureCurrentSceneBaseline(): void {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return;
-    if (this.lastSavedSceneId === scene.id && this.lastSavedSceneSnapshot !== null) return;
-    this.markSceneSaved(scene);
+    if (this.trackedSceneRef === scene) return;
+    this.trackedSceneRef = scene;
+    this.editor.undoManager.resetForCleanScene();
   }
 
-  markSceneSaved(scene: Scene): void {
-    this.lastSavedSceneId = scene.id;
-    this.lastSavedSceneSnapshot = this.serializeScene(scene);
+  markSceneSaved(): void {
+    this.editor.undoManager.markSaved();
   }
 
   isCurrentSceneDirty(): boolean {
-    const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return false;
-    if (this.lastSavedSceneId !== scene.id || this.lastSavedSceneSnapshot === null) {
-      return false;
-    }
-    return this.serializeScene(scene) !== this.lastSavedSceneSnapshot;
+    return this.editor.undoManager.isDirty();
   }
 
   private async confirmProceedWithUnsavedChanges(): Promise<'save' | 'discard' | 'cancel'> {
@@ -55,6 +45,13 @@ export class EditorPersistenceManager {
   }
 
   async runWithUnsavedChangesGuard(action: () => Promise<void> | void): Promise<void> {
+    if (this.pendingSceneSave) {
+      const saveResult = await this.pendingSceneSave;
+      if (!saveResult && this.isCurrentSceneDirty()) {
+        return;
+      }
+    }
+
     if (!this.isCurrentSceneDirty()) {
       await action();
       return;
@@ -74,6 +71,22 @@ export class EditorPersistenceManager {
   // --- Scene Saving ---
 
   async saveScene(saveAs: boolean = false): Promise<boolean> {
+    if (this.pendingSceneSave) {
+      return this.pendingSceneSave;
+    }
+
+    const savePromise = this.saveSceneInternal(saveAs);
+    this.pendingSceneSave = savePromise;
+    try {
+      return await savePromise;
+    } finally {
+      if (this.pendingSceneSave === savePromise) {
+        this.pendingSceneSave = null;
+      }
+    }
+  }
+
+  private async saveSceneInternal(saveAs: boolean = false): Promise<boolean> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return false;
     const previousSceneId = scene.id || '';
@@ -137,7 +150,7 @@ export class EditorPersistenceManager {
       if (response.ok) {
         this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
         await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
-        this.markSceneSaved(scene);
+        this.markSceneSaved();
         // Use Toast Message
         this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
         return true;
@@ -162,7 +175,8 @@ export class EditorPersistenceManager {
         this.editor.selectObject(null);
         const scene = this.editor.game.sceneManager.currentScene;
         if (scene) {
-          this.markSceneSaved(scene);
+          this.trackedSceneRef = scene;
+          this.editor.undoManager.resetForCleanScene();
         }
       });
     });
