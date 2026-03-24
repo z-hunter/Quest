@@ -46,6 +46,7 @@ export class EditorSelectionManager {
     if (obj === null || obj === undefined) return { type: null, id: null, key: null };
     if (obj === 'SCENE') return { type: 'SCENE', id: 'SCENE', key: 'SCENE' };
     if (obj === 'SETTINGS') return { type: 'SETTINGS', id: 'SETTINGS', key: 'SETTINGS' };
+    if (obj.type === 'Folder') return { type: 'Folder', id: obj.name, key: `Folder:${obj.name}` };
     if (obj.type === 'Quad') return { type: 'Quad', id: obj.name, key: `Quad:${obj.name}` };
     if (obj instanceof Actor) return { type: 'Actor', id: obj.name, key: `Actor:${obj.name}` };
     if (obj instanceof Entity) return { type: 'Entity', id: obj.name, key: `Entity:${obj.name}` };
@@ -334,9 +335,37 @@ export class EditorSelectionManager {
   }
 
   private getCurrentSelectionForSerialization(): SceneObject[] {
-    if (this.hasMultiSelection()) return this.getSelectedObjects();
-    if (this.editor.selectedObject instanceof SceneObject) return [this.editor.selectedObject];
-    return [];
+    let selected: SceneObject[] = [];
+    if (this.hasMultiSelection()) selected = this.getSelectedObjects();
+    else if (this.editor.selectedObject instanceof SceneObject)
+      selected = [this.editor.selectedObject];
+    if (selected.length === 0) return [];
+
+    // If selection includes folders, also include their contents
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return selected;
+
+    const result = new Set<SceneObject>(selected);
+    const folderNames = selected.filter((obj) => obj.type === 'Folder').map((obj) => obj.name);
+
+    if (folderNames.length > 0) {
+      const allObjects: SceneObject[] = [
+        ...scene.entities,
+        ...scene.walkbox,
+        ...scene.triggerboxes,
+      ];
+      for (const obj of allObjects) {
+        const pid =
+          typeof (obj as any).spatial?.parentNodeId === 'string'
+            ? (obj as any).spatial.parentNodeId.trim()
+            : '';
+        if (pid && folderNames.includes(pid)) {
+          result.add(obj);
+        }
+      }
+    }
+
+    return Array.from(result);
   }
 
   private getSerializedObjectKey(data: any): string {

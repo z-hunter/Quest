@@ -4,6 +4,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { Folder } from '../entities/Folder';
 import { normalizeTriggerComponents } from '../entities/TriggerComponents';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
@@ -846,6 +847,8 @@ export class SceneEditor {
         newObj = Actor.fromJSON(this.game, data);
       } else if (type === 'Player') {
         newObj = Actor.fromJSON(this.game, { ...data, type: 'Actor', isPlayer: true });
+      } else if (type === 'Folder') {
+        newObj = Folder.fromData(this.game, data);
       } else if (type === 'Static' || type === 'Entity') {
         newObj = Entity.fromJSON(this.game, data);
       }
@@ -911,6 +914,21 @@ export class SceneEditor {
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
+      // If deleting a folder, also remove its contents
+      if (this.selectedObject.type === 'Folder') {
+        const folderName = this.selectedObject.name;
+        const children = [
+          ...scene.entities.filter((e: any) => e.spatial?.parentNodeId === folderName),
+          ...scene.walkbox.filter((w: any) => w.spatial?.parentNodeId === folderName),
+          ...scene.triggerboxes.filter((t: any) => t.spatial?.parentNodeId === folderName),
+        ];
+        for (const child of children) {
+          if (child instanceof Walkbox) scene.removeWalkbox(child);
+          else if (child instanceof Triggerbox) scene.removeTriggerbox(child);
+          else if (child instanceof Entity) scene.removeEntity(child);
+        }
+      }
+
       if (this.selectedObject instanceof Walkbox) {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {

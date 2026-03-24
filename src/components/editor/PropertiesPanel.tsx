@@ -25,8 +25,7 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   W: 'Visible width of the object rectangle.',
   Scale:
     'Overall size multiplier. For polygon objects it scales the current shape around its center; for sprite objects it changes their model scale.',
-  Layer:
-    'Render and interaction layer. Higher layers are treated as being in front of lower ones.',
+  Layer: 'Render and interaction layer. Higher layers are treated as being in front of lower ones.',
   Parallax:
     'Camera parallax factor. Values around 1 move with the scene, while lower or higher values create foreground or background depth drift.',
   'Collider H':
@@ -37,21 +36,17 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
     'Keeps the object at a fixed visual size instead of letting the scene depth-scaling system resize it by Y position.',
   'Fill Color':
     'Base fill color for the object when no sprite is used, or the tint/fill color used by this visual mode.',
-  'Blend Mode':
-    'Canvas blend mode used to combine this object with the scene behind it.',
+  'Blend Mode': 'Canvas blend mode used to combine this object with the scene behind it.',
   Opacity:
     'Visual transparency. 0% keeps the object fully opaque; 100% makes it invisible and excluded from rendering.',
   Blur: 'Blur radius in pixels. 0 px is sharp; higher values make the object softer.',
   Sprite:
     'Sprite asset used to render this object. Leave empty to keep the plain filled rectangle look.',
-  Mode:
-    'Selects the behavior mode for this object or component.',
+  Mode: 'Selects the behavior mode for this object or component.',
   'Depth Sort mode':
     'Chooses which quad rule is used for Y sorting, or disables Y sorting so layer order stays fully manual.',
-  'Grid X':
-    'Number of vertical subdivisions in the retro grid effect.',
-  'Grid Y':
-    'Number of horizontal subdivisions in the retro grid effect.',
+  'Grid X': 'Number of vertical subdivisions in the retro grid effect.',
+  'Grid Y': 'Number of horizontal subdivisions in the retro grid effect.',
   Width: 'Line width or stroke width used by the current visual effect.',
   'Grid Color': 'Color used to draw the retro grid lines.',
   ID: 'Unique identifier used by the engine, scripts, references, and file operations.',
@@ -59,24 +54,21 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
     'Unique scene identifier and file path key. Slashes create subfolders when the scene is saved.',
   Title:
     'Text-asset title shown to the player and used by the text layer as the friendly name for this object or scene.',
-  'Key Item ID':
-    'Inventory item ID required to unlock or activate this interaction.',
-  Description: 'Player-facing short description used by text interactions and subscene presentation.',
+  'Key Item ID': 'Inventory item ID required to unlock or activate this interaction.',
+  Description:
+    'Player-facing short description used by text interactions and subscene presentation.',
   'Target ID(s)':
     'One or more target group IDs or object IDs affected by this component or interaction.',
   'Target ID(s) (Optional)':
     'Optional target IDs affected by this component. Leave empty when the component should only provide auxiliary behavior.',
   'Target Trigger (Name/ID)':
     'Name or ID of the triggerbox that this helper area should activate as if it were clicked directly.',
-  'Target(s) 1':
-    'Targets used when the switch is in state 1, usually the closed or default state.',
-  'Target(s) 2':
-    'Targets used when the switch is in state 2, usually the open or alternate state.',
+  'Target(s) 1': 'Targets used when the switch is in state 1, usually the closed or default state.',
+  'Target(s) 2': 'Targets used when the switch is in state 2, usually the open or alternate state.',
   'Sound 1': 'Sound played when the switch moves into state 1.',
   'Sound 2': 'Sound played when the switch moves into state 2.',
   State: 'Current switch state used as the starting state in the editor and at runtime.',
-  'Shadow Quad ID':
-    'Quad that receives or shapes this shadow effect.',
+  'Shadow Quad ID': 'Quad that receives or shapes this shadow effect.',
   'Offset X': 'Horizontal offset applied by the component or effect.',
   'Offset Y': 'Vertical offset applied by the component or effect.',
   'Trigger ID(s) (Zone)':
@@ -186,53 +178,68 @@ export const PropertiesPanel: React.FC = () => {
     selectedObjectType === 'SCENE' ||
     (selectedObjectType !== 'MULTI' &&
       selectedObjectType !== 'SETTINGS' &&
+      selectedObjectType !== 'Folder' &&
       game?.editor?.selectedObject?.type !== 'Walkbox');
-  const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
-    ? game.editor.selectionManager.getSelectedObjects()
-    : [];
-  const spatialRelationOptions = [
-    { value: '', label: '(None)' },
-    { value: 'in', label: 'In' },
-    { value: 'on', label: 'On' },
-    { value: 'under', label: 'Under' },
-    { value: 'behind', label: 'Behind' },
-  ];
+  const multiObjects = React.useMemo(
+    () =>
+      game?.editor?.selectionManager?.hasMultiSelection()
+        ? game.editor.selectionManager.getSelectedObjects()
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game, objectVersion, selectedObjectId]
+  );
+  const spatialRelationOptions = React.useMemo(
+    () => [
+      { value: '', label: '(None)' },
+      { value: 'in', label: 'In' },
+      { value: 'on', label: 'On' },
+      { value: 'under', label: 'Under' },
+      { value: 'behind', label: 'Behind' },
+    ],
+    []
+  );
   const getSpatialRelationOptions = React.useCallback(
     (hasParent: boolean) =>
-      hasParent ? spatialRelationOptions.filter((option) => option.value !== '') : spatialRelationOptions,
+      hasParent
+        ? spatialRelationOptions.filter((option) => option.value !== '')
+        : spatialRelationOptions,
     [spatialRelationOptions]
   );
 
-  const getSpatialDescendantNames = React.useCallback((rootNames: string[]) => {
-    const scene = game?.sceneManager?.currentScene;
-    if (!scene || !rootNames.length) return new Set<string>();
+  const getSpatialDescendantNames = React.useCallback(
+    (rootNames: string[]) => {
+      const scene = game?.sceneManager?.currentScene;
+      if (!scene || !rootNames.length) return new Set<string>();
 
-    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
-    const childrenByParent = new Map<string, string[]>();
+      const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+      const childrenByParent = new Map<string, string[]>();
 
-    allObjects.forEach((item: any) => {
-      const parentId = typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
-      const name = typeof item?.name === 'string' ? item.name.trim() : '';
-      if (!parentId || !name) return;
-      const children = childrenByParent.get(parentId) || [];
-      children.push(name);
-      childrenByParent.set(parentId, children);
-    });
-
-    const visited = new Set<string>();
-    const stack = [...rootNames.filter(Boolean)];
-    while (stack.length) {
-      const current = stack.pop()!;
-      const children = childrenByParent.get(current) || [];
-      children.forEach((child) => {
-        if (visited.has(child)) return;
-        visited.add(child);
-        stack.push(child);
+      allObjects.forEach((item: any) => {
+        const parentId =
+          typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+        const name = typeof item?.name === 'string' ? item.name.trim() : '';
+        if (!parentId || !name) return;
+        const children = childrenByParent.get(parentId) || [];
+        children.push(name);
+        childrenByParent.set(parentId, children);
       });
-    }
 
-    return visited;
-  }, [game]);
+      const visited = new Set<string>();
+      const stack = [...rootNames.filter(Boolean)];
+      while (stack.length) {
+        const current = stack.pop()!;
+        const children = childrenByParent.get(current) || [];
+        children.forEach((child) => {
+          if (visited.has(child)) return;
+          visited.add(child);
+          stack.push(child);
+        });
+      }
+
+      return visited;
+    },
+    [game]
+  );
 
   const getSceneSpatialParentOptions = React.useCallback(() => {
     const scene = game?.sceneManager?.currentScene;
@@ -393,7 +400,10 @@ export const PropertiesPanel: React.FC = () => {
   const getQuadCentroid = React.useCallback((quad: any) => {
     const verts = quad?.vertices || [];
     if (!verts.length) return { x: quad?.x || 0, y: quad?.y || 0 };
-    const sum = verts.reduce((acc: any, v: any) => ({ x: acc.x + v.x, y: acc.y + v.y }), { x: 0, y: 0 });
+    const sum = verts.reduce((acc: any, v: any) => ({ x: acc.x + v.x, y: acc.y + v.y }), {
+      x: 0,
+      y: 0,
+    });
     return { x: sum.x / verts.length, y: sum.y / verts.length };
   }, []);
 
@@ -498,7 +508,6 @@ export const PropertiesPanel: React.FC = () => {
     [
       game,
       getPolyCentroid,
-      getQuadCentroid,
       incrementObjectVersion,
       obj,
       scalePolyByFactor,
@@ -508,7 +517,10 @@ export const PropertiesPanel: React.FC = () => {
   );
 
   const applyToMulti = (fn: (o: any) => void) => {
-    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    const multiKey = `MULTI:${multiObjects
+      .map((item: any) => item?.name || '')
+      .filter(Boolean)
+      .join('|')}`;
     if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
       game.editor.saveUndoState();
       lastUndoMultiKeyRef.current = multiKey;
@@ -519,14 +531,18 @@ export const PropertiesPanel: React.FC = () => {
   };
 
   const applyToMultiRoots = (fn: (o: any) => void) => {
-    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    const multiKey = `MULTI:${multiObjects
+      .map((item: any) => item?.name || '')
+      .filter(Boolean)
+      .join('|')}`;
     if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
       game.editor.saveUndoState();
       lastUndoMultiKeyRef.current = multiKey;
     }
     const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
     multiObjects.forEach((o: any) => {
-      const parentId = typeof o?.spatial?.parentNodeId === 'string' ? o.spatial.parentNodeId.trim() : '';
+      const parentId =
+        typeof o?.spatial?.parentNodeId === 'string' ? o.spatial.parentNodeId.trim() : '';
       if (parentId && selectedNames.has(parentId)) return;
       fn(o);
     });
@@ -542,14 +558,13 @@ export const PropertiesPanel: React.FC = () => {
     }
 
     const sharedParent = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
-    const sharedRelation = getSharedValue(
-      multiObjects,
-      (o: any) => (o.spatial?.parentNodeId ? o.spatial?.relation || 'in' : o.spatial?.relation || '')
+    const sharedRelation = getSharedValue(multiObjects, (o: any) =>
+      o.spatial?.parentNodeId ? o.spatial?.relation || 'in' : o.spatial?.relation || ''
     );
 
     setMultiSpatialParentDraft(sharedParent === '' ? '' : sharedParent);
     setMultiSpatialRelationDraft(sharedRelation === '' ? '' : sharedRelation);
-  }, [selectedObjectType, selectedObjectId, objectVersion, multiObjects.length]);
+  }, [selectedObjectType, selectedObjectId, objectVersion, multiObjects]);
 
   React.useEffect(() => {
     setPolygonScaleDraft('1');
@@ -694,7 +709,9 @@ export const PropertiesPanel: React.FC = () => {
       {title !== null && (
         <div className={`properties-section-header properties-section-${color}`}>
           <div className="properties-section-title">
-            <span className={`properties-section-number properties-section-${color}`}>{section}</span>
+            <span className={`properties-section-number properties-section-${color}`}>
+              {section}
+            </span>
             <span className="properties-section-label">{title}</span>
           </div>
         </div>
@@ -815,7 +832,10 @@ export const PropertiesPanel: React.FC = () => {
       entitiesAndQuads,
       (o: any) => !!o.ignoreScaling
     );
-    const sharedParentNodeId = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
+    const sharedParentNodeId = getSharedValue(
+      multiObjects,
+      (o: any) => o.spatial?.parentNodeId || ''
+    );
     const sharedLocked = getSharedBooleanState(multiObjects, (o: any) => !!o.locked);
     const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
@@ -1052,7 +1072,11 @@ export const PropertiesPanel: React.FC = () => {
                       }
                       const s = parseFloat(e.target.value);
                       if (isNaN(s) || s <= 0) return;
-                      game.editor.selectionManager.applyGroupTransform(group.offsetX, group.offsetY, s);
+                      game.editor.selectionManager.applyGroupTransform(
+                        group.offsetX,
+                        group.offsetY,
+                        s
+                      );
                       incrementObjectVersion();
                     }}
                   />
@@ -1087,7 +1111,11 @@ export const PropertiesPanel: React.FC = () => {
                           const v = parseFloat(e.target.value);
                           if (isNaN(v)) return;
                           applyToMulti((o: any) => {
-                            if (o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad') {
+                            if (
+                              o instanceof Entity ||
+                              o instanceof Triggerbox ||
+                              (o as any).type === 'Quad'
+                            ) {
                               o.parallax = v;
                             }
                           });
@@ -1130,7 +1158,7 @@ export const PropertiesPanel: React.FC = () => {
             'Visual',
             'yellow',
             <>
-              {entitiesAndQuads.length > 0 && (
+              {entitiesAndQuads.length > 0 &&
                 renderOpacityBlurControls(
                   sharedOpacity,
                   sharedBlur,
@@ -1144,8 +1172,7 @@ export const PropertiesPanel: React.FC = () => {
                       if (o instanceof Entity) o.blur = nextBlur;
                     });
                   }
-                )
-              )}
+                )}
 
               {entitiesAndQuads.length > 0 && (
                 <div
@@ -1188,7 +1215,8 @@ export const PropertiesPanel: React.FC = () => {
                         value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
                         onChange={(value) => {
                           applyToMulti((o: any) => {
-                            if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                            if (o instanceof Entity)
+                              o.blendMode = value as GlobalCompositeOperation;
                           });
                         }}
                         options={[
@@ -1392,9 +1420,10 @@ export const PropertiesPanel: React.FC = () => {
     if (!obj) return;
 
     if (selectedObjectType !== 'SETTINGS' && game?.editor) {
-      const objectKey = selectedObjectType === 'SCENE'
-        ? `SCENE:${obj.id || ''}`
-        : `${selectedObjectType || 'Object'}:${obj.name || ''}`;
+      const objectKey =
+        selectedObjectType === 'SCENE'
+          ? `SCENE:${obj.id || ''}`
+          : `${selectedObjectType || 'Object'}:${obj.name || ''}`;
       if (lastUndoObjectKeyRef.current !== objectKey) {
         game.editor.saveUndoState();
         lastUndoObjectKeyRef.current = objectKey;
@@ -1470,12 +1499,16 @@ export const PropertiesPanel: React.FC = () => {
   };
 
   const isEntityLike =
-    selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static';
+    selectedObjectType === 'Entity' ||
+    selectedObjectType === 'Actor' ||
+    selectedObjectType === 'Static';
   const isTriggerbox = selectedObjectType === 'Triggerbox';
   const isWalkbox = selectedObjectType === 'Walkbox';
   const isScene = selectedObjectType === 'SCENE';
   const isSettings = selectedObjectType === 'SETTINGS';
-  const isObjectWithScriptEvents = !isSettings && !isScene && !isWalkbox && selectedObjectType !== 'MULTI';
+  const isFolder = selectedObjectType === 'Folder';
+  const isObjectWithScriptEvents =
+    !isSettings && !isScene && !isWalkbox && !isFolder && selectedObjectType !== 'MULTI';
 
   return (
     <div
@@ -1509,7 +1542,7 @@ export const PropertiesPanel: React.FC = () => {
             'neutral',
             <>
               <div className="e-row">
-                <label className="e-label">{isScene ? 'ID/File' : 'ID'}</label>
+                <label className="e-label">{isScene ? 'ID/File' : isFolder ? 'Name' : 'ID'}</label>
                 <input
                   type="text"
                   className="e-input"
@@ -1541,7 +1574,8 @@ export const PropertiesPanel: React.FC = () => {
                       if (dupEntity || dupTrigger) {
                         console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
                         // @ts-ignore
-                        if (game.showMessage) game.showMessage(`Name '${finalVal}' already exists!`);
+                        if (game.showMessage)
+                          game.showMessage(`Name '${finalVal}' already exists!`);
                         isValid = false;
                       }
                     }
@@ -1576,7 +1610,9 @@ export const PropertiesPanel: React.FC = () => {
                   />
                   {textAssetPath && (
                     <>
-                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <div
+                        style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}
+                      >
                         <button className="e-btn" onClick={handleOpenTA}>
                           {hasTextAsset ? 'Open TA' : 'Create TA'}
                         </button>
@@ -1595,7 +1631,7 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
               )}
 
-              {!isScene && !isSettings && (
+              {!isScene && !isSettings && !isFolder && (
                 <div className="e-row">
                   <label className="e-label">Group #ID</label>
                   <input
@@ -1623,7 +1659,7 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
               )}
 
-              {!isScene && !isSettings && !isWalkbox && (
+              {!isScene && !isSettings && !isWalkbox && !isFolder && (
                 <div
                   className="e-row"
                   style={{
@@ -1675,6 +1711,31 @@ export const PropertiesPanel: React.FC = () => {
               )}
             </>
           )}
+
+        {isFolder && (
+          <div style={{ padding: '8px 0' }}>
+            <button
+              className="e-btn"
+              style={{ width: '100%' }}
+              onClick={() => {
+                const scene = game?.sceneManager?.currentScene;
+                if (!scene || !obj) return;
+                const children = scene.entities.filter((ent: any) => {
+                  const pid =
+                    typeof ent?.spatial?.parentNodeId === 'string'
+                      ? ent.spatial.parentNodeId.trim()
+                      : '';
+                  return pid === obj.name;
+                });
+                if (children.length > 0) {
+                  game.editor.selectionManager.setMultiSelection(children);
+                }
+              }}
+            >
+              Select Contents
+            </button>
+          </div>
+        )}
 
         {isEntityLike && (
           <>
@@ -1765,7 +1826,11 @@ export const PropertiesPanel: React.FC = () => {
                           const camY = scene.camera.y;
                           obj.x += camX * (newP - oldP);
                           obj.y += camY * (newP - oldP);
-                          if (game.editor && game.editor.selectedObject && 'x' in game.editor.selectedObject) {
+                          if (
+                            game.editor &&
+                            game.editor.selectedObject &&
+                            'x' in game.editor.selectedObject
+                          ) {
                             (game.editor.selectedObject as any).x = obj.x;
                             (game.editor.selectedObject as any).y = obj.y;
                           }
@@ -1829,7 +1894,13 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="color"
                         className="e-input"
-                        style={{ width: '30px', padding: 0, height: '20px', cursor: 'pointer', border: 'none' }}
+                        style={{
+                          width: '30px',
+                          padding: 0,
+                          height: '20px',
+                          cursor: 'pointer',
+                          border: 'none',
+                        }}
                         value={obj.color || '#AAAAAA'}
                         onChange={(e) => handleChange('color', e.target.value)}
                       />
@@ -1880,7 +1951,9 @@ export const PropertiesPanel: React.FC = () => {
                     <button
                       className="e-btn"
                       onClick={() =>
-                        game.openFileBrowser('load', 'public/sprites', (f) => handleChange('spriteName', f))
+                        game.openFileBrowser('load', 'public/sprites', (f) =>
+                          handleChange('spriteName', f)
+                        )
                       }
                     >
                       ...
@@ -1889,7 +1962,6 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
               </>
             )}
-
           </>
         )}
 
@@ -1935,14 +2007,22 @@ export const PropertiesPanel: React.FC = () => {
               'Transform',
               'blue',
               <>
-                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                >
                   <div>
                     <label className="e-label">X</label>
                     <input
                       type="number"
                       className="e-input"
                       value={formatPanelNumber(getPolyCentroid(obj.poly).x)}
-                      onChange={(e) => translatePolyTo(parseFloat(e.target.value) || 0, getPolyCentroid(obj.poly).y)}
+                      onChange={(e) =>
+                        translatePolyTo(
+                          parseFloat(e.target.value) || 0,
+                          getPolyCentroid(obj.poly).y
+                        )
+                      }
                     />
                   </div>
                   <div>
@@ -1951,11 +2031,19 @@ export const PropertiesPanel: React.FC = () => {
                       type="number"
                       className="e-input"
                       value={formatPanelNumber(getPolyCentroid(obj.poly).y)}
-                      onChange={(e) => translatePolyTo(getPolyCentroid(obj.poly).x, parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        translatePolyTo(
+                          getPolyCentroid(obj.poly).x,
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
                     />
                   </div>
                 </div>
-                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                >
                   <div>
                     <label className="e-label">Scale</label>
                     <input
@@ -2003,7 +2091,6 @@ export const PropertiesPanel: React.FC = () => {
                 </div>
               </>
             )}
-
           </>
         )}
 
@@ -2029,7 +2116,9 @@ export const PropertiesPanel: React.FC = () => {
                   type="number"
                   className="e-input"
                   value={formatPanelNumber(getQuadCentroid(obj).x)}
-                  onChange={(e) => translateQuadTo(parseFloat(e.target.value) || 0, getQuadCentroid(obj).y)}
+                  onChange={(e) =>
+                    translateQuadTo(parseFloat(e.target.value) || 0, getQuadCentroid(obj).y)
+                  }
                 />
               </div>
               <div>
@@ -2038,7 +2127,9 @@ export const PropertiesPanel: React.FC = () => {
                   type="number"
                   className="e-input"
                   value={formatPanelNumber(getQuadCentroid(obj).y)}
-                  onChange={(e) => translateQuadTo(getQuadCentroid(obj).x, parseFloat(e.target.value) || 0)}
+                  onChange={(e) =>
+                    translateQuadTo(getQuadCentroid(obj).x, parseFloat(e.target.value) || 0)
+                  }
                 />
               </div>
               <div>
@@ -2094,7 +2185,10 @@ export const PropertiesPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="e-label ui-text-accent-blue ui-font-bold" style={{ marginTop: '6px', marginBottom: '6px' }}>
+            <div
+              className="e-label ui-text-accent-blue ui-font-bold"
+              style={{ marginTop: '6px', marginBottom: '6px' }}
+            >
               Vertices
             </div>
             {obj.vertices &&
@@ -2432,7 +2526,10 @@ export const PropertiesPanel: React.FC = () => {
             )}
 
             {/* Blend */}
-            <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '5px' }}>
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '5px' }}
+            >
               <div>
                 <label className="e-label">Blend Mode</label>
                 <Select
@@ -2450,7 +2547,6 @@ export const PropertiesPanel: React.FC = () => {
                 />
               </div>
             </div>
-
           </div>
         )}
 
@@ -2461,9 +2557,7 @@ export const PropertiesPanel: React.FC = () => {
           selectedObjectType === 'Static' ||
           selectedObjectType === 'Quad') && (
           <div ref={setSectionRef(3)} className="properties-section-block">
-            <div
-              className="properties-section-header properties-section-red"
-            >
+            <div className="properties-section-header properties-section-red">
               <div className="properties-section-title">
                 <span className="properties-section-number properties-section-red">3</span>
                 <span className="properties-section-label">COMPONENTS</span>
@@ -2568,7 +2662,9 @@ export const PropertiesPanel: React.FC = () => {
                       marginBottom: '5px',
                     }}
                   >
-                    <span className="ui-font-bold" style={{ color: '#fb8' }}>{comp.type}</span>
+                    <span className="ui-font-bold" style={{ color: '#fb8' }}>
+                      {comp.type}
+                    </span>
                     <button
                       className="e-btn e-btn-red"
                       style={{ padding: '0 5px' }}
@@ -3175,7 +3271,9 @@ export const PropertiesPanel: React.FC = () => {
                 type="number"
                 step="10"
                 className="e-input"
-                value={formatPanelNumber(obj.animationSpeed !== undefined ? obj.animationSpeed : 150)}
+                value={formatPanelNumber(
+                  obj.animationSpeed !== undefined ? obj.animationSpeed : 150
+                )}
                 onChange={(e) => handleChange('animationSpeed', e.target.value, true)}
               />
             </div>
@@ -3345,9 +3443,7 @@ export const PropertiesPanel: React.FC = () => {
 
         {isObjectWithScriptEvents && (
           <div ref={setSectionRef(5)} className="properties-section-block">
-            <div
-              className="properties-section-header properties-section-purple"
-            >
+            <div className="properties-section-header properties-section-purple">
               <div className="properties-section-title">
                 <span className="properties-section-number properties-section-purple">5</span>
                 <span className="properties-section-label">SCRIPT EVENTS</span>
@@ -3579,7 +3675,9 @@ export const PropertiesPanel: React.FC = () => {
                         step="0.1"
                         className="e-input"
                         value={formatPanelNumber(obj.cameraSpeed || 5)}
-                        onChange={(e) => handleChange('cameraSpeed', parseFloat(e.target.value), true)}
+                        onChange={(e) =>
+                          handleChange('cameraSpeed', parseFloat(e.target.value), true)
+                        }
                       />
                     </div>
                     <div>
@@ -3587,8 +3685,12 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={formatPanelNumber(obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50)}
-                        onChange={(e) => handleChange('camDeadzoneX', parseFloat(e.target.value), true)}
+                        value={formatPanelNumber(
+                          obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50
+                        )}
+                        onChange={(e) =>
+                          handleChange('camDeadzoneX', parseFloat(e.target.value), true)
+                        }
                       />
                     </div>
                     <div>
@@ -3596,8 +3698,12 @@ export const PropertiesPanel: React.FC = () => {
                       <input
                         type="number"
                         className="e-input"
-                        value={formatPanelNumber(obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30)}
-                        onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
+                        value={formatPanelNumber(
+                          obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30
+                        )}
+                        onChange={(e) =>
+                          handleChange('camDeadzoneY', parseFloat(e.target.value), true)
+                        }
                       />
                     </div>
                   </div>
@@ -3675,7 +3781,9 @@ export const PropertiesPanel: React.FC = () => {
                   {obj.defaultCamera && (
                     <div className="e-row" style={{ marginTop: '5px' }}>
                       <div className="e-label ui-text-accent-blue">Default Camera</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                      <div
+                        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                      >
                         <div>
                           <label className="e-label">Def X</label>
                           <input
@@ -3745,7 +3853,10 @@ export const PropertiesPanel: React.FC = () => {
                   return (
                     <>
                       <div className="e-row">
-                        <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                        <label
+                          className="e-label"
+                          style={{ display: 'flex', alignItems: 'center' }}
+                        >
                           <input
                             type="checkbox"
                             style={{ marginRight: '5px' }}
@@ -3759,7 +3870,9 @@ export const PropertiesPanel: React.FC = () => {
                         </label>
                       </div>
                       {s.enabled && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                        <div
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                        >
                           <div>
                             <label className="e-label">Min</label>
                             <input
@@ -4013,8 +4126,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Phosphor / Grain{' '}
-                    <span>{formatPanelNumber(obj.crt.phosphor || 0)}</span>
+                    Phosphor / Grain <span>{formatPanelNumber(obj.crt.phosphor || 0)}</span>
                   </label>
                   <input
                     type="range"
@@ -4046,7 +4158,10 @@ export const PropertiesPanel: React.FC = () => {
               </>
             )}
 
-            <div className="e-row ui-divider-neutral" style={{ marginTop: '20px', paddingTop: '10px' }}>
+            <div
+              className="e-row ui-divider-neutral"
+              style={{ marginTop: '20px', paddingTop: '10px' }}
+            >
               <button
                 className="e-btn"
                 style={{ width: '100%', padding: '8px' }}

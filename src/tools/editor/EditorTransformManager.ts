@@ -4,6 +4,7 @@ import { Actor } from '../../entities/Actor';
 import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
+import { Folder } from '../../entities/Folder';
 import { SceneObject } from '../../entities/SceneObject';
 
 import { Geometry } from '../../utils/Geometry';
@@ -1275,6 +1276,12 @@ export class EditorTransformManager {
       editor.selectObject(newTrigger);
       useEditorStore.getState().incrementHierarchyVersion();
       editor.redrawSelected();
+    } else if (type === 'Folder') {
+      const name = 'Folder_' + Math.floor(Math.random() * 1000);
+      const folder = new Folder(editor.game, name);
+      scene.entities.unshift(folder);
+      editor.selectObject(folder);
+      useEditorStore.getState().incrementHierarchyVersion();
     }
   }
 

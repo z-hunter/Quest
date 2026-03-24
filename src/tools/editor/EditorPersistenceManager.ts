@@ -185,7 +185,7 @@ export class EditorPersistenceManager {
   // --- Prefab Saving ---
 
   async saveObject(): Promise<void> {
-    const selection = this.editor.selectionManager.hasMultiSelection()
+    let selection = this.editor.selectionManager.hasMultiSelection()
       ? this.editor.selectionManager.getSelectedObjects()
       : this.editor.selectedObject instanceof SceneObject
         ? [this.editor.selectedObject]
@@ -194,6 +194,28 @@ export class EditorPersistenceManager {
     if (!selection.length) {
       this.editor.game.showNotification('Select an Object to Save');
       return;
+    }
+
+    // If selection includes folders, also include their contents
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (scene) {
+      const folderNames = selection.filter((obj) => obj.type === 'Folder').map((obj) => obj.name);
+      if (folderNames.length > 0) {
+        const result = new Set<SceneObject>(selection);
+        const allObjects: SceneObject[] = [
+          ...scene.entities,
+          ...scene.walkbox,
+          ...scene.triggerboxes,
+        ];
+        for (const obj of allObjects) {
+          const pid =
+            typeof (obj as any).spatial?.parentNodeId === 'string'
+              ? (obj as any).spatial.parentNodeId.trim()
+              : '';
+          if (pid && folderNames.includes(pid)) result.add(obj);
+        }
+        selection = Array.from(result);
+      }
     }
 
     this.editor.game.openFileBrowser('save', 'public/prefabs', (filename: string) => {

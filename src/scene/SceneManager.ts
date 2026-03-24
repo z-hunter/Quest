@@ -5,6 +5,7 @@ import { Actor } from '../entities/Actor';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { Folder } from '../entities/Folder';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -446,6 +447,8 @@ export class SceneManager {
           entity = Actor.fromJSON(this.game, entityData);
         } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
           entity = QuadObject.fromJSON(this.game, entityData);
+        } else if (entityData.type === 'Folder') {
+          entity = Folder.fromData(this.game, entityData);
         } else {
           entity = Entity.fromJSON(this.game, entityData);
         }
