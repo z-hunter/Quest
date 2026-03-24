@@ -29,3 +29,4 @@ Original prompt: Давай временно переключимся с пар�
 - Implemented state-driven EditorBottomMenu with modifier modes; added Alt/Shift Save As path and Ctrl action set; pending browser smoke verification.
 
 - Verified in browser: bottom menu now switches between base / Alt / Ctrl / Shift layouts, and Alt mode updates D from Disable to Enable after toggling selected object disabled state.\n
+- New task: add two editor selection slots. Planned behavior: Shift+1/2 saves current object or multi-selection when cursor is over canvas or hierarchy; 1/2 restores saved selection; empty slot shows toast.\n
