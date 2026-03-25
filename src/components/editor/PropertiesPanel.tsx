@@ -4,6 +4,140 @@ import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { QuadObject } from '../../entities/QuadObject';
 import { Entity } from '../../entities/Entity';
+import { Triggerbox } from '../../entities/Triggerbox';
+
+const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
+  'Group #ID':
+    'Comma-separated tags used to address this object or selection from triggers, switches, scripts, and subscenes.',
+  Parent:
+    'Chooses the direct spatial parent of this object. The object will be treated as attached to that parent instead of the root scene.',
+  Relation:
+    'Defines how this object is attached to its parent in the spatial hierarchy: in, on, under, or behind.',
+  'Group X':
+    'Moves the whole selected group horizontally while preserving the relative layout between the selected objects.',
+  'Group Y':
+    'Moves the whole selected group vertically while preserving the relative layout between the selected objects.',
+  'Group Scale':
+    'Scales the whole selected group around its shared center while keeping the objects aligned with each other.',
+  X: 'Horizontal position in scene space.',
+  Y: 'Vertical position in scene space.',
+  H: 'Visible height of the object rectangle.',
+  W: 'Visible width of the object rectangle.',
+  Scale:
+    'Overall size multiplier. For polygon objects it scales the current shape around its center; for sprite objects it changes their model scale.',
+  Layer:
+    'Render and interaction layer. Higher layers are treated as being in front of lower ones.',
+  Parallax:
+    'Camera parallax factor. Values around 1 move with the scene, while lower or higher values create foreground or background depth drift.',
+  'Collider H':
+    'Collision height used for walkbox and obstacle interaction. Set to 0 to make the object non-blocking.',
+  'Collider W':
+    'Collision width used for walkbox and obstacle interaction. Set to 0 to make the object non-blocking.',
+  'Disable Depth-scaling':
+    'Keeps the object at a fixed visual size instead of letting the scene depth-scaling system resize it by Y position.',
+  'Fill Color':
+    'Base fill color for the object when no sprite is used, or the tint/fill color used by this visual mode.',
+  'Blend Mode':
+    'Canvas blend mode used to combine this object with the scene behind it.',
+  Opacity:
+    'Visual transparency. 0% keeps the object fully opaque; 100% makes it invisible and excluded from rendering.',
+  Blur: 'Blur radius in pixels. 0 px is sharp; higher values make the object softer.',
+  Sprite:
+    'Sprite asset used to render this object. Leave empty to keep the plain filled rectangle look.',
+  Mode:
+    'Selects the behavior mode for this object or component.',
+  'Depth Sort mode':
+    'Chooses which quad rule is used for Y sorting, or disables Y sorting so layer order stays fully manual.',
+  'Grid X':
+    'Number of vertical subdivisions in the retro grid effect.',
+  'Grid Y':
+    'Number of horizontal subdivisions in the retro grid effect.',
+  Width: 'Line width or stroke width used by the current visual effect.',
+  'Grid Color': 'Color used to draw the retro grid lines.',
+  ID: 'Unique identifier used by the engine, scripts, references, and file operations.',
+  'ID/File':
+    'Unique scene identifier and file path key. Slashes create subfolders when the scene is saved.',
+  Title:
+    'Text-asset title shown to the player and used by the text layer as the friendly name for this object or scene.',
+  'Key Item ID':
+    'Inventory item ID required to unlock or activate this interaction.',
+  Description: 'Player-facing short description used by text interactions and subscene presentation.',
+  'Target ID(s)':
+    'One or more target group IDs or object IDs affected by this component or interaction.',
+  'Target ID(s) (Optional)':
+    'Optional target IDs affected by this component. Leave empty when the component should only provide auxiliary behavior.',
+  'Target Trigger (Name/ID)':
+    'Name or ID of the triggerbox that this helper area should activate as if it were clicked directly.',
+  'Target(s) 1':
+    'Targets used when the switch is in state 1, usually the closed or default state.',
+  'Target(s) 2':
+    'Targets used when the switch is in state 2, usually the open or alternate state.',
+  'Sound 1': 'Sound played when the switch moves into state 1.',
+  'Sound 2': 'Sound played when the switch moves into state 2.',
+  State: 'Current switch state used as the starting state in the editor and at runtime.',
+  'Shadow Quad ID':
+    'Quad that receives or shapes this shadow effect.',
+  'Offset X': 'Horizontal offset applied by the component or effect.',
+  'Offset Y': 'Vertical offset applied by the component or effect.',
+  'Trigger ID(s) (Zone)':
+    'Trigger IDs that enable, disable, or otherwise gate this component in specific zones.',
+  Axis: 'Axis constrained by the component or comparison rule.',
+  Op: 'Comparison operator used by the current component or condition.',
+  'Culling Type':
+    'Chooses how the object is culled or hidden when it falls outside the active visibility rule.',
+  'Vert A (0-3)': 'First quad vertex index used by this link or rule.',
+  'Vert B (0-3)': 'Second quad vertex index used by this link or rule.',
+  Direction: 'Default facing direction for the actor.',
+  'Move Speed': 'Actor movement speed in scene units per step.',
+  'Anim Speed (ms)': 'Frame duration for sprite animation playback, in milliseconds.',
+  'Cam X': 'Current camera X position in scene space.',
+  'Cam Y': 'Current camera Y position in scene space.',
+  Zoom: 'Current scene camera zoom.',
+  'Auto-Center on Player':
+    'Automatically keeps the camera centered on the player instead of relying on manual camera values.',
+  'Cam Spd': 'Camera follow speed when auto-centering or camera tracking is active.',
+  'Dead X': 'Horizontal deadzone before camera follow begins.',
+  'Dead Y': 'Vertical deadzone before camera follow begins.',
+  'Min X': 'Minimum allowed X value for this camera range.',
+  'Max X': 'Maximum allowed X value for this camera range.',
+  'Min Y': 'Minimum allowed Y value for this camera range.',
+  'Max Y': 'Maximum allowed Y value for this camera range.',
+  'Def X': 'Default camera X used when the scene loads or resets.',
+  'Def Y': 'Default camera Y used when the scene loads or resets.',
+  'Def Zoom': 'Default camera zoom used when the scene loads or resets.',
+  'Enable Depth Scaling':
+    'Turns scene depth scaling on or off so objects can grow or shrink according to their Y position.',
+  Min: 'Minimum depth-scaling factor used at the horizon end of the scene.',
+  Max: 'Maximum depth-scaling factor used at the front end of the scene.',
+  'Horizon Y': 'Y coordinate treated as the horizon for depth scaling.',
+  'Front Y': 'Y coordinate treated as the foreground limit for depth scaling.',
+  'UI Scale': 'Editor interface scale multiplier.',
+  Curvature: 'Strength of the CRT screen curvature effect.',
+  Vignette: 'Darkening applied toward the screen edges.',
+  'Scanline Count': 'Number of scanlines used by the CRT filter.',
+  'Scanline Intensity': 'Visibility strength of the CRT scanlines.',
+  'RGB Split': 'Amount of RGB channel separation in the CRT effect.',
+  Bloom: 'Glow intensity added by the CRT effect.',
+  'Phosphor / Grain': 'Amount of phosphor persistence and grain noise.',
+  'Enable CRT Filter': 'Turns the CRT post-processing effect on or off.',
+  'Bezel Glow': 'Adds a glow around the virtual CRT bezel.',
+  'Lock Object': 'Prevents accidental editing of this object in the editor. Hotkey: Alt-L.',
+  Disabled: 'Disables the object so it does not participate in the scene. Hotkey: Alt-D.',
+  'Retro Grid':
+    'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+};
+
+const normalizeTooltipLabelText = (rawText: string): string => {
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.startsWith('Opacity')) return 'Opacity';
+  if (text.startsWith('Blur')) return 'Blur';
+  if (text.startsWith('UI Scale')) return 'UI Scale';
+  if (text.startsWith('State')) return 'State';
+  if (text.startsWith('Mode:')) return 'Mode';
+  if (text === 'Disable Depth Scaling') return 'Disable Depth-scaling';
+  return text;
+};
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
@@ -12,14 +146,31 @@ export const PropertiesPanel: React.FC = () => {
     selectedObjectType,
     incrementHierarchyVersion,
     incrementObjectVersion,
+    objectVersion,
     mode,
     selectedVertexIndex,
   } = useEditorStore();
   const [groupIdDraft, setGroupIdDraft] = React.useState('');
+  const [multiSpatialParentDraft, setMultiSpatialParentDraft] = React.useState('');
+  const [multiSpatialRelationDraft, setMultiSpatialRelationDraft] = React.useState('');
+  const [resolvedTitle, setResolvedTitle] = React.useState('');
+  const [textAssetPath, setTextAssetPath] = React.useState('');
+  const [isReadingTA, setIsReadingTA] = React.useState(false);
+  const [hasTextAsset, setHasTextAsset] = React.useState(false);
+  const [polygonScaleDraft, setPolygonScaleDraft] = React.useState('1');
+  const lastUndoObjectKeyRef = React.useRef<string | null>(null);
+  const lastUndoMultiKeyRef = React.useRef<string | null>(null);
+  const lastPolygonScaleObjectKeyRef = React.useRef<string | null>(null);
+  const polygonScaleSnapshotRef = React.useRef<any>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const sectionRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const isPanelHoveredRef = React.useRef(false);
 
   // Derived Object Binding (Source of Truth)
-  // We re-render whenever objectVersion changes (subscribed via store hook)
+  // We re-render whenever objectVersion changes.
   let obj: any = null;
+  void objectVersion;
   if (game) {
     if (selectedObjectId === 'SETTINGS') {
       obj = game.settings;
@@ -31,9 +182,97 @@ export const PropertiesPanel: React.FC = () => {
   }
 
   const uiScale = game?.settings?.editor?.uiScale || 1.0;
+  const supportsTextAsset =
+    selectedObjectType === 'SCENE' ||
+    (selectedObjectType !== 'MULTI' &&
+      selectedObjectType !== 'SETTINGS' &&
+      game?.editor?.selectedObject?.type !== 'Walkbox');
   const multiObjects = game?.editor?.selectionManager?.hasMultiSelection()
     ? game.editor.selectionManager.getSelectedObjects()
     : [];
+  const spatialRelationOptions = [
+    { value: '', label: '(None)' },
+    { value: 'in', label: 'In' },
+    { value: 'on', label: 'On' },
+    { value: 'under', label: 'Under' },
+    { value: 'behind', label: 'Behind' },
+  ];
+  const getSpatialRelationOptions = React.useCallback(
+    (hasParent: boolean) =>
+      hasParent ? spatialRelationOptions.filter((option) => option.value !== '') : spatialRelationOptions,
+    [spatialRelationOptions]
+  );
+
+  const getSpatialDescendantNames = React.useCallback((rootNames: string[]) => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !rootNames.length) return new Set<string>();
+
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const childrenByParent = new Map<string, string[]>();
+
+    allObjects.forEach((item: any) => {
+      const parentId = typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      if (!parentId || !name) return;
+      const children = childrenByParent.get(parentId) || [];
+      children.push(name);
+      childrenByParent.set(parentId, children);
+    });
+
+    const visited = new Set<string>();
+    const stack = [...rootNames.filter(Boolean)];
+    while (stack.length) {
+      const current = stack.pop()!;
+      const children = childrenByParent.get(current) || [];
+      children.forEach((child) => {
+        if (visited.has(child)) return;
+        visited.add(child);
+        stack.push(child);
+      });
+    }
+
+    return visited;
+  }, [game]);
+
+  const getSceneSpatialParentOptions = React.useCallback(() => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !obj) {
+      return [{ value: '', label: '(None)' }];
+    }
+
+    const excludedNames = new Set<string>([obj?.name].filter(Boolean));
+    getSpatialDescendantNames([obj?.name]).forEach((name) => excludedNames.add(name));
+
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const options = allObjects
+      .filter((item: any) => item && !excludedNames.has(item.name))
+      .map((item: any) => ({
+        value: item.name,
+        label: item.customName?.trim() || item.name,
+      }));
+
+    return [{ value: '', label: '(None)' }, ...options];
+  }, [game, obj, getSpatialDescendantNames]);
+
+  const getMultiSpatialParentOptions = React.useCallback(() => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !multiObjects.length) {
+      return [{ value: '', label: '(None)' }];
+    }
+
+    const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
+    getSpatialDescendantNames(Array.from(selectedNames)).forEach((name) => selectedNames.add(name));
+
+    const allObjects = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes];
+    const options = allObjects
+      .filter((item: any) => item && !selectedNames.has(item.name))
+      .map((item: any) => ({
+        value: item.name,
+        label: item.customName?.trim() || item.name,
+      }));
+
+    return [{ value: '', label: '(None)' }, ...options];
+  }, [game, multiObjects, getSpatialDescendantNames]);
 
   const getSharedValue = (arr: any[], getter: (o: any) => any) => {
     if (!arr.length) return '';
@@ -53,13 +292,466 @@ export const PropertiesPanel: React.FC = () => {
     return first ? 'on' : 'off';
   };
 
+  const formatPanelNumber = React.useCallback((value: any): number | string => {
+    if (value === '' || value === null || value === undefined) return '';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return value;
+    return Number(n.toFixed(3));
+  }, []);
+
+  const setSectionRef = React.useCallback(
+    (section: number) => (node: HTMLDivElement | null) => {
+      sectionRefs.current[section] = node;
+    },
+    []
+  );
+
+  const scrollToSection = React.useCallback((section: number) => {
+    const container = contentRef.current;
+    const node = sectionRefs.current[section];
+    if (!container || !node) return;
+    const containerRect = container.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const targetTop = container.scrollTop + (nodeRect.top - containerRect.top) - 8;
+    container.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const isPanelTextEntryFocused = React.useCallback(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !panelRef.current || !panelRef.current.contains(active)) return false;
+    if (active.matches('input, textarea, select, [contenteditable="true"]')) return true;
+    if (active.closest('.custom-select-container')) return true;
+    return false;
+  }, []);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isPanelHoveredRef.current) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (isPanelTextEntryFocused()) return;
+
+      const key = e.key;
+      if (!/^[0-6]$/.test(key)) return;
+
+      e.preventDefault();
+      scrollToSection(parseInt(key, 10));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPanelTextEntryFocused, scrollToSection]);
+
+  React.useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const labels = panel.querySelectorAll('label.e-label');
+    labels.forEach((node) => {
+      const label = node as HTMLLabelElement;
+      if (label.dataset.tooltipFixed === 'true') {
+        label.classList.add('e-tooltip-label');
+        return;
+      }
+
+      const normalized = normalizeTooltipLabelText(label.textContent || '');
+      const tooltip = PROPERTIES_LABEL_TOOLTIPS[normalized];
+      if (!tooltip) {
+        label.removeAttribute('title');
+        label.classList.remove('e-tooltip-label');
+        return;
+      }
+
+      label.title = tooltip;
+      label.classList.add('e-tooltip-label');
+    });
+  });
+
+  const getPolyCentroid = React.useCallback((poly: { x: number; y: number }[] = []) => {
+    if (!poly.length) return { x: 0, y: 0 };
+    const sum = poly.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
+    return { x: sum.x / poly.length, y: sum.y / poly.length };
+  }, []);
+
+  const translatePolyTo = React.useCallback(
+    (targetX: number, targetY: number) => {
+      if (!obj?.poly?.length) return;
+      const centroid = getPolyCentroid(obj.poly);
+      const dx = targetX - centroid.x;
+      const dy = targetY - centroid.y;
+      obj.poly = obj.poly.map((pt: any) => ({
+        x: Math.round(pt.x + dx),
+        y: Math.round(pt.y + dy),
+      }));
+      incrementObjectVersion();
+    },
+    [getPolyCentroid, incrementObjectVersion, obj]
+  );
+
+  const getQuadCentroid = React.useCallback((quad: any) => {
+    const verts = quad?.vertices || [];
+    if (!verts.length) return { x: quad?.x || 0, y: quad?.y || 0 };
+    const sum = verts.reduce((acc: any, v: any) => ({ x: acc.x + v.x, y: acc.y + v.y }), { x: 0, y: 0 });
+    return { x: sum.x / verts.length, y: sum.y / verts.length };
+  }, []);
+
+  const translateQuadTo = React.useCallback(
+    (targetX: number, targetY: number) => {
+      if (!obj?.vertices?.length) return;
+      const centroid = getQuadCentroid(obj);
+      const dx = targetX - centroid.x;
+      const dy = targetY - centroid.y;
+      obj.vertices = obj.vertices.map((v: any) => ({
+        ...v,
+        x: v.x + dx,
+        y: v.y + dy,
+      }));
+      obj.x = targetX;
+      obj.y = targetY;
+      incrementObjectVersion();
+    },
+    [getQuadCentroid, incrementObjectVersion, obj]
+  );
+
+  const scalePolyByFactor = React.useCallback(
+    (poly: { x: number; y: number }[], factor: number, originX: number, originY: number) =>
+      poly.map((pt) => ({
+        x: Math.round(originX + (pt.x - originX) * factor),
+        y: Math.round(originY + (pt.y - originY) * factor),
+      })),
+    []
+  );
+
+  const scaleQuadVerticesByFactor = React.useCallback(
+    (vertices: any[], factor: number, originX: number, originY: number) =>
+      vertices.map((v) => ({
+        ...v,
+        x: originX + (v.x - originX) * factor,
+        y: originY + (v.y - originY) * factor,
+      })),
+    []
+  );
+
+  const applyPolygonScaleDraft = React.useCallback(
+    (nextScaleRaw: string) => {
+      if (!obj || !(selectedObjectType === 'Triggerbox' || selectedObjectType === 'Quad')) return;
+      const nextScale = parseFloat(nextScaleRaw);
+      if (!Number.isFinite(nextScale) || nextScale <= 0) return;
+
+      const objectKey = `${selectedObjectType || 'Object'}:${obj.name || ''}`;
+      if (lastPolygonScaleObjectKeyRef.current !== objectKey) {
+        game?.editor?.saveUndoState();
+        if (selectedObjectType === 'Quad' && obj.vertices?.length) {
+          polygonScaleSnapshotRef.current = {
+            key: objectKey,
+            kind: 'quad',
+            vertices: obj.vertices.map((v: any) => ({ ...v })),
+          };
+        } else if (obj.poly?.length) {
+          polygonScaleSnapshotRef.current = {
+            key: objectKey,
+            kind: 'poly',
+            poly: obj.poly.map((pt: any) => ({ x: pt.x, y: pt.y })),
+          };
+        } else {
+          polygonScaleSnapshotRef.current = null;
+        }
+      }
+
+      const snapshot = polygonScaleSnapshotRef.current;
+      if (!snapshot || snapshot.key !== objectKey) {
+        setPolygonScaleDraft(nextScaleRaw);
+        lastPolygonScaleObjectKeyRef.current = objectKey;
+        return;
+      }
+
+      if (snapshot.kind === 'quad' && selectedObjectType === 'Quad' && snapshot.vertices?.length) {
+        const sourceVertices = snapshot.vertices.map((v: any) => ({ ...v }));
+        const sourceCentroid = {
+          x: sourceVertices.reduce((acc: number, v: any) => acc + v.x, 0) / sourceVertices.length,
+          y: sourceVertices.reduce((acc: number, v: any) => acc + v.y, 0) / sourceVertices.length,
+        };
+        obj.vertices = scaleQuadVerticesByFactor(
+          sourceVertices,
+          nextScale,
+          sourceCentroid.x,
+          sourceCentroid.y
+        );
+        obj.x = Math.round(
+          obj.vertices.reduce((acc: number, v: any) => acc + v.x, 0) / obj.vertices.length
+        );
+        obj.y = Math.round(
+          obj.vertices.reduce((acc: number, v: any) => acc + v.y, 0) / obj.vertices.length
+        );
+      } else if (snapshot.kind === 'poly' && snapshot.poly?.length) {
+        const sourcePoly = snapshot.poly.map((pt: any) => ({ x: pt.x, y: pt.y }));
+        const sourceCentroid = getPolyCentroid(sourcePoly);
+        obj.poly = scalePolyByFactor(sourcePoly, nextScale, sourceCentroid.x, sourceCentroid.y);
+      }
+
+      setPolygonScaleDraft(nextScaleRaw);
+      lastPolygonScaleObjectKeyRef.current = objectKey;
+      incrementObjectVersion();
+    },
+    [
+      game,
+      getPolyCentroid,
+      getQuadCentroid,
+      incrementObjectVersion,
+      obj,
+      scalePolyByFactor,
+      scaleQuadVerticesByFactor,
+      selectedObjectType,
+    ]
+  );
+
   const applyToMulti = (fn: (o: any) => void) => {
+    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+      game.editor.saveUndoState();
+      lastUndoMultiKeyRef.current = multiKey;
+    }
     multiObjects.forEach(fn);
     incrementObjectVersion();
     incrementHierarchyVersion();
   };
 
+  const applyToMultiRoots = (fn: (o: any) => void) => {
+    const multiKey = `MULTI:${multiObjects.map((item: any) => item?.name || '').filter(Boolean).join('|')}`;
+    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+      game.editor.saveUndoState();
+      lastUndoMultiKeyRef.current = multiKey;
+    }
+    const selectedNames = new Set(multiObjects.map((item: any) => item?.name).filter(Boolean));
+    multiObjects.forEach((o: any) => {
+      const parentId = typeof o?.spatial?.parentNodeId === 'string' ? o.spatial.parentNodeId.trim() : '';
+      if (parentId && selectedNames.has(parentId)) return;
+      fn(o);
+    });
+    incrementObjectVersion();
+    incrementHierarchyVersion();
+  };
+
   React.useEffect(() => {
+    if (selectedObjectType !== 'MULTI' || multiObjects.length <= 1) {
+      setMultiSpatialParentDraft('');
+      setMultiSpatialRelationDraft('');
+      return;
+    }
+
+    const sharedParent = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
+    const sharedRelation = getSharedValue(
+      multiObjects,
+      (o: any) => (o.spatial?.parentNodeId ? o.spatial?.relation || 'in' : o.spatial?.relation || '')
+    );
+
+    setMultiSpatialParentDraft(sharedParent === '' ? '' : sharedParent);
+    setMultiSpatialRelationDraft(sharedRelation === '' ? '' : sharedRelation);
+  }, [selectedObjectType, selectedObjectId, objectVersion, multiObjects.length]);
+
+  React.useEffect(() => {
+    setPolygonScaleDraft('1');
+    lastPolygonScaleObjectKeyRef.current = null;
+    polygonScaleSnapshotRef.current = null;
+  }, [selectedObjectType, selectedObjectId]);
+
+  const loadResolvedTitle = React.useCallback(
+    async (forceReload: boolean = false) => {
+      if (!game || !obj || selectedObjectType === 'MULTI' || selectedObjectType === 'SETTINGS') {
+        setResolvedTitle('');
+        setTextAssetPath('');
+        setHasTextAsset(false);
+        return;
+      }
+
+      if (!supportsTextAsset) {
+        setResolvedTitle('');
+        setTextAssetPath('');
+        setHasTextAsset(false);
+        return;
+      }
+
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        const asset = forceReload
+          ? await game.textAssets.readSceneAsset(scene, true)
+          : await game.textAssets.readSceneAsset(scene, false);
+        setHasTextAsset(!!asset);
+        setResolvedTitle(game.textAssets.getResolvedSceneField(scene, 'title') || '');
+        setTextAssetPath(game.textAssets.getSceneAssetProjectPath(scene.id));
+        return;
+      }
+
+      if (game.editor?.selectedObject) {
+        const selected = game.editor.selectedObject;
+        const asset = forceReload
+          ? await game.textAssets.readObjectAsset(selected, true)
+          : await game.textAssets.readObjectAsset(selected, false);
+        setHasTextAsset(!!asset);
+        setResolvedTitle(game.textAssets.getResolvedObjectField(selected, 'title') || '');
+        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
+      }
+    },
+    [game, obj, selectedObjectType, supportsTextAsset]
+  );
+
+  React.useEffect(() => {
+    loadResolvedTitle(false).catch((err) => {
+      console.error('Failed to load text asset title:', err);
+    });
+  }, [loadResolvedTitle, selectedObjectId, selectedObjectType]);
+
+  const handleOpenTA = async () => {
+    if (!game || !obj) return;
+    try {
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        await game.textAssets.openSceneAsset(scene);
+      } else if (game.editor?.selectedObject) {
+        await game.textAssets.openObjectAsset(game.editor.selectedObject);
+      }
+      await loadResolvedTitle(true);
+    } catch (err) {
+      console.error('Failed to open text asset:', err);
+      game.showNotification?.(`Failed to open TA: ${err}`);
+    }
+  };
+
+  const handleReadTA = async () => {
+    if (!game || !obj) return;
+    setIsReadingTA(true);
+    try {
+      const path =
+        selectedObjectType === 'SCENE'
+          ? game.textAssets.getSceneAssetProjectPath(game.sceneManager.currentScene?.id || '')
+          : game.editor?.selectedObject
+            ? game.textAssets.getObjectAssetProjectPath(game.editor.selectedObject.name)
+            : '';
+      const defaultContent =
+        selectedObjectType === 'SCENE'
+          ? JSON.stringify(
+              game.textAssets.buildDefaultSceneAsset(game.sceneManager.currentScene as any),
+              null,
+              2
+            )
+          : game.editor?.selectedObject
+            ? JSON.stringify(
+                game.textAssets.buildDefaultObjectAsset(game.editor.selectedObject),
+                null,
+                2
+              )
+            : '{}';
+
+      await fetch('/api/read-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content: defaultContent }),
+      });
+      await loadResolvedTitle(true);
+      incrementObjectVersion();
+      game.showNotification?.('Text asset reloaded');
+    } catch (err) {
+      console.error('Failed to read text asset:', err);
+      game.showNotification?.(`Failed to read TA: ${err}`);
+    } finally {
+      setIsReadingTA(false);
+    }
+  };
+
+  const handleDeleteTA = async () => {
+    if (!game || !obj || !hasTextAsset) return;
+    const confirmed = window.confirm(`Delete text asset?\n${textAssetPath}`);
+    if (!confirmed) return;
+
+    try {
+      if (selectedObjectType === 'SCENE') {
+        const scene = game.sceneManager.currentScene;
+        if (!scene) return;
+        await game.textAssets.deleteSceneAsset(scene);
+      } else if (game.editor?.selectedObject) {
+        await game.textAssets.deleteObjectAsset(game.editor.selectedObject);
+      }
+      await loadResolvedTitle(true);
+      incrementObjectVersion();
+      game.showNotification?.('Text asset deleted');
+    } catch (err) {
+      console.error('Failed to delete text asset:', err);
+      game.showNotification?.(`Failed to delete TA: ${err}`);
+    }
+  };
+
+  const renderSection = (
+    section: number,
+    title: string | null,
+    color: 'blue' | 'red' | 'yellow' | 'purple' | 'neutral',
+    children: React.ReactNode
+  ) => (
+    <div ref={setSectionRef(section)} className="properties-section-block" data-section={section}>
+      {title !== null && (
+        <div className={`properties-section-header properties-section-${color}`}>
+          <div className="properties-section-title">
+            <span className={`properties-section-number properties-section-${color}`}>{section}</span>
+            <span className="properties-section-label">{title}</span>
+          </div>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+
+  const renderOpacityBlurControls = (
+    opacityValue: number | '',
+    blurValue: number | '',
+    onOpacityChange: (nextOpacity: number) => void,
+    onBlurChange: (nextBlur: number) => void
+  ) => {
+    const normalizedOpacity = opacityValue === '' ? 1 : Number(opacityValue);
+    const normalizedBlur = blurValue === '' ? 0 : Number(blurValue);
+    const opacityUi = Math.round((1 - normalizedOpacity) * 100);
+    const blurUi = Math.max(0, Math.min(50, Math.round(normalizedBlur)));
+
+    return (
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}
+      >
+        <div>
+          <label className="e-label">Opacity ({opacityUi}%)</label>
+          <input
+            type="range"
+            className="e-input"
+            style={{ width: '100%' }}
+            min="0"
+            max="100"
+            step="5"
+            value={opacityUi}
+            onChange={(e) => onOpacityChange(1 - parseInt(e.target.value, 10) / 100)}
+          />
+        </div>
+        <div>
+          <label className="e-label">Blur ({blurUi}px)</label>
+          <input
+            type="range"
+            className="e-input"
+            style={{ width: '100%' }}
+            min="0"
+            max="50"
+            step="1"
+            value={blurUi}
+            onChange={(e) => onBlurChange(parseInt(e.target.value, 10))}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  React.useEffect(() => {
+    lastUndoObjectKeyRef.current = null;
+    lastUndoMultiKeyRef.current = null;
     if (selectedObjectType !== 'MULTI') {
       setGroupIdDraft('');
     }
@@ -68,20 +760,27 @@ export const PropertiesPanel: React.FC = () => {
   if (!obj || !game) {
     return (
       <div
+        ref={panelRef}
         id="editor-panel"
         className="editor-sidebar right"
         onMouseEnter={() => {
+          isPanelHoveredRef.current = true;
           if (game) game.isMouseOverUI = true;
         }}
         onMouseLeave={() => {
+          isPanelHoveredRef.current = false;
           if (game) game.isMouseOverUI = false;
+        }}
+        onBlurCapture={() => {
+          lastUndoObjectKeyRef.current = null;
+          lastUndoMultiKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
         <div className="editor-header">
           <span>{selectedObjectId === 'SETTINGS' ? 'SETTINGS (Loading...)' : 'PROPERTIES'}</span>
         </div>
-        <div className="editor-content" style={{ color: '#888', fontStyle: 'italic' }}>
+        <div ref={contentRef} className="editor-content ui-text-muted ui-text-italic">
           {selectedObjectId === 'SETTINGS' ? 'Loading Settings...' : 'No Selection'}
         </div>
       </div>
@@ -91,9 +790,12 @@ export const PropertiesPanel: React.FC = () => {
   if (selectedObjectType === 'MULTI' && multiObjects.length > 1) {
     const group = game.editor.selectionManager.getGroupTransform();
     const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
+    const parallaxObjects = multiObjects.filter(
+      (o: any) => o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad'
+    );
     const quads = multiObjects.filter((o: any) => (o as any).type === 'Quad');
     const sharedLayer = getSharedValue(multiObjects, (o) => o.layer ?? 0);
-    const sharedParallax = getSharedValue(entitiesAndQuads, (o: any) => o.parallax ?? 1);
+    const sharedParallax = getSharedValue(parallaxObjects, (o: any) => o.parallax ?? 1);
     const sharedBlendMode = getSharedValue(
       entitiesAndQuads,
       (o: any) => o.blendMode || 'source-over'
@@ -113,18 +815,26 @@ export const PropertiesPanel: React.FC = () => {
       entitiesAndQuads,
       (o: any) => !!o.ignoreScaling
     );
+    const sharedParentNodeId = getSharedValue(multiObjects, (o: any) => o.spatial?.parentNodeId || '');
     const sharedLocked = getSharedBooleanState(multiObjects, (o: any) => !!o.locked);
     const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
     return (
       <div
+        ref={panelRef}
         id="editor-panel"
         className="editor-sidebar right"
         onMouseEnter={() => {
+          isPanelHoveredRef.current = true;
           if (game) game.isMouseOverUI = true;
         }}
         onMouseLeave={() => {
+          isPanelHoveredRef.current = false;
           if (game) game.isMouseOverUI = false;
+        }}
+        onBlurCapture={() => {
+          lastUndoObjectKeyRef.current = null;
+          lastUndoMultiKeyRef.current = null;
         }}
         style={{ fontSize: `${12 * uiScale}px` }}
       >
@@ -134,462 +844,545 @@ export const PropertiesPanel: React.FC = () => {
             X
           </button>
         </div>
-        <div className="editor-content">
-          <div className="e-row">
-            <label className="e-label">Group #ID</label>
-            <div className="e-label" style={{ color: '#888', fontSize: '0.8em' }}>
-              (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
-            </div>
-            <input
-              type="text"
-              className="e-input"
-              value={groupIdDraft}
-              placeholder="#group"
-              onChange={(e) => setGroupIdDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const raw = groupIdDraft.trim();
-                if (!raw) return;
-                const prepared = raw
-                  .split(',')
-                  .map((x) => x.trim())
-                  .filter(Boolean)
-                  .map((x) => (x.startsWith('#') ? x : `#${x}`));
-
-                let changedCount = 0;
-                multiObjects.forEach((o: any) => {
-                  const existing = (o.groupID || '')
-                    .split(',')
-                    .map((x: string) => x.trim())
-                    .filter(Boolean);
-
-                  if (e.ctrlKey) {
-                    const filtered = existing.filter((x: string) => !prepared.includes(x));
-                    if (filtered.length !== existing.length) {
-                      changedCount++;
-                    }
-                    o.groupID = filtered.join(',');
-                    return;
-                  }
-
-                  const merged = [...new Set([...existing, ...prepared])];
-                  if (merged.length !== existing.length) {
-                    changedCount++;
-                  }
-                  o.groupID = merged.join(',');
-                });
-
-                if (changedCount > 0) {
-                  incrementObjectVersion();
-                  incrementHierarchyVersion();
-                  const tagsText = prepared.join(', ');
-                  if (e.ctrlKey) {
-                    game.showNotification(
-                      `Removed ${tagsText} from ${changedCount} object${changedCount === 1 ? '' : 's'}`
-                    );
-                  } else {
-                    game.showNotification(
-                      `Appended ${tagsText} to ${changedCount} object${changedCount === 1 ? '' : 's'}`
-                    );
-                  }
-                }
-                setGroupIdDraft('');
-              }}
-            />
-          </div>
-
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div>
-              <label className="e-label">Group X</label>
-              <input
-                type="number"
-                className="e-input"
-                value={group.offsetX.toFixed(2)}
-                onChange={(e) => {
-                  const x = parseFloat(e.target.value);
-                  game.editor.selectionManager.applyGroupTransform(
-                    isNaN(x) ? 0 : x,
-                    group.offsetY,
-                    group.scale
-                  );
-                  incrementObjectVersion();
-                }}
-              />
-            </div>
-            <div>
-              <label className="e-label">Group Y</label>
-              <input
-                type="number"
-                className="e-input"
-                value={group.offsetY.toFixed(2)}
-                onChange={(e) => {
-                  const y = parseFloat(e.target.value);
-                  game.editor.selectionManager.applyGroupTransform(
-                    group.offsetX,
-                    isNaN(y) ? 0 : y,
-                    group.scale
-                  );
-                  incrementObjectVersion();
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="e-row">
-            <label className="e-label">Group Scale</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="e-input"
-              value={group.scale.toFixed(3)}
-              onChange={(e) => {
-                const s = parseFloat(e.target.value);
-                game.editor.selectionManager.applyGroupTransform(
-                  group.offsetX,
-                  group.offsetY,
-                  isNaN(s) ? 1 : s
-                );
-                incrementObjectVersion();
-              }}
-            />
-          </div>
-
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div>
-              <label className="e-label">Layer</label>
-              <input
-                type="number"
-                className="e-input"
-                placeholder="mixed"
-                value={sharedLayer === '' ? '' : sharedLayer}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value);
-                  if (isNaN(v)) return;
-                  applyToMulti((o) => {
-                    o.layer = v;
-                  });
-                }}
-              />
-            </div>
-            {entitiesAndQuads.length > 0 ? (
-              <div>
-                <label className="e-label">Parallax</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedParallax === '' ? '' : sharedParallax}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.parallax = v;
-                    });
-                  }}
-                />
-              </div>
-            ) : (
-              <div />
-            )}
-          </div>
-
-          {entitiesAndQuads.length > 0 && (
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-            >
-              <div>
-                <label className="e-label">Opacity</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="1"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedOpacity === '' ? '' : sharedOpacity}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.opacity = v;
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <label className="e-label">Blur</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  placeholder="mixed"
-                  value={sharedBlur === '' ? '' : sharedBlur}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value);
-                    if (isNaN(v)) return;
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.blur = v;
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {entitiesAndQuads.length > 0 && (
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-            >
-              <div>
-                <label className="e-label">Fill Color</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{ width: '32px', padding: 0 }}
-                    value={sharedColor === '' ? '#ffffff' : sharedColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if (o.color !== undefined) o.color = v;
-                      });
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedColor === '' ? '' : sharedColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if (o.color !== undefined) o.color = v;
-                      });
-                    }}
-                  />
+        <div ref={contentRef} className="editor-content">
+          {renderSection(
+            0,
+            null,
+            'neutral',
+            <>
+              <div className="e-row">
+                <label
+                  className="e-label"
+                  data-tooltip-fixed="true"
+                  title="Use this field to add or remove group #ID tags for all selected objects at once."
+                >
+                  Group #ID
+                </label>
+                <div className="e-label ui-text-muted ui-text-small">
+                  (&lt;Enter&gt; = append, &lt;Ctrl+Enter&gt; = remove)
                 </div>
+                <input
+                  type="text"
+                  className="e-input"
+                  value={groupIdDraft}
+                  placeholder="#group"
+                  onChange={(e) => setGroupIdDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    const raw = groupIdDraft.trim();
+                    if (!raw) return;
+                    const prepared = raw
+                      .split(',')
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                      .map((x) => (x.startsWith('#') ? x : `#${x}`));
+
+                    let changedCount = 0;
+                    multiObjects.forEach((o: any) => {
+                      const existing = (o.groupID || '')
+                        .split(',')
+                        .map((x: string) => x.trim())
+                        .filter(Boolean);
+
+                      if (e.ctrlKey) {
+                        const filtered = existing.filter((x: string) => !prepared.includes(x));
+                        if (filtered.length !== existing.length) changedCount++;
+                        o.groupID = filtered.join(',');
+                        return;
+                      }
+
+                      const merged = [...new Set([...existing, ...prepared])];
+                      if (merged.length !== existing.length) changedCount++;
+                      o.groupID = merged.join(',');
+                    });
+
+                    if (changedCount > 0) {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      incrementObjectVersion();
+                      incrementHierarchyVersion();
+                      const tagsText = prepared.join(', ');
+                      if (e.ctrlKey) {
+                        game.showNotification(
+                          `Removed ${tagsText} from ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                        );
+                      } else {
+                        game.showNotification(
+                          `Appended ${tagsText} to ${changedCount} object${changedCount === 1 ? '' : 's'}`
+                        );
+                      }
+                    }
+                    setGroupIdDraft('');
+                  }}
+                />
               </div>
-              <div style={{ display: 'flex', alignItems: 'end' }}>
-                <div style={{ width: '100%' }}>
-                  <label className="e-label">Blend</label>
+
+              <div className="e-row">
+                <label className="e-label">Parent</label>
+                <Select
+                  className="parent-id-select"
+                  value={multiSpatialParentDraft}
+                  onChange={(value) => {
+                    const nextRelation = !value ? '' : multiSpatialRelationDraft || 'in';
+                    setMultiSpatialParentDraft(value || '');
+                    setMultiSpatialRelationDraft(nextRelation);
+                    applyToMultiRoots((o: any) => {
+                      o.spatial = {
+                        ...(o.spatial || {}),
+                        parentNodeId: value || null,
+                        relation: value ? nextRelation || 'in' : null,
+                      };
+                    });
+                  }}
+                  options={getMultiSpatialParentOptions()}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {sharedParentNodeId && (
+                <div className="e-row">
+                  <label className="e-label">Relation</label>
                   <Select
-                    value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                    value={multiSpatialRelationDraft}
                     onChange={(value) => {
-                      applyToMulti((o: any) => {
-                        if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                      setMultiSpatialRelationDraft(value || '');
+                      applyToMultiRoots((o: any) => {
+                        o.spatial = {
+                          ...(o.spatial || {}),
+                          parentNodeId: o.spatial?.parentNodeId || null,
+                          relation: value || (o.spatial?.parentNodeId ? 'in' : null),
+                        };
                       });
                     }}
-                    options={[
-                      { value: 'source-over', label: 'Normal' },
-                      { value: 'multiply', label: 'Multiply' },
-                      { value: 'screen', label: 'Screen' },
-                      { value: 'overlay', label: 'Overlay' },
-                      { value: 'lighter', label: 'Add' },
-                      { value: 'difference', label: 'Diff' },
-                    ]}
+                    options={getSpatialRelationOptions(true)}
                     style={{ width: '100%' }}
                   />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {quads.length > 0 && (
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={sharedIsGrid === 'on'}
-                  ref={(el) => {
-                    if (el) el.indeterminate = sharedIsGrid === 'mixed';
-                  }}
-                  onChange={(e) => {
-                    applyToMulti((o: any) => {
-                      if ((o as any).type === 'Quad') (o as any).isGrid = e.target.checked;
-                    });
-                  }}
-                />
-                Retro Grid
-              </label>
-            </div>
-          )}
-
-          {quads.length > 0 && sharedIsGrid !== 'off' && (
-            <>
-              <div
-                className="e-row"
-                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
-              >
-                <div>
-                  <label className="e-label">Grid X</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridX === '' ? '' : sharedGridX}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridLinesX = v;
-                      });
-                    }}
-                    min={1}
-                    max={50}
-                  />
-                </div>
-                <div>
-                  <label className="e-label">Grid Y</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridY === '' ? '' : sharedGridY}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridLinesY = v;
-                      });
-                    }}
-                    min={1}
-                    max={50}
-                  />
-                </div>
-                <div>
-                  <label className="e-label">Width</label>
-                  <input
-                    type="number"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridWidth === '' ? '' : sharedGridWidth}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (isNaN(v)) return;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).lineWidth = v;
-                      });
-                    }}
-                    step={0.1}
-                    min={0.1}
-                    max={10}
-                  />
-                </div>
-              </div>
-              <div className="e-row">
-                <label className="e-label">Grid Color</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{ width: '32px', padding: 0 }}
-                    value={sharedGridColor === '' ? '#ffffff' : sharedGridColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                      });
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    placeholder="mixed"
-                    value={sharedGridColor === '' ? '' : sharedGridColor}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      applyToMulti((o: any) => {
-                        if ((o as any).type === 'Quad') (o as any).gridColor = v;
-                      });
-                    }}
-                  />
-                </div>
-              </div>
+              )}
             </>
           )}
 
-          <div
-            className="e-row"
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'end' }}>
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+          {renderSection(
+            1,
+            'Transform',
+            'blue',
+            <>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
               >
-                <input
-                  type="checkbox"
-                  checked={sharedIgnoreScaling === 'on'}
-                  ref={(el) => {
-                    if (el) el.indeterminate = sharedIgnoreScaling === 'mixed';
-                  }}
-                  onChange={(e) => {
-                    applyToMulti((o: any) => {
-                      if (o instanceof Entity) o.ignoreScaling = e.target.checked;
-                    });
-                  }}
-                />
-                Disable Depth Scaling
-              </label>
-            </div>
-            <label
-              className="e-label"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
-            >
-              <input
-                type="checkbox"
-                checked={sharedLocked === 'on'}
-                ref={(el) => {
-                  if (el) el.indeterminate = sharedLocked === 'mixed';
-                }}
-                onChange={(e) => {
-                  applyToMulti((o: any) => {
-                    o.locked = e.target.checked;
-                  });
-                }}
-              />
-              Lock
-            </label>
-          </div>
+                <div>
+                  <label className="e-label">Group X</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={formatPanelNumber(group.offsetX)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const x = parseFloat(e.target.value);
+                      game.editor.selectionManager.applyGroupTransform(
+                        isNaN(x) ? 0 : x,
+                        group.offsetY,
+                        group.scale
+                      );
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Group Y</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    value={formatPanelNumber(group.offsetY)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const y = parseFloat(e.target.value);
+                      game.editor.selectionManager.applyGroupTransform(
+                        group.offsetX,
+                        isNaN(y) ? 0 : y,
+                        group.scale
+                      );
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              </div>
 
-          <div className="e-row">
-            <label
-              className="e-label"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
-            >
-              <input
-                type="checkbox"
-                checked={sharedDisabled === 'on'}
-                ref={(el) => {
-                  if (el) el.indeterminate = sharedDisabled === 'mixed';
-                }}
-                onChange={(e) => {
-                  applyToMulti((o: any) => {
-                    o.disabled = e.target.checked;
-                  });
-                }}
-              />
-              Disabled
-            </label>
-          </div>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}
+              >
+                <div>
+                  <label className="e-label">Group Scale</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="e-input"
+                    value={formatPanelNumber(group.scale)}
+                    onChange={(e) => {
+                      const multiKey = `MULTI:${multiObjects
+                        .map((item: any) => item?.name || '')
+                        .filter(Boolean)
+                        .join('|')}`;
+                      if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+                        game.editor.saveUndoState();
+                        lastUndoMultiKeyRef.current = multiKey;
+                      }
+                      const s = parseFloat(e.target.value);
+                      if (isNaN(s) || s <= 0) return;
+                      game.editor.selectionManager.applyGroupTransform(group.offsetX, group.offsetY, s);
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="e-label">Layer</label>
+                  <input
+                    type="number"
+                    className="e-input"
+                    placeholder="mixed"
+                    value={sharedLayer === '' ? '' : formatPanelNumber(sharedLayer)}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (isNaN(v)) return;
+                      applyToMulti((o) => {
+                        o.layer = v;
+                      });
+                    }}
+                  />
+                </div>
+                <div>
+                  {parallaxObjects.length > 0 ? (
+                    <>
+                      <label className="e-label">Parallax</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input ui-text-muted"
+                        placeholder="mixed"
+                        value={sharedParallax === '' ? '' : formatPanelNumber(sharedParallax)}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if (o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad') {
+                              o.parallax = v;
+                            }
+                          });
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div />
+                  )}
+                </div>
+              </div>
+
+              {entitiesAndQuads.length > 0 && (
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sharedIgnoreScaling === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedIgnoreScaling === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if (o instanceof Entity) o.ignoreScaling = e.target.checked;
+                        });
+                      }}
+                    />
+                    Disable Depth Scaling
+                  </label>
+                </div>
+              )}
+            </>
+          )}
+
+          {renderSection(
+            2,
+            'Visual',
+            'yellow',
+            <>
+              {entitiesAndQuads.length > 0 && (
+                renderOpacityBlurControls(
+                  sharedOpacity,
+                  sharedBlur,
+                  (nextOpacity) => {
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.opacity = nextOpacity;
+                    });
+                  },
+                  (nextBlur) => {
+                    applyToMulti((o: any) => {
+                      if (o instanceof Entity) o.blur = nextBlur;
+                    });
+                  }
+                )
+              )}
+
+              {entitiesAndQuads.length > 0 && (
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+                >
+                  <div>
+                    <label className="e-label">Fill Color</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <input
+                        type="color"
+                        className="e-input"
+                        style={{ width: '32px', padding: 0 }}
+                        value={sharedColor === '' ? '#ffffff' : sharedColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if (o.color !== undefined) o.color = v;
+                          });
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedColor === '' ? '' : sharedColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if (o.color !== undefined) o.color = v;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'end' }}>
+                    <div style={{ width: '100%' }}>
+                      <label className="e-label">Blend Mode</label>
+                      <Select
+                        value={sharedBlendMode === '' ? 'source-over' : sharedBlendMode}
+                        onChange={(value) => {
+                          applyToMulti((o: any) => {
+                            if (o instanceof Entity) o.blendMode = value as GlobalCompositeOperation;
+                          });
+                        }}
+                        options={[
+                          { value: 'source-over', label: 'Normal' },
+                          { value: 'multiply', label: 'Multiply' },
+                          { value: 'screen', label: 'Screen' },
+                          { value: 'overlay', label: 'Overlay' },
+                          { value: 'lighter', label: 'Add' },
+                          { value: 'difference', label: 'Diff' },
+                        ]}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {quads.length > 0 && (
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ marginRight: '5px' }}
+                      checked={sharedIsGrid === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedIsGrid === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).isGrid = e.target.checked;
+                        });
+                      }}
+                    />
+                    Retro Grid
+                  </label>
+                </div>
+              )}
+
+              {quads.length > 0 && sharedIsGrid !== 'off' && (
+                <>
+                  <div
+                    className="e-row"
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                  >
+                    <div>
+                      <label className="e-label">Grid X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridX === '' ? '' : formatPanelNumber(sharedGridX)}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridLinesX = v;
+                          });
+                        }}
+                        min={1}
+                        max={50}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Grid Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridY === '' ? '' : formatPanelNumber(sharedGridY)}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridLinesY = v;
+                          });
+                        }}
+                        min={1}
+                        max={50}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Width</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridWidth === '' ? '' : formatPanelNumber(sharedGridWidth)}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (isNaN(v)) return;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).lineWidth = v;
+                          });
+                        }}
+                        step={0.1}
+                        min={0.1}
+                        max={10}
+                      />
+                    </div>
+                  </div>
+                  <div className="e-row">
+                    <label className="e-label">Grid Color</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <input
+                        type="color"
+                        className="e-input"
+                        style={{ width: '32px', padding: 0 }}
+                        value={sharedGridColor === '' ? '#ffffff' : sharedGridColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                          });
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="e-input"
+                        placeholder="mixed"
+                        value={sharedGridColor === '' ? '' : sharedGridColor}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          applyToMulti((o: any) => {
+                            if ((o as any).type === 'Quad') (o as any).gridColor = v;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {renderSection(
+            6,
+            null,
+            'neutral',
+            <>
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+              >
+                <label
+                  className="e-label"
+                  title="Toggle lock hotkey: Alt-L"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                >
+                  <input
+                    type="checkbox"
+                    title="Alt-L"
+                    checked={sharedLocked === 'on'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sharedLocked === 'mixed';
+                    }}
+                    onChange={(e) => {
+                      applyToMulti((o: any) => {
+                        o.locked = e.target.checked;
+                      });
+                    }}
+                  />
+                  Lock Object
+                </label>
+
+                <label
+                  className="e-label"
+                  title="Toggle disabled hotkey: Alt-D"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                >
+                  <input
+                    type="checkbox"
+                    title="Alt-D"
+                    checked={sharedDisabled === 'on'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sharedDisabled === 'mixed';
+                    }}
+                    onChange={(e) => {
+                      applyToMulti((o: any) => {
+                        o.disabled = e.target.checked;
+                      });
+                    }}
+                  />
+                  Disabled
+                </label>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -597,6 +1390,16 @@ export const PropertiesPanel: React.FC = () => {
 
   const handleChange = (field: string, value: any, enforceNumber = false) => {
     if (!obj) return;
+
+    if (selectedObjectType !== 'SETTINGS' && game?.editor) {
+      const objectKey = selectedObjectType === 'SCENE'
+        ? `SCENE:${obj.id || ''}`
+        : `${selectedObjectType || 'Object'}:${obj.name || ''}`;
+      if (lastUndoObjectKeyRef.current !== objectKey) {
+        game.editor.saveUndoState();
+        lastUndoObjectKeyRef.current = objectKey;
+      }
+    }
 
     let finalVal = value;
     if (enforceNumber) {
@@ -666,14 +1469,25 @@ export const PropertiesPanel: React.FC = () => {
     }
   };
 
+  const isEntityLike =
+    selectedObjectType === 'Entity' || selectedObjectType === 'Actor' || selectedObjectType === 'Static';
+  const isTriggerbox = selectedObjectType === 'Triggerbox';
+  const isWalkbox = selectedObjectType === 'Walkbox';
+  const isScene = selectedObjectType === 'SCENE';
+  const isSettings = selectedObjectType === 'SETTINGS';
+  const isObjectWithScriptEvents = !isSettings && !isScene && !isWalkbox && selectedObjectType !== 'MULTI';
+
   return (
     <div
+      ref={panelRef}
       id="editor-panel"
       className="editor-sidebar right"
       onMouseEnter={() => {
+        isPanelHoveredRef.current = true;
         if (game) game.isMouseOverUI = true;
       }}
       onMouseLeave={() => {
+        isPanelHoveredRef.current = false;
         if (game) game.isMouseOverUI = false;
       }}
       style={{ fontSize: `${12 * uiScale}px` }}
@@ -687,516 +1501,419 @@ export const PropertiesPanel: React.FC = () => {
         </button>
       </div>
 
-      <div className="editor-content">
-        {selectedObjectType !== 'SETTINGS' && (
-          <>
-            {/* Common: Name -> ID */}
-            <div className="e-row">
-              <label className="e-label">{selectedObjectType === 'SCENE' ? 'ID/File' : 'ID'}</label>
-              <input
-                type="text"
-                className="e-input"
-                value={selectedObjectType === 'SCENE' ? obj.id || '' : obj.name || ''}
-                onChange={(e) => {
-                  // Local update only
-                  const val = e.target.value;
-                  if (selectedObjectType === 'SCENE') obj.id = val;
-                  else obj.name = val;
-                  incrementObjectVersion();
-                }}
-                onBlur={(e) => {
-                  // Commit with Validation
-                  const rawVal = e.target.value;
-                  const finalVal = rawVal.trim();
-                  const field = selectedObjectType === 'SCENE' ? 'id' : 'name';
-
-                  // Validation (Only for Name/ID)
-                  let isValid = true;
-                  const scene = game?.sceneManager?.currentScene;
-
-                  if (selectedObjectType !== 'SCENE' && scene) {
-                    // Check duplicates
-                    // Check Entities
-                    const dupEntity = scene.entities.find(
-                      (ent) => ent.name === finalVal && ent !== game?.editor?.selectedObject
-                    );
-                    // Check Triggerboxes
-                    const dupTrigger = scene.triggerboxes
-                      ? scene.triggerboxes.find(
-                          (tb) => tb.name === finalVal && tb !== game?.editor?.selectedObject
-                        )
-                      : null;
-
-                    if (dupEntity || dupTrigger) {
-                      console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
-                      // @ts-ignore
-                      if (game.showMessage) game.showMessage(`Name '${finalVal}' already exists!`);
-                      isValid = false;
-                    }
-                  }
-
-                  if (isValid) {
-                    handleChange(field, finalVal);
-                  } else {
-                    // Revert to original from real object
-                    let realObj: any = null;
-                    if (game?.editor) realObj = game.editor.selectedObject;
-
-                    if (realObj) {
-                      if (selectedObjectType === 'SCENE') obj.id = realObj.id;
-                      else obj.name = realObj.name;
-                      incrementObjectVersion();
-                    }
-                  }
-                }}
-              />
-            </div>
-          </>
-        )}
-
-        {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
-          <div className="e-row">
-            <label className="e-label">Group #ID</label>
-            <input
-              type="text"
-              className="e-input"
-              value={obj.groupID || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                // Auto-format: Ensure every token starts with #
-                // 1. Split by comma
-                const tokens = val.split(',');
-                const newTokens = tokens.map((t) => {
-                  // Don't auto-add to the very last token if it's empty (user just typed comma)
-                  if (t.length === 0) return '';
-
-                  let clean = t;
-                  // If this is a new char entry (not just backspace), check prefix
-                  const trimmed = t.trimStart();
-                  if (trimmed.length > 0 && !trimmed.startsWith('#')) {
-                    // Find where the white space ends to insert #
-                    const firstCharIdx = t.length - trimmed.length;
-                    clean = t.substring(0, firstCharIdx) + '#' + trimmed;
-                  }
-                  return clean;
-                });
-
-                handleChange('groupID', newTokens.join(','));
-              }}
-            />
-          </div>
-        )}
-
-        {/* Entity Properties (Static, Actor, Entity) - Moved & Compacted */}
-        {(selectedObjectType === 'Entity' ||
-          selectedObjectType === 'Actor' ||
-          selectedObjectType === 'Static') && (
-          <>
-            {/* Display Name */}
-            <div className="e-row">
-              <label className="e-label">Display Name</label>
-              <input
-                type="text"
-                className="e-input"
-                placeholder="e.g. Pillar (for Parser)"
-                value={obj.customName || ''}
-                onChange={(e) => handleChange('customName', e.target.value)}
-              />
-            </div>
-
-            {/* Transform: X, Y, W, H */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">X</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.x ?? 0}
-                  onChange={(e) => handleChange('x', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Y</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.y ?? 0}
-                  onChange={(e) => handleChange('y', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">W</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.width ?? 0}
-                  onChange={(e) => handleChange('width', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">H</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.height ?? 0}
-                  onChange={(e) => handleChange('height', e.target.value, true)}
-                />
-              </div>
-            </div>
-
-            {/* Scale, Layer, Parallax */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">Scale</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="e-input"
-                  value={obj.modelScale || 1}
-                  onChange={(e) => handleChange('modelScale', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Layer</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.layer || 0}
-                  onChange={(e) => handleChange('layer', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Parallax</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="e-input"
-                  value={obj.parallax ?? 1}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    const newP = isNaN(val) ? 1.0 : val;
-                    const oldP = obj.parallax !== undefined ? obj.parallax : 1.0;
-
-                    // Auto-Correct Position to prevent visual jump
-                    // NewPos = OldPos + Cam * (NewP - OldP)
-                    const scene = game.sceneManager.currentScene;
-                    if (scene && game.editor.selectedObject) {
-                      const camX = scene.camera.x;
-                      const camY = scene.camera.y;
-
-                      const dx = camX * (newP - oldP);
-                      const dy = camY * (newP - oldP);
-
-                      // Apply to Local
-                      obj.x += dx;
-                      obj.y += dy;
-
-                      // Apply to Real (Must do this manually as handleChange only does the targeting field)
-                      if (
-                        game.editor &&
-                        game.editor.selectedObject &&
-                        'x' in game.editor.selectedObject
-                      ) {
-                        (game.editor.selectedObject as any).x = obj.x;
-                        (game.editor.selectedObject as any).y = obj.y;
-                      }
-                    }
-
-                    handleChange('parallax', newP, true);
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Color & Blend Mode */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">Color</label>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{
-                      width: '30px',
-                      padding: 0,
-                      height: '20px',
-                      cursor: 'pointer',
-                      border: 'none',
-                    }}
-                    value={obj.color || '#AAAAAA'}
-                    onChange={(e) => handleChange('color', e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    style={{ flex: 1, minWidth: 0 }}
-                    value={obj.color || ''}
-                    onChange={(e) => handleChange('color', e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="e-label">Blend Mode</label>
-                <Select
-                  value={obj.blendMode || 'source-over'}
-                  onChange={(value) => handleChange('blendMode', value)}
-                  options={[
-                    { value: 'source-over', label: 'Normal' },
-                    { value: 'multiply', label: 'Multiply' },
-                    { value: 'screen', label: 'Screen' },
-                    { value: 'overlay', label: 'Overlay' },
-                    { value: 'lighter', label: 'Add' },
-                    { value: 'difference', label: 'Diff' },
-                  ]}
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
-
-            {/* Opacity & Blur */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">
-                  Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)
-                </label>
-                <input
-                  type="range"
-                  className="e-input"
-                  style={{ width: '100%' }}
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={obj.opacity !== undefined ? obj.opacity : 1.0}
-                  onChange={(e) => handleChange('opacity', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Blur ({obj.blur || 0}px)</label>
-                <input
-                  type="range"
-                  className="e-input"
-                  style={{ width: '100%', direction: 'ltr' }}
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={50 - (obj.blur || 0)}
-                  onChange={(e) => handleChange('blur', 50 - parseInt(e.target.value))}
-                />
-              </div>
-            </div>
-
-            {/* Sprite */}
-            <div className="e-row">
-              <label className="e-label">Sprite</label>
-              <div style={{ display: 'flex', gap: '5px' }}>
+      <div ref={contentRef} className="editor-content">
+        {!isSettings &&
+          renderSection(
+            0,
+            null,
+            'neutral',
+            <>
+              <div className="e-row">
+                <label className="e-label">{isScene ? 'ID/File' : 'ID'}</label>
                 <input
                   type="text"
                   className="e-input"
-                  style={{ flex: 1 }}
-                  value={obj.spriteName || ''}
-                  onChange={(e) => handleChange('spriteName', e.target.value)}
-                />
-                <button
-                  className="e-btn"
-                  onClick={() =>
-                    game.openFileBrowser('load', 'public/sprites', (f) =>
-                      handleChange('spriteName', f)
-                    )
-                  }
-                >
-                  ...
-                </button>
-              </div>
-            </div>
+                  value={isScene ? obj.id || '' : obj.name || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (isScene) obj.id = val;
+                    else obj.name = val;
+                    incrementObjectVersion();
+                  }}
+                  onBlur={(e) => {
+                    const rawVal = e.target.value;
+                    const finalVal = rawVal.trim();
+                    const field = isScene ? 'id' : 'name';
 
-            {/* Colliders + Flags */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-            >
-              <div>
-                <label className="e-label">Collider W</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.colliderWidth ?? 0}
-                  onChange={(e) => handleChange('colliderWidth', e.target.value, true)}
-                />
-              </div>
-              <div>
-                <label className="e-label">Collider H</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.colliderHeight ?? 0}
-                  onChange={(e) => handleChange('colliderHeight', e.target.value, true)}
-                />
-              </div>
-            </div>
+                    let isValid = true;
+                    const scene = game?.sceneManager?.currentScene;
 
-            <div className="e-row">
-              <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.ignoreScaling}
-                  onChange={(e) => handleChange('ignoreScaling', e.target.checked)}
-                />
-                Disable Depth Scaling
-              </label>
-            </div>
+                    if (!isScene && scene) {
+                      const dupEntity = scene.entities.find(
+                        (ent) => ent.name === finalVal && ent !== game?.editor?.selectedObject
+                      );
+                      const dupTrigger = scene.triggerboxes
+                        ? scene.triggerboxes.find(
+                            (tb) => tb.name === finalVal && tb !== game?.editor?.selectedObject
+                          )
+                        : null;
 
-            <div className="e-row">
-              <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.locked}
-                  onChange={(e) => handleChange('locked', e.target.checked)}
-                />
-                Lock Object
-              </label>
-            </div>
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.disabled}
-                  onChange={(e) => handleChange('disabled', e.target.checked)}
-                />
-                Disabled (Hidden)
-              </label>
-            </div>
-
-            {/* Interactions */}
-            <div
-              className="e-row"
-              style={{ marginTop: '10px', borderTop: '1px solid #444', paddingTop: '5px' }}
-            >
-              <div
-                className="e-label"
-                style={{
-                  color: '#aaf',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <span>SCRIPT EVENTS</span>
-                <Select
-                  value=""
-                  placeholder="+ ADD"
-                  onChange={(value) => {
-                    const verb = value;
-                    if (!verb) return;
-                    if (!obj.interactions) obj.interactions = {};
-                    if (!obj.interactions[verb]) {
-                      obj.interactions[verb] = '';
-                      // Sync to real object
-                      if (game.editor.selectedObject) {
-                        if (!(game.editor.selectedObject as any).interactions)
-                          (game.editor.selectedObject as any).interactions = {};
-                        (game.editor.selectedObject as any).interactions[verb] = '';
+                      if (dupEntity || dupTrigger) {
+                        console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
+                        // @ts-ignore
+                        if (game.showMessage) game.showMessage(`Name '${finalVal}' already exists!`);
+                        isValid = false;
                       }
-                      incrementObjectVersion();
+                    }
+
+                    if (isValid) {
+                      handleChange(field, finalVal);
+                    } else {
+                      let realObj: any = null;
+                      if (game?.editor) realObj = game.editor.selectedObject;
+
+                      if (realObj) {
+                        if (isScene) obj.id = realObj.id;
+                        else obj.name = realObj.name;
+                        incrementObjectVersion();
+                      }
                     }
                   }}
-                  options={[
-                    { value: 'look', label: 'Look' },
-                    { value: 'use', label: 'Use' },
-                    { value: 'talk', label: 'Talk' },
-                    { value: 'pickup', label: 'Pickup' },
-                  ]}
-                  style={{ width: '80px', fontSize: '0.85em' }}
                 />
               </div>
 
-              {obj.interactions &&
-                Object.keys(obj.interactions).map((verb) => (
-                  <div
-                    key={verb}
-                    style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}
-                  >
-                    <div style={{ width: '40px', fontSize: '0.85em', color: '#ccc' }}>
-                      {verb.toUpperCase()}
+              {supportsTextAsset && (
+                <div className="e-row">
+                  <label className="e-label">Title</label>
+                  <input
+                    type="text"
+                    className="e-input"
+                    value={resolvedTitle}
+                    readOnly
+                    tabIndex={-1}
+                    onFocus={(e) => e.currentTarget.blur()}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  {textAssetPath && (
+                    <>
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <button className="e-btn" onClick={handleOpenTA}>
+                          {hasTextAsset ? 'Open TA' : 'Create TA'}
+                        </button>
+                        <button className="e-btn" onClick={handleReadTA} disabled={isReadingTA}>
+                          {isReadingTA ? 'Syncing...' : 'Sync TA'}
+                        </button>
+                        {hasTextAsset && (
+                          <button className="e-btn" onClick={handleDeleteTA}>
+                            Delete TA
+                          </button>
+                        )}
+                      </div>
+                      <div className="e-label ui-text-muted ui-text-small">{textAssetPath}</div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {!isScene && !isSettings && (
+                <div className="e-row">
+                  <label className="e-label">Group #ID</label>
+                  <input
+                    type="text"
+                    className="e-input"
+                    value={obj.groupID || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const tokens = val.split(',');
+                      const newTokens = tokens.map((t) => {
+                        if (t.length === 0) return '';
+
+                        let clean = t;
+                        const trimmed = t.trimStart();
+                        if (trimmed.length > 0 && !trimmed.startsWith('#')) {
+                          const firstCharIdx = t.length - trimmed.length;
+                          clean = t.substring(0, firstCharIdx) + '#' + trimmed;
+                        }
+                        return clean;
+                      });
+
+                      handleChange('groupID', newTokens.join(','));
+                    }}
+                  />
+                </div>
+              )}
+
+              {!isScene && !isSettings && !isWalkbox && (
+                <div
+                  className="e-row"
+                  style={{
+                    display: obj.spatial?.parentNodeId ? 'grid' : 'block',
+                    gridTemplateColumns: obj.spatial?.parentNodeId ? '1fr 1fr' : undefined,
+                    gap: obj.spatial?.parentNodeId ? '5px' : undefined,
+                  }}
+                >
+                  <div>
+                    <label className="e-label">Parent</label>
+                    <Select
+                      className="parent-id-select"
+                      value={obj.spatial?.parentNodeId || ''}
+                      onChange={(value) => {
+                        game.editor.saveUndoState();
+                        obj.spatial = {
+                          ...(obj.spatial || {}),
+                          parentNodeId: value || null,
+                          relation: value ? obj.spatial?.relation || 'in' : null,
+                        };
+                        incrementObjectVersion();
+                        incrementHierarchyVersion();
+                      }}
+                      options={getSceneSpatialParentOptions()}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  {obj.spatial?.parentNodeId && (
+                    <div>
+                      <label className="e-label">Relation</label>
+                      <Select
+                        value={obj.spatial?.relation || 'in'}
+                        onChange={(value) => {
+                          game.editor.saveUndoState();
+                          obj.spatial = {
+                            ...(obj.spatial || {}),
+                            parentNodeId: obj.spatial?.parentNodeId || null,
+                            relation: value || (obj.spatial?.parentNodeId ? 'in' : null),
+                          };
+                          incrementObjectVersion();
+                          incrementHierarchyVersion();
+                        }}
+                        options={getSpatialRelationOptions(true)}
+                        style={{ width: '100%' }}
+                      />
                     </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+        {isEntityLike && (
+          <>
+            {renderSection(
+              1,
+              'Transform',
+              'blue',
+              <>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">X</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.x ?? 0)}
+                      onChange={(e) => handleChange('x', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Y</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.y ?? 0)}
+                      onChange={(e) => handleChange('y', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">H</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.height ?? 0)}
+                      onChange={(e) => handleChange('height', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">W</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.width ?? 0)}
+                      onChange={(e) => handleChange('width', e.target.value, true)}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Scale</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="e-input"
+                      value={formatPanelNumber(obj.modelScale || 1)}
+                      onChange={(e) => handleChange('modelScale', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Layer</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.layer || 0)}
+                      onChange={(e) => handleChange('layer', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Parallax</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="e-input"
+                      value={formatPanelNumber(obj.parallax ?? 1)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const newP = isNaN(val) ? 1.0 : val;
+                        const oldP = obj.parallax !== undefined ? obj.parallax : 1.0;
+                        const scene = game.sceneManager.currentScene;
+                        if (scene && game.editor.selectedObject) {
+                          const camX = scene.camera.x;
+                          const camY = scene.camera.y;
+                          obj.x += camX * (newP - oldP);
+                          obj.y += camY * (newP - oldP);
+                          if (game.editor && game.editor.selectedObject && 'x' in game.editor.selectedObject) {
+                            (game.editor.selectedObject as any).x = obj.x;
+                            (game.editor.selectedObject as any).y = obj.y;
+                          }
+                        }
+                        handleChange('parallax', newP, true);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Collider H</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.colliderHeight ?? 0)}
+                      onChange={(e) => handleChange('colliderHeight', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Collider W</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.colliderWidth ?? 0)}
+                      onChange={(e) => handleChange('colliderWidth', e.target.value, true)}
+                    />
+                  </div>
+                </div>
+
+                <div className="e-row">
+                  <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      style={{ marginRight: '5px' }}
+                      checked={!!obj.ignoreScaling}
+                      onChange={(e) => handleChange('ignoreScaling', e.target.checked)}
+                    />
+                    Disable Depth-scaling
+                  </label>
+                </div>
+              </>
+            )}
+
+            {renderSection(
+              2,
+              'Visual',
+              'yellow',
+              <>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Fill Color</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <input
+                        type="color"
+                        className="e-input"
+                        style={{ width: '30px', padding: 0, height: '20px', cursor: 'pointer', border: 'none' }}
+                        value={obj.color || '#AAAAAA'}
+                        onChange={(e) => handleChange('color', e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        className="e-input"
+                        style={{ flex: 1, minWidth: 0 }}
+                        value={obj.color || ''}
+                        onChange={(e) => handleChange('color', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="e-label">Blend Mode</label>
+                    <Select
+                      value={obj.blendMode || 'source-over'}
+                      onChange={(value) => handleChange('blendMode', value)}
+                      options={[
+                        { value: 'source-over', label: 'Normal' },
+                        { value: 'multiply', label: 'Multiply' },
+                        { value: 'screen', label: 'Screen' },
+                        { value: 'overlay', label: 'Overlay' },
+                        { value: 'lighter', label: 'Add' },
+                        { value: 'difference', label: 'Diff' },
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+
+                {renderOpacityBlurControls(
+                  obj.opacity !== undefined ? obj.opacity : 1.0,
+                  obj.blur || 0,
+                  (nextOpacity) => handleChange('opacity', nextOpacity, true),
+                  (nextBlur) => handleChange('blur', nextBlur)
+                )}
+
+                <div className="e-row">
+                  <label className="e-label">Sprite</label>
+                  <div style={{ display: 'flex', gap: '5px' }}>
                     <input
                       type="text"
                       className="e-input"
-                      style={{ flex: 1, fontSize: '0.85em' }}
-                      placeholder="Script ID"
-                      value={obj.interactions[verb]}
-                      onChange={(e) => {
-                        obj.interactions[verb] = e.target.value;
-                        // Sync to real object
-                        if (game.editor.selectedObject) {
-                          (game.editor.selectedObject as any).interactions[verb] = e.target.value;
-                        }
-                        incrementObjectVersion();
-                      }}
+                      style={{ flex: 1 }}
+                      value={obj.spriteName || ''}
+                      onChange={(e) => handleChange('spriteName', e.target.value)}
                     />
                     <button
-                      className="e-btn e-btn-red"
-                      style={{ marginLeft: '2px', padding: '0 4px', fontSize: '0.85em' }}
-                      onClick={() => {
-                        delete obj.interactions[verb];
-                        // Sync to real object
-                        if (game.editor.selectedObject) {
-                          delete (game.editor.selectedObject as any).interactions[verb];
-                        }
-                        incrementObjectVersion();
-                      }}
+                      className="e-btn"
+                      onClick={() =>
+                        game.openFileBrowser('load', 'public/sprites', (f) => handleChange('spriteName', f))
+                      }
                     >
-                      x
+                      ...
                     </button>
                   </div>
-                ))}
-            </div>
+                </div>
+              </>
+            )}
+
           </>
         )}
 
-        {/* Walkbox/Triggerbox Properties */}
-        {(selectedObjectType === 'Walkbox' || selectedObjectType === 'Triggerbox') && (
+        {selectedObjectType === 'Walkbox' && (
           <div className="e-row">
-            {selectedObjectType === 'Walkbox' && (
-              <div className="e-row">
-                <label className="e-label">Mode</label>
-                <Select
-                  value={obj.mode || 'Invert'}
-                  onChange={(value) => handleChange('mode', value)}
-                  options={[
-                    { value: 'Invert', label: 'Invert (Standard)' },
-                    { value: 'Add', label: 'Add (Bridge)' },
-                    { value: 'Subtract', label: 'Subtract (Hole)' },
-                  ]}
-                  style={{ width: '100%', marginBottom: '5px' }}
-                />
-              </div>
-            )}
+            <div className="e-row">
+              <label className="e-label">Mode</label>
+              <Select
+                value={obj.mode || 'Invert'}
+                onChange={(value) => handleChange('mode', value)}
+                options={[
+                  { value: 'Invert', label: 'Invert (Standard)' },
+                  { value: 'Add', label: 'Add (Bridge)' },
+                  { value: 'Subtract', label: 'Subtract (Hole)' },
+                ]}
+                style={{ width: '100%', marginBottom: '5px' }}
+              />
+            </div>
             <button
               className="e-btn e-btn-yellow"
               style={{ width: '100%', marginBottom: '5px' }}
               onClick={(e) => {
                 if (confirm('Redraw polygon? Current points will be cleared.')) {
-                  // Clean Redraw Logic: Editor handles clearing and mode setting
                   game.editor.redrawSelected();
-                  // Blur the button so hitting Enter doesn't re-trigger it
                   (e.target as HTMLElement).blur();
                 }
               }}
@@ -1208,95 +1925,389 @@ export const PropertiesPanel: React.FC = () => {
                 ? 'Click to add points. Press ENTER to finish. Hold Shift for 22.5° snap.'
                 : 'To edit, drag vertices on screen. Hold Shift for 22.5° snap.'}
             </div>
+          </div>
+        )}
 
-            {selectedObjectType === 'Triggerbox' && (
-              <div className="e-row">
-                <label className="e-label">Layer</label>
-                <input
-                  type="number"
-                  className="e-input"
-                  value={obj.layer || 0}
-                  onChange={(e) => handleChange('layer', e.target.value, true)}
-                />
-              </div>
+        {isTriggerbox && (
+          <>
+            {renderSection(
+              1,
+              'Transform',
+              'blue',
+              <>
+                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                  <div>
+                    <label className="e-label">X</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(getPolyCentroid(obj.poly).x)}
+                      onChange={(e) => translatePolyTo(parseFloat(e.target.value) || 0, getPolyCentroid(obj.poly).y)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Y</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(getPolyCentroid(obj.poly).y)}
+                      onChange={(e) => translatePolyTo(getPolyCentroid(obj.poly).x, parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                  <div>
+                    <label className="e-label">Scale</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="e-input"
+                      value={polygonScaleDraft}
+                      onChange={(e) => applyPolygonScaleDraft(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Layer</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      value={formatPanelNumber(obj.layer || 0)}
+                      onChange={(e) => handleChange('layer', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Parallax</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="e-input"
+                      value={formatPanelNumber(obj.parallax ?? 1)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const newP = isNaN(val) ? 1.0 : val;
+                        const oldP = obj.parallax !== undefined ? obj.parallax : 1.0;
+                        const scene = game.sceneManager.currentScene;
+                        if (scene && obj.poly?.length) {
+                          const dx = scene.camera.x * (newP - oldP);
+                          const dy = scene.camera.y * (newP - oldP);
+                          obj.poly = obj.poly.map((pt: any) => ({
+                            x: Math.round(pt.x + dx),
+                            y: Math.round(pt.y + dy),
+                          }));
+                        }
+                        handleChange('parallax', newP, true);
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
-            <div className="e-row">
-              <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.locked}
-                  onChange={(e) => handleChange('locked', e.target.checked)}
-                />
-                Lock Object (Prevent Mouse Edit)
-              </label>
-            </div>
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.disabled}
-                  onChange={(e) => handleChange('disabled', e.target.checked)}
-                />
-                Disabled (Hidden in Game)
-              </label>
-            </div>
-          </div>
+          </>
         )}
 
         {/* Quad Properties */}
         {selectedObjectType === 'Quad' && (
           <div className="e-row">
-            {/* Layer */}
-            <div className="e-row">
-              <label className="e-label">Layer</label>
-              <input
-                type="number"
-                className="e-input"
-                value={obj.layer || 0}
-                onChange={(e) => handleChange('layer', e.target.value, true)}
-              />
+            <div ref={setSectionRef(1)} className="properties-section-block">
+              <div className="properties-section-header properties-section-blue">
+                <div className="properties-section-title">
+                  <span className="properties-section-number properties-section-blue">1</span>
+                  <span className="properties-section-label">Transform</span>
+                </div>
+              </div>
             </div>
 
-            {/* Opacity / Blur */}
             <div
               className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
             >
               <div>
-                <label className="e-label">
-                  Opacity ({Math.round((obj.opacity !== undefined ? obj.opacity : 1.0) * 100)}%)
-                </label>
+                <label className="e-label">X</label>
                 <input
-                  type="range"
+                  type="number"
                   className="e-input"
-                  style={{ width: '100%' }}
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={obj.opacity !== undefined ? obj.opacity : 1.0}
-                  onChange={(e) => handleChange('opacity', e.target.value, true)}
+                  value={formatPanelNumber(getQuadCentroid(obj).x)}
+                  onChange={(e) => translateQuadTo(parseFloat(e.target.value) || 0, getQuadCentroid(obj).y)}
                 />
               </div>
               <div>
-                <label className="e-label">Blur ({obj.blur || 0}px)</label>
+                <label className="e-label">Y</label>
                 <input
-                  type="range"
+                  type="number"
                   className="e-input"
-                  style={{ width: '100%', direction: 'ltr' }}
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={50 - (obj.blur || 0)}
-                  onChange={(e) => handleChange('blur', 50 - parseInt(e.target.value))}
+                  value={formatPanelNumber(getQuadCentroid(obj).y)}
+                  onChange={(e) => translateQuadTo(getQuadCentroid(obj).x, parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className="e-label">Layer</label>
+                <input
+                  type="number"
+                  className="e-input"
+                  value={formatPanelNumber(obj.layer || 0)}
+                  onChange={(e) => handleChange('layer', e.target.value, true)}
                 />
               </div>
             </div>
+
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+            >
+              <div>
+                <label className="e-label">Parallax</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="e-input"
+                  value={formatPanelNumber(obj.parallax ?? 1)}
+                  onChange={(e) => handleChange('parallax', e.target.value, true)}
+                />
+              </div>
+              <div>
+                <label className="e-label">Scale</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="e-input"
+                  value={polygonScaleDraft}
+                  onChange={(e) => applyPolygonScaleDraft(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="e-label">Depth Sort mode</label>
+                <Select
+                  value={obj.sortMode || 'ignore'}
+                  onChange={(value) => handleChange('sortMode', value)}
+                  options={[
+                    { value: 'ignore', label: 'Ignore Y (Manual Layer)' },
+                    { value: 'v0', label: 'By Vertex 0 (TL)' },
+                    { value: 'v1', label: 'By Vertex 1 (TR)' },
+                    { value: 'v2', label: 'By Vertex 2 (BR)' },
+                    { value: 'v3', label: 'By Vertex 3 (BL)' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div className="e-label ui-text-accent-blue ui-font-bold" style={{ marginTop: '6px', marginBottom: '6px' }}>
+              Vertices
+            </div>
+            {obj.vertices &&
+              obj.vertices.map((v: any, i: number) => {
+                const isSelected = selectedVertexIndex === i;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      marginBottom: '5px',
+                      background: '#222',
+                      padding: '4px',
+                      borderRadius: '4px',
+                      border: isSelected ? '1px solid yellow' : '1px solid transparent',
+                    }}
+                  >
+                    <div className="ui-text-muted ui-text-tiny" style={{ marginBottom: '2px' }}>
+                      Vertex {i}{' '}
+                      {i === 0
+                        ? '(TL)'
+                        : i === 1
+                          ? '(TR)'
+                          : i === 2
+                            ? '(BR)'
+                            : i === 3
+                              ? '(BL)'
+                              : ''}
+                      {v.binding && (
+                        <span
+                          style={{
+                            color: '#00FFFF',
+                            marginLeft: '5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          L:
+                          {v.binding.targetName.length > 8
+                            ? v.binding.targetName.slice(0, 8) + '..'
+                            : v.binding.targetName}
+                          <button
+                            title="Unbind Vertex"
+                            style={{
+                              background: '#444',
+                              border: '1px solid #666',
+                              color: '#fff',
+                              fontSize: '0.7em',
+                              marginLeft: '4px',
+                              cursor: 'pointer',
+                              padding: '0 4px',
+                              borderRadius: '2px',
+                              height: '16px',
+                              lineHeight: '14px',
+                            }}
+                            onClick={() => {
+                              const binding = v.binding;
+                              delete v.binding;
+                              incrementObjectVersion();
+
+                              if (game.editor.selectedObject) {
+                                const sel = game.editor.selectedObject as any;
+                                if (sel.vertices[i].binding) delete sel.vertices[i].binding;
+
+                                if (binding && binding.type === 'vertex') {
+                                  const scene = game.sceneManager.currentScene;
+                                  if (scene) {
+                                    const target = scene.entities.find(
+                                      (e: any) => e.name === binding.targetName
+                                    );
+                                    if (target && (target as any).type === 'Quad') {
+                                      const tQuad = target as any;
+                                      const tIdx = binding.index;
+                                      if (tIdx !== undefined && tQuad.vertices[tIdx]) {
+                                        const tV = tQuad.vertices[tIdx];
+                                        if (
+                                          tV.binding &&
+                                          tV.binding.type === 'vertex' &&
+                                          tV.binding.targetName === sel.name &&
+                                          tV.binding.index === i
+                                        ) {
+                                          delete tV.binding;
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+
+                                game.editor.saveUndoState();
+                              }
+                            }}
+                          >
+                            U
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '2px' }}>
+                      <input
+                        type="number"
+                        className="e-input"
+                        style={{ width: '33%' }}
+                        value={formatPanelNumber(v.x)}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (v.x !== val) {
+                            const diff = val - v.x;
+                            const scene = game.sceneManager.currentScene;
+                            if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                              const group = QuadObject.getConnectedVertices(
+                                scene,
+                                game.editor.selectedObject as QuadObject,
+                                i
+                              );
+                              group.forEach((ref) => {
+                                ref.v.x += diff;
+                              });
+                            } else {
+                              v.x = val;
+                            }
+
+                            incrementObjectVersion();
+                            game.editor.saveUndoState();
+                          }
+                        }}
+                      />
+                      <input
+                        type="number"
+                        className="e-input"
+                        style={{ width: '33%' }}
+                        value={formatPanelNumber(v.y)}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (v.y !== val) {
+                            const diff = val - v.y;
+                            const scene = game.sceneManager.currentScene;
+                            if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                              const group = QuadObject.getConnectedVertices(
+                                scene,
+                                game.editor.selectedObject as QuadObject,
+                                i
+                              );
+                              group.forEach((ref) => {
+                                ref.v.y += diff;
+                              });
+                            } else {
+                              v.y = val;
+                            }
+
+                            incrementObjectVersion();
+                            game.editor.saveUndoState();
+                          }
+                        }}
+                      />
+                      <input
+                        type="number"
+                        className="e-input"
+                        style={{ width: '33%' }}
+                        step="0.1"
+                        value={formatPanelNumber(v.p)}
+                        onChange={(e) => {
+                          const newP = parseFloat(e.target.value);
+                          const oldP = v.p;
+                          const diffP = newP - oldP;
+
+                          const scene = game.sceneManager.currentScene;
+                          if (scene && (game.editor.selectedObject as any).type === 'Quad') {
+                            const group = QuadObject.getConnectedVertices(
+                              scene,
+                              game.editor.selectedObject as QuadObject,
+                              i
+                            );
+
+                            group.forEach((ref) => {
+                              const camX = scene.camera.x;
+                              const camY = scene.camera.y;
+                              ref.v.x += camX * diffP;
+                              ref.v.y += camY * diffP;
+                              ref.v.p = newP;
+                            });
+                          } else {
+                            if (scene) {
+                              const camX = scene.camera.x;
+                              const camY = scene.camera.y;
+                              v.x += camX * diffP;
+                              v.y += camY * diffP;
+                            }
+                            v.p = newP;
+                          }
+
+                          incrementObjectVersion();
+                          game.editor.saveUndoState();
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+            {/* Opacity / Blur */}
+            <div ref={setSectionRef(2)} className="properties-section-block">
+              <div className="properties-section-header properties-section-yellow">
+                <div className="properties-section-title">
+                  <span className="properties-section-number properties-section-yellow">2</span>
+                  <span className="properties-section-label">Visual</span>
+                </div>
+              </div>
+            </div>
+            {renderOpacityBlurControls(
+              obj.opacity !== undefined ? obj.opacity : 1.0,
+              obj.blur || 0,
+              (nextOpacity) => handleChange('opacity', nextOpacity, true),
+              (nextBlur) => handleChange('blur', nextBlur)
+            )}
 
             {/* Fill Color */}
             <div className="e-row">
@@ -1368,7 +2379,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.gridLinesX ?? 5}
+                      value={formatPanelNumber(obj.gridLinesX ?? 5)}
                       onChange={(e) => handleChange('gridLinesX', parseInt(e.target.value))}
                       min={1}
                       max={50}
@@ -1379,7 +2390,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.gridLinesY ?? 5}
+                      value={formatPanelNumber(obj.gridLinesY ?? 5)}
                       onChange={(e) => handleChange('gridLinesY', parseInt(e.target.value))}
                       min={1}
                       max={50}
@@ -1390,7 +2401,7 @@ export const PropertiesPanel: React.FC = () => {
                     <input
                       type="number"
                       className="e-input"
-                      value={obj.lineWidth ?? 1.0}
+                      value={formatPanelNumber(obj.lineWidth ?? 1.0)}
                       onChange={(e) => handleChange('lineWidth', parseFloat(e.target.value))}
                       step={0.1}
                       min={0.1}
@@ -1420,11 +2431,8 @@ export const PropertiesPanel: React.FC = () => {
               </>
             )}
 
-            {/* Blend & Sort (Extras) */}
-            <div
-              className="e-row"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-            >
+            {/* Blend */}
+            <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '5px' }}>
               <div>
                 <label className="e-label">Blend Mode</label>
                 <Select
@@ -1441,265 +2449,8 @@ export const PropertiesPanel: React.FC = () => {
                   style={{ width: '100%' }}
                 />
               </div>
-              <div>
-                <label className="e-label">Sort Mode</label>
-                <Select
-                  value={obj.sortMode || 'ignore'}
-                  onChange={(value) => handleChange('sortMode', value)}
-                  options={[
-                    { value: 'ignore', label: 'Ignore Y (Manual Layer)' },
-                    { value: 'v0', label: 'By Vertex 0 (TL)' },
-                    { value: 'v1', label: 'By Vertex 1 (TR)' },
-                    { value: 'v2', label: 'By Vertex 2 (BR)' },
-                    { value: 'v3', label: 'By Vertex 3 (BL)' },
-                  ]}
-                  style={{ width: '100%' }}
-                />
-              </div>
             </div>
 
-            <div
-              className="e-label"
-              style={{ marginTop: '5px', borderBottom: '1px solid #444', marginBottom: '5px' }}
-            >
-              VERTICES (X / Y / P)
-            </div>
-            {obj.vertices &&
-              obj.vertices.map((v: any, i: number) => {
-                const isSelected = selectedVertexIndex === i;
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      marginBottom: '5px',
-                      background: '#222',
-                      padding: '4px',
-                      borderRadius: '4px',
-                      border: isSelected ? '1px solid yellow' : '1px solid transparent',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.75em', color: '#888', marginBottom: '2px' }}>
-                      Vertex {i}{' '}
-                      {i === 0
-                        ? '(TL)'
-                        : i === 1
-                          ? '(TR)'
-                          : i === 2
-                            ? '(BR)'
-                            : i === 3
-                              ? '(BL)'
-                              : ''}
-                      {v.binding && (
-                        <span
-                          style={{
-                            color: '#00FFFF',
-                            marginLeft: '5px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                          }}
-                        >
-                          L:
-                          {v.binding.targetName.length > 8
-                            ? v.binding.targetName.slice(0, 8) + '..'
-                            : v.binding.targetName}
-                          <button
-                            title="Unbind Vertex"
-                            style={{
-                              background: '#444',
-                              border: '1px solid #666',
-                              color: '#fff',
-                              fontSize: '0.7em',
-                              marginLeft: '4px',
-                              cursor: 'pointer',
-                              padding: '0 4px',
-                              borderRadius: '2px',
-                              height: '16px',
-                              lineHeight: '14px',
-                            }}
-                            onClick={() => {
-                              const binding = v.binding;
-                              // Unbind Self (UI Copy)
-                              delete v.binding;
-                              incrementObjectVersion();
-
-                              // Sync to real object & Unbind Reverse
-                              if (game.editor.selectedObject) {
-                                const sel = game.editor.selectedObject as any;
-
-                                // Unbind Self (Real)
-                                if (sel.vertices[i].binding) delete sel.vertices[i].binding;
-
-                                // Unbind Reverse (Real)
-                                if (binding && binding.type === 'vertex') {
-                                  const scene = game.sceneManager.currentScene;
-                                  if (scene) {
-                                    const target = scene.entities.find(
-                                      (e: any) => e.name === binding.targetName
-                                    );
-                                    if (target && (target as any).type === 'Quad') {
-                                      const tQuad = target as any;
-                                      const tIdx = binding.index;
-                                      if (tIdx !== undefined && tQuad.vertices[tIdx]) {
-                                        const tV = tQuad.vertices[tIdx];
-                                        // Check if target is bound back to US (Mutual)
-                                        if (
-                                          tV.binding &&
-                                          tV.binding.type === 'vertex' &&
-                                          tV.binding.targetName === sel.name &&
-                                          tV.binding.index === i
-                                        ) {
-                                          delete tV.binding;
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-
-                                game.editor.saveUndoState();
-                              }
-                            }}
-                          >
-                            U
-                          </button>
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '2px' }}>
-                      <input
-                        type="number"
-                        className="e-input"
-                        style={{ width: '33%' }}
-                        value={Math.round(v.x)}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          if (v.x !== val) {
-                            const diff = val - v.x;
-
-                            // Propagate to Group
-                            const scene = game.sceneManager.currentScene;
-                            if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                              const group = QuadObject.getConnectedVertices(
-                                scene,
-                                game.editor.selectedObject as QuadObject,
-                                i
-                              );
-                              group.forEach((ref) => {
-                                ref.v.x += diff;
-                              });
-                            } else {
-                              v.x = val;
-                            }
-
-                            incrementObjectVersion();
-                            game.editor.saveUndoState();
-                          }
-                        }}
-                      />
-                      <input
-                        type="number"
-                        className="e-input"
-                        style={{ width: '33%' }}
-                        value={Math.round(v.y)}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          if (v.y !== val) {
-                            const diff = val - v.y;
-
-                            // Propagate to Group
-                            const scene = game.sceneManager.currentScene;
-                            if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                              const group = QuadObject.getConnectedVertices(
-                                scene,
-                                game.editor.selectedObject as QuadObject,
-                                i
-                              );
-                              group.forEach((ref) => {
-                                ref.v.y += diff;
-                              });
-                            } else {
-                              v.y = val;
-                            }
-
-                            incrementObjectVersion();
-                            game.editor.saveUndoState();
-                          }
-                        }}
-                      />
-                      <input
-                        type="number"
-                        className="e-input"
-                        style={{ width: '33%' }}
-                        step="0.1"
-                        value={v.p}
-                        onChange={(e) => {
-                          const newP = parseFloat(e.target.value);
-                          const oldP = v.p;
-                          const diffP = newP - oldP;
-
-                          const scene = game.sceneManager.currentScene;
-                          if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                            const group = QuadObject.getConnectedVertices(
-                              scene,
-                              game.editor.selectedObject as QuadObject,
-                              i
-                            );
-
-                            group.forEach((ref) => {
-                              // Auto-Correct Position to prevent visual jump
-                              // NewPos = OldPos + Cam * (NewP - OldP)
-                              const camX = scene.camera.x;
-                              const camY = scene.camera.y;
-                              ref.v.x += camX * diffP;
-                              ref.v.y += camY * diffP;
-
-                              ref.v.p = newP; // All adopt the new P? Yes, per "changes parallax together".
-                            });
-                          } else {
-                            // Single logic
-                            if (scene) {
-                              const camX = scene.camera.x;
-                              const camY = scene.camera.y;
-                              v.x += camX * diffP;
-                              v.y += camY * diffP;
-                            }
-                            v.p = newP;
-                          }
-
-                          incrementObjectVersion();
-                          game.editor.saveUndoState();
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-
-            <div className="e-row">
-              <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.locked}
-                  onChange={(e) => handleChange('locked', e.target.checked)}
-                />
-                Lock Object
-              </label>
-            </div>
-            <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#faa' }}
-              >
-                <input
-                  type="checkbox"
-                  style={{ marginRight: '5px' }}
-                  checked={!!obj.disabled}
-                  onChange={(e) => handleChange('disabled', e.target.checked)}
-                />
-                Disabled
-              </label>
-            </div>
-            {/* Tips moved to bottom */}
           </div>
         )}
 
@@ -1709,22 +2460,15 @@ export const PropertiesPanel: React.FC = () => {
           selectedObjectType === 'Actor' ||
           selectedObjectType === 'Static' ||
           selectedObjectType === 'Quad') && (
-          <div
-            className="e-row"
-            style={{ borderTop: '1px solid #444', paddingTop: '5px', marginTop: '5px' }}
-          >
+          <div ref={setSectionRef(3)} className="properties-section-block">
             <div
-              className="e-label"
-              style={{
-                color: '#faa',
-                fontWeight: 'bold',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
+              className="properties-section-header properties-section-red"
             >
-              <span>COMPONENTS</span>
-              <div>
+              <div className="properties-section-title">
+                <span className="properties-section-number properties-section-red">3</span>
+                <span className="properties-section-label">COMPONENTS</span>
+              </div>
+              <div className="properties-section-actions">
                 <Select
                   options={[
                     { value: 'Item', label: 'Item (Pickup)' },
@@ -1749,7 +2493,12 @@ export const PropertiesPanel: React.FC = () => {
                     if (!obj.components) obj.components = [];
 
                     if (type === 'Subscene') {
-                      obj.components.push({ type: 'Subscene', targetGroupId: '', name: '' });
+                      obj.components.push({
+                        type: 'Subscene',
+                        targetGroupId: '',
+                        title: '',
+                        description: '',
+                      });
                     } else if (type === 'Subtrigger') {
                       obj.components.push({ type: 'Subtrigger', target: '' });
                     } else if (type === 'Item') {
@@ -1794,7 +2543,7 @@ export const PropertiesPanel: React.FC = () => {
                     incrementObjectVersion();
                     // No need to reset value as Select component handles it or we pass empty value
                   }}
-                  style={{ width: '100px', fontSize: '0.8em' }}
+                  style={{ width: '100%' }}
                   value=""
                 />
               </div>
@@ -1819,7 +2568,7 @@ export const PropertiesPanel: React.FC = () => {
                       marginBottom: '5px',
                     }}
                   >
-                    <span style={{ fontWeight: 'bold', color: '#fb8' }}>{comp.type}</span>
+                    <span className="ui-font-bold" style={{ color: '#fb8' }}>{comp.type}</span>
                     <button
                       className="e-btn e-btn-red"
                       style={{ padding: '0 5px' }}
@@ -1966,13 +2715,8 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                       <div className="e-row">
                         <label
-                          className="e-label"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            color: '#aaf',
-                            fontSize: '10px',
-                          }}
+                          className="e-label ui-text-accent-blue ui-inline-flex-center"
+                          style={{ fontSize: '10px' }}
                         >
                           <input
                             type="checkbox"
@@ -2007,14 +2751,28 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                       <div className="e-row">
                         <label className="e-label" style={{ fontSize: '10px' }}>
-                          Name (Optional)
+                          Title
                         </label>
                         <input
                           type="text"
                           className="e-input"
-                          value={comp.name || ''}
+                          value={comp.title || ''}
                           onChange={(e) => {
-                            comp.name = e.target.value;
+                            comp.title = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Description
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={comp.description || ''}
+                          onChange={(e) => {
+                            comp.description = e.target.value;
                             incrementObjectVersion();
                           }}
                         />
@@ -2089,7 +2847,7 @@ export const PropertiesPanel: React.FC = () => {
                               { value: 'Add', label: 'Add (Walk Inside)' },
                               { value: 'Subtract', label: 'Subtract (Hole)' },
                             ]}
-                            style={{ width: '120px' }}
+                            style={{ width: '100%' }}
                           />
                         </div>
                       </div>
@@ -2307,7 +3065,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={comp.offsetX || 0}
+                            value={formatPanelNumber(comp.offsetX || 0)}
                             onChange={(e) => {
                               comp.offsetX = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -2321,7 +3079,7 @@ export const PropertiesPanel: React.FC = () => {
                           <input
                             type="number"
                             className="e-input"
-                            value={comp.offsetY || 0}
+                            value={formatPanelNumber(comp.offsetY || 0)}
                             onChange={(e) => {
                               comp.offsetY = parseFloat(e.target.value);
                               incrementObjectVersion();
@@ -2350,38 +3108,20 @@ export const PropertiesPanel: React.FC = () => {
           </div>
         )}
 
-        {selectedObjectType === 'Quad' && (
-          <div
-            className="e-label"
-            style={{
-              marginTop: '10px',
-              fontSize: '10px',
-              color: '#666',
-              fontStyle: 'italic',
-              borderTop: '1px solid #444',
-              paddingTop: '5px',
-            }}
-          >
-            Drag VERTEX: Hold ALT to snap to vertices/grid.
-            <br />
-            Hold SHIFT for angle snap.
-          </div>
-        )}
-
         {selectedObjectType === 'Actor' && (
           <>
-            <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-              <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
-                ACTOR PROPERTIES
+            <div ref={setSectionRef(4)} className="properties-section-block">
+              <div className="properties-section-header properties-section-blue">
+                <div className="properties-section-title">
+                  <span className="properties-section-number properties-section-blue">4</span>
+                  <span className="properties-section-label">ACTOR PROP.</span>
+                </div>
               </div>
             </div>
 
             {/* Is Player */}
             <div className="e-row">
-              <label
-                className="e-label"
-                style={{ display: 'flex', alignItems: 'center', color: '#aaf' }}
-              >
+              <label className="e-label ui-inline-flex-center ui-text-accent-blue">
                 <input
                   type="checkbox"
                   style={{ marginRight: '5px' }}
@@ -2423,7 +3163,7 @@ export const PropertiesPanel: React.FC = () => {
                 type="number"
                 step="0.01"
                 className="e-input"
-                value={obj.speed !== undefined ? obj.speed : 0.1}
+                value={formatPanelNumber(obj.speed !== undefined ? obj.speed : 0.1)}
                 onChange={(e) => handleChange('speed', e.target.value, true)}
               />
             </div>
@@ -2435,7 +3175,7 @@ export const PropertiesPanel: React.FC = () => {
                 type="number"
                 step="10"
                 className="e-input"
-                value={obj.animationSpeed !== undefined ? obj.animationSpeed : 150}
+                value={formatPanelNumber(obj.animationSpeed !== undefined ? obj.animationSpeed : 150)}
                 onChange={(e) => handleChange('animationSpeed', e.target.value, true)}
               />
             </div>
@@ -2443,13 +3183,8 @@ export const PropertiesPanel: React.FC = () => {
             {/* Animation Sets */}
             <div className="e-row" style={{ marginTop: '10px' }}>
               <div
-                className="e-label"
-                style={{
-                  color: '#aaf',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
+                className="e-label ui-text-accent-blue ui-font-bold"
+                style={{ display: 'flex', justifyContent: 'space-between' }}
               >
                 <span>ANIMATION SETS</span>
                 <button
@@ -2568,7 +3303,7 @@ export const PropertiesPanel: React.FC = () => {
                           alignItems: 'center',
                         }}
                       >
-                        <div style={{ width: '30px', fontSize: '10px', color: '#888' }}>
+                        <div className="ui-text-muted ui-text-micro" style={{ width: '30px' }}>
                           {dir.toUpperCase()}
                         </div>
                         <input
@@ -2608,126 +3343,267 @@ export const PropertiesPanel: React.FC = () => {
           </>
         )}
 
+        {isObjectWithScriptEvents && (
+          <div ref={setSectionRef(5)} className="properties-section-block">
+            <div
+              className="properties-section-header properties-section-purple"
+            >
+              <div className="properties-section-title">
+                <span className="properties-section-number properties-section-purple">5</span>
+                <span className="properties-section-label">SCRIPT EVENTS</span>
+              </div>
+              <div className="properties-section-actions">
+                <Select
+                  value=""
+                  className="compact-action-select"
+                  placeholder="+ ADD"
+                  onChange={(value) => {
+                    const verb = value;
+                    if (!verb) return;
+                    if (!obj.interactions) obj.interactions = {};
+                    if (!obj.interactions[verb]) {
+                      obj.interactions[verb] = '';
+                      if (game.editor.selectedObject) {
+                        if (!(game.editor.selectedObject as any).interactions) {
+                          (game.editor.selectedObject as any).interactions = {};
+                        }
+                        (game.editor.selectedObject as any).interactions[verb] = '';
+                      }
+                      incrementObjectVersion();
+                    }
+                  }}
+                  options={[
+                    { value: 'look', label: 'Look' },
+                    { value: 'use', label: 'Use' },
+                    { value: 'talk', label: 'Talk' },
+                    { value: 'pickup', label: 'Pickup' },
+                  ]}
+                  style={{ width: '8em' }}
+                />
+              </div>
+            </div>
+
+            {obj.interactions &&
+              Object.keys(obj.interactions).map((verb) => (
+                <div key={verb} style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}>
+                  <div className="ui-text-light" style={{ width: '40px', fontSize: '0.85em' }}>
+                    {verb.toUpperCase()}
+                  </div>
+                  <input
+                    type="text"
+                    className="e-input"
+                    style={{ flex: 1, fontSize: '0.85em' }}
+                    placeholder="Script ID"
+                    value={obj.interactions[verb]}
+                    onChange={(e) => {
+                      obj.interactions[verb] = e.target.value;
+                      if (game.editor.selectedObject) {
+                        (game.editor.selectedObject as any).interactions[verb] = e.target.value;
+                      }
+                      incrementObjectVersion();
+                    }}
+                  />
+                  <button
+                    className="e-btn e-btn-red"
+                    style={{ marginLeft: '2px', padding: '0 4px', fontSize: '0.85em' }}
+                    onClick={() => {
+                      delete obj.interactions[verb];
+                      if (game.editor.selectedObject) {
+                        delete (game.editor.selectedObject as any).interactions[verb];
+                      }
+                      incrementObjectVersion();
+                    }}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {!isSettings && !isScene && !isWalkbox && (
+          <div ref={setSectionRef(6)} className="properties-section-block">
+            {isTriggerbox && (
+              <>
+                <button
+                  className="e-btn e-btn-yellow"
+                  style={{ width: '100%', marginBottom: '5px' }}
+                  onClick={(e) => {
+                    if (confirm('Redraw polygon? Current points will be cleared.')) {
+                      game.editor.redrawSelected();
+                      (e.target as HTMLElement).blur();
+                    }
+                  }}
+                >
+                  Redraw Polygon
+                </button>
+                <div className="e-label">
+                  {mode && mode.includes('DRAW')
+                    ? 'Click to add points. Press ENTER to finish. Hold Shift for 22.5° snap.'
+                    : 'To edit, drag vertices on screen. Hold Shift for 22.5° snap.'}
+                </div>
+              </>
+            )}
+
+            {selectedObjectType === 'Quad' && (
+              <div
+                className="e-label ui-text-dim"
+                style={{
+                  marginTop: '10px',
+                  fontSize: '10px',
+                  fontStyle: 'italic',
+                  paddingTop: '5px',
+                }}
+              >
+                Drag VERTEX: Hold ALT to snap to vertices/grid.
+                <br />
+                Hold SHIFT for angle snap.
+              </div>
+            )}
+
+            <div
+              className="e-row"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '6px',
+                marginTop: isTriggerbox || selectedObjectType === 'Quad' ? '10px' : 0,
+              }}
+            >
+              <label
+                className="e-label"
+                title="Toggle lock hotkey: Alt-L"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  title="Alt-L"
+                  checked={!!obj.locked}
+                  onChange={(e) => handleChange('locked', e.target.checked)}
+                />
+                Lock Object
+              </label>
+
+              <label
+                className="e-label"
+                title="Toggle disabled hotkey: Alt-D"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  title="Alt-D"
+                  checked={!!obj.disabled}
+                  onChange={(e) => handleChange('disabled', e.target.checked)}
+                />
+                Disabled
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* SCENE Properties */}
         {selectedObjectType === 'SCENE' && (
           <>
-            <div className="e-row">
-              <label className="e-label">Title</label>
-              <input
-                type="text"
-                className="e-input"
-                value={obj.name || ''}
-                onChange={(e) => handleChange('name', e.target.value)}
-              />
-            </div>
-
-            {/* Camera properties */}
-            {(obj.camera || obj.defaultCamera) && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
-                  CAMERA
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
-                  <div>
-                    <label className="e-label">Cam X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camera ? Math.round(obj.camera.x) : 0}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.x = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Cam Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camera ? Math.round(obj.camera.y) : 0}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.y = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Zoom</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.camera ? obj.camera.zoom : 1}
-                      onChange={(e) => {
-                        if (obj.camera) {
-                          obj.camera.zoom = parseFloat(e.target.value);
-                          incrementObjectVersion();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="e-row" style={{ marginTop: '5px' }}>
-                  <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      style={{ marginRight: '5px' }}
-                      checked={!!obj.autoCenter}
-                      onChange={(e) => handleChange('autoCenter', e.target.checked)}
-                    />
-                    Auto-Center on Player
-                  </label>
-                </div>
-                <div
-                  className="e-row"
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
-                >
-                  <div>
-                    <label className="e-label">Cam Spd</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.cameraSpeed || 5}
-                      onChange={(e) =>
-                        handleChange('cameraSpeed', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Dead X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50}
-                      onChange={(e) =>
-                        handleChange('camDeadzoneX', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Dead Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30}
-                      onChange={(e) =>
-                        handleChange('camDeadzoneY', parseFloat(e.target.value), true)
-                      }
-                    />
-                  </div>
-                </div>
+            {(obj.camera || obj.defaultCamera) &&
+              renderSection(
+                1,
+                'Camera',
+                'blue',
                 <>
-                  <div className="e-row" style={{ marginTop: '5px' }}>
-                    <div className="e-label" style={{ color: '#aaf' }}>
-                      Camera Bounds (Min/Max)
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                    <div>
+                      <label className="e-label">Cam X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camera ? formatPanelNumber(obj.camera.x) : 0}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.x = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
                     </div>
+                    <div>
+                      <label className="e-label">Cam Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={obj.camera ? formatPanelNumber(obj.camera.y) : 0}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.y = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Zoom</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input"
+                        value={obj.camera ? formatPanelNumber(obj.camera.zoom) : 1}
+                        onChange={(e) => {
+                          if (obj.camera) {
+                            obj.camera.zoom = parseFloat(e.target.value);
+                            incrementObjectVersion();
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="e-row" style={{ marginTop: '5px' }}>
+                    <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        style={{ marginRight: '5px' }}
+                        checked={!!obj.autoCenter}
+                        onChange={(e) => handleChange('autoCenter', e.target.checked)}
+                      />
+                      Auto-Center on Player
+                    </label>
+                  </div>
+
+                  <div
+                    className="e-row"
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                  >
+                    <div>
+                      <label className="e-label">Cam Spd</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="e-input"
+                        value={formatPanelNumber(obj.cameraSpeed || 5)}
+                        onChange={(e) => handleChange('cameraSpeed', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Dead X</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={formatPanelNumber(obj.camDeadzoneX !== undefined ? obj.camDeadzoneX : 50)}
+                        onChange={(e) => handleChange('camDeadzoneX', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                    <div>
+                      <label className="e-label">Dead Y</label>
+                      <input
+                        type="number"
+                        className="e-input"
+                        value={formatPanelNumber(obj.camDeadzoneY !== undefined ? obj.camDeadzoneY : 30)}
+                        onChange={(e) => handleChange('camDeadzoneY', parseFloat(e.target.value), true)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="e-row" style={{ marginTop: '5px' }}>
+                    <div className="e-label ui-text-accent-blue">Camera Bounds (Min/Max)</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                       <div>
                         <label className="e-label">Min X</label>
@@ -2735,7 +3611,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMinX !== undefined ? obj.camMinX : ''}
+                          value={obj.camMinX !== undefined ? formatPanelNumber(obj.camMinX) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMinX',
@@ -2751,7 +3627,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMaxX !== undefined ? obj.camMaxX : ''}
+                          value={obj.camMaxX !== undefined ? formatPanelNumber(obj.camMaxX) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMaxX',
@@ -2767,7 +3643,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMinY !== undefined ? obj.camMinY : ''}
+                          value={obj.camMinY !== undefined ? formatPanelNumber(obj.camMinY) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMinY',
@@ -2783,7 +3659,7 @@ export const PropertiesPanel: React.FC = () => {
                           type="number"
                           className="e-input"
                           placeholder="None"
-                          value={obj.camMaxY !== undefined ? obj.camMaxY : ''}
+                          value={obj.camMaxY !== undefined ? formatPanelNumber(obj.camMaxY) : ''}
                           onChange={(e) =>
                             handleChange(
                               'camMaxY',
@@ -2795,89 +3671,81 @@ export const PropertiesPanel: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {obj.defaultCamera && (
+                    <div className="e-row" style={{ marginTop: '5px' }}>
+                      <div className="e-label ui-text-accent-blue">Default Camera</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+                        <div>
+                          <label className="e-label">Def X</label>
+                          <input
+                            type="number"
+                            className="e-input"
+                            value={formatPanelNumber(obj.defaultCamera.x)}
+                            onChange={(e) => {
+                              obj.defaultCamera.x = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="e-label">Def Y</label>
+                          <input
+                            type="number"
+                            className="e-input"
+                            value={formatPanelNumber(obj.defaultCamera.y)}
+                            onChange={(e) => {
+                              obj.defaultCamera.y = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="e-label">Def Zoom</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="e-input"
+                            value={formatPanelNumber(obj.defaultCamera.zoom)}
+                            onChange={(e) => {
+                              obj.defaultCamera.zoom = parseFloat(e.target.value);
+                              incrementObjectVersion();
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="e-row" style={{ marginTop: '5px' }}>
+                        <button
+                          className="e-btn"
+                          style={{ width: '100%' }}
+                          onClick={() => {
+                            if (obj.camera && obj.defaultCamera) {
+                              obj.defaultCamera.x = obj.camera.x;
+                              obj.defaultCamera.y = obj.camera.y;
+                              obj.defaultCamera.zoom = obj.camera.zoom;
+                              incrementObjectVersion();
+                            }
+                          }}
+                        >
+                          Set Current as Default
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
-              </div>
-            )}
+              )}
 
-            {/* Default Camera (Start Position) */}
-            {obj.defaultCamera && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#aaf', fontWeight: 'bold' }}>
-                  DEFAULT CAMERA
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
-                  <div>
-                    <label className="e-label">Def X</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={Math.round(obj.defaultCamera.x)}
-                      onChange={(e) => {
-                        obj.defaultCamera.x = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Def Y</label>
-                    <input
-                      type="number"
-                      className="e-input"
-                      value={Math.round(obj.defaultCamera.y)}
-                      onChange={(e) => {
-                        obj.defaultCamera.y = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="e-label">Def Zoom</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="e-input"
-                      value={obj.defaultCamera.zoom}
-                      onChange={(e) => {
-                        obj.defaultCamera.zoom = parseFloat(e.target.value);
-                        incrementObjectVersion();
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="e-row" style={{ marginTop: '5px' }}>
-                  <button
-                    className="e-btn"
-                    style={{ width: '100%' }}
-                    onClick={() => {
-                      if (obj.camera && obj.defaultCamera) {
-                        obj.defaultCamera.x = obj.camera.x;
-                        obj.defaultCamera.y = obj.camera.y;
-                        obj.defaultCamera.zoom = obj.camera.zoom;
-                        incrementObjectVersion();
-                      }
-                    }}
-                  >
-                    Set Current as Default
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Scaling Settings */}
-            {game.sceneManager.currentScene && (
-              <div className="e-row" style={{ borderTop: '1px solid #444', paddingTop: '5px' }}>
-                <div className="e-label" style={{ color: '#ffaa00', fontWeight: 'bold' }}>
-                  SCALING
-                </div>
-                {(() => {
+            {game.sceneManager.currentScene &&
+              renderSection(
+                2,
+                'Scaling',
+                'yellow',
+                (() => {
                   const s = game.sceneManager.currentScene.scaling;
                   return (
                     <>
                       <div className="e-row">
-                        <label
-                          className="e-label"
-                          style={{ display: 'flex', alignItems: 'center' }}
-                        >
+                        <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                           <input
                             type="checkbox"
                             style={{ marginRight: '5px' }}
@@ -2891,16 +3759,14 @@ export const PropertiesPanel: React.FC = () => {
                         </label>
                       </div>
                       {s.enabled && (
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
-                        >
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
                           <div>
                             <label className="e-label">Min</label>
                             <input
                               type="number"
                               step="0.1"
                               className="e-input"
-                              value={s.min}
+                              value={formatPanelNumber(s.min)}
                               onChange={(e) => {
                                 s.min = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -2913,7 +3779,7 @@ export const PropertiesPanel: React.FC = () => {
                               type="number"
                               step="0.1"
                               className="e-input"
-                              value={s.max}
+                              value={formatPanelNumber(s.max)}
                               onChange={(e) => {
                                 s.max = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -2925,7 +3791,7 @@ export const PropertiesPanel: React.FC = () => {
                             <input
                               type="number"
                               className="e-input"
-                              value={s.horizon}
+                              value={formatPanelNumber(s.horizon)}
                               onChange={(e) => {
                                 s.horizon = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -2937,7 +3803,7 @@ export const PropertiesPanel: React.FC = () => {
                             <input
                               type="number"
                               className="e-input"
-                              value={s.front}
+                              value={formatPanelNumber(s.front)}
                               onChange={(e) => {
                                 s.front = parseFloat(e.target.value);
                                 incrementObjectVersion();
@@ -2948,9 +3814,8 @@ export const PropertiesPanel: React.FC = () => {
                       )}
                     </>
                   );
-                })()}
-              </div>
-            )}
+                })()
+              )}
           </>
         )}
 
@@ -2959,8 +3824,8 @@ export const PropertiesPanel: React.FC = () => {
           <>
             <div className="e-row">
               <label
-                className="e-label"
-                style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}
+                className="e-label ui-text-accent-green ui-font-bold"
+                style={{ marginBottom: '10px' }}
               >
                 EDITOR SETTINGS
               </label>
@@ -2972,7 +3837,7 @@ export const PropertiesPanel: React.FC = () => {
                 className="e-label"
                 style={{ display: 'flex', justifyContent: 'space-between' }}
               >
-                UI Scale <span>{(obj.editor?.uiScale || 1.0).toFixed(1)}x</span>
+                UI Scale <span>{formatPanelNumber(obj.editor?.uiScale || 1.0)}x</span>
               </label>
               <input
                 type="number"
@@ -2980,7 +3845,7 @@ export const PropertiesPanel: React.FC = () => {
                 min="0.5"
                 max="2.0"
                 step="0.1"
-                value={obj.editor?.uiScale || 1.0}
+                value={formatPanelNumber(obj.editor?.uiScale || 1.0)}
                 onChange={(e) => {
                   if (!obj.editor) obj.editor = { uiScale: 1.0 };
                   obj.editor.uiScale = parseFloat(e.target.value);
@@ -2995,8 +3860,8 @@ export const PropertiesPanel: React.FC = () => {
 
             <div className="e-row" style={{ marginTop: '10px' }}>
               <label
-                className="e-label"
-                style={{ color: '#79EFA4', fontWeight: 'bold', marginBottom: '10px' }}
+                className="e-label ui-text-accent-green ui-font-bold"
+                style={{ marginBottom: '10px' }}
               >
                 CRT EFFECT SETTINGS
               </label>
@@ -3028,7 +3893,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Curvature <span>{obj.crt.curvature.toFixed(2)}</span>
+                    Curvature <span>{formatPanelNumber(obj.crt.curvature)}</span>
                   </label>
                   <input
                     type="range"
@@ -3036,7 +3901,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="0.5"
                     step="0.01"
-                    value={obj.crt.curvature}
+                    value={formatPanelNumber(obj.crt.curvature)}
                     onChange={(e) => {
                       obj.crt.curvature = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3048,7 +3913,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Vignette <span>{obj.crt.vignette.toFixed(2)}</span>
+                    Vignette <span>{formatPanelNumber(obj.crt.vignette)}</span>
                   </label>
                   <input
                     type="range"
@@ -3056,7 +3921,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.vignette}
+                    value={formatPanelNumber(obj.crt.vignette)}
                     onChange={(e) => {
                       obj.crt.vignette = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3068,7 +3933,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Scanline Count <span>{Math.round(obj.crt.scanlineCount)}</span>
+                    Scanline Count <span>{formatPanelNumber(obj.crt.scanlineCount)}</span>
                   </label>
                   <input
                     type="range"
@@ -3076,7 +3941,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="100"
                     max="2000"
                     step="50"
-                    value={obj.crt.scanlineCount}
+                    value={formatPanelNumber(obj.crt.scanlineCount)}
                     onChange={(e) => {
                       obj.crt.scanlineCount = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3088,7 +3953,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Scanline Intensity <span>{obj.crt.scanlineIntensity.toFixed(2)}</span>
+                    Scanline Intensity <span>{formatPanelNumber(obj.crt.scanlineIntensity)}</span>
                   </label>
                   <input
                     type="range"
@@ -3096,7 +3961,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.scanlineIntensity}
+                    value={formatPanelNumber(obj.crt.scanlineIntensity)}
                     onChange={(e) => {
                       obj.crt.scanlineIntensity = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3108,7 +3973,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    RGB Split <span>{obj.crt.aberration.toFixed(1)}</span>
+                    RGB Split <span>{formatPanelNumber(obj.crt.aberration)}</span>
                   </label>
                   <input
                     type="range"
@@ -3116,7 +3981,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="5"
                     step="0.1"
-                    value={obj.crt.aberration}
+                    value={formatPanelNumber(obj.crt.aberration)}
                     onChange={(e) => {
                       obj.crt.aberration = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3128,7 +3993,7 @@ export const PropertiesPanel: React.FC = () => {
                     className="e-label"
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
-                    Bloom <span>{obj.crt.bloom.toFixed(2)}</span>
+                    Bloom <span>{formatPanelNumber(obj.crt.bloom)}</span>
                   </label>
                   <input
                     type="range"
@@ -3136,7 +4001,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.bloom}
+                    value={formatPanelNumber(obj.crt.bloom)}
                     onChange={(e) => {
                       obj.crt.bloom = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3149,7 +4014,7 @@ export const PropertiesPanel: React.FC = () => {
                     style={{ display: 'flex', justifyContent: 'space-between' }}
                   >
                     Phosphor / Grain{' '}
-                    <span>{obj.crt.phosphor ? obj.crt.phosphor.toFixed(2) : '0.00'}</span>
+                    <span>{formatPanelNumber(obj.crt.phosphor || 0)}</span>
                   </label>
                   <input
                     type="range"
@@ -3157,7 +4022,7 @@ export const PropertiesPanel: React.FC = () => {
                     min="0"
                     max="1"
                     step="0.05"
-                    value={obj.crt.phosphor || 0}
+                    value={formatPanelNumber(obj.crt.phosphor || 0)}
                     onChange={(e) => {
                       obj.crt.phosphor = parseFloat(e.target.value);
                       incrementObjectVersion();
@@ -3181,10 +4046,7 @@ export const PropertiesPanel: React.FC = () => {
               </>
             )}
 
-            <div
-              className="e-row"
-              style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '10px' }}
-            >
+            <div className="e-row ui-divider-neutral" style={{ marginTop: '20px', paddingTop: '10px' }}>
               <button
                 className="e-btn"
                 style={{ width: '100%', padding: '8px' }}

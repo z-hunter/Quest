@@ -12,7 +12,7 @@ export class SceneRenderer {
   }
 
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
-    const { camera, entities, activeSubscene, subsceneEntities } = scene;
+    const { camera, entities, activeSubscene, subsceneEntities, pickupAnimations } = scene;
 
     // Sorting Logic moved from Scene.render
     // Sort by Y (Depth) and Parallax
@@ -118,6 +118,17 @@ export class SceneRenderer {
 
     // 3. Render Subscene Layer
     this.renderLayer(ctx, subsceneLayer, scene, halfW, halfH);
+
+    // 3.5. Render transient pickup effects above scene objects.
+    if (pickupAnimations.length > 0) {
+      this.renderLayer(
+        ctx,
+        pickupAnimations.map((anim) => anim.entity),
+        scene,
+        halfW,
+        halfH
+      );
+    }
 
     // 4. Debug Rendering (Walkboxes/Triggers)
     if (this.game && this.game.editor && this.game.editor.enabled) {
@@ -331,7 +342,7 @@ export class SceneRenderer {
 
     const halfW = ctx.canvas.width / 2;
     const halfH = ctx.canvas.height / 2;
-    const p = 1.0; // Debug shapes usually 1.0 parallax? Walkboxes are on floor, maybe 1.0.
+    const p = (obj as any).parallax !== undefined ? (obj as any).parallax : 1.0;
 
     ctx.save();
     ctx.translate(halfW, halfH);

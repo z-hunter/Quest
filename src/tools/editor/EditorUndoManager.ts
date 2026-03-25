@@ -2,12 +2,20 @@ import { SceneEditor } from '../SceneEditor';
 
 export class EditorUndoManager {
   private editor: SceneEditor;
-  private undoStack: any[] = [];
-  private redoStack: any[] = [];
+  private undoStack: Array<{ sceneData: any; version: number }> = [];
+  private redoStack: Array<{ sceneData: any; version: number }> = [];
   private readonly MAX_HISTORY = 50;
+  private currentMutationVersion = 0;
+  private savedMutationVersion = 0;
 
   constructor(editor: SceneEditor) {
     this.editor = editor;
+  }
+
+  private captureCurrentState(): any {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return null;
+    return JSON.parse(JSON.stringify(scene.toJSON()));
   }
 
   saveUndoState(): void {
@@ -15,15 +23,35 @@ export class EditorUndoManager {
     if (!scene) return;
 
     // Push current state to Undo Stack (Deep Clone)
-    this.undoStack.push(JSON.parse(JSON.stringify(scene.toJSON())));
+    this.undoStack.push({
+      sceneData: this.captureCurrentState(),
+      version: this.currentMutationVersion,
+    });
 
     // Enforce Max History
     if (this.undoStack.length > this.MAX_HISTORY) {
       this.undoStack.shift(); // Remove oldest
     }
 
+    this.currentMutationVersion += 1;
+
     // Clear Redo Stack on new action
     this.redoStack = [];
+  }
+
+  markSaved(): void {
+    this.savedMutationVersion = this.currentMutationVersion;
+  }
+
+  isDirty(): boolean {
+    return this.currentMutationVersion !== this.savedMutationVersion;
+  }
+
+  resetForCleanScene(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.currentMutationVersion = 0;
+    this.savedMutationVersion = 0;
   }
 
   restoreSceneState(data: any): void {
@@ -74,47 +102,45 @@ export class EditorUndoManager {
   }
 
   undo(): void {
-    const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return;
-
     if (this.undoStack.length === 0) {
       this.editor.game.showNotification('Cannot Undo: Start of Buffer');
       return;
     }
 
-    // 1. Capture CURRENT state and push to Redo Stack
-    // 1. Capture CURRENT state and push to Redo Stack
-    const currentState = JSON.parse(JSON.stringify(scene.toJSON()));
-    this.redoStack.push(currentState);
+    const currentState = this.captureCurrentState();
+    if (!currentState) return;
+    this.redoStack.push({
+      sceneData: currentState,
+      version: this.currentMutationVersion,
+    });
 
-    // 2. Pop from Undo Stack
     const previousState = this.undoStack.pop();
+    if (!previousState) return;
 
-    // 3. Restore Previous State
-    this.restoreSceneState(previousState);
+    this.restoreSceneState(previousState.sceneData);
+    this.currentMutationVersion = previousState.version;
 
     this.editor.game.showNotification(`Undo (-${this.redoStack.length})`);
   }
 
   redo(): void {
-    const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return;
-
     if (this.redoStack.length === 0) {
       this.editor.game.showNotification('Cannot Redo: End of Buffer');
       return;
     }
 
-    // 1. Capture CURRENT state and push to Undo Stack
-    // 1. Capture CURRENT state and push to Undo Stack
-    const currentState = JSON.parse(JSON.stringify(scene.toJSON()));
-    this.undoStack.push(currentState);
+    const currentState = this.captureCurrentState();
+    if (!currentState) return;
+    this.undoStack.push({
+      sceneData: currentState,
+      version: this.currentMutationVersion,
+    });
 
-    // 2. Pop from Redo Stack
     const nextState = this.redoStack.pop();
+    if (!nextState) return;
 
-    // 3. Restore Next State
-    this.restoreSceneState(nextState);
+    this.restoreSceneState(nextState.sceneData);
+    this.currentMutationVersion = nextState.version;
 
     if (this.redoStack.length === 0) {
       this.editor.game.showNotification(`Redo (Latest)`);

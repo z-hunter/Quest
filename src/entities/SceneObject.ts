@@ -9,6 +9,7 @@ export class SceneObject {
 
   // User-facing name for parser (e.g. "Pillar" instead of "Pillar_01")
   customName: string = '';
+  textRedirects: Record<string, string> = {};
 
   // Script bindings for verbs: { "LOOK": "script.id", "USE": "script.id" }
   interactions: Record<string, string> = {};
@@ -18,6 +19,8 @@ export class SceneObject {
 
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)
+  spatial: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null } =
+    {};
 
   /**
    * List of properties to be serialized to/from JSON.
@@ -30,10 +33,12 @@ export class SceneObject {
     'disabled',
     'groupID',
     'customName',
+    'textRedirects',
     'interactions',
     'components',
     'layer',
     'visible',
+    'spatial',
   ];
 
   constructor(name: string, type: string) {
@@ -43,7 +48,9 @@ export class SceneObject {
     this.disabled = false;
     this.layer = 0;
     this.visible = true;
+    this.spatial = {};
     this.customName = '';
+    this.textRedirects = {};
     this.interactions = {};
     this.components = [];
   }
@@ -56,6 +63,16 @@ export class SceneObject {
     props.forEach((prop) => {
       const value = (this as any)[prop];
       if (value !== undefined) {
+        if (
+          prop === 'spatial' &&
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !value.parentNodeId &&
+          !value.relation
+        ) {
+          return;
+        }
         // Deep clone objects and arrays to prevent reference sharing
         if (typeof value === 'object' && value !== null) {
           json[prop] = JSON.parse(JSON.stringify(value));
@@ -83,6 +100,29 @@ export class SceneObject {
         }
       }
     });
+  }
+
+  setTextRedirect(field: string, targetField: string): void {
+    const source = String(field || '').trim();
+    const target = String(targetField || '').trim();
+    if (!source || !target) return;
+    this.textRedirects[source] = target;
+    this.notifyTextRedirectChanged();
+  }
+
+  clearTextRedirect(field: string): void {
+    const source = String(field || '').trim();
+    if (!source) return;
+    if (this.textRedirects[source] === undefined) return;
+    delete this.textRedirects[source];
+    this.notifyTextRedirectChanged();
+  }
+
+  private notifyTextRedirectChanged(): void {
+    const game = (this as any).game;
+    if (game?.editor?.selectionManager) {
+      game.editor.selectionManager.notifyObjectChanged(this);
+    }
   }
 
   /**

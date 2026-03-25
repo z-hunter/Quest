@@ -107,14 +107,14 @@ export class EditorTransformManager {
       if (entity.hitTest(worldX, worldY)) return entity;
     }
 
-    const worldPos = {
-      x: (pos.x - halfW) / zoom + camX,
-      y: (pos.y - halfH) / zoom + camY,
-    };
-
     if (scene.walkbox) {
       for (const wb of scene.walkbox) {
         if (wb.disabled || wb.locked) continue;
+        const p = (wb as any).parallax !== undefined ? (wb as any).parallax : 1.0;
+        const worldPos = {
+          x: (pos.x - halfW) / zoom + camX * p,
+          y: (pos.y - halfH) / zoom + camY * p,
+        };
         if (Geometry.isPointInPolygon(worldPos, wb.poly)) return wb;
       }
     }
@@ -122,6 +122,11 @@ export class EditorTransformManager {
     if (scene.triggerboxes) {
       for (const tb of scene.triggerboxes) {
         if (tb.disabled || tb.locked) continue;
+        const p = (tb as any).parallax !== undefined ? (tb as any).parallax : 1.0;
+        const worldPos = {
+          x: (pos.x - halfW) / zoom + camX * p,
+          y: (pos.y - halfH) / zoom + camY * p,
+        };
         if (Geometry.isPointInPolygon(worldPos, tb.poly)) return tb;
       }
     }
@@ -139,9 +144,9 @@ export class EditorTransformManager {
     halfH: number
   ): SceneObject[] {
     const selected: SceneObject[] = [];
-    const toScreen = (wx: number, wy: number) => ({
-      x: (wx - camX) * zoom + halfW,
-      y: (wy - camY) * zoom + halfH,
+    const toScreen = (wx: number, wy: number, parallax: number = 1.0) => ({
+      x: (wx - camX * parallax) * zoom + halfW,
+      y: (wy - camY * parallax) * zoom + halfH,
     });
 
     (scene.entities || []).forEach((entity: any) => {
@@ -174,7 +179,8 @@ export class EditorTransformManager {
 
     (scene.walkbox || []).forEach((wb: any) => {
       if (wb.disabled || wb.locked || !wb.poly?.length) return;
-      const screenPoly = wb.poly.map((p: any) => toScreen(p.x, p.y));
+      const p = wb.parallax !== undefined ? wb.parallax : 1.0;
+      const screenPoly = wb.poly.map((pt: any) => toScreen(pt.x, pt.y, p));
       const minX = Math.min(...screenPoly.map((p: any) => p.x));
       const maxX = Math.max(...screenPoly.map((p: any) => p.x));
       const minY = Math.min(...screenPoly.map((p: any) => p.y));
@@ -184,7 +190,8 @@ export class EditorTransformManager {
 
     (scene.triggerboxes || []).forEach((tb: any) => {
       if (tb.disabled || tb.locked || !tb.poly?.length) return;
-      const screenPoly = tb.poly.map((p: any) => toScreen(p.x, p.y));
+      const p = tb.parallax !== undefined ? tb.parallax : 1.0;
+      const screenPoly = tb.poly.map((pt: any) => toScreen(pt.x, pt.y, p));
       const minX = Math.min(...screenPoly.map((p: any) => p.x));
       const maxX = Math.max(...screenPoly.map((p: any) => p.x));
       const minY = Math.min(...screenPoly.map((p: any) => p.y));
@@ -290,6 +297,11 @@ export class EditorTransformManager {
           poly = (editor.selectedObject as any).poly;
         }
 
+        const selectedParallax =
+          (editor.selectedObject as any).parallax !== undefined
+            ? (editor.selectedObject as any).parallax
+            : 1.0;
+
         const vertexRadius = 6 / zoom; // Hit radius
 
         // Calculate Centroid...
@@ -306,8 +318,8 @@ export class EditorTransformManager {
 
         // Check vertices
         const worldPos = {
-          x: (pos.x - halfW) / zoom + camX,
-          y: (pos.y - halfH) / zoom + camY,
+          x: (pos.x - halfW) / zoom + camX * selectedParallax,
+          y: (pos.y - halfH) / zoom + camY * selectedParallax,
         };
 
         for (let i = 0; i < poly.length; i++) {
@@ -469,15 +481,15 @@ export class EditorTransformManager {
       }
 
       // 2. Check Walkboxes
-      const worldPos = {
-        x: (pos.x - halfW) / zoom + camX,
-        y: (pos.y - halfH) / zoom + camY,
-      };
-
       if (scene.walkbox) {
         for (const wb of scene.walkbox) {
           if (wb.disabled) continue;
           if (wb.locked) continue;
+          const p = (wb as any).parallax !== undefined ? (wb as any).parallax : 1.0;
+          const worldPos = {
+            x: (pos.x - halfW) / zoom + camX * p,
+            y: (pos.y - halfH) / zoom + camY * p,
+          };
           if (Geometry.isPointInPolygon(worldPos, wb.poly)) {
             this.editor.selectObject(wb);
             e.stopPropagation();
@@ -491,6 +503,11 @@ export class EditorTransformManager {
         for (const tb of scene.triggerboxes) {
           if (tb.disabled) continue;
           if (tb.locked) continue;
+          const p = (tb as any).parallax !== undefined ? (tb as any).parallax : 1.0;
+          const worldPos = {
+            x: (pos.x - halfW) / zoom + camX * p,
+            y: (pos.y - halfH) / zoom + camY * p,
+          };
           if (Geometry.isPointInPolygon(worldPos, tb.poly)) {
             this.editor.selectObject(tb);
             e.stopPropagation();
@@ -579,9 +596,13 @@ export class EditorTransformManager {
         editor.selectedObject instanceof Triggerbox ||
         (editor.selectedObject as any).type === 'Quad'
       ) {
+        const selectedParallax =
+          (editor.selectedObject as any).parallax !== undefined
+            ? (editor.selectedObject as any).parallax
+            : 1.0;
         const worldPos = {
-          x: (pos.x - halfW) / zoom + camX,
-          y: (pos.y - halfH) / zoom + camY,
+          x: (pos.x - halfW) / zoom + camX * selectedParallax,
+          y: (pos.y - halfH) / zoom + camY * selectedParallax,
         };
 
         let poly: any;

@@ -1,61 +1,110 @@
-# tasks.md
+# Properties Panel Redesign Plan
 
-## Текущий фокус (блокер перед Parser)
+## Goal
 
-Закрыть долг по операциям с множественным выделением в Scene Editor:
+Restructure the right-side Properties panel into consistent numbered sections with:
+- shared section layout;
+- colored headings and dividers;
+- section hotkeys `0..6` that scroll the panel to the chosen section;
+- unified field placement across object types where possible.
 
-- copy/paste группы;
-- duplicate группы (`Ctrl + D`);
-- save/load prefab для single и group;
-- единая логика размещения при вставке.
+## Scope
 
-## Критерии успеха
+In scope:
+- `Entity`
+- `Actor`
+- `Static`
+- `Quad`
+- `Triggerbox`
+- multi-selection panel
+- section hotkey navigation for the Properties panel
+- new purple section style
 
-- [x] `Ctrl + C` копирует single/group выделение как сериализуемый payload.
-- [x] `Ctrl + V` вставляет single/group с сохранением относительных позиций группы.
-- [x] `Ctrl + D` дублирует single/group с тем же pipeline, что и paste.
-- [x] `Ctrl + S` сохраняет single prefab и group prefab.
-- [x] Group prefab поддерживает все selectable-типы (`Entity`, `Actor`, `Quad`, `Walkbox`, `Triggerbox`) со свойствами.
-- [x] `Ctrl + O` загружает prefab и вставляет в позицию курсора (или в центр вида, если курсор вне canvas).
-- [x] Toolbar `Load` сохраняет стандартное поведение загрузки (без cursor-only режима hotkey).
-- [x] После paste/duplicate/load снимается старое выделение и выделяются только новые объекты.
-- [x] Порядок объектов группы после вставки/дублирования сохраняется.
+Out of scope for this task:
+- `Walkbox` property layout changes
+- `SETTINGS` redesign
+- deep component-specific redesign beyond regrouping under `COMPONENTS`
 
-## Реализация
+## Section Model
 
-### Приоритет 1. Сериализация и instantiate pipeline
+### Section 0
+No title.
+Contains:
+- ID
+- Title
+- TA buttons
+- Group ID
+- Parent / Relation
 
-- [x] Ввести общий формат payload (`single/group`) для clipboard.
-- [x] Поддержать legacy single JSON без `kind/version`.
-- [x] Реализовать общий pipeline создания объектов из payload (single/group).
-- [x] Ввести remap имён и ссылок внутри вставляемой группы.
+### Section 1 TRANSFORM
+Contains, depending on object type:
+- X, Y, H, W
+- Scale, Layer, Parallax
+- Collider H, W
+- Depth Sort mode
+- Disable Depth-scaling
+- Vertices block for `Quad`
 
-### Приоритет 2. Hotkeys и редакторные операции
+### Section 2 VISUAL
+Contains:
+- Fill Color
+- Blend mode
+- Opacity / Blur
+- Retro Grid block for `Quad`
+- Sprite
 
-- [x] Перевести `copySelectedObjectToClipboard` на новый pipeline.
-- [x] Реализовать duplicate для группы через тот же pipeline.
-- [x] Перевести paste на общий pipeline с fallback в центр вида.
-- [x] Исправить рендер подсветки multi-selection для Entity (использовать текущий объект цикла).
+### Section 3 COMPONENTS
+Contains all component-related editing.
 
-### Приоритет 3. Prefab single/group
+### Section 4 ACTOR PROP.
+Actor-only section. Keep current actor-specific controls.
 
-- [x] Расширить `saveObject` на single/group.
-- [x] Добавить формат `group_prefab`.
-- [x] Расширить `loadObject` на single/group с backward compatibility.
-- [x] Разделить режимы загрузки: `Ctrl + O` (`cursor`) и toolbar (`default`).
+### Section 5 SCRIPT EVENTS
+Shared script event section for all non-Walkbox object types.
 
-### Приоритет 4. Документация и приемка
+### Section 6
+No title.
+Contains all remaining object-specific controls not covered above.
 
-- [x] Обновить GDD по copy/paste/duplicate и prefab single/group.
-- [x] Прогнать `npm run typecheck`.
-- [x] Прогнать `npm run build`.
-- [ ] Ручной smoke-тест в браузере (single/group copy/paste/duplicate/save/load).
+## Implementation Steps
 
-## Следующий этап (после закрытия блока)
+- [x] Add reusable section wrapper API in `PropertiesPanel.tsx`
+- [x] Add purple section accent style in CSS
+- [x] Add section number badge style (inverse accent)
+- [x] Add Properties-panel hotkey scroll navigation for digits `0..6`
+- [x] Reorganize multi-selection layout into the new section model
+- [x] Reorganize `Entity` / `Actor` / `Static`
+- [x] Reorganize `Quad`
+- [x] Reorganize `Triggerbox`
+- [ ] Keep `Walkbox` layout unchanged
+- [ ] Keep `SETTINGS` layout unchanged
+- [x] Verify build after section restructuring
+- [ ] Manual audit of section contents and navigation behavior
+- [ ] Final visual audit of multi-selection panel
+- [ ] Update any remaining field placement mismatches found during QA
 
-- [ ] Вернуться к задачам Parser/Text resources.
+## Current Status
 
-## Правило сопровождения плана
+Already implemented:
+- shared numbered section headers with common layout;
+- inverse section badges with blue / red / yellow / purple / neutral accents;
+- Properties-panel digit hotkeys `0..6` with guarded focus behavior;
+- single-object common section `0` for ID / Title / TA / Group ID / Parent / Relation;
+- `Entity` / `Actor` / `Static` regrouped into `TRANSFORM`, `VISUAL`, `COMPONENTS`, `ACTOR PROP.`, `SCRIPT EVENTS`, and bottom misc section;
+- `Quad` regrouped into `TRANSFORM` and `VISUAL`, with `Vertices` inside `TRANSFORM`;
+- `Triggerbox` regrouped into the same section model where applicable;
+- multi-selection regrouped into sections `0`, `1`, `2`, and `6`;
+- `Lock Object` and `Disabled` moved to the bottom misc section for single-object editing with `Alt-L` / `Alt-D` tooltips.
 
-- [ ] Перед началом новой задачи сверяться с `tasks.md`.
-- [ ] При изменении приоритетов обновлять статусы и критерии.
+Still to verify manually:
+- `Walkbox` still behaves and looks unchanged;
+- `SETTINGS` remains unaffected by the redesign;
+- section hotkeys consistently scroll with section headers visible;
+- no field remains in the wrong section after live QA across object types.
+
+## Notes
+
+- Parent / Relation should hide `Relation` when Parent is `(None)`.
+- Parent dropdown styling should keep natural-case IDs.
+- Script Events becomes a common section for all non-Walkbox scene objects.
+- Reuse existing component editors and vertex editors where possible instead of rewriting them.

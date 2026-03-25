@@ -38,8 +38,8 @@ export class Input {
     this.onKeyDown = (e: KeyboardEvent) => {
       this.keys[e.key] = true;
 
-      // Global Tilde (~) to toggle Console
-      if (e.key === '`' || e.key === '~') {
+      // Toggle console by physical backquote key, independent of keyboard layout.
+      if (e.code === 'Backquote') {
         e.preventDefault();
         if (this.game.console) {
           this.game.console.toggle();

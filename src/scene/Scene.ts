@@ -11,7 +11,29 @@ import type { IGame } from '../core/IGame';
 import { toVisualPosition } from '../utils/Parallax';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
-import { handleSceneClick, activateSceneObject } from './SceneInteraction';
+import {
+  handleSceneClick,
+  activateSceneObject,
+  getHoverCursorAtScreenPoint,
+  type HoverCursor,
+} from './SceneInteraction';
+import { useEditorStore } from '../store/editorStore';
+import type {
+  SpatialIndex,
+  SpatialNodeDescriptor,
+  SpatialPlacement,
+  SpatialRelationType,
+} from './spatialTypes';
+import type { SubsceneComponent } from '../systems/ComponentSystem';
+
+interface PickupAnimation {
+  entity: Entity;
+  startY: number;
+  lift: number;
+  duration: number;
+  elapsed: number;
+  baseModelScale: number;
+}
 
 export interface SceneScaling {
   enabled: boolean;
@@ -24,13 +46,20 @@ export interface SceneScaling {
 export interface SceneData {
   id: string;
   name: string;
+  description?: string;
+  textRedirects?: Record<string, string>;
   filename?: string;
   walkbox: {
     poly: { x: number; y: number }[];
     name: string;
     mode?: 'Invert' | 'Add' | 'Subtract';
   }[];
-  triggerboxes: { poly: { x: number; y: number }[]; name: string; script: string }[];
+  triggerboxes: {
+    poly: { x: number; y: number }[];
+    name: string;
+    script: string;
+    components?: any[];
+  }[];
   scaling: SceneScaling;
   entities: EntityData[];
   camera?: { x: number; y: number; zoom: number };
@@ -50,9 +79,11 @@ export class Scene {
 
   id: string;
   name: string;
+  description: string;
   filename: string;
   background: HTMLImageElement | null;
   entities: Entity[];
+  pickupAnimations: PickupAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
   scaling: SceneScaling;
@@ -77,6 +108,7 @@ export class Scene {
 
   // Default Camera (saved to scene file, restored on load/reset)
   defaultCamera: { x: number; y: number; zoom: number };
+  textRedirects: Record<string, string> = {};
 
   // Subscene State
   private _activeSubscene: string | null = null;
@@ -100,10 +132,131 @@ export class Scene {
     this._activeSubscene = value;
   }
 
+  private normalizeSpatialPlacement(
+    value: SpatialPlacement | undefined | null
+  ): SpatialPlacement | null {
+    if (!value) return null;
+    const parentNodeId = typeof value.parentNodeId === 'string' ? value.parentNodeId.trim() : '';
+    const relation =
+      value.relation === 'in' ||
+      value.relation === 'on' ||
+      value.relation === 'under' ||
+      value.relation === 'behind'
+        ? value.relation
+        : parentNodeId
+          ? 'in'
+          : null;
+    if (!parentNodeId && !relation) return null;
+    return {
+      parentNodeId: parentNodeId || null,
+      relation,
+    };
+  }
+
+  getSubsceneComponents(): Array<{ triggerbox: Triggerbox; component: SubsceneComponent }> {
+    const result: Array<{ triggerbox: Triggerbox; component: SubsceneComponent }> = [];
+    for (const triggerbox of this.triggerboxes) {
+      for (const component of triggerbox.components || []) {
+        if (component?.type === 'Subscene') {
+          result.push({ triggerbox, component: component as SubsceneComponent });
+        }
+      }
+    }
+    return result;
+  }
+
+  getSpatialNodeDescriptors(): SpatialNodeDescriptor[] {
+    const entityNodes: SpatialNodeDescriptor[] = this.entities.map((entity) => ({
+      id: entity.name,
+      kind: 'entity',
+      title: this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim() || null,
+      placement: this.normalizeSpatialPlacement((entity as any).spatial),
+      sourceName: entity.name,
+    }));
+
+    const subsceneNodes: SpatialNodeDescriptor[] = this.getSubsceneComponents().map(
+      ({ triggerbox, component }) => ({
+        id: (triggerbox.name || component.targetGroupId || '').trim(),
+        kind: 'subscene' as const,
+        title: component.title?.trim() || null,
+        placement: this.normalizeSpatialPlacement((triggerbox as any).spatial),
+        sourceName: triggerbox.name,
+      })
+    );
+
+    return [...entityNodes, ...subsceneNodes].filter((node) => !!node.id);
+  }
+
+  getSpatialIndex(): SpatialIndex {
+    const nodeById = new Map<string, SpatialNodeDescriptor>();
+    const childrenByParentId = new Map<string, SpatialNodeDescriptor[]>();
+    const childrenByParentAndRelation = new Map<
+      string,
+      Map<SpatialRelationType, SpatialNodeDescriptor[]>
+    >();
+
+    for (const node of this.getSpatialNodeDescriptors()) {
+      nodeById.set(node.id, node);
+      const parentId = node.placement?.parentNodeId?.trim();
+      const relation = node.placement?.relation || null;
+      if (!parentId || !relation) continue;
+
+      const existingChildren = childrenByParentId.get(parentId) || [];
+      existingChildren.push(node);
+      childrenByParentId.set(parentId, existingChildren);
+
+      const relationMap = childrenByParentAndRelation.get(parentId) || new Map();
+      const relationChildren = relationMap.get(relation) || [];
+      relationChildren.push(node);
+      relationMap.set(relation, relationChildren);
+      childrenByParentAndRelation.set(parentId, relationMap);
+    }
+
+    return {
+      nodeById,
+      childrenByParentId,
+      childrenByParentAndRelation,
+    };
+  }
+
+  getSpatialNode(id: string): SpatialNodeDescriptor | null {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return null;
+    return this.getSpatialIndex().nodeById.get(normalizedId) || null;
+  }
+
+  getDirectSpatialChildren(nodeId: string, relation?: SpatialRelationType): SceneObject[] {
+    const normalizedId = String(nodeId || '').trim();
+    if (!normalizedId) return [];
+
+    const result = new Set<SceneObject>();
+    const allObjects: SceneObject[] = [...this.entities, ...this.walkbox, ...this.triggerboxes];
+
+    for (const obj of allObjects) {
+      const placement = this.normalizeSpatialPlacement((obj as any).spatial);
+      if (!placement?.parentNodeId || placement.parentNodeId !== normalizedId) continue;
+      if (relation && placement.relation !== relation) continue;
+      result.add(obj);
+    }
+
+    return Array.from(result);
+  }
+
+  getSpatialPlacementForObject(obj: SceneObject): SpatialPlacement | null {
+    return this.normalizeSpatialPlacement((obj as any).spatial);
+  }
+
+  getSpatialDescendantObjects(nodeId: string): SceneObject[] {
+    const normalizedId = String(nodeId || '').trim();
+    if (!normalizedId) return [];
+    return this.getDirectSpatialChildren(normalizedId);
+  }
+
   constructor(game: IGame, id: string, name: string) {
     this.game = game;
     this.id = id;
     this.name = name;
+    this.description = `You are in ${name}.`;
     this.filename = ''; // Default empty
     this.background = null; // Image object
     this.entities = [];
@@ -142,18 +295,89 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
+      if (this.subsceneEntities.has(entity)) {
+        this.subsceneEntities.delete(entity);
+      }
       if (this.player === entity) {
         this.player = null;
       }
     }
   }
 
+  removeTriggerbox(triggerbox: Triggerbox): void {
+    const index = this.triggerboxes.indexOf(triggerbox);
+    if (index > -1) {
+      this.triggerboxes.splice(index, 1);
+      if (this.subsceneEntities.has(triggerbox)) {
+        this.subsceneEntities.delete(triggerbox);
+      }
+      if (this.activeSubscene && triggerbox.name === this.activeSubscene) {
+        this.activeSubscene = null;
+      }
+    }
+  }
+
+  removeWalkbox(walkbox: Walkbox): void {
+    const index = this.walkbox.indexOf(walkbox);
+    if (index > -1) {
+      this.walkbox.splice(index, 1);
+      if (this.subsceneEntities.has(walkbox)) {
+        this.subsceneEntities.delete(walkbox);
+      }
+    }
+  }
+
+  playPickupAnimation(entity: Entity): void {
+    const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
+    clone.disabled = false;
+    clone.visible = true;
+    clone.locked = true;
+    clone.groupID = null;
+    clone.components = [];
+    clone.interactions = {};
+    clone.opacity = entity.opacity ?? 1.0;
+    // @ts-ignore
+    clone.scene = this;
+
+    this.pickupAnimations.push({
+      entity: clone,
+      startY: clone.y,
+      lift: 26,
+      duration: 260,
+      elapsed: 0,
+      baseModelScale: clone.modelScale || 1,
+    });
+  }
+
   findEntity(name: string): Entity | undefined {
-    return this.entities.find(
-      (e) =>
-        e.name.toUpperCase() === name.toUpperCase() ||
-        (e.customName && e.customName.toUpperCase() === name.toUpperCase())
-    );
+    const normalized = name.toUpperCase();
+    return this.entities.find((e) => {
+      if (e.disabled) return false;
+      return (
+        e.name.toUpperCase() === normalized ||
+        (e.customName && e.customName.toUpperCase() === normalized)
+      );
+    });
+  }
+
+  setTextRedirect(field: string, targetField: string): void {
+    const source = String(field || '').trim();
+    const target = String(targetField || '').trim();
+    if (!source || !target) return;
+    this.textRedirects[source] = target;
+    this.notifyTextRedirectChanged();
+  }
+
+  clearTextRedirect(field: string): void {
+    const source = String(field || '').trim();
+    if (!source) return;
+    if (this.textRedirects[source] === undefined) return;
+    delete this.textRedirects[source];
+    this.notifyTextRedirectChanged();
+  }
+
+  private notifyTextRedirectChanged(): void {
+    useEditorStore.getState().incrementObjectVersion();
   }
 
   getScaling(y: number): number {
@@ -415,29 +639,8 @@ export class Scene {
     return null;
   }
 
-  checkHover(x: number, y: number): boolean {
-    // Transform Screen Coordinates to World Coordinates
-    const screenW = 420;
-    const screenH = 300;
-    const halfW = screenW / 2;
-    const halfH = screenH / 2;
-    const worldX = (x - halfW) / this.camera.zoom + this.camera.x;
-    const worldY = (y - halfH) / this.camera.zoom + this.camera.y;
-
-    const obj = this.getHitObject(worldX, worldY);
-
-    if (obj && obj.components) {
-      const sub = obj.components.find((c) => c.type === 'Subscene') as any;
-      if (sub) {
-        // If this trigger opens the CURRENTLY active subscene, ignore it (cursor shouldn't change)
-        if (this.activeSubscene && sub.targetGroupId === this.activeSubscene) {
-          return false;
-        }
-        return true;
-      }
-    }
-
-    return false;
+  checkHover(x: number, y: number): HoverCursor | null {
+    return getHoverCursorAtScreenPoint(this, x, y);
   }
 
   onClick(x: number, y: number): void {
@@ -467,6 +670,23 @@ export class Scene {
         entity.update(deltaTime);
       }
     });
+
+    if (this.pickupAnimations.length > 0) {
+      const nextAnimations: PickupAnimation[] = [];
+      for (const anim of this.pickupAnimations) {
+        anim.elapsed += deltaTime;
+        const progress = Math.min(anim.elapsed / anim.duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 2);
+        anim.entity.y = anim.startY - anim.lift * eased;
+        anim.entity.opacity = Math.max(0, 1 - progress);
+        anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * eased);
+        anim.entity.update(deltaTime);
+        if (progress < 1) {
+          nextAnimations.push(anim);
+        }
+      }
+      this.pickupAnimations = nextAnimations;
+    }
   }
 
   // -----------------------------------------------------
@@ -486,6 +706,8 @@ export class Scene {
     return {
       id: this.id,
       name: this.name,
+      description: this.description,
+      textRedirects: this.textRedirects,
       filename: this.filename,
       walkbox: this.walkbox.map((wb) => wb.toJSON()),
       triggerboxes: this.triggerboxes.map((tb) => tb.toJSON()),

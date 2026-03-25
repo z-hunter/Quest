@@ -6,24 +6,33 @@ import { SceneEditor } from '../tools/SceneEditor';
 import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
+import { SceneObject } from '../entities/SceneObject';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
+import { TextAssetManager } from './TextAssetManager';
+import type { GameActionOutcome } from './GameActionTypes';
 
 import { Console } from './Console';
+import { ScriptRegistry } from './ScriptRegistry';
+import { ComponentSystem } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
+import type { Scene } from '../scene/Scene';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 
 export class Game implements IGame {
   public static instance: Game;
 
   canvas: HTMLCanvasElement; // UI Canvas
+  editorOverlayCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
   bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
   rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
   uiCtx: CanvasRenderingContext2D | null;
+  editorOverlayCtx: CanvasRenderingContext2D | null;
 
   crtFilter: CRTFilter | null;
   lastTime: number;
@@ -41,6 +50,7 @@ export class Game implements IGame {
   sceneManager: SceneManager;
   assets: AssetLoader;
   audio: AudioManager;
+  textAssets: TextAssetManager;
   editor: SceneEditor;
   spriteEditor: SpriteEditor;
   console: Console; // Virtual Console
@@ -65,7 +75,16 @@ export class Game implements IGame {
         dir: string,
         onConfirm: (f: string) => void,
         extension?: string,
-        title?: string
+        title?: string,
+        onCancel?: () => void
+      ) => void)
+    | null = null;
+  onRequestChoiceDialog:
+    | ((
+        title: string,
+        message: string,
+        options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>,
+        onResolve: (choiceId: string | null) => void
       ) => void)
     | null = null;
 
@@ -81,25 +100,44 @@ export class Game implements IGame {
     dir: string,
     onConfirm: (f: string) => void,
     extension?: string,
-    title?: string
+    title?: string,
+    onCancel?: () => void
   ): void {
     if (this.onRequestFileBrowser) {
-      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title);
+      this.onRequestFileBrowser(mode, dir, onConfirm, extension, title, onCancel);
     } else {
       console.error('File Browser UI not hooked up!');
       alert('File Browser Unavailable');
     }
   }
 
+  requestChoiceDialog(
+    title: string,
+    message: string,
+    options: Array<{ id: string; label: string; variant?: 'primary' | 'danger' | 'neutral' }>
+  ): Promise<string | null> {
+    if (!this.onRequestChoiceDialog) {
+      console.error('Choice Dialog UI not hooked up!');
+      return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+      this.onRequestChoiceDialog!(title, message, options, resolve);
+    });
+  }
+
   constructor(
     rendererCanvas: HTMLCanvasElement, // The main visual canvas (WebGL)
-    uiCanvas: HTMLCanvasElement // The UI overlay canvas (2D)
+    uiCanvas: HTMLCanvasElement, // The UI overlay canvas (2D)
+    editorOverlayCanvas?: HTMLCanvasElement // High-res editor overlay canvas
   ) {
     Game.instance = this;
     this.rendererCanvas = rendererCanvas;
     this.canvas = uiCanvas;
+    this.editorOverlayCanvas = editorOverlayCanvas || null;
 
     this.uiCtx = this.canvas.getContext('2d');
+    this.editorOverlayCtx = this.editorOverlayCanvas?.getContext('2d') || null;
 
     // Create an offscreen buffer for the game to draw onto
     this.bufferCanvas = document.createElement('canvas');
@@ -115,14 +153,14 @@ export class Game implements IGame {
     this.settings = {
       crt: {
         enabled: true,
-        curvature: 0.1,
-        scanlineCount: 800,
-        scanlineIntensity: 0.5,
-        aberration: 1.0,
-        vignette: 0.3,
-        phosphor: 0.0,
-        bezelGlow: false,
-        bloom: 0.0,
+        curvature: 0.16,
+        scanlineCount: 200,
+        scanlineIntensity: 0.4,
+        aberration: 0.2,
+        vignette: 0.9,
+        phosphor: 1.0,
+        bezelGlow: true,
+        bloom: 0.05,
       },
       editor: {
         uiScale: 1.0,
@@ -142,6 +180,7 @@ export class Game implements IGame {
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
+    if (this.editorOverlayCtx) this.editorOverlayCtx.imageSmoothingEnabled = true;
 
     // (Previously corrupted lines removed)
     this.input = new Input(this);
@@ -149,7 +188,21 @@ export class Game implements IGame {
     this.parser = new Parser(this);
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
+    this.textAssets = new TextAssetManager();
+    void this.textAssets.preloadServiceAssets();
+    void this.textAssets.preloadParserLanguageAssets();
     this.sceneManager = new SceneManager(this);
+    if (typeof window !== 'undefined') {
+      const debugWindow = window as Window & {
+        __QUEST_DEBUG__?: Record<string, unknown>;
+      };
+      debugWindow.__QUEST_DEBUG__ = {
+        ...(debugWindow.__QUEST_DEBUG__ || {}),
+        game: this,
+        profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
+        profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
+      };
+    }
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);
 
@@ -224,19 +277,22 @@ export class Game implements IGame {
       this.editor.update(deltaTime);
     }
 
-    // Cursor Logic: Change to 'eye' if hovering over Subscene object in Game Mode
+    // Cursor Logic: Change to contextual cursor if hovering over interactive object in Game Mode
     if (!this.editor.enabled && this.sceneManager.currentScene) {
-      const hovered = this.sceneManager.currentScene.checkHover(
+      const hoverCursor = this.sceneManager.currentScene.checkHover(
         this.input.mouse.x,
         this.input.mouse.y
       );
-      if (hovered) {
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
+      if (hoverCursor === 'eye') {
         this.canvas.classList.add('cursor-eye');
-      } else {
-        this.canvas.classList.remove('cursor-eye');
+      } else if (hoverCursor === 'hand') {
+        this.canvas.classList.add('cursor-hand');
+      } else if (hoverCursor === 'back') {
+        this.canvas.classList.add('cursor-back');
       }
     } else {
-      this.canvas.classList.remove('cursor-eye');
+      this.canvas.classList.remove('cursor-eye', 'cursor-hand', 'cursor-back');
     }
   }
 
@@ -299,16 +355,40 @@ export class Game implements IGame {
       }
     }
 
-    // 3. Render UI/Editor to UI Canvas (Overlay)
+    // 3. Render UI/Editor overlays
     if (this.uiCtx) {
       this.uiCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    if (this.editorOverlayCtx && this.editorOverlayCanvas) {
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.editorOverlayCtx.clearRect(
+        0,
+        0,
+        this.editorOverlayCanvas.width,
+        this.editorOverlayCanvas.height
+      );
+    }
 
+    if (this.uiCtx) {
       // Sprite Editor Overlay (Takes over screen if active)
       if (this.spriteEditor.active) {
         this.spriteEditor.render(this.uiCtx);
-      } else {
+      } else if (!this.editorOverlayCtx) {
         this.editor.render(this.uiCtx);
       }
+    }
+
+    if (
+      this.editorOverlayCtx &&
+      this.editorOverlayCanvas &&
+      !this.spriteEditor.active &&
+      this.editor.enabled
+    ) {
+      const scaleX = this.editorOverlayCanvas.width / this.canvas.width;
+      const scaleY = this.editorOverlayCanvas.height / this.canvas.height;
+      this.editorOverlayCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      this.editor.render(this.editorOverlayCtx);
+      this.editorOverlayCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
 
@@ -410,6 +490,516 @@ export class Game implements IGame {
   log(text: string): void {
     console.log(`[GAME LOG] ${text}`);
     this.console.log(text);
+  }
+
+  text(key: string, params?: Record<string, string | number>): string {
+    return this.textAssets.getServiceText(key, params);
+  }
+
+  private getPlayerFacingObjectTitle(target: SceneObject): string | null {
+    const title = this.textAssets.getResolvedObjectField(target as any, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private getRelationDisplayText(relation: SpatialRelationType): string {
+    switch (relation) {
+      case 'in':
+        return 'in';
+      case 'on':
+        return 'on';
+      case 'under':
+        return 'under';
+      case 'behind':
+        return 'behind';
+      default:
+        return relation;
+    }
+  }
+
+  private capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  private formatTitleList(items: string[]): string {
+    if (items.length <= 1) return items[0] || '';
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+  }
+
+  private getSpatialParentMessage(target: SceneObject): string | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const placement = scene.getSpatialPlacementForObject(target);
+    if (!placement?.parentNodeId || !placement.relation) return null;
+
+    const itemTitle = this.getPlayerFacingObjectTitle(target);
+    const parentNode = scene.getSpatialNode(placement.parentNodeId);
+    const parentTitle = parentNode?.title?.trim() || null;
+    if (!itemTitle || !parentTitle) return null;
+
+    return this.text('parser.relation_contents', {
+      Relation: this.capitalize(this.getRelationDisplayText(placement.relation)),
+      relation: this.getRelationDisplayText(placement.relation),
+      target: parentTitle,
+      items: itemTitle,
+    });
+  }
+
+  getSeeMessage(target: SceneObject): string | null {
+    return this.getSpatialParentMessage(target) || null;
+  }
+
+  private isEntityInInventory(entity: Entity): boolean {
+    return this.inventory.includes(entity);
+  }
+
+  private canExamineObject(entity: SceneObject): GameActionOutcome | null {
+    if (entity instanceof Entity && this.isEntityInInventory(entity)) return null;
+
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    if (scene.activeSubscene && scene.subsceneEntities.has(entity as any)) {
+      return null;
+    }
+
+    const distanceError = ComponentSystem.getInteractionDistanceError(entity as any, scene.player);
+    if (distanceError) {
+      return {
+        status: 'failed',
+        code: 'too_far_to_examine',
+        message: distanceError,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  }
+
+  lookScene(scene?: Scene | null): GameActionOutcome {
+    const targetScene = scene || this.sceneManager.currentScene;
+    if (!targetScene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const sceneDescription =
+      this.textAssets.getResolvedSceneField(targetScene, 'description') ||
+      targetScene.description ||
+      this.text('parser.look_default_scene', { scene: targetScene.name });
+    // Intentionally disabled for now:
+    // const directItems = this.getDirectSceneLookItems(targetScene);
+    // const contentsMessage = directItems.length
+    //   ? this.text('parser.look_scene_contents', {
+    //       items: this.formatTitleList(directItems),
+    //     })
+    //   : '';
+    return {
+      status: 'ok',
+      code: 'scene_description',
+      message: sceneDescription,
+      data: { targetType: 'scene', sceneId: targetScene.id },
+    };
+  }
+
+  lookEntity(entity: SceneObject): GameActionOutcome {
+    const interactionId =
+      entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription =
+      typeof (entity as any).description === 'string' ? (entity as any).description : null;
+    const description = objectDescription || runtimeDescription;
+    if (description && description.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_description',
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    const targetTitle = this.getPlayerFacingObjectTitle(entity);
+    if (targetTitle) {
+      const genericMessage = this.text('parser.look_default_object', { target: targetTitle });
+      return {
+        status: 'ok',
+        code: 'entity_generic_description',
+        message: genericMessage,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_description',
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  examineEntity(entity: SceneObject): GameActionOutcome {
+    const accessError = this.canExamineObject(entity);
+    if (accessError) return accessError;
+
+    const subsceneComponent = entity.components?.find(
+      (component: any) => component?.type === 'Subscene'
+    );
+    if (subsceneComponent && this.sceneManager.currentScene) {
+      this.sceneManager.currentScene.activateObject(entity);
+      const seeMessage = this.getSeeMessage(entity);
+      const targetTitle = this.getPlayerFacingObjectTitle(entity);
+      return {
+        status: 'ok',
+        code: 'subscene_activated',
+        ...(seeMessage
+          ? { message: seeMessage }
+          : targetTitle
+            ? { message: this.text('engine.click_you_see', { title: targetTitle }) }
+            : {}),
+        data: { targetType: 'entity', entityId: entity.name },
+        effects: ['subscene_opened'],
+      };
+    }
+
+    const interactionId =
+      entity.interactions &&
+      (entity.interactions.examine ||
+        entity.interactions.EXAMINE ||
+        entity.interactions.inspect ||
+        entity.interactions.INSPECT ||
+        entity.interactions.check ||
+        entity.interactions.CHECK);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const details = this.textAssets.getResolvedObjectField(entity, 'details');
+    if (details && details.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_details',
+        message: details,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription =
+      typeof (entity as any).description === 'string' ? (entity as any).description : null;
+    const description = objectDescription || runtimeDescription;
+    if (description && description.trim()) {
+      return {
+        status: 'ok',
+        code: 'entity_description_fallback',
+        message: description,
+        data: { targetType: 'entity', entityId: entity.name },
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'missing_details',
+      data: { targetType: 'entity', entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const anchorNode = scene.getSpatialNode(anchorNodeId);
+    const anchorObject =
+      scene.entities.find((entity) => entity.name === anchorNodeId) ||
+      scene.triggerboxes.find((triggerbox) => triggerbox.name === anchorNodeId) ||
+      scene.walkbox.find((walkbox) => walkbox.name === anchorNodeId) ||
+      null;
+    const anchorTitle =
+      anchorNode?.title?.trim() ||
+      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject)?.trim() : null) ||
+      null;
+    if (!anchorTitle) {
+      return {
+        status: 'escalate',
+        code: 'spatial_node_missing_title',
+        recoverable: true,
+      };
+    }
+
+    const childTitles = scene
+      .getDirectSpatialChildren(anchorNodeId, relation)
+      .map((child) => this.getPlayerFacingObjectTitle(child))
+      .filter((title): title is string => !!title);
+
+    if (!childTitles.length) {
+      return {
+        status: 'ok',
+        code: 'relation_empty',
+        message: this.text('parser.relation_empty', {
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+        }),
+        data: {
+          relation,
+          anchorNodeId,
+        },
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'relation_contents',
+      message: this.text('parser.relation_contents', {
+        Relation: this.capitalize(this.getRelationDisplayText(relation)),
+        relation: this.getRelationDisplayText(relation),
+        target: anchorTitle,
+        items: this.formatTitleList(childTitles),
+      }),
+      data: {
+        relation,
+        anchorNodeId,
+      },
+    };
+  }
+
+  takeEntity(entity: Entity): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const interactionId =
+      entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
+    if (interactionId) {
+      ScriptRegistry.execute(interactionId, { game: this, entity });
+      return {
+        status: 'ok',
+        code: 'delegated_script',
+        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
+        effects: ['script_executed'],
+      };
+    }
+
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
+    if (isItem || entity.isTakeable) {
+      scene.playPickupAnimation(entity);
+      scene.removeEntity(entity);
+      this.inventory.push(entity);
+      const itemTitle = this.getPlayerFacingObjectTitle(entity);
+      if (!itemTitle) {
+        return {
+          status: 'escalate',
+          code: 'taken_item_missing_title',
+          data: { entityId: entity.name },
+          effects: ['moved_to_inventory'],
+          recoverable: true,
+        };
+      }
+      return {
+        status: 'ok',
+        code: 'item_taken',
+        message: this.text('parser.take_pickup_success', {
+          item: itemTitle,
+        }),
+        data: { entityId: entity.name },
+        effects: ['moved_to_inventory'],
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'not_takeable',
+      message: this.text('parser.take_cannot'),
+      data: { entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  removeInventoryEntity(entity: Entity): GameActionOutcome {
+    const index = this.inventory.indexOf(entity);
+    if (index === -1) {
+      return {
+        status: 'failed',
+        code: 'inventory_item_not_found',
+        recoverable: true,
+      };
+    }
+
+    this.inventory.splice(index, 1);
+    return {
+      status: 'ok',
+      code: 'inventory_item_removed',
+      data: { entityId: entity.name },
+      effects: ['removed_from_inventory'],
+    };
+  }
+
+  showInventory(): GameActionOutcome {
+    const inventoryTitles = this.inventory
+      .map((entity: any) => this.getPlayerFacingObjectTitle(entity))
+      .filter((title): title is string => !!title);
+
+    if (inventoryTitles.length !== this.inventory.length) {
+      return {
+        status: 'escalate',
+        code: 'inventory_item_missing_title',
+        data: {
+          count: this.inventory.length,
+        },
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'inventory_list',
+      message:
+        this.inventory.length === 0
+          ? this.text('parser.inventory_empty')
+          : this.text('parser.inventory_items', {
+              items: inventoryTitles.join(', '),
+            }),
+      data: {
+        count: this.inventory.length,
+      },
+    };
+  }
+
+  goToSceneTarget(target: string): GameActionOutcome {
+    const normalized = String(target || '')
+      .trim()
+      .toUpperCase();
+    if (!normalized) {
+      return {
+        status: 'failed',
+        code: 'destination_not_found',
+        recoverable: true,
+      };
+    }
+
+    for (const descriptor of this.sceneManager.sceneRegistry.values()) {
+      if (
+        descriptor.id.toUpperCase() === normalized ||
+        descriptor.name.toUpperCase() === normalized ||
+        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
+      ) {
+        return this.goToScene(descriptor.id);
+      }
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      recoverable: true,
+    };
+  }
+
+  goToScene(sceneId: string): GameActionOutcome {
+    const currentScene = this.sceneManager.currentScene;
+    const activeScene = this.sceneManager.scenes.get(sceneId);
+    if (!activeScene && !this.sceneManager.sceneRegistry.get(sceneId)) {
+      return {
+        status: 'failed',
+        code: 'destination_not_found',
+        recoverable: true,
+      };
+    }
+
+    this.sceneManager.switchTo(sceneId);
+    const switchedScene = this.sceneManager.currentScene;
+    return {
+      status: 'ok',
+      code: 'scene_switched',
+      message:
+        (switchedScene && this.textAssets.getResolvedSceneField(switchedScene, 'description')) ||
+        switchedScene?.description ||
+        undefined,
+      data: { targetType: 'scene', sceneId },
+      effects: currentScene?.id !== sceneId ? ['scene_changed'] : [],
+    };
+  }
+
+  goToEntity(entity: Entity): GameActionOutcome {
+    const currentScene = this.sceneManager.currentScene;
+    if (currentScene?.player && 'x' in entity && 'y' in entity) {
+      const entityTitle = this.getPlayerFacingObjectTitle(entity);
+      if (!entityTitle) {
+        return {
+          status: 'escalate',
+          code: 'destination_missing_title',
+          data: { targetType: 'entity', entityId: entity.name },
+          recoverable: true,
+        };
+      }
+      currentScene.player.moveTo((entity as any).x, (entity as any).y);
+      return {
+        status: 'ok',
+        code: 'player_moving',
+        message: this.text('parser.go_to_success', {
+          target: entityTitle,
+        }),
+        data: { targetType: 'entity', entityId: entity.name },
+        effects: ['player_move_started'],
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'destination_not_found',
+      recoverable: true,
+    };
   }
 
   showNotification(text: string): void {

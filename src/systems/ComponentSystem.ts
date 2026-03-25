@@ -12,6 +12,8 @@ import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
 export interface SubsceneComponent {
   type: 'Subscene';
   targetGroupId: string;
+  title?: string;
+  description?: string | null;
 }
 
 export interface SwitchComponent {
@@ -45,6 +47,43 @@ export interface WalkBoxComponent {
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  private static getDirectSpatialChildren(
+    rootIds: string[],
+    scene: ActivationSceneContext
+  ): SceneObject[] {
+    const roots = new Set(
+      rootIds.map((value) => String(value || '').trim()).filter((value) => !!value)
+    );
+    if (roots.size === 0) return [];
+
+    const allObjects: SceneObject[] = [
+      ...scene.entities,
+      ...(scene.walkbox || []),
+      ...scene.triggerboxes,
+    ];
+    const result = new Set<SceneObject>();
+
+    for (const obj of allObjects) {
+      const objectParentId =
+        typeof (obj as any).spatial?.parentNodeId === 'string'
+          ? (obj as any).spatial.parentNodeId.trim()
+          : '';
+
+      if (objectParentId && roots.has(objectParentId)) {
+        result.add(obj);
+        continue;
+      }
+
+    }
+
+    return Array.from(result);
+  }
+
+  private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
+    const title = game?.textAssets.getResolvedObjectField(entity, 'title');
+    return title && title.trim() ? title.trim() : null;
+  }
+
   static update(entity: any, _dt: number) {
     if (!entity.components) return;
 
@@ -94,8 +133,50 @@ export class ComponentSystem {
 
   // Called when trying to TAKE an item
   // Returns string (error message) or null (success)
+  static getInteractionDistanceError(
+    entity: SceneObject,
+    player: Actor | null,
+    options?: { ignoreDistance?: boolean }
+  ): string | null {
+    const game = (entity as any).game as IGame | undefined;
+    if (!player || options?.ignoreDistance) return null;
+
+    let targetX = 0;
+    let targetY = 0;
+
+    if (
+      Array.isArray((entity as any).poly) &&
+      (entity as any).poly.length > 0
+    ) {
+      const poly = (entity as any).poly as Array<{ x: number; y: number }>;
+      targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
+      targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
+    } else {
+      const e = entity as unknown as { x?: number; y?: number };
+      targetX = e.x || 0;
+      targetY = e.y || 0;
+    }
+
+    const dist = Math.hypot(player.x - targetX, player.y - targetY);
+    const allowedDist = (player.width || 30) * 4;
+
+    if (dist > allowedDist) {
+      const title = this.getPlayerFacingTitle(game, entity);
+      if (title) {
+        return (
+          game?.text('engine.too_far_from_entity', { target: title }) ||
+          `You are too far away from the ${title}.`
+        );
+      }
+      return game?.text('engine.too_far_generic') || 'You are too far away.';
+    }
+
+    return null;
+  }
+
   static canTakeItem(entity: SceneObject, player: Actor | null): string | null {
-    if (!entity.components) return 'You cannot take that.';
+    const game = (entity as any).game as IGame | undefined;
+    if (!entity.components) return game?.text('parser.take_cannot') || 'You cannot take that.';
 
     const itemComp = entity.components.find((c: any) => c.type === 'Item') as
       | ItemComponent
@@ -105,16 +186,10 @@ export class ComponentSystem {
 
     if (!itemComp) return null; // Not an item component, let caller handle legacy or fail
 
-    // Check Proximity
-    if (!itemComp.ignoreDistance && player) {
-      const e = entity as unknown as { x: number; y: number };
-      const dist = Math.hypot(player.x - e.x, player.y - e.y);
-      const allowedDist = (player.width || 30) * 4; // Tolerance
-
-      if (dist > allowedDist) {
-        return `You are too far away from the ${entity.name}.`;
-      }
-    }
+    const distanceError = this.getInteractionDistanceError(entity, player, {
+      ignoreDistance: !!itemComp.ignoreDistance,
+    });
+    if (distanceError) return distanceError;
 
     return null; // OK
   }
@@ -149,7 +224,7 @@ export class ComponentSystem {
     scene: ActivationSceneContext
   ): boolean {
     const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
-    if (!targetStr) return false;
+    if (!targetStr && !entity.name) return false;
 
     // Proximity Check (if player exists)
     const player = scene.player;
@@ -178,16 +253,26 @@ export class ComponentSystem {
       if (dist > allowedDist) {
         const game = scene.game as unknown as IGame;
         if (game && typeof game.showMessage === 'function') {
-          game.showMessage('You are too far away.');
+          game.showMessage(game.text('engine.too_far_generic'));
         }
         return true; // Blocked
       }
     }
 
-    scene.activeSubscene = targetStr;
-    scene.subsceneEntities.clear();
+    const spatialRootIds = Array.from(
+      new Set(
+        [targetStr, entity.name]
+          .map((value) => String(value || '').trim())
+          .filter((value) => !!value)
+      )
+    );
+    const spatialTargets = this.getDirectSpatialChildren(spatialRootIds, scene);
+    const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
+    const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
+    const activeSubsceneId = entity.name || targetStr;
 
-    const targets = scene.resolveTarget(targetStr);
+    scene.activeSubscene = activeSubsceneId;
+    scene.subsceneEntities.clear();
     targets.forEach((t) => {
       t.disabled = false;
       scene.subsceneEntities.add(t);
@@ -208,7 +293,24 @@ export class ComponentSystem {
           (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
         );
         if (!hasKey) {
-          game.showMessage(`Locked. Needs ${sw.idKey}`);
+          const keyEntity =
+            game.inventory.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            ) ||
+            scene.entities.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            ) ||
+            scene.triggerboxes.find(
+              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+            );
+          const keyTitle = keyEntity
+            ? this.getPlayerFacingTitle(game, keyEntity as SceneObject)
+            : null;
+          game.showMessage(
+            keyTitle
+              ? game.text('engine.locked_needs', { item: keyTitle })
+              : game.text('engine.locked_generic')
+          );
           return true; // Handled (Blocked)
         }
       }

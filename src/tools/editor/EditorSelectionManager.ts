@@ -558,7 +558,9 @@ export class EditorSelectionManager {
 
     const created: SceneObject[] = [];
     const preserveQuadBindings = payload.items.length > 1;
-    orderedItems.forEach((item) => {
+    orderedItems.forEach((item, index) => {
+      const originalName =
+        typeof payload.items[index]?.name === 'string' ? payload.items[index].name : item.name;
       const sourcePoint = this.getReferencePointFromSerializedData(item);
       const overrideX = insertionPoint.x + (sourcePoint.x - anchorSourcePoint.x);
       const overrideY = insertionPoint.y + (sourcePoint.y - anchorSourcePoint.y);
@@ -571,7 +573,14 @@ export class EditorSelectionManager {
       const newObj = this.editor.createObjectFromData(item, overrideX, overrideY, {
         preserveBindings: preserveQuadBindings && item?.type === 'Quad',
       });
-      if (newObj) created.push(newObj);
+      if (newObj) {
+        created.push(newObj);
+        if (originalName && originalName !== newObj.name) {
+          this.editor.game.textAssets
+            .duplicateObjectAssetIfExists(originalName, newObj.name)
+            .catch((err: unknown) => console.error('Failed to duplicate text asset:', err));
+        }
+      }
     });
 
     return created;
