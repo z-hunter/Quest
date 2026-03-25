@@ -333,6 +333,17 @@ button {
 button:hover {
   background: var(--ui-main-color);
   color: #000;
+  box-shadow:
+    0 0 4px rgba(121, 239, 164, 0.24),
+    0 0 8px rgba(121, 239, 164, 0.14);
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.18),
+    0 0 6px rgba(121, 239, 164, 0.14);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    box-shadow 160ms ease,
+    text-shadow 160ms ease;
 }
 
 .toolbar-icon {
