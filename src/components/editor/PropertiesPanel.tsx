@@ -6,6 +6,7 @@ import { QuadObject } from '../../entities/QuadObject';
 import { Entity } from '../../entities/Entity';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { readProjectFile } from '../../platform/fileApi';
+import { isTauriRuntime } from '../../platform/fileApi';
 
 const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Group #ID':
@@ -143,6 +144,7 @@ const normalizeTooltipLabelText = (rawText: string): string => {
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
+  const isDesktopRuntime = React.useMemo(() => isTauriRuntime(), []);
   const {
     selectedObjectId,
     selectedObjectType,
@@ -3856,24 +3858,26 @@ export const PropertiesPanel: React.FC = () => {
               />
             </div>
 
-            <div className="e-row">
-              <label className="e-label">Game Zoom</label>
-              <Select
-                value={obj.editor?.viewportZoom || 'fit'}
-                onChange={(value) => {
-                  if (!obj.editor) obj.editor = { uiScale: 1.0, viewportZoom: 'fit' };
-                  obj.editor.viewportZoom = value as 'fit' | '1' | '1.5' | '2';
-                  incrementObjectVersion();
-                }}
-                options={[
-                  { value: 'fit', label: 'Fit to Window' },
-                  { value: '1', label: '100%' },
-                  { value: '1.5', label: '150%' },
-                  { value: '2', label: '200%' },
-                ]}
-                style={{ width: '100%' }}
-              />
-            </div>
+            {isDesktopRuntime && (
+              <div className="e-row">
+                <label className="e-label">Game Zoom</label>
+                <Select
+                  value={obj.editor?.viewportZoom || 'fit'}
+                  onChange={(value) => {
+                    if (!obj.editor) obj.editor = { uiScale: 1.0, viewportZoom: 'fit' };
+                    obj.editor.viewportZoom = value as 'fit' | '1' | '1.5' | '2';
+                    incrementObjectVersion();
+                  }}
+                  options={[
+                    { value: 'fit', label: 'Fit to Window' },
+                    { value: '1', label: '100%' },
+                    { value: '1.5', label: '150%' },
+                    { value: '2', label: '200%' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
 
             <div className="e-row" style={{ marginTop: '10px' }}>
               <label
