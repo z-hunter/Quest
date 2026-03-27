@@ -26,3 +26,7 @@ docs
 
 # Ghost directory
 public?
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/

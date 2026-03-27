@@ -515,6 +515,7 @@ input[type='checkbox'] {
   flex: 1;
   overflow: hidden;
   height: 100%;
+  min-width: 0;
 }
 
 /* Toolbar Icon Buttons */

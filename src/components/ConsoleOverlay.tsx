@@ -86,10 +86,10 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
       className="console-overlay"
       style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
+        top: 'var(--game-viewport-top, 0px)',
+        left: 'var(--game-viewport-left, 0px)',
+        width: 'var(--game-viewport-width, 100%)',
+        height: 'var(--game-viewport-height, 100%)',
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         color: '#0f0', // Classic terminal green? Or White? GDD says "High resolution... distinct from game"
         fontFamily: 'monospace',
