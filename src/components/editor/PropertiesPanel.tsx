@@ -5,6 +5,8 @@ import { Select } from '../../components/common/Select';
 import { QuadObject } from '../../entities/QuadObject';
 import { Entity } from '../../entities/Entity';
 import { Triggerbox } from '../../entities/Triggerbox';
+import { readProjectFile } from '../../platform/fileApi';
+import { isTauriRuntime } from '../../platform/fileApi';
 
 const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Group #ID':
@@ -112,6 +114,7 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Horizon Y': 'Y coordinate treated as the horizon for depth scaling.',
   'Front Y': 'Y coordinate treated as the foreground limit for depth scaling.',
   'UI Scale': 'Editor interface scale multiplier.',
+  'Game Zoom': 'Scales the game viewport inside the application window. Fit uses the largest size that still stays fully visible.',
   Curvature: 'Strength of the CRT screen curvature effect.',
   Vignette: 'Darkening applied toward the screen edges.',
   'Scanline Count': 'Number of scanlines used by the CRT filter.',
@@ -141,6 +144,7 @@ const normalizeTooltipLabelText = (rawText: string): string => {
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
+  const isDesktopRuntime = React.useMemo(() => isTauriRuntime(), []);
   const {
     selectedObjectId,
     selectedObjectType,
@@ -646,11 +650,7 @@ export const PropertiesPanel: React.FC = () => {
               )
             : '{}';
 
-      await fetch('/api/read-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content: defaultContent }),
-      });
+      await readProjectFile(path, defaultContent);
       await loadResolvedTitle(true);
       incrementObjectVersion();
       game.showNotification?.('Text asset reloaded');
@@ -3857,6 +3857,27 @@ export const PropertiesPanel: React.FC = () => {
                 }}
               />
             </div>
+
+            {isDesktopRuntime && (
+              <div className="e-row">
+                <label className="e-label">Game Zoom</label>
+                <Select
+                  value={obj.editor?.viewportZoom || 'fit'}
+                  onChange={(value) => {
+                    if (!obj.editor) obj.editor = { uiScale: 1.0, viewportZoom: 'fit' };
+                    obj.editor.viewportZoom = value as 'fit' | '1' | '1.5' | '2';
+                    incrementObjectVersion();
+                  }}
+                  options={[
+                    { value: 'fit', label: 'Fit to Window' },
+                    { value: '1', label: '100%' },
+                    { value: '1.5', label: '150%' },
+                    { value: '2', label: '200%' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
 
             <div className="e-row" style={{ marginTop: '10px' }}>
               <label

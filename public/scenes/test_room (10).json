@@ -120,6 +120,10 @@
       ],
       "layer": 0,
       "visible": true,
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": 27,
@@ -157,7 +161,7 @@
       "script": ""
     },
     {
-      "name": "sub_sw_d1",
+      "name": "Drawer1",
       "type": "Triggerbox",
       "locked": false,
       "disabled": true,
@@ -481,8 +485,8 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 232.86186143649797,
-      "y": 223.85074125381902,
+      "x": 233.76407849510315,
+      "y": 255.46834743791874,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -493,7 +497,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.024795357575403,
+      "parallax": 1.0454184297360856,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -666,7 +670,7 @@
       "layer": 5,
       "visible": true,
       "spatial": {
-        "parentNodeId": "Drawer1",
+        "parentNodeId": "sub_sw_d1",
         "relation": "in"
       },
       "x": 93,
@@ -701,7 +705,7 @@
       "layer": 5,
       "visible": true,
       "spatial": {
-        "parentNodeId": "Drawer1",
+        "parentNodeId": "sub_sw_d1",
         "relation": "in"
       },
       "x": 320,
@@ -856,8 +860,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.9043373174802,
-      "y": 306.9284515529539,
+      "x": 222.90433731748016,
+      "y": 306.9284515529538,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -868,7 +872,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293817,
+      "parallax": 1.0790382036293815,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -985,41 +989,6 @@
       "blur": 0
     },
     {
-      "name": "Drawer1",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "spatial": {
-        "parentNodeId": "Desk",
-        "relation": "in"
-      },
-      "x": 90.66834500947778,
-      "y": 120,
-      "width": 27.3,
-      "height": 27.3,
-      "baseWidth": 30,
-      "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.91,
-      "modelScale": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 0,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
       "name": "window1",
       "type": "Entity",
       "locked": false,
@@ -1062,30 +1031,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 177.40625891347847,
-      "y": 204.99379689971948,
+      "x": 183.5621392632326,
+      "y": 234.48271508100382,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 177.40625891347847,
-          "y": 204.99379689971948,
-          "p": 1.0124869315719702
+          "x": 183.5621392632326,
+          "y": 234.48271508100382,
+          "p": 1.0317413330719143
         },
         {
-          "x": 273.3546785024226,
-          "y": 203.45494893614816,
-          "p": 1.0114617012261051
+          "x": 280.0780479371777,
+          "y": 232.72157956389412,
+          "p": 1.030570983751848
         },
         {
-          "x": 262.5537137492114,
-          "y": 249.54350071101484,
-          "p": 1.0415316998111208
+          "x": 252.63517383723232,
+          "y": 285.3328246821567,
+          "p": 1.0649234148249391
         },
         {
-          "x": 212.71215117336098,
-          "y": 247.59187519264492,
-          "p": 1.0402645533908195
+          "x": 203.49659455754374,
+          "y": 283.1045271803673,
+          "p": 1.0634670112289983
         }
       ],
       "color": "#000975",

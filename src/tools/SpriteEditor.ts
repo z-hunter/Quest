@@ -2,6 +2,7 @@ import type { IGame } from '../core/IGame';
 import { useEditorStore } from '../store/editorStore';
 import { Theme } from '../utils/Theme';
 import { Game } from '../core/Game';
+import { saveProjectFile } from '../platform/fileApi';
 
 export interface SpriteData {
   id: string; // Filename without extension
@@ -469,18 +470,9 @@ export class SpriteEditor {
     const data = JSON.stringify(this.sprite, null, 2);
 
     try {
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: data }),
-      });
-
-      if (response.ok) {
-        // Use Toast Message instead of Alert
-        this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
-      } else {
-        throw new Error(await response.text());
-      }
+      await saveProjectFile(filePath, data);
+      // Use Toast Message instead of Alert
+      this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
     } catch (e) {
       console.error('[SpriteEditor] Failed to save sprite:', e);
       this.game.showNotification?.(`Error saving sprite: ${e}`);

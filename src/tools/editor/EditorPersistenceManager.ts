@@ -2,6 +2,7 @@ import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { SceneObject } from '../../entities/SceneObject';
 import { useEditorStore } from '../../store/editorStore';
+import { saveProjectFile } from '../../platform/fileApi';
 
 export class EditorPersistenceManager {
   private editor: SceneEditor;
@@ -141,22 +142,13 @@ export class EditorPersistenceManager {
     const filePath = `public/scenes/${normalizedPath}.json`;
 
     try {
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json }),
-      });
-
-      if (response.ok) {
-        this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
-        await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
-        this.markSceneSaved();
-        // Use Toast Message
-        this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
-        return true;
-      } else {
-        throw new Error(await response.text());
-      }
+      await saveProjectFile(filePath, json);
+      this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
+      await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
+      this.markSceneSaved();
+      // Use Toast Message
+      this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
+      return true;
     } catch (e) {
       console.error('Failed to save scene:', e);
       this.editor.game.showNotification(`Error saving scene: ${e}`);
@@ -221,17 +213,8 @@ export class EditorPersistenceManager {
     const filePath = `public/prefabs/${filename}`;
 
     try {
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json }),
-      });
-
-      if (response.ok) {
-        this.editor.game.showNotification(`Prefab Saved: ${filename} `);
-      } else {
-        throw new Error(await response.text());
-      }
+      await saveProjectFile(filePath, json);
+      this.editor.game.showNotification(`Prefab Saved: ${filename} `);
     } catch (e) {
       console.error('Failed to save prefab:', e);
       this.editor.game.showNotification(`Error: ${e} `);

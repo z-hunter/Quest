@@ -1,0 +1,129 @@
+type FileListItem = {
+  name: string;
+  isDir: boolean;
+};
+
+type JsonHeaders = {
+  'Content-Type': 'application/json';
+};
+
+type TauriCoreLike = {
+  invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+};
+
+type TauriWindowLike = Window & {
+  __TAURI__?: {
+    core?: TauriCoreLike;
+  };
+  __TAURI_INTERNALS__?: TauriCoreLike;
+};
+
+const JSON_HEADERS: JsonHeaders = {
+  'Content-Type': 'application/json',
+};
+
+function getTauriInvoker():
+  | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
+  | null {
+  if (typeof window === 'undefined') return null;
+
+  const tauriWindow = window as TauriWindowLike;
+  const invoke =
+    tauriWindow.__TAURI__?.core?.invoke || tauriWindow.__TAURI_INTERNALS__?.invoke || null;
+
+  return typeof invoke === 'function' ? invoke.bind(tauriWindow.__TAURI__?.core) : null;
+}
+
+export function isTauriRuntime(): boolean {
+  return !!getTauriInvoker();
+}
+
+async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const invoke = getTauriInvoker();
+  if (!invoke) {
+    throw new Error(`Tauri runtime is unavailable for command '${command}'.`);
+  }
+  return (await invoke(command, args)) as T;
+}
+
+async function postJson<T>(url: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+export async function listProjectFiles(path: string): Promise<FileListItem[]> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<FileListItem[]>('list_project_files', { path });
+  }
+
+  const result = await postJson<{ files?: FileListItem[] }>('/api/list', { path });
+  return Array.isArray(result?.files) ? result.files : [];
+}
+
+export async function ensureProjectFile(path: string, content: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invokeTauri('ensure_project_file', { path, content });
+    return;
+  }
+
+  await postJson('/api/ensure-file', { path, content });
+}
+
+export async function saveProjectFile(path: string, content: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invokeTauri('save_project_file', { path, content });
+    return;
+  }
+
+  await postJson('/api/save', { path, content });
+}
+
+export async function readProjectFile(path: string, content: string): Promise<string> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<string>('read_project_file', { path, content });
+  }
+
+  const result = await postJson<{ content?: string }>('/api/read-file', { path, content });
+  return typeof result?.content === 'string' ? result.content : '';
+}
+
+export async function openProjectFile(path: string, content: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invokeTauri('open_project_file', { path, content });
+    return;
+  }
+
+  await postJson('/api/open-file', { path, content });
+}
+
+export async function deleteProjectFile(path: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invokeTauri('delete_project_file', { path });
+    return;
+  }
+
+  await postJson('/api/delete-file', { path });
+}
+
+export async function openProjectFolder(path: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invokeTauri('open_project_folder', { path });
+    return;
+  }
+
+  await postJson('/api/open-folder', { path });
+}

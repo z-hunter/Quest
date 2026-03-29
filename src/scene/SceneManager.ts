@@ -5,6 +5,7 @@ import { Actor } from '../entities/Actor';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { listProjectFiles } from '../platform/fileApi';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -603,19 +604,9 @@ export class SceneManager {
   }
 
   private async listSceneFiles(relativeDir: string): Promise<string[]> {
-    const response = await fetch('/api/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: relativeDir }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    const payload = (await response.json()) as { files?: Array<{ name: string; isDir: boolean }> };
     const files: string[] = [];
 
-    for (const item of payload.files || []) {
+    for (const item of await listProjectFiles(relativeDir)) {
       const joined = `${relativeDir}/${item.name}`.replace(/\\/g, '/');
       if (item.isDir) {
         const nested = await this.listSceneFiles(joined);

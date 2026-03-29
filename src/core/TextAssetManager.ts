@@ -2,6 +2,12 @@ import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../mechanics/parserTypes';
+import {
+  deleteProjectFile,
+  ensureProjectFile,
+  openProjectFile,
+  saveProjectFile,
+} from '../platform/fileApi';
 
 type TextAssetValue = string | string[];
 type TextAssetData = Record<string, TextAssetValue>;
@@ -751,33 +757,15 @@ export class TextAssetManager {
   }
 
   private async ensureFile(filePath: string, content: string): Promise<void> {
-    await fetch('/api/ensure-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
+    await ensureProjectFile(filePath, content);
   }
 
   private async saveFile(filePath: string, content: string): Promise<void> {
-    const response = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await saveProjectFile(filePath, content);
   }
 
   private async openFile(filePath: string, content: string): Promise<void> {
-    const response = await fetch('/api/open-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await openProjectFile(filePath, content);
   }
 
   async duplicateObjectAssetIfExists(
@@ -789,14 +777,7 @@ export class TextAssetManager {
     if (!sourceData) return;
 
     const targetPath = this.getObjectAssetProjectPath(targetObjectId);
-    const response = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: targetPath, content: JSON.stringify(sourceData, null, 2) }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await saveProjectFile(targetPath, JSON.stringify(sourceData, null, 2));
     this.objectCache.set(this.normalizeId(targetObjectId), sourceData);
   }
 
@@ -832,13 +813,6 @@ export class TextAssetManager {
   }
 
   private async deleteFile(filePath: string): Promise<void> {
-    const response = await fetch('/api/delete-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await deleteProjectFile(filePath);
   }
 }

@@ -120,6 +120,10 @@
       ],
       "layer": 0,
       "visible": true,
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": 27,
@@ -154,10 +158,11 @@
           "y": 194
         }
       ],
-      "script": ""
+      "script": "",
+      "parallax": 1
     },
     {
-      "name": "sub_sw_d1",
+      "name": "Drawer1",
       "type": "Triggerbox",
       "locked": false,
       "disabled": true,
@@ -200,7 +205,8 @@
           "y": -95
         }
       ],
-      "script": ""
+      "script": "",
+      "parallax": 1
     },
     {
       "name": "Trig_834",
@@ -215,7 +221,8 @@
       "layer": 0,
       "visible": true,
       "poly": [],
-      "script": ""
+      "script": "",
+      "parallax": 1
     },
     {
       "name": "sub_sw_d2",
@@ -261,7 +268,8 @@
           "y": -10.68627450980393
         }
       ],
-      "script": ""
+      "script": "",
+      "parallax": 1
     },
     {
       "name": "Desk",
@@ -353,7 +361,8 @@
           "y": 211
         }
       ],
-      "script": ""
+      "script": "",
+      "parallax": 1
     }
   ],
   "scaling": {
@@ -442,8 +451,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 100,
-      "y": 249,
+      "x": 122.64117647058825,
+      "y": 254.25294117647059,
       "width": 116.89999999999999,
       "height": 198.79999999999998,
       "baseWidth": 167,
@@ -454,7 +463,7 @@
       "color": "#00ff00",
       "scale": 0.7,
       "modelScale": 0.7,
-      "parallax": 1,
+      "parallax": 1.1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -481,19 +490,19 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 306.351468358703,
-      "y": 227.84447142883158,
-      "width": 119.88,
-      "height": 289.34,
-      "baseWidth": 162,
-      "baseHeight": 391,
+      "x": 260.16515497723515,
+      "y": 278.7942737814031,
+      "width": 71.03999999999999,
+      "height": 290.08,
+      "baseWidth": 96,
+      "baseHeight": 392,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-down.json",
+      "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0273839007520702,
+      "parallax": 1.0606498521447079,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -501,7 +510,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "down",
+      "direction": "left",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -629,6 +638,10 @@
       "components": [],
       "layer": 4,
       "visible": true,
+      "spatial": {
+        "parentNodeId": "Drawer1",
+        "relation": "in"
+      },
       "x": 136,
       "y": -4,
       "width": 614.4,
@@ -766,11 +779,15 @@
       "components": [
         {
           "type": "Subtrigger",
-          "target": "sub_sw_d1"
+          "target": "Drawer1"
         }
       ],
       "layer": 6,
       "visible": true,
+      "spatial": {
+        "parentNodeId": "Drawer1",
+        "relation": "in"
+      },
       "x": 135,
       "y": 66,
       "width": 614.4,
@@ -856,8 +873,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.9043373174802,
-      "y": 306.9284515529539,
+      "x": 222.90433731748013,
+      "y": 306.9284515529538,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -868,7 +885,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293817,
+      "parallax": 1.0790382036293815,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -985,41 +1002,6 @@
       "blur": 0
     },
     {
-      "name": "Drawer1",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "spatial": {
-        "parentNodeId": "Desk",
-        "relation": "in"
-      },
-      "x": 90.66834500947778,
-      "y": 120,
-      "width": 27.3,
-      "height": 27.3,
-      "baseWidth": 30,
-      "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.91,
-      "modelScale": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 0,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
       "name": "window1",
       "type": "Entity",
       "locked": false,
@@ -1062,30 +1044,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 251.56334401080537,
-      "y": 208.4319364013629,
+      "x": 205.5325999447441,
+      "y": 259.6370974644339,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 251.56334401080537,
-          "y": 208.4319364013629,
-          "p": 1.014733918039131
+          "x": 205.5325999447441,
+          "y": 259.6370974644339,
+          "p": 1.0481392167712738
         },
         {
-          "x": 347.5117635997495,
-          "y": 206.89308843779156,
-          "p": 1.013708687693266
+          "x": 301.78408001496064,
+          "y": 258.0399375612814,
+          "p": 1.0470849265106414
         },
         {
-          "x": 336.71084835449676,
-          "y": 252.9816450467687,
-          "p": 1.0437788529717444
+          "x": 282.1751116380275,
+          "y": 305.85435697469336,
+          "p": 1.0783361810292114
         },
         {
-          "x": 286.86923627068785,
-          "y": 251.03001469428833,
-          "p": 1.0425115398579803
+          "x": 232.70336503797736,
+          "y": 303.8294188921579,
+          "p": 1.0770126920863778
         }
       ],
       "color": "#000975",
@@ -1102,8 +1084,8 @@
     }
   ],
   "camera": {
-    "x": 297,
-    "y": 29,
+    "x": 226.41176470588238,
+    "y": 52.529411764705884,
     "zoom": 0.51
   },
   "autoCenter": false,

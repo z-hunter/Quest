@@ -21,6 +21,8 @@ import type { IGame } from './IGame';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 
+type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
+
 export class Game implements IGame {
   public static instance: Game;
 
@@ -92,6 +94,7 @@ export class Game implements IGame {
     crt: CRTSettings & { enabled: boolean };
     editor: {
       uiScale: number;
+      viewportZoom: EditorViewportZoom;
     };
   };
 
@@ -164,6 +167,7 @@ export class Game implements IGame {
       },
       editor: {
         uiScale: 1.0,
+        viewportZoom: 'fit',
       },
     };
 

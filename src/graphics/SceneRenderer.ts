@@ -147,7 +147,9 @@ export class SceneRenderer {
       // Triggerboxes - Show only if a Triggerbox is selected
       if (selected && selected.type === 'Triggerbox' && scene.triggerboxes) {
         scene.triggerboxes.forEach((tb) => {
-          this.renderDebugPolygon(ctx, tb, scene, 'rgba(255, 0, 0, 0.3)', 'rgba(255, 0, 0, 0.8)');
+          const fill = tb.disabled ? 'transparent' : 'rgba(255, 0, 0, 0.3)';
+          const stroke = tb.disabled ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 0, 0, 0.8)';
+          this.renderDebugPolygon(ctx, tb, scene, fill, stroke);
         });
       }
     }
@@ -351,7 +353,7 @@ export class SceneRenderer {
 
     ctx.fillStyle = fill;
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = obj?.disabled ? 1 : 2;
 
     ctx.beginPath();
     obj.poly.forEach((pt: any, i: number) => {
@@ -359,7 +361,9 @@ export class SceneRenderer {
       else ctx.lineTo(pt.x, pt.y);
     });
     ctx.closePath();
-    ctx.fill();
+    if (fill !== 'transparent') {
+      ctx.fill();
+    }
     ctx.stroke();
 
     ctx.restore();

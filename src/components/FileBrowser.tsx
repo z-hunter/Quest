@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { listProjectFiles, openProjectFolder } from '../platform/fileApi';
 
 interface FileBrowserProps {
   mode: 'save' | 'load';
@@ -45,30 +46,15 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
     // Clear filter when changing directory
     setFilterText('');
 
-    fetch('/api/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: currentPath }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`File API error (${res.status}): ${text || res.statusText}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data.files)) {
-          setItems(data.files);
-        } else {
-          setError('File API returned invalid payload.');
-        }
+    listProjectFiles(currentPath)
+      .then((files) => {
+        setItems(files);
       })
       .catch((err) => {
         const raw = String(err);
         if (raw.includes('Failed to fetch')) {
           setError(
-            `File API unavailable at ${window.location.origin}/api/list. Start app with 'npm run dev'.`
+            `File API is unavailable. Start the Vite dev server or run the desktop shell.`
           );
         } else {
           setError(raw);
@@ -290,11 +276,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
           </div>
           <button
             onClick={() => {
-              fetch('/api/open-folder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: currentPath }),
-              });
+              void openProjectFolder(currentPath);
             }}
             title="Open in System Explorer"
             className="e-btn"
