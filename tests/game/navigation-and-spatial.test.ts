@@ -63,4 +63,26 @@ describe('Game navigation and spatial API', () => {
     expect(empty.status).toBe('ok');
     expect(empty.message).toBe('You see nothing under the Desk.');
   });
+
+  it('describeSpatialRelation flattens untitled ancestors in the text layer', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'An office desk.',
+    });
+    fixture.addEntity('HiddenHolder', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('note', {
+      title: 'Piece of paper',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'HiddenHolder', relation: 'on' },
+    });
+
+    const populated = fixture.game.describeSpatialRelation('Desk', 'on');
+
+    expect(populated.status).toBe('ok');
+    expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+  });
 });

@@ -16,6 +16,8 @@ import type { GameActionOutcome } from './GameActionTypes';
 import { Console } from './Console';
 import { ScriptRegistry } from './ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import type { SwitchComponent } from '../systems/ComponentSystem';
+import { buildSceneTextLayerSnapshot, getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
 
 import type { IGame } from './IGame';
 import type { Scene } from '../scene/Scene';
@@ -534,17 +536,17 @@ export class Game implements IGame {
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
 
-    const placement = scene.getSpatialPlacementForObject(target);
-    if (!placement?.parentNodeId || !placement.relation) return null;
+    const textLayer = buildSceneTextLayerSnapshot(scene, this);
+    const entry = textLayer.entryById.get(target.name);
+    if (!entry?.effectiveParentId || !entry.effectiveRelation) return null;
 
-    const itemTitle = this.getPlayerFacingObjectTitle(target);
-    const parentNode = scene.getSpatialNode(placement.parentNodeId);
-    const parentTitle = parentNode?.title?.trim() || null;
+    const itemTitle = entry.title || this.getPlayerFacingObjectTitle(target);
+    const parentTitle = textLayer.entryById.get(entry.effectiveParentId)?.title?.trim() || null;
     if (!itemTitle || !parentTitle) return null;
 
     return this.text('parser.relation_contents', {
-      Relation: this.capitalize(this.getRelationDisplayText(placement.relation)),
-      relation: this.getRelationDisplayText(placement.relation),
+      Relation: this.capitalize(this.getRelationDisplayText(entry.effectiveRelation)),
+      relation: this.getRelationDisplayText(entry.effectiveRelation),
       target: parentTitle,
       items: itemTitle,
     });
@@ -571,6 +573,11 @@ export class Game implements IGame {
       };
     }
 
+    const blockedOutcome = this.getBlockedAccessOutcome(entity);
+    if (blockedOutcome) {
+      return blockedOutcome;
+    }
+
     if (scene.activeSubscene && scene.subsceneEntities.has(entity as any)) {
       return null;
     }
@@ -587,6 +594,127 @@ export class Game implements IGame {
     }
 
     return null;
+  }
+
+  private getSwitchComponent(entity: SceneObject): SwitchComponent | null {
+    const component = entity.components?.find((candidate: any) => candidate?.type === 'Switch');
+    return (component as SwitchComponent | undefined) || null;
+  }
+
+  private isSwitchTargetInInactiveSubscene(entity: SceneObject): boolean {
+    if (!this.getSwitchComponent(entity)) return false;
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return false;
+    return getInactiveSubsceneAncestors(scene, entity).length > 0;
+  }
+
+  private openInactiveAncestorSubscenes(entity: SceneObject): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const ancestors = getInactiveSubsceneAncestors(scene, entity);
+    for (const triggerbox of ancestors) {
+      const accessError = this.canExamineObject(triggerbox);
+      if (accessError) return accessError;
+      scene.activateObject(triggerbox);
+    }
+
+    return null;
+  }
+
+  private ensureSwitchTargetReady(entity: SceneObject): GameActionOutcome | null {
+    if (!this.isSwitchTargetInInactiveSubscene(entity)) return null;
+    return this.openInactiveAncestorSubscenes(entity);
+  }
+
+  private getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+    const entry = buildSceneTextLayerSnapshot(scene, this).entryById.get(entity.name);
+    if (!entry?.blocked) return null;
+    return {
+      status: 'failed',
+      code: 'blocked_inside_closed',
+      message: this.text('engine.blocked_inside_closed'),
+      data: { entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  private executeSwitchStateChange(
+    entity: SceneObject,
+    desiredState: 1 | 2
+  ): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
+    if (autoOpenOutcome) return autoOpenOutcome;
+
+    const switchComponent = this.getSwitchComponent(entity);
+    if (!switchComponent) {
+      return {
+        status: 'escalate',
+        code: 'target_is_not_switch',
+        recoverable: true,
+      };
+    }
+
+    const accessError = this.canExamineObject(entity);
+    if (accessError) return accessError;
+
+    const title = this.getPlayerFacingObjectTitle(entity);
+    if (!title) {
+      return {
+        status: 'escalate',
+        code: 'switch_missing_title',
+        recoverable: true,
+      };
+    }
+
+    const blocked = ComponentSystem.getSwitchLockError(entity, switchComponent, scene);
+    if (blocked) {
+      return {
+        status: 'failed',
+        code: blocked.code,
+        message: blocked.message,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const currentState = switchComponent.state === 2 ? 2 : 1;
+    if (currentState === desiredState) {
+      return {
+        status: 'failed',
+        code: desiredState === 2 ? 'switch_already_open' : 'switch_already_closed',
+        message: this.text(
+          desiredState === 2 ? 'parser.open_already' : 'parser.close_already',
+          { target: title }
+        ),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    ComponentSystem.applySwitchState(entity, switchComponent, scene, desiredState);
+
+    return {
+      status: 'ok',
+      code: desiredState === 2 ? 'switch_opened' : 'switch_closed',
+      message: this.text(desiredState === 2 ? 'parser.open_success' : 'parser.close_success', {
+        target: title,
+      }),
+      data: { entityId: entity.name, state: desiredState },
+      effects: [desiredState === 2 ? 'switch_opened' : 'switch_closed'],
+    };
   }
 
   lookScene(scene?: Scene | null): GameActionOutcome {
@@ -620,6 +748,9 @@ export class Game implements IGame {
   }
 
   lookEntity(entity: SceneObject): GameActionOutcome {
+    const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
+    if (autoOpenOutcome) return autoOpenOutcome;
+
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
     if (interactionId) {
@@ -665,6 +796,9 @@ export class Game implements IGame {
   }
 
   examineEntity(entity: SceneObject): GameActionOutcome {
+    const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
+    if (autoOpenOutcome) return autoOpenOutcome;
+
     const accessError = this.canExamineObject(entity);
     if (accessError) return accessError;
 
@@ -748,16 +882,8 @@ export class Game implements IGame {
       };
     }
 
-    const anchorNode = scene.getSpatialNode(anchorNodeId);
-    const anchorObject =
-      scene.entities.find((entity) => entity.name === anchorNodeId) ||
-      scene.triggerboxes.find((triggerbox) => triggerbox.name === anchorNodeId) ||
-      scene.walkbox.find((walkbox) => walkbox.name === anchorNodeId) ||
-      null;
-    const anchorTitle =
-      anchorNode?.title?.trim() ||
-      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject)?.trim() : null) ||
-      null;
+    const textLayer = buildSceneTextLayerSnapshot(scene, this);
+    const anchorTitle = textLayer.entryById.get(anchorNodeId)?.title?.trim() || null;
     if (!anchorTitle) {
       return {
         status: 'escalate',
@@ -766,10 +892,12 @@ export class Game implements IGame {
       };
     }
 
-    const childTitles = scene
-      .getDirectSpatialChildren(anchorNodeId, relation)
-      .map((child) => this.getPlayerFacingObjectTitle(child))
-      .filter((title): title is string => !!title);
+    const childTitles =
+      textLayer.childrenByParentAndRelation
+        .get(anchorNodeId)
+        ?.get(relation as Exclude<SpatialRelationType, 'near'>)
+        ?.map((entry) => entry.title)
+        .filter((title): title is string => !!title) || [];
 
     if (!childTitles.length) {
       return {
@@ -812,6 +940,12 @@ export class Game implements IGame {
         recoverable: false,
       };
     }
+
+    const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
+    if (autoOpenOutcome) return autoOpenOutcome;
+
+    const blockedOutcome = this.getBlockedAccessOutcome(entity);
+    if (blockedOutcome) return blockedOutcome;
 
     const interactionId =
       entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
@@ -1014,6 +1148,14 @@ export class Game implements IGame {
 
   showMessage(text: string): void {
     this.log(text);
+  }
+
+  openEntity(entity: SceneObject): GameActionOutcome {
+    return this.executeSwitchStateChange(entity, 2);
+  }
+
+  closeEntity(entity: SceneObject): GameActionOutcome {
+    return this.executeSwitchStateChange(entity, 1);
   }
 
   bindUI(): void {

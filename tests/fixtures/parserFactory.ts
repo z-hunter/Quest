@@ -76,6 +76,46 @@ export function createParserFixture(): ParserFixture {
     return { status: 'escalate', code: 'missing_details', recoverable: true };
   };
 
+  fixture.game.openEntity = (entity: Entity) => {
+    const switchComponent = entity.components?.find((component: any) => component?.type === 'Switch') as
+      | { state?: number; idKey?: string }
+      | undefined;
+    if (!switchComponent) {
+      return { status: 'escalate', code: 'target_is_not_switch', recoverable: true };
+    }
+    const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
+    if ((switchComponent.state || 1) === 2) {
+      return {
+        status: 'failed',
+        code: 'switch_already_open',
+        message: fixture.game.text('parser.open_already', { target: title }),
+        recoverable: true,
+      };
+    }
+    switchComponent.state = 2;
+    return okOutcome('switch_opened', fixture.game.text('parser.open_success', { target: title }));
+  };
+
+  fixture.game.closeEntity = (entity: Entity) => {
+    const switchComponent = entity.components?.find((component: any) => component?.type === 'Switch') as
+      | { state?: number; idKey?: string }
+      | undefined;
+    if (!switchComponent) {
+      return { status: 'escalate', code: 'target_is_not_switch', recoverable: true };
+    }
+    const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
+    if ((switchComponent.state || 1) === 1) {
+      return {
+        status: 'failed',
+        code: 'switch_already_closed',
+        message: fixture.game.text('parser.close_already', { target: title }),
+        recoverable: true,
+      };
+    }
+    switchComponent.state = 1;
+    return okOutcome('switch_closed', fixture.game.text('parser.close_success', { target: title }));
+  };
+
   fixture.game.takeEntity = (entity: Entity) => {
     const error = ComponentSystem.canTakeItem(entity as any, fixture.scene.player);
     if (error) {

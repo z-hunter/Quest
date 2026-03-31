@@ -77,6 +77,8 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Sound 1': 'Sound played when the switch moves into state 1.',
   'Sound 2': 'Sound played when the switch moves into state 2.',
   State: 'Current switch state used as the starting state in the editor and at runtime.',
+  Transparent:
+    'If enabled, closed contents remain visible to LOOK, but stay blocked for interaction until the switch opens.',
   'Shadow Quad ID':
     'Quad that receives or shapes this shadow effect.',
   'Offset X': 'Horizontal offset applied by the component or effect.',
@@ -2512,6 +2514,7 @@ export const PropertiesPanel: React.FC = () => {
                         idKey: '',
                         sound1: '',
                         sound2: '',
+                        transparent: false,
                       });
                     } else if (type === 'Backface') {
                       obj.components.push({
@@ -2928,6 +2931,20 @@ export const PropertiesPanel: React.FC = () => {
                             }}
                           />
                         </div>
+                      </div>
+
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!comp.transparent}
+                            onChange={(e) => {
+                              comp.transparent = e.target.checked;
+                              incrementObjectVersion();
+                            }}
+                          />{' '}
+                          Transparent
+                        </label>
                       </div>
 
                       <div

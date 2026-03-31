@@ -1,6 +1,6 @@
 import type { ParserRelationType } from './parserTypes';
 
-export type ParserIntentId = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
+export type ParserIntentId = 'look' | 'examine' | 'take' | 'open' | 'close' | 'goTo' | 'showInventory';
 
 export type ParserLexiconAsset = {
   stage1Aliases: Record<ParserIntentId, string[]>;
@@ -73,7 +73,7 @@ export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): S
   if (!trimmed) return null;
   const lowered = trimmed.toLowerCase();
 
-  const intents: ParserIntentId[] = ['look', 'examine', 'take', 'showInventory', 'goTo'];
+  const intents: ParserIntentId[] = ['look', 'examine', 'take', 'open', 'close', 'showInventory', 'goTo'];
   for (const intent of intents) {
     const aliases = sortByLengthDesc(lexicon.stage1Aliases[intent] || []);
     for (const alias of aliases) {

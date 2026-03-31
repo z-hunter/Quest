@@ -38,7 +38,7 @@ export type ParserSpatialRelationContext = {
 };
 
 export type ParserPendingState = {
-  intent: 'look' | 'examine' | 'take' | 'goTo' | 'custom';
+  intent: 'look' | 'examine' | 'take' | 'open' | 'close' | 'goTo' | 'custom';
   question: string;
   originalInput: string;
   pendingEnvelopeJson?: string;
@@ -166,6 +166,14 @@ export type ParserToolAction =
     }
   | {
       type: 'takeTarget';
+      target: string | null;
+    }
+  | {
+      type: 'openTarget';
+      target: string | null;
+    }
+  | {
+      type: 'closeTarget';
       target: string | null;
     }
   | {

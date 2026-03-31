@@ -40,4 +40,33 @@ describe('Parser + game integration smoke', () => {
 
     expect(result.messages.at(-1)).toBe('You are too far away from the Boombox.');
   });
+
+  it('supports OPEN and CLOSE for reachable switches', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [{ type: 'Switch', state: 1 }],
+    });
+
+    const openResult = await fixture.run('open drawer');
+    expect(openResult.messages.at(-1)).toBe('You open the Drawer.');
+
+    const closeResult = await fixture.run('close drawer');
+    expect(closeResult.messages.at(-1)).toBe('You close the Drawer.');
+  });
+
+  it('elevates OPEN on non-switch objects to the next parser cascade', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Chair', {
+      title: 'Chair',
+      description: 'A wooden chair.',
+    });
+
+    const result = await fixture.run('open chair');
+
+    expect(result.messages.at(-1)).toBe("I don't understand.");
+  });
 });

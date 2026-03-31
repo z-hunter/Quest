@@ -55,4 +55,66 @@ describe('Parser world model context', () => {
     expect(nestedContext && 'y' in nestedContext).toBe(false);
     expect(nestedContext && 'reachable' in nestedContext).toBe(false);
   });
+
+  it('flattens untitled ancestors and hides opaque switch descendants while keeping transparent ones visible-only', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('HiddenHolder', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('Note', {
+      title: 'Note',
+      description: 'A hidden note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'HiddenHolder', relation: 'in' },
+    });
+    fixture.addEntity('FalseBottom', {
+      title: null,
+      components: [{ type: 'Switch', state: 1 }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('SecretCoin', {
+      title: 'Secret coin',
+      description: 'A concealed coin.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'FalseBottom', relation: 'in' },
+    });
+    fixture.addEntity('GlassBox', {
+      title: null,
+      components: [{ type: 'Switch', state: 1, transparent: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('VisibleGem', {
+      title: 'Visible gem',
+      description: 'A gem behind glass.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'GlassBox', relation: 'in' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look desk', null);
+
+    expect(model.context.entities?.some((entity) => entity.id === 'Note')).toBe(true);
+    expect(model.context.entities?.some((entity) => entity.id === 'SecretCoin')).toBe(false);
+    expect(model.context.entities?.some((entity) => entity.id === 'VisibleGem')).toBe(true);
+
+    expect(model.scope.visible.map((entity) => entity.name)).toContain('VisibleGem');
+    expect(model.scope.takable.map((entity) => entity.name)).not.toContain('VisibleGem');
+    expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('VisibleGem');
+
+    expect(model.context.spatialRelations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anchorNodeId: 'Desk',
+          relation: 'in',
+          childNodeIds: expect.arrayContaining(['Note', 'VisibleGem']),
+        }),
+      ])
+    );
+  });
 });

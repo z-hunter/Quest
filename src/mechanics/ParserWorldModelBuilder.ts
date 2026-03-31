@@ -2,13 +2,13 @@ import type { Game } from '../core/Game';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
+import { buildSceneTextLayerSnapshot } from '../scene/SceneTextLayer';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
   ParserEntityContext,
   ParserInventoryItemContext,
   ParserPendingState,
-  ParserRelationType,
   ParserScope,
   ParserSpatialNodeContext,
   ParserSpatialRelationContext,
@@ -74,24 +74,25 @@ export class ParserWorldModelBuilder {
   }
 
   private buildEntityContexts(scene: Scene): ParserEntityContext[] {
-    const sceneObjects: SceneObject[] = [...(scene.entities || []), ...(scene.triggerboxes || [])];
-    return sceneObjects
-      .map((sceneObject) => {
-        const title = this.getPlayerFacingObjectTitle(sceneObject);
-        if (!title) return null;
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    return textLayer.entries
+      .map((entry) => {
+        const sceneObject = entry.object;
         const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
         const interactions = Object.keys(sceneObject.interactions || {});
         const isItem = !!sceneObject.components?.find((component: any) => component?.type === 'Item');
-        const isDirectSceneObject = this.isDirectSceneObject(scene, sceneObject);
+        const isDirectSceneObject = !entry.effectiveParentId;
         const coordinates = isDirectSceneObject ? this.getSceneObjectCoordinates(sceneObject) : undefined;
         const reachable =
           isDirectSceneObject &&
+          !entry.blocked &&
+          !entry.inInactiveSubscene &&
           !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
             ? true
             : undefined;
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
-          title,
+          title: entry.title,
           item: isItem || undefined,
           reachable,
           ...coordinates,
@@ -123,51 +124,37 @@ export class ParserWorldModelBuilder {
   }
 
   private buildSpatialNodes(scene: Scene): ParserSpatialNodeContext[] {
-    const descriptors = scene.getSpatialNodeDescriptors();
-    const spatialIndex = scene.getSpatialIndex();
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
     const connectedNodeIds = new Set<string>();
-    for (const [parentId, children] of spatialIndex.childrenByParentId.entries()) {
+    for (const [parentId, children] of textLayer.childrenByParentId.entries()) {
       if (children.length) connectedNodeIds.add(parentId);
       for (const child of children) {
-        connectedNodeIds.add(child.id);
+        connectedNodeIds.add(child.object.name);
       }
     }
 
-    return descriptors
-      .filter((descriptor) => connectedNodeIds.has(descriptor.id))
-      .map((descriptor) => {
-        if (descriptor.kind === 'entity') {
-          return this.compactRecord<ParserSpatialNodeContext>({
-            id: descriptor.id,
-            parentNodeId: descriptor.placement?.parentNodeId || undefined,
-            relation:
-              (descriptor.placement?.relation as Exclude<ParserRelationType, 'near'> | null) ||
-              undefined,
-          });
-        }
-
-        return this.compactRecord<ParserSpatialNodeContext>({
-          id: descriptor.id,
-          subscene: true,
-          title: descriptor.title || undefined,
-          parentNodeId: descriptor.placement?.parentNodeId || undefined,
-          relation:
-            (descriptor.placement?.relation as Exclude<ParserRelationType, 'near'> | null) ||
-            undefined,
-        });
-      });
+    return textLayer.entries
+      .filter((entry) => connectedNodeIds.has(entry.object.name))
+      .map((entry) =>
+        this.compactRecord<ParserSpatialNodeContext>({
+          id: entry.object.name,
+          title: entry.title || undefined,
+          parentNodeId: entry.effectiveParentId || undefined,
+          relation: entry.effectiveRelation || undefined,
+        })
+      );
   }
 
   private buildSpatialRelations(scene: Scene): ParserSpatialRelationContext[] {
-    const spatialIndex = scene.getSpatialIndex();
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
     const relations: ParserSpatialRelationContext[] = [];
 
-    for (const [anchorNodeId, relationMap] of spatialIndex.childrenByParentAndRelation.entries()) {
+    for (const [anchorNodeId, relationMap] of textLayer.childrenByParentAndRelation.entries()) {
       for (const [relation, nodes] of relationMap.entries()) {
         relations.push({
           anchorNodeId,
           relation,
-          childNodeIds: nodes.map((node) => node.id),
+          childNodeIds: nodes.map((node) => node.object.name),
         });
       }
     }
@@ -178,13 +165,15 @@ export class ParserWorldModelBuilder {
   private buildScope(): ParserScope {
     const scene = this.game.sceneManager.currentScene;
     const visible = scene ? this.getTextVisibleSceneObjects(scene) : [];
+    const textLayer = scene ? buildSceneTextLayerSnapshot(scene, this.game) : null;
     const held = (this.game.inventory || []).filter(
       (entity: Entity) => !!this.getPlayerFacingObjectTitle(entity)
     );
     const takable = visible.filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity).filter((entity: Entity) => {
       const isItem =
         entity.components && entity.components.find((component: any) => component.type === 'Item');
-      return !!isItem || !!entity.isTakeable;
+      const entry = textLayer?.entryById.get(entity.name);
+      return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
     });
     const subscene = scene?.activeSubscene
       ? visible.filter((sceneObject: SceneObject) => scene.subsceneEntities.has(sceneObject as any))
@@ -192,6 +181,7 @@ export class ParserWorldModelBuilder {
     const reachable = scene
       ? visible.filter(
           (sceneObject: SceneObject) =>
+            !textLayer?.entryById.get(sceneObject.name)?.blocked &&
             !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
         )
       : [];
@@ -207,19 +197,15 @@ export class ParserWorldModelBuilder {
   }
 
   private getTextVisibleSceneObjects(scene: Scene): SceneObject[] {
-    return [...(scene.entities || []), ...(scene.triggerboxes || [])].filter(
-      (sceneObject: SceneObject) => !sceneObject.disabled && !!this.getPlayerFacingObjectTitle(sceneObject)
-    );
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    return textLayer.entries
+      .filter((entry) => !entry.inInactiveSubscene && !entry.object.disabled)
+      .map((entry) => entry.object);
   }
 
   private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
     const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
-  }
-
-  private isDirectSceneObject(scene: Scene, sceneObject: SceneObject): boolean {
-    const placement = scene.getSpatialPlacementForObject(sceneObject);
-    return !placement?.parentNodeId;
   }
 
   private getSceneObjectCoordinates(sceneObject: SceneObject): { x: number; y: number } | undefined {

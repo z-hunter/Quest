@@ -12,6 +12,7 @@ import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { buildSceneTextLayerSnapshot, getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
 import type {
   ParserCascadeEnvelope,
   ParserCommandActionSpec,
@@ -166,6 +167,10 @@ export class Parser {
             ? 'examineTarget'
             : this.pendingState.intent === 'take'
               ? 'takeTarget'
+              : this.pendingState.intent === 'open'
+                ? 'openTarget'
+                : this.pendingState.intent === 'close'
+                  ? 'closeTarget'
               : 'goToTarget',
       target: input.trim(),
     };
@@ -268,6 +273,52 @@ export class Parser {
                 type: 'takeTarget',
                 target:
                   normalizeTargetForIntent(input, 'take', lexicon) ||
+                  match?.remainder ||
+                  noun ||
+                  null,
+              },
+            ],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
+      case 'open':
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [
+              {
+                type: 'openTarget',
+                target:
+                  normalizeTargetForIntent(input, 'open', lexicon) ||
+                  match?.remainder ||
+                  noun ||
+                  null,
+              },
+            ],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
+      case 'close':
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [
+              {
+                type: 'closeTarget',
+                target:
+                  normalizeTargetForIntent(input, 'close', lexicon) ||
                   match?.remainder ||
                   noun ||
                   null,
@@ -472,6 +523,10 @@ export class Parser {
         return this.resolveRelationTarget('examine', action.relation, action.anchor);
       case 'takeTarget':
         return this.resolveTakeTarget(action.target);
+      case 'openTarget':
+        return this.resolveOpenCloseTarget('open', action.target);
+      case 'closeTarget':
+        return this.resolveOpenCloseTarget('close', action.target);
       case 'showInventory':
         return this.game.showInventory();
       case 'goToTarget':
@@ -524,6 +579,10 @@ export class Parser {
         return 'examineRelation';
       case 'takeTarget':
         return 'take';
+      case 'openTarget':
+        return 'open';
+      case 'closeTarget':
+        return 'close';
       case 'showInventory':
         return 'showInventory';
       case 'goToTarget':
@@ -846,6 +905,28 @@ export class Parser {
     };
   }
 
+  private resolveInactiveSubsceneSwitchTarget(
+    rawTarget: string
+  ):
+    | { status: 'found'; entity: SceneObject }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return { status: 'not_found' };
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+
+    const candidates = [...scene.entities, ...scene.triggerboxes].filter((sceneObject: SceneObject) => {
+      if (!sceneObject.components?.some((component: any) => component?.type === 'Switch')) {
+        return false;
+      }
+      if (!textLayer.entryById.has(sceneObject.name)) return false;
+      return getInactiveSubsceneAncestors(scene, sceneObject).length > 0;
+    });
+
+    return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
+  }
+
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
@@ -856,6 +937,22 @@ export class Parser {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
     if (resolved.status === 'not_found') {
+      const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
+      if (inactiveSwitchResolved.status === 'found') {
+        return this.game.lookEntity(inactiveSwitchResolved.entity as any);
+      }
+      if (inactiveSwitchResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_look_target',
+          message: inactiveSwitchResolved.message,
+          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          recoverable: true,
+        };
+      }
+      if (inactiveSwitchResolved.status === 'escalate') {
+        return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -917,6 +1014,22 @@ export class Parser {
       }
       if (broadResolved?.status === 'found') {
         return this.game.examineEntity(broadResolved.entity as any);
+      }
+      const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
+      if (inactiveSwitchResolved.status === 'found') {
+        return this.game.examineEntity(inactiveSwitchResolved.entity as any);
+      }
+      if (inactiveSwitchResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_examine_target',
+          message: inactiveSwitchResolved.message,
+          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          recoverable: true,
+        };
+      }
+      if (inactiveSwitchResolved.status === 'escalate') {
+        return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
       }
       return {
         status: 'failed',
@@ -1064,6 +1177,22 @@ export class Parser {
           recoverable: true,
         };
       }
+      const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
+      if (inactiveSwitchResolved.status === 'found') {
+        return this.game.takeEntity(inactiveSwitchResolved.entity as Entity);
+      }
+      if (inactiveSwitchResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_take_target',
+          message: inactiveSwitchResolved.message,
+          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          recoverable: true,
+        };
+      }
+      if (inactiveSwitchResolved.status === 'escalate') {
+        return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -1082,6 +1211,110 @@ export class Parser {
       };
     }
     return this.game.takeEntity(resolved.entity as Entity);
+  }
+
+  private resolveOpenCloseTarget(
+    intent: 'open' | 'close',
+    rawTarget: string | null
+  ): GameActionOutcome {
+    if (!rawTarget) {
+      return {
+        status: 'needs_clarification',
+        code: intent === 'open' ? 'missing_open_target' : 'missing_close_target',
+        message: this.game.text(intent === 'open' ? 'parser.open_prompt' : 'parser.close_prompt'),
+        recoverable: true,
+      };
+    }
+
+    const clarificationKey =
+      intent === 'open' ? 'parser.open_which_one' : 'parser.close_which_one';
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(['reachable']),
+      clarificationKey
+    );
+    const broadResolved =
+      resolved.status === 'not_found'
+        ? this.resolveEntityTargetInCandidates(
+            rawTarget,
+            this.getScopeCandidates(['visible']),
+            clarificationKey
+          )
+        : null;
+
+    if (resolved.status === 'escalate' || broadResolved?.status === 'escalate') {
+      return {
+        status: 'escalate',
+        code:
+          resolved.status === 'escalate'
+            ? resolved.code
+            : broadResolved?.status === 'escalate'
+              ? broadResolved.code
+              : 'switch_target_resolution_failed',
+        recoverable: true,
+      };
+    }
+
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
+        message: resolved.message,
+        data: { target: rawTarget, options: resolved.options },
+        recoverable: true,
+      };
+    }
+
+    if (resolved.status === 'not_found') {
+      if (broadResolved?.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
+          message: broadResolved.message,
+          data: { target: rawTarget, options: broadResolved.options },
+          recoverable: true,
+        };
+      }
+      if (broadResolved?.status === 'found') {
+        return this.getOpenCloseOutcome(intent, broadResolved.entity);
+      }
+      const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
+      if (inactiveSwitchResolved.status === 'found') {
+        return this.getOpenCloseOutcome(intent, inactiveSwitchResolved.entity);
+      }
+      if (inactiveSwitchResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
+          message: inactiveSwitchResolved.message,
+          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          recoverable: true,
+        };
+      }
+      if (inactiveSwitchResolved.status === 'escalate') {
+        return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      return {
+        status: 'failed',
+        code: 'entity_not_found',
+        message: this.game.text('parser.look_not_found', { target: rawTarget }),
+        data: { target: rawTarget },
+        recoverable: true,
+      };
+    }
+
+    return this.getOpenCloseOutcome(intent, resolved.entity);
+  }
+
+  private getOpenCloseOutcome(intent: 'open' | 'close', entity: SceneObject): GameActionOutcome {
+    if (!entity.components?.some((component: any) => component?.type === 'Switch')) {
+      return {
+        status: 'escalate',
+        code: 'target_is_not_switch',
+        recoverable: true,
+      };
+    }
+    return intent === 'open' ? this.game.openEntity(entity as any) : this.game.closeEntity(entity as any);
   }
 
   private resolveGoToTarget(rawTarget: string | null): GameActionOutcome {
@@ -1490,7 +1723,7 @@ export class Parser {
     }
   }
 
-  private extractPendingIntent(actionJson: string): 'look' | 'examine' | 'take' | 'goTo' {
+  private extractPendingIntent(actionJson: string): 'look' | 'examine' | 'take' | 'open' | 'close' | 'goTo' {
     try {
       const envelope = JSON.parse(actionJson) as ParserCascadeEnvelope;
       if (envelope.output.kind !== 'plan') {
@@ -1504,6 +1737,8 @@ export class Parser {
           firstAction.type === 'examineTarget' ||
           firstAction.type === 'examineRelationTarget' ||
           firstAction.type === 'takeTarget' ||
+          firstAction.type === 'openTarget' ||
+          firstAction.type === 'closeTarget' ||
           firstAction.type === 'goToTarget')
       ) {
         return firstAction.type === 'lookTarget'
@@ -1516,6 +1751,10 @@ export class Parser {
                 ? 'examine'
                 : firstAction.type === 'takeTarget'
                   ? 'take'
+                  : firstAction.type === 'openTarget'
+                    ? 'open'
+                    : firstAction.type === 'closeTarget'
+                      ? 'close'
                   : 'goTo';
       }
     } catch {

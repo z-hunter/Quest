@@ -24,6 +24,7 @@ export interface SwitchComponent {
   sound2?: string;
   groupId1?: string;
   groupId2?: string;
+  transparent?: boolean;
 }
 
 export interface SubtriggerComponent {
@@ -285,73 +286,82 @@ export class ComponentSystem {
     sw: SwitchComponent,
     scene: ActivationSceneContext
   ): boolean {
-    // 1. Check Key
-    if (sw.idKey) {
-      const game = scene.game as unknown as IGame;
-      if (game && game.inventory) {
-        const hasKey = game.inventory.some(
-          (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-        );
-        if (!hasKey) {
-          const keyEntity =
-            game.inventory.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            ) ||
-            scene.entities.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            ) ||
-            scene.triggerboxes.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            );
-          const keyTitle = keyEntity
-            ? this.getPlayerFacingTitle(game, keyEntity as SceneObject)
-            : null;
-          game.showMessage(
-            keyTitle
-              ? game.text('engine.locked_needs', { item: keyTitle })
-              : game.text('engine.locked_generic')
-          );
-          return true; // Handled (Blocked)
-        }
-      }
+    const blocked = this.getSwitchLockError(entity, sw, scene);
+    if (blocked) {
+      (scene.game as unknown as IGame).showMessage(blocked.message);
+      return true;
     }
 
-    // 2. Toggle State
-    // Default to state 1 if undefined
-    const currentState = sw.state || 1;
+    const currentState = sw.state === 2 ? 2 : 1;
     const nextState = currentState === 1 ? 2 : 1;
+    this.applySwitchState(entity, sw, scene, nextState);
+    return true;
+  }
+
+  static getSwitchLockError(
+    _entity: SceneObject,
+    sw: SwitchComponent,
+    scene: ActivationSceneContext
+  ): { code: 'switch_locked'; message: string } | null {
+    if (!sw.idKey) return null;
+
+    const game = scene.game as unknown as IGame;
+    if (!game?.inventory) return null;
+
+    const hasKey = game.inventory.some(
+      (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+    );
+    if (hasKey) return null;
+
+    const keyEntity =
+      game.inventory.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      ) ||
+      scene.entities.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      ) ||
+      scene.triggerboxes.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      );
+    const keyTitle = keyEntity ? this.getPlayerFacingTitle(game, keyEntity as SceneObject) : null;
+
+    return {
+      code: 'switch_locked',
+      message: keyTitle
+        ? game.text('engine.locked_needs', { item: keyTitle })
+        : game.text('engine.locked_generic'),
+    };
+  }
+
+  static applySwitchState(
+    entity: SceneObject,
+    sw: SwitchComponent,
+    scene: ActivationSceneContext,
+    nextState: 1 | 2
+  ): void {
     sw.state = nextState;
 
-    // 3. Audio
     const game = scene.game as unknown as IGame;
-    if (game) {
-      if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
-      if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
-    }
+    if (nextState === 1 && sw.sound1) game?.playSound(sw.sound1);
+    if (nextState === 2 && sw.sound2) game?.playSound(sw.sound2);
 
-    // 4. Update Targets
     const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
     const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
 
-    // Resolve
-    if (scene.resolveTarget) {
-      const toShow = scene.resolveTarget(targetStrShow || '');
-      const toHide = scene.resolveTarget(targetStrHide || '');
+    if (!scene.resolveTarget) return;
 
-      toShow.forEach((t) => {
-        t.disabled = false;
-        if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(t);
-      });
+    const toShow = scene.resolveTarget(targetStrShow || '');
+    const toHide = scene.resolveTarget(targetStrHide || '');
 
-      toHide.forEach((t) => {
-        // Don't disable self if self is in target list (safety)
-        if (t === entity) return;
+    toShow.forEach((target) => {
+      target.disabled = false;
+      if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(target);
+    });
 
-        t.disabled = true;
-        if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(t);
-      });
-    }
-
-    return true; // Handled
+    toHide.forEach((target) => {
+      if (target === entity) return;
+      target.disabled = true;
+      if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(target);
+    });
   }
 }

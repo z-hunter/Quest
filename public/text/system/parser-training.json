@@ -48,6 +48,22 @@
     "i want to take the key",
     "please pick up the card"
   ],
+  "open": [
+    "open",
+    "open drawer",
+    "open desk drawer",
+    "open cabinet",
+    "open the drawer",
+    "open the compartment"
+  ],
+  "close": [
+    "close",
+    "close drawer",
+    "close desk drawer",
+    "shut drawer",
+    "close the drawer",
+    "shut the compartment"
+  ],
   "goTo": [
     "go",
     "go office",

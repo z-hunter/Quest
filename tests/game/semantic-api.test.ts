@@ -91,4 +91,81 @@ describe('Game semantic API', () => {
     expect(missing.status).toBe('failed');
     expect(missing.code).toBe('inventory_item_not_found');
   });
+
+  it('openEntity and closeEntity mirror switch state changes', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 1, sound2: 'open.wav', sound1: 'close.wav' }],
+    });
+
+    const opened = fixture.game.openEntity(drawer);
+    expect(opened.status).toBe('ok');
+    expect(opened.message).toBe('You open the Drawer.');
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+    expect(fixture.sounds).toContain('open.wav');
+
+    const alreadyOpen = fixture.game.openEntity(drawer);
+    expect(alreadyOpen.status).toBe('failed');
+    expect(alreadyOpen.code).toBe('switch_already_open');
+
+    const closed = fixture.game.closeEntity(drawer);
+    expect(closed.status).toBe('ok');
+    expect(closed.message).toBe('You close the Drawer.');
+    expect((drawer.components[0] as { state: number }).state).toBe(1);
+    expect(fixture.sounds).toContain('close.wav');
+  });
+
+  it('openEntity blocks interaction with transparent closed contents', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('GlassBox', {
+      title: null,
+      components: [{ type: 'Switch', state: 1, transparent: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const gem = fixture.addEntity('Gem', {
+      title: 'Gem',
+      description: 'A gem behind glass.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'GlassBox', relation: 'in' },
+    });
+
+    const outcome = fixture.game.examineEntity(gem);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('blocked_inside_closed');
+  });
+
+  it('auto-opens inactive ancestor subscene before operating on a titled switch target', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const latch = fixture.addEntity('Latch', {
+      title: 'Drawer latch',
+      description: 'A small latch.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Switch', state: 1 }],
+    });
+
+    const outcome = fixture.game.openEntity(latch);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('You open the Drawer latch.');
+    expect(fixture.scene.activeSubscene).toBe('DrawerZone');
+    expect(fixture.scene.subsceneEntities.has(latch)).toBe(true);
+    expect((latch.components[0] as { state: number }).state).toBe(2);
+    expect(drawerZone.disabled).toBe(false);
+  });
 });

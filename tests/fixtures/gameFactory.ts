@@ -82,6 +82,12 @@ export function createTestGame(): TestGameHarness {
     examineEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_examine_entity');
     },
+    openEntity(_entity: Entity) {
+      return notImplementedOutcome('not_implemented_open_entity');
+    },
+    closeEntity(_entity: Entity) {
+      return notImplementedOutcome('not_implemented_close_entity');
+    },
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
     },

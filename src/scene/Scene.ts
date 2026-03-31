@@ -327,6 +327,16 @@ export class Scene {
     }
   }
 
+  getAllSceneObjects(): SceneObject[] {
+    return [...this.entities, ...this.walkbox, ...this.triggerboxes];
+  }
+
+  getObjectByName(name: string): SceneObject | null {
+    const normalized = String(name || '').trim();
+    if (!normalized) return null;
+    return this.getAllSceneObjects().find((obj) => obj.name === normalized) || null;
+  }
+
   playPickupAnimation(entity: Entity): void {
     const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
     clone.disabled = false;

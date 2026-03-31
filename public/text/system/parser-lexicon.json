@@ -3,6 +3,8 @@
     "look": ["look"],
     "examine": ["examine", "inspect", "check"],
     "take": ["take", "get", "pickup", "pick up"],
+    "open": ["open"],
+    "close": ["close", "shut"],
     "goTo": ["go", "walk", "move"],
     "showInventory": ["inventory", "inv"]
   },
@@ -19,6 +21,8 @@
       "check"
     ],
     "take": ["pick up", "take", "get", "grab"],
+    "open": ["open"],
+    "close": ["close", "shut"],
     "goTo": [
       "go over to",
       "walk over to",

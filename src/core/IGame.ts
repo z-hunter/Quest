@@ -25,6 +25,8 @@ export interface IGame {
   lookEntity(entity: SceneObject): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
   examineEntity(entity: SceneObject): GameActionOutcome;
+  openEntity(entity: SceneObject): GameActionOutcome;
+  closeEntity(entity: SceneObject): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
