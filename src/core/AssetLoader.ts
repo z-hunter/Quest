@@ -150,10 +150,12 @@ export class AssetLoader {
       const spriteKey = this.normalizeSpriteKey(rawSpriteKey);
       if (!spriteKey) continue;
       const { image } = await this.loadSprite(spriteKey);
-      const imagePath = this.spriteToImagePath.get(spriteKey) || image.currentSrc || image.src || spriteKey;
+      const imagePath =
+        this.spriteToImagePath.get(spriteKey) || image.currentSrc || image.src || spriteKey;
       if (uniqueImages.has(imagePath)) continue;
       uniqueImages.add(imagePath);
-      bytes += (image.naturalWidth || image.width || 0) * (image.naturalHeight || image.height || 0) * 4;
+      bytes +=
+        (image.naturalWidth || image.width || 0) * (image.naturalHeight || image.height || 0) * 4;
     }
 
     return {
@@ -212,7 +214,8 @@ export class AssetLoader {
       img.onload = () => {
         const entry: ImageCacheEntry = {
           image: img,
-          estimatedBytes: (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4,
+          estimatedBytes:
+            (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4,
           lastAccessed: Date.now(),
           refSceneIds: new Set<string>(),
           state: 'cold',
@@ -238,7 +241,7 @@ export class AssetLoader {
   async loadSprite(spriteName: string): Promise<SpriteData> {
     const normalizedSpriteKey = this.normalizeSpriteKey(spriteName);
 
-    let filename = normalizedSpriteKey;
+    const filename = normalizedSpriteKey;
     let jsonPath = filename;
     if (jsonPath.startsWith('public/')) {
       jsonPath = '/' + jsonPath.substring(7);
