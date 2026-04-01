@@ -26,6 +26,7 @@ export interface SwitchTrigger extends TriggerComponent {
   sound1?: string; // Sound when switching TO state 1? Or from? GDD says "sound names for opening/closing".
   sound2?: string;
   transparent?: boolean;
+  clearlyOpenable?: boolean;
 }
 
 export type AnyTriggerComponent = SubsceneTrigger | SwitchTrigger | Subtrigger;
@@ -72,6 +73,7 @@ export function normalizeTriggerComponent(component: any): AnyTriggerComponent |
       ...(typeof component.sound1 === 'string' ? { sound1: component.sound1 } : {}),
       ...(typeof component.sound2 === 'string' ? { sound2: component.sound2 } : {}),
       ...(component.transparent === true ? { transparent: true } : {}),
+      ...(component.clearlyOpenable === true ? { clearlyOpenable: true } : {}),
       ...(typeof component.name === 'string' ? { name: component.name } : {}),
     };
   }

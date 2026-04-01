@@ -16,6 +16,20 @@ export type SceneTextLayerEntry = {
   inInactiveSubscene: boolean;
 };
 
+export type SceneTextLayerAccessState = {
+  object: SceneObject;
+  title: string | null;
+  effectiveParentId: string | null;
+  effectiveRelation: EffectiveRelation | null;
+  blocked: boolean;
+  hidden: boolean;
+  inInactiveSubscene: boolean;
+  gatingSwitch: SceneObject | null;
+  gatingSwitchTitle: string | null;
+  gatingSwitchTransparent: boolean;
+  gatingSwitchClearlyOpenable: boolean;
+};
+
 export type SceneTextLayerSnapshot = {
   entries: SceneTextLayerEntry[];
   entryById: Map<string, SceneTextLayerEntry>;
@@ -85,6 +99,80 @@ export function getInactiveSubsceneAncestors(scene: Scene, object: SceneObject):
     .filter((candidate): candidate is Triggerbox => !!candidate && isSubsceneTriggerbox(candidate));
 }
 
+export function getSceneTextLayerAccessState(
+  scene: Scene,
+  game: IGame,
+  object: SceneObject,
+  objectById?: Map<string, SceneObject>,
+  titleById?: Map<string, string | null>
+): SceneTextLayerAccessState {
+  const allObjectById =
+    objectById || new Map(scene.getAllSceneObjects().map((candidate) => [candidate.name, candidate] as const));
+  const allTitleById =
+    titleById ||
+    new Map(
+      scene
+        .getAllSceneObjects()
+        .map((candidate) => [candidate.name, getSceneObjectTitle(game, candidate)] as const)
+    );
+
+  const title = allTitleById.get(object.name) || null;
+  const placement = getPlacement(scene, object);
+  let currentParentId = placement?.parentNodeId || null;
+  let relationToAncestor = normalizeRelation(placement?.relation) || null;
+  let effectiveParentId: string | null = null;
+  let blocked = false;
+  let hidden = false;
+  let inInactiveSubscene = false;
+  let gatingSwitch: SceneObject | null = null;
+
+  while (currentParentId) {
+    const parentObject = allObjectById.get(currentParentId) || null;
+    if (!parentObject) break;
+
+    if (isSubsceneTriggerbox(parentObject)) {
+      const subsceneRootId = getSubsceneRootId(parentObject);
+      if (subsceneRootId && scene.activeSubscene !== subsceneRootId) {
+        inInactiveSubscene = true;
+      }
+    }
+
+    const switchComponent = getSwitchComponent(parentObject);
+    if (switchComponent && relationToAncestor === 'in' && (switchComponent.state || 1) !== 2) {
+      if (!gatingSwitch) gatingSwitch = parentObject;
+      if (switchComponent.transparent) {
+        blocked = true;
+      } else {
+        hidden = true;
+      }
+    }
+
+    if (!effectiveParentId && allTitleById.get(parentObject.name)) {
+      effectiveParentId = parentObject.name;
+    }
+
+    const parentPlacement = getPlacement(scene, parentObject);
+    currentParentId = parentPlacement?.parentNodeId || null;
+    relationToAncestor = normalizeRelation(parentPlacement?.relation) || null;
+  }
+
+  const gatingSwitchComponent = gatingSwitch ? getSwitchComponent(gatingSwitch) : null;
+
+  return {
+    object,
+    title,
+    effectiveParentId,
+    effectiveRelation: normalizeRelation(placement?.relation) || null,
+    blocked,
+    hidden,
+    inInactiveSubscene,
+    gatingSwitch,
+    gatingSwitchTitle: gatingSwitch ? allTitleById.get(gatingSwitch.name) || null : null,
+    gatingSwitchTransparent: !!gatingSwitchComponent?.transparent,
+    gatingSwitchClearlyOpenable: !!gatingSwitchComponent?.clearlyOpenable,
+  };
+}
+
 export function buildSceneTextLayerSnapshot(
   scene: Scene,
   game: IGame
@@ -96,55 +184,19 @@ export function buildSceneTextLayerSnapshot(
   const entries: SceneTextLayerEntry[] = [];
 
   for (const object of allObjects) {
-    const title = titleById.get(object.name);
+    const accessState = getSceneTextLayerAccessState(scene, game, object, objectById, titleById);
+    const title = accessState.title;
     if (!title) continue;
 
-    const placement = getPlacement(scene, object);
-    let currentParentId = placement?.parentNodeId || null;
-    let relationToAncestor = normalizeRelation(placement?.relation) || null;
-    let effectiveParentId: string | null = null;
-    let blocked = false;
-    let hidden = false;
-    let inInactiveSubscene = false;
-
-    while (currentParentId) {
-      const parentObject = objectById.get(currentParentId) || null;
-      if (!parentObject) break;
-
-      if (isSubsceneTriggerbox(parentObject)) {
-        const subsceneRootId = getSubsceneRootId(parentObject);
-        if (subsceneRootId && scene.activeSubscene !== subsceneRootId) {
-          inInactiveSubscene = true;
-        }
-      }
-
-      const switchComponent = getSwitchComponent(parentObject);
-      if (switchComponent && relationToAncestor === 'in' && (switchComponent.state || 1) !== 2) {
-        if ((switchComponent as SwitchComponent & { transparent?: boolean }).transparent) {
-          blocked = true;
-        } else {
-          hidden = true;
-        }
-      }
-
-      if (!effectiveParentId && titleById.get(parentObject.name)) {
-        effectiveParentId = parentObject.name;
-      }
-
-      const parentPlacement = getPlacement(scene, parentObject);
-      currentParentId = parentPlacement?.parentNodeId || null;
-      relationToAncestor = normalizeRelation(parentPlacement?.relation) || null;
-    }
-
-    if (hidden) continue;
+    if (accessState.hidden) continue;
 
     entries.push({
       object,
       title,
-      effectiveParentId,
-      effectiveRelation: normalizeRelation(placement?.relation) || null,
-      blocked,
-      inInactiveSubscene,
+      effectiveParentId: accessState.effectiveParentId,
+      effectiveRelation: accessState.effectiveRelation,
+      blocked: accessState.blocked,
+      inInactiveSubscene: accessState.inInactiveSubscene,
     });
   }
 

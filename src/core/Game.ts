@@ -17,7 +17,11 @@ import { Console } from './Console';
 import { ScriptRegistry } from './ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type { SwitchComponent } from '../systems/ComponentSystem';
-import { buildSceneTextLayerSnapshot, getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
+import {
+  buildSceneTextLayerSnapshot,
+  getInactiveSubsceneAncestors,
+  getSceneTextLayerAccessState,
+} from '../scene/SceneTextLayer';
 
 import type { IGame } from './IGame';
 import type { Scene } from '../scene/Scene';
@@ -630,12 +634,33 @@ export class Game implements IGame {
   private getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null {
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
-    const entry = buildSceneTextLayerSnapshot(scene, this).entryById.get(entity.name);
-    if (!entry?.blocked) return null;
+    const accessState = getSceneTextLayerAccessState(scene, this, entity);
+    if (!accessState.blocked && !accessState.hidden) return null;
+
+    const closedMessage =
+      accessState.gatingSwitchClearlyOpenable && accessState.gatingSwitchTitle
+        ? this.text('engine.closed_container', { target: accessState.gatingSwitchTitle })
+        : null;
+
+    if (accessState.hidden) {
+      return {
+        status: 'failed',
+        code: accessState.gatingSwitchClearlyOpenable
+          ? 'blocked_by_closed_container'
+          : 'cannot_reach_hidden_target',
+        message: closedMessage || this.text('engine.cant_reach_generic'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
     return {
       status: 'failed',
       code: 'blocked_inside_closed',
-      message: this.text('engine.blocked_inside_closed'),
+      message:
+        accessState.gatingSwitchClearlyOpenable
+          ? this.text('engine.blocked_inside_closed')
+          : this.text('engine.cant_reach_generic'),
       data: { entityId: entity.name },
       recoverable: true,
     };
@@ -750,6 +775,9 @@ export class Game implements IGame {
   lookEntity(entity: SceneObject): GameActionOutcome {
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
     if (autoOpenOutcome) return autoOpenOutcome;
+
+    const blockedOutcome = this.getBlockedAccessOutcome(entity);
+    if (blockedOutcome) return blockedOutcome;
 
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
@@ -890,6 +918,22 @@ export class Game implements IGame {
         code: 'spatial_node_missing_title',
         recoverable: true,
       };
+    }
+
+    if (relation === 'in') {
+      const anchorObject = scene.getObjectByName(anchorNodeId);
+      const switchComponent = anchorObject ? this.getSwitchComponent(anchorObject) : null;
+      if (switchComponent && (switchComponent.state || 1) !== 2 && !switchComponent.transparent) {
+        if (switchComponent.clearlyOpenable) {
+          return {
+            status: 'failed',
+            code: 'blocked_by_closed_container',
+            message: this.text('engine.closed_container', { target: anchorTitle }),
+            data: { relation, anchorNodeId },
+            recoverable: true,
+          };
+        }
+      }
     }
 
     const childTitles =

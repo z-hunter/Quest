@@ -1,6 +1,7 @@
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { Parser } from '../../src/mechanics/Parser';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
+import { getSceneTextLayerAccessState, buildSceneTextLayerSnapshot } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
 import { Entity } from '../../src/entities/Entity';
 
@@ -19,6 +20,41 @@ function okOutcome(code: string, message?: string, data?: Record<string, unknown
 
 export function createParserFixture(): ParserFixture {
   const fixture = createSceneFixture();
+
+  const getAccessOutcome = (entity: Entity, _mode: 'look' | 'interact') => {
+    const accessState = getSceneTextLayerAccessState(fixture.scene, fixture.game, entity);
+    if (!accessState.hidden && !accessState.blocked) return null;
+
+    if (accessState.hidden) {
+      if (accessState.gatingSwitchClearlyOpenable && accessState.gatingSwitchTitle) {
+        return {
+          status: 'failed' as const,
+          code: 'blocked_by_closed_container',
+          message: fixture.game.text('engine.closed_container', {
+            target: accessState.gatingSwitchTitle,
+          }),
+          recoverable: true,
+        };
+      }
+      return {
+        status: 'failed' as const,
+        code: 'cannot_reach_hidden_target',
+        message: fixture.game.text('engine.cant_reach_generic'),
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'failed' as const,
+      code: 'blocked_inside_closed',
+      message: fixture.game.text(
+        accessState.gatingSwitchClearlyOpenable
+          ? 'engine.blocked_inside_closed'
+          : 'engine.cant_reach_generic'
+      ),
+      recoverable: true,
+    };
+  };
 
   fixture.game.console = {
     parserStage1Enabled: true,
@@ -40,6 +76,8 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.lookEntity = (entity: Entity) => {
+    const accessOutcome = getAccessOutcome(entity, 'look');
+    if (accessOutcome) return accessOutcome;
     const description =
       fixture.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
     if (description?.trim()) {
@@ -52,6 +90,8 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.examineEntity = (entity: Entity) => {
+    const accessOutcome = getAccessOutcome(entity, 'interact');
+    if (accessOutcome) return accessOutcome;
     const distanceError = ComponentSystem.getInteractionDistanceError(
       entity as any,
       fixture.scene.player
@@ -77,6 +117,8 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.openEntity = (entity: Entity) => {
+    const accessOutcome = getAccessOutcome(entity, 'interact');
+    if (accessOutcome) return accessOutcome;
     const switchComponent = entity.components?.find((component: any) => component?.type === 'Switch') as
       | { state?: number; idKey?: string }
       | undefined;
@@ -97,6 +139,8 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.closeEntity = (entity: Entity) => {
+    const accessOutcome = getAccessOutcome(entity, 'interact');
+    if (accessOutcome) return accessOutcome;
     const switchComponent = entity.components?.find((component: any) => component?.type === 'Switch') as
       | { state?: number; idKey?: string }
       | undefined;
@@ -117,6 +161,8 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.takeEntity = (entity: Entity) => {
+    const accessOutcome = getAccessOutcome(entity, 'interact');
+    if (accessOutcome) return accessOutcome;
     const error = ComponentSystem.canTakeItem(entity as any, fixture.scene.player);
     if (error) {
       return { status: 'failed', code: 'cannot_take', message: error, recoverable: true };
@@ -183,15 +229,33 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.describeSpatialRelation = (anchorNodeId, relation) => {
-    const anchorNode = fixture.scene.getSpatialNode(anchorNodeId);
-    const anchorTitle = anchorNode?.title?.trim();
+    const textLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
+    const anchorTitle = textLayer.entryById.get(anchorNodeId)?.title?.trim();
     if (!anchorTitle) {
       return { status: 'escalate', code: 'spatial_node_missing_title', recoverable: true };
     }
-    const childTitles = fixture.scene
-      .getDirectSpatialChildren(anchorNodeId, relation)
-      .map((child) => fixture.textAssets.getResolvedObjectField(child, 'title'))
-      .filter((title): title is string => !!title);
+    if (relation === 'in') {
+      const anchorObject = fixture.scene.getObjectByName(anchorNodeId);
+      const switchComponent = anchorObject?.components?.find(
+        (component: any) => component?.type === 'Switch'
+      ) as { state?: number; transparent?: boolean; clearlyOpenable?: boolean } | undefined;
+      if (switchComponent && (switchComponent.state || 1) !== 2 && !switchComponent.transparent) {
+        if (switchComponent.clearlyOpenable) {
+          return {
+            status: 'failed',
+            code: 'blocked_by_closed_container',
+            message: fixture.game.text('engine.closed_container', { target: anchorTitle }),
+            recoverable: true,
+          };
+        }
+      }
+    }
+    const childTitles =
+      textLayer.childrenByParentAndRelation
+        .get(anchorNodeId)
+        ?.get(relation as 'in' | 'on' | 'under' | 'behind')
+        ?.map((entry) => entry.title)
+        .filter((title): title is string => !!title) || [];
     if (!childTitles.length) {
       return okOutcome(
         'relation_empty',

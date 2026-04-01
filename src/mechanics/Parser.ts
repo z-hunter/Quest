@@ -12,7 +12,11 @@ import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { buildSceneTextLayerSnapshot, getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
+import {
+  buildSceneTextLayerSnapshot,
+  getInactiveSubsceneAncestors,
+  getSceneTextLayerAccessState,
+} from '../scene/SceneTextLayer';
 import type {
   ParserCascadeEnvelope,
   ParserCommandActionSpec,
@@ -927,6 +931,26 @@ export class Parser {
     return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
   }
 
+  private resolveHiddenSwitchGatedTarget(
+    rawTarget: string
+  ):
+    | { status: 'found'; entity: SceneObject }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return { status: 'not_found' };
+
+    const candidates = [...scene.entities, ...scene.triggerboxes].filter((sceneObject: SceneObject) => {
+      const title = this.getPlayerFacingObjectTitle(sceneObject);
+      if (!title) return false;
+      const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
+      return accessState.hidden;
+    });
+
+    return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
+  }
+
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
@@ -952,6 +976,22 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
+      if (hiddenGatedResolved.status === 'found') {
+        return this.game.lookEntity(hiddenGatedResolved.entity as any);
+      }
+      if (hiddenGatedResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_look_target',
+          message: hiddenGatedResolved.message,
+          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          recoverable: true,
+        };
+      }
+      if (hiddenGatedResolved.status === 'escalate') {
+        return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
       }
       return {
         status: 'failed',
@@ -1030,6 +1070,22 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
+      if (hiddenGatedResolved.status === 'found') {
+        return this.game.examineEntity(hiddenGatedResolved.entity as any);
+      }
+      if (hiddenGatedResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_examine_target',
+          message: hiddenGatedResolved.message,
+          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          recoverable: true,
+        };
+      }
+      if (hiddenGatedResolved.status === 'escalate') {
+        return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
       }
       return {
         status: 'failed',
@@ -1193,6 +1249,22 @@ export class Parser {
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
       }
+      const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
+      if (hiddenGatedResolved.status === 'found') {
+        return this.game.takeEntity(hiddenGatedResolved.entity as Entity);
+      }
+      if (hiddenGatedResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_take_target',
+          message: hiddenGatedResolved.message,
+          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          recoverable: true,
+        };
+      }
+      if (hiddenGatedResolved.status === 'escalate') {
+        return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
+      }
       return {
         status: 'failed',
         code: 'entity_not_found',
@@ -1293,6 +1365,22 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
+      if (hiddenGatedResolved.status === 'found') {
+        return this.getOpenCloseOutcome(intent, hiddenGatedResolved.entity);
+      }
+      if (hiddenGatedResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
+          message: hiddenGatedResolved.message,
+          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          recoverable: true,
+        };
+      }
+      if (hiddenGatedResolved.status === 'escalate') {
+        return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
       }
       return {
         status: 'failed',

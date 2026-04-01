@@ -25,6 +25,7 @@ export interface SwitchComponent {
   groupId1?: string;
   groupId2?: string;
   transparent?: boolean;
+  clearlyOpenable?: boolean;
 }
 
 export interface SubtriggerComponent {

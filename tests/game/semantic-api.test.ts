@@ -118,7 +118,7 @@ describe('Game semantic API', () => {
     expect(fixture.sounds).toContain('close.wav');
   });
 
-  it('openEntity blocks interaction with transparent closed contents', () => {
+  it('transparent closed contents use a generic blocked message unless clearly openable is set', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     fixture.addEntity('Desk', {
@@ -141,6 +141,63 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('blocked_inside_closed');
+    expect(outcome.message).toBe("You can't reach it.");
+  });
+
+  it('hidden contents behind a clearly openable closed switch report the container as closed', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const note = fixture.addEntity('Note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const look = fixture.game.lookEntity(note);
+    expect(look.status).toBe('failed');
+    expect(look.message).toBe('The Drawer is closed.');
+
+    const examine = fixture.game.examineEntity(note);
+    expect(examine.status).toBe('failed');
+    expect(examine.message).toBe('The Drawer is closed.');
+  });
+
+  it('transparent clearly openable switches keep the specific closed-container blocked message', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('GlassBox', {
+      title: 'Glass Box',
+      description: 'A glass display case.',
+      components: [{ type: 'Switch', state: 1, transparent: true, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const gem = fixture.addEntity('Gem', {
+      title: 'Gem',
+      description: 'A gem behind glass.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'GlassBox', relation: 'in' },
+    });
+
+    const outcome = fixture.game.examineEntity(gem);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('blocked_inside_closed');
+    expect(outcome.message).toBe("You can't reach that while it is inside something closed.");
   });
 
   it('auto-opens inactive ancestor subscene before operating on a titled switch target', () => {

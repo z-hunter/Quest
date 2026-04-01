@@ -69,4 +69,31 @@ describe('Parser + game integration smoke', () => {
 
     expect(result.messages.at(-1)).toBe("I don't understand.");
   });
+
+  it('reports a clearly openable closed container on LOOK IN and direct LOOK of hidden contents', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const relationResult = await fixture.run('look in drawer');
+    expect(relationResult.messages.at(-1)).toBe('The Drawer is closed.');
+
+    const directResult = await fixture.run('look note');
+    expect(directResult.messages.at(-1)).toBe('The Drawer is closed.');
+  });
 });

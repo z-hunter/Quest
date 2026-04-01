@@ -79,6 +79,8 @@ const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   State: 'Current switch state used as the starting state in the editor and at runtime.',
   Transparent:
     'If enabled, closed contents remain visible to LOOK, but stay blocked for interaction until the switch opens.',
+  'Clearly Openable':
+    'If enabled, closed contents report that their container is closed instead of using generic hidden or unreachable wording.',
   'Shadow Quad ID':
     'Quad that receives or shapes this shadow effect.',
   'Offset X': 'Horizontal offset applied by the component or effect.',
@@ -2515,6 +2517,7 @@ export const PropertiesPanel: React.FC = () => {
                         sound1: '',
                         sound2: '',
                         transparent: false,
+                        clearlyOpenable: false,
                       });
                     } else if (type === 'Backface') {
                       obj.components.push({
@@ -2944,6 +2947,20 @@ export const PropertiesPanel: React.FC = () => {
                             }}
                           />{' '}
                           Transparent
+                        </label>
+                      </div>
+
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!comp.clearlyOpenable}
+                            onChange={(e) => {
+                              comp.clearlyOpenable = e.target.checked;
+                              incrementObjectVersion();
+                            }}
+                          />{' '}
+                          Clearly Openable
                         </label>
                       </div>
 
