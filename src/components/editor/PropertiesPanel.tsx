@@ -2562,6 +2562,7 @@ export const PropertiesPanel: React.FC = () => {
                   onChange={(value) => {
                     const type = value;
                     if (!type) return;
+                    if (game.editor) game.editor.saveUndoState();
                     if (!obj.components) obj.components = [];
 
                     if (type === 'Subscene') {
@@ -2664,6 +2665,7 @@ export const PropertiesPanel: React.FC = () => {
                       className="e-btn e-btn-red"
                       style={{ padding: '0 5px' }}
                       onClick={() => {
+                        if (game.editor) game.editor.saveUndoState();
                         obj.components.splice(idx, 1);
                         if (game.editor.selectedObject) {
                           (game.editor.selectedObject as any).components = obj.components;
