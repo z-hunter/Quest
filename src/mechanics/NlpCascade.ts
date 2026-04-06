@@ -5,7 +5,7 @@ import type { TextAssetManager } from '../core/TextAssetManager';
 const NLP_CONFIDENCE_THRESHOLD = 0.58;
 const NLP_MODEL_CACHE_PREFIX = 'quest:nlp:model:v1:';
 
-type SupportedIntent = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
+type SupportedIntent = 'look' | 'examine' | 'take' | 'put' | 'goTo' | 'showInventory';
 
 type NlpProcessResult = {
   intent?: string;
@@ -225,6 +225,8 @@ export class NlpCascade {
         return [{ type: 'examineTarget', target }];
       case 'take':
         return [{ type: 'takeTarget', target }];
+      case 'put':
+        return [{ type: 'putTarget', item: target, target: null, relation: null }];
       case 'goTo':
         return [{ type: 'goToTarget', target }];
       case 'showInventory':

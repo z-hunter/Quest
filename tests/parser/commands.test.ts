@@ -88,4 +88,49 @@ describe('Parser custom commands', () => {
     expect(result.messages.at(-1)).toBe('Use what on what?');
     expect(result.pendingIntent).toBe('custom');
   });
+
+  it('drops a held item onto an available surface', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('drop key');
+
+    expect(result.messages.at(-1)).toBe('You put the key on the desk.');
+    expect(fixture.game.inventory).not.toContain(key);
+  });
+
+  it('puts a held item into a target inventory container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A tape.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+
+    const result = await fixture.run('put cassette into recorder');
+
+    expect(result.messages.at(-1)).toBe('You put the cassette into the recorder.');
+    expect(fixture.game.inventory).not.toContain(cassette);
+    expect((recorder.components[0] as { items: string[] }).items).toContain('cassette');
+  });
 });

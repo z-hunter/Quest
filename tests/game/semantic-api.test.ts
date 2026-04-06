@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Game semantic API', () => {
   it('lookScene returns the scene description', () => {
@@ -90,6 +91,190 @@ describe('Game semantic API', () => {
     const missing = fixture.game.removeInventoryEntity(idCard);
     expect(missing.status).toBe('failed');
     expect(missing.code).toBe('inventory_item_not_found');
+  });
+
+  it('putEntity places a held item onto the nearest valid surface', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, desk, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect(fixture.game.inventory).not.toContain(key);
+    expect(fixture.scene.entities).toContain(key);
+    expect((desk.components[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
+    expect(key.layer).toBe(desk.layer);
+  });
+
+  it('surface with no valid group ids accepts any item', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const coin = fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'A coin.',
+      components: [{ type: 'Item' }],
+      groupID: '#currency',
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      components: [{ type: 'Surface', capacity: 2, groups: [''], items: [] }],
+    });
+    fixture.scene.removeEntity(coin);
+    fixture.game.inventory.push(coin);
+
+    const outcome = fixture.game.putEntity(coin, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+  });
+
+  it('takeEntity can pull an accessible item out of another entity inventory', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A cassette tape.',
+      components: [{ type: 'Item' }],
+    });
+
+    const stored = fixture.game.addInventoryEntity(recorder, cassette);
+    expect(stored.status).toBe('ok');
+    expect(fixture.scene.entities).not.toContain(cassette);
+
+    const taken = fixture.game.takeEntity(cassette);
+
+    expect(taken.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(cassette);
+    expect(fixture.game.getInventoryEntities(recorder)).not.toContain(cassette);
+  });
+
+  it('placing an item onto a surface inside the active subscene keeps it visible there', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.scene.activeSubscene).toBe('DrawerZone');
+    expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
+    expect(key.disabled).toBe(false);
+  });
+
+  it('item placed into a subscene surface is restored after closing and reopening the subscene', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    expect(fixture.game.putEntity(key, tray, { relation: 'on' }).status).toBe('ok');
+
+    fixture.scene.activeSubscene = null;
+    expect(key.disabled).toBe(true);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    expect(key.disabled).toBe(false);
+    expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
+  });
+
+  it('item placed onto a surface inside an open switch branch of the active subscene stays visible there', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [
+        { type: 'Switch', state: 2, groupId1: '#drawer_closed', groupId2: '#drawer_open' },
+      ],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      groupID: '#drawer_open',
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    expect(tray.disabled).toBe(false);
+    expect(fixture.scene.subsceneEntities.has(tray)).toBe(true);
+
+    expect(fixture.game.putEntity(key, tray, { relation: 'on' }).status).toBe('ok');
+    expect(key.disabled).toBe(false);
+    expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
   });
 
   it('openEntity and closeEntity mirror switch state changes', () => {

@@ -78,11 +78,18 @@ export class ParserWorldModelBuilder {
     return textLayer.entries
       .map((entry) => {
         const sceneObject = entry.object;
-        const synonyms = this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms');
+        const synonyms = this.game.textAssets.getResolvedObjectListField(
+          sceneObject as any,
+          'synonyms'
+        );
         const interactions = Object.keys(sceneObject.interactions || {});
-        const isItem = !!sceneObject.components?.find((component: any) => component?.type === 'Item');
+        const isItem = !!sceneObject.components?.find(
+          (component: any) => component?.type === 'Item'
+        );
         const isDirectSceneObject = !entry.effectiveParentId;
-        const coordinates = isDirectSceneObject ? this.getSceneObjectCoordinates(sceneObject) : undefined;
+        const coordinates = isDirectSceneObject
+          ? this.getSceneObjectCoordinates(sceneObject)
+          : undefined;
         const reachable =
           isDirectSceneObject &&
           !entry.blocked &&
@@ -98,7 +105,8 @@ export class ParserWorldModelBuilder {
           ...coordinates,
           synonyms,
           description:
-            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') || undefined,
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
+            undefined,
           details:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           interactions,
@@ -116,7 +124,8 @@ export class ParserWorldModelBuilder {
           id: entity.name,
           title,
           synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
-          description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
+          description:
+            this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
           details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
         });
       })
@@ -169,12 +178,18 @@ export class ParserWorldModelBuilder {
     const held = (this.game.inventory || []).filter(
       (entity: Entity) => !!this.getPlayerFacingObjectTitle(entity)
     );
-    const takable = visible.filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity).filter((entity: Entity) => {
-      const isItem =
-        entity.components && entity.components.find((component: any) => component.type === 'Item');
-      const entry = textLayer?.entryById.get(entity.name);
-      return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
-    });
+    const takable = visible
+      .filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity)
+      .filter((entity: Entity) => {
+        const isItem =
+          entity.components &&
+          entity.components.find((component: any) => component.type === 'Item');
+        const entry = textLayer?.entryById.get(entity.name);
+        return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
+      });
+    const externalTakable = Array.isArray((this.game as any).getAccessibleInventoryItems?.())
+      ? ((this.game as any).getAccessibleInventoryItems() as Entity[])
+      : [];
     const subscene = scene?.activeSubscene
       ? visible.filter((sceneObject: SceneObject) => scene.subsceneEntities.has(sceneObject as any))
       : [];
@@ -189,7 +204,7 @@ export class ParserWorldModelBuilder {
     return {
       visible,
       held,
-      takable,
+      takable: this.uniqueObjects([...takable, ...externalTakable]),
       reachable,
       examinable,
       subscene,
@@ -208,7 +223,9 @@ export class ParserWorldModelBuilder {
     return title && title.trim() ? title.trim() : null;
   }
 
-  private getSceneObjectCoordinates(sceneObject: SceneObject): { x: number; y: number } | undefined {
+  private getSceneObjectCoordinates(
+    sceneObject: SceneObject
+  ): { x: number; y: number } | undefined {
     if (typeof (sceneObject as any).x === 'number' && typeof (sceneObject as any).y === 'number') {
       return {
         x: Math.round((sceneObject as any).x),
