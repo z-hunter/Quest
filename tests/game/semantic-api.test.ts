@@ -75,6 +75,45 @@ describe('Game semantic API', () => {
     expect(filledOutcome.message).toBe('You are carrying: your ID card');
   });
 
+  it('examining an inventory item opens hi-res inventory preview state', () => {
+    const fixture = createGameSemanticFixture();
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.examineEntity(idCard);
+
+    expect(outcome.status).toBe('ok');
+    expect((fixture.game as any).getInventoryPreviewEntity()).toBe(idCard);
+    expect((fixture.game as any).getInventoryPreviewText()).toBe('Your ID.');
+  });
+
+  it('moving a previewed inventory item out of the player inventory closes preview state', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    (fixture.game as any).openInventoryPreview(key);
+
+    const outcome = fixture.game.putEntity(key, desk, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect((fixture.game as any).getInventoryPreviewEntity()).toBe(null);
+  });
+
   it('removeInventoryEntity succeeds only for held items', () => {
     const fixture = createGameSemanticFixture();
     const idCard = fixture.addEntity('miles_id', {
@@ -142,6 +181,28 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_on_surface');
+  });
+
+  it('drop onto an untitled non-walkbox surface uses a generic drop message', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: null,
+      description: 'A tray.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('You drop the Key.');
   });
 
   it('takeEntity can pull an accessible item out of another entity inventory', () => {
@@ -356,6 +417,45 @@ describe('Game semantic API', () => {
     const examine = fixture.game.examineEntity(note);
     expect(examine.status).toBe('failed');
     expect(examine.message).toBe('The Drawer is closed.');
+  });
+
+  it('held items no longer keep stale closed-container access state after pickup', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('Drawer', {
+      title: 'Upper drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 2, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const note = fixture.addEntity('Note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const taken = fixture.game.takeEntity(note);
+    expect(taken.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(note);
+    expect((note as any).spatial).toBeNull();
+
+    const drawerSwitch = fixture.scene.getObjectByName('Drawer');
+    if (drawerSwitch) {
+      (
+        drawerSwitch.components?.find((component: any) => component?.type === 'Switch') as {
+          state?: number;
+        }
+      ).state = 1;
+    }
+
+    const look = fixture.game.lookEntity(note);
+    expect(look.status).toBe('ok');
+    expect(look.message).toBe('A folded note.');
   });
 
   it('transparent clearly openable switches keep the specific closed-container blocked message', () => {

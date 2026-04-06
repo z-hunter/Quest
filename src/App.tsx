@@ -6,6 +6,7 @@ import { PropertiesPanel } from './components/editor/PropertiesPanel';
 import { EditorBottomMenu } from './components/editor/EditorBottomMenu';
 import { SpritePropertiesPanel } from './components/tools/SpritePropertiesPanel';
 import { SpriteBottomMenu } from './components/tools/SpriteBottomMenu';
+import { PlayerInventoryPanel } from './components/inventory/PlayerInventoryPanel';
 import { useEditorStore } from './store/editorStore';
 import { Game } from './core/Game';
 import './index.css';
@@ -32,6 +33,7 @@ function App() {
               <GameCanvas onGameInit={setGame} />
               {/* UIOverlay sits ABSOLUTELY on top of the GameCanvas inside this wrapper */}
               <UIOverlay game={game} />
+              {!showLayout && game ? <PlayerInventoryPanel game={game} /> : null}
             </div>
           </div>
 

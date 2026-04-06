@@ -83,6 +83,13 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.lookEntity = (entity: Entity) => {
+    if (fixture.game.inventory.includes(entity)) {
+      const details = fixture.textAssets.getResolvedObjectField(entity, 'details');
+      const description = fixture.textAssets.getResolvedObjectField(entity, 'description');
+      if (details) return okOutcome('entity_details', details, { entityId: entity.name });
+      if (description)
+        return okOutcome('entity_description', description, { entityId: entity.name });
+    }
     const accessOutcome = getAccessOutcome(entity, 'look');
     if (accessOutcome) return accessOutcome;
     const description =
@@ -175,6 +182,8 @@ export function createParserFixture(): ParserFixture {
       return { status: 'failed', code: 'cannot_take', message: error, recoverable: true };
     }
     fixture.scene.removeEntity(entity);
+    (entity as any).spatial = null;
+    fixture.scene.subsceneEntities.delete(entity);
     fixture.game.inventory.push(entity);
     const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
     return okOutcome(
@@ -223,6 +232,8 @@ export function createParserFixture(): ParserFixture {
       fixture.game.inventory = fixture.game.inventory.filter((candidate) => candidate !== entity);
     }
     fixture.scene.removeEntity(entity);
+    (entity as any).spatial = null;
+    fixture.scene.subsceneEntities.delete(entity);
     inventoryComponent.items.push(entity.name);
     return okOutcome('inventory_item_added', undefined, {
       entityId: entity.name,
@@ -310,9 +321,11 @@ export function createParserFixture(): ParserFixture {
 
     const surface = target?.components?.some((entry: any) => entry?.type === 'Surface')
       ? target
-      : fixture.scene.entities.find((candidate) =>
-          candidate.components?.some((entry: any) => entry?.type === 'Surface')
-        ) || null;
+      : fixture.scene
+          .getAllSceneObjects()
+          .find((candidate) =>
+            candidate.components?.some((entry: any) => entry?.type === 'Surface')
+          ) || null;
     if (!surface) {
       return {
         status: 'failed',
@@ -325,10 +338,13 @@ export function createParserFixture(): ParserFixture {
     fixture.game.inventory = fixture.game.inventory.filter((candidate) => candidate !== entity);
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
-    return okOutcome(
-      'item_put_on_surface',
-      fixture.game.text('parser.put_success_surface', { item: entity.name, target: surface.name })
-    );
+    const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');
+    const message = surfaceTitle
+      ? fixture.game.text('parser.put_success_surface', { item: entity.name, target: surfaceTitle })
+      : surface.type === 'Walkbox'
+        ? `You drop the ${entity.name} on the floor.`
+        : `You drop the ${entity.name}.`;
+    return okOutcome('item_put_on_surface', message);
   };
 
   fixture.game.removeInventoryEntity = (entity: Entity) => {

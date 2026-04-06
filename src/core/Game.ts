@@ -71,6 +71,9 @@ export class Game implements IGame {
   score: number = 0;
   cursorBlink: number = 0;
   private readonly inventoryEntityStore = new Map<string, Entity[]>();
+  private inventoryPreviewEntity: Entity | null = null;
+  private inventoryPreviewText: string | null = null;
+  private readonly inventoryUiListeners = new Set<() => void>();
 
   // FPS Counter
   fps: number = 0;
@@ -543,6 +546,88 @@ export class Game implements IGame {
     return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
   }
 
+  private notifyInventoryUiChange(): void {
+    const self = this as any;
+    const listeners: Set<() => void> =
+      this.inventoryUiListeners || self.inventoryUiListeners || new Set();
+    self.inventoryUiListeners = listeners;
+    listeners.forEach((listener) => listener());
+  }
+
+  subscribeInventoryUi(listener: () => void): () => void {
+    const self = this as any;
+    const listeners: Set<() => void> =
+      this.inventoryUiListeners || self.inventoryUiListeners || new Set();
+    self.inventoryUiListeners = listeners;
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }
+
+  private reconcileInventoryPreview(): void {
+    if (
+      this.inventoryPreviewEntity &&
+      (!this.inventory.includes(this.inventoryPreviewEntity) ||
+        this.inventoryPreviewEntity.disabled)
+    ) {
+      this.inventoryPreviewEntity = null;
+      this.inventoryPreviewText = null;
+    }
+  }
+
+  getInventoryPreviewEntity(): Entity | null {
+    this.reconcileInventoryPreview();
+    return this.inventoryPreviewEntity;
+  }
+
+  getInventoryPreviewText(): string | null {
+    this.reconcileInventoryPreview();
+    return this.inventoryPreviewText;
+  }
+
+  private resolveInventoryPreviewText(entity: Entity): string | null {
+    const details = this.textAssets.getResolvedObjectField(entity, 'details');
+    if (details && details.trim()) return details;
+
+    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription = typeof entity.description === 'string' ? entity.description : null;
+    const description = objectDescription || runtimeDescription;
+    return description && description.trim() ? description : null;
+  }
+
+  openInventoryPreview(entity: Entity, previewText?: string | null): void {
+    if (!this.inventory.includes(entity) || entity.disabled) return;
+    this.inventoryPreviewEntity = entity;
+    this.inventoryPreviewText =
+      previewText !== undefined ? previewText : this.resolveInventoryPreviewText(entity);
+    this.notifyInventoryUiChange();
+  }
+
+  closeInventoryPreview(): void {
+    if (!this.inventoryPreviewEntity) return;
+    this.inventoryPreviewEntity = null;
+    this.inventoryPreviewText = null;
+    this.notifyInventoryUiChange();
+  }
+
+  private getSurfaceDropMessage(surface: SceneObject, item: Entity): string {
+    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
+    const surfaceTitle = this.getPlayerFacingObjectTitle(surface);
+    if (surfaceTitle) {
+      return this.text('parser.put_success_surface', {
+        item: itemTitle,
+        target: surfaceTitle,
+      });
+    }
+
+    if (surface.type === 'Walkbox') {
+      return `You drop the ${itemTitle} on the floor.`;
+    }
+
+    return `You drop the ${itemTitle}.`;
+  }
+
   private getSpatialParentMessage(target: SceneObject): string | null {
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
@@ -634,6 +719,8 @@ export class Game implements IGame {
     if (this.isPlayerInventoryOwner(owner)) {
       this.inventory = entities;
       this.syncPlayerInventoryComponent();
+      this.reconcileInventoryPreview();
+      this.notifyInventoryUiChange();
       return;
     }
     this.inventoryEntityStore.set(owner.name, entities);
@@ -1060,6 +1147,8 @@ export class Game implements IGame {
     if (scene?.entities.includes(entity)) {
       scene.removeEntity(entity);
     }
+    (entity as any).spatial = null;
+    scene?.subsceneEntities.delete(entity);
     this.syncInventoryStore(owner, [...currentItems, entity]);
     return {
       status: 'ok',
@@ -1244,6 +1333,8 @@ export class Game implements IGame {
   }
 
   private getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null {
+    if (entity instanceof Entity && this.isEntityInInventory(entity)) return null;
+
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
     const accessState = getSceneTextLayerAccessState(scene, this, entity);
@@ -1477,6 +1568,9 @@ export class Game implements IGame {
 
     const details = this.textAssets.getResolvedObjectField(entity, 'details');
     if (details && details.trim()) {
+      if (entity instanceof Entity && this.isEntityInInventory(entity)) {
+        this.openInventoryPreview(entity, details);
+      }
       return {
         status: 'ok',
         code: 'entity_details',
@@ -1490,6 +1584,9 @@ export class Game implements IGame {
       typeof (entity as any).description === 'string' ? (entity as any).description : null;
     const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
+      if (entity instanceof Entity && this.isEntityInInventory(entity)) {
+        this.openInventoryPreview(entity, description);
+      }
       return {
         status: 'ok',
         code: 'entity_description_fallback',
@@ -1661,8 +1758,11 @@ export class Game implements IGame {
       if (scene.entities.includes(entity)) {
         scene.removeEntity(entity);
       }
+      (entity as any).spatial = null;
+      scene.subsceneEntities.delete(entity);
       this.inventory.push(entity);
       this.syncPlayerInventoryComponent();
+      this.notifyInventoryUiChange();
       const itemTitle = this.getPlayerFacingObjectTitle(entity);
       if (!itemTitle) {
         return {
@@ -1774,15 +1874,10 @@ export class Game implements IGame {
       if (moveOutcome.status !== 'ok') {
         return moveOutcome;
       }
-      const targetTitle =
-        this.getPlayerFacingObjectTitle(destinationSurface) || destinationSurface.name;
       return {
         status: 'ok',
         code: 'item_put_on_surface',
-        message: this.text('parser.put_success_surface', {
-          item: this.getPlayerFacingObjectTitle(entity) || entity.name,
-          target: targetTitle,
-        }),
+        message: this.getSurfaceDropMessage(destinationSurface, entity),
         data: { entityId: entity.name, targetId: destinationSurface.name },
         effects: ['removed_from_inventory', 'placed_on_surface'],
       };
@@ -1808,6 +1903,8 @@ export class Game implements IGame {
 
     this.inventory.splice(index, 1);
     this.syncPlayerInventoryComponent();
+    this.reconcileInventoryPreview();
+    this.notifyInventoryUiChange();
     return {
       status: 'ok',
       code: 'inventory_item_removed',

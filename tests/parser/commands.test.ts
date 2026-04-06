@@ -107,7 +107,26 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('drop key');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the desk.');
+    expect(result.messages.at(-1)).toBe('You put the key on the Desk.');
+    expect(fixture.game.inventory).not.toContain(key);
+  });
+
+  it('drops a held item onto a walkbox surface as floor text', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('FloorZone');
+    floor.components = [{ type: 'Surface', capacity: 4, groups: [], items: [] }];
+
+    const result = await fixture.run('drop key');
+
+    expect(result.messages.at(-1)).toBe('You drop the key on the floor.');
     expect(fixture.game.inventory).not.toContain(key);
   });
 
