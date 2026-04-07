@@ -506,13 +506,13 @@
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": []
+          "items": ["miles_id"]
         }
       ],
       "layer": 0,
       "visible": true,
-      "x": 140.98301304201,
-      "y": 257.6175110277775,
+      "x": 258.8379317233878,
+      "y": 263.4439308952993,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -523,7 +523,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0468410425980919,
+      "parallax": 1.0506169482975813,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -531,7 +531,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -677,46 +677,6 @@
       "modelScale": 0.6,
       "parallax": 1,
       "ignoreScaling": true,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "miles_id",
-      "type": "Entity",
-      "locked": false,
-      "disabled": true,
-      "groupID": "#D1",
-      "customName": "your ID card",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item",
-          "ignoreDistance": true
-        }
-      ],
-      "layer": 5,
-      "visible": true,
-      "spatial": {
-        "parentNodeId": "Drawer1",
-        "relation": "in"
-      },
-      "x": 93,
-      "y": 0,
-      "width": 150.4436263347707,
-      "height": 93.2343137254902,
-      "baseWidth": 165.32266630194582,
-      "baseHeight": 102.45528980823099,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "sub_drawers_d1_id.json",
-      "color": "#AAAAAA",
-      "scale": 0.91,
-      "modelScale": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
@@ -894,8 +854,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.90433731748016,
-      "y": 306.9284515529537,
+      "x": 222.90433731748004,
+      "y": 306.92845155295356,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1026,30 +986,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 86.37044860665155,
-      "y": 238.5585056255823,
+      "x": 205.13246675402408,
+      "y": 244.38505036135336,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 86.37044860665155,
-          "y": 238.5585056255823,
-          "p": 1.0344187003270882
+          "x": 205.13246675402408,
+          "y": 244.38505036135336,
+          "p": 1.0381973808765614
         },
         {
-          "x": 182.69247160969263,
-          "y": 236.97687299417981,
-          "p": 1.0333604077035181
+          "x": 301.5577490652691,
+          "y": 242.81876595684375,
+          "p": 1.0371541477418127
         },
         {
-          "x": 160.91779477628745,
-          "y": 284.3142112756289,
-          "p": 1.0643033286640333
+          "x": 276.7813067778314,
+          "y": 289.7124082320141,
+          "p": 1.0677858877333426
         },
         {
-          "x": 111.53717956505486,
-          "y": 282.3093674988208,
-          "p": 1.062990625494244
+          "x": 227.5282537068367,
+          "y": 287.7264510493967,
+          "p": 1.0664878765028738
         }
       ],
       "color": "#000975",
@@ -1081,20 +1041,60 @@
       "layer": 0,
       "visible": true,
       "spatial": {
-        "parentNodeId": "Walk_176",
-        "relation": "on"
+        "parentNodeId": "Chair",
+        "relation": "under"
       },
-      "x": 248,
-      "y": 223,
-      "width": 18.626739427012275,
-      "height": 26.469577080491128,
-      "baseWidth": 19.699863574351976,
-      "baseHeight": 27.994542974079124,
+      "x": 97,
+      "y": 241,
+      "width": 19.046657571623467,
+      "height": 27.06630286493861,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.9455263157894737,
+      "scale": 0.966842105263158,
+      "modelScale": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "miles_id",
+      "type": "Entity",
+      "locked": false,
+      "disabled": true,
+      "groupID": "#D1",
+      "customName": "your ID card",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item",
+          "ignoreDistance": true
+        }
+      ],
+      "layer": 5,
+      "visible": true,
+      "spatial": {
+        "parentNodeId": "Drawer1",
+        "relation": "in"
+      },
+      "x": 82,
+      "y": -2,
+      "width": 150.4436263347707,
+      "height": 93.2343137254902,
+      "baseWidth": 165.32266630194582,
+      "baseHeight": 102.45528980823099,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "sub_drawers_d1_id.json",
+      "color": "#AAAAAA",
+      "scale": 0.91,
       "modelScale": 1,
       "parallax": 1,
       "ignoreScaling": false,
