@@ -9,4 +9,3 @@ export type GameDesignResolution = {
 export function getGameDesignResolution(): GameDesignResolution {
   return { width: GAME_DESIGN_WIDTH, height: GAME_DESIGN_HEIGHT };
 }
-
