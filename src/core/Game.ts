@@ -788,19 +788,6 @@ export class Game implements IGame {
     return null;
   }
 
-  private findSurfaceForEntity(entity: Entity): SceneObject | null {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return null;
-    for (const candidate of scene.getAllSceneObjects()) {
-      const component = ComponentSystem.getSurfaceComponent(candidate);
-      if (!component) continue;
-      if ((component.items || []).some((item) => item.id === entity.name)) {
-        return candidate;
-      }
-    }
-    return null;
-  }
-
   private parseGroupIds(value: string | null | undefined): string[] {
     return String(value || '')
       .split(',')
@@ -944,10 +931,16 @@ export class Game implements IGame {
       this.syncInventoryStore(inventoryOwner, entities);
     }
 
-    const surface = this.findSurfaceForEntity(entity);
-    if (surface) {
-      const component = this.ensureSurfaceComponent(surface);
-      component.items = (component.items || []).filter((item) => item.id !== entity.name);
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+
+    for (const candidate of scene.getAllSceneObjects()) {
+      const component = ComponentSystem.getSurfaceComponent(candidate);
+      if (!component?.items?.length) continue;
+      const nextItems = component.items.filter((item) => item.id !== entity.name);
+      if (nextItems.length !== component.items.length) {
+        component.items = nextItems;
+      }
     }
   }
 
@@ -1018,6 +1011,143 @@ export class Game implements IGame {
     return null;
   }
 
+  private getEntityPlacementSizeAtY(
+    entity: Entity,
+    targetY: number
+  ): { width: number; height: number } {
+    const scene = this.sceneManager.currentScene;
+    const baseWidth =
+      typeof entity.baseWidth === 'number' && Number.isFinite(entity.baseWidth)
+        ? entity.baseWidth
+        : entity.width;
+    const baseHeight =
+      typeof entity.baseHeight === 'number' && Number.isFinite(entity.baseHeight)
+        ? entity.baseHeight
+        : entity.height;
+    const modelScale =
+      typeof entity.modelScale === 'number' && Number.isFinite(entity.modelScale)
+        ? entity.modelScale
+        : 1;
+    const depthFactor =
+      !entity.ignoreScaling && scene?.scaling?.enabled ? scene.getScaling(targetY) : 1;
+
+    return {
+      width: baseWidth * modelScale * depthFactor,
+      height: baseHeight * modelScale * depthFactor,
+    };
+  }
+
+  private getSurfaceFootprintRect(
+    surface: SceneObject,
+    size: { width: number; height: number },
+    x: number,
+    y: number
+  ): { x: number; y: number; w: number; h: number } {
+    if (surface.type === 'Walkbox') {
+      const footprintWidth = Math.max(12, size.width * 0.7);
+      const footprintHeight = Math.max(10, Math.min(24, size.height * 0.18));
+      return {
+        x: x - footprintWidth / 2,
+        y: y - footprintHeight,
+        w: footprintWidth,
+        h: footprintHeight,
+      };
+    }
+
+    return {
+      x: x - size.width / 2,
+      y: y - size.height,
+      w: size.width,
+      h: size.height,
+    };
+  }
+
+  private evaluateSurfacePlacement(
+    surface: SceneObject,
+    entity: Entity,
+    x: number,
+    y: number,
+    placements: SurfaceItemPlacement[]
+  ): {
+    fits: boolean;
+    candidateSize: { width: number; height: number };
+    candidateRect: { x: number; y: number; w: number; h: number };
+    inside: boolean;
+    collisions: Array<Record<string, unknown>>;
+  } {
+    const bounds = this.getSurfaceBounds(surface);
+    const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
+    const candidateRect = this.getSurfaceFootprintRect(surface, candidateSize, x, y);
+
+    if (!bounds) {
+      return {
+        fits: false,
+        candidateSize,
+        candidateRect,
+        inside: false,
+        collisions: [],
+      };
+    }
+
+    const inside =
+      surface.type === 'Walkbox'
+        ? candidateRect.x >= bounds.rect.left &&
+          candidateRect.y >= bounds.rect.top &&
+          candidateRect.x + candidateRect.w <= bounds.rect.right &&
+          candidateRect.y + candidateRect.h <= bounds.rect.bottom
+        : bounds.type === 'poly' && bounds.poly
+          ? Geometry.rectInsidePolygon(candidateRect, bounds.poly)
+          : candidateRect.x >= bounds.rect.left &&
+            candidateRect.y >= bounds.rect.top &&
+            candidateRect.x + candidateRect.w <= bounds.rect.right &&
+            candidateRect.y + candidateRect.h <= bounds.rect.bottom;
+
+    if (!inside) {
+      return {
+        fits: false,
+        candidateSize,
+        candidateRect,
+        inside,
+        collisions: [],
+      };
+    }
+
+    const collisions = placements
+      .map((placement) => {
+        const placedEntity =
+          this.sceneManager.currentScene?.getObjectByName(placement.id) ||
+          this.inventory.find((candidate) => candidate.name === placement.id) ||
+          null;
+        const placedSize =
+          placedEntity instanceof Entity
+            ? this.getEntityPlacementSizeAtY(placedEntity, placement.y)
+            : candidateSize;
+        const placedRect = this.getSurfaceFootprintRect(
+          surface,
+          placedSize,
+          placement.x,
+          placement.y
+        );
+        const intersects = Geometry.rectIntersectsRect(candidateRect, placedRect);
+        return {
+          id: placement.id,
+          placement: { x: placement.x, y: placement.y },
+          placedSize,
+          placedRect,
+          intersects,
+        };
+      })
+      .filter((entry) => entry.intersects);
+
+    return {
+      fits: collisions.length === 0,
+      candidateSize,
+      candidateRect,
+      inside,
+      collisions,
+    };
+  }
+
   private canFitEntityOnSurfaceAt(
     surface: SceneObject,
     entity: Entity,
@@ -1025,40 +1155,7 @@ export class Game implements IGame {
     y: number,
     placements: SurfaceItemPlacement[]
   ): boolean {
-    const bounds = this.getSurfaceBounds(surface);
-    if (!bounds) return false;
-
-    const rect = {
-      x: x - entity.width / 2,
-      y: y - entity.height,
-      w: entity.width,
-      h: entity.height,
-    };
-
-    const inside =
-      bounds.type === 'poly' && bounds.poly
-        ? Geometry.rectInsidePolygon(rect, bounds.poly)
-        : rect.x >= bounds.rect.left &&
-          rect.y >= bounds.rect.top &&
-          rect.x + rect.w <= bounds.rect.right &&
-          rect.y + rect.h <= bounds.rect.bottom;
-
-    if (!inside) return false;
-
-    return !placements.some((placement) => {
-      const placedEntity =
-        this.sceneManager.currentScene?.getObjectByName(placement.id) ||
-        this.inventory.find((candidate) => candidate.name === placement.id) ||
-        null;
-      const width = placedEntity instanceof Entity ? placedEntity.width : entity.width;
-      const height = placedEntity instanceof Entity ? placedEntity.height : entity.height;
-      return Geometry.rectIntersectsRect(rect, {
-        x: placement.x - width / 2,
-        y: placement.y - height,
-        w: width,
-        h: height,
-      });
-    });
+    return this.evaluateSurfacePlacement(surface, entity, x, y, placements).fits;
   }
 
   private placeEntityOnSurface(surface: SceneObject, entity: Entity): SurfaceItemPlacement | null {
@@ -1067,46 +1164,89 @@ export class Game implements IGame {
     if (!bounds) return null;
 
     const placements = component.items || [];
-    const minX = bounds.rect.left + entity.width / 2;
-    const maxX = bounds.rect.right - entity.width / 2;
-    const minY = bounds.rect.top + entity.height;
-    const maxY = bounds.rect.bottom;
-    if (minX > maxX || minY > maxY) return null;
-
     const samples: Array<{ x: number; y: number }> = [];
-    for (let index = 0; index < 32; index += 1) {
-      samples.push({
-        x: minX + Math.random() * Math.max(0, maxX - minX),
-        y: minY + Math.random() * Math.max(0, maxY - minY),
-      });
-    }
-    samples.push({
-      x: (minX + maxX) / 2,
-      y: maxY,
-    });
+    const seen = new Set<string>();
+    const addSample = (x: number, y: number) => {
+      const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
+      const footprint = this.getSurfaceFootprintRect(surface, candidateSize, 0, y);
+      const minX = bounds.rect.left + footprint.w / 2;
+      const maxX = bounds.rect.right - footprint.w / 2;
+      const minY = bounds.rect.top + footprint.h;
+      const maxY = bounds.rect.bottom;
+      if (minX > maxX || minY > maxY) {
+        return;
+      }
 
+      const clampedX = Math.max(minX, Math.min(maxX, x));
+      const clampedY = Math.max(minY, Math.min(maxY, y));
+      const key = `${Math.round(clampedX)}:${Math.round(clampedY)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      samples.push({ x: clampedX, y: clampedY });
+    };
+
+    const maxEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.bottom);
+    const minEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.top);
+    const maxFootprint = this.getSurfaceFootprintRect(
+      surface,
+      maxEntitySize,
+      0,
+      bounds.rect.bottom
+    );
+    const minFootprint = this.getSurfaceFootprintRect(surface, minEntitySize, 0, bounds.rect.top);
+    const rowMinY = Math.min(bounds.rect.bottom, bounds.rect.top + minFootprint.h);
+    const rowMaxY = bounds.rect.bottom;
+    const centerX = (bounds.rect.left + bounds.rect.right) / 2;
+    const centerY = (rowMinY + rowMaxY) / 2;
+    addSample(centerX, rowMaxY);
+    addSample(centerX, centerY);
+    addSample(bounds.rect.left, rowMaxY);
+    addSample(bounds.rect.right, rowMaxY);
+    addSample(bounds.rect.left, rowMinY);
+    addSample(bounds.rect.right, rowMinY);
+
+    const rangeY = Math.max(0, rowMaxY - rowMinY);
+    const columnStep = Math.max(maxFootprint.w * 0.75, 12);
+    const rowStep = Math.max(maxFootprint.h * 0.75, 12);
+    const rowCount = Math.max(1, Math.ceil(rangeY / rowStep));
+
+    for (let row = rowCount; row >= 0; row -= 1) {
+      const y = rowCount === 0 ? rowMaxY : rowMinY + (rangeY * row) / Math.max(rowCount, 1);
+      const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
+      const footprint = this.getSurfaceFootprintRect(surface, candidateSize, 0, y);
+      const minX = bounds.rect.left + footprint.w / 2;
+      const maxX = bounds.rect.right - footprint.w / 2;
+      if (minX > maxX) continue;
+      const rangeX = Math.max(0, maxX - minX);
+      const columnCount = Math.max(1, Math.ceil(rangeX / columnStep));
+      for (let column = 0; column <= columnCount; column += 1) {
+        const x = columnCount === 0 ? centerX : minX + (rangeX * column) / Math.max(columnCount, 1);
+        addSample(x, y);
+      }
+    }
+
+    const fittingSamples = samples.filter((sample) =>
+      this.canFitEntityOnSurfaceAt(surface, entity, sample.x, sample.y, placements)
+    );
     const openSpot =
-      samples.find((sample) =>
-        this.canFitEntityOnSurfaceAt(surface, entity, sample.x, sample.y, placements)
-      ) || null;
+      fittingSamples.length > 0
+        ? fittingSamples[Math.floor(Math.random() * fittingSamples.length)]
+        : null;
+    const insideOnlySamples = samples.filter((sample) => {
+      const evaluation = this.evaluateSurfacePlacement(
+        surface,
+        entity,
+        sample.x,
+        sample.y,
+        placements
+      );
+      return evaluation.inside;
+    });
     const fallbackSpot =
       openSpot ||
-      samples.find((sample) => {
-        const boundsCheck = this.getSurfaceBounds(surface);
-        if (!boundsCheck) return false;
-        const rect = {
-          x: sample.x - entity.width / 2,
-          y: sample.y - entity.height,
-          w: entity.width,
-          h: entity.height,
-        };
-        return boundsCheck.type === 'poly' && boundsCheck.poly
-          ? Geometry.rectInsidePolygon(rect, boundsCheck.poly)
-          : rect.x >= boundsCheck.rect.left &&
-              rect.y >= boundsCheck.rect.top &&
-              rect.x + rect.w <= boundsCheck.rect.right &&
-              rect.y + rect.h <= boundsCheck.rect.bottom;
-      });
+      (insideOnlySamples.length > 0
+        ? insideOnlySamples[Math.floor(Math.random() * insideOnlySamples.length)]
+        : null);
 
     if (!fallbackSpot) return null;
 
@@ -1370,6 +1510,7 @@ export class Game implements IGame {
       parentNodeId: surface.name,
       relation: 'on',
     };
+    scene?.playDropAnimation(entity);
     if (scene?.activeSubscene) {
       if (this.isObjectInsideActiveSubscene(surface)) {
         entity.disabled = false;
@@ -1888,14 +2029,13 @@ export class Game implements IGame {
         };
       }
 
+      scene.finishDropAnimation(entity);
+
       if (inventoryOwner) {
         this.removeEntityFromInventory(inventoryOwner, entity);
       }
 
-      const surface = this.findSurfaceForEntity(entity);
-      if (surface) {
-        this.removeEntityFromSurface(surface, entity);
-      }
+      this.removeEntityFromCurrentStorage(entity);
 
       this.clearInheritedSurfaceSwitchGroups(entity);
       scene.playPickupAnimation(entity);

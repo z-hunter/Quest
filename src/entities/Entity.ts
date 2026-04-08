@@ -489,7 +489,7 @@ export class Entity extends SceneObject {
   private static _hitTestCtx: CanvasRenderingContext2D | null = null;
 
   hitTest(x: number, y: number): boolean {
-    if (this.disabled || !this.visible) return false;
+    if (this.disabled || !this.visible || this.locked) return false;
 
     // 1. Initial AABB Check (World Space)
     // Entity Pivot is Bottom-Center

@@ -106,9 +106,9 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
 
 function getSortedClickableCandidates(scene: Scene): SceneObject[] {
   return sortClickableCandidates([
-    ...scene.entities.filter((e) => !e.disabled && e.visible && !(e as any).isPlayer),
-    ...(scene.triggerboxes?.filter((t) => !t.disabled && t.visible) || []),
-    ...(scene.walkbox?.filter((w) => !w.disabled && w.visible) || []),
+    ...scene.entities.filter((e) => !e.disabled && !e.locked && e.visible && !(e as any).isPlayer),
+    ...(scene.triggerboxes?.filter((t) => !t.disabled && !t.locked && t.visible) || []),
+    ...(scene.walkbox?.filter((w) => !w.disabled && !w.locked && w.visible) || []),
   ]);
 }
 
@@ -255,7 +255,7 @@ export function getHoverCursorAtScreenPoint(
   if (scene.activeSubscene) {
     const world = toWorld(scene, screenX, screenY);
     const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
+      (obj) => !obj.disabled && !obj.locked && obj.visible
     );
     const topLayerHits = findTopLayerHitCandidatesAtWorldPoint(
       subsceneCandidates,
@@ -309,7 +309,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
   if (scene.activeSubscene) {
     const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
+      (obj) => !obj.disabled && !obj.locked && obj.visible
     );
     const subsceneHitCandidates = findTopLayerHitCandidatesAtWorldPoint(
       subsceneCandidates,

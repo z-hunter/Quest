@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
@@ -158,6 +158,9 @@ describe('Game semantic API', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
     expect(key.layer).toBe(desk.layer);
+    expect(fixture.scene.dropAnimations).toHaveLength(1);
+    expect(key.opacity).toBe(0);
+    expect(key.locked).toBe(true);
   });
 
   it('putEntity with IN can target a nested surface inside the object', () => {
@@ -235,6 +238,123 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.message).toBe('You drop the Key.');
+  });
+
+  it('taking an item during drop animation settles it so it can be dropped again', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 20);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const floor = fixture.addWalkbox('Walk_176');
+    floor.poly = [
+      { x: -120, y: -40 },
+      { x: 120, y: -40 },
+      { x: 120, y: 40 },
+      { x: -120, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', capacity: 4, groups: [], items: [] }];
+
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const firstDrop = fixture.game.putEntity(idCard, null, { relation: null });
+    expect(firstDrop.status).toBe('ok');
+    expect((floor.components[0] as { items: Array<{ id: string }> }).items).toEqual([
+      expect.objectContaining({ id: 'miles_id' }),
+    ]);
+    expect(idCard.locked).toBe(true);
+
+    const takeBack = fixture.game.takeEntity(idCard);
+    expect(takeBack.status).toBe('ok');
+    expect((floor.components[0] as { items: Array<{ id: string }> }).items).toEqual([]);
+    expect(idCard.locked).toBe(false);
+    expect(idCard.opacity).toBe(1);
+    expect(fixture.scene.dropAnimations).toHaveLength(0);
+
+    const secondDrop = fixture.game.putEntity(idCard, null, { relation: null });
+    expect(secondDrop.status).toBe('ok');
+    expect((floor.components[0] as { items: Array<{ id: string }> }).items).toEqual([
+      expect.objectContaining({ id: 'miles_id' }),
+    ]);
+  });
+
+  it('dropEntity finds a stable free spot on a surface that already has another item', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const firstCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const secondCard = fixture.addEntity('someone_id', {
+      title: 'Someone ID card',
+      description: 'Another ID.',
+      components: [{ type: 'Item' }],
+    });
+    const floor = fixture.addWalkbox('Walk_176');
+    floor.poly = [
+      { x: -120, y: -40 },
+      { x: 120, y: -40 },
+      { x: 120, y: 40 },
+      { x: -120, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', capacity: 4, groups: [], items: [] }];
+
+    fixture.scene.removeEntity(firstCard);
+    fixture.scene.removeEntity(secondCard);
+    fixture.game.inventory.push(firstCard, secondCard);
+
+    expect(fixture.game.putEntity(firstCard, null, { relation: null }).status).toBe('ok');
+    expect(fixture.game.putEntity(secondCard, null, { relation: null }).status).toBe('ok');
+
+    const placedIds = (floor.components[0] as { items: Array<{ id: string }> }).items.map(
+      (item) => item.id
+    );
+    expect(placedIds).toContain('miles_id');
+    expect(placedIds).toContain('someone_id');
+  });
+
+  it('surface placement keeps randomness by choosing among valid samples', () => {
+    const runPlacement = (randomValue: number) => {
+      const fixture = createGameSemanticFixture();
+      fixture.addPlayer('Hero', 0, 0);
+      const idCard = fixture.addEntity('miles_id', {
+        title: 'your ID card',
+        description: 'Your ID.',
+        components: [{ type: 'Item' }],
+      });
+      const floor = fixture.addWalkbox('Walk_176');
+      floor.poly = [
+        { x: -120, y: -40 },
+        { x: 120, y: -40 },
+        { x: 120, y: 40 },
+        { x: -120, y: 40 },
+      ];
+      floor.components = [{ type: 'Surface', capacity: 8, groups: [], items: [] }];
+
+      fixture.scene.removeEntity(idCard);
+      fixture.game.inventory.push(idCard);
+
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(randomValue);
+      try {
+        const outcome = fixture.game.addEntityToSurface(floor, idCard);
+        expect(outcome.status).toBe('ok');
+        const placement = (
+          floor.components[0] as { items: Array<{ id: string; x: number; y: number }> }
+        ).items[0];
+        return { x: placement.x, y: placement.y };
+      } finally {
+        randomSpy.mockRestore();
+      }
+    };
+
+    const firstPlacement = runPlacement(0);
+    const lastPlacement = runPlacement(0.999);
+
+    expect(firstPlacement).not.toEqual(lastPlacement);
   });
 
   it('takeEntity can pull an accessible item out of another entity inventory', () => {
