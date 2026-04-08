@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Game } from '../core/Game';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
 
 interface GameCanvasProps {
   onGameInit: (game: Game) => void;
 }
-
-const BASE_VIEWPORT_WIDTH = 840;
-const BASE_VIEWPORT_HEIGHT = 600;
 
 type ZoomMode = 'fit' | '1' | '1.5' | '2';
 
@@ -19,13 +17,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [zoomMode, setZoomMode] = useState<ZoomMode>('fit');
   const [viewportSize, setViewportSize] = useState({
-    width: BASE_VIEWPORT_WIDTH,
-    height: BASE_VIEWPORT_HEIGHT,
+    width: GAME_DESIGN_WIDTH,
+    height: GAME_DESIGN_HEIGHT,
     scale: 1,
   });
 
   useEffect(() => {
-    if (canvasRef.current && uiCanvasRef.current && editorOverlayCanvasRef.current && !gameRef.current) {
+    if (
+      canvasRef.current &&
+      uiCanvasRef.current &&
+      editorOverlayCanvasRef.current &&
+      !gameRef.current
+    ) {
       // Initialize Game with BOTH canvases
       // canvasRef -> WebGL (CRT)
       // uiCanvasRef -> 2D (UI/Input)
@@ -59,14 +62,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         if (clientWidth <= 0 || clientHeight <= 0) return;
 
         const fitScale = Math.min(
-          clientWidth / BASE_VIEWPORT_WIDTH,
-          clientHeight / BASE_VIEWPORT_HEIGHT
+          clientWidth / GAME_DESIGN_WIDTH,
+          clientHeight / GAME_DESIGN_HEIGHT
         );
         const requestedScale = zoomMode === 'fit' ? fitScale : Number.parseFloat(zoomMode);
-        const appliedScale =
-          zoomMode === 'fit' ? fitScale : Math.min(fitScale, requestedScale);
-        const width = Math.max(1, Math.round(BASE_VIEWPORT_WIDTH * appliedScale));
-        const height = Math.max(1, Math.round(BASE_VIEWPORT_HEIGHT * appliedScale));
+        const appliedScale = zoomMode === 'fit' ? fitScale : Math.min(fitScale, requestedScale);
+        const width = Math.max(1, Math.round(GAME_DESIGN_WIDTH * appliedScale));
+        const height = Math.max(1, Math.round(GAME_DESIGN_HEIGHT * appliedScale));
         setViewportSize({ width, height, scale: appliedScale });
         const offsetX = Math.max(0, Math.round((clientWidth - width) / 2));
         const offsetY = Math.max(0, Math.round((clientHeight - height) / 2));
@@ -179,8 +181,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         <canvas
           ref={uiCanvasRef}
           id="ui-canvas"
-          width={420}
-          height={300}
+          width={GAME_DESIGN_WIDTH}
+          height={GAME_DESIGN_HEIGHT}
           style={{
             width: '100%',
             height: '100%',

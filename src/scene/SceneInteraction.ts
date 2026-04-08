@@ -2,14 +2,15 @@ import type { Scene } from './Scene';
 import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
 function getScreenSize(scene: Scene): { width: number; height: number } {
   const canvas = scene.game?.canvas;
   return {
-    width: canvas?.width || 420,
-    height: canvas?.height || 300,
+    width: canvas?.width || GAME_DESIGN_WIDTH,
+    height: canvas?.height || GAME_DESIGN_HEIGHT,
   };
 }
 
@@ -66,8 +67,12 @@ function isHitAtScreenPoint(
   }
 
   const worldPos = {
-    x: (screenX - halfW) / zoom + camX * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
-    y: (screenY - halfH) / zoom + camY * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
+    x:
+      (screenX - halfW) / zoom +
+      camX * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+    y:
+      (screenY - halfH) / zoom +
+      camY * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
   };
   return obj.hitTest(worldPos.x, worldPos.y);
 }

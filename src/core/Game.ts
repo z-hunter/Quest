@@ -32,6 +32,7 @@ import { Geometry } from '../utils/Geometry';
 import type { IGame } from './IGame';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -41,7 +42,7 @@ export class Game implements IGame {
   canvas: HTMLCanvasElement; // UI Canvas
   editorOverlayCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
-  bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
+  bufferCanvas: HTMLCanvasElement; // Design-resolution buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
   rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
@@ -160,8 +161,8 @@ export class Game implements IGame {
 
     // Create an offscreen buffer for the game to draw onto
     this.bufferCanvas = document.createElement('canvas');
-    this.bufferCanvas.width = 420;
-    this.bufferCanvas.height = 300;
+    this.bufferCanvas.width = GAME_DESIGN_WIDTH;
+    this.bufferCanvas.height = GAME_DESIGN_HEIGHT;
     this.ctx = this.bufferCanvas.getContext('2d');
 
     // We won't strictly need 2D context for rendererCanvas if we use WebGL,
@@ -785,6 +786,68 @@ export class Game implements IGame {
     return null;
   }
 
+  private parseGroupIds(value: string | null | undefined): string[] {
+    return String(value || '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith('#'));
+  }
+
+  private setEntityGroupIds(entity: Entity, groupIds: string[]): void {
+    const normalized = Array.from(
+      new Set(
+        groupIds.map((entry) => String(entry || '').trim()).filter((entry) => entry.startsWith('#'))
+      )
+    );
+    entity.groupID = normalized.length ? normalized.join(',') : null;
+  }
+
+  private clearInheritedSurfaceSwitchGroups(entity: Entity): void {
+    const inherited = Array.isArray((entity as any).__surfaceInheritedSwitchGroups)
+      ? ((entity as any).__surfaceInheritedSwitchGroups as string[])
+      : [];
+    if (!inherited.length) return;
+
+    const remaining = ComponentSystem.getGroupIds(entity).filter(
+      (groupId) => !inherited.includes(groupId)
+    );
+    this.setEntityGroupIds(entity, remaining);
+    (entity as any).__surfaceInheritedSwitchGroups = [];
+  }
+
+  private collectActiveSurfaceSwitchGroups(surface: SceneObject): string[] {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return [];
+
+    const collected: string[] = [];
+    let current: SceneObject | null = surface;
+    while (current) {
+      const switchComponent = this.getSwitchComponent(current);
+      if (switchComponent) {
+        const activeTarget =
+          switchComponent.state === 2 ? switchComponent.groupId2 : switchComponent.groupId1;
+        collected.push(...this.parseGroupIds(activeTarget));
+      }
+
+      const parentId: string =
+        typeof (current as any).spatial?.parentNodeId === 'string'
+          ? (current as any).spatial.parentNodeId.trim()
+          : '';
+      current = parentId ? scene.getObjectByName(parentId) : null;
+    }
+
+    return Array.from(new Set(collected));
+  }
+
+  private assignInheritedSurfaceSwitchGroups(entity: Entity, surface: SceneObject): void {
+    this.clearInheritedSurfaceSwitchGroups(entity);
+    const inherited = this.collectActiveSurfaceSwitchGroups(surface);
+    if (!inherited.length) return;
+
+    this.setEntityGroupIds(entity, [...ComponentSystem.getGroupIds(entity), ...inherited]);
+    (entity as any).__surfaceInheritedSwitchGroups = inherited;
+  }
+
   private itemMatchesStorageGroups(groups: string[] | string | undefined, entity: Entity): boolean {
     const normalizedGroups = Array.isArray(groups)
       ? groups
@@ -1083,6 +1146,69 @@ export class Game implements IGame {
     })[0];
   }
 
+  private findPreferredStorageForRelation(
+    anchor: SceneObject,
+    relation: SpatialRelationType
+  ): { inventoryOwner: Entity | null; surface: SceneObject | null } {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return { inventoryOwner: null, surface: null };
+    }
+
+    const inventoryCandidates: Entity[] = [];
+    const surfaceCandidates: SceneObject[] = [];
+
+    if (relation === 'in') {
+      if (
+        anchor instanceof Entity &&
+        ComponentSystem.getInventoryComponent(anchor) &&
+        this.isInventoryAccessible(anchor)
+      ) {
+        inventoryCandidates.push(anchor);
+      }
+      if (ComponentSystem.getSurfaceComponent(anchor) && this.isSurfaceAccessible(anchor)) {
+        surfaceCandidates.push(anchor);
+      }
+    } else if (
+      relation === 'on' &&
+      ComponentSystem.getSurfaceComponent(anchor) &&
+      this.isSurfaceAccessible(anchor)
+    ) {
+      surfaceCandidates.push(anchor);
+    }
+
+    for (const candidate of scene.getAllSceneObjects()) {
+      const parentId =
+        typeof (candidate as any).spatial?.parentNodeId === 'string'
+          ? (candidate as any).spatial.parentNodeId.trim()
+          : '';
+      const candidateRelation = ((candidate as any).spatial?.relation ||
+        null) as SpatialRelationType | null;
+      if (parentId !== anchor.name || candidateRelation !== relation) continue;
+
+      if (
+        relation === 'in' &&
+        candidate instanceof Entity &&
+        ComponentSystem.getInventoryComponent(candidate) &&
+        this.isInventoryAccessible(candidate)
+      ) {
+        inventoryCandidates.push(candidate);
+      }
+
+      if (ComponentSystem.getSurfaceComponent(candidate) && this.isSurfaceAccessible(candidate)) {
+        surfaceCandidates.push(candidate);
+      }
+    }
+
+    const byPriority = (left: SceneObject, right: SceneObject) =>
+      this.getSceneObjectSelectionPriority(left) - this.getSceneObjectSelectionPriority(right);
+
+    return {
+      inventoryOwner: inventoryCandidates.sort(byPriority)[0] || null,
+      surface: surfaceCandidates.sort(byPriority)[0] || null,
+    };
+  }
+
   private isObjectInsideActiveSubscene(object: SceneObject): boolean {
     const scene = this.sceneManager.currentScene;
     const activeSubscene = scene?.activeSubscene;
@@ -1143,6 +1269,7 @@ export class Game implements IGame {
     }
 
     this.removeEntityFromCurrentStorage(entity);
+    this.clearInheritedSurfaceSwitchGroups(entity);
     const scene = this.sceneManager.currentScene;
     if (scene?.entities.includes(entity)) {
       scene.removeEntity(entity);
@@ -1216,6 +1343,7 @@ export class Game implements IGame {
     }
 
     this.removeEntityFromCurrentStorage(entity);
+    this.assignInheritedSurfaceSwitchGroups(entity, surface);
     const scene = this.sceneManager.currentScene;
     if (scene && !scene.entities.includes(entity)) {
       scene.addEntity(entity);
@@ -1754,6 +1882,7 @@ export class Game implements IGame {
         this.removeEntityFromSurface(surface, entity);
       }
 
+      this.clearInheritedSurfaceSwitchGroups(entity);
       scene.playPickupAnimation(entity);
       if (scene.entities.includes(entity)) {
         scene.removeEntity(entity);
@@ -1816,11 +1945,9 @@ export class Game implements IGame {
     if (!target) {
       destinationSurface = this.getAutoDropSurface();
     } else if (relation === 'in') {
-      if (target instanceof Entity && ComponentSystem.getInventoryComponent(target)) {
-        destinationInventoryOwner = target;
-      } else if (target instanceof Entity && ComponentSystem.getSurfaceComponent(target)) {
-        destinationSurface = target;
-      }
+      const storage = this.findPreferredStorageForRelation(target, 'in');
+      destinationInventoryOwner = storage.inventoryOwner;
+      destinationSurface = storage.surface;
     } else if (relation === 'on') {
       destinationSurface = this.findPreferredSurfaceForRelation(target, 'on');
     } else if (relation === 'under' || relation === 'behind') {
