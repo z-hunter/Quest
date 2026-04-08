@@ -64,7 +64,7 @@ describe('Game navigation and spatial API', () => {
     expect(empty.message).toBe('You see nothing under the Desk.');
   });
 
-  it('describeSpatialRelation flattens untitled ancestors in the text layer', () => {
+  it('describeSpatialRelation uses the collapsed ancestor relation for untitled intermediates', () => {
     const fixture = createGameSemanticFixture();
     fixture.addEntity('Desk', {
       title: 'Desk',
@@ -80,9 +80,9 @@ describe('Game navigation and spatial API', () => {
       spatial: { parentNodeId: 'HiddenHolder', relation: 'on' },
     });
 
-    const populated = fixture.game.describeSpatialRelation('Desk', 'on');
+    const populated = fixture.game.describeSpatialRelation('Desk', 'in');
 
     expect(populated.status).toBe('ok');
-    expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+    expect(populated.message).toBe('In the Desk you see: Piece of paper.');
   });
 });
