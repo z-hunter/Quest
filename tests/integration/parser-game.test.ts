@@ -70,7 +70,7 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe("I don't understand.");
   });
 
-  it('reports a clearly openable closed container on LOOK IN and direct LOOK of hidden contents', async () => {
+  it('reports a clearly openable closed container on LOOK IN but not on direct LOOK of hidden contents', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     fixture.addEntity('Desk', {
@@ -94,6 +94,32 @@ describe('Parser + game integration smoke', () => {
     expect(relationResult.messages.at(-1)).toBe('The Drawer is closed.');
 
     const directResult = await fixture.run('look note');
-    expect(directResult.messages.at(-1)).toBe('The Drawer is closed.');
+    expect(directResult.messages.at(-1)).toBe("You don't see any note here.");
+  });
+
+  it('supports PUT IN object when the object contains a nested surface', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    fixture.addEntity('drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+    });
+    fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('put key in drawer');
+
+    expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
   });
 });

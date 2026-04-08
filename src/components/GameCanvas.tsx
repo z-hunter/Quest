@@ -99,8 +99,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
       }
     };
 
-    // Initial resize
+    // Initial resize (best-effort)
     handleResize();
+
+    // Layout often stabilizes 1–2 frames later (flex panels, fonts, DPR, etc).
+    // Ensure we resize again after paint to avoid "wrong initial CRT scaling" until user triggers editor layout.
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      handleResize();
+      raf2 = window.requestAnimationFrame(() => {
+        handleResize();
+      });
+    });
+    const t = window.setTimeout(() => handleResize(), 75);
 
     // Listen for window resize
     window.addEventListener('resize', handleResize);
@@ -110,10 +122,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
     if (shellRef.current) {
       resizeObserver.observe(shellRef.current);
     }
+    // In some layouts, the parent flex container changes size while this node doesn't emit reliably.
+    // Observing the parent makes the resize robust when editor panels mount/unmount.
+    const parent = shellRef.current?.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
+    }
 
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(t);
     };
   }, [zoomMode]);
 

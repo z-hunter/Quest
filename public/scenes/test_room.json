@@ -54,8 +54,8 @@
           "items": [
             {
               "id": "test",
-              "x": 248,
-              "y": 223
+              "x": 506,
+              "y": 277
             }
           ]
         }
@@ -377,6 +377,66 @@
       ],
       "script": "",
       "parallax": 1
+    },
+    {
+      "name": "d1_surface",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Surface",
+          "capacity": 8,
+          "groups": [],
+          "items": []
+        }
+      ],
+      "layer": 5,
+      "visible": true,
+      "spatial": {
+        "parentNodeId": "Drawer1",
+        "relation": "in"
+      },
+      "poly": [
+        {
+          "x": -145,
+          "y": -20
+        },
+        {
+          "x": -98,
+          "y": -161
+        },
+        {
+          "x": 327,
+          "y": -161
+        },
+        {
+          "x": 386,
+          "y": -23
+        }
+      ],
+      "script": "",
+      "parallax": 1
+    },
+    {
+      "name": "Trig_338",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "poly": [],
+      "script": "",
+      "parallax": 1
     }
   ],
   "scaling": {
@@ -506,13 +566,13 @@
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": ["miles_id"]
+          "items": []
         }
       ],
       "layer": 0,
       "visible": true,
-      "x": 258.8379317233878,
-      "y": 263.4439308952993,
+      "x": 227.0041038307995,
+      "y": 242.84841212589546,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -523,7 +583,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0506169482975813,
+      "parallax": 1.0371883148858903,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -531,7 +591,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "right",
+      "direction": "left",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -843,7 +903,7 @@
       "blur": 0
     },
     {
-      "name": "Actor_562",
+      "name": "Sofa",
       "type": "Actor",
       "locked": false,
       "disabled": false,
@@ -854,8 +914,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.90433731748004,
-      "y": 306.92845155295356,
+      "x": 222.90433731747953,
+      "y": 306.92845155295333,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -866,7 +926,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293815,
+      "parallax": 1.0790382036293813,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -986,30 +1046,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 205.13246675402408,
-      "y": 244.38505036135336,
+      "x": 173.43791892878318,
+      "y": 223.792619674212,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 205.13246675402408,
-          "y": 244.38505036135336,
-          "p": 1.0381973808765614
+          "x": 173.43791892878318,
+          "y": 223.792619674212,
+          "p": 1.0248373715151469
         },
         {
-          "x": 301.5577490652691,
-          "y": 242.81876595684375,
-          "p": 1.0371541477418127
+          "x": 270.032882039762,
+          "y": 222.2394350189669,
+          "p": 1.0237674184895398
         },
         {
-          "x": 276.7813067778314,
-          "y": 289.7124082320141,
-          "p": 1.0677858877333426
+          "x": 240.1067090610648,
+          "y": 268.69507683853925,
+          "p": 1.0539928788918806
         },
         {
-          "x": 227.5282537068367,
-          "y": 287.7264510493967,
-          "p": 1.0664878765028738
+          "x": 191.07615337632785,
+          "y": 266.72914433377764,
+          "p": 1.052745543115717
         }
       ],
       "color": "#000975",
@@ -1023,45 +1083,6 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 7
-    },
-    {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "spatial": {
-        "parentNodeId": "Chair",
-        "relation": "under"
-      },
-      "x": 97,
-      "y": 241,
-      "width": 19.046657571623467,
-      "height": 27.06630286493861,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.966842105263158,
-      "modelScale": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
     },
     {
       "name": "miles_id",
@@ -1095,6 +1116,45 @@
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
       "scale": 0.91,
+      "modelScale": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "spatial": {
+        "parentNodeId": "Walk_176",
+        "relation": "on"
+      },
+      "x": 506,
+      "y": 277,
+      "width": 19.69986357435198,
+      "height": 27.994542974079128,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 1,
       "modelScale": 1,
       "parallax": 1,
       "ignoreScaling": false,

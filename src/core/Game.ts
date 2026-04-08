@@ -195,9 +195,6 @@ export class Game implements IGame {
     this.isRunning = false;
     this.inventory = []; // Player inventory
 
-    // Load Settings from LocalStorage
-    this.loadSettings();
-
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
@@ -206,6 +203,10 @@ export class Game implements IGame {
     // (Previously corrupted lines removed)
     this.input = new Input(this);
     this.console = new Console(this); // Init Console with Game Reference
+
+    // Load Settings from LocalStorage (after console exists for safe diagnostics elsewhere)
+    this.loadSettings();
+
     this.parser = new Parser(this);
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
@@ -362,7 +363,21 @@ export class Game implements IGame {
       }
 
       try {
-        this.crtFilter.render(this.bufferCanvas, settings);
+        // Make CRT parameters resolution-aware so the effect is consistent
+        // before/after editor layout resizes the renderer canvas.
+        //
+        // - scanlineCount is "number of scanlines across screen height"
+        // - aberration is effectively in pixels in the shader, so scale with width
+        const designW = GAME_DESIGN_WIDTH;
+        const designH = GAME_DESIGN_HEIGHT;
+        const scaleX = this.rendererCanvas?.width ? this.rendererCanvas.width / designW : 1;
+        const scaleY = this.rendererCanvas?.height ? this.rendererCanvas.height / designH : 1;
+        const effectiveSettings = {
+          ...settings,
+          scanlineCount: (settings.scanlineCount || 0) * scaleY,
+          aberration: (settings.aberration || 0) * scaleX,
+        };
+        this.crtFilter.render(this.bufferCanvas, effectiveSettings);
       } catch (e) {
         console.warn('CRT Filter failed, disabling:', e);
         this.disableCRT();
@@ -2202,12 +2217,47 @@ export class Game implements IGame {
       const json = localStorage.getItem('quest_settings');
       if (json) {
         const loaded = JSON.parse(json);
-        // Merge loaded settings with defaults (simple shallow merge for crt)
-        if (loaded.crt) {
-          this.settings.crt = { ...this.settings.crt, ...loaded.crt };
+        // Backward-compatible merge: older builds may have nested shapes.
+        const loadedCrt = loaded?.crt ?? loaded?.settings?.crt ?? loaded?.graphics?.crt;
+        const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
+
+        if (loadedCrt) {
+          const coerceNumber = (value: unknown, fallback: number) => {
+            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            if (typeof value === 'string') {
+              const n = Number.parseFloat(value);
+              return Number.isFinite(n) ? n : fallback;
+            }
+            return fallback;
+          };
+
+          this.settings.crt = {
+            ...this.settings.crt,
+            ...loadedCrt,
+            // Ensure numeric fields stay numeric even if older UI saved strings.
+            curvature: coerceNumber(loadedCrt.curvature, this.settings.crt.curvature),
+            scanlineCount: coerceNumber(loadedCrt.scanlineCount, this.settings.crt.scanlineCount),
+            scanlineIntensity: coerceNumber(
+              loadedCrt.scanlineIntensity,
+              this.settings.crt.scanlineIntensity
+            ),
+            aberration: coerceNumber(loadedCrt.aberration, this.settings.crt.aberration),
+            vignette: coerceNumber(loadedCrt.vignette, this.settings.crt.vignette),
+            phosphor: coerceNumber(loadedCrt.phosphor, this.settings.crt.phosphor),
+            bloom: coerceNumber(loadedCrt.bloom, this.settings.crt.bloom),
+            enabled:
+              typeof loadedCrt.enabled === 'boolean'
+                ? loadedCrt.enabled
+                : this.settings.crt.enabled,
+            bezelGlow:
+              typeof loadedCrt.bezelGlow === 'boolean'
+                ? loadedCrt.bezelGlow
+                : this.settings.crt.bezelGlow,
+          };
         }
-        if (loaded.editor) {
-          this.settings.editor = { ...this.settings.editor, ...loaded.editor };
+
+        if (loadedEditor) {
+          this.settings.editor = { ...this.settings.editor, ...loadedEditor };
         }
       }
     } catch (e) {

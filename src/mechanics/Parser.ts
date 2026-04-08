@@ -48,7 +48,10 @@ export class Parser {
     this.game = game;
     this.inputField = null;
     this.pendingState = null;
-    this.nlpCascade = new NlpCascade(() => this.game.textAssets);
+    this.nlpCascade = new NlpCascade(
+      () => this.game.textAssets,
+      () => this.game.console
+    );
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
     this.activeWorldModel = null;
     this.activeScope = null;
@@ -1014,22 +1017,6 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
-      }
-      const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
-      if (hiddenGatedResolved.status === 'found') {
-        return this.game.lookEntity(hiddenGatedResolved.entity as any);
-      }
-      if (hiddenGatedResolved.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_look_target',
-          message: hiddenGatedResolved.message,
-          data: { target: rawTarget, options: hiddenGatedResolved.options },
-          recoverable: true,
-        };
-      }
-      if (hiddenGatedResolved.status === 'escalate') {
-        return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
       }
       return {
         status: 'failed',

@@ -304,28 +304,51 @@ export function createParserFixture(): ParserFixture {
       };
     }
 
-    if (
-      target?.components?.some((entry: any) => entry?.type === 'Inventory') &&
-      options?.relation === 'in'
-    ) {
-      const outcome = fixture.game.addInventoryEntity(target, entity);
-      if (outcome.status !== 'ok') return outcome;
-      return okOutcome(
-        'item_put_into_inventory',
-        fixture.game.text('parser.put_success_inventory', {
-          item: entity.name,
-          target: target.name,
-        })
-      );
+    if (options?.relation === 'in' && target) {
+      const nestedInventory =
+        (target?.components?.some((entry: any) => entry?.type === 'Inventory') ? target : null) ||
+        fixture.scene
+          .getAllSceneObjects()
+          .find(
+            (candidate) =>
+              candidate instanceof Entity &&
+              (candidate as any).spatial?.parentNodeId === target.name &&
+              (candidate as any).spatial?.relation === 'in' &&
+              candidate.components?.some((entry: any) => entry?.type === 'Inventory')
+          ) ||
+        null;
+      if (nestedInventory) {
+        const outcome = fixture.game.addInventoryEntity(nestedInventory as Entity, entity);
+        if (outcome.status !== 'ok') return outcome;
+        return okOutcome(
+          'item_put_into_inventory',
+          fixture.game.text('parser.put_success_inventory', {
+            item: entity.name,
+            target: nestedInventory.name,
+          })
+        );
+      }
     }
 
-    const surface = target?.components?.some((entry: any) => entry?.type === 'Surface')
-      ? target
-      : fixture.scene
-          .getAllSceneObjects()
-          .find((candidate) =>
-            candidate.components?.some((entry: any) => entry?.type === 'Surface')
-          ) || null;
+    const surface =
+      target && options?.relation
+        ? (target?.components?.some((entry: any) => entry?.type === 'Surface') ? target : null) ||
+          fixture.scene
+            .getAllSceneObjects()
+            .find(
+              (candidate) =>
+                (candidate as any).spatial?.parentNodeId === target.name &&
+                (candidate as any).spatial?.relation === options.relation &&
+                candidate.components?.some((entry: any) => entry?.type === 'Surface')
+            ) ||
+          null
+        : (target?.components?.some((entry: any) => entry?.type === 'Surface') ? target : null) ||
+          fixture.scene
+            .getAllSceneObjects()
+            .find((candidate) =>
+              candidate.components?.some((entry: any) => entry?.type === 'Surface')
+            ) ||
+          null;
     if (!surface) {
       return {
         status: 'failed',

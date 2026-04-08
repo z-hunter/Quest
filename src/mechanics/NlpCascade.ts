@@ -29,13 +29,19 @@ export type NlpCascadeDebugInfo = {
 
 export class NlpCascade {
   private getTextAssets: () => TextAssetManager | undefined;
+  private getConsole: () => { log: (text: string, type?: any) => void } | undefined;
   private manager: any = null;
   private initPromise: Promise<void> | null = null;
   private ready = false;
   private lastDebugInfo: NlpCascadeDebugInfo | null = null;
+  private diagnosticsEmitted = false;
 
-  constructor(getTextAssets: () => TextAssetManager | undefined) {
+  constructor(
+    getTextAssets: () => TextAssetManager | undefined,
+    getConsole?: () => { log: (text: string, type?: any) => void } | undefined
+  ) {
     this.getTextAssets = getTextAssets;
+    this.getConsole = getConsole || (() => undefined);
   }
 
   getLastDebugInfo(): NlpCascadeDebugInfo | null {
@@ -51,6 +57,7 @@ export class NlpCascade {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
+      const initStart = this.nowMs();
       const textAssets = this.getTextAssets();
       if (!textAssets) {
         throw new Error('Parser language assets are not available');
@@ -88,20 +95,43 @@ export class NlpCascade {
         try {
           this.manager.import(cachedModel);
           this.ready = true;
+          this.emitDiagnosticsOnce({
+            cache: 'hit',
+            cacheKey,
+            trainMs: null,
+            modelBytes: this.estimateBytes(cachedModel),
+            initMs: this.nowMs() - initStart,
+          });
           return;
         } catch {
           this.removeCachedModel(cacheKey);
+          this.emitDiagnosticsOnce({
+            cache: 'miss(import_failed)',
+            cacheKey,
+            trainMs: null,
+            modelBytes: this.estimateBytes(cachedModel),
+            initMs: this.nowMs() - initStart,
+          });
         }
       }
 
+      const trainStart = this.nowMs();
       for (const [intent, utterances] of Object.entries(trainingData)) {
         for (const utterance of utterances) {
           this.manager.addDocument('en', utterance, intent);
         }
       }
       await this.manager.train();
-      this.writeCachedModel(cacheKey, this.manager.export(true));
+      const exported = this.manager.export(true);
+      this.writeCachedModel(cacheKey, exported);
       this.ready = true;
+      this.emitDiagnosticsOnce({
+        cache: cachedModel ? 'miss(import_failed)' : 'miss',
+        cacheKey,
+        trainMs: this.nowMs() - trainStart,
+        modelBytes: this.estimateBytes(exported),
+        initMs: this.nowMs() - initStart,
+      });
     })();
 
     return this.initPromise;
@@ -291,5 +321,59 @@ export class NlpCascade {
       hash = (hash * 33) ^ value.charCodeAt(i);
     }
     return (hash >>> 0).toString(36);
+  }
+
+  private nowMs(): number {
+    // performance.now is more stable for durations; fall back to Date.now
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+    return Date.now();
+  }
+
+  private estimateBytes(text: string): number {
+    // Best-effort size estimate for logging/debugging only.
+    try {
+      // Browser: Blob gives byte-accurate UTF-8 length.
+      if (typeof Blob !== 'undefined') {
+        return new Blob([text]).size;
+      }
+    } catch {
+      // ignore
+    }
+    // Fallback: JS strings are UTF-16-ish; approximate.
+    return text.length * 2;
+  }
+
+  private formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes < 0) return 'unknown';
+    if (bytes < 1024) return `${Math.round(bytes)} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(2)} MB`;
+  }
+
+  private emitDiagnosticsOnce(info: {
+    cache: 'hit' | 'miss' | 'miss(import_failed)';
+    cacheKey: string;
+    trainMs: number | null;
+    modelBytes: number;
+    initMs: number;
+  }): void {
+    if (this.diagnosticsEmitted) return;
+    this.diagnosticsEmitted = true;
+
+    const consoleRef = this.getConsole();
+    if (!consoleRef) return;
+
+    const shortKey = info.cacheKey.replace(NLP_MODEL_CACHE_PREFIX, '');
+    const trainPart = info.trainMs === null ? '' : ` train=${Math.round(info.trainMs)}ms`;
+    const initPart = ` init=${Math.round(info.initMs)}ms`;
+    const sizePart = ` model=${this.formatBytes(info.modelBytes)}`;
+    consoleRef.log(
+      `[NLP] cache=${info.cache} key=${shortKey}${trainPart}${initPart}${sizePart}`,
+      'info'
+    );
   }
 }

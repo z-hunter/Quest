@@ -160,6 +160,38 @@ describe('Game semantic API', () => {
     expect(key.layer).toBe(desk.layer);
   });
 
+  it('putEntity with IN can target a nested surface inside the object', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const drawer = fixture.addEntity('drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray inside the drawer.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, drawer, { relation: 'in' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect(fixture.game.inventory).not.toContain(key);
+    expect((tray.components[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
+    expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'on' });
+  });
+
   it('surface with no valid group ids accepts any item', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -336,6 +368,44 @@ describe('Game semantic API', () => {
     expect(fixture.game.putEntity(key, tray, { relation: 'on' }).status).toBe('ok');
     expect(key.disabled).toBe(false);
     expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
+  });
+
+  it('item placed onto a switch-controlled surface inherits the active switch group', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [
+        { type: 'Switch', state: 2, groupId1: '#drawer_closed', groupId2: '#drawer_open' },
+      ],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: false,
+      groupID: '#drawer_open',
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    expect(fixture.game.putEntity(key, tray, { relation: 'on' }).status).toBe('ok');
+    expect(key.groupID).toContain('#drawer_open');
+
+    const closed = fixture.game.closeEntity(drawer);
+    expect(closed.status).toBe('ok');
+    expect(key.disabled).toBe(true);
+
+    const opened = fixture.game.openEntity(drawer);
+    expect(opened.status).toBe('ok');
+    expect(key.disabled).toBe(false);
   });
 
   it('openEntity and closeEntity mirror switch state changes', () => {
