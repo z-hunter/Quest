@@ -30,6 +30,23 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('A folded note.');
   });
 
+  it('lookEntity turns the player toward a visible scene object', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.setDirection('down');
+    const note = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+    });
+    note.x = -40;
+    note.y = 0;
+
+    const outcome = fixture.game.lookEntity(note);
+
+    expect(outcome.status).toBe('ok');
+    expect(player.direction).toBe('left');
+  });
+
   it('examineEntity prefers details and falls back to description', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer();
@@ -59,6 +76,23 @@ describe('Game semantic API', () => {
     expect(fallback.message).toBe('Cassette recorder.');
   });
 
+  it('examineEntity turns the player toward a visible scene object', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.setDirection('left');
+    const boombox = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+    });
+    boombox.x = 0;
+    boombox.y = -30;
+
+    const outcome = fixture.game.examineEntity(boombox);
+
+    expect(outcome.status).toBe('ok');
+    expect(player.direction).toBe('up');
+  });
+
   it('showInventory returns empty and filled inventory messages', () => {
     const fixture = createGameSemanticFixture();
     const emptyOutcome = fixture.game.showInventory();
@@ -77,6 +111,8 @@ describe('Game semantic API', () => {
 
   it('examining an inventory item opens hi-res inventory preview state', () => {
     const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.setDirection('right');
     const idCard = fixture.addEntity('miles_id', {
       title: 'your ID card',
       description: 'Your ID.',
@@ -89,6 +125,27 @@ describe('Game semantic API', () => {
     expect(outcome.status).toBe('ok');
     expect((fixture.game as any).getInventoryPreviewEntity()).toBe(idCard);
     expect((fixture.game as any).getInventoryPreviewText()).toBe('Your ID.');
+    expect(player.direction).toBe('right');
+  });
+
+  it('examineEntity does not turn the player toward objects inside subscenes', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.setDirection('down');
+    fixture.scene.activeSubscene = 'desk_subscene';
+    const note = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'desk_subscene', relation: 'in' },
+    });
+    fixture.scene.subsceneEntities.add(note);
+    note.x = 50;
+    note.y = 0;
+
+    const outcome = fixture.game.examineEntity(note);
+
+    expect(outcome.status).toBe('ok');
+    expect(player.direction).toBe('down');
   });
 
   it('moving a previewed inventory item out of the player inventory closes preview state', () => {

@@ -973,6 +973,35 @@ export class Game implements IGame {
     return Math.hypot(location.x - (player.x || 0), location.y - (player.y || 0));
   }
 
+  private shouldFacePlayerTowardObservedObject(entity: SceneObject): boolean {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return false;
+    if (entity instanceof Entity && this.isEntityInInventory(entity)) return false;
+    if (this.isObjectInsideActiveSubscene(entity)) return false;
+    if (getInactiveSubsceneAncestors(scene, entity).length > 0) return false;
+    return true;
+  }
+
+  private facePlayerTowardObservedObject(entity: SceneObject): void {
+    if (!this.shouldFacePlayerTowardObservedObject(entity)) return;
+
+    const scene = this.sceneManager.currentScene;
+    const player = scene?.player;
+    if (!player || typeof player.setDirection !== 'function') return;
+
+    const target = this.getSceneObjectReferencePoint(entity);
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      player.setDirection(dx >= 0 ? 'right' : 'left');
+      return;
+    }
+
+    player.setDirection(dy >= 0 ? 'down' : 'up');
+  }
+
   private getSurfaceBounds(surface: SceneObject): {
     type: 'rect' | 'poly';
     rect: { left: number; top: number; right: number; bottom: number };
@@ -1761,6 +1790,8 @@ export class Game implements IGame {
     const blockedOutcome = this.getBlockedAccessOutcome(entity);
     if (blockedOutcome) return blockedOutcome;
 
+    this.facePlayerTowardObservedObject(entity);
+
     const interactionId =
       entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
     if (interactionId) {
@@ -1831,6 +1862,8 @@ export class Game implements IGame {
         effects: ['subscene_opened'],
       };
     }
+
+    this.facePlayerTowardObservedObject(entity);
 
     const interactionId =
       entity.interactions &&
