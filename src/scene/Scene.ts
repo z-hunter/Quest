@@ -357,6 +357,8 @@ export class Scene {
     clone.components = [];
     clone.interactions = {};
     clone.opacity = entity.opacity ?? 1.0;
+    clone.subsceneItemScale = entity.subsceneItemScale || 1;
+    clone.update(0);
     // @ts-ignore
     clone.scene = this;
 
@@ -706,9 +708,46 @@ export class Scene {
     activateSceneObject(this, obj, depth);
   }
 
+  getActiveSubsceneItemScale(): number {
+    const activeSubsceneId = String(this.activeSubscene || '').trim();
+    if (!activeSubsceneId) return 1;
+
+    const triggerbox = this.triggerboxes.find((candidate) => {
+      if (candidate.name === activeSubsceneId) return true;
+      return candidate.components?.some(
+        (component: any) =>
+          component?.type === 'Subscene' &&
+          String(component.targetGroupId || '').trim() === activeSubsceneId
+      );
+    });
+    const subsceneComponent = triggerbox?.components?.find(
+      (component: any) => component?.type === 'Subscene'
+    ) as { itemScale?: number } | undefined;
+    const itemScale = subsceneComponent?.itemScale;
+    return typeof itemScale === 'number' && Number.isFinite(itemScale) && itemScale > 0
+      ? itemScale
+      : 1;
+  }
+
+  private syncSubsceneItemScales(): void {
+    const activeItemScale = this.getActiveSubsceneItemScale();
+
+    for (const entity of this.entities) {
+      const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+      const nextScale =
+        !!this.activeSubscene && isItem && this.subsceneEntities.has(entity) ? activeItemScale : 1;
+      if (entity.subsceneItemScale === nextScale) continue;
+      entity.subsceneItemScale = nextScale;
+      if (entity.disabled) {
+        entity.update(0);
+      }
+    }
+  }
+
   update(deltaTime: number): void {
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
+    this.syncSubsceneItemScales();
 
     const cameraState = updateSceneCamera(this, deltaTime, {
       isCenteringX: this._isCenteringX,

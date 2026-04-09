@@ -817,6 +817,75 @@ export class Game implements IGame {
     (entity as any).__surfaceInheritedSwitchGroups = [];
   }
 
+  private clearActiveContainerSwitchGroups(entity: Entity): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+
+    const groupsToRemove = new Set<string>();
+    let current: SceneObject | null = entity;
+    while (current) {
+      const switchComponent = this.getSwitchComponent(current);
+      if (switchComponent) {
+        const activeTarget =
+          switchComponent.state === 2 ? switchComponent.groupId2 : switchComponent.groupId1;
+        for (const groupId of this.parseGroupIds(activeTarget)) {
+          groupsToRemove.add(groupId);
+        }
+      }
+
+      const parentId: string =
+        typeof (current as any).spatial?.parentNodeId === 'string'
+          ? (current as any).spatial.parentNodeId.trim()
+          : '';
+      current = parentId ? scene.getObjectByName(parentId) : null;
+    }
+
+    if (!groupsToRemove.size) return;
+
+    const remaining = ComponentSystem.getGroupIds(entity).filter(
+      (groupId) => !groupsToRemove.has(groupId)
+    );
+    this.setEntityGroupIds(entity, remaining);
+  }
+
+  private getContainingSubsceneRootIds(entity: SceneObject): string[] {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return [];
+
+    const roots: string[] = [];
+    let current: SceneObject | null = entity;
+    while (current) {
+      if (current.components?.some((component: any) => component?.type === 'Subscene')) {
+        roots.push(current.name);
+      }
+      const parentId: string =
+        typeof (current as any).spatial?.parentNodeId === 'string'
+          ? (current as any).spatial.parentNodeId.trim()
+          : '';
+      current = parentId ? scene.getObjectByName(parentId) : null;
+    }
+
+    return Array.from(new Set(roots));
+  }
+
+  private markEntityDetachedFromSubscenes(entity: Entity, subsceneRootIds: string[]): void {
+    const normalized = Array.from(
+      new Set(subsceneRootIds.map((value) => String(value || '').trim()).filter((value) => !!value))
+    );
+    (entity as any).__detachedSubsceneRootIds = normalized;
+  }
+
+  private clearEntityDetachedSubsceneRoot(entity: Entity, subsceneRootId: string): void {
+    const detached = Array.isArray((entity as any).__detachedSubsceneRootIds)
+      ? ((entity as any).__detachedSubsceneRootIds as string[])
+      : [];
+    if (!detached.length) return;
+
+    const normalizedRoot = String(subsceneRootId || '').trim();
+    const next = detached.filter((value) => value !== normalizedRoot);
+    (entity as any).__detachedSubsceneRootIds = next;
+  }
+
   private collectActiveSurfaceSwitchGroups(surface: SceneObject): string[] {
     const scene = this.sceneManager.currentScene;
     if (!scene) return [];
@@ -1539,15 +1608,18 @@ export class Game implements IGame {
       parentNodeId: surface.name,
       relation: 'on',
     };
-    scene?.playDropAnimation(entity);
     if (scene?.activeSubscene) {
       if (this.isObjectInsideActiveSubscene(surface)) {
+        entity.subsceneItemScale = scene.getActiveSubsceneItemScale();
+        entity.update(0);
         entity.disabled = false;
         scene.subsceneEntities.add(entity);
+        this.clearEntityDetachedSubsceneRoot(entity, scene.activeSubscene);
       } else if (scene.subsceneEntities.has(entity)) {
         scene.subsceneEntities.delete(entity);
       }
     }
+    scene?.playDropAnimation(entity);
     component.items = [
       ...(component.items || []).filter((item) => item.id !== entity.name),
       placement,
@@ -2063,6 +2135,7 @@ export class Game implements IGame {
       }
 
       scene.finishDropAnimation(entity);
+      const containingSubsceneRootIds = this.getContainingSubsceneRootIds(entity);
 
       if (inventoryOwner) {
         this.removeEntityFromInventory(inventoryOwner, entity);
@@ -2071,12 +2144,16 @@ export class Game implements IGame {
       this.removeEntityFromCurrentStorage(entity);
 
       this.clearInheritedSurfaceSwitchGroups(entity);
+      this.clearActiveContainerSwitchGroups(entity);
       scene.playPickupAnimation(entity);
       if (scene.entities.includes(entity)) {
         scene.removeEntity(entity);
       }
       (entity as any).spatial = null;
       scene.subsceneEntities.delete(entity);
+      this.markEntityDetachedFromSubscenes(entity, containingSubsceneRootIds);
+      entity.subsceneItemScale = 1;
+      entity.update(0);
       this.inventory.push(entity);
       this.syncPlayerInventoryComponent();
       this.notifyInventoryUiChange();

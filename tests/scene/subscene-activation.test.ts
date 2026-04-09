@@ -121,4 +121,40 @@ describe('Subscene activation', () => {
       ['Coin', 'ClosedDrawer', 'OpenDrawer', 'Tray', 'Trig_B'].sort()
     );
   });
+
+  it('applies itemScale from the active subscene to visible item entities only', () => {
+    const fixture = createSceneFixture();
+    const rootSubscene = fixture.addTriggerbox('Trig_A', {
+      components: [{ type: 'Subscene', targetGroupId: '', itemScale: 2 }],
+    });
+    const coin = fixture.addEntity('Coin', {
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+    });
+    coin.modelScale = 1.5;
+    coin.ignoreScaling = true;
+
+    const mug = fixture.addEntity('Mug', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+    });
+    mug.modelScale = 1.5;
+    mug.ignoreScaling = true;
+
+    ComponentSystem.handleActivation(rootSubscene, fixture.scene);
+    fixture.scene.update(16);
+
+    expect(coin.subsceneItemScale).toBe(2);
+    expect(coin.scale).toBe(3);
+    expect(mug.subsceneItemScale).toBe(1);
+    expect(mug.scale).toBe(1.5);
+
+    fixture.scene.activeSubscene = null;
+    fixture.scene.subsceneEntities.clear();
+    fixture.scene.update(16);
+
+    expect(coin.subsceneItemScale).toBe(1);
+    expect(coin.scale).toBe(1.5);
+  });
 });

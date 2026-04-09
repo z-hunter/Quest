@@ -12,6 +12,7 @@ import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
 export interface SubsceneComponent {
   type: 'Subscene';
   targetGroupId: string;
+  itemScale?: number;
   title?: string;
   description?: string | null;
 }
@@ -144,6 +145,18 @@ export class ComponentSystem {
       const currentState = switchComponent.state === 2 ? 2 : 1;
       this.applySwitchState(target, switchComponent, scene, currentState, { playSound: false });
     }
+  }
+
+  private static isDetachedFromSubsceneRoot(
+    target: SceneObject,
+    subsceneRootId: string | null | undefined
+  ): boolean {
+    const normalizedRoot = String(subsceneRootId || '').trim();
+    if (!normalizedRoot) return false;
+    const detached = Array.isArray((target as any).__detachedSubsceneRootIds)
+      ? ((target as any).__detachedSubsceneRootIds as string[])
+      : [];
+    return detached.includes(normalizedRoot);
   }
 
   private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
@@ -363,8 +376,10 @@ export class ComponentSystem {
     );
     const spatialTargets = this.collectSubsceneSpatialTargets(spatialRootIds, scene);
     const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
-    const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
     const activeSubsceneId = entity.name || targetStr;
+    const targets = Array.from(new Set([...groupTargets, ...spatialTargets])).filter(
+      (target) => !this.isDetachedFromSubsceneRoot(target, activeSubsceneId)
+    );
 
     scene.activeSubscene = activeSubsceneId;
     scene.subsceneEntities.clear();

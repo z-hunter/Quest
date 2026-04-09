@@ -5,6 +5,7 @@ export interface TriggerComponent {
 export interface SubsceneTrigger extends TriggerComponent {
   type: 'Subscene';
   targetGroupId: string;
+  itemScale?: number;
   title?: string;
   description?: string | null;
 }
@@ -51,6 +52,9 @@ export function normalizeTriggerComponent(component: any): AnyTriggerComponent |
     return {
       type: 'Subscene',
       targetGroupId: typeof component.targetGroupId === 'string' ? component.targetGroupId : '',
+      ...(typeof component.itemScale === 'number' && Number.isFinite(component.itemScale)
+        ? { itemScale: component.itemScale }
+        : {}),
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
     };
@@ -81,7 +85,9 @@ export function normalizeTriggerComponent(component: any): AnyTriggerComponent |
   return component as AnyTriggerComponent;
 }
 
-export function normalizeTriggerComponents(components: any[] | null | undefined): AnyTriggerComponent[] {
+export function normalizeTriggerComponents(
+  components: any[] | null | undefined
+): AnyTriggerComponent[] {
   if (!Array.isArray(components) || components.length === 0) return [];
   return components
     .map((component) => normalizeTriggerComponent(component))

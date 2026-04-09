@@ -113,6 +113,7 @@ export class Entity extends SceneObject {
     }
   }
   ignoreScaling: boolean;
+  subsceneItemScale: number;
   // locked: boolean; // Inherited from SceneObject
   // readonly type: string = 'Static'; // Inherited
 
@@ -207,6 +208,7 @@ export class Entity extends SceneObject {
     // this.layer = 0; // Inherited
     this._parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
     this.ignoreScaling = false;
+    this.subsceneItemScale = 1.0;
     this.animationSpeed = 150; // Default 150ms
     // this.locked = false; // Inherited
 
@@ -316,7 +318,7 @@ export class Entity extends SceneObject {
     }
 
     // Final Scale = User Model Scale * Depth Factor
-    this.scale = this.modelScale * depthFactor;
+    this.scale = this.modelScale * this.subsceneItemScale * depthFactor;
 
     if (this.animator) {
       this.animator.update(deltaTime);

@@ -2569,6 +2569,7 @@ export const PropertiesPanel: React.FC = () => {
                       obj.components.push({
                         type: 'Subscene',
                         targetGroupId: '',
+                        itemScale: 1,
                         title: '',
                         description: '',
                       });
@@ -3005,6 +3006,27 @@ export const PropertiesPanel: React.FC = () => {
                           value={comp.title || ''}
                           onChange={(e) => {
                             comp.title = e.target.value;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Item Scale
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          className="e-input"
+                          value={
+                            typeof comp.itemScale === 'number' && Number.isFinite(comp.itemScale)
+                              ? comp.itemScale
+                              : 1
+                          }
+                          onChange={(e) => {
+                            const parsed = Number(e.target.value);
+                            comp.itemScale = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
                             incrementObjectVersion();
                           }}
                         />

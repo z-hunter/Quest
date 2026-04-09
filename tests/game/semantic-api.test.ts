@@ -757,4 +757,90 @@ describe('Game semantic API', () => {
     expect((latch.components[0] as { state: number }).state).toBe(2);
     expect(drawerZone.disabled).toBe(false);
   });
+
+  it('taking an item from an active subscene clears the temporary subscene item scale', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const item = fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'A small coin.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    item.ignoreScaling = true;
+    item.modelScale = 1.25;
+    item.subsceneItemScale = 2;
+    item.update(0);
+    fixture.scene.activeSubscene = 'DeskSubscene';
+    fixture.scene.subsceneEntities.add(item);
+
+    const outcome = fixture.game.takeEntity(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(item.subsceneItemScale).toBe(1);
+    expect(item.scale).toBe(1.25);
+    expect(fixture.scene.pickupAnimations).toHaveLength(1);
+    expect(fixture.scene.pickupAnimations[0].entity.subsceneItemScale).toBe(2);
+  });
+
+  it('item taken out of a subscene does not rejoin it on reopen after being dropped into the main scene', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 20);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '#drawer_items' }],
+    });
+    const note = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      groupID: '#drawer_items',
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+    });
+    const floor = fixture.addWalkbox('Walk_176');
+    floor.poly = [
+      { x: -120, y: -40 },
+      { x: 120, y: -40 },
+      { x: 120, y: 40 },
+      { x: -120, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', capacity: 4, groups: [], items: [] }];
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    expect(fixture.scene.subsceneEntities.has(note)).toBe(true);
+
+    expect(fixture.game.takeEntity(note).status).toBe('ok');
+    expect(fixture.game.putEntity(note, null, { relation: null }).status).toBe('ok');
+    expect(fixture.scene.subsceneEntities.has(note)).toBe(false);
+
+    fixture.scene.activeSubscene = null;
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+
+    expect(fixture.scene.subsceneEntities.has(note)).toBe(false);
+  });
+
+  it('taking an item out of a switch-controlled branch removes the active switch group from it', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [
+        { type: 'Switch', state: 2, groupId1: '#drawer_closed', groupId2: '#drawer_open' },
+      ],
+    });
+    const note = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      groupID: '#drawer_open,#quest_item',
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const outcome = fixture.game.takeEntity(note);
+
+    expect(outcome.status).toBe('ok');
+    expect(note.groupID).toBe('#quest_item');
+  });
 });
