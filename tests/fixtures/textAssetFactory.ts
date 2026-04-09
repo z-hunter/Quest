@@ -1,9 +1,6 @@
 import type { Scene } from '../../src/scene/Scene';
 import type { SceneObject } from '../../src/entities/SceneObject';
-import type {
-  ObjectTextAssetData,
-  SceneTextAssetData,
-} from '../../src/core/TextAssetManager';
+import type { ObjectTextAssetData, SceneTextAssetData } from '../../src/core/TextAssetManager';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../../src/mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
@@ -42,7 +39,16 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.take_prompt': 'Take what?',
   'parser.take_which_one': 'Which item do you mean: {options}?',
   'parser.take_pickup_success': 'You picked up the {item}.',
+  'parser.take_already_held': 'You are already carrying the {item}.',
   'parser.take_cannot': 'You cannot take that.',
+  'parser.put_prompt': 'Put what?',
+  'parser.put_which_item': 'Which item do you want to put down: {options}?',
+  'parser.put_which_target': 'Where exactly do you want to put it: {options}?',
+  'parser.put_item_not_held': "You aren't carrying the {item}.",
+  'parser.put_target_not_found': "You don't see anywhere suitable near {target}.",
+  'parser.put_no_place': "You can't put that there.",
+  'parser.put_success_surface': 'You put the {item} on the {target}.',
+  'parser.put_success_inventory': 'You put the {item} into the {target}.',
   'parser.open_prompt': 'Open what?',
   'parser.open_which_one': 'Which thing do you want to open: {options}?',
   'parser.open_success': 'You open the {target}.',
@@ -68,6 +74,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check', 'x'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    put: ['put', 'drop', 'place'],
     open: ['open'],
     close: ['close', 'shut'],
     goTo: ['go', 'walk', 'move'],
@@ -77,6 +84,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
     examine: ['look closely at', 'take a closer look at', 'examine', 'inspect', 'check'],
     take: ['pick up', 'take', 'get', 'grab'],
+    put: ['put down', 'put', 'drop', 'place'],
     open: ['open'],
     close: ['close', 'shut'],
     goTo: ['go to', 'walk to', 'move to', 'go', 'walk', 'move'],
@@ -88,7 +96,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   relationMarkers: {
     on: ['on'],
     under: ['under', 'beneath'],
-    in: ['in', 'inside'],
+    in: ['in', 'inside', 'into'],
     behind: ['behind'],
     near: ['near', 'next to', 'by'],
   },
@@ -98,6 +106,7 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   look: ['look chair', 'look at the chair', 'describe the chair'],
   examine: ['examine chair', 'inspect the chair', 'check the card'],
   take: ['take key', 'pick up key'],
+  put: ['put key', 'drop key', 'put key on desk', 'put cassette into recorder'],
   open: ['open drawer', 'open cabinet'],
   close: ['close drawer', 'shut cabinet'],
   goTo: ['go to office', 'walk office'],
@@ -208,7 +217,10 @@ export function createTestTextAssets(): TestTextAssets {
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
       if (typeof value === 'string') return value;
-      if (field === 'description' && typeof (obj as { description?: unknown }).description === 'string') {
+      if (
+        field === 'description' &&
+        typeof (obj as { description?: unknown }).description === 'string'
+      ) {
         return (obj as { description?: string }).description || null;
       }
       return null;
@@ -216,13 +228,16 @@ export function createTestTextAssets(): TestTextAssets {
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
-      return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+      return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : [];
     },
     getResolvedSceneField(scene, field) {
       const asset = sceneAssets.get(scene.id);
       const value = asset?.[field];
       if (typeof value === 'string') return value;
-      if (field === 'description' && typeof scene.description === 'string') return scene.description || null;
+      if (field === 'description' && typeof scene.description === 'string')
+        return scene.description || null;
       return null;
     },
     getParserLexicon() {

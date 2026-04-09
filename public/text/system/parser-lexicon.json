@@ -3,6 +3,7 @@
     "look": ["look"],
     "examine": ["examine", "inspect", "check"],
     "take": ["take", "get", "pickup", "pick up"],
+    "put": ["put", "drop", "place"],
     "open": ["open"],
     "close": ["close", "shut"],
     "goTo": ["go", "walk", "move"],
@@ -21,6 +22,7 @@
       "check"
     ],
     "take": ["pick up", "take", "get", "grab"],
+    "put": ["put down", "put", "drop", "place"],
     "open": ["open"],
     "close": ["close", "shut"],
     "goTo": [

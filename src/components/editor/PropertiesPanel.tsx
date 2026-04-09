@@ -2527,6 +2527,7 @@ export const PropertiesPanel: React.FC = () => {
 
         {/* Trigger Components */}
         {(selectedObjectType === 'Triggerbox' ||
+          selectedObjectType === 'Walkbox' ||
           selectedObjectType === 'Entity' ||
           selectedObjectType === 'Actor' ||
           selectedObjectType === 'Static' ||
@@ -2541,6 +2542,8 @@ export const PropertiesPanel: React.FC = () => {
                 <Select
                   options={[
                     { value: 'Item', label: 'Item (Pickup)' },
+                    { value: 'Inventory', label: 'Inventory' },
+                    { value: 'Surface', label: 'Surface' },
                     { value: 'Subscene', label: 'Subscene' },
                     { value: 'Subtrigger', label: 'Subtrigger' },
                     { value: 'Switch', label: 'Switch' },
@@ -2559,6 +2562,7 @@ export const PropertiesPanel: React.FC = () => {
                   onChange={(value) => {
                     const type = value;
                     if (!type) return;
+                    if (game.editor) game.editor.saveUndoState();
                     if (!obj.components) obj.components = [];
 
                     if (type === 'Subscene') {
@@ -2572,6 +2576,21 @@ export const PropertiesPanel: React.FC = () => {
                       obj.components.push({ type: 'Subtrigger', target: '' });
                     } else if (type === 'Item') {
                       obj.components.push({ type: 'Item' });
+                    } else if (type === 'Inventory') {
+                      obj.components.push({
+                        type: 'Inventory',
+                        capacity: 8,
+                        groups: [],
+                        protected: false,
+                        items: [],
+                      });
+                    } else if (type === 'Surface') {
+                      obj.components.push({
+                        type: 'Surface',
+                        capacity: 8,
+                        groups: [],
+                        items: [],
+                      });
                     } else if (type === 'Switch') {
                       obj.components.push({
                         type: 'Switch',
@@ -2646,6 +2665,7 @@ export const PropertiesPanel: React.FC = () => {
                       className="e-btn e-btn-red"
                       style={{ padding: '0 5px' }}
                       onClick={() => {
+                        if (game.editor) game.editor.saveUndoState();
                         obj.components.splice(idx, 1);
                         if (game.editor.selectedObject) {
                           (game.editor.selectedObject as any).components = obj.components;
@@ -2802,6 +2822,159 @@ export const PropertiesPanel: React.FC = () => {
                           />
                           Ignore Distance (Always Pickup)
                         </label>
+                      </div>
+                    </>
+                  )}
+
+                  {comp.type === 'Inventory' && (
+                    <>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: '#ccc',
+                          fontStyle: 'italic',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Stores picked-up items by id.
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Capacity
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="e-input"
+                          value={comp.capacity ?? 0}
+                          onChange={(e) => {
+                            comp.capacity = Math.max(0, parseInt(e.target.value || '0', 10) || 0);
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Allowed Groups
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={Array.isArray(comp.groups) ? comp.groups.join(', ') : ''}
+                          onChange={(e) => {
+                            comp.groups = e.target.value
+                              .split(',')
+                              .map((value) => value.trim())
+                              .filter(Boolean);
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label
+                          className="e-label ui-text-accent-blue ui-inline-flex-center"
+                          style={{ fontSize: '10px' }}
+                        >
+                          <input
+                            type="checkbox"
+                            style={{ marginRight: '5px' }}
+                            checked={!!comp.protected}
+                            onChange={(e) => {
+                              comp.protected = e.target.checked;
+                              incrementObjectVersion();
+                            }}
+                          />
+                          Protected
+                        </label>
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Item IDs
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={Array.isArray(comp.items) ? comp.items.join(', ') : ''}
+                          onChange={(e) => {
+                            comp.items = e.target.value
+                              .split(',')
+                              .map((value) => value.trim())
+                              .filter(Boolean);
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {comp.type === 'Surface' && (
+                    <>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: '#ccc',
+                          fontStyle: 'italic',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Accepts placed items and keeps their local positions.
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Capacity
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="e-input"
+                          value={comp.capacity ?? 0}
+                          onChange={(e) => {
+                            comp.capacity = Math.max(0, parseInt(e.target.value || '0', 10) || 0);
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Allowed Groups
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={Array.isArray(comp.groups) ? comp.groups.join(', ') : ''}
+                          onChange={(e) => {
+                            comp.groups = e.target.value
+                              .split(',')
+                              .map((value) => value.trim())
+                              .filter(Boolean);
+                            incrementObjectVersion();
+                          }}
+                        />
+                      </div>
+                      <div className="e-row">
+                        <label className="e-label" style={{ fontSize: '10px' }}>
+                          Items Preview
+                        </label>
+                        <input
+                          type="text"
+                          className="e-input"
+                          value={
+                            Array.isArray(comp.items)
+                              ? comp.items
+                                  .map((item: any) => item?.id)
+                                  .filter(Boolean)
+                                  .join(', ')
+                              : ''
+                          }
+                          onChange={(e) => {
+                            comp.items = e.target.value
+                              .split(',')
+                              .map((value) => value.trim())
+                              .filter(Boolean)
+                              .map((id) => ({ id, x: 0, y: 0 }));
+                            incrementObjectVersion();
+                          }}
+                        />
                       </div>
                     </>
                   )}

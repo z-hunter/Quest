@@ -3,6 +3,7 @@ import { Game } from '../core/Game';
 import { FileBrowser } from './FileBrowser';
 import { useEditorStore } from '../store/editorStore';
 import { ConsoleOverlay } from './ConsoleOverlay';
+import { InventoryEntityCanvas } from './inventory/InventoryEntityCanvas';
 
 interface UIOverlayProps {
   game: Game | null;
@@ -28,6 +29,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
   // Console History State
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [, forceInventoryRefresh] = useState(0);
 
   // Editor Store State
   const { enabled: editorEnabled } = useEditorStore();
@@ -70,6 +72,11 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
       });
       return unsubscribe;
     }
+  }, [game]);
+
+  useEffect(() => {
+    if (!game) return;
+    return game.subscribeInventoryUi(() => forceInventoryRefresh((value) => value + 1));
   }, [game]);
 
   useEffect(() => {
@@ -132,6 +139,9 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [choiceDialog, handleChoiceResolve]);
+
+  const previewEntity = game?.getInventoryPreviewEntity() || null;
+  const previewText = game?.getInventoryPreviewText() || null;
 
   return (
     <>
@@ -282,6 +292,22 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
       {/* Virtual Console Overlay (High Res, Open State) */}
       {game && <ConsoleOverlay game={game} />}
+
+      {game && !editorEnabled && previewEntity && (
+        <div
+          className="inventory-preview-backdrop"
+          style={{ pointerEvents: 'auto' }}
+          onClick={() => game.closeInventoryPreview()}
+        >
+          <div className="inventory-preview-card" onClick={(e) => e.stopPropagation()}>
+            <InventoryEntityCanvas entity={previewEntity} size={320} />
+          </div>
+        </div>
+      )}
+
+      {game && !editorEnabled && previewEntity && previewText && (
+        <div className="inventory-preview-description">{previewText}</div>
+      )}
 
       {/* File Browser Modal */}
       {fileBrowser && fileBrowser.open && (

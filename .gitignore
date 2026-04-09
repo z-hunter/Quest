@@ -18,6 +18,7 @@ docs
 !.vscode/extensions.json
 .idea
 .DS_Store
+.playwright-mcp/
 *.suo
 *.ntvs*
 *.njsproj

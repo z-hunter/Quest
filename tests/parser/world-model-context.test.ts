@@ -117,4 +117,36 @@ describe('Parser world model context', () => {
       ])
     );
   });
+
+  it('uses the titled ancestor relation when flattening untitled surface-like intermediates', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+    });
+    fixture.addEntity('Tray', {
+      title: null,
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+    fixture.addEntity('Key', {
+      title: 'Key',
+      description: 'A key on the tray.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Tray', relation: 'on' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look key', null);
+
+    expect(model.context.spatialRelations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anchorNodeId: 'Drawer',
+          relation: 'in',
+          childNodeIds: expect.arrayContaining(['Key']),
+        }),
+      ])
+    );
+  });
 });

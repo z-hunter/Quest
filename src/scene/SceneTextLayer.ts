@@ -65,9 +65,9 @@ function normalizeRelation(
 }
 
 function getSubsceneRootId(triggerbox: Triggerbox): string {
-  const subsceneComponent = triggerbox.components?.find((component: any) => component?.type === 'Subscene') as
-    | { targetGroupId?: string }
-    | undefined;
+  const subsceneComponent = triggerbox.components?.find(
+    (component: any) => component?.type === 'Subscene'
+  ) as { targetGroupId?: string } | undefined;
   return String(triggerbox.name || subsceneComponent?.targetGroupId || '').trim();
 }
 
@@ -107,7 +107,8 @@ export function getSceneTextLayerAccessState(
   titleById?: Map<string, string | null>
 ): SceneTextLayerAccessState {
   const allObjectById =
-    objectById || new Map(scene.getAllSceneObjects().map((candidate) => [candidate.name, candidate] as const));
+    objectById ||
+    new Map(scene.getAllSceneObjects().map((candidate) => [candidate.name, candidate] as const));
   const allTitleById =
     titleById ||
     new Map(
@@ -121,6 +122,7 @@ export function getSceneTextLayerAccessState(
   let currentParentId = placement?.parentNodeId || null;
   let relationToAncestor = normalizeRelation(placement?.relation) || null;
   let effectiveParentId: string | null = null;
+  let effectiveRelation: EffectiveRelation | null = relationToAncestor;
   let blocked = false;
   let hidden = false;
   let inInactiveSubscene = false;
@@ -149,6 +151,7 @@ export function getSceneTextLayerAccessState(
 
     if (!effectiveParentId && allTitleById.get(parentObject.name)) {
       effectiveParentId = parentObject.name;
+      effectiveRelation = relationToAncestor;
     }
 
     const parentPlacement = getPlacement(scene, parentObject);
@@ -162,7 +165,7 @@ export function getSceneTextLayerAccessState(
     object,
     title,
     effectiveParentId,
-    effectiveRelation: normalizeRelation(placement?.relation) || null,
+    effectiveRelation,
     blocked,
     hidden,
     inInactiveSubscene,
@@ -173,13 +176,12 @@ export function getSceneTextLayerAccessState(
   };
 }
 
-export function buildSceneTextLayerSnapshot(
-  scene: Scene,
-  game: IGame
-): SceneTextLayerSnapshot {
+export function buildSceneTextLayerSnapshot(scene: Scene, game: IGame): SceneTextLayerSnapshot {
   const allObjects = scene.getAllSceneObjects();
   const objectById = new Map(allObjects.map((object) => [object.name, object] as const));
-  const titleById = new Map(allObjects.map((object) => [object.name, getSceneObjectTitle(game, object)] as const));
+  const titleById = new Map(
+    allObjects.map((object) => [object.name, getSceneObjectTitle(game, object)] as const)
+  );
 
   const entries: SceneTextLayerEntry[] = [];
 
@@ -202,7 +204,10 @@ export function buildSceneTextLayerSnapshot(
 
   const entryById = new Map(entries.map((entry) => [entry.object.name, entry] as const));
   const childrenByParentId = new Map<string, SceneTextLayerEntry[]>();
-  const childrenByParentAndRelation = new Map<string, Map<EffectiveRelation, SceneTextLayerEntry[]>>();
+  const childrenByParentAndRelation = new Map<
+    string,
+    Map<EffectiveRelation, SceneTextLayerEntry[]>
+  >();
 
   for (const entry of entries) {
     if (!entry.effectiveParentId || !entry.effectiveRelation) continue;

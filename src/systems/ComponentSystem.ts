@@ -38,6 +38,27 @@ export interface ItemComponent {
   ignoreDistance?: boolean;
 }
 
+export interface InventoryComponent {
+  type: 'Inventory';
+  capacity?: number;
+  groups?: string[];
+  protected?: boolean;
+  items?: string[];
+}
+
+export interface SurfaceItemPlacement {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface SurfaceComponent {
+  type: 'Surface';
+  capacity?: number;
+  groups?: string[];
+  items?: SurfaceItemPlacement[];
+}
+
 import { ThreeDParallaxSystem, type ThreeDParallaxComponent } from './ThreeDParallaxSystem';
 import type { ActivationSceneContext } from './types';
 
@@ -75,10 +96,54 @@ export class ComponentSystem {
         result.add(obj);
         continue;
       }
-
     }
 
     return Array.from(result);
+  }
+
+  private static collectSubsceneSpatialTargets(
+    rootIds: string[],
+    scene: ActivationSceneContext
+  ): SceneObject[] {
+    const result = new Set<SceneObject>();
+    const visitedParentIds = new Set<string>();
+    const queue = rootIds.map((value) => String(value || '').trim()).filter((value) => !!value);
+
+    while (queue.length > 0) {
+      const parentId = queue.shift();
+      if (!parentId || visitedParentIds.has(parentId)) continue;
+      visitedParentIds.add(parentId);
+
+      const children = this.getDirectSpatialChildren([parentId], scene);
+      for (const child of children) {
+        if (!result.has(child)) {
+          result.add(child);
+        }
+
+        const isNestedSubscene = child.components?.some(
+          (component: any) => component?.type === 'Subscene'
+        );
+        if (!isNestedSubscene) {
+          queue.push(child.name);
+        }
+      }
+    }
+
+    return Array.from(result);
+  }
+
+  private static syncSubsceneSwitchStates(
+    targets: SceneObject[],
+    scene: ActivationSceneContext
+  ): void {
+    for (const target of targets) {
+      const switchComponent = target.components?.find(
+        (component: any) => component?.type === 'Switch'
+      ) as SwitchComponent | undefined;
+      if (!switchComponent) continue;
+      const currentState = switchComponent.state === 2 ? 2 : 1;
+      this.applySwitchState(target, switchComponent, scene, currentState, { playSound: false });
+    }
   }
 
   private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
@@ -146,10 +211,7 @@ export class ComponentSystem {
     let targetX = 0;
     let targetY = 0;
 
-    if (
-      Array.isArray((entity as any).poly) &&
-      (entity as any).poly.length > 0
-    ) {
+    if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
       const poly = (entity as any).poly as Array<{ x: number; y: number }>;
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
@@ -194,6 +256,37 @@ export class ComponentSystem {
     if (distanceError) return distanceError;
 
     return null; // OK
+  }
+
+  static getInventoryComponent(entity: SceneObject | null | undefined): InventoryComponent | null {
+    if (!entity?.components) return null;
+    return (
+      (entity.components.find((component: any) => component?.type === 'Inventory') as
+        | InventoryComponent
+        | undefined) || null
+    );
+  }
+
+  static getSurfaceComponent(entity: SceneObject | null | undefined): SurfaceComponent | null {
+    if (!entity?.components) return null;
+    return (
+      (entity.components.find((component: any) => component?.type === 'Surface') as
+        | SurfaceComponent
+        | undefined) || null
+    );
+  }
+
+  static getGroupIds(entity: SceneObject | null | undefined): string[] {
+    const raw = String(entity?.groupID || '').trim();
+    if (!raw) return [];
+    return Array.from(
+      new Set(
+        raw
+          .split(/[,\s]+/)
+          .map((value) => value.trim())
+          .filter((value) => value.startsWith('#'))
+      )
+    );
   }
 
   private static handleSubtrigger(
@@ -268,7 +361,7 @@ export class ComponentSystem {
           .filter((value) => !!value)
       )
     );
-    const spatialTargets = this.getDirectSpatialChildren(spatialRootIds, scene);
+    const spatialTargets = this.collectSubsceneSpatialTargets(spatialRootIds, scene);
     const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
     const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
     const activeSubsceneId = entity.name || targetStr;
@@ -279,6 +372,7 @@ export class ComponentSystem {
       t.disabled = false;
       scene.subsceneEntities.add(t);
     });
+    this.syncSubsceneSwitchStates(targets, scene);
     return true; // Handled
   }
 
@@ -338,13 +432,16 @@ export class ComponentSystem {
     entity: SceneObject,
     sw: SwitchComponent,
     scene: ActivationSceneContext,
-    nextState: 1 | 2
+    nextState: 1 | 2,
+    options?: { playSound?: boolean }
   ): void {
     sw.state = nextState;
 
     const game = scene.game as unknown as IGame;
-    if (nextState === 1 && sw.sound1) game?.playSound(sw.sound1);
-    if (nextState === 2 && sw.sound2) game?.playSound(sw.sound2);
+    if (options?.playSound !== false) {
+      if (nextState === 1 && sw.sound1) game?.playSound(sw.sound1);
+      if (nextState === 2 && sw.sound2) game?.playSound(sw.sound2);
+    }
 
     const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
     const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;

@@ -28,6 +28,17 @@ export interface IGame {
   openEntity(entity: SceneObject): GameActionOutcome;
   closeEntity(entity: SceneObject): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
+  putEntity(
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
+  addInventoryEntity(owner: Entity, entity: Entity): GameActionOutcome;
+  removeEntityFromInventory(owner: Entity, entity: Entity): GameActionOutcome;
+  hasInventoryEntity(owner: Entity, entity: Entity): boolean;
+  getInventoryEntities(owner: Entity): Entity[];
+  addEntityToSurface(surface: SceneObject, entity: Entity): GameActionOutcome;
+  removeEntityFromSurface(surface: SceneObject, entity: Entity): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
   goToSceneTarget(target: string): GameActionOutcome;

@@ -29,7 +29,10 @@ describe('Subscene activation', () => {
     expect(directEntity.disabled).toBe(false);
     expect(nestedSubscene.disabled).toBe(false);
     expect(grandchild.disabled).toBe(true);
-    expect([...fixture.scene.subsceneEntities].map((item) => item.name).sort()).toEqual(['Lamp', 'Trig_B']);
+    expect([...fixture.scene.subsceneEntities].map((item) => item.name).sort()).toEqual([
+      'Lamp',
+      'Trig_B',
+    ]);
   });
 
   it('still includes group targets together with direct spatial children', () => {
@@ -54,5 +57,68 @@ describe('Subscene activation', () => {
       'ByGroup',
       'BySpatial',
     ]);
+  });
+
+  it('includes recursive descendants inside the subscene, but preserves switch-gated visibility and nested subscene boundaries', () => {
+    const fixture = createSceneFixture();
+    const rootSubscene = fixture.addTriggerbox('Trig_A', {
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const openDrawer = fixture.addEntity('OpenDrawer', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+      components: [
+        {
+          type: 'Switch',
+          state: 2,
+          groupId1: '#open_drawer_closed',
+          groupId2: '#open_drawer_open',
+        },
+      ],
+    });
+    const tray = fixture.addEntity('Tray', {
+      disabled: true,
+      groupID: '#open_drawer_open',
+      spatial: { parentNodeId: 'OpenDrawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const coin = fixture.addEntity('Coin', {
+      disabled: true,
+      spatial: { parentNodeId: 'Tray', relation: 'on' },
+    });
+    const closedDrawer = fixture.addEntity('ClosedDrawer', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+      components: [
+        { type: 'Switch', state: 1, groupId1: '#drawer_closed', groupId2: '#drawer_open' },
+      ],
+    });
+    const hiddenBySwitch = fixture.addEntity('HiddenBySwitch', {
+      disabled: true,
+      groupID: '#drawer_open',
+      spatial: { parentNodeId: 'ClosedDrawer', relation: 'in' },
+    });
+    const nestedSubscene = fixture.addTriggerbox('Trig_B', {
+      disabled: true,
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+      spatial: { parentNodeId: 'Trig_A', relation: 'in' },
+    });
+    const hiddenGrandchild = fixture.addEntity('HiddenGrandchild', {
+      disabled: true,
+      spatial: { parentNodeId: 'Trig_B', relation: 'in' },
+    });
+
+    ComponentSystem.handleActivation(rootSubscene, fixture.scene);
+
+    expect(openDrawer.disabled).toBe(false);
+    expect(tray.disabled).toBe(false);
+    expect(coin.disabled).toBe(false);
+    expect(closedDrawer.disabled).toBe(false);
+    expect(hiddenBySwitch.disabled).toBe(true);
+    expect(nestedSubscene.disabled).toBe(false);
+    expect(hiddenGrandchild.disabled).toBe(true);
+    expect([...fixture.scene.subsceneEntities].map((item) => item.name).sort()).toEqual(
+      ['Coin', 'ClosedDrawer', 'OpenDrawer', 'Tray', 'Trig_B'].sort()
+    );
   });
 });

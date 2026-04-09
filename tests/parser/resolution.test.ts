@@ -74,6 +74,41 @@ describe('Parser resolution', () => {
     expect(fixture.scene.entities).toContain(sceneCoin);
   });
 
+  it('looks up a taken item from inventory instead of stale closed-drawer scene context', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Upper drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 2, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const note = fixture.addEntity('Note', {
+      title: 'Note',
+      description: 'Inventory note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const taken = fixture.game.takeEntity(note);
+    expect(taken.status).toBe('ok');
+    expect((note as any).spatial).toBeNull();
+
+    (
+      drawer.components?.find((component: any) => component?.type === 'Switch') as {
+        state?: number;
+      }
+    ).state = 1;
+
+    const result = await fixture.run('look note');
+
+    expect(result.messages.at(-1)).toBe('Inventory note.');
+  });
+
   it('prefers the nearest scene object when duplicate titles are both in scene', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

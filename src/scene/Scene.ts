@@ -35,6 +35,16 @@ interface PickupAnimation {
   baseModelScale: number;
 }
 
+interface DropAnimation {
+  entity: Entity;
+  targetY: number;
+  lift: number;
+  duration: number;
+  elapsed: number;
+  baseModelScale: number;
+  targetOpacity: number;
+}
+
 export interface SceneScaling {
   enabled: boolean;
   min: number;
@@ -84,6 +94,7 @@ export class Scene {
   background: HTMLImageElement | null;
   entities: Entity[];
   pickupAnimations: PickupAnimation[] = [];
+  dropAnimations: DropAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
   scaling: SceneScaling;
@@ -357,6 +368,40 @@ export class Scene {
       elapsed: 0,
       baseModelScale: clone.modelScale || 1,
     });
+  }
+
+  playDropAnimation(entity: Entity): void {
+    this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
+
+    const targetOpacity = entity.opacity ?? 1.0;
+    const baseModelScale = entity.modelScale || 1;
+    const targetY = entity.y;
+
+    entity.locked = true;
+    entity.y = targetY - 26;
+    entity.opacity = 0;
+    entity.modelScale = baseModelScale * 1.1;
+
+    this.dropAnimations.push({
+      entity,
+      targetY,
+      lift: 26,
+      duration: 260,
+      elapsed: 0,
+      baseModelScale,
+      targetOpacity,
+    });
+  }
+
+  finishDropAnimation(entity: Entity): void {
+    const active = this.dropAnimations.find((anim) => anim.entity === entity);
+    if (!active) return;
+
+    entity.y = active.targetY;
+    entity.opacity = active.targetOpacity;
+    entity.modelScale = active.baseModelScale;
+    entity.locked = false;
+    this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
   }
 
   findEntity(name: string): Entity | undefined {
@@ -696,6 +741,31 @@ export class Scene {
         }
       }
       this.pickupAnimations = nextAnimations;
+    }
+
+    if (this.dropAnimations.length > 0) {
+      const nextAnimations: DropAnimation[] = [];
+      for (const anim of this.dropAnimations) {
+        if (!this.entities.includes(anim.entity)) continue;
+
+        anim.elapsed += deltaTime;
+        const progress = Math.min(anim.elapsed / anim.duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 2);
+
+        anim.entity.y = anim.targetY - anim.lift * (1 - eased);
+        anim.entity.opacity = Math.min(anim.targetOpacity, anim.targetOpacity * progress);
+        anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * (1 - eased));
+
+        if (progress < 1) {
+          nextAnimations.push(anim);
+        } else {
+          anim.entity.y = anim.targetY;
+          anim.entity.opacity = anim.targetOpacity;
+          anim.entity.modelScale = anim.baseModelScale;
+          anim.entity.locked = false;
+        }
+      }
+      this.dropAnimations = nextAnimations;
     }
   }
 

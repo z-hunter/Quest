@@ -48,6 +48,14 @@
     "i want to take the key",
     "please pick up the card"
   ],
+  "put": [
+    "put key",
+    "drop key",
+    "put key on table",
+    "drop the tape on desk",
+    "put cassette into recorder",
+    "place note under table"
+  ],
   "open": [
     "open",
     "open drawer",

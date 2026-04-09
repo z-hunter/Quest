@@ -132,4 +132,13 @@ export class SceneObject {
   hitTest(_x: number, _y: number): boolean {
     return false;
   }
+
+  /**
+   * Checks whether a point is inside the object's zone for non-interaction systems.
+   * By default this uses hitTest, but subclasses may ignore interaction-only state
+   * such as `locked` while still respecting real visibility/disabled state.
+   */
+  containsPoint(x: number, y: number): boolean {
+    return this.hitTest(x, y);
+  }
 }

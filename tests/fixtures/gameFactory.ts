@@ -91,6 +91,27 @@ export function createTestGame(): TestGameHarness {
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
     },
+    putEntity(_entity: Entity, _target?: SceneObject | null) {
+      return notImplementedOutcome('not_implemented_put_entity');
+    },
+    addInventoryEntity(_owner: Entity, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_add_inventory_entity');
+    },
+    removeEntityFromInventory(_owner: Entity, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_remove_entity_from_inventory');
+    },
+    hasInventoryEntity(_owner: Entity, _entity: Entity) {
+      return false;
+    },
+    getInventoryEntities(_owner: Entity) {
+      return [];
+    },
+    addEntityToSurface(_surface: SceneObject, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_add_entity_to_surface');
+    },
+    removeEntityFromSurface(_surface: SceneObject, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_remove_entity_from_surface');
+    },
     removeInventoryEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_remove_inventory_entity');
     },
@@ -124,6 +145,8 @@ export function createTestGame(): TestGameHarness {
     ctx: null,
     bufferCanvas: {} as HTMLCanvasElement,
   };
+
+  (game as any).inventoryEntityStore = new Map();
 
   return {
     game,
