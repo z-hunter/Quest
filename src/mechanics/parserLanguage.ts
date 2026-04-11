@@ -246,6 +246,7 @@ export function extractTakeCommand(
     return { item: null, target: null, relation: null };
   }
 
+  // "take X from Y" implies X was in Y (semantic inversion)
   const relationCandidates: Array<{ relation: ParserRelationType; marker: string }> = [
     { relation: 'in', marker: 'from' },
   ];

@@ -309,7 +309,7 @@ export function createParserFixture(): ParserFixture {
       const distanceProbe =
         target?.title === null || !fixture.textAssets.getResolvedObjectField(target, 'title')
           ? target
-          : target;
+          : target.object || target;
       const distanceError = ComponentSystem.getInteractionDistanceError(
         distanceProbe as any,
         player

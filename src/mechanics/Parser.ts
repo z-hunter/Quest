@@ -1399,6 +1399,8 @@ export class Parser {
     anchor: SceneObject,
     relation: ParserRelationType
   ): Entity[] {
+    if (relation === 'near') return [];
+
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
 
@@ -1406,7 +1408,7 @@ export class Parser {
     const directEntries =
       textLayer.childrenByParentAndRelation
         .get(anchor.name)
-        ?.get(relation as 'in' | 'on' | 'under' | 'behind') || [];
+        ?.get(relation as Exclude<ParserRelationType, 'near'>) || [];
 
     return directEntries
       .map((entry) => entry.object)

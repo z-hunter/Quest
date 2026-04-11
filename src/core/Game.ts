@@ -1308,6 +1308,40 @@ export class Game implements IGame {
     };
   }
 
+  private isCandidateRectInside(
+    candidateRect: { x: number; y: number; w: number; h: number },
+    bounds: {
+      type: 'rect' | 'poly';
+      rect: { left: number; top: number; right: number; bottom: number };
+      poly?: Array<{ x: number; y: number }>;
+    },
+    surface: SceneObject,
+    placementRelation: SpatialRelationType | null
+  ): boolean {
+    if (surface.type === 'Walkbox') {
+      return (
+        candidateRect.x >= bounds.rect.left &&
+        candidateRect.y >= bounds.rect.top &&
+        candidateRect.x + candidateRect.w <= bounds.rect.right &&
+        candidateRect.y + candidateRect.h <= bounds.rect.bottom
+      );
+    }
+
+    if (bounds.type === 'poly' && bounds.poly) {
+      if (placementRelation !== 'in') {
+        return this.isPolygonSurfaceFootprintSupported(candidateRect, bounds.poly);
+      }
+      return Geometry.rectInsidePolygon(candidateRect, bounds.poly);
+    }
+
+    return (
+      candidateRect.x >= bounds.rect.left &&
+      candidateRect.y >= bounds.rect.top &&
+      candidateRect.x + candidateRect.w <= bounds.rect.right &&
+      candidateRect.y + candidateRect.h <= bounds.rect.bottom
+    );
+  }
+
   private evaluateSurfacePlacement(
     surface: SceneObject,
     entity: Entity,
@@ -1337,20 +1371,7 @@ export class Game implements IGame {
       };
     }
 
-    const inside =
-      surface.type === 'Walkbox'
-        ? candidateRect.x >= bounds.rect.left &&
-          candidateRect.y >= bounds.rect.top &&
-          candidateRect.x + candidateRect.w <= bounds.rect.right &&
-          candidateRect.y + candidateRect.h <= bounds.rect.bottom
-        : bounds.type === 'poly' && bounds.poly && placementRelation !== 'in'
-          ? this.isPolygonSurfaceFootprintSupported(candidateRect, bounds.poly)
-          : bounds.type === 'poly' && bounds.poly
-            ? Geometry.rectInsidePolygon(candidateRect, bounds.poly)
-            : candidateRect.x >= bounds.rect.left &&
-              candidateRect.y >= bounds.rect.top &&
-              candidateRect.x + candidateRect.w <= bounds.rect.right &&
-              candidateRect.y + candidateRect.h <= bounds.rect.bottom;
+    const inside = this.isCandidateRectInside(candidateRect, bounds, surface, placementRelation);
 
     if (!inside) {
       return {
