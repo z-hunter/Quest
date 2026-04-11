@@ -4,6 +4,7 @@ import type { SceneObject } from '../../src/entities/SceneObject';
 import type { SpatialRelationType } from '../../src/scene/spatialTypes';
 import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
+import { InventoryManager } from '../../src/core/InventoryManager';
 import { createTestTextAssets } from './textAssetFactory';
 
 export type TestGameHarness = {
@@ -56,7 +57,10 @@ export function createTestGame(): TestGameHarness {
         notifyObjectChanged() {},
       },
     } as any,
-    inventory: [],
+    inventoryManager: {} as any,
+    get inventory() {
+      return (this.inventoryManager as any)?.inventory || [];
+    },
     showMessage(text: string) {
       messages.push(text);
     },
@@ -145,6 +149,12 @@ export function createTestGame(): TestGameHarness {
     ctx: null,
     bufferCanvas: {} as HTMLCanvasElement,
   };
+
+  game.inventoryManager = new InventoryManager(
+    game.sceneManager as any,
+    textAssets as any,
+    game.text.bind(game)
+  );
 
   (game as any).inventoryEntityStore = new Map();
 

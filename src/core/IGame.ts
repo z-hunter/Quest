@@ -8,6 +8,7 @@ import type { GameActionOutcome } from './GameActionTypes';
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
+import type { InventoryManager } from './InventoryManager';
 
 export interface IGame {
   assets: AssetLoader;
@@ -16,6 +17,7 @@ export interface IGame {
   sceneManager: SceneManager;
   editor: SceneEditor;
   inventory: Entity[];
+  inventoryManager: InventoryManager;
 
   showMessage(text: string): void;
   log(text: string): void;

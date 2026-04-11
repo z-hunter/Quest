@@ -390,6 +390,9 @@ describe('Game semantic API', () => {
     fixture.game.inventory.push(key);
 
     const outcome = fixture.game.putEntity(key, desk, { relation: 'on' });
+    if (outcome.status !== 'ok') {
+      throw new Error('DEBUG OUTCOME: ' + JSON.stringify(outcome));
+    }
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_on_surface');

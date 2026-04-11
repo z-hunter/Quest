@@ -229,7 +229,7 @@ export function createParserFixture(): ParserFixture {
       return { status: 'failed', code: 'inventory_item_already_present', recoverable: true };
     }
     if (fixture.game.inventory.includes(entity)) {
-      fixture.game.inventory = fixture.game.inventory.filter((candidate) => candidate !== entity);
+      fixture.game.removeInventoryEntity(entity);
     }
     fixture.scene.removeEntity(entity);
     (entity as any).spatial = null;
@@ -378,7 +378,7 @@ export function createParserFixture(): ParserFixture {
       };
     }
 
-    fixture.game.inventory = fixture.game.inventory.filter((candidate) => candidate !== entity);
+    fixture.game.removeInventoryEntity(entity);
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
     const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');

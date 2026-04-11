@@ -16,20 +16,15 @@ import type { GameActionOutcome } from './GameActionTypes';
 import { Console } from './Console';
 import { ScriptRegistry } from './ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import type {
-  InventoryComponent,
-  SurfaceComponent,
-  SurfaceItemPlacement,
-  SwitchComponent,
-} from '../systems/ComponentSystem';
+import type { SwitchComponent } from '../systems/ComponentSystem';
 import {
   buildSceneTextLayerSnapshot,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
 } from '../scene/SceneTextLayer';
-import { Geometry } from '../utils/Geometry';
 
 import type { IGame } from './IGame';
+import { InventoryManager } from './InventoryManager';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
@@ -52,7 +47,6 @@ export class Game implements IGame {
   crtFilter: CRTFilter | null;
   lastTime: number;
   isRunning: boolean;
-  inventory: Entity[];
 
   playSound(name: string): void {
     if (this.audio) {
@@ -71,11 +65,17 @@ export class Game implements IGame {
   console: Console; // Virtual Console
   score: number = 0;
   cursorBlink: number = 0;
-  private readonly inventoryEntityStore = new Map<string, Entity[]>();
-  private inventoryPreviewEntity: Entity | null = null;
-  private inventoryPreviewText: string | null = null;
-  private readonly inventoryUiListeners = new Set<() => void>();
-  private putDebugEnabled = false;
+
+  /** Manages all inventory/surface storage state and logic. */
+  inventoryManager: InventoryManager;
+
+  // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
+  get inventory(): Entity[] {
+    return this.inventoryManager.inventory;
+  }
+  set inventory(value: Entity[]) {
+    this.inventoryManager.inventory = value;
+  }
 
   // FPS Counter
   fps: number = 0;
@@ -194,7 +194,6 @@ export class Game implements IGame {
 
     this.lastTime = 0;
     this.isRunning = false;
-    this.inventory = []; // Player inventory
 
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
@@ -215,6 +214,14 @@ export class Game implements IGame {
     void this.textAssets.preloadServiceAssets();
     void this.textAssets.preloadParserLanguageAssets();
     this.sceneManager = new SceneManager(this);
+
+    // Initialize InventoryManager after sceneManager and textAssets are ready
+    this.inventoryManager = new InventoryManager(
+      this.sceneManager,
+      this.textAssets,
+      this.text.bind(this)
+    );
+
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {
         __QUEST_DEBUG__?: Record<string, unknown>;
@@ -225,10 +232,10 @@ export class Game implements IGame {
         profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
         profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
         enablePutDebug: () => {
-          this.putDebugEnabled = true;
+          this.inventoryManager.enablePutDebug();
         },
         disablePutDebug: () => {
-          this.putDebugEnabled = false;
+          this.inventoryManager.disablePutDebug();
         },
       };
     }
@@ -539,11 +546,6 @@ export class Game implements IGame {
     return this.textAssets.getServiceText(key, params);
   }
 
-  private debugPut(event: string, payload?: Record<string, unknown>): void {
-    if (!this.putDebugEnabled) return;
-    console.debug(`[Quest PUT] ${event}`, payload || {});
-  }
-
   private getPlayerFacingObjectTitle(target: SceneObject): string | null {
     const title = this.textAssets.getResolvedObjectField(target as any, 'title');
     return title && title.trim() ? title.trim() : null;
@@ -574,69 +576,34 @@ export class Game implements IGame {
     return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
   }
 
+  // ─── Inventory UI / Preview delegates ───────────────────────────────────
+
   private notifyInventoryUiChange(): void {
-    const self = this as any;
-    const listeners: Set<() => void> =
-      this.inventoryUiListeners || self.inventoryUiListeners || new Set();
-    self.inventoryUiListeners = listeners;
-    listeners.forEach((listener) => listener());
+    this.inventoryManager.notifyInventoryUiChange();
   }
 
   subscribeInventoryUi(listener: () => void): () => void {
-    const self = this as any;
-    const listeners: Set<() => void> =
-      this.inventoryUiListeners || self.inventoryUiListeners || new Set();
-    self.inventoryUiListeners = listeners;
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
+    return this.inventoryManager.subscribeInventoryUi(listener);
   }
 
   private reconcileInventoryPreview(): void {
-    if (
-      this.inventoryPreviewEntity &&
-      (!this.inventory.includes(this.inventoryPreviewEntity) ||
-        this.inventoryPreviewEntity.disabled)
-    ) {
-      this.inventoryPreviewEntity = null;
-      this.inventoryPreviewText = null;
-    }
+    this.inventoryManager.reconcileInventoryPreview();
   }
 
   getInventoryPreviewEntity(): Entity | null {
-    this.reconcileInventoryPreview();
-    return this.inventoryPreviewEntity;
+    return this.inventoryManager.getInventoryPreviewEntity();
   }
 
   getInventoryPreviewText(): string | null {
-    this.reconcileInventoryPreview();
-    return this.inventoryPreviewText;
-  }
-
-  private resolveInventoryPreviewText(entity: Entity): string | null {
-    const details = this.textAssets.getResolvedObjectField(entity, 'details');
-    if (details && details.trim()) return details;
-
-    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
-    const runtimeDescription = typeof entity.description === 'string' ? entity.description : null;
-    const description = objectDescription || runtimeDescription;
-    return description && description.trim() ? description : null;
+    return this.inventoryManager.getInventoryPreviewText();
   }
 
   openInventoryPreview(entity: Entity, previewText?: string | null): void {
-    if (!this.inventory.includes(entity) || entity.disabled) return;
-    this.inventoryPreviewEntity = entity;
-    this.inventoryPreviewText =
-      previewText !== undefined ? previewText : this.resolveInventoryPreviewText(entity);
-    this.notifyInventoryUiChange();
+    this.inventoryManager.openInventoryPreview(entity, previewText);
   }
 
   closeInventoryPreview(): void {
-    if (!this.inventoryPreviewEntity) return;
-    this.inventoryPreviewEntity = null;
-    this.inventoryPreviewText = null;
-    this.notifyInventoryUiChange();
+    this.inventoryManager.closeInventoryPreview();
   }
 
   private getSurfaceDropMessage(surface: SceneObject, item: Entity): string {
@@ -769,422 +736,90 @@ export class Game implements IGame {
     return this.getSpatialParentMessage(target) || null;
   }
 
+  // ─── Inventory / Surface storage delegates ───────────────────────────────
+  // All state and logic lives in InventoryManager. Game provides callback
+  // functions that InventoryManager needs (blocked access, switch component,
+  // player-facing title) to avoid circular dependencies.
+
   private isEntityInInventory(entity: Entity): boolean {
-    return this.inventory.includes(entity);
-  }
-
-  private getPlayerEntity(): Entity | null {
-    const player = this.sceneManager.currentScene?.player;
-    return player instanceof Entity ? player : null;
-  }
-
-  private isPlayerInventoryOwner(owner: Entity | null | undefined): boolean {
-    const player = this.getPlayerEntity();
-    return !!owner && !!player && owner === player;
-  }
-
-  private ensureInventoryComponent(owner: Entity): InventoryComponent {
-    let component = ComponentSystem.getInventoryComponent(owner);
-    if (!component) {
-      component = {
-        type: 'Inventory',
-        capacity: Number.MAX_SAFE_INTEGER,
-        groups: [],
-        protected: false,
-        items: [],
-      };
-      owner.components = owner.components || [];
-      owner.components.push(component);
-    }
-    if (!Array.isArray(component.groups)) component.groups = [];
-    if (!Array.isArray(component.items)) component.items = [];
-    if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
-      component.capacity = Number.MAX_SAFE_INTEGER;
-    }
-    component.protected = !!component.protected;
-    return component;
-  }
-
-  private ensureSurfaceComponent(surface: SceneObject): SurfaceComponent {
-    let component = ComponentSystem.getSurfaceComponent(surface);
-    if (!component) {
-      component = {
-        type: 'Surface',
-        capacity: Number.MAX_SAFE_INTEGER,
-        groups: [],
-        items: [],
-      };
-      surface.components = surface.components || [];
-      surface.components.push(component);
-    }
-    if (!Array.isArray(component.groups)) component.groups = [];
-    if (!Array.isArray(component.items)) component.items = [];
-    if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
-      component.capacity = Number.MAX_SAFE_INTEGER;
-    }
-    return component;
-  }
-
-  private syncPlayerInventoryComponent(): void {
-    const player = this.getPlayerEntity();
-    if (!player) return;
-    const component = this.ensureInventoryComponent(player);
-    component.items = this.inventory.map((entity) => entity.name);
-  }
-
-  private syncInventoryStore(owner: Entity, entities: Entity[]): void {
-    if (this.isPlayerInventoryOwner(owner)) {
-      this.inventory = entities;
-      this.syncPlayerInventoryComponent();
-      this.reconcileInventoryPreview();
-      this.notifyInventoryUiChange();
-      return;
-    }
-    this.inventoryEntityStore.set(owner.name, entities);
-    this.ensureInventoryComponent(owner).items = entities.map((entity) => entity.name);
-  }
-
-  private getStoredInventoryEntities(owner: Entity): Entity[] {
-    if (this.isPlayerInventoryOwner(owner)) {
-      this.syncPlayerInventoryComponent();
-      return this.inventory;
-    }
-
-    const existing = this.inventoryEntityStore.get(owner.name);
-    if (existing) {
-      this.ensureInventoryComponent(owner).items = existing.map((entity) => entity.name);
-      return existing;
-    }
-
-    const component = this.ensureInventoryComponent(owner);
-    const scene = this.sceneManager.currentScene;
-    const resolved = (component.items || [])
-      .map((id) => {
-        const candidate = scene?.getObjectByName(id);
-        return candidate instanceof Entity ? candidate : null;
-      })
-      .filter((entity): entity is Entity => !!entity);
-
-    this.inventoryEntityStore.set(owner.name, resolved);
-    component.items = resolved.map((entity) => entity.name);
-    return resolved;
+    return this.inventoryManager.isEntityInInventory(entity);
   }
 
   private findInventoryOwnerForEntity(entity: Entity): Entity | null {
-    const player = this.getPlayerEntity();
-    if (player && this.inventory.includes(entity)) {
-      return player;
-    }
-
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return null;
-    for (const candidate of scene.entities) {
-      if (!(candidate instanceof Entity) || candidate.disabled) continue;
-      const component = ComponentSystem.getInventoryComponent(candidate);
-      if (!component) continue;
-      if (this.getStoredInventoryEntities(candidate).includes(entity)) {
-        return candidate;
-      }
-    }
-    return null;
+    return this.inventoryManager.findInventoryOwnerForEntity(entity);
   }
 
-  private parseGroupIds(value: string | null | undefined): string[] {
-    return String(value || '')
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.startsWith('#'));
-  }
-
-  private setEntityGroupIds(entity: Entity, groupIds: string[]): void {
-    const normalized = Array.from(
-      new Set(
-        groupIds.map((entry) => String(entry || '').trim()).filter((entry) => entry.startsWith('#'))
-      )
-    );
-    entity.groupID = normalized.length ? normalized.join(',') : null;
+  private syncPlayerInventoryComponent(): void {
+    this.inventoryManager.syncPlayerInventoryComponent();
   }
 
   private clearInheritedSurfaceSwitchGroups(entity: Entity): void {
-    const inherited = Array.isArray((entity as any).__surfaceInheritedSwitchGroups)
-      ? ((entity as any).__surfaceInheritedSwitchGroups as string[])
-      : [];
-    if (!inherited.length) return;
-
-    const remaining = ComponentSystem.getGroupIds(entity).filter(
-      (groupId) => !inherited.includes(groupId)
-    );
-    this.setEntityGroupIds(entity, remaining);
-    (entity as any).__surfaceInheritedSwitchGroups = [];
+    this.inventoryManager.clearInheritedSurfaceSwitchGroups(entity);
   }
 
   private clearActiveContainerSwitchGroups(entity: Entity): void {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return;
-
-    const groupsToRemove = new Set<string>();
-    let current: SceneObject | null = entity;
-    while (current) {
-      const switchComponent = this.getSwitchComponent(current);
-      if (switchComponent) {
-        const activeTarget =
-          switchComponent.state === 2 ? switchComponent.groupId2 : switchComponent.groupId1;
-        for (const groupId of this.parseGroupIds(activeTarget)) {
-          groupsToRemove.add(groupId);
-        }
-      }
-
-      const parentId: string =
-        typeof (current as any).spatial?.parentNodeId === 'string'
-          ? (current as any).spatial.parentNodeId.trim()
-          : '';
-      current = parentId ? scene.getObjectByName(parentId) : null;
-    }
-
-    if (!groupsToRemove.size) return;
-
-    const remaining = ComponentSystem.getGroupIds(entity).filter(
-      (groupId) => !groupsToRemove.has(groupId)
+    this.inventoryManager.clearActiveContainerSwitchGroups(
+      entity,
+      this.getSwitchComponent.bind(this)
     );
-    this.setEntityGroupIds(entity, remaining);
   }
 
   private getContainingSubsceneRootIds(entity: SceneObject): string[] {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return [];
-
-    const roots: string[] = [];
-    let current: SceneObject | null = entity;
-    while (current) {
-      if (current.components?.some((component: any) => component?.type === 'Subscene')) {
-        roots.push(current.name);
-      }
-      const parentId: string =
-        typeof (current as any).spatial?.parentNodeId === 'string'
-          ? (current as any).spatial.parentNodeId.trim()
-          : '';
-      current = parentId ? scene.getObjectByName(parentId) : null;
-    }
-
-    return Array.from(new Set(roots));
+    return this.inventoryManager.getContainingSubsceneRootIds(entity);
   }
 
   private markEntityDetachedFromSubscenes(entity: Entity, subsceneRootIds: string[]): void {
-    const normalized = Array.from(
-      new Set(subsceneRootIds.map((value) => String(value || '').trim()).filter((value) => !!value))
-    );
-    (entity as any).__detachedSubsceneRootIds = normalized;
-  }
-
-  private clearEntityDetachedSubsceneRoot(entity: Entity, subsceneRootId: string): void {
-    const detached = Array.isArray((entity as any).__detachedSubsceneRootIds)
-      ? ((entity as any).__detachedSubsceneRootIds as string[])
-      : [];
-    if (!detached.length) return;
-
-    const normalizedRoot = String(subsceneRootId || '').trim();
-    const next = detached.filter((value) => value !== normalizedRoot);
-    (entity as any).__detachedSubsceneRootIds = next;
-  }
-
-  private collectActiveSurfaceSwitchGroups(surface: SceneObject): string[] {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return [];
-
-    const collected: string[] = [];
-    let current: SceneObject | null = surface;
-    while (current) {
-      const switchComponent = this.getSwitchComponent(current);
-      if (switchComponent) {
-        const activeTarget =
-          switchComponent.state === 2 ? switchComponent.groupId2 : switchComponent.groupId1;
-        collected.push(...this.parseGroupIds(activeTarget));
-      }
-
-      const parentId: string =
-        typeof (current as any).spatial?.parentNodeId === 'string'
-          ? (current as any).spatial.parentNodeId.trim()
-          : '';
-      current = parentId ? scene.getObjectByName(parentId) : null;
-    }
-
-    return Array.from(new Set(collected));
-  }
-
-  private assignInheritedSurfaceSwitchGroups(entity: Entity, surface: SceneObject): void {
-    this.clearInheritedSurfaceSwitchGroups(entity);
-    const inherited = this.collectActiveSurfaceSwitchGroups(surface);
-    if (!inherited.length) return;
-
-    this.setEntityGroupIds(entity, [...ComponentSystem.getGroupIds(entity), ...inherited]);
-    (entity as any).__surfaceInheritedSwitchGroups = inherited;
-  }
-
-  private itemMatchesStorageGroups(groups: string[] | string | undefined, entity: Entity): boolean {
-    const normalizedGroups = Array.isArray(groups)
-      ? groups
-      : typeof groups === 'string'
-        ? groups.split(/[,\s]+/)
-        : [];
-    const acceptedGroups = normalizedGroups
-      .map((value) => String(value || '').trim())
-      .filter((value) => value.startsWith('#'));
-    if (!acceptedGroups.length) return true;
-    const entityGroups = ComponentSystem.getGroupIds(entity);
-    return entityGroups.some((groupId) => acceptedGroups.includes(groupId));
+    this.inventoryManager.markEntityDetachedFromSubscenes(entity, subsceneRootIds);
   }
 
   private isSurfaceAccessible(surface: SceneObject): boolean {
-    if (surface.disabled) return false;
-    if (this.isEntityInInventory(surface as Entity)) return true;
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return false;
-    const accessOutcome = this.getBlockedAccessOutcome(surface);
-    if (accessOutcome) return false;
-    if (scene.activeSubscene && scene.subsceneEntities.has(surface as any)) {
-      return true;
-    }
-    return !ComponentSystem.getInteractionDistanceError(surface as any, scene.player);
+    return this.inventoryManager.isSurfaceAccessible(
+      surface,
+      this.getBlockedAccessOutcome.bind(this)
+    );
   }
 
   private isSurfaceAccessibleFromAnchor(surface: SceneObject, anchor: SceneObject): boolean {
-    if (surface.disabled) return false;
-    if (this.isEntityInInventory(surface as Entity)) return true;
-
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return false;
-    const accessOutcome = this.getBlockedAccessOutcome(surface);
-    if (accessOutcome) return false;
-    if (scene.activeSubscene && scene.subsceneEntities.has(surface as any)) {
-      return true;
-    }
-
-    const surfaceTitle = this.getPlayerFacingObjectTitle(surface);
-    if (!surfaceTitle) {
-      return !ComponentSystem.getInteractionDistanceError(anchor as any, scene.player);
-    }
-
-    return !ComponentSystem.getInteractionDistanceError(surface as any, scene.player);
+    return this.inventoryManager.isSurfaceAccessibleFromAnchor(
+      surface,
+      anchor,
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this)
+    );
   }
 
   private isInventoryAccessible(owner: Entity): boolean {
-    if (owner.disabled) return false;
-    if (this.isPlayerInventoryOwner(owner)) return true;
-    if (this.isEntityInInventory(owner)) return true;
-
-    const component = ComponentSystem.getInventoryComponent(owner);
-    if (!component || component.protected) return false;
-
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return false;
-    const accessOutcome = this.getBlockedAccessOutcome(owner);
-    if (accessOutcome) return false;
-    if (scene.activeSubscene && scene.subsceneEntities.has(owner as any)) {
-      return true;
-    }
-    return !ComponentSystem.getInteractionDistanceError(owner as any, scene.player);
+    return this.inventoryManager.isInventoryAccessible(
+      owner,
+      this.getBlockedAccessOutcome.bind(this)
+    );
   }
 
   private isInventoryAccessibleFromAnchor(owner: Entity, anchor: SceneObject): boolean {
-    if (owner.disabled) return false;
-    if (this.isPlayerInventoryOwner(owner)) return true;
-    if (this.isEntityInInventory(owner)) return true;
-
-    const component = ComponentSystem.getInventoryComponent(owner);
-    if (!component || component.protected) return false;
-
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return false;
-    const accessOutcome = this.getBlockedAccessOutcome(owner);
-    if (accessOutcome) return false;
-    if (scene.activeSubscene && scene.subsceneEntities.has(owner as any)) {
-      return true;
-    }
-
-    const ownerTitle = this.getPlayerFacingObjectTitle(owner);
-    if (!ownerTitle) {
-      return !ComponentSystem.getInteractionDistanceError(anchor as any, scene.player);
-    }
-
-    return !ComponentSystem.getInteractionDistanceError(owner as any, scene.player);
-  }
-
-  private getAccessibleSceneSurfaces(): SceneObject[] {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return [];
-    return scene
-      .getAllSceneObjects()
-      .filter((candidate) => !!ComponentSystem.getSurfaceComponent(candidate))
-      .filter((candidate) => this.isSurfaceAccessible(candidate));
-  }
-
-  private getAccessibleInventoryOwners(): Entity[] {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return [];
-    return scene.entities.filter(
-      (candidate): candidate is Entity =>
-        candidate instanceof Entity &&
-        !!ComponentSystem.getInventoryComponent(candidate) &&
-        this.isInventoryAccessible(candidate)
+    return this.inventoryManager.isInventoryAccessibleFromAnchor(
+      owner,
+      anchor,
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this)
     );
   }
 
   getAccessibleInventoryItems(): Entity[] {
-    return this.getAccessibleInventoryOwners()
-      .filter((owner) => !this.isPlayerInventoryOwner(owner))
-      .flatMap((owner) => this.getStoredInventoryEntities(owner))
-      .filter((entity) => !entity.disabled);
+    return this.inventoryManager.getAccessibleInventoryItems(
+      this.getBlockedAccessOutcome.bind(this)
+    );
   }
 
   private removeEntityFromCurrentStorage(entity: Entity): void {
-    const inventoryOwner = this.findInventoryOwnerForEntity(entity);
-    if (inventoryOwner) {
-      const entities = this.getStoredInventoryEntities(inventoryOwner).filter(
-        (candidate) => candidate !== entity
-      );
-      this.syncInventoryStore(inventoryOwner, entities);
-    }
+    this.inventoryManager.removeEntityFromCurrentStorage(entity);
+  }
 
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return;
-
-    for (const candidate of scene.getAllSceneObjects()) {
-      const component = ComponentSystem.getSurfaceComponent(candidate);
-      if (!component?.items?.length) continue;
-      const nextItems = component.items.filter((item) => item.id !== entity.name);
-      if (nextItems.length !== component.items.length) {
-        component.items = nextItems;
-      }
-    }
+  private isObjectInsideActiveSubscene(object: SceneObject): boolean {
+    return this.inventoryManager.isObjectInsideActiveSubscene(object);
   }
 
   private getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
-    const polygon = (sceneObject as any).poly;
-    if (Array.isArray(polygon) && polygon.length) {
-      const sum = polygon.reduce(
-        (acc: { x: number; y: number }, point: { x: number; y: number }) => ({
-          x: acc.x + (point?.x || 0),
-          y: acc.y + (point?.y || 0),
-        }),
-        { x: 0, y: 0 }
-      );
-      return {
-        x: sum.x / polygon.length,
-        y: sum.y / polygon.length,
-      };
-    }
-    return {
-      x: Number((sceneObject as any).x) || 0,
-      y: Number((sceneObject as any).y) || 0,
-    };
-  }
-
-  private getSceneObjectSelectionPriority(sceneObject: SceneObject): number {
-    const scene = this.sceneManager.currentScene;
-    const player = scene?.player;
-    if (!player) return Number.MAX_SAFE_INTEGER;
-    const location = this.getSceneObjectReferencePoint(sceneObject);
-    return Math.hypot(location.x - (player.x || 0), location.y - (player.y || 0));
+    return this.inventoryManager.getSceneObjectReferencePoint(sceneObject);
   }
 
   private shouldFacePlayerTowardObservedObject(entity: SceneObject): boolean {
@@ -1201,353 +836,19 @@ export class Game implements IGame {
 
     const scene = this.sceneManager.currentScene;
     const player = scene?.player;
-    if (!player || typeof player.setDirection !== 'function') return;
+    if (!player || typeof (player as any).setDirection !== 'function') return;
 
     const target = this.getSceneObjectReferencePoint(entity);
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
+    const dx = target.x - (player as any).x;
+    const dy = target.y - (player as any).y;
     if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return;
 
     if (Math.abs(dx) >= Math.abs(dy)) {
-      player.setDirection(dx >= 0 ? 'right' : 'left');
+      (player as any).setDirection(dx >= 0 ? 'right' : 'left');
       return;
     }
 
-    player.setDirection(dy >= 0 ? 'down' : 'up');
-  }
-
-  private getSurfaceBounds(surface: SceneObject): {
-    type: 'rect' | 'poly';
-    rect: { left: number; top: number; right: number; bottom: number };
-    poly?: Array<{ x: number; y: number }>;
-  } | null {
-    const poly = Array.isArray((surface as any).poly) ? (surface as any).poly : null;
-    if (poly?.length) {
-      const xs = poly.map((point: { x: number; y: number }) => point.x);
-      const ys = poly.map((point: { x: number; y: number }) => point.y);
-      return {
-        type: 'poly',
-        rect: {
-          left: Math.min(...xs),
-          top: Math.min(...ys),
-          right: Math.max(...xs),
-          bottom: Math.max(...ys),
-        },
-        poly,
-      };
-    }
-
-    if (typeof (surface as any).x === 'number' && typeof (surface as any).y === 'number') {
-      const width = Number((surface as any).width) || 0;
-      const height = Number((surface as any).height) || 0;
-      return {
-        type: 'rect',
-        rect: {
-          left: (surface as any).x - width / 2,
-          top: (surface as any).y - height,
-          right: (surface as any).x + width / 2,
-          bottom: (surface as any).y,
-        },
-      };
-    }
-
-    return null;
-  }
-
-  private getEntityPlacementSizeAtY(
-    entity: Entity,
-    targetY: number
-  ): { width: number; height: number } {
-    const scene = this.sceneManager.currentScene;
-    const baseWidth =
-      typeof entity.baseWidth === 'number' && Number.isFinite(entity.baseWidth)
-        ? entity.baseWidth
-        : entity.width;
-    const baseHeight =
-      typeof entity.baseHeight === 'number' && Number.isFinite(entity.baseHeight)
-        ? entity.baseHeight
-        : entity.height;
-    const modelScale =
-      typeof entity.modelScale === 'number' && Number.isFinite(entity.modelScale)
-        ? entity.modelScale
-        : 1;
-    const depthFactor =
-      !entity.ignoreScaling && scene?.scaling?.enabled ? scene.getScaling(targetY) : 1;
-
-    return {
-      width: baseWidth * modelScale * depthFactor,
-      height: baseHeight * modelScale * depthFactor,
-    };
-  }
-
-  private getSurfaceFootprintRect(
-    surface: SceneObject,
-    size: { width: number; height: number },
-    x: number,
-    y: number
-  ): { x: number; y: number; w: number; h: number } {
-    const hasPoly = Array.isArray((surface as any).poly) && (surface as any).poly.length > 0;
-    const placementRelation = ((surface as any).spatial?.relation ||
-      null) as SpatialRelationType | null;
-    if (surface.type === 'Walkbox' || (hasPoly && placementRelation !== 'in')) {
-      const footprintWidth = Math.max(12, size.width * 0.7);
-      const footprintHeight = Math.max(10, Math.min(24, size.height * 0.18));
-      return {
-        x: x - footprintWidth / 2,
-        y: y - footprintHeight,
-        w: footprintWidth,
-        h: footprintHeight,
-      };
-    }
-
-    return {
-      x: x - size.width / 2,
-      y: y - size.height,
-      w: size.width,
-      h: size.height,
-    };
-  }
-
-  private isCandidateRectInside(
-    candidateRect: { x: number; y: number; w: number; h: number },
-    bounds: {
-      type: 'rect' | 'poly';
-      rect: { left: number; top: number; right: number; bottom: number };
-      poly?: Array<{ x: number; y: number }>;
-    },
-    surface: SceneObject,
-    placementRelation: SpatialRelationType | null
-  ): boolean {
-    if (surface.type === 'Walkbox') {
-      return (
-        candidateRect.x >= bounds.rect.left &&
-        candidateRect.y >= bounds.rect.top &&
-        candidateRect.x + candidateRect.w <= bounds.rect.right &&
-        candidateRect.y + candidateRect.h <= bounds.rect.bottom
-      );
-    }
-
-    if (bounds.type === 'poly' && bounds.poly) {
-      if (placementRelation !== 'in') {
-        return this.isPolygonSurfaceFootprintSupported(candidateRect, bounds.poly);
-      }
-      return Geometry.rectInsidePolygon(candidateRect, bounds.poly);
-    }
-
-    return (
-      candidateRect.x >= bounds.rect.left &&
-      candidateRect.y >= bounds.rect.top &&
-      candidateRect.x + candidateRect.w <= bounds.rect.right &&
-      candidateRect.y + candidateRect.h <= bounds.rect.bottom
-    );
-  }
-
-  private evaluateSurfacePlacement(
-    surface: SceneObject,
-    entity: Entity,
-    x: number,
-    y: number,
-    placements: SurfaceItemPlacement[]
-  ): {
-    fits: boolean;
-    candidateSize: { width: number; height: number };
-    candidateRect: { x: number; y: number; w: number; h: number };
-    inside: boolean;
-    collisions: Array<Record<string, unknown>>;
-  } {
-    const bounds = this.getSurfaceBounds(surface);
-    const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
-    const candidateRect = this.getSurfaceFootprintRect(surface, candidateSize, x, y);
-    const placementRelation = ((surface as any).spatial?.relation ||
-      null) as SpatialRelationType | null;
-
-    if (!bounds) {
-      return {
-        fits: false,
-        candidateSize,
-        candidateRect,
-        inside: false,
-        collisions: [],
-      };
-    }
-
-    const inside = this.isCandidateRectInside(candidateRect, bounds, surface, placementRelation);
-
-    if (!inside) {
-      return {
-        fits: false,
-        candidateSize,
-        candidateRect,
-        inside,
-        collisions: [],
-      };
-    }
-
-    const collisions = placements
-      .map((placement) => {
-        const placedEntity =
-          this.sceneManager.currentScene?.getObjectByName(placement.id) ||
-          this.inventory.find((candidate) => candidate.name === placement.id) ||
-          null;
-        const placedSize =
-          placedEntity instanceof Entity
-            ? this.getEntityPlacementSizeAtY(placedEntity, placement.y)
-            : candidateSize;
-        const placedRect = this.getSurfaceFootprintRect(
-          surface,
-          placedSize,
-          placement.x,
-          placement.y
-        );
-        const intersects = Geometry.rectIntersectsRect(candidateRect, placedRect);
-        return {
-          id: placement.id,
-          placement: { x: placement.x, y: placement.y },
-          placedSize,
-          placedRect,
-          intersects,
-        };
-      })
-      .filter((entry) => entry.intersects);
-
-    return {
-      fits: collisions.length === 0,
-      candidateSize,
-      candidateRect,
-      inside,
-      collisions,
-    };
-  }
-
-  private isPolygonSurfaceFootprintSupported(
-    rect: { x: number; y: number; w: number; h: number },
-    poly: Array<{ x: number; y: number }>
-  ): boolean {
-    const supportY = rect.y + rect.h;
-    const samplePoints = [
-      { x: rect.x, y: supportY },
-      { x: rect.x + rect.w / 2, y: supportY },
-      { x: rect.x + rect.w, y: supportY },
-    ];
-
-    return samplePoints.every((point) => Geometry.isPointInPolygon(point, poly));
-  }
-
-  private canFitEntityOnSurfaceAt(
-    surface: SceneObject,
-    entity: Entity,
-    x: number,
-    y: number,
-    placements: SurfaceItemPlacement[]
-  ): boolean {
-    return this.evaluateSurfacePlacement(surface, entity, x, y, placements).fits;
-  }
-
-  private placeEntityOnSurface(surface: SceneObject, entity: Entity): SurfaceItemPlacement | null {
-    const component = this.ensureSurfaceComponent(surface);
-    const bounds = this.getSurfaceBounds(surface);
-    if (!bounds) return null;
-
-    const placements = component.items || [];
-    const samples: Array<{ x: number; y: number }> = [];
-    const seen = new Set<string>();
-    const addSample = (x: number, y: number) => {
-      const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
-      const footprint = this.getSurfaceFootprintRect(surface, candidateSize, 0, y);
-      const minX = bounds.rect.left + footprint.w / 2;
-      const maxX = bounds.rect.right - footprint.w / 2;
-      const minY = bounds.rect.top + footprint.h;
-      const maxY = bounds.rect.bottom;
-      if (minX > maxX || minY > maxY) {
-        return;
-      }
-
-      const clampedX = Math.max(minX, Math.min(maxX, x));
-      const clampedY = Math.max(minY, Math.min(maxY, y));
-      const key = `${Math.round(clampedX)}:${Math.round(clampedY)}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      samples.push({ x: clampedX, y: clampedY });
-    };
-
-    const maxEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.bottom);
-    const minEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.top);
-    const maxFootprint = this.getSurfaceFootprintRect(
-      surface,
-      maxEntitySize,
-      0,
-      bounds.rect.bottom
-    );
-    const minFootprint = this.getSurfaceFootprintRect(surface, minEntitySize, 0, bounds.rect.top);
-    const rowMinY = Math.min(bounds.rect.bottom, bounds.rect.top + minFootprint.h);
-    const rowMaxY = bounds.rect.bottom;
-    const centerX = (bounds.rect.left + bounds.rect.right) / 2;
-    const centerY = (rowMinY + rowMaxY) / 2;
-    addSample(centerX, rowMaxY);
-    addSample(centerX, centerY);
-    addSample(bounds.rect.left, rowMaxY);
-    addSample(bounds.rect.right, rowMaxY);
-    addSample(bounds.rect.left, rowMinY);
-    addSample(bounds.rect.right, rowMinY);
-
-    const rangeY = Math.max(0, rowMaxY - rowMinY);
-    const columnStep = Math.max(maxFootprint.w * 0.75, 12);
-    const rowStep = Math.max(maxFootprint.h * 0.75, 12);
-    const rowCount = Math.max(1, Math.ceil(rangeY / rowStep));
-
-    for (let row = rowCount; row >= 0; row -= 1) {
-      const y = rowCount === 0 ? rowMaxY : rowMinY + (rangeY * row) / Math.max(rowCount, 1);
-      const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
-      const footprint = this.getSurfaceFootprintRect(surface, candidateSize, 0, y);
-      const minX = bounds.rect.left + footprint.w / 2;
-      const maxX = bounds.rect.right - footprint.w / 2;
-      if (minX > maxX) continue;
-      const rangeX = Math.max(0, maxX - minX);
-      const columnCount = Math.max(1, Math.ceil(rangeX / columnStep));
-      for (let column = 0; column <= columnCount; column += 1) {
-        const x = columnCount === 0 ? centerX : minX + (rangeX * column) / Math.max(columnCount, 1);
-        addSample(x, y);
-      }
-    }
-
-    const fittingSamples = samples.filter((sample) =>
-      this.canFitEntityOnSurfaceAt(surface, entity, sample.x, sample.y, placements)
-    );
-    const openSpot =
-      fittingSamples.length > 0
-        ? fittingSamples[Math.floor(Math.random() * fittingSamples.length)]
-        : null;
-    const insideOnlySamples = samples.filter((sample) => {
-      const evaluation = this.evaluateSurfacePlacement(
-        surface,
-        entity,
-        sample.x,
-        sample.y,
-        placements
-      );
-      return evaluation.inside;
-    });
-    const fallbackSpot =
-      openSpot ||
-      (insideOnlySamples.length > 0
-        ? insideOnlySamples[Math.floor(Math.random() * insideOnlySamples.length)]
-        : null);
-
-    if (!fallbackSpot) return null;
-
-    this.debugPut('surface-placement-samples', {
-      entityId: entity.name,
-      surfaceId: surface.name,
-      sampleCount: samples.length,
-      fittingCount: fittingSamples.length,
-      chosen: fallbackSpot,
-    });
-
-    return {
-      id: entity.name,
-      x: Math.round(fallbackSpot.x),
-      y: Math.round(fallbackSpot.y),
-    };
+    (player as any).setDirection(dy >= 0 ? 'down' : 'up');
   }
 
   private findPreferredSurfaceForRelation(
@@ -1555,47 +856,13 @@ export class Game implements IGame {
     relation: SpatialRelationType | null | undefined,
     requireAccessible: boolean = true
   ): SceneObject | null {
-    const scene = this.sceneManager.currentScene;
-    if (!scene || !relation) return null;
-
-    const directSurface =
-      relation === 'on' && ComponentSystem.getSurfaceComponent(anchor) ? anchor : null;
-    if (directSurface && (!requireAccessible || this.isSurfaceAccessible(directSurface))) {
-      return directSurface;
-    }
-
-    const candidates = scene
-      .getAllSceneObjects()
-      .filter((candidate) => !!ComponentSystem.getSurfaceComponent(candidate))
-      .filter((candidate) => (candidate as any).spatial?.parentNodeId === anchor.name)
-      .filter((candidate) => ((candidate as any).spatial?.relation || null) === relation)
-      .filter((candidate) => !requireAccessible || this.isSurfaceAccessible(candidate));
-    candidates.push(
-      ...this.getCollapsedContainerExtensions(anchor, relation, requireAccessible).surfaces
+    return this.inventoryManager.findPreferredSurfaceForRelation(
+      anchor,
+      relation,
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this),
+      requireAccessible
     );
-
-    if (!candidates.length) return null;
-    return Array.from(new Set(candidates)).sort((left, right) => {
-      const a = this.getSceneObjectSelectionPriority(left as any);
-      const b = this.getSceneObjectSelectionPriority(right as any);
-      return a - b;
-    })[0];
-  }
-
-  private getAutoDropSurface(): SceneObject | null {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) return null;
-    const surfaces = this.getAccessibleSceneSurfaces();
-    if (!surfaces.length) return null;
-    const subsceneFirst = scene.activeSubscene
-      ? surfaces.filter((candidate) => scene.subsceneEntities.has(candidate as any))
-      : [];
-    const pool = subsceneFirst.length ? subsceneFirst : surfaces;
-    return pool.sort((left, right) => {
-      const a = this.getSceneObjectSelectionPriority(left as any);
-      const b = this.getSceneObjectSelectionPriority(right as any);
-      return a - b;
-    })[0];
   }
 
   private findPreferredStorageForRelation(
@@ -1603,336 +870,46 @@ export class Game implements IGame {
     relation: SpatialRelationType,
     requireAccessible: boolean = true
   ): { inventoryOwner: Entity | null; surface: SceneObject | null } {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) {
-      return { inventoryOwner: null, surface: null };
-    }
-
-    const inventoryCandidates: Entity[] = [];
-    const surfaceCandidates: SceneObject[] = [];
-
-    if (relation === 'in') {
-      if (
-        anchor instanceof Entity &&
-        ComponentSystem.getInventoryComponent(anchor) &&
-        (!requireAccessible || this.isInventoryAccessible(anchor))
-      ) {
-        inventoryCandidates.push(anchor);
-      }
-      if (
-        ComponentSystem.getSurfaceComponent(anchor) &&
-        (!requireAccessible || this.isSurfaceAccessible(anchor))
-      ) {
-        surfaceCandidates.push(anchor);
-      }
-    } else if (
-      relation === 'on' &&
-      ComponentSystem.getSurfaceComponent(anchor) &&
-      (!requireAccessible || this.isSurfaceAccessible(anchor))
-    ) {
-      surfaceCandidates.push(anchor);
-    }
-
-    for (const candidate of scene.getAllSceneObjects()) {
-      const parentId =
-        typeof (candidate as any).spatial?.parentNodeId === 'string'
-          ? (candidate as any).spatial.parentNodeId.trim()
-          : '';
-      const candidateRelation = ((candidate as any).spatial?.relation ||
-        null) as SpatialRelationType | null;
-      if (parentId !== anchor.name || candidateRelation !== relation) continue;
-
-      if (
-        relation === 'in' &&
-        candidate instanceof Entity &&
-        ComponentSystem.getInventoryComponent(candidate) &&
-        (!requireAccessible || this.isInventoryAccessible(candidate))
-      ) {
-        inventoryCandidates.push(candidate);
-      }
-
-      if (
-        ComponentSystem.getSurfaceComponent(candidate) &&
-        (!requireAccessible || this.isSurfaceAccessible(candidate))
-      ) {
-        surfaceCandidates.push(candidate);
-      }
-    }
-
-    const collapsedExtensions = this.getCollapsedContainerExtensions(
+    return this.inventoryManager.findPreferredStorageForRelation(
       anchor,
       relation,
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this),
       requireAccessible
     );
-    inventoryCandidates.push(...collapsedExtensions.inventoryOwners);
-    surfaceCandidates.push(...collapsedExtensions.surfaces);
-
-    const byPriority = (left: SceneObject, right: SceneObject) =>
-      this.getSceneObjectSelectionPriority(left) - this.getSceneObjectSelectionPriority(right);
-
-    return {
-      inventoryOwner: Array.from(new Set(inventoryCandidates)).sort(byPriority)[0] || null,
-      surface: Array.from(new Set(surfaceCandidates)).sort(byPriority)[0] || null,
-    };
   }
 
-  private getCollapsedContainerExtensions(
-    anchor: SceneObject,
-    relation: SpatialRelationType,
-    requireAccessible: boolean = true
-  ): { inventoryOwners: Entity[]; surfaces: SceneObject[] } {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) {
-      return { inventoryOwners: [], surfaces: [] };
-    }
-
-    const inventoryOwners: Entity[] = [];
-    const surfaces: SceneObject[] = [];
-    const queue: SceneObject[] = scene
-      .getAllSceneObjects()
-      .filter((candidate) => ((candidate as any).spatial?.parentNodeId || null) === anchor.name)
-      .filter(
-        (candidate) =>
-          (((candidate as any).spatial?.relation || null) as SpatialRelationType | null) ===
-          relation
-      )
-      .filter((candidate) => !this.getPlayerFacingObjectTitle(candidate));
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-
-      if (current instanceof Entity) {
-        const inventoryComponent = ComponentSystem.getInventoryComponent(current);
-        if (
-          inventoryComponent &&
-          (!requireAccessible || this.isInventoryAccessibleFromAnchor(current, anchor))
-        ) {
-          inventoryOwners.push(current);
-        }
-      }
-
-      if (
-        ComponentSystem.getSurfaceComponent(current) &&
-        (!requireAccessible || this.isSurfaceAccessibleFromAnchor(current, anchor))
-      ) {
-        surfaces.push(current);
-      }
-
-      const children = scene
-        .getAllSceneObjects()
-        .filter((candidate) => ((candidate as any).spatial?.parentNodeId || null) === current.name)
-        .filter((candidate) => !this.getPlayerFacingObjectTitle(candidate));
-      queue.push(...children);
-    }
-
-    return { inventoryOwners, surfaces };
-  }
-
-  private isObjectInsideActiveSubscene(object: SceneObject): boolean {
-    const scene = this.sceneManager.currentScene;
-    const activeSubscene = scene?.activeSubscene;
-    if (!scene || !activeSubscene) return false;
-    if (scene.subsceneEntities.has(object as any)) return true;
-
-    let current: SceneObject | null = object;
-    while (current) {
-      if (
-        current.components?.some((component: any) => component?.type === 'Subscene') &&
-        current.name === activeSubscene
-      ) {
-        return true;
-      }
-      const parentId: string =
-        typeof (current as any).spatial?.parentNodeId === 'string'
-          ? (current as any).spatial.parentNodeId.trim()
-          : '';
-      current = parentId ? scene.getObjectByName(parentId) : null;
-    }
-
-    return false;
+  private getAutoDropSurface(): SceneObject | null {
+    return this.inventoryManager.getAutoDropSurface(this.getBlockedAccessOutcome.bind(this));
   }
 
   getInventoryEntities(owner: Entity): Entity[] {
-    return [...this.getStoredInventoryEntities(owner)];
+    return this.inventoryManager.getInventoryEntities(owner);
   }
 
   hasInventoryEntity(owner: Entity, entity: Entity): boolean {
-    return this.getStoredInventoryEntities(owner).includes(entity);
+    return this.inventoryManager.hasInventoryEntity(owner, entity);
   }
 
   addInventoryEntity(owner: Entity, entity: Entity): GameActionOutcome {
-    const component = this.ensureInventoryComponent(owner);
-    const currentItems = this.getStoredInventoryEntities(owner);
-    if (currentItems.includes(entity)) {
-      return {
-        status: 'failed',
-        code: 'inventory_item_already_present',
-        recoverable: true,
-      };
-    }
-    if (currentItems.length >= (component.capacity || Number.MAX_SAFE_INTEGER)) {
-      return {
-        status: 'failed',
-        code: 'inventory_full',
-        message: this.text('parser.put_no_place'),
-        recoverable: true,
-      };
-    }
-    if (!this.itemMatchesStorageGroups(component.groups, entity)) {
-      return {
-        status: 'failed',
-        code: 'inventory_group_rejected',
-        message: this.text('parser.put_no_place'),
-        recoverable: true,
-      };
-    }
-
-    this.removeEntityFromCurrentStorage(entity);
-    this.clearInheritedSurfaceSwitchGroups(entity);
-    const scene = this.sceneManager.currentScene;
-    if (scene?.entities.includes(entity)) {
-      scene.removeEntity(entity);
-    }
-    (entity as any).spatial = null;
-    scene?.subsceneEntities.delete(entity);
-    this.syncInventoryStore(owner, [...currentItems, entity]);
-    return {
-      status: 'ok',
-      code: 'inventory_item_added',
-      data: { entityId: entity.name, ownerId: owner.name },
-      effects: ['moved_to_inventory'],
-    };
+    return this.inventoryManager.addInventoryEntity(owner, entity);
   }
 
   removeEntityFromInventory(owner: Entity, entity: Entity): GameActionOutcome {
-    const currentItems = this.getStoredInventoryEntities(owner);
-    if (!currentItems.includes(entity)) {
-      return {
-        status: 'failed',
-        code: 'inventory_item_not_found',
-        recoverable: true,
-      };
-    }
-    this.syncInventoryStore(
-      owner,
-      currentItems.filter((candidate) => candidate !== entity)
-    );
-    return {
-      status: 'ok',
-      code: 'inventory_item_removed',
-      data: { entityId: entity.name, ownerId: owner.name },
-      effects: ['removed_from_inventory'],
-    };
+    return this.inventoryManager.removeEntityFromInventory(owner, entity);
   }
 
   addEntityToSurface(surface: SceneObject, entity: Entity): GameActionOutcome {
-    const component = this.ensureSurfaceComponent(surface);
-    if ((component.items || []).some((item) => item.id === entity.name)) {
-      return {
-        status: 'failed',
-        code: 'surface_item_already_present',
-        recoverable: true,
-      };
-    }
-    if ((component.items || []).length >= (component.capacity || Number.MAX_SAFE_INTEGER)) {
-      return {
-        status: 'failed',
-        code: 'surface_full',
-        message: this.text('parser.put_no_place'),
-        recoverable: true,
-      };
-    }
-    if (!this.itemMatchesStorageGroups(component.groups, entity)) {
-      return {
-        status: 'failed',
-        code: 'surface_group_rejected',
-        message: this.text('parser.put_no_place'),
-        recoverable: true,
-      };
-    }
-
-    const placement = this.placeEntityOnSurface(surface, entity);
-    if (!placement) {
-      this.debugPut('surface-no-fit', {
-        entityId: entity.name,
-        surfaceId: surface.name,
-        surfaceRelation: ((surface as any).spatial?.relation || null) as SpatialRelationType | null,
-        bounds: this.getSurfaceBounds(surface),
-        entity: {
-          width: entity.width,
-          height: entity.height,
-          baseWidth: entity.baseWidth,
-          baseHeight: entity.baseHeight,
-          modelScale: entity.modelScale,
-          scale: entity.scale,
-          x: entity.x,
-          y: entity.y,
-        },
-      });
-      return {
-        status: 'failed',
-        code: 'surface_no_fit',
-        message: this.text('parser.put_no_place'),
-        recoverable: true,
-      };
-    }
-
-    this.removeEntityFromCurrentStorage(entity);
-    this.assignInheritedSurfaceSwitchGroups(entity, surface);
-    const scene = this.sceneManager.currentScene;
-    if (scene && !scene.entities.includes(entity)) {
-      scene.addEntity(entity);
-    }
-    entity.x = placement.x;
-    entity.y = placement.y;
-    entity.layer = surface.layer || 0;
-    entity.spatial = {
-      parentNodeId: surface.name,
-      relation: 'on',
-    };
-    if (scene?.activeSubscene) {
-      if (this.isObjectInsideActiveSubscene(surface)) {
-        entity.subsceneItemScale = scene.getActiveSubsceneItemScale();
-        entity.update(0);
-        entity.disabled = false;
-        scene.subsceneEntities.add(entity);
-        this.clearEntityDetachedSubsceneRoot(entity, scene.activeSubscene);
-      } else if (scene.subsceneEntities.has(entity)) {
-        scene.subsceneEntities.delete(entity);
-      }
-    }
-    scene?.playDropAnimation(entity);
-    component.items = [
-      ...(component.items || []).filter((item) => item.id !== entity.name),
-      placement,
-    ];
-    return {
-      status: 'ok',
-      code: 'surface_item_added',
-      data: { entityId: entity.name, surfaceId: surface.name },
-      effects: ['placed_on_surface'],
-    };
+    return this.inventoryManager.addEntityToSurface(
+      surface,
+      entity,
+      this.getSwitchComponent.bind(this)
+    );
   }
 
   removeEntityFromSurface(surface: SceneObject, entity: Entity): GameActionOutcome {
-    const component = this.ensureSurfaceComponent(surface);
-    if (!(component.items || []).some((item) => item.id === entity.name)) {
-      return {
-        status: 'failed',
-        code: 'surface_item_not_found',
-        recoverable: true,
-      };
-    }
-    component.items = (component.items || []).filter((item) => item.id !== entity.name);
-    return {
-      status: 'ok',
-      code: 'surface_item_removed',
-      data: { entityId: entity.name, surfaceId: surface.name },
-      effects: ['removed_from_surface'],
-    };
+    return this.inventoryManager.removeEntityFromSurface(surface, entity);
   }
-
   private canExamineObject(entity: SceneObject): GameActionOutcome | null {
     if (entity instanceof Entity && this.isEntityInInventory(entity)) return null;
 
