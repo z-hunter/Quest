@@ -1,5 +1,5 @@
 {
-  "title": "Someone ID card",
-  "description": "You see someone's ID",
-  "synonyms": []
+  "title": "Compact cassete",
+  "description": "You see a compact cassete",
+  "synonyms": ["tape", "cassette", "record"]
 }

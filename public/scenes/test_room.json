@@ -51,13 +51,7 @@
           "type": "Surface",
           "capacity": 8,
           "groups": [],
-          "items": [
-            {
-              "id": "test",
-              "x": 506,
-              "y": 277
-            }
-          ]
+          "items": []
         }
       ],
       "layer": 0,
@@ -453,7 +447,13 @@
           "type": "Surface",
           "capacity": 2,
           "groups": [],
-          "items": []
+          "items": [
+            {
+              "id": "test",
+              "x": -126,
+              "y": 114
+            }
+          ]
         }
       ],
       "layer": 0,
@@ -636,8 +636,8 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 246.8229704060681,
-      "y": 238.55164156078837,
+      "x": 92.48131257770953,
+      "y": 209.10019724273403,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -648,7 +648,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0343812149357308,
+      "parallax": 1.0152054247348858,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -979,8 +979,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.9043373174796,
-      "y": 306.9284515529538,
+      "x": 222.9043373174797,
+      "y": 306.9284515529541,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -991,7 +991,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293815,
+      "parallax": 1.079038203629382,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1011,7 +1011,15 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "capacity": 1,
+          "groups": ["compact_cassete"],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "x": -152,
@@ -1111,30 +1119,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 192.20936953138278,
-      "y": 219.49243016324763,
+      "x": 37.86773708370124,
+      "y": 190.04099088967703,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 192.20936953138278,
-          "y": 219.49243016324763,
-          "p": 1.0219542949903813
+          "x": 37.86773708370124,
+          "y": 190.04099088967703,
+          "p": 1.002778616889175
         },
         {
-          "x": 288.81371348902394,
-          "y": 217.96328389295746,
-          "p": 1.020925774646837
+          "x": 134.47540945428455,
+          "y": 188.51986301926215,
+          "p": 1.0017647972523118
         },
         {
-          "x": 258.83089977760426,
-          "y": 263.7661764756052,
-          "p": 1.0509010681340616
+          "x": 104.43836684935765,
+          "y": 234.09756819672486,
+          "p": 1.0315005762709415
         },
         {
-          "x": 209.793711563644,
-          "y": 261.8258718073618,
-          "p": 1.0496244382563662
+          "x": 55.40770011220733,
+          "y": 232.1676912533552,
+          "p": 1.0302527500060725
         }
       ],
       "color": "#000975",
@@ -1194,7 +1202,7 @@
       "type": "Entity",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "#compact_cassete",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1206,20 +1214,20 @@
       "layer": 0,
       "visible": true,
       "spatial": {
-        "parentNodeId": "Walk_176",
+        "parentNodeId": "desk_surface",
         "relation": "on"
       },
-      "x": 506,
-      "y": 277,
-      "width": 19.69986357435198,
-      "height": 27.994542974079128,
+      "x": -126,
+      "y": 114,
+      "width": 17.926875852660302,
+      "height": 25.475034106412007,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 1,
+      "scale": 0.91,
       "modelScale": 1,
       "parallax": 1,
       "ignoreScaling": false,
