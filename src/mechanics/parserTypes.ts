@@ -167,6 +167,8 @@ export type ParserToolAction =
   | {
       type: 'takeTarget';
       target: string | null;
+      anchor?: string | null;
+      relation?: ParserRelationType | null;
     }
   | {
       type: 'putTarget';

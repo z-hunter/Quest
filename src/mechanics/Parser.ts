@@ -3,6 +3,7 @@ import { NlpCascade } from './NlpCascade';
 import { matchParserCommandSpec } from './parserCommands';
 import {
   extractPutCommand,
+  extractTakeCommand,
   extractRelationTargetForIntent,
   getStage1CommandWords,
   isLookSceneWord,
@@ -270,7 +271,8 @@ export class Parser {
           },
         };
       }
-      case 'take':
+      case 'take': {
+        const takeCommand = extractTakeCommand(input, lexicon);
         return {
           stage: 'regex-v1',
           output: {
@@ -279,10 +281,13 @@ export class Parser {
               {
                 type: 'takeTarget',
                 target:
+                  takeCommand.item ||
                   normalizeTargetForIntent(input, 'take', lexicon) ||
                   match?.remainder ||
                   noun ||
                   null,
+                anchor: takeCommand.target,
+                relation: takeCommand.relation,
               },
             ],
           },
@@ -291,8 +296,11 @@ export class Parser {
             normalizedInput: input.trim().toUpperCase(),
             verb,
             noun,
+            relation: takeCommand.relation || undefined,
+            anchor: takeCommand.target,
           },
         };
+      }
       case 'put': {
         const putCommand = extractPutCommand(input, lexicon);
         return {
@@ -554,7 +562,11 @@ export class Parser {
       case 'examineRelationTarget':
         return this.resolveRelationTarget('examine', action.relation, action.anchor);
       case 'takeTarget':
-        return this.resolveTakeTarget(action.target);
+        return this.resolveTakeTarget(
+          action.target,
+          action.anchor || null,
+          action.relation || null
+        );
       case 'putTarget':
         return this.resolvePutTarget(action.item, action.target, action.relation);
       case 'openTarget':
@@ -1204,7 +1216,278 @@ export class Parser {
     return this.game.describeSpatialRelation(resolved.node.id, relation);
   }
 
-  private resolveTakeTarget(rawTarget: string | null): GameActionOutcome {
+  private collectTakeStorageCandidates(
+    anchor: SceneObject,
+    relation: ParserRelationType
+  ): { inventoryOwners: Entity[]; surfaces: SceneObject[] } {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) {
+      return { inventoryOwners: [], surfaces: [] };
+    }
+
+    const inventoryOwners: Entity[] = [];
+    const surfaces: SceneObject[] = [];
+
+    const anchorInventory =
+      anchor instanceof Entity
+        ? (anchor.components?.find((component: any) => component?.type === 'Inventory') as
+            | { protected?: boolean }
+            | undefined)
+        : null;
+    if (relation === 'in') {
+      if (anchorInventory && !anchorInventory.protected) {
+        inventoryOwners.push(anchor as Entity);
+      }
+      if (anchor.components?.some((component: any) => component?.type === 'Surface')) {
+        surfaces.push(anchor);
+      }
+    } else if (
+      relation === 'on' &&
+      anchor.components?.some((component: any) => component?.type === 'Surface')
+    ) {
+      surfaces.push(anchor);
+    }
+
+    for (const candidate of scene.getAllSceneObjects()) {
+      const parentId =
+        typeof (candidate as any).spatial?.parentNodeId === 'string'
+          ? (candidate as any).spatial.parentNodeId.trim()
+          : '';
+      const candidateRelation = ((candidate as any).spatial?.relation ||
+        null) as ParserRelationType | null;
+      if (parentId !== anchor.name || candidateRelation !== relation) continue;
+
+      if (relation === 'in' && candidate instanceof Entity) {
+        const inventoryComponent = candidate.components?.find(
+          (component: any) => component?.type === 'Inventory'
+        ) as { protected?: boolean } | undefined;
+        if (inventoryComponent && !inventoryComponent.protected) {
+          inventoryOwners.push(candidate);
+        }
+      }
+
+      if (candidate.components?.some((component: any) => component?.type === 'Surface')) {
+        surfaces.push(candidate);
+      }
+    }
+
+    return { inventoryOwners, surfaces };
+  }
+
+  private getStorageCandidateItems(storage: SceneObject): Entity[] {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return [];
+    const collected = new Set<Entity>();
+
+    if (storage instanceof Entity) {
+      const inventoryComponent = storage.components?.find(
+        (component: any) => component?.type === 'Inventory'
+      ) as { items?: string[]; protected?: boolean } | undefined;
+      if (inventoryComponent && !inventoryComponent.protected) {
+        for (const candidate of (inventoryComponent.items || [])
+          .map((id) => scene.getObjectByName(id))
+          .filter(
+            (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
+          )) {
+          collected.add(candidate);
+        }
+      }
+    }
+
+    const surfaceComponent = storage.components?.find(
+      (component: any) => component?.type === 'Surface'
+    ) as { items?: Array<{ id: string }> } | undefined;
+    for (const candidate of (surfaceComponent?.items || [])
+      .map((item) => scene.getObjectByName(item.id))
+      .filter(
+        (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
+      )) {
+      collected.add(candidate);
+    }
+
+    for (const candidate of scene.entities) {
+      if (!(candidate instanceof Entity) || candidate.disabled) continue;
+      let current: SceneObject | null = candidate;
+      while (current) {
+        const parentId: string =
+          typeof (current as any).spatial?.parentNodeId === 'string'
+            ? (current as any).spatial.parentNodeId.trim()
+            : '';
+        if (!parentId) break;
+        if (parentId === storage.name) {
+          collected.add(candidate);
+          break;
+        }
+        current = scene.getObjectByName(parentId);
+      }
+    }
+
+    return Array.from(collected);
+  }
+
+  private getObjectAccessOutcome(entity: SceneObject): GameActionOutcome | null {
+    if (this.game.inventory.includes(entity)) return null;
+
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const accessState = getSceneTextLayerAccessState(scene, this.game, entity);
+    if (!accessState.hidden && !accessState.blocked) return null;
+
+    const closedMessage =
+      accessState.gatingSwitchClearlyOpenable && accessState.gatingSwitchTitle
+        ? this.game.text('engine.closed_container', {
+            target: accessState.gatingSwitchTitle,
+          })
+        : null;
+
+    if (accessState.hidden) {
+      return {
+        status: 'failed',
+        code: accessState.gatingSwitchClearlyOpenable
+          ? 'blocked_by_closed_container'
+          : 'cannot_reach_hidden_target',
+        message: closedMessage || this.game.text('engine.cant_reach_generic'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'blocked_inside_closed',
+      message: accessState.gatingSwitchClearlyOpenable
+        ? this.game.text('engine.blocked_inside_closed')
+        : this.game.text('engine.cant_reach_generic'),
+      data: { entityId: entity.name },
+      recoverable: true,
+    };
+  }
+
+  private resolveContainerAnchor(
+    rawTarget: string,
+    candidateScopes: Array<keyof ParserScope>,
+    clarificationKey: string
+  ):
+    | { status: 'found'; entity: SceneObject }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      this.getScopeCandidates(candidateScopes),
+      clarificationKey
+    );
+    if (resolved.status !== 'not_found') {
+      return resolved;
+    }
+
+    const nodeResolved = this.resolveSpatialNodeTarget(rawTarget, clarificationKey);
+    if (nodeResolved.status !== 'found') {
+      return nodeResolved;
+    }
+
+    const scene = this.game.sceneManager.currentScene;
+    const entity = scene?.getObjectByName(nodeResolved.node.id) || null;
+    if (!entity) {
+      return { status: 'escalate', code: 'spatial_node_target_missing_object' };
+    }
+    return { status: 'found', entity };
+  }
+
+  private getDirectRelationTakeCandidates(
+    anchor: SceneObject,
+    relation: ParserRelationType
+  ): Entity[] {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return [];
+
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const directEntries =
+      textLayer.childrenByParentAndRelation
+        .get(anchor.name)
+        ?.get(relation as 'in' | 'on' | 'under' | 'behind') || [];
+
+    return directEntries
+      .map((entry) => entry.object)
+      .filter((candidate): candidate is Entity => candidate instanceof Entity)
+      .filter((candidate) => !candidate.disabled)
+      .filter(
+        (candidate) =>
+          candidate.components?.some((component: any) => component?.type === 'Item') ||
+          candidate.isTakeable
+      );
+  }
+
+  private getScopedTakeCandidates(
+    anchor: SceneObject,
+    relation: ParserRelationType
+  ): { status: 'resolved'; candidates: Entity[]; hasStorage: boolean } | GameActionOutcome {
+    const { inventoryOwners, surfaces } = this.collectTakeStorageCandidates(anchor, relation);
+    const orderByPriority = (left: SceneObject, right: SceneObject) => {
+      const a = this.getSceneObjectSelectionPriority(left);
+      const b = this.getSceneObjectSelectionPriority(right);
+      if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+      if (a.order !== b.order) return a.order - b.order;
+      if (a.distance !== b.distance) return a.distance - b.distance;
+      return left.name.localeCompare(right.name);
+    };
+    const orderedStorages = [
+      ...inventoryOwners.sort(orderByPriority),
+      ...surfaces.sort(orderByPriority),
+    ];
+    const accessibleStorages = orderedStorages.filter(
+      (storage) => !this.getObjectAccessOutcome(storage)
+    );
+    const directCandidates = this.getDirectRelationTakeCandidates(anchor, relation);
+
+    if (accessibleStorages.length) {
+      const candidates: Entity[] = [];
+      for (const storage of accessibleStorages) {
+        candidates.push(...this.getStorageCandidateItems(storage));
+      }
+      candidates.push(...directCandidates);
+      return {
+        status: 'resolved',
+        candidates: Array.from(new Set(candidates)),
+        hasStorage: true,
+      };
+    }
+
+    if (relation === 'in') {
+      const relationOutcome = this.game.describeSpatialRelation(anchor.name, 'in');
+      if (relationOutcome.status === 'failed') {
+        return relationOutcome;
+      }
+    }
+
+    if (directCandidates.length) {
+      return {
+        status: 'resolved',
+        candidates: directCandidates,
+        hasStorage: true,
+      };
+    }
+
+    for (const storage of orderedStorages) {
+      const blockedOutcome = this.getObjectAccessOutcome(storage);
+      if (blockedOutcome) {
+        return blockedOutcome;
+      }
+    }
+
+    return {
+      status: 'resolved',
+      candidates: [],
+      hasStorage: orderedStorages.length > 0,
+    };
+  }
+
+  private resolveTakeTarget(
+    rawTarget: string | null,
+    rawAnchor: string | null = null,
+    relation: ParserRelationType | null = null
+  ): GameActionOutcome {
     if (!rawTarget) {
       return {
         status: 'needs_clarification',
@@ -1213,6 +1496,84 @@ export class Parser {
         recoverable: true,
       };
     }
+
+    if (rawAnchor && relation) {
+      const targetScopes: Array<keyof ParserScope> =
+        relation === 'in'
+          ? ['held', 'visible', 'subscene']
+          : ['visible', 'reachable', 'held', 'subscene'];
+      const resolvedAnchor = this.resolveContainerAnchor(
+        rawAnchor,
+        targetScopes,
+        'parser.take_which_target'
+      );
+
+      if (resolvedAnchor.status === 'escalate') {
+        return { status: 'escalate', code: resolvedAnchor.code, recoverable: true };
+      }
+      if (resolvedAnchor.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_take_target_container',
+          message: resolvedAnchor.message,
+          data: { target: rawAnchor, options: resolvedAnchor.options },
+          recoverable: true,
+        };
+      }
+      if (resolvedAnchor.status === 'not_found') {
+        return {
+          status: 'failed',
+          code: 'take_target_not_found',
+          message: this.game.text('parser.take_target_not_found', { target: rawAnchor }),
+          data: { target: rawAnchor, relation },
+          recoverable: true,
+        };
+      }
+
+      const scoped = this.getScopedTakeCandidates(resolvedAnchor.entity, relation);
+      if (scoped.status !== 'resolved') {
+        return scoped;
+      }
+      if (!scoped.hasStorage) {
+        return {
+          status: 'failed',
+          code: 'take_target_not_found',
+          message: this.game.text('parser.take_target_not_found', { target: rawAnchor }),
+          data: { target: rawAnchor, relation, anchorId: resolvedAnchor.entity.name },
+          recoverable: true,
+        };
+      }
+
+      const scopedResolved = this.resolveEntityTargetInCandidates(
+        rawTarget,
+        scoped.candidates,
+        'parser.take_which_one'
+      );
+      if (scopedResolved.status === 'escalate') {
+        return { status: 'escalate', code: scopedResolved.code, recoverable: true };
+      }
+      if (scopedResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_take_target',
+          message: scopedResolved.message,
+          data: { target: rawTarget, anchor: rawAnchor, relation, options: scopedResolved.options },
+          recoverable: true,
+        };
+      }
+      if (scopedResolved.status === 'found') {
+        return this.game.takeEntity(scopedResolved.entity as Entity);
+      }
+
+      return {
+        status: 'failed',
+        code: 'entity_not_found',
+        message: this.game.text('parser.look_not_found', { target: rawTarget }),
+        data: { target: rawTarget, anchor: rawAnchor, relation },
+        recoverable: true,
+      };
+    }
+
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
       this.getScopeCandidates(['takable']),
@@ -1374,9 +1735,9 @@ export class Parser {
       relation === 'in'
         ? ['held', 'visible', 'subscene']
         : ['visible', 'reachable', 'held', 'subscene'];
-    const resolvedTarget = this.resolveEntityTargetInCandidates(
+    const resolvedTarget = this.resolveContainerAnchor(
       rawTarget,
-      this.getScopeCandidates(targetScopes),
+      targetScopes,
       'parser.put_which_target'
     );
 

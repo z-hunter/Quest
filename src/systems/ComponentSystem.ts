@@ -263,8 +263,12 @@ export class ComponentSystem {
 
     if (!itemComp) return null; // Not an item component, let caller handle legacy or fail
 
+    const scene = game?.sceneManager?.currentScene;
+    const ignoreDistanceForActiveSubscene =
+      !!scene?.activeSubscene && !!scene.subsceneEntities?.has(entity as any);
+
     const distanceError = this.getInteractionDistanceError(entity, player, {
-      ignoreDistance: !!itemComp.ignoreDistance,
+      ignoreDistance: !!itemComp.ignoreDistance || ignoreDistanceForActiveSubscene,
     });
     if (distanceError) return distanceError;
 

@@ -122,4 +122,136 @@ describe('Parser + game integration smoke', () => {
 
     expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
   });
+
+  it('supports PUT IN a titled spatial node even when the anchor object itself is not in visible scope', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('drawer', {
+      title: 'upper drawer',
+      description: 'A drawer.',
+      spatial: { parentNodeId: 'desk', relation: 'in' },
+      disabled: true,
+    } as any);
+    fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray inside the drawer.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('put key in drawer');
+
+    expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
+  });
+
+  it('surfaces a distance-specific error for PUT when the target is too far away', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    tray.x = 250;
+    tray.y = 0;
+
+    const result = await fixture.run('put key on tray');
+
+    expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
+  });
+
+  it('resolves TAKE FROM container without unnecessary ambiguity', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('table', {
+      title: 'Table',
+      description: 'A table.',
+    });
+    fixture.addEntity('drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+    });
+    fixture.addEntity('surface_top', {
+      title: 'Surface top',
+      description: 'A top surface.',
+      spatial: { parentNodeId: 'table', relation: 'on' },
+      components: [
+        { type: 'Surface', capacity: 5, groups: [], items: [{ id: 'pencil_a', x: 0, y: 0 }] },
+      ],
+    });
+    fixture.addEntity('surface_drawer', {
+      title: 'Tray',
+      description: 'A drawer tray.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [
+        { type: 'Surface', capacity: 5, groups: [], items: [{ id: 'pencil_b', x: 0, y: 0 }] },
+      ],
+    });
+    fixture.addEntity('pencil_a', {
+      title: 'pencil',
+      description: 'A pencil on the table.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'surface_top', relation: 'on' },
+    });
+    fixture.addEntity('pencil_b', {
+      title: 'pencil',
+      description: 'A pencil in the drawer.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'surface_drawer', relation: 'on' },
+    });
+
+    const result = await fixture.run('take pencil from drawer');
+
+    expect(result.messages.at(-1)).toBe('You picked up the pencil.');
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain('pencil_b');
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain('pencil_a');
+  });
+
+  it('surfaces a closed-container failure for TAKE FROM drawer', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true }],
+    });
+    fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A drawer tray.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [
+        { type: 'Surface', capacity: 5, groups: [], items: [{ id: 'note', x: 0, y: 0 }] },
+      ],
+      disabled: true,
+    } as any);
+    fixture.addEntity('note', {
+      title: 'note',
+      description: 'A note.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'tray', relation: 'on' },
+      disabled: true,
+    } as any);
+
+    const result = await fixture.run('take note from drawer');
+
+    expect(result.messages.at(-1)).toBe('The Drawer is closed.');
+  });
 });

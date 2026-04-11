@@ -128,7 +128,8 @@
       "components": [
         {
           "type": "Subscene",
-          "targetGroupId": "#D"
+          "targetGroupId": "#D",
+          "itemScale": 9.5
         }
       ],
       "layer": 0,
@@ -437,6 +438,70 @@
       "poly": [],
       "script": "",
       "parallax": 1
+    },
+    {
+      "name": "desk_surface",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Surface",
+          "capacity": 2,
+          "groups": [],
+          "items": []
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "on"
+      },
+      "poly": [
+        {
+          "x": -29,
+          "y": 95
+        },
+        {
+          "x": 7,
+          "y": 92
+        },
+        {
+          "x": 46,
+          "y": 95
+        },
+        {
+          "x": -13,
+          "y": 109
+        },
+        {
+          "x": -117,
+          "y": 125
+        },
+        {
+          "x": -156,
+          "y": 113
+        },
+        {
+          "x": -132,
+          "y": 109
+        },
+        {
+          "x": -103,
+          "y": 118
+        },
+        {
+          "x": -32,
+          "y": 107
+        }
+      ],
+      "script": "",
+      "parallax": 1
     }
   ],
   "scaling": {
@@ -571,8 +636,8 @@
       ],
       "layer": 0,
       "visible": true,
-      "x": 279.6980153275208,
-      "y": 238.55130030706337,
+      "x": 246.8229704060681,
+      "y": 238.55164156078837,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -583,7 +648,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0343736315196193,
+      "parallax": 1.0343812149357308,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -914,8 +979,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.90433731747947,
-      "y": 306.92845155295305,
+      "x": 222.9043373174796,
+      "y": 306.9284515529538,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -926,7 +991,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.079038203629381,
+      "parallax": 1.0790382036293815,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1046,30 +1111,30 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 225.0861314274598,
-      "y": 219.49243016324766,
+      "x": 192.20936953138278,
+      "y": 219.49243016324763,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 225.0861314274598,
-          "y": 219.49243016324766,
+          "x": 192.20936953138278,
+          "y": 219.49243016324763,
           "p": 1.0219542949903813
         },
         {
-          "x": 321.69047538510097,
-          "y": 217.94876345087147,
+          "x": 288.81371348902394,
+          "y": 217.96328389295746,
           "p": 1.020925774646837
         },
         {
-          "x": 291.7531434553284,
-          "y": 264.1859819044134,
-          "p": 1.051101948957133
+          "x": 258.83089977760426,
+          "y": 263.7661764756052,
+          "p": 1.0509010681340616
         },
         {
-          "x": 242.7159578745256,
-          "y": 262.22765399569886,
-          "p": 1.0498253307093872
+          "x": 209.793711563644,
+          "y": 261.8258718073618,
+          "p": 1.0496244382563662
         }
       ],
       "color": "#000975",
@@ -1107,16 +1172,16 @@
       },
       "x": 82,
       "y": -2,
-      "width": 150.4436263347707,
-      "height": 93.2343137254902,
+      "width": 15.044362633477071,
+      "height": 9.32343137254902,
       "baseWidth": 165.32266630194582,
       "baseHeight": 102.45528980823099,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
-      "scale": 0.91,
-      "modelScale": 1,
+      "scale": 0.09100000000000001,
+      "modelScale": 0.1,
       "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,

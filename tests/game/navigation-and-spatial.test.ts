@@ -85,4 +85,34 @@ describe('Game navigation and spatial API', () => {
     expect(populated.status).toBe('ok');
     expect(populated.message).toBe('In the Desk you see: Piece of paper.');
   });
+
+  it('describeSpatialRelation treats items on untitled nested container extensions as lying on the titled object', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'An office desk.',
+    });
+    fixture.addEntity('TechHolder', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'on' },
+    });
+    fixture.addEntity('TechSwitch', {
+      title: null,
+      spatial: { parentNodeId: 'TechHolder', relation: 'in' },
+    });
+    fixture.addEntity('SurfaceNode', {
+      title: null,
+      spatial: { parentNodeId: 'TechSwitch', relation: 'in' },
+    });
+    fixture.addEntity('note', {
+      title: 'Piece of paper',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'SurfaceNode', relation: 'on' },
+    });
+
+    const populated = fixture.game.describeSpatialRelation('Desk', 'on');
+
+    expect(populated.status).toBe('ok');
+    expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+  });
 });

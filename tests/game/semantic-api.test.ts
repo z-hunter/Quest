@@ -252,6 +252,197 @@ describe('Game semantic API', () => {
     expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'on' });
   });
 
+  it('putEntity reports a distance-specific error when the target is too far away', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    tray.x = 250;
+    tray.y = 0;
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_target_too_far');
+    expect(outcome.message).toBe('You are too far away from the Tray.');
+  });
+
+  it('putEntity reports when a surface target is full', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      components: [
+        { type: 'Surface', capacity: 1, groups: [], items: [{ id: 'other', x: 0, y: 0 }] },
+      ],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('surface_full');
+    expect(outcome.message).toBe('There is no more room on the Tray.');
+  });
+
+  it('putEntity reports when an item does not fit on the target surface', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const box = fixture.addEntity('box', {
+      title: 'Box',
+      description: 'A tiny box.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    box.width = 12;
+    box.height = 12;
+    const idCard = fixture.addEntity('id_card', {
+      title: 'ID card',
+      description: 'A card.',
+      components: [{ type: 'Item' }],
+    });
+    idCard.baseWidth = 60;
+    idCard.baseHeight = 40;
+    idCard.width = 60;
+    idCard.height = 40;
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.putEntity(idCard, box, { relation: 'on' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('surface_no_fit');
+    expect(outcome.message).toBe('The ID card does not fit on the Box.');
+  });
+
+  it('putEntity reports when a container inventory is full', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('other', {
+      title: 'Other item',
+      description: 'An existing item.',
+      components: [{ type: 'Item' }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const drawer = fixture.addEntity('drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [
+        { type: 'Inventory', capacity: 1, groups: [], protected: false, items: ['other'] },
+      ],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, drawer, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('inventory_full');
+    expect(outcome.message).toBe('There is no more room in the Drawer.');
+  });
+
+  it('putEntity can target an untitled nested surface that extends a titled object relation', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('tech_holder', {
+      title: null,
+      spatial: { parentNodeId: 'desk', relation: 'on' },
+    });
+    fixture.addEntity('tech_switch', {
+      title: null,
+      spatial: { parentNodeId: 'tech_holder', relation: 'in' },
+    });
+    const surface = fixture.addEntity('desk_surface_runtime', {
+      title: null,
+      spatial: { parentNodeId: 'tech_switch', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, desk, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect((surface.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
+  });
+
+  it('putEntity can place an item on a polygon desk surface with relation ON', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('test', {
+      title: 'Someone ID card',
+      description: "You see someone's ID.",
+      components: [{ type: 'Item' }],
+    });
+    idCard.baseWidth = 19.69986357435198;
+    idCard.baseHeight = 27.994542974079128;
+    idCard.width = idCard.baseWidth;
+    idCard.height = idCard.baseHeight;
+    idCard.modelScale = 1;
+    const desk = fixture.addTriggerbox('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    const deskSurface = fixture.addTriggerbox('desk_surface', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'on' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    deskSurface.poly = [
+      { x: -29, y: 95 },
+      { x: 7, y: 92 },
+      { x: 46, y: 95 },
+      { x: -13, y: 109 },
+      { x: -117, y: 125 },
+      { x: -156, y: 113 },
+      { x: -132, y: 109 },
+      { x: -103, y: 118 },
+      { x: -32, y: 107 },
+    ];
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.putEntity(idCard, desk, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect((deskSurface.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'test' })])
+    );
+  });
+
   it('surface with no valid group ids accepts any item', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -780,6 +971,56 @@ describe('Game semantic API', () => {
     expect(item.scale).toBe(1.25);
     expect(fixture.scene.pickupAnimations).toHaveLength(1);
     expect(fixture.scene.pickupAnimations[0].entity.subsceneItemScale).toBe(2);
+  });
+
+  it('taking an item from an active subscene ignores world distance even without ignoreDistance flag', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const item = fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'A small coin.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskSubscene', relation: 'in' },
+    });
+    item.x = 500;
+    item.y = 500;
+    fixture.scene.activeSubscene = 'DeskSubscene';
+    fixture.scene.subsceneEntities.add(item);
+
+    const outcome = fixture.game.takeEntity(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(item);
+  });
+
+  it('taking a dynamically placed item from an active subscene also ignores world distance', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      spatial: { parentNodeId: 'DeskSubscene', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const item = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A folded note.',
+      components: [{ type: 'Item' }],
+    });
+    item.x = 600;
+    item.y = 600;
+    fixture.scene.removeEntity(item);
+    fixture.game.inventory.push(item);
+    fixture.scene.activeSubscene = 'DeskSubscene';
+    fixture.scene.subsceneEntities.add(tray);
+
+    expect(fixture.game.putEntity(item, tray, { relation: 'on' }).status).toBe('ok');
+    expect(fixture.scene.subsceneEntities.has(item)).toBe(true);
+
+    const outcome = fixture.game.takeEntity(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(item);
   });
 
   it('item taken out of a subscene does not rejoin it on reopen after being dropped into the main scene', () => {

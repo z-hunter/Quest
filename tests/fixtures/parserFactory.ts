@@ -304,6 +304,26 @@ export function createParserFixture(): ParserFixture {
       };
     }
 
+    if (target) {
+      const player = fixture.scene.player || null;
+      const distanceProbe =
+        target?.title === null || !fixture.textAssets.getResolvedObjectField(target, 'title')
+          ? target
+          : target;
+      const distanceError = ComponentSystem.getInteractionDistanceError(
+        distanceProbe as any,
+        player
+      );
+      if (distanceError) {
+        return {
+          status: 'failed',
+          code: 'put_target_too_far',
+          message: distanceError,
+          recoverable: true,
+        };
+      }
+    }
+
     if (options?.relation === 'in' && target) {
       const nestedInventory =
         (target?.components?.some((entry: any) => entry?.type === 'Inventory') ? target : null) ||
