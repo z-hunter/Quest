@@ -3,6 +3,7 @@ import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import type { EntityData } from '../entities/Entity';
+import { Folder } from '../entities/Folder';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { Geometry } from '../utils/Geometry';
@@ -62,6 +63,7 @@ export interface SceneData {
   }[];
   scaling: SceneScaling;
   entities: EntityData[];
+  folders?: any[];
   camera?: { x: number; y: number; zoom: number };
   autoCenter?: boolean;
   cameraSpeed?: number;
@@ -83,6 +85,7 @@ export class Scene {
   filename: string;
   background: HTMLImageElement | null;
   entities: Entity[];
+  folders: Folder[] = [];
   pickupAnimations: PickupAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
@@ -260,6 +263,7 @@ export class Scene {
     this.filename = ''; // Default empty
     this.background = null; // Image object
     this.entities = [];
+    this.folders = [];
     this.walkbox = [];
     this.triggerboxes = [];
     this.scaling = {
@@ -288,6 +292,19 @@ export class Scene {
     // If this entity is the player, store a reference
     if (entity instanceof Actor && entity.isPlayer) {
       this.player = entity;
+    }
+  }
+
+  addFolder(folder: Folder): void {
+    this.folders.push(folder);
+    // @ts-ignore
+    folder.scene = this;
+  }
+
+  removeFolder(folder: Folder): void {
+    const index = this.folders.indexOf(folder);
+    if (index > -1) {
+      this.folders.splice(index, 1);
     }
   }
 
@@ -702,6 +719,7 @@ export class Scene {
     // We include Player in the entities list so state is saved (pos, etc)
     // Loader must handle 'Player' type specially to assign to scene.player
     const savedEntities = this.entities.map((e) => e.toJSON());
+    const savedFolders = this.folders.map((f) => f.toJSON());
 
     return {
       id: this.id,
@@ -713,6 +731,7 @@ export class Scene {
       triggerboxes: this.triggerboxes.map((tb) => tb.toJSON()),
       scaling: this.scaling,
       entities: savedEntities,
+      folders: savedFolders,
       camera: this.defaultCamera, // Save the DEFAULT settings, not the current runtime state
       autoCenter: this.autoCenter,
       cameraSpeed: this.cameraSpeed,

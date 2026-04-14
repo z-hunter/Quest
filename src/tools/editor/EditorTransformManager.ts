@@ -1279,7 +1279,7 @@ export class EditorTransformManager {
     } else if (type === 'Folder') {
       const name = 'Folder_' + Math.floor(Math.random() * 1000);
       const folder = new Folder(editor.game, name);
-      scene.entities.unshift(folder);
+      scene.addFolder(folder);
       editor.selectObject(folder);
       useEditorStore.getState().incrementHierarchyVersion();
     }

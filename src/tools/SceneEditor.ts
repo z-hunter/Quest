@@ -627,6 +627,9 @@ export class SceneEditor {
     const name = sep >= 0 ? key.slice(sep + 1) : key;
     if (!type || !name) return null;
 
+    if (type === 'Folder') {
+      return (scene.folders || []).find((obj: any) => obj?.name === name) || null;
+    }
     if (type === 'Entity' || type === 'Actor') {
       return (scene.entities || []).find((obj: any) => obj?.name === name) || null;
     }
@@ -866,6 +869,8 @@ export class SceneEditor {
       } else if (type === 'Triggerbox') {
         if (!scene.triggerboxes) scene.triggerboxes = [];
         scene.triggerboxes.push(newObj);
+      } else if (type === 'Folder') {
+        scene.addFolder(newObj);
       } else {
         scene.addEntity(newObj);
       }
@@ -916,11 +921,11 @@ export class SceneEditor {
     if (scene) {
       // If deleting a folder, also remove its contents
       if (this.selectedObject.type === 'Folder') {
-        const folderName = this.selectedObject.name;
+        const folderId = (this.selectedObject as any).folderId;
         const children = [
-          ...scene.entities.filter((e: any) => e.spatial?.parentNodeId === folderName),
-          ...scene.walkbox.filter((w: any) => w.spatial?.parentNodeId === folderName),
-          ...scene.triggerboxes.filter((t: any) => t.spatial?.parentNodeId === folderName),
+          ...scene.entities.filter((e: any) => e.folder === folderId),
+          ...scene.walkbox.filter((w: any) => w.folder === folderId),
+          ...scene.triggerboxes.filter((t: any) => t.folder === folderId),
         ];
         for (const child of children) {
           if (child instanceof Walkbox) scene.removeWalkbox(child);
@@ -929,13 +934,13 @@ export class SceneEditor {
         }
       }
 
-      if (this.selectedObject instanceof Walkbox) {
+      if (this.selectedObject.type === 'Folder') {
+        scene.removeFolder(this.selectedObject as any);
+      } else if (this.selectedObject instanceof Walkbox) {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
         scene.removeTriggerbox(this.selectedObject);
       } else if (this.selectedObject instanceof Entity) {
-        scene.removeEntity(this.selectedObject);
-      } else if (this.selectedObject instanceof Actor) {
         scene.removeEntity(this.selectedObject);
       }
     }

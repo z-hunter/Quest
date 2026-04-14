@@ -439,6 +439,12 @@ export class SceneManager {
 
     if (data.entities) {
       data.entities.forEach((entityData: any) => {
+        if (entityData.type === 'Folder') {
+          const folder = Folder.fromData(this.game, entityData);
+          newScene.addFolder(folder);
+          return;
+        }
+
         let entity: Entity;
 
         if (entityData.type === 'Player') {
@@ -447,13 +453,18 @@ export class SceneManager {
           entity = Actor.fromJSON(this.game, entityData);
         } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
           entity = QuadObject.fromJSON(this.game, entityData);
-        } else if (entityData.type === 'Folder') {
-          entity = Folder.fromData(this.game, entityData);
         } else {
           entity = Entity.fromJSON(this.game, entityData);
         }
 
         newScene.addEntity(entity);
+      });
+    }
+
+    if (data.folders) {
+      data.folders.forEach((folderData: any) => {
+        const folder = Folder.fromData(this.game, folderData);
+        newScene.addFolder(folder);
       });
     }
 

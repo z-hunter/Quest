@@ -199,8 +199,11 @@ export class EditorPersistenceManager {
     // If selection includes folders, also include their contents
     const scene = this.editor.game.sceneManager.currentScene;
     if (scene) {
-      const folderNames = selection.filter((obj) => obj.type === 'Folder').map((obj) => obj.name);
-      if (folderNames.length > 0) {
+      const folderIds = selection
+        .filter((obj) => obj.type === 'Folder')
+        .map((obj) => (obj as any).folderId)
+        .filter(Boolean);
+      if (folderIds.length > 0) {
         const result = new Set<SceneObject>(selection);
         const allObjects: SceneObject[] = [
           ...scene.entities,
@@ -208,11 +211,9 @@ export class EditorPersistenceManager {
           ...scene.triggerboxes,
         ];
         for (const obj of allObjects) {
-          const pid =
-            typeof (obj as any).spatial?.parentNodeId === 'string'
-              ? (obj as any).spatial.parentNodeId.trim()
-              : '';
-          if (pid && folderNames.includes(pid)) result.add(obj);
+          if ((obj as any).folder && folderIds.includes((obj as any).folder)) {
+            result.add(obj);
+          }
         }
         selection = Array.from(result);
       }

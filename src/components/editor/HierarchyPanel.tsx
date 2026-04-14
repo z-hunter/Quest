@@ -57,7 +57,9 @@ export const HierarchyPanel: React.FC = () => {
     [filterMode, filterNeedle]
   );
 
-  const filteredEntities = [...(scene?.entities || [])].filter((item: any) => matchesFilter(item));
+  const filteredEntities = [...(scene?.entities || []), ...(scene?.folders || [])].filter(
+    (item: any) => matchesFilter(item)
+  );
   const filteredWalkboxes = [...(scene?.walkbox || [])].filter((item: any) => matchesFilter(item));
   const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
     matchesFilter(item)
@@ -72,16 +74,33 @@ export const HierarchyPanel: React.FC = () => {
   );
   const hierarchicalObjects = React.useMemo(() => {
     const objectByName = new Map(filteredObjects.map((item: any) => [item.name, item]));
+    const folderIdToName = new Map<string, string>();
+    filteredObjects.forEach((item: any) => {
+      if (item.type === 'Folder' && item.folderId) {
+        folderIdToName.set(item.folderId, item.name);
+      }
+    });
+
     const childrenByParent = new Map<string, any[]>();
     const roots: any[] = [];
 
-    const pushChild = (parentId: string, item: any) => {
-      const children = childrenByParent.get(parentId) || [];
+    const pushChild = (parentName: string, item: any) => {
+      const children = childrenByParent.get(parentName) || [];
       children.push(item);
-      childrenByParent.set(parentId, children);
+      childrenByParent.set(parentName, children);
     };
 
     filteredObjects.forEach((item: any) => {
+      const fid = typeof item?.folder === 'string' ? item.folder : '';
+      const folderParentName = fid ? folderIdToName.get(fid) || '' : '';
+      if (
+        folderParentName &&
+        folderParentName !== item.name &&
+        objectByName.has(folderParentName)
+      ) {
+        pushChild(folderParentName, item);
+        return;
+      }
       const parentId =
         typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
       if (parentId && parentId !== item.name && objectByName.has(parentId)) {
@@ -128,37 +147,41 @@ export const HierarchyPanel: React.FC = () => {
   }, []);
 
   const visibleObjects = React.useMemo(() => {
-    const hidden = new Set<string>();
-    const collectChildren = (parentName: string) => {
-      for (const { item } of hierarchicalObjects) {
-        const pid =
-          typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
-        if (pid === parentName && !hidden.has(item.name)) {
-          hidden.add(item.name);
-          if (item.type === 'Folder' && collapsedFolders.has(item.name)) {
-            collectChildren(item.name);
-          }
-        }
-      }
-    };
+    const collapsedFolderIds = new Set<string>();
     for (const { item } of hierarchicalObjects) {
       if (item.type === 'Folder' && collapsedFolders.has(item.name)) {
-        collectChildren(item.name);
+        collapsedFolderIds.add(item.folderId);
       }
     }
-    return hierarchicalObjects.filter(({ item }) => !hidden.has(item.name));
+    const isFolderCollapsed = (folderId: string): boolean => {
+      if (!folderId) return false;
+      if (collapsedFolderIds.has(folderId)) return true;
+      const folderItem = hierarchicalObjects.find(
+        (e) => e.item.type === 'Folder' && e.item.folderId === folderId
+      );
+      if (folderItem?.item?.folder) {
+        return isFolderCollapsed(folderItem.item.folder);
+      }
+      return false;
+    };
+    return hierarchicalObjects.filter(({ item }) => {
+      const fid = typeof item?.folder === 'string' ? item.folder : '';
+      if (!fid) return true;
+      return !isFolderCollapsed(fid);
+    });
   }, [hierarchicalObjects, collapsedFolders]);
 
   const selectFolderContents = React.useCallback(
     (folderName: string) => {
       const scene = game?.sceneManager?.currentScene;
       if (!scene) return;
+      const folder = (scene.folders || []).find(
+        (e: any) => e.type === 'Folder' && e.name === folderName
+      );
+      if (!folder) return;
+      const fid = (folder as any).folderId;
       const children = hierarchicalObjects
-        .filter(({ item }) => {
-          const pid =
-            typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
-          return pid === folderName;
-        })
+        .filter(({ item }) => item.folder === fid)
         .map(({ item }) => item);
       if (children.length > 0) {
         game.editor.selectionManager.setMultiSelection(children);
@@ -167,15 +190,14 @@ export const HierarchyPanel: React.FC = () => {
     [game, hierarchicalObjects]
   );
 
-  // Helper to resolve display ID for an item, matching how it's identified in the UI
   const getDisplayId = (item: any): string => {
     if (item === 'SCENE') return 'SCENE';
     if (item && typeof item === 'object') {
       if (item.type === 'Walkbox') return item.name || 'Walkbox';
       if (item.type === 'Triggerbox') return item.name || 'Triggerbox';
-      return item.name; // For entities and other objects
+      return item.name;
     }
-    return String(item); // Fallback, should not be hit with current data structure
+    return String(item);
   };
 
   const getSelectionKey = (item: any): string => {
@@ -191,7 +213,6 @@ export const HierarchyPanel: React.FC = () => {
     return String(item);
   };
 
-  // Track hover state
   const isHovered = React.useRef(false);
 
   React.useEffect(() => {
@@ -305,26 +326,43 @@ export const HierarchyPanel: React.FC = () => {
   );
 
   // --- Drag-and-drop handlers ---
-  const getDraggedNames = React.useCallback((): Set<string> => {
-    const names = new Set<string>();
-    if (selectedObjectKeys?.length > 1) {
-      for (const entry of visibleObjects) {
-        if (isItemSelected(entry.item)) names.add(entry.item.name);
-      }
-    } else if (game?.editor?.selectedObject) {
-      const obj = game.editor.selectedObject;
-      if (obj && obj.name) names.add(obj.name);
-    }
-    return names;
-  }, [selectedObjectKeys, visibleObjects, game, isItemSelected]);
-
   const handleDragMouseDown = React.useCallback(
     (e: React.MouseEvent, item: any) => {
       if (e.button !== 0) return;
-      if (!isItemSelected(item)) return;
-      dragPending.current = { startY: e.clientY, item };
+      if (!isItemSelected(item)) {
+        game.editor.selectObject(item);
+      }
+      const startY = e.clientY;
+      dragPending.current = { startY, item };
+
+      const armDragIfMoved = (ev: MouseEvent) => {
+        if (Math.abs(ev.clientY - startY) <= 4) return;
+        const names = new Set<string>();
+        if (selectedObjectKeys?.length > 1) {
+          for (const entry of visibleObjects) {
+            if (isItemSelected(entry.item)) names.add(entry.item.name);
+          }
+        }
+        if (names.size === 0 && item?.name) names.add(item.name);
+        dragPending.current = null;
+        window.removeEventListener('mousemove', armDragIfMoved);
+        window.removeEventListener('mouseup', cancelPending);
+        setDragState({
+          dragging: true,
+          draggedNames: names,
+          dropTarget: null,
+          startY: ev.clientY,
+        });
+      };
+      const cancelPending = () => {
+        dragPending.current = null;
+        window.removeEventListener('mousemove', armDragIfMoved);
+        window.removeEventListener('mouseup', cancelPending);
+      };
+      window.addEventListener('mousemove', armDragIfMoved);
+      window.addEventListener('mouseup', cancelPending);
     },
-    [isItemSelected]
+    [isItemSelected, game, selectedObjectKeys, visibleObjects]
   );
 
   const applyDrop = React.useCallback(
@@ -335,27 +373,33 @@ export const HierarchyPanel: React.FC = () => {
       game.editor.saveUndoState();
 
       if (dropTarget.type === 'into') {
+        const targetFolder = (scene.folders || []).find(
+          (e: any) => e.type === 'Folder' && e.name === dropTarget.targetName
+        );
+        const targetFolderId = (targetFolder as any)?.folderId || null;
         for (const entry of visibleObjects) {
           if (draggedNames.has(entry.item.name)) {
             if (entry.item.type === 'Folder') continue;
-            entry.item.spatial = {
-              ...(entry.item.spatial || {}),
-              parentNodeId: dropTarget.targetName,
-            };
-            if (!entry.item.spatial.relation) {
-              entry.item.spatial.relation = null;
-            }
+            entry.item.folder = targetFolderId;
           }
         }
       } else {
         const targetName = dropTarget.targetName;
         const draggedEntities: any[] = [];
+        const draggedFolders: any[] = [];
         const draggedWalkboxes: any[] = [];
         const draggedTriggers: any[] = [];
 
         scene.entities = scene.entities.filter((e: any) => {
           if (draggedNames.has(e.name)) {
             draggedEntities.push(e);
+            return false;
+          }
+          return true;
+        });
+        scene.folders = scene.folders.filter((f: any) => {
+          if (draggedNames.has(f.name)) {
+            draggedFolders.push(f);
             return false;
           }
           return true;
@@ -375,29 +419,29 @@ export const HierarchyPanel: React.FC = () => {
           return true;
         });
 
-        let newParent: string | null = null;
+        let newFolder: string | null = null;
         if (targetName !== '__end__') {
-          const targetObj = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes].find(
-            (o: any) => o.name === targetName
-          );
+          const targetObj = [
+            ...scene.entities,
+            ...scene.folders,
+            ...scene.walkbox,
+            ...scene.triggerboxes,
+          ].find((o: any) => o.name === targetName);
           if (targetObj) {
-            const pid =
-              typeof targetObj.spatial?.parentNodeId === 'string'
-                ? targetObj.spatial.parentNodeId.trim()
-                : '';
-            newParent = pid || null;
+            newFolder = (targetObj as any).folder || null;
           }
         }
 
         for (const obj of [...draggedEntities, ...draggedWalkboxes, ...draggedTriggers]) {
-          obj.spatial = { ...(obj.spatial || {}), parentNodeId: newParent };
-          if (!newParent && !obj.spatial.relation) {
-            obj.spatial = {};
+          if (obj.folder && obj.folder !== newFolder && obj.inheritedProps instanceof Set) {
+            obj.inheritedProps.clear();
           }
+          obj.folder = newFolder;
         }
 
         if (targetName === '__end__') {
           scene.entities.push(...draggedEntities);
+          scene.folders.push(...draggedFolders);
           scene.walkbox.push(...draggedWalkboxes);
           scene.triggerboxes.push(...draggedTriggers);
         } else {
@@ -408,6 +452,7 @@ export const HierarchyPanel: React.FC = () => {
             else arr.push(...items);
           };
           insertAt(scene.entities, draggedEntities);
+          insertAt(scene.folders, draggedFolders);
           insertAt(scene.walkbox, draggedWalkboxes);
           insertAt(scene.triggerboxes, draggedTriggers);
         }
@@ -420,27 +465,9 @@ export const HierarchyPanel: React.FC = () => {
   );
 
   React.useEffect(() => {
-    if (!dragState.dragging && !dragPending.current) return;
+    if (!dragState.dragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (dragPending.current && !dragState.dragging) {
-        if (Math.abs(e.clientY - dragPending.current.startY) > 4) {
-          const names = getDraggedNames();
-          if (names.size > 0) {
-            setDragState({
-              dragging: true,
-              draggedNames: names,
-              dropTarget: null,
-              startY: e.clientY,
-            });
-          }
-          dragPending.current = null;
-        }
-        return;
-      }
-
-      if (!dragState.dragging) return;
-
       const panel = document.getElementById('hierarchy-panel');
       if (!panel) return;
 
@@ -514,14 +541,7 @@ export const HierarchyPanel: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [
-    dragState.dragging,
-    dragState.draggedNames,
-    dragState.dropTarget,
-    getDraggedNames,
-    applyDrop,
-    visibleObjects,
-  ]);
+  }, [dragState.dragging, dragState.draggedNames, dragState.dropTarget, applyDrop, visibleObjects]);
 
   const uiScale = game?.settings?.editor?.uiScale || 1.0;
 
@@ -693,6 +713,7 @@ export const HierarchyPanel: React.FC = () => {
           const shouldShiftDown = !isDragged && dropBeforeIdx >= 0 && i >= dropBeforeIdx;
           return (
             <div
+              className="hierarchy-row"
               key={`${item.type}:${item.name || i}`}
               data-hierarchy-name={item.name}
               data-hierarchy-type={item.type}
@@ -717,7 +738,6 @@ export const HierarchyPanel: React.FC = () => {
                 transform: shouldShiftDown ? 'translateY(3px)' : undefined,
                 transition: dragState.dragging ? 'transform 0.12s ease' : undefined,
               }}
-              onMouseDown={(e) => handleDragMouseDown(e, item)}
               onClick={(e) => {
                 if (dragState.dragging) return;
                 if (e.ctrlKey) game.editor.toggleObjectSelection(item);
@@ -767,7 +787,26 @@ export const HierarchyPanel: React.FC = () => {
                   </span>
                 )}
               </div>
-              {item.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {item.locked && <span style={{ fontSize: '10px' }}>🔒</span>}
+                <span
+                  className="drag-handle"
+                  style={{
+                    cursor: 'grab',
+                    fontSize: '10px',
+                    color: '#666',
+                    userSelect: 'none',
+                    padding: '0 2px',
+                    lineHeight: 1,
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    handleDragMouseDown(e, item);
+                  }}
+                >
+                  ⠿
+                </span>
+              </div>
             </div>
           );
         })}

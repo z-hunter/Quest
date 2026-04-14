@@ -724,7 +724,9 @@ export const PropertiesPanel: React.FC = () => {
     opacityValue: number | '',
     blurValue: number | '',
     onOpacityChange: (nextOpacity: number) => void,
-    onBlurChange: (nextBlur: number) => void
+    onBlurChange: (nextBlur: number) => void,
+    opacityInherited = false,
+    blurInherited = false
   ) => {
     const normalizedOpacity = opacityValue === '' ? 1 : Number(opacityValue);
     const normalizedBlur = blurValue === '' ? 0 : Number(blurValue);
@@ -737,7 +739,9 @@ export const PropertiesPanel: React.FC = () => {
         style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}
       >
         <div>
-          <label className="e-label">Opacity ({opacityUi}%)</label>
+          <label className="e-label" style={opacityInherited ? { color: '#7c6cb0' } : undefined}>
+            Opacity ({opacityUi}%){opacityInherited ? ' *' : ''}
+          </label>
           <input
             type="range"
             className="e-input"
@@ -750,7 +754,9 @@ export const PropertiesPanel: React.FC = () => {
           />
         </div>
         <div>
-          <label className="e-label">Blur ({blurUi}px)</label>
+          <label className="e-label" style={blurInherited ? { color: '#7c6cb0' } : undefined}>
+            Blur ({blurUi}px){blurInherited ? ' *' : ''}
+          </label>
           <input
             type="range"
             className="e-input"
@@ -1439,6 +1445,10 @@ export const PropertiesPanel: React.FC = () => {
     // Apply directly to the source of truth
     obj[field] = finalVal;
 
+    if (obj.inheritedProps instanceof Set && obj.inheritedProps.has(field)) {
+      obj.inheritedProps.delete(field);
+    }
+
     // Signal update
     incrementObjectVersion();
 
@@ -1496,6 +1506,93 @@ export const PropertiesPanel: React.FC = () => {
         obj.animator.frameDuration = finalVal;
       }
     }
+  };
+
+  const applyFolderDefault = (folder: any, prop: string, value: any, isNew: boolean = false) => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene) return;
+    const fid = folder.folderId;
+    const allObjects = [...scene.entities, ...(scene.walkbox || []), ...(scene.triggerboxes || [])];
+    for (const child of allObjects) {
+      if ((child as any).folder !== fid) continue;
+      if (!((child as any).inheritedProps instanceof Set)) {
+        (child as any).inheritedProps = new Set();
+      }
+      const inherited: Set<string> = (child as any).inheritedProps;
+      if (isNew || inherited.has(prop)) {
+        (child as any)[prop] = value;
+        inherited.add(prop);
+      }
+    }
+  };
+
+  const removeFolderDefault = (folder: any, prop: string) => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene) return;
+    const fid = folder.folderId;
+    const ENTITY_DEFAULTS: Record<string, any> = {
+      opacity: 1.0,
+      blur: 0,
+      blendMode: 'source-over',
+      color: '#AAAAAA',
+      modelScale: 1.0,
+      layer: 0,
+      parallax: 1.0,
+      visible: true,
+      ignoreScaling: false,
+      colliderWidth: 0,
+      colliderHeight: 0,
+    };
+    const allObjects = [
+      ...scene.entities,
+      ...(scene.folders || []),
+      ...(scene.walkbox || []),
+      ...(scene.triggerboxes || []),
+    ];
+    for (const child of allObjects) {
+      if ((child as any).folder !== fid) continue;
+      if (!((child as any).inheritedProps instanceof Set)) {
+        (child as any).inheritedProps = new Set();
+      }
+      const inherited: Set<string> = (child as any).inheritedProps;
+      if (inherited.has(prop)) {
+        (child as any)[prop] = ENTITY_DEFAULTS[prop] ?? 0;
+        inherited.delete(prop);
+      }
+    }
+  };
+
+  const isInherited = (prop: string): boolean => {
+    return obj?.inheritedProps instanceof Set && obj.inheritedProps.has(prop);
+  };
+
+  const inheritedClass = (prop: string, base = 'e-input'): string => {
+    return isInherited(prop) ? `${base} e-inherited` : base;
+  };
+
+  const inheritedLabel = (label: string, prop: string) => {
+    if (!isInherited(prop)) return <label className="e-label">{label}</label>;
+    return (
+      <label
+        className="e-label"
+        style={{ color: '#7c6cb0', cursor: 'pointer' }}
+        title="Inherited from folder. Click to reset to folder default."
+        onClick={() => resetToFolderDefault(prop)}
+      >
+        {label} *
+      </label>
+    );
+  };
+
+  const resetToFolderDefault = (prop: string) => {
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene || !obj?.folder) return;
+    const folder = (scene.folders || []).find((f: any) => f.folderId === obj.folder);
+    if (!folder || !(prop in folder.defaults)) return;
+    game.editor.saveUndoState();
+    obj[prop] = folder.defaults[prop];
+    obj.inheritedProps.add(prop);
+    incrementObjectVersion();
   };
 
   const isEntityLike =
@@ -1565,13 +1662,16 @@ export const PropertiesPanel: React.FC = () => {
                       const dupEntity = scene.entities.find(
                         (ent) => ent.name === finalVal && ent !== game?.editor?.selectedObject
                       );
+                      const dupFolder = (scene.folders || []).find(
+                        (f) => f.name === finalVal && f !== game?.editor?.selectedObject
+                      );
                       const dupTrigger = scene.triggerboxes
                         ? scene.triggerboxes.find(
                             (tb) => tb.name === finalVal && tb !== game?.editor?.selectedObject
                           )
                         : null;
 
-                      if (dupEntity || dupTrigger) {
+                      if (dupEntity || dupFolder || dupTrigger) {
                         console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
                         // @ts-ignore
                         if (game.showMessage)
@@ -1713,28 +1813,228 @@ export const PropertiesPanel: React.FC = () => {
           )}
 
         {isFolder && (
-          <div style={{ padding: '8px 0' }}>
-            <button
-              className="e-btn"
-              style={{ width: '100%' }}
-              onClick={() => {
-                const scene = game?.sceneManager?.currentScene;
-                if (!scene || !obj) return;
-                const children = scene.entities.filter((ent: any) => {
-                  const pid =
-                    typeof ent?.spatial?.parentNodeId === 'string'
-                      ? ent.spatial.parentNodeId.trim()
-                      : '';
-                  return pid === obj.name;
-                });
-                if (children.length > 0) {
-                  game.editor.selectionManager.setMultiSelection(children);
-                }
-              }}
-            >
-              Select Contents
-            </button>
-          </div>
+          <>
+            <div style={{ padding: '8px 0' }}>
+              <button
+                className="e-btn"
+                style={{ width: '100%' }}
+                onClick={() => {
+                  const scene = game?.sceneManager?.currentScene;
+                  if (!scene || !obj) return;
+                  const fid = obj.folderId;
+                  const allObjects = [
+                    ...scene.entities,
+                    ...(scene.folders || []),
+                    ...(scene.triggerboxes || []),
+                    ...scene.walkbox,
+                  ];
+                  const children = allObjects.filter((o: any) => o.folder === fid);
+                  if (children.length > 0) {
+                    game.editor.selectionManager.setMultiSelection(children);
+                  }
+                }}
+              >
+                Select Contents
+              </button>
+            </div>
+
+            {renderSection(
+              1,
+              'Children Defaults',
+              'purple',
+              (() => {
+                const defaults = obj.defaults || {};
+                const handleDefault = (prop: string, value: any, enforceNumber = false) => {
+                  game.editor.saveUndoState();
+                  let finalVal = value;
+                  if (enforceNumber) {
+                    finalVal = parseFloat(value);
+                    if (isNaN(finalVal)) finalVal = 0;
+                  }
+                  const isNew = !(prop in defaults);
+                  if (!obj.defaults) obj.defaults = {};
+                  obj.defaults[prop] = finalVal;
+                  applyFolderDefault(obj, prop, finalVal, isNew);
+                  incrementObjectVersion();
+                };
+                const clearDefault = (prop: string) => {
+                  game.editor.saveUndoState();
+                  removeFolderDefault(obj, prop);
+                  delete obj.defaults[prop];
+                  incrementObjectVersion();
+                };
+                const hasDefault = (prop: string) => prop in defaults;
+
+                return (
+                  <>
+                    <div
+                      className="e-row"
+                      style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
+                    >
+                      <div>
+                        <label className="e-label">Scale</label>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className={`e-input${hasDefault('modelScale') ? ' e-inherited' : ''}`}
+                            value={
+                              hasDefault('modelScale') ? formatPanelNumber(defaults.modelScale) : ''
+                            }
+                            placeholder="-"
+                            onChange={(e) => handleDefault('modelScale', e.target.value, true)}
+                          />
+                          {hasDefault('modelScale') && (
+                            <button
+                              className="e-btn e-btn-reset"
+                              onClick={() => clearDefault('modelScale')}
+                            >
+                              x
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="e-label">Layer</label>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <input
+                            type="number"
+                            className={`e-input${hasDefault('layer') ? ' e-inherited' : ''}`}
+                            value={hasDefault('layer') ? formatPanelNumber(defaults.layer) : ''}
+                            placeholder="-"
+                            onChange={(e) => handleDefault('layer', e.target.value, true)}
+                          />
+                          {hasDefault('layer') && (
+                            <button
+                              className="e-btn e-btn-reset"
+                              onClick={() => clearDefault('layer')}
+                            >
+                              x
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="e-label">Parallax</label>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <input
+                            type="number"
+                            step="0.1"
+                            className={`e-input${hasDefault('parallax') ? ' e-inherited' : ''}`}
+                            value={
+                              hasDefault('parallax') ? formatPanelNumber(defaults.parallax) : ''
+                            }
+                            placeholder="-"
+                            onChange={(e) => handleDefault('parallax', e.target.value, true)}
+                          />
+                          {hasDefault('parallax') && (
+                            <button
+                              className="e-btn e-btn-reset"
+                              onClick={() => clearDefault('parallax')}
+                            >
+                              x
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      className="e-row"
+                      style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '5px' }}
+                    >
+                      <div>
+                        <label className="e-label">Fill Color</label>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <input
+                            type="color"
+                            className="e-input"
+                            style={{
+                              width: '30px',
+                              padding: 0,
+                              height: '20px',
+                              cursor: 'pointer',
+                              border: 'none',
+                            }}
+                            value={defaults.color || '#AAAAAA'}
+                            onChange={(e) => handleDefault('color', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            className={`e-input${hasDefault('color') ? ' e-inherited' : ''}`}
+                            style={{ flex: 1, minWidth: 0 }}
+                            value={defaults.color || ''}
+                            placeholder="-"
+                            onChange={(e) => handleDefault('color', e.target.value)}
+                          />
+                          {hasDefault('color') && (
+                            <button
+                              className="e-btn e-btn-reset"
+                              onClick={() => clearDefault('color')}
+                            >
+                              x
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="e-label">Blend Mode</label>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <Select
+                            value={hasDefault('blendMode') ? defaults.blendMode : ''}
+                            onChange={(value) => handleDefault('blendMode', value)}
+                            options={[
+                              { value: '', label: '-' },
+                              { value: 'source-over', label: 'Normal' },
+                              { value: 'multiply', label: 'Multiply' },
+                              { value: 'screen', label: 'Screen' },
+                              { value: 'overlay', label: 'Overlay' },
+                              { value: 'lighter', label: 'Add' },
+                              { value: 'difference', label: 'Diff' },
+                            ]}
+                            style={{ width: '100%' }}
+                          />
+                          {hasDefault('blendMode') && (
+                            <button
+                              className="e-btn e-btn-reset"
+                              onClick={() => clearDefault('blendMode')}
+                            >
+                              x
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {renderOpacityBlurControls(
+                      hasDefault('opacity') ? defaults.opacity : '',
+                      hasDefault('blur') ? defaults.blur : '',
+                      (nextOpacity) => handleDefault('opacity', nextOpacity, true),
+                      (nextBlur) => handleDefault('blur', nextBlur)
+                    )}
+
+                    <div className="e-row">
+                      <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          style={{ marginRight: '5px' }}
+                          checked={!!defaults.ignoreScaling}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              handleDefault('ignoreScaling', true);
+                            } else {
+                              clearDefault('ignoreScaling');
+                            }
+                          }}
+                        />
+                        Disable Depth-scaling
+                      </label>
+                    </div>
+                  </>
+                );
+              })()
+            )}
+          </>
         )}
 
         {isEntityLike && (
@@ -1791,30 +2091,30 @@ export const PropertiesPanel: React.FC = () => {
                   style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}
                 >
                   <div>
-                    <label className="e-label">Scale</label>
+                    {inheritedLabel('Scale', 'modelScale')}
                     <input
                       type="number"
                       step="0.1"
-                      className="e-input"
+                      className={inheritedClass('modelScale')}
                       value={formatPanelNumber(obj.modelScale || 1)}
                       onChange={(e) => handleChange('modelScale', e.target.value, true)}
                     />
                   </div>
                   <div>
-                    <label className="e-label">Layer</label>
+                    {inheritedLabel('Layer', 'layer')}
                     <input
                       type="number"
-                      className="e-input"
+                      className={inheritedClass('layer')}
                       value={formatPanelNumber(obj.layer || 0)}
                       onChange={(e) => handleChange('layer', e.target.value, true)}
                     />
                   </div>
                   <div>
-                    <label className="e-label">Parallax</label>
+                    {inheritedLabel('Parallax', 'parallax')}
                     <input
                       type="number"
                       step="0.1"
-                      className="e-input"
+                      className={inheritedClass('parallax')}
                       value={formatPanelNumber(obj.parallax ?? 1)}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
@@ -1889,7 +2189,7 @@ export const PropertiesPanel: React.FC = () => {
                   style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '5px' }}
                 >
                   <div>
-                    <label className="e-label">Fill Color</label>
+                    {inheritedLabel('Fill Color', 'color')}
                     <div style={{ display: 'flex', gap: '5px' }}>
                       <input
                         type="color"
@@ -1906,7 +2206,7 @@ export const PropertiesPanel: React.FC = () => {
                       />
                       <input
                         type="text"
-                        className="e-input"
+                        className={inheritedClass('color')}
                         style={{ flex: 1, minWidth: 0 }}
                         value={obj.color || ''}
                         onChange={(e) => handleChange('color', e.target.value)}
@@ -1914,8 +2214,9 @@ export const PropertiesPanel: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="e-label">Blend Mode</label>
+                    {inheritedLabel('Blend Mode', 'blendMode')}
                     <Select
+                      className={isInherited('blendMode') ? 'e-inherited' : ''}
                       value={obj.blendMode || 'source-over'}
                       onChange={(value) => handleChange('blendMode', value)}
                       options={[
@@ -1935,7 +2236,9 @@ export const PropertiesPanel: React.FC = () => {
                   obj.opacity !== undefined ? obj.opacity : 1.0,
                   obj.blur || 0,
                   (nextOpacity) => handleChange('opacity', nextOpacity, true),
-                  (nextBlur) => handleChange('blur', nextBlur)
+                  (nextBlur) => handleChange('blur', nextBlur),
+                  isInherited('opacity'),
+                  isInherited('blur')
                 )}
 
                 <div className="e-row">

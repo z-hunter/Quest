@@ -6,38 +6,6 @@
   "filename": "test_room",
   "walkbox": [
     {
-      "name": "Walk_997",
-      "type": "Walkbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "poly": [
-        {
-          "x": -79,
-          "y": 346
-        },
-        {
-          "x": -81,
-          "y": 272
-        },
-        {
-          "x": 153,
-          "y": 272
-        },
-        {
-          "x": 153,
-          "y": 346
-        }
-      ],
-      "mode": "Add"
-    },
-    {
       "name": "Walk_176",
       "type": "Walkbox",
       "locked": false,
@@ -47,6 +15,8 @@
       "textRedirects": {},
       "interactions": {},
       "components": [],
+      "folder": "f_mny9h6ej_1",
+      "inheritedProps": ["modelScale"],
       "layer": 0,
       "visible": true,
       "poly": [
@@ -99,6 +69,55 @@
           "y": 194
         }
       ],
+      "mode": "Add"
+    },
+    {
+      "name": "Walk_997",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mny9h6ej_1",
+      "inheritedProps": ["modelScale"],
+      "layer": 0,
+      "visible": true,
+      "poly": [
+        {
+          "x": -79,
+          "y": 346
+        },
+        {
+          "x": -81,
+          "y": 272
+        },
+        {
+          "x": 153,
+          "y": 272
+        },
+        {
+          "x": 153,
+          "y": 346
+        }
+      ],
+      "mode": "Add"
+    },
+    {
+      "name": "Walk_197",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "poly": [],
       "mode": "Add"
     }
   ],
@@ -1104,6 +1123,20 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 7
+    }
+  ],
+  "folders": [
+    {
+      "name": "Folder_61",
+      "type": "Folder",
+      "folderId": "f_mny9h6ej_1",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "collapsed": false,
+      "defaults": {
+        "modelScale": 3
+      }
     }
   ],
   "camera": {
