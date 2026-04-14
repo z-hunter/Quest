@@ -1699,36 +1699,118 @@ export class Parser {
       };
     }
 
+    const normalizedItem = String(rawItem || '')
+      .trim()
+      .toUpperCase();
+    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'takable'] : ['held'];
+    const sourceCandidates = this.getScopeCandidates(sourceScopes);
+    if (rawTarget && normalizedItem) {
+      const sourceMatches = sourceCandidates.filter((sceneObject: SceneObject) =>
+        this.getObjectLookupTokens(sceneObject).includes(normalizedItem)
+      );
+      const hasHeldMatch = sourceMatches.some((sceneObject) =>
+        this.game.inventory.includes(sceneObject as Entity)
+      );
+      const hasSceneMatch = sourceMatches.some(
+        (sceneObject) => !this.game.inventory.includes(sceneObject as Entity)
+      );
+      if (sourceMatches.length > 1 && hasHeldMatch && hasSceneMatch) {
+        const optionTitles = this.getResolutionOptionTitles(sourceMatches);
+        if (!optionTitles) {
+          return {
+            status: 'escalate',
+            code: 'ambiguous_targets_missing_titles',
+            recoverable: true,
+          };
+        }
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_put_item',
+          message: this.game.text('parser.put_which_item', { options: optionTitles.join(', ') }),
+          data: { item: rawItem, options: optionTitles },
+          recoverable: true,
+        };
+      }
+    }
+
     const heldResolved = this.resolveEntityTargetInCandidates(
       rawItem,
-      this.getScopeCandidates(['held']),
+      sourceCandidates,
       'parser.put_which_item'
     );
+    const broadResolved =
+      rawTarget && heldResolved.status === 'not_found'
+        ? this.resolveEntityTargetInCandidates(
+            rawItem,
+            this.getScopeCandidates(['held', 'visible']),
+            'parser.put_which_item'
+          )
+        : null;
 
-    if (heldResolved.status === 'escalate') {
-      return { status: 'escalate', code: heldResolved.code, recoverable: true };
-    }
-    if (heldResolved.status === 'ambiguous') {
+    if (heldResolved.status === 'escalate' || broadResolved?.status === 'escalate') {
       return {
-        status: 'needs_clarification',
-        code: 'ambiguous_put_item',
-        message: heldResolved.message,
-        data: { item: rawItem, options: heldResolved.options },
+        status: 'escalate',
+        code:
+          heldResolved.status === 'escalate'
+            ? heldResolved.code
+            : broadResolved?.status === 'escalate'
+              ? broadResolved.code
+              : 'put_item_missing_title',
         recoverable: true,
       };
     }
-    if (heldResolved.status === 'not_found') {
+    if (heldResolved.status === 'ambiguous' || broadResolved?.status === 'ambiguous') {
+      const ambiguousResult =
+        heldResolved.status === 'ambiguous'
+          ? heldResolved
+          : broadResolved?.status === 'ambiguous'
+            ? broadResolved
+            : null;
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_put_item',
+        message:
+          ambiguousResult?.message || this.game.text('parser.put_which_item', { options: '' }),
+        data: {
+          item: rawItem,
+          options: ambiguousResult?.options || [],
+        },
+        recoverable: true,
+      };
+    }
+    if (heldResolved.status === 'not_found' && broadResolved?.status !== 'found') {
       return {
         status: 'failed',
-        code: 'put_item_not_held',
-        message: this.game.text('parser.put_item_not_held', { item: rawItem }),
+        code: rawTarget ? 'entity_not_found' : 'put_item_not_held',
+        message: rawTarget
+          ? this.game.text('parser.look_not_found', { target: rawItem })
+          : this.game.text('parser.put_item_not_held', { item: rawItem }),
+        data: { item: rawItem },
+        recoverable: true,
+      };
+    }
+
+    const sourceEntity =
+      heldResolved.status === 'found'
+        ? (heldResolved.entity as Entity)
+        : broadResolved?.status === 'found'
+          ? (broadResolved.entity as Entity)
+          : null;
+
+    if (!sourceEntity) {
+      return {
+        status: 'failed',
+        code: rawTarget ? 'entity_not_found' : 'put_item_not_held',
+        message: rawTarget
+          ? this.game.text('parser.look_not_found', { target: rawItem })
+          : this.game.text('parser.put_item_not_held', { item: rawItem }),
         data: { item: rawItem },
         recoverable: true,
       };
     }
 
     if (!rawTarget) {
-      return this.game.putEntity(heldResolved.entity as Entity, null, {
+      return this.game.putEntity(sourceEntity, null, {
         relation: relation || null,
       });
     }
@@ -1765,7 +1847,7 @@ export class Parser {
       };
     }
 
-    return this.game.putEntity(heldResolved.entity as Entity, resolvedTarget.entity, {
+    return this.game.putEntity(sourceEntity, resolvedTarget.entity, {
       relation: relation || null,
     });
   }

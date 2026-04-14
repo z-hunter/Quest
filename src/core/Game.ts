@@ -1447,12 +1447,68 @@ export class Game implements IGame {
     };
   }
 
+  private getPuttableSourceFailure(entity: Entity): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
+    if (autoOpenOutcome) return autoOpenOutcome;
+
+    const inventoryOwner = this.findInventoryOwnerForEntity(entity);
+    if (!inventoryOwner) {
+      const blockedOutcome = this.getBlockedAccessOutcome(entity);
+      if (blockedOutcome) return blockedOutcome;
+    }
+
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'put_source_not_accessible',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+    if (!isItem && !entity.isTakeable) {
+      return {
+        status: 'failed',
+        code: 'not_takeable',
+        message: this.text('parser.take_cannot'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    if (inventoryOwner && !this.isInventoryAccessible(inventoryOwner)) {
+      return {
+        status: 'failed',
+        code: 'inventory_not_accessible',
+        message: this.text('parser.take_cannot'),
+        data: { entityId: entity.name, ownerId: inventoryOwner.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  }
+
   putEntity(
     entity: Entity,
     target?: SceneObject | null,
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome {
-    if (!this.isEntityInInventory(entity)) {
+    const sourceInInventory = this.isEntityInInventory(entity);
+    if (!sourceInInventory && !target) {
       return {
         status: 'failed',
         code: 'put_item_not_held',
@@ -1461,6 +1517,10 @@ export class Game implements IGame {
         }),
         recoverable: true,
       };
+    }
+    if (!sourceInInventory) {
+      const sourceFailure = this.getPuttableSourceFailure(entity);
+      if (sourceFailure) return sourceFailure;
     }
 
     const relation = options?.relation || null;
@@ -1522,7 +1582,9 @@ export class Game implements IGame {
           target: targetTitle,
         }),
         data: { entityId: entity.name, ownerId: destinationInventoryOwner.name },
-        effects: ['removed_from_inventory', 'moved_to_inventory'],
+        effects: sourceInInventory
+          ? ['removed_from_inventory', 'moved_to_inventory']
+          : ['moved_between_containers'],
       };
     }
 
@@ -1557,7 +1619,9 @@ export class Game implements IGame {
         code: 'item_put_on_surface',
         message: this.getSurfaceDropMessage(destinationSurface, entity),
         data: { entityId: entity.name, targetId: destinationSurface.name },
-        effects: ['removed_from_inventory', 'placed_on_surface'],
+        effects: sourceInInventory
+          ? ['removed_from_inventory', 'placed_on_surface']
+          : ['moved_between_scene_targets'],
       };
     }
 

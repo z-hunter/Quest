@@ -295,13 +295,25 @@ export function createParserFixture(): ParserFixture {
     target?: any,
     options?: { relation?: string | null }
   ) => {
-    if (!fixture.game.inventory.includes(entity)) {
+    const isHeld = fixture.game.inventory.includes(entity);
+    if (!isHeld && !target) {
       return {
         status: 'failed',
         code: 'put_item_not_held',
         message: fixture.game.text('parser.put_item_not_held', { item: entity.name }),
         recoverable: true,
       };
+    }
+    if (!isHeld) {
+      const takeError = ComponentSystem.canTakeItem(entity as any, fixture.scene.player || null);
+      if (takeError) {
+        return {
+          status: 'failed',
+          code: 'put_source_not_accessible',
+          message: takeError,
+          recoverable: true,
+        };
+      }
     }
 
     if (target) {
@@ -378,7 +390,9 @@ export function createParserFixture(): ParserFixture {
       };
     }
 
-    fixture.game.removeInventoryEntity(entity);
+    if (isHeld) {
+      fixture.game.removeInventoryEntity(entity);
+    }
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
     const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');

@@ -155,6 +155,61 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
   });
 
+  it('supports PUT from a nearby scene item into a nearby container without taking it first', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'cassette',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 10;
+    cassette.y = 0;
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 20;
+    recorder.y = 0;
+
+    const result = await fixture.run('put cassette in recorder');
+
+    expect(result.messages.at(-1)).toBe('You put the cassette into the recorder.');
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
+      cassette.name
+    );
+  });
+
+  it('asks for clarification when both a held item and a nearby scene item match PUT source', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('cassette_held', {
+      title: 'cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    fixture.addEntity('cassette_scene', {
+      title: 'cassette',
+      description: 'A nearby cassette.',
+      components: [{ type: 'Item' }],
+    });
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const result = await fixture.run('put cassette in recorder');
+
+    expect(result.messages.at(-1)).toContain('Which item do you want to put down');
+    expect(result.pendingIntent).toBe('put');
+  });
+
   it('surfaces a distance-specific error for PUT when the target is too far away', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

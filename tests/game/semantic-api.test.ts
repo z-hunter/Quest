@@ -252,6 +252,57 @@ describe('Game semantic API', () => {
     expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'on' });
   });
 
+  it('putEntity can move a nearby scene item into a nearby reachable container without taking it first', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 10;
+    cassette.y = 0;
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 20;
+    recorder.y = 0;
+
+    const outcome = fixture.game.putEntity(cassette, recorder, { relation: 'in' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_into_inventory');
+    expect(fixture.game.inventory).not.toContain(cassette);
+    expect(fixture.game.getInventoryEntities(recorder)).toContain(cassette);
+  });
+
+  it('putEntity rejects moving a scene item when the source is too far away', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const outcome = fixture.game.putEntity(cassette, recorder, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_source_not_accessible');
+    expect(outcome.message).toBe('You are too far away from the Cassette.');
+  });
+
   it('putEntity reports a distance-specific error when the target is too far away', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
