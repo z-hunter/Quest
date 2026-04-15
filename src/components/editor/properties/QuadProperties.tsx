@@ -25,6 +25,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
     incrementObjectVersion,
   } = usePropertiesContext<QuadObject>();
   const quad = obj;
+  const centroid = getQuadCentroid(quad);
 
   return (
     <div className="e-row">
@@ -48,10 +49,8 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
           <input
             type="number"
             className="e-input"
-            value={formatPanelNumber(getQuadCentroid(quad).x)}
-            onChange={(e) =>
-              translateQuadTo(parseFloat(e.target.value) || 0, getQuadCentroid(quad).y)
-            }
+            value={formatPanelNumber(centroid.x)}
+            onChange={(e) => translateQuadTo(parseFloat(e.target.value) || 0, centroid.y)}
           />
         </div>
         <div>
@@ -59,10 +58,8 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
           <input
             type="number"
             className="e-input"
-            value={formatPanelNumber(getQuadCentroid(quad).y)}
-            onChange={(e) =>
-              translateQuadTo(getQuadCentroid(quad).x, parseFloat(e.target.value) || 0)
-            }
+            value={formatPanelNumber(centroid.y)}
+            onChange={(e) => translateQuadTo(centroid.x, parseFloat(e.target.value) || 0)}
           />
         </div>
         <div>

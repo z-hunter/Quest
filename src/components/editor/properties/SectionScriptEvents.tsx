@@ -67,6 +67,7 @@ export const SectionScriptEvents: React.FC = () => {
             <button
               className="e-btn e-btn-red"
               style={{ marginLeft: '2px', padding: '0 4px', fontSize: '0.85em' }}
+              aria-label={`Delete interaction ${verb}`}
               onClick={() => {
                 delete o.interactions[verb];
                 if (game.editor.selectedObject) {

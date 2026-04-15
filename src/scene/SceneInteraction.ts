@@ -78,6 +78,40 @@ function isHitAtScreenPoint(
   return obj.hitTest(worldPos.x, worldPos.y);
 }
 
+function containsScreenPoint(
+  scene: Scene,
+  obj: SceneObject,
+  screenX: number,
+  screenY: number
+): boolean {
+  const { width: screenW, height: screenH } = getScreenSize(scene);
+  const halfW = screenW / 2;
+  const halfH = screenH / 2;
+  const camX = scene.camera.x;
+  const camY = scene.camera.y;
+  const zoom = scene.camera.zoom;
+
+  if ('x' in obj && 'y' in obj) {
+    const entity = obj as any;
+    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+    const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+    const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+    const worldX = (screenX - halfW) / zoom + camX * p - vOx;
+    const worldY = (screenY - halfH) / zoom + camY * p - vOy;
+    return obj.containsPoint(worldX, worldY);
+  }
+
+  const worldPos = {
+    x:
+      (screenX - halfW) / zoom +
+      camX * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+    y:
+      (screenY - halfH) / zoom +
+      camY * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+  };
+  return obj.containsPoint(worldPos.x, worldPos.y);
+}
+
 function getClickableTypePriority(obj: SceneObject): number {
   if (obj.type === 'Walkbox') return 30;
   if (obj.type === 'Triggerbox') return 10;
@@ -107,9 +141,9 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
 
 function getSortedClickableCandidates(scene: Scene): SceneObject[] {
   return sortClickableCandidates([
-    ...scene.entities.filter((e) => !e.disabled && !e.locked && e.visible && !(e as any).isPlayer),
-    ...(scene.triggerboxes?.filter((t) => !t.disabled && !t.locked && t.visible) || []),
-    ...(scene.walkbox?.filter((w) => !w.disabled && !w.locked && w.visible) || []),
+    ...scene.entities.filter((e) => !e.disabled && e.visible && !(e as any).isPlayer),
+    ...(scene.triggerboxes?.filter((t) => !t.disabled && t.visible) || []),
+    ...(scene.walkbox?.filter((w) => !w.disabled && w.visible) || []),
   ]);
 }
 
@@ -125,6 +159,20 @@ function findTopHitInCandidates(
     }
   }
   return null;
+}
+
+function isContainedInCandidates(
+  scene: Scene,
+  candidates: SceneObject[],
+  screenX: number,
+  screenY: number
+): boolean {
+  for (const candidate of sortClickableCandidates(candidates)) {
+    if (containsScreenPoint(scene, candidate, screenX, screenY)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
@@ -230,27 +278,6 @@ function findTopLayerHitCandidatesAtScreenPoint(
   return hits;
 }
 
-function findTopLayerHitCandidatesAtWorldPoint(
-  candidates: SceneObject[],
-  worldX: number,
-  worldY: number
-): SceneObject[] {
-  const hits: SceneObject[] = [];
-  let topLayer: number | null = null;
-
-  for (const candidate of sortClickableCandidates(candidates)) {
-    if (!candidate.hitTest(worldX, worldY)) continue;
-    const candidateLayer = candidate.layer || 0;
-    if (topLayer === null) {
-      topLayer = candidateLayer;
-    }
-    if (candidateLayer !== topLayer) break;
-    hits.push(candidate);
-  }
-
-  return hits;
-}
-
 function findBestMeaningfulHit(
   scene: Scene,
   candidates: SceneObject[],
@@ -272,14 +299,14 @@ export function getHoverCursorAtScreenPoint(
   screenY: number
 ): HoverCursor | null {
   if (scene.activeSubscene) {
-    const world = toWorld(scene, screenX, screenY);
     const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && !obj.locked && obj.visible
+      (obj) => !obj.disabled && obj.visible
     );
-    const topLayerHits = findTopLayerHitCandidatesAtWorldPoint(
+    const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
+      scene,
       subsceneCandidates,
-      world.x,
-      world.y
+      screenX,
+      screenY
     );
     for (const obj of topLayerHits) {
       const hoverCursor = getHoverCursorForObject(scene, obj);
@@ -287,7 +314,7 @@ export function getHoverCursorAtScreenPoint(
         return hoverCursor;
       }
     }
-    return topLayerHits.length > 0 ? null : 'back';
+    return isContainedInCandidates(scene, subsceneCandidates, screenX, screenY) ? null : 'back';
   }
 
   const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
@@ -324,27 +351,26 @@ export function activateSceneObject(scene: Scene, obj: SceneObject, depth: numbe
 }
 
 export function handleSceneClick(scene: Scene, x: number, y: number): void {
-  const world = toWorld(scene, x, y);
-
   if (scene.activeSubscene) {
     const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && !obj.locked && obj.visible
+      (obj) => !obj.disabled && obj.visible
     );
-    const subsceneHitCandidates = findTopLayerHitCandidatesAtWorldPoint(
+    const subsceneHitCandidates = findTopLayerHitCandidatesAtScreenPoint(
+      scene,
       subsceneCandidates,
-      world.x,
-      world.y
+      x,
+      y
     );
-    const subsceneHit =
+    const subsceneHitRaw =
       subsceneHitCandidates.find((obj) => hasMeaningfulClickResult(scene, obj)) || null;
 
-    if (subsceneHit) {
-      const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
+    if (subsceneHitRaw) {
+      const subsceneHit = resolveSubtriggerTarget(scene, subsceneHitRaw);
       revealLookableByClick(scene, subsceneHit);
-      const seeMessage = scene.game.getSeeMessage(titleOwner);
+      const seeMessage = scene.game.getSeeMessage(subsceneHit);
       const title = shouldSuppressTitleByHiddenState(scene, subsceneHit)
         ? null
-        : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+        : scene.game.textAssets.getResolvedObjectField(subsceneHit, 'title');
       if (seeMessage) {
         scene.game.log(seeMessage);
       } else if (title && title.trim()) {
@@ -354,7 +380,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
       return;
     }
 
-    if (subsceneHitCandidates.length > 0) {
+    if (
+      subsceneHitCandidates.length > 0 ||
+      isContainedInCandidates(scene, subsceneCandidates, x, y)
+    ) {
       return;
     }
 
@@ -362,15 +391,15 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     return;
   }
 
-  const hitObj = findBestMeaningfulHit(scene, getSortedClickableCandidates(scene), x, y);
+  const rawHitObj = findBestMeaningfulHit(scene, getSortedClickableCandidates(scene), x, y);
 
-  if (hitObj) {
-    const titleOwner = resolveSubtriggerTarget(scene, hitObj);
+  if (rawHitObj) {
+    const hitObj = resolveSubtriggerTarget(scene, rawHitObj);
     revealLookableByClick(scene, hitObj);
-    const seeMessage = scene.game.getSeeMessage(titleOwner);
+    const seeMessage = scene.game.getSeeMessage(hitObj);
     const title = shouldSuppressTitleByHiddenState(scene, hitObj)
       ? null
-      : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+      : scene.game.textAssets.getResolvedObjectField(hitObj, 'title');
     const activated = activateSceneObject(scene, hitObj);
 
     if (seeMessage) {
@@ -388,14 +417,14 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     }
   }
 
-  const visibleHitObj = findVisibleHitObject(scene, x, y);
-  if (visibleHitObj) {
-    const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
+  const rawVisibleHitObj = findVisibleHitObject(scene, x, y);
+  if (rawVisibleHitObj) {
+    const visibleHitObj = resolveSubtriggerTarget(scene, rawVisibleHitObj);
     revealLookableByClick(scene, visibleHitObj);
-    const seeMessage = scene.game.getSeeMessage(titleOwner);
+    const seeMessage = scene.game.getSeeMessage(visibleHitObj);
     const title = shouldSuppressTitleByHiddenState(scene, visibleHitObj)
       ? null
-      : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+      : scene.game.textAssets.getResolvedObjectField(visibleHitObj, 'title');
     if (seeMessage) {
       scene.game.log(seeMessage);
       return;

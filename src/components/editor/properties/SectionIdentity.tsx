@@ -2,6 +2,18 @@ import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
+import { SceneObject } from '../../../entities/SceneObject';
+import { Triggerbox } from '../../../entities/Triggerbox';
+
+interface SectionIdentityData {
+  id?: string;
+  name?: string;
+  groupID?: string | null;
+  spatial?: {
+    parentNodeId?: string | null;
+    relation?: string | null;
+  };
+}
 
 interface SectionIdentityProps {
   isScene: boolean;
@@ -41,8 +53,8 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
     handleChange,
     incrementObjectVersion,
     incrementHierarchyVersion,
-  } = usePropertiesContext();
-  const o = obj as any;
+  } = usePropertiesContext<SectionIdentityData>();
+  const o = obj;
 
   return (
     <div ref={setSectionRef(0)} className="properties-section-block" data-section={0}>
@@ -69,18 +81,17 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
 
             if (!isScene && scene) {
               const dupEntity = scene.entities.find(
-                (ent: any) => ent.name === finalVal && ent !== game?.editor?.selectedObject
+                (ent: Entity) => ent.name === finalVal && ent !== game?.editor?.selectedObject
               );
               const dupTrigger = scene.triggerboxes
                 ? scene.triggerboxes.find(
-                    (tb: any) => tb.name === finalVal && tb !== game?.editor?.selectedObject
+                    (tb: Triggerbox) => tb.name === finalVal && tb !== game?.editor?.selectedObject
                   )
                 : null;
 
               if (dupEntity || dupTrigger) {
                 console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
-                if ((game as any).showMessage)
-                  (game as any).showMessage(`Name '${finalVal}' already exists!`);
+                game.showMessage(`Name '${finalVal}' already exists!`);
                 isValid = false;
               }
             }
@@ -88,8 +99,9 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
             if (isValid) {
               handleChange(field, finalVal);
             } else {
-              let realObj: any = null;
-              if (game?.editor) realObj = game.editor.selectedObject;
+              let realObj: SceneObject | null = null;
+              if (game?.editor)
+                realObj = game.editor.selectedObject as unknown as SceneObject | null;
 
               if (realObj) {
                 if (isScene) o.id = realObj.id;

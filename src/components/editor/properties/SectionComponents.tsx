@@ -55,6 +55,12 @@ export const SectionComponents: React.FC = () => {
       (['in', 'on', 'under', 'behind'] as const).find((relation) => !used.has(relation)) || null
     );
   };
+  const normalizeSoundPath = (file: string): string => {
+    let val = file;
+    if (val.startsWith('public/sounds/')) val = val.replace('public/sounds/', '');
+    if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
+    return val;
+  };
 
   const SpatialRelationSelect = ({ comp, idx }: { comp: any; idx: number }) => (
     <div className="e-row">
@@ -833,11 +839,7 @@ export const SectionComponents: React.FC = () => {
                               'load',
                               'public/sounds',
                               (file) => {
-                                let val = file;
-                                if (val.startsWith('public/sounds/'))
-                                  val = val.replace('public/sounds/', '');
-                                if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
-                                comp.sound1 = val;
+                                comp.sound1 = normalizeSoundPath(file);
                                 incrementObjectVersion();
                               },
                               '.mp3,.wav'
@@ -873,11 +875,7 @@ export const SectionComponents: React.FC = () => {
                               'load',
                               'public/sounds',
                               (file) => {
-                                let val = file;
-                                if (val.startsWith('public/sounds/'))
-                                  val = val.replace('public/sounds/', '');
-                                if (val.startsWith('/sounds/')) val = val.replace('/sounds/', '');
-                                comp.sound2 = val;
+                                comp.sound2 = normalizeSoundPath(file);
                                 incrementObjectVersion();
                               },
                               '.mp3,.wav'

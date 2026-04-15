@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
-import { Actor } from '../../../entities/Actor';
+import { Actor, type ActorDirection } from '../../../entities/Actor';
 
 export const ActorProperties: React.FC = () => {
   const { game, obj, handleChange, formatPanelNumber, setSectionRef, incrementObjectVersion } =
@@ -39,8 +39,9 @@ export const ActorProperties: React.FC = () => {
           value={actor.direction || 'down'}
           onChange={(value) => {
             handleChange('direction', value);
-            if (game.editor.selectedObject && (game.editor.selectedObject as any).setDirection) {
-              (game.editor.selectedObject as any).setDirection(value);
+            const selectedActor = game.editor.selectedObject as Actor;
+            if (selectedActor && typeof selectedActor.setDirection === 'function') {
+              selectedActor.setDirection(value as ActorDirection);
             }
           }}
           options={[
@@ -101,8 +102,9 @@ export const ActorProperties: React.FC = () => {
                 right: null,
               };
 
-              if (game.editor.selectedObject && (game.editor.selectedObject as any).addAnimSet) {
-                (game.editor.selectedObject as any).addAnimSet(newId);
+              const selectedActor = game.editor.selectedObject as Actor;
+              if (selectedActor && typeof selectedActor.addAnimSet === 'function') {
+                selectedActor.addAnimSet(newId);
               }
               incrementObjectVersion();
             }}
@@ -169,11 +171,9 @@ export const ActorProperties: React.FC = () => {
                   onClick={() => {
                     if (confirm(`Delete animation set '${setId}'?`)) {
                       delete actor.animSets[setId];
-                      if (
-                        game.editor.selectedObject &&
-                        (game.editor.selectedObject as any).removeAnimSet
-                      ) {
-                        (game.editor.selectedObject as any).removeAnimSet(setId);
+                      const selectedActor = game.editor.selectedObject as Actor;
+                      if (selectedActor && typeof selectedActor.removeAnimSet === 'function') {
+                        selectedActor.removeAnimSet(setId);
                       }
                       incrementObjectVersion();
                     }
@@ -210,13 +210,11 @@ export const ActorProperties: React.FC = () => {
                     onClick={() => {
                       game.openFileBrowser('load', 'public/sprites', (f) => {
                         set[dir] = f;
-                        if (
-                          game.editor.selectedObject &&
-                          (game.editor.selectedObject as any).animSets
-                        ) {
-                          const realSet = (game.editor.selectedObject as any).animSets[setId];
+                        const selectedActor = game.editor.selectedObject as Actor;
+                        if (selectedActor && selectedActor.animSets) {
+                          const realSet = selectedActor.animSets[setId];
                           if (realSet) realSet[dir] = f;
-                          (game.editor.selectedObject as any).updateSpriteForState();
+                          selectedActor.updateSpriteForState();
                         }
                         incrementObjectVersion();
                       });

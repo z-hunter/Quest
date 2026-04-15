@@ -2,11 +2,28 @@ import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { renderOpacityBlurControls, renderSection } from './propertiesUtils';
-import { Entity } from '../../../entities/Entity';
+
+interface EntityObject {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  modelScale: number;
+  layer: number;
+  parallax: number;
+  colliderHeight: number;
+  colliderWidth: number;
+  ignoreScaling: boolean;
+  color: string;
+  blendMode: string;
+  opacity: number;
+  blur: number;
+  spriteName: string | null;
+}
 
 export const EntityProperties: React.FC = () => {
   const { game, obj, handleChange, formatPanelNumber, setSectionRef } =
-    usePropertiesContext<Entity>();
+    usePropertiesContext<EntityObject>();
   const entity = obj;
 
   return (
@@ -103,8 +120,9 @@ export const EntityProperties: React.FC = () => {
                       game.editor.selectedObject &&
                       'x' in game.editor.selectedObject
                     ) {
-                      (game.editor.selectedObject as any).x = entity.x;
-                      (game.editor.selectedObject as any).y = entity.y;
+                      const sel = game.editor.selectedObject as unknown as EntityObject;
+                      sel.x = entity.x;
+                      sel.y = entity.y;
                     }
                   }
                   handleChange('parallax', newP, true);

@@ -48,6 +48,18 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     incrementObjectVersion,
     incrementHierarchyVersion,
   } = usePropertiesContext();
+  const getMultiKey = () =>
+    `MULTI:${multiObjects
+      .map((item: any) => item?.name || '')
+      .filter(Boolean)
+      .join('|')}`;
+  const saveUndoIfNeeded = () => {
+    const multiKey = getMultiKey();
+    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
+      game.editor.saveUndoState();
+      lastUndoMultiKeyRef.current = multiKey;
+    }
+  };
 
   const group = game.editor.selectionManager.getGroupTransform();
   const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
@@ -146,14 +158,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   });
 
                   if (changedCount > 0) {
-                    const multiKey = `MULTI:${multiObjects
-                      .map((item: any) => item?.name || '')
-                      .filter(Boolean)
-                      .join('|')}`;
-                    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
-                      game.editor.saveUndoState();
-                      lastUndoMultiKeyRef.current = multiKey;
-                    }
+                    saveUndoIfNeeded();
                     incrementObjectVersion();
                     incrementHierarchyVersion();
                     const tagsText = prepared.join(', ');
@@ -241,14 +246,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   className="e-input"
                   value={formatPanelNumber(group.offsetX)}
                   onChange={(e) => {
-                    const multiKey = `MULTI:${multiObjects
-                      .map((item: any) => item?.name || '')
-                      .filter(Boolean)
-                      .join('|')}`;
-                    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
-                      game.editor.saveUndoState();
-                      lastUndoMultiKeyRef.current = multiKey;
-                    }
+                    saveUndoIfNeeded();
                     const x = parseFloat(e.target.value);
                     game.editor.selectionManager.applyGroupTransform(
                       isNaN(x) ? 0 : x,
@@ -266,14 +264,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   className="e-input"
                   value={formatPanelNumber(group.offsetY)}
                   onChange={(e) => {
-                    const multiKey = `MULTI:${multiObjects
-                      .map((item: any) => item?.name || '')
-                      .filter(Boolean)
-                      .join('|')}`;
-                    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
-                      game.editor.saveUndoState();
-                      lastUndoMultiKeyRef.current = multiKey;
-                    }
+                    saveUndoIfNeeded();
                     const y = parseFloat(e.target.value);
                     game.editor.selectionManager.applyGroupTransform(
                       group.offsetX,
@@ -298,14 +289,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   className="e-input"
                   value={formatPanelNumber(group.scale)}
                   onChange={(e) => {
-                    const multiKey = `MULTI:${multiObjects
-                      .map((item: any) => item?.name || '')
-                      .filter(Boolean)
-                      .join('|')}`;
-                    if (game?.editor && lastUndoMultiKeyRef.current !== multiKey) {
-                      game.editor.saveUndoState();
-                      lastUndoMultiKeyRef.current = multiKey;
-                    }
+                    saveUndoIfNeeded();
                     const s = parseFloat(e.target.value);
                     if (isNaN(s) || s <= 0) return;
                     game.editor.selectionManager.applyGroupTransform(
