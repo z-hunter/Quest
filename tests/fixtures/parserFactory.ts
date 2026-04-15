@@ -4,6 +4,7 @@ import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import {
   getSceneTextLayerAccessState,
   buildSceneTextLayerSnapshot,
+  getActiveBlockingComponentState,
 } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
 import { Entity } from '../../src/entities/Entity';
@@ -28,11 +29,33 @@ function okOutcome(
 export function createParserFixture(): ParserFixture {
   const fixture = createSceneFixture();
 
+  const getSemanticHiddenMode = (entity: Entity): false | 'lookable' | 'examinable' =>
+    entity.hidden === 'lookable' || entity.hidden === 'examinable' ? entity.hidden : false;
+
+  const revealHiddenEntityForIntent = (entity: Entity, intent: 'look' | 'examine'): boolean => {
+    const hiddenMode = getSemanticHiddenMode(entity);
+    if (!hiddenMode) return false;
+    if (fixture.scene.isHiddenEntityRevealed(entity)) return false;
+    if (intent === 'look' && hiddenMode !== 'lookable') return false;
+    fixture.scene.revealHiddenEntity(entity);
+    return true;
+  };
+
   const getAccessOutcome = (entity: Entity, _mode: 'look' | 'interact') => {
     const accessState = getSceneTextLayerAccessState(fixture.scene, fixture.game, entity);
     if (!accessState.hidden && !accessState.blocked) return null;
 
     if (accessState.hidden) {
+      if (accessState.hiddenReason === 'lookable' || accessState.hiddenReason === 'examinable') {
+        return {
+          status: 'failed' as const,
+          code: 'hidden_semantic_target',
+          message: fixture.game.text('parser.look_not_found', {
+            target: fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+          }),
+          recoverable: true,
+        };
+      }
       if (accessState.gatingSwitchClearlyOpenable && accessState.gatingSwitchTitle) {
         return {
           status: 'failed' as const,
@@ -83,6 +106,7 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.lookEntity = (entity: Entity) => {
+    revealHiddenEntityForIntent(entity, 'look');
     if (fixture.game.inventory.includes(entity)) {
       const details = fixture.textAssets.getResolvedObjectField(entity, 'details');
       const description = fixture.textAssets.getResolvedObjectField(entity, 'description');
@@ -104,6 +128,7 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.examineEntity = (entity: Entity) => {
+    revealHiddenEntityForIntent(entity, 'examine');
     const accessOutcome = getAccessOutcome(entity, 'interact');
     if (accessOutcome) return accessOutcome;
     const distanceError = ComponentSystem.getInteractionDistanceError(
@@ -195,30 +220,58 @@ export function createParserFixture(): ParserFixture {
     );
   };
 
-  fixture.game.getInventoryEntities = (owner: Entity) => {
+  const normalizeInventoryRelation = (component: any): 'in' | 'on' | 'under' | 'behind' =>
+    component?.relation === 'on' ||
+    component?.relation === 'under' ||
+    component?.relation === 'behind' ||
+    component?.relation === 'in'
+      ? component.relation
+      : 'in';
+  const normalizeSurfaceRelation = (component: any): 'in' | 'on' | 'under' | 'behind' =>
+    component?.relation === 'in' ||
+    component?.relation === 'on' ||
+    component?.relation === 'under' ||
+    component?.relation === 'behind'
+      ? component.relation
+      : 'on';
+  const hasTitle = (object: any) =>
+    !!fixture.textAssets.getResolvedObjectField(object, 'title')?.trim();
+
+  fixture.game.getInventoryEntities = (
+    owner: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'in'
+  ) => {
     if (fixture.scene.player === owner) {
       return [...fixture.game.inventory];
     }
-    const component = owner.components?.find((entry: any) => entry?.type === 'Inventory') as
-      | { items?: string[] }
-      | undefined;
+    const component = owner.components?.find(
+      (entry: any) => entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === relation
+    ) as { items?: string[] } | undefined;
     return (component?.items || [])
       .map((id) => fixture.scene.getObjectByName(id))
       .filter((candidate): candidate is Entity => candidate instanceof Entity);
   };
 
-  fixture.game.hasInventoryEntity = (owner: Entity, entity: Entity) =>
-    fixture.game.getInventoryEntities(owner).includes(entity);
+  fixture.game.hasInventoryEntity = (
+    owner: Entity,
+    entity: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'in'
+  ) => fixture.game.getInventoryEntities(owner, relation).includes(entity);
 
-  fixture.game.addInventoryEntity = (owner: Entity, entity: Entity) => {
+  fixture.game.addInventoryEntity = (
+    owner: Entity,
+    entity: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'in'
+  ) => {
     const component = (owner.components ||= []).find(
-      (entry: any) => entry?.type === 'Inventory'
+      (entry: any) => entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === relation
     ) as { type: 'Inventory'; items?: string[]; capacity?: number; groups?: string[] } | undefined;
     const inventoryComponent =
       component ||
       ((owner.components ||= []),
       owner.components.push({
         type: 'Inventory',
+        relation,
         items: [],
         capacity: Number.MAX_SAFE_INTEGER,
         groups: [],
@@ -241,13 +294,17 @@ export function createParserFixture(): ParserFixture {
     });
   };
 
-  fixture.game.removeEntityFromInventory = (owner: Entity, entity: Entity) => {
+  fixture.game.removeEntityFromInventory = (
+    owner: Entity,
+    entity: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'in'
+  ) => {
     if (fixture.scene.player === owner) {
       return fixture.game.removeInventoryEntity(entity);
     }
-    const component = owner.components?.find((entry: any) => entry?.type === 'Inventory') as
-      | { items?: string[] }
-      | undefined;
+    const component = owner.components?.find(
+      (entry: any) => entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === relation
+    ) as { items?: string[] } | undefined;
     if (!component?.items?.includes(entity.name)) {
       return { status: 'failed', code: 'inventory_item_not_found', recoverable: true };
     }
@@ -258,10 +315,14 @@ export function createParserFixture(): ParserFixture {
     });
   };
 
-  fixture.game.addEntityToSurface = (surface: any, entity: Entity) => {
-    const component = surface.components?.find((entry: any) => entry?.type === 'Surface') as
-      | { items?: Array<{ id: string; x: number; y: number }> }
-      | undefined;
+  fixture.game.addEntityToSurface = (
+    surface: any,
+    entity: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'on'
+  ) => {
+    const component = surface.components?.find(
+      (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === relation
+    ) as { items?: Array<{ id: string; x: number; y: number }> } | undefined;
     if (!component) {
       return { status: 'failed', code: 'surface_missing', recoverable: true };
     }
@@ -269,6 +330,10 @@ export function createParserFixture(): ParserFixture {
     if (!fixture.scene.entities.includes(entity)) {
       fixture.scene.addEntity(entity);
     }
+    (entity as any).spatial = {
+      parentNodeId: surface.name,
+      relation: hasTitle(surface) ? relation : 'on',
+    };
     component.items.push({ id: entity.name, x: entity.x, y: entity.y });
     return okOutcome('surface_item_added', undefined, {
       entityId: entity.name,
@@ -276,10 +341,14 @@ export function createParserFixture(): ParserFixture {
     });
   };
 
-  fixture.game.removeEntityFromSurface = (surface: any, entity: Entity) => {
-    const component = surface.components?.find((entry: any) => entry?.type === 'Surface') as
-      | { items?: Array<{ id: string; x: number; y: number }> }
-      | undefined;
+  fixture.game.removeEntityFromSurface = (
+    surface: any,
+    entity: Entity,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'on'
+  ) => {
+    const component = surface.components?.find(
+      (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === relation
+    ) as { items?: Array<{ id: string; x: number; y: number }> } | undefined;
     if (!component?.items?.some((item) => item.id === entity.name)) {
       return { status: 'failed', code: 'surface_item_not_found', recoverable: true };
     }
@@ -336,21 +405,30 @@ export function createParserFixture(): ParserFixture {
       }
     }
 
-    if (options?.relation === 'in' && target) {
+    if (options?.relation && target) {
       const nestedInventory =
-        (target?.components?.some((entry: any) => entry?.type === 'Inventory') ? target : null) ||
+        (target?.components?.some(
+          (entry: any) =>
+            entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === options.relation
+        )
+          ? target
+          : null) ||
         fixture.scene
           .getAllSceneObjects()
           .find(
             (candidate) =>
               candidate instanceof Entity &&
               (candidate as any).spatial?.parentNodeId === target.name &&
-              (candidate as any).spatial?.relation === 'in' &&
+              (candidate as any).spatial?.relation === options.relation &&
               candidate.components?.some((entry: any) => entry?.type === 'Inventory')
           ) ||
         null;
       if (nestedInventory) {
-        const outcome = fixture.game.addInventoryEntity(nestedInventory as Entity, entity);
+        const outcome = fixture.game.addInventoryEntity(
+          nestedInventory as Entity,
+          entity,
+          options.relation as 'in' | 'on' | 'under' | 'behind'
+        );
         if (outcome.status !== 'ok') return outcome;
         return okOutcome(
           'item_put_into_inventory',
@@ -364,7 +442,12 @@ export function createParserFixture(): ParserFixture {
 
     const surface =
       target && options?.relation
-        ? (target?.components?.some((entry: any) => entry?.type === 'Surface') ? target : null) ||
+        ? (target?.components?.some(
+            (entry: any) =>
+              entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === options.relation
+          )
+            ? target
+            : null) ||
           fixture.scene
             .getAllSceneObjects()
             .find(
@@ -374,7 +457,11 @@ export function createParserFixture(): ParserFixture {
                 candidate.components?.some((entry: any) => entry?.type === 'Surface')
             ) ||
           null
-        : (target?.components?.some((entry: any) => entry?.type === 'Surface') ? target : null) ||
+        : (target?.components?.some(
+            (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === 'on'
+          )
+            ? target
+            : null) ||
           fixture.scene
             .getAllSceneObjects()
             .find((candidate) =>
@@ -393,7 +480,16 @@ export function createParserFixture(): ParserFixture {
     if (isHeld) {
       fixture.game.removeInventoryEntity(entity);
     }
-    const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity);
+    const surfaceStoreRelation =
+      target &&
+      surface === target &&
+      target?.components?.some(
+        (entry: any) =>
+          entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === options?.relation
+      )
+        ? (options?.relation as 'in' | 'on' | 'under' | 'behind' | undefined) || 'on'
+        : 'on';
+    const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity, surfaceStoreRelation);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
     const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');
     const message = surfaceTitle
@@ -469,13 +565,13 @@ export function createParserFixture(): ParserFixture {
     if (!anchorTitle) {
       return { status: 'escalate', code: 'spatial_node_missing_title', recoverable: true };
     }
-    if (relation === 'in') {
+    if (relation !== 'near') {
       const anchorObject = fixture.scene.getObjectByName(anchorNodeId);
-      const switchComponent = anchorObject?.components?.find(
-        (component: any) => component?.type === 'Switch'
-      ) as { state?: number; transparent?: boolean; clearlyOpenable?: boolean } | undefined;
-      if (switchComponent && (switchComponent.state || 1) !== 2 && !switchComponent.transparent) {
-        if (switchComponent.clearlyOpenable) {
+      const blockingComponent = anchorObject
+        ? getActiveBlockingComponentState(anchorObject as any, relation)
+        : null;
+      if (blockingComponent && !blockingComponent.transparent) {
+        if (blockingComponent.clearlyOpenable) {
           return {
             status: 'failed',
             code: 'blocked_by_closed_container',

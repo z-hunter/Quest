@@ -19,6 +19,7 @@ export class SceneObject {
 
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)
+  hidden: false | 'lookable' | 'examinable' = false;
   spatial: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null } =
     {};
 
@@ -38,6 +39,7 @@ export class SceneObject {
     'components',
     'layer',
     'visible',
+    'hidden',
     'spatial',
   ];
 
@@ -48,6 +50,7 @@ export class SceneObject {
     this.disabled = false;
     this.layer = 0;
     this.visible = true;
+    this.hidden = false;
     this.spatial = {};
     this.customName = '';
     this.textRedirects = {};

@@ -30,6 +30,25 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('A folded note.');
   });
 
+  it('lookEntity reveals a lookable hidden object', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A hidden key.',
+      components: [{ type: 'Item' }],
+    });
+    key.hidden = 'lookable';
+
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(false);
+
+    const outcome = fixture.game.lookEntity(key);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('A hidden key.');
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
+  });
+
   it('lookEntity turns the player toward a visible scene object', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -76,6 +95,30 @@ describe('Game semantic API', () => {
     expect(fallback.message).toBe('Cassette recorder.');
   });
 
+  it('examineEntity reveals an examinable hidden object', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cache = fixture.addEntity('cache', {
+      title: 'Secret cache',
+      description: 'A concealed niche.',
+      details: 'A concealed niche with a tiny latch.',
+    } as any);
+    fixture.textAssets.setObject('cache', {
+      title: 'Secret cache',
+      description: 'A concealed niche.',
+      details: 'A concealed niche with a tiny latch.',
+    });
+    cache.hidden = 'examinable';
+
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(false);
+
+    const outcome = fixture.game.examineEntity(cache);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('A concealed niche with a tiny latch.');
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(true);
+  });
+
   it('examineEntity turns the player toward a visible scene object', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -107,6 +150,92 @@ describe('Game semantic API', () => {
 
     const filledOutcome = fixture.game.showInventory();
     expect(filledOutcome.message).toBe('You are carrying: your ID card');
+  });
+
+  it('taking an item keeps it in scene hierarchy as a hidden IN-child of the player inventory owner', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+
+    const outcome = fixture.game.takeEntity(idCard);
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(idCard);
+    expect(fixture.scene.entities).toContain(idCard);
+    expect(idCard.visible).toBe(false);
+    expect((idCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+  });
+
+  it('syncs a spatially reparented item into an external inventory slot for editor hierarchy workflows', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cabinet = fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'behind',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A book.',
+      components: [{ type: 'Item' }],
+    });
+
+    book.spatial = { parentNodeId: cabinet.name, relation: 'in' };
+    fixture.game.inventoryManager.syncEntityStorageFromSpatialPlacement(book);
+
+    expect(fixture.game.hasInventoryEntity(cabinet as any, book as any, 'behind')).toBe(true);
+    expect(book.visible).toBe(false);
+    expect((book as any).spatial).toEqual({ parentNodeId: 'cabinet', relation: 'in' });
+
+    const relationOutcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
+    expect(relationOutcome.status).toBe('ok');
+    expect(relationOutcome.message).toBe('Behind the Cabinet you see: Book.');
+  });
+
+  it('removing a spatial child from an inventory owner also removes it from inventory storage', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cabinet = fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'behind',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A book.',
+      components: [{ type: 'Item' }],
+    });
+
+    fixture.game.inventoryManager.addInventoryEntity(cabinet as any, book as any, 'behind');
+    expect(fixture.game.hasInventoryEntity(cabinet as any, book as any, 'behind')).toBe(true);
+
+    book.spatial = null;
+    fixture.game.inventoryManager.syncEntityStorageFromSpatialPlacement(book);
+
+    expect(fixture.game.hasInventoryEntity(cabinet as any, book as any, 'behind')).toBe(false);
+    expect(book.visible).toBe(true);
   });
 
   it('examining an inventory item opens hi-res inventory preview state', () => {
@@ -452,6 +581,99 @@ describe('Game semantic API', () => {
     );
   });
 
+  it('putEntity can use a built-in titled surface with relation UNDER', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, desk, { relation: 'under' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
+    expect((key as any).spatial).toEqual({ parentNodeId: 'desk', relation: 'under' });
+  });
+
+  it('putEntity can use a built-in titled inventory with relation BEHIND', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    const shelf = fixture.addEntity('shelf', {
+      title: 'Shelf',
+      description: 'A shelf.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'behind',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+
+    const outcome = fixture.game.putEntity(cassette, shelf, { relation: 'behind' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_into_inventory');
+    expect(fixture.game.getInventoryEntities(shelf, 'behind')).toContain(cassette);
+    expect(fixture.game.getInventoryEntities(shelf, 'in')).not.toContain(cassette);
+  });
+
+  it('describeSpatialRelation projects built-in inventory contents through the inventory relation', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cabinet = fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'behind',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A book.',
+      components: [{ type: 'Item' }],
+    });
+
+    const moveOutcome = fixture.game.addInventoryEntity(cabinet, book, 'behind');
+    expect(moveOutcome.status).toBe('ok');
+    expect(book.visible).toBe(false);
+    expect((book as any).spatial).toEqual({ parentNodeId: 'cabinet', relation: 'in' });
+
+    const relationOutcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
+
+    expect(relationOutcome.status).toBe('ok');
+    expect(relationOutcome.message).toBe('Behind the Cabinet you see: Book.');
+  });
+
   it('putEntity can place an item on a polygon desk surface with relation ON', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -661,7 +883,7 @@ describe('Game semantic API', () => {
 
   it('takeEntity can pull an accessible item out of another entity inventory', () => {
     const fixture = createGameSemanticFixture();
-    fixture.addPlayer('Hero', 0, 0);
+    const player = fixture.addPlayer('Hero', 0, 0);
     const recorder = fixture.addEntity('recorder', {
       title: 'Tape recorder',
       description: 'A recorder.',
@@ -675,13 +897,18 @@ describe('Game semantic API', () => {
 
     const stored = fixture.game.addInventoryEntity(recorder, cassette);
     expect(stored.status).toBe('ok');
-    expect(fixture.scene.entities).not.toContain(cassette);
+    expect(fixture.scene.entities).toContain(cassette);
+    expect(cassette.visible).toBe(false);
+    expect((cassette as any).spatial).toEqual({ parentNodeId: 'recorder', relation: 'in' });
 
     const taken = fixture.game.takeEntity(cassette);
 
     expect(taken.status).toBe('ok');
     expect(fixture.game.inventory).toContain(cassette);
     expect(fixture.game.getInventoryEntities(recorder)).not.toContain(cassette);
+    expect(fixture.scene.entities).toContain(cassette);
+    expect(cassette.visible).toBe(false);
+    expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
   });
 
   it('placing an item onto a surface inside the active subscene keeps it visible there', () => {
@@ -934,7 +1161,8 @@ describe('Game semantic API', () => {
     const taken = fixture.game.takeEntity(note);
     expect(taken.status).toBe('ok');
     expect(fixture.game.inventory).toContain(note);
-    expect((note as any).spatial).toBeNull();
+    expect((note as any).spatial).toEqual({ parentNodeId: 'Hero', relation: 'in' });
+    expect(note.visible).toBe(false);
 
     const drawerSwitch = fixture.scene.getObjectByName('Drawer');
     if (drawerSwitch) {
@@ -975,6 +1203,91 @@ describe('Game semantic API', () => {
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('blocked_inside_closed');
     expect(outcome.message).toBe("You can't reach that while it is inside something closed.");
+  });
+
+  it('opaque blockers hide only the configured blocked relation', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('UnderDeskBlocker', {
+      title: null,
+      components: [{ type: 'Blocker', blockedRelation: 'under' }],
+      spatial: { parentNodeId: 'Desk', relation: 'under' },
+    });
+    fixture.addEntity('UnderKey', {
+      title: 'Key',
+      description: 'A key under the desk.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'UnderDeskBlocker', relation: 'under' },
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Note',
+      description: 'A note on the desk.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Desk', relation: 'on' },
+    });
+
+    const underOutcome = fixture.game.describeSpatialRelation('Desk', 'under');
+    const onOutcome = fixture.game.describeSpatialRelation('Desk', 'on');
+
+    expect(underOutcome.status).toBe('ok');
+    expect(underOutcome.code).toBe('relation_empty');
+    expect(onOutcome.status).toBe('ok');
+    expect(onOutcome.message).toBe('On the Desk you see: Note.');
+  });
+
+  it('transparent blockers keep objects visible but block interaction on the configured relation', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('UnderDeskGlass', {
+      title: null,
+      components: [{ type: 'Blocker', blockedRelation: 'under', transparent: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'under' },
+    });
+    const gem = fixture.addEntity('Gem', {
+      title: 'Gem',
+      description: 'A gem under glass.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'UnderDeskGlass', relation: 'under' },
+    });
+
+    const lookUnder = fixture.game.describeSpatialRelation('Desk', 'under');
+    const examine = fixture.game.examineEntity(gem);
+
+    expect(lookUnder.status).toBe('ok');
+    expect(lookUnder.message).toBe('Under the Desk you see: Gem.');
+    expect(examine.status).toBe('failed');
+    expect(examine.code).toBe('blocked_inside_closed');
+    expect(examine.message).toBe("You can't reach it.");
+  });
+
+  it('closed switches respect blockedRelation outside of IN', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true, blockedRelation: 'under' }],
+    });
+    fixture.addEntity('HiddenKey', {
+      title: 'Key',
+      description: 'A hidden key.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Desk', relation: 'under' },
+    });
+
+    const outcome = fixture.game.describeSpatialRelation('Desk', 'under');
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('blocked_by_closed_container');
+    expect(outcome.message).toBe('The Desk is closed.');
   });
 
   it('auto-opens inactive ancestor subscene before operating on a titled switch target', () => {

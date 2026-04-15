@@ -35,12 +35,32 @@ export interface IGame {
     target?: SceneObject | null,
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome;
-  addInventoryEntity(owner: Entity, entity: Entity): GameActionOutcome;
-  removeEntityFromInventory(owner: Entity, entity: Entity): GameActionOutcome;
-  hasInventoryEntity(owner: Entity, entity: Entity): boolean;
-  getInventoryEntities(owner: Entity): Entity[];
-  addEntityToSurface(surface: SceneObject, entity: Entity): GameActionOutcome;
-  removeEntityFromSurface(surface: SceneObject, entity: Entity): GameActionOutcome;
+  addInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  removeEntityFromInventory(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  hasInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): boolean;
+  getInventoryEntities(owner: Entity, relation?: Exclude<SpatialRelationType, 'near'>): Entity[];
+  addEntityToSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  removeEntityFromSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
   goToSceneTarget(target: string): GameActionOutcome;

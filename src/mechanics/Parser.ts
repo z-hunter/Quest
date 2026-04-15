@@ -129,6 +129,48 @@ export class Parser {
         }
 
         const patchedActions = envelope.output.actions.map((action) => {
+          if (action.type === 'lookTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
+          if (action.type === 'examineTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
+          if (action.type === 'takeTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
+          if (action.type === 'putTarget') {
+            return {
+              ...action,
+              item: input.trim(),
+            };
+          }
+          if (action.type === 'openTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
+          if (action.type === 'closeTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
+          if (action.type === 'goToTarget') {
+            return {
+              ...action,
+              target: input.trim(),
+            };
+          }
           if (action.type === 'resolveArgumentEntity') {
             if (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg) {
               return {
@@ -997,7 +1039,34 @@ export class Parser {
         const title = this.getPlayerFacingObjectTitle(sceneObject);
         if (!title) return false;
         const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
-        return accessState.hidden;
+        return accessState.hiddenReason === 'switch';
+      }
+    );
+
+    return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
+  }
+
+  private resolveSemanticHiddenTarget(
+    rawTarget: string,
+    allowedModes: Array<'lookable' | 'examinable'>
+  ):
+    | { status: 'found'; entity: SceneObject }
+    | { status: 'not_found' }
+    | { status: 'ambiguous'; message: string; options: string[] }
+    | { status: 'escalate'; code: string } {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return { status: 'not_found' };
+
+    const candidates = [...scene.entities, ...scene.triggerboxes].filter(
+      (sceneObject: SceneObject) => {
+        const title = this.getPlayerFacingObjectTitle(sceneObject);
+        if (!title) return false;
+        const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
+        return (
+          accessState.hidden &&
+          !!accessState.hiddenReason &&
+          allowedModes.includes(accessState.hiddenReason as 'lookable' | 'examinable')
+        );
       }
     );
 
@@ -1014,6 +1083,22 @@ export class Parser {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
     if (resolved.status === 'not_found') {
+      const semanticHiddenResolved = this.resolveSemanticHiddenTarget(rawTarget, ['lookable']);
+      if (semanticHiddenResolved.status === 'found') {
+        return this.game.lookEntity(semanticHiddenResolved.entity as any);
+      }
+      if (semanticHiddenResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_look_target',
+          message: semanticHiddenResolved.message,
+          data: { target: rawTarget, options: semanticHiddenResolved.options },
+          recoverable: true,
+        };
+      }
+      if (semanticHiddenResolved.status === 'escalate') {
+        return { status: 'escalate', code: semanticHiddenResolved.code, recoverable: true };
+      }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
         return this.game.lookEntity(inactiveSwitchResolved.entity as any);
@@ -1107,6 +1192,25 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      const semanticHiddenResolved = this.resolveSemanticHiddenTarget(rawTarget, [
+        'lookable',
+        'examinable',
+      ]);
+      if (semanticHiddenResolved.status === 'found') {
+        return this.game.examineEntity(semanticHiddenResolved.entity as any);
+      }
+      if (semanticHiddenResolved.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_examine_target',
+          message: semanticHiddenResolved.message,
+          data: { target: rawTarget, options: semanticHiddenResolved.options },
+          recoverable: true,
+        };
+      }
+      if (semanticHiddenResolved.status === 'escalate') {
+        return { status: 'escalate', code: semanticHiddenResolved.code, recoverable: true };
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
@@ -1219,33 +1323,42 @@ export class Parser {
   private collectTakeStorageCandidates(
     anchor: SceneObject,
     relation: ParserRelationType
-  ): { inventoryOwners: Entity[]; surfaces: SceneObject[] } {
+  ): {
+    inventoryOwners: Array<{
+      owner: Entity;
+      relation: Exclude<ParserRelationType, 'near'>;
+    }>;
+    surfaces: Array<{
+      surface: SceneObject;
+      relation: Exclude<ParserRelationType, 'near'>;
+    }>;
+  } {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) {
       return { inventoryOwners: [], surfaces: [] };
     }
 
-    const inventoryOwners: Entity[] = [];
-    const surfaces: SceneObject[] = [];
+    if (relation === 'near') {
+      return { inventoryOwners: [], surfaces: [] };
+    }
 
-    const anchorInventory =
-      anchor instanceof Entity
-        ? (anchor.components?.find((component: any) => component?.type === 'Inventory') as
-            | { protected?: boolean }
-            | undefined)
-        : null;
-    if (relation === 'in') {
-      if (anchorInventory && !anchorInventory.protected) {
-        inventoryOwners.push(anchor as Entity);
-      }
-      if (anchor.components?.some((component: any) => component?.type === 'Surface')) {
-        surfaces.push(anchor);
-      }
-    } else if (
-      relation === 'on' &&
-      anchor.components?.some((component: any) => component?.type === 'Surface')
-    ) {
-      surfaces.push(anchor);
+    const inventoryOwners: Array<{
+      owner: Entity;
+      relation: Exclude<ParserRelationType, 'near'>;
+    }> = [];
+    const surfaces: Array<{
+      surface: SceneObject;
+      relation: Exclude<ParserRelationType, 'near'>;
+    }> = [];
+
+    const directInventory =
+      anchor instanceof Entity ? ComponentSystem.getInventoryComponent(anchor, relation) : null;
+    if (directInventory && !directInventory.protected && anchor instanceof Entity) {
+      inventoryOwners.push({ owner: anchor, relation });
+    }
+    const directSurface = ComponentSystem.getSurfaceComponent(anchor, relation);
+    if (directSurface) {
+      surfaces.push({ surface: anchor, relation });
     }
 
     for (const candidate of scene.getAllSceneObjects()) {
@@ -1257,32 +1370,37 @@ export class Parser {
         null) as ParserRelationType | null;
       if (parentId !== anchor.name || candidateRelation !== relation) continue;
 
-      if (relation === 'in' && candidate instanceof Entity) {
+      if (candidate instanceof Entity) {
         const inventoryComponent = candidate.components?.find(
           (component: any) => component?.type === 'Inventory'
         ) as { protected?: boolean } | undefined;
         if (inventoryComponent && !inventoryComponent.protected) {
-          inventoryOwners.push(candidate);
+          inventoryOwners.push({ owner: candidate, relation: 'in' });
         }
       }
 
       if (candidate.components?.some((component: any) => component?.type === 'Surface')) {
-        surfaces.push(candidate);
+        surfaces.push({ surface: candidate, relation: 'on' });
       }
     }
 
     return { inventoryOwners, surfaces };
   }
 
-  private getStorageCandidateItems(storage: SceneObject): Entity[] {
+  private getStorageCandidateItems(
+    storage:
+      | { owner: Entity; relation: Exclude<ParserRelationType, 'near'> }
+      | { surface: SceneObject; relation: Exclude<ParserRelationType, 'near'> }
+  ): Entity[] {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
     const collected = new Set<Entity>();
 
-    if (storage instanceof Entity) {
-      const inventoryComponent = storage.components?.find(
-        (component: any) => component?.type === 'Inventory'
-      ) as { items?: string[]; protected?: boolean } | undefined;
+    if ('owner' in storage) {
+      const inventoryComponent = ComponentSystem.getInventoryComponent(
+        storage.owner,
+        storage.relation
+      );
       if (inventoryComponent && !inventoryComponent.protected) {
         for (const candidate of (inventoryComponent.items || [])
           .map((id) => scene.getObjectByName(id))
@@ -1294,9 +1412,10 @@ export class Parser {
       }
     }
 
-    const surfaceComponent = storage.components?.find(
-      (component: any) => component?.type === 'Surface'
-    ) as { items?: Array<{ id: string }> } | undefined;
+    const surfaceObject = 'surface' in storage ? storage.surface : null;
+    const surfaceComponent = surfaceObject
+      ? ComponentSystem.getSurfaceComponent(surfaceObject, storage.relation)
+      : null;
     for (const candidate of (surfaceComponent?.items || [])
       .map((item) => scene.getObjectByName(item.id))
       .filter(
@@ -1314,7 +1433,7 @@ export class Parser {
             ? (current as any).spatial.parentNodeId.trim()
             : '';
         if (!parentId) break;
-        if (parentId === storage.name) {
+        if (surfaceObject && parentId === surfaceObject.name) {
           collected.add(candidate);
           break;
         }
@@ -1435,11 +1554,12 @@ export class Parser {
       return left.name.localeCompare(right.name);
     };
     const orderedStorages = [
-      ...inventoryOwners.sort(orderByPriority),
-      ...surfaces.sort(orderByPriority),
+      ...inventoryOwners.sort((left, right) => orderByPriority(left.owner, right.owner)),
+      ...surfaces.sort((left, right) => orderByPriority(left.surface, right.surface)),
     ];
     const accessibleStorages = orderedStorages.filter(
-      (storage) => !this.getObjectAccessOutcome(storage)
+      (storage) =>
+        !this.getObjectAccessOutcome('owner' in storage ? storage.owner : storage.surface)
     );
     const directCandidates = this.getDirectRelationTakeCandidates(anchor, relation);
 
@@ -1472,7 +1592,9 @@ export class Parser {
     }
 
     for (const storage of orderedStorages) {
-      const blockedOutcome = this.getObjectAccessOutcome(storage);
+      const blockedOutcome = this.getObjectAccessOutcome(
+        'owner' in storage ? storage.owner : storage.surface
+      );
       if (blockedOutcome) {
         return blockedOutcome;
       }
@@ -2332,6 +2454,7 @@ export class Parser {
                 intent: this.extractPendingIntent(envelopeJson),
                 question: clarification.message || this.game.text('parser.parse_unknown'),
                 originalInput: this.extractRawInput(envelopeJson),
+                pendingEnvelopeJson: envelopeJson,
               };
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),

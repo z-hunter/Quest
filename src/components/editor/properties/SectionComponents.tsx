@@ -6,6 +6,53 @@ export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
     usePropertiesContext();
   const o = obj as any;
+  const title = game.textAssets.getResolvedObjectField(o, 'title');
+  const hasTitle = !!title?.trim();
+  const relationOptions = [
+    { value: 'in', label: 'IN' },
+    { value: 'on', label: 'ON' },
+    { value: 'under', label: 'UNDER' },
+    { value: 'behind', label: 'BEHIND' },
+  ];
+  const blockedRelationOptions = [
+    { value: 'in', label: 'IN' },
+    { value: 'on', label: 'ON' },
+    { value: 'under', label: 'UNDER' },
+    { value: 'behind', label: 'BEHIND' },
+    { value: 'none', label: 'NONE' },
+  ];
+  const normalizeContainerRelation = (comp: any): 'in' | 'on' | 'under' | 'behind' => {
+    if (comp?.type === 'Inventory') {
+      return comp?.relation === 'on' ||
+        comp?.relation === 'under' ||
+        comp?.relation === 'behind' ||
+        comp?.relation === 'in'
+        ? comp.relation
+        : 'in';
+    }
+    return comp?.relation === 'in' ||
+      comp?.relation === 'on' ||
+      comp?.relation === 'under' ||
+      comp?.relation === 'behind'
+      ? comp.relation
+      : 'on';
+  };
+  const getUsedContainerRelations = (
+    ignoreIndex?: number
+  ): Array<'in' | 'on' | 'under' | 'behind'> =>
+    (o.components || [])
+      .map((comp: any, idx: number) =>
+        idx !== ignoreIndex && (comp?.type === 'Inventory' || comp?.type === 'Surface')
+          ? normalizeContainerRelation(comp)
+          : null
+      )
+      .filter((value: any): value is 'in' | 'on' | 'under' | 'behind' => !!value);
+  const getNextAvailableContainerRelation = (): 'in' | 'on' | 'under' | 'behind' | null => {
+    const used = new Set(getUsedContainerRelations());
+    return (
+      (['in', 'on', 'under', 'behind'] as const).find((relation) => !used.has(relation)) || null
+    );
+  };
 
   return (
     <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
@@ -23,6 +70,7 @@ export const SectionComponents: React.FC = () => {
               { value: 'Subscene', label: 'Subscene' },
               { value: 'Subtrigger', label: 'Subtrigger' },
               { value: 'Switch', label: 'Switch' },
+              { value: 'Blocker', label: 'Blocker' },
               ...(selectedObjectType === 'Quad'
                 ? [
                     { value: 'Backface', label: 'Backface' },
@@ -38,6 +86,7 @@ export const SectionComponents: React.FC = () => {
               if (!type) return;
               if (game.editor) game.editor.saveUndoState();
               if (!o.components) o.components = [];
+              const relation = hasTitle ? getNextAvailableContainerRelation() : null;
 
               if (type === 'Subscene') {
                 o.components.push({
@@ -52,16 +101,26 @@ export const SectionComponents: React.FC = () => {
               } else if (type === 'Item') {
                 o.components.push({ type: 'Item' });
               } else if (type === 'Inventory') {
+                if (hasTitle && !relation) {
+                  game.showNotification?.('This object already has containers for all relations.');
+                  return;
+                }
                 o.components.push({
                   type: 'Inventory',
+                  relation: relation || 'in',
                   capacity: 8,
                   groups: [],
                   protected: false,
                   items: [],
                 });
               } else if (type === 'Surface') {
+                if (hasTitle && !relation) {
+                  game.showNotification?.('This object already has containers for all relations.');
+                  return;
+                }
                 o.components.push({
                   type: 'Surface',
+                  relation: relation || 'in',
                   capacity: 8,
                   groups: [],
                   items: [],
@@ -77,6 +136,13 @@ export const SectionComponents: React.FC = () => {
                   sound2: '',
                   transparent: false,
                   clearlyOpenable: false,
+                  blockedRelation: 'in',
+                });
+              } else if (type === 'Blocker') {
+                o.components.push({
+                  type: 'Blocker',
+                  transparent: false,
+                  blockedRelation: 'in',
                 });
               } else if (type === 'Backface') {
                 o.components.push({
@@ -311,6 +377,29 @@ export const SectionComponents: React.FC = () => {
                 >
                   Stores picked-up items by id.
                 </div>
+                {hasTitle && (
+                  <div className="e-row">
+                    <label className="e-label" style={{ fontSize: '10px' }}>
+                      Spatial Relation
+                    </label>
+                    <Select
+                      value={normalizeContainerRelation(comp)}
+                      onChange={(value) => {
+                        const nextRelation = value as 'in' | 'on' | 'under' | 'behind';
+                        if (getUsedContainerRelations(idx).includes(nextRelation)) {
+                          game.showNotification?.(
+                            `Another container already uses relation ${nextRelation.toUpperCase()}.`
+                          );
+                          return;
+                        }
+                        comp.relation = nextRelation;
+                        incrementObjectVersion();
+                      }}
+                      options={relationOptions}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                )}
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
                     Capacity
@@ -392,6 +481,29 @@ export const SectionComponents: React.FC = () => {
                 >
                   Accepts placed items and keeps their local positions.
                 </div>
+                {hasTitle && (
+                  <div className="e-row">
+                    <label className="e-label" style={{ fontSize: '10px' }}>
+                      Spatial Relation
+                    </label>
+                    <Select
+                      value={normalizeContainerRelation(comp)}
+                      onChange={(value) => {
+                        const nextRelation = value as 'in' | 'on' | 'under' | 'behind';
+                        if (getUsedContainerRelations(idx).includes(nextRelation)) {
+                          game.showNotification?.(
+                            `Another container already uses relation ${nextRelation.toUpperCase()}.`
+                          );
+                          return;
+                        }
+                        comp.relation = nextRelation;
+                        incrementObjectVersion();
+                      }}
+                      options={relationOptions}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                )}
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
                     Capacity
@@ -669,6 +781,21 @@ export const SectionComponents: React.FC = () => {
 
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
+                    Blocked Relation
+                  </label>
+                  <Select
+                    value={comp.blockedRelation || 'in'}
+                    onChange={(value) => {
+                      comp.blockedRelation = value;
+                      incrementObjectVersion();
+                    }}
+                    options={blockedRelationOptions}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
                     <input
                       type="checkbox"
                       checked={!!comp.transparent}
@@ -779,6 +906,48 @@ export const SectionComponents: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+              </>
+            )}
+
+            {comp.type === 'Blocker' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#ccc',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Semantically blocks objects on a chosen spatial relation.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Blocked Relation
+                  </label>
+                  <Select
+                    value={comp.blockedRelation || 'in'}
+                    onChange={(value) => {
+                      comp.blockedRelation = value;
+                      incrementObjectVersion();
+                    }}
+                    options={blockedRelationOptions}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!comp.transparent}
+                      onChange={(e) => {
+                        comp.transparent = e.target.checked;
+                        incrementObjectVersion();
+                      }}
+                    />{' '}
+                    Transparent
+                  </label>
                 </div>
               </>
             )}

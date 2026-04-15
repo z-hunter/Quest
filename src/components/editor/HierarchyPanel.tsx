@@ -139,10 +139,7 @@ export const HierarchyPanel: React.FC = () => {
         return;
       }
 
-      const allItems = [
-        'SCENE',
-        ...hierarchicalObjects.map((entry) => entry.item),
-      ];
+      const allItems = ['SCENE', ...hierarchicalObjects.map((entry) => entry.item)];
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -183,12 +180,7 @@ export const HierarchyPanel: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    hierarchicalObjects,
-    hierarchyVersion,
-    selectedObjectId,
-    game.editor,
-  ]);
+  }, [hierarchicalObjects, hierarchyVersion, selectedObjectId, game.editor]);
 
   const centerCameraOn = (item: any) => {
     const scene = game?.sceneManager?.currentScene;
@@ -360,6 +352,11 @@ export const HierarchyPanel: React.FC = () => {
 
         {hierarchicalObjects.map(({ item, depth }, i) => {
           const isSelected = isItemSelected(item);
+          const inventorySlot =
+            item?.type !== 'Walkbox' && item?.type !== 'Triggerbox'
+              ? game.inventoryManager?.getInventorySlotForEntity?.(item as any) || null
+              : null;
+          const isStoredInInventory = !!inventorySlot;
           const icon =
             item.type === 'Actor'
               ? '👤'
@@ -401,7 +398,8 @@ export const HierarchyPanel: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  opacity: item.disabled ? 0.5 : 1.0,
+                  opacity: item.disabled ? 0.5 : isStoredInInventory ? 0.68 : 1.0,
+                  color: isStoredInInventory && !isSelected ? '#8fa28f' : undefined,
                 }}
               >
                 <span

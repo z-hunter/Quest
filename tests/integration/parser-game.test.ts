@@ -97,6 +97,45 @@ describe('Parser + game integration smoke', () => {
     expect(directResult.messages.at(-1)).toBe("You don't see any note here.");
   });
 
+  it('reveals a lookable hidden target through LOOK', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A hidden key.',
+      components: [{ type: 'Item' }],
+    });
+    key.hidden = 'lookable';
+
+    const result = await fixture.run('look key');
+
+    expect(result.messages.at(-1)).toBe('A hidden key.');
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
+  });
+
+  it('reveals an examinable hidden target through EXAMINE but not LOOK', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cache = fixture.addEntity('cache', {
+      title: 'Secret cache',
+      description: 'A concealed niche.',
+    } as any);
+    fixture.textAssets.setObject('cache', {
+      title: 'Secret cache',
+      description: 'A concealed niche.',
+      details: 'A concealed niche with a tiny latch.',
+    });
+    cache.hidden = 'examinable';
+
+    const lookResult = await fixture.run('look cache');
+    expect(lookResult.messages.at(-1)).toBe("You don't see any cache here.");
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(false);
+
+    const examineResult = await fixture.run('examine cache');
+    expect(examineResult.messages.at(-1)).toBe('A concealed niche with a tiny latch.');
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(true);
+  });
+
   it('supports PUT IN object when the object contains a nested surface', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -121,6 +160,30 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put key in drawer');
 
     expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
+  });
+
+  it('supports PUT UNDER a titled object when it has a built-in UNDER surface', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('put key under desk');
+
+    expect(result.messages.at(-1)).toBe('You put the key on the Desk.');
+    expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
   });
 
   it('supports PUT IN a titled spatial node even when the anchor object itself is not in visible scope', async () => {
@@ -208,6 +271,46 @@ describe('Parser + game integration smoke', () => {
 
     expect(result.messages.at(-1)).toContain('Which item do you want to put down');
     expect(result.pendingIntent).toBe('put');
+  });
+
+  it('keeps the original PUT target after clarification and can use the nearby scene item', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const nearbyCassette = fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A nearby cassette.',
+      components: [{ type: 'Item' }],
+    });
+    nearbyCassette.x = 10;
+    nearbyCassette.y = 0;
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 15;
+    recorder.y = 0;
+
+    const ambiguous = await fixture.run('put cassette into recorder');
+    expect(ambiguous.messages.at(-1)).toContain('Which item do you want to put down');
+    expect(ambiguous.pendingIntent).toBe('put');
+
+    const resolved = await fixture.run('Cassette B');
+    expect(resolved.messages.at(-1)).toBe('You put the cassette_b into the recorder.');
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
+      nearbyCassette.name
+    );
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(heldCassette.name);
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain(
+      nearbyCassette.name
+    );
   });
 
   it('surfaces a distance-specific error for PUT when the target is too far away', async () => {

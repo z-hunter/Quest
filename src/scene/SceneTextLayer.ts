@@ -1,7 +1,7 @@
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Triggerbox } from '../entities/Triggerbox';
-import type { SwitchComponent } from '../systems/ComponentSystem';
+import type { BlockerComponent, SwitchComponent } from '../systems/ComponentSystem';
 import type { Scene } from './Scene';
 import type { SpatialPlacement, SpatialRelationType } from './spatialTypes';
 
@@ -23,6 +23,7 @@ export type SceneTextLayerAccessState = {
   effectiveRelation: EffectiveRelation | null;
   blocked: boolean;
   hidden: boolean;
+  hiddenReason: 'switch' | 'blocker' | 'lookable' | 'examinable' | null;
   inInactiveSubscene: boolean;
   gatingSwitch: SceneObject | null;
   gatingSwitchTitle: string | null;
@@ -42,10 +43,83 @@ function getSceneObjectTitle(game: IGame, object: SceneObject): string | null {
   return title && title.trim() ? title.trim() : null;
 }
 
+function getInventorySlotProjection(
+  game: IGame,
+  object: SceneObject
+): {
+  owner: SceneObject;
+  relation: EffectiveRelation;
+  protected: boolean;
+  playerOwned: boolean;
+} | null {
+  const slot = game.inventoryManager?.getInventorySlotForEntity?.(object as any);
+  if (!slot) return null;
+  return {
+    owner: slot.owner,
+    relation: slot.relation,
+    protected: !!slot.component?.protected,
+    playerOwned: !!game.inventoryManager?.isPlayerInventoryOwner?.(slot.owner),
+  };
+}
+
 function getSwitchComponent(object: SceneObject | null): SwitchComponent | null {
   if (!object?.components?.length) return null;
   const component = object.components.find((candidate: any) => candidate?.type === 'Switch');
   return (component as SwitchComponent | undefined) || null;
+}
+
+function getBlockerComponent(object: SceneObject | null): BlockerComponent | null {
+  if (!object?.components?.length) return null;
+  const component = object.components.find((candidate: any) => candidate?.type === 'Blocker');
+  return (component as BlockerComponent | undefined) || null;
+}
+
+function normalizeBlockedRelation(value: unknown): EffectiveRelation | 'none' {
+  return value === 'on' || value === 'under' || value === 'behind' || value === 'none'
+    ? value
+    : 'in';
+}
+
+export type ActiveBlockingComponentState = {
+  kind: 'switch' | 'blocker';
+  transparent: boolean;
+  clearlyOpenable: boolean;
+};
+
+export function getActiveBlockingComponentState(
+  object: SceneObject | null,
+  relation: EffectiveRelation | null
+): ActiveBlockingComponentState | null {
+  if (!object || !relation) return null;
+
+  const blockerComponent = getBlockerComponent(object);
+  if (blockerComponent && normalizeBlockedRelation(blockerComponent.blockedRelation) === relation) {
+    return {
+      kind: 'blocker',
+      transparent: !!blockerComponent.transparent,
+      clearlyOpenable: false,
+    };
+  }
+
+  const switchComponent = getSwitchComponent(object);
+  if (
+    switchComponent &&
+    (switchComponent.state || 1) !== 2 &&
+    normalizeBlockedRelation(switchComponent.blockedRelation) === relation
+  ) {
+    return {
+      kind: 'switch',
+      transparent: !!switchComponent.transparent,
+      clearlyOpenable: !!switchComponent.clearlyOpenable,
+    };
+  }
+
+  return null;
+}
+
+function getSemanticHiddenMode(object: SceneObject | null): false | 'lookable' | 'examinable' {
+  if (!object) return false;
+  return object.hidden === 'lookable' || object.hidden === 'examinable' ? object.hidden : false;
 }
 
 function isSubsceneTriggerbox(object: SceneObject | null): object is Triggerbox {
@@ -118,6 +192,7 @@ export function getSceneTextLayerAccessState(
     );
 
   const title = allTitleById.get(object.name) || null;
+  const inventorySlot = getInventorySlotProjection(game, object);
   const placement = getPlacement(scene, object);
   let currentParentId = placement?.parentNodeId || null;
   let relationToAncestor = normalizeRelation(placement?.relation) || null;
@@ -125,8 +200,11 @@ export function getSceneTextLayerAccessState(
   let effectiveRelation: EffectiveRelation | null = relationToAncestor;
   let blocked = false;
   let hidden = false;
+  let hiddenReason: 'switch' | 'blocker' | 'lookable' | 'examinable' | null = null;
   let inInactiveSubscene = false;
   let gatingSwitch: SceneObject | null = null;
+  let gatingSwitchTransparent = false;
+  let gatingSwitchClearlyOpenable = false;
 
   while (currentParentId) {
     const parentObject = allObjectById.get(currentParentId) || null;
@@ -139,19 +217,25 @@ export function getSceneTextLayerAccessState(
       }
     }
 
-    const switchComponent = getSwitchComponent(parentObject);
-    if (switchComponent && relationToAncestor === 'in' && (switchComponent.state || 1) !== 2) {
+    const blockingComponent = getActiveBlockingComponentState(parentObject, relationToAncestor);
+    if (blockingComponent) {
       if (!gatingSwitch) gatingSwitch = parentObject;
-      if (switchComponent.transparent) {
+      gatingSwitchTransparent = blockingComponent.transparent;
+      gatingSwitchClearlyOpenable = blockingComponent.clearlyOpenable;
+      if (blockingComponent.transparent) {
         blocked = true;
       } else {
         hidden = true;
+        hiddenReason = blockingComponent.kind;
       }
     }
 
     if (!effectiveParentId && allTitleById.get(parentObject.name)) {
       effectiveParentId = parentObject.name;
-      effectiveRelation = relationToAncestor;
+      effectiveRelation =
+        inventorySlot && inventorySlot.owner === parentObject
+          ? inventorySlot.relation
+          : relationToAncestor;
     }
 
     const parentPlacement = getPlacement(scene, parentObject);
@@ -159,7 +243,14 @@ export function getSceneTextLayerAccessState(
     relationToAncestor = normalizeRelation(parentPlacement?.relation) || null;
   }
 
-  const gatingSwitchComponent = gatingSwitch ? getSwitchComponent(gatingSwitch) : null;
+  if (!hidden && title) {
+    const semanticHiddenMode = getSemanticHiddenMode(object);
+    const isRevealed = scene.isHiddenEntityRevealed(object);
+    if (semanticHiddenMode && !isRevealed) {
+      hidden = true;
+      hiddenReason = semanticHiddenMode;
+    }
+  }
 
   return {
     object,
@@ -168,11 +259,12 @@ export function getSceneTextLayerAccessState(
     effectiveRelation,
     blocked,
     hidden,
+    hiddenReason,
     inInactiveSubscene,
     gatingSwitch,
     gatingSwitchTitle: gatingSwitch ? allTitleById.get(gatingSwitch.name) || null : null,
-    gatingSwitchTransparent: !!gatingSwitchComponent?.transparent,
-    gatingSwitchClearlyOpenable: !!gatingSwitchComponent?.clearlyOpenable,
+    gatingSwitchTransparent,
+    gatingSwitchClearlyOpenable,
   };
 }
 
@@ -189,6 +281,9 @@ export function buildSceneTextLayerSnapshot(scene: Scene, game: IGame): SceneTex
     const accessState = getSceneTextLayerAccessState(scene, game, object, objectById, titleById);
     const title = accessState.title;
     if (!title) continue;
+    const inventorySlot = getInventorySlotProjection(game, object);
+    if (inventorySlot?.playerOwned) continue;
+    if (inventorySlot?.protected) continue;
 
     if (accessState.hidden) continue;
 

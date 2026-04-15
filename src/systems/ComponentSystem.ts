@@ -1,5 +1,6 @@
 import { SceneObject } from '../entities/SceneObject';
 import { QuadObject } from '../entities/QuadObject';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 // We use 'any' for Actor/Entity imports inside methods to avoid circular dependency at top level if possible,
 // or just import them. Circular imports are handled by webpack/vite usually, but let's be careful.
 // Actually, using them as Types is fine.
@@ -27,6 +28,13 @@ export interface SwitchComponent {
   groupId2?: string;
   transparent?: boolean;
   clearlyOpenable?: boolean;
+  blockedRelation?: Exclude<SpatialRelationType, 'near'> | 'none';
+}
+
+export interface BlockerComponent {
+  type: 'Blocker';
+  transparent?: boolean;
+  blockedRelation?: Exclude<SpatialRelationType, 'near'> | 'none';
 }
 
 export interface SubtriggerComponent {
@@ -41,6 +49,7 @@ export interface ItemComponent {
 
 export interface InventoryComponent {
   type: 'Inventory';
+  relation?: Exclude<SpatialRelationType, 'near'>;
   capacity?: number;
   groups?: string[];
   protected?: boolean;
@@ -55,6 +64,7 @@ export interface SurfaceItemPlacement {
 
 export interface SurfaceComponent {
   type: 'Surface';
+  relation?: Exclude<SpatialRelationType, 'near'>;
   capacity?: number;
   groups?: string[];
   items?: SurfaceItemPlacement[];
@@ -71,6 +81,38 @@ export interface WalkBoxComponent {
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  static normalizeInventoryRelation(
+    component: InventoryComponent | null | undefined
+  ): Exclude<SpatialRelationType, 'near'> {
+    const relation = component?.relation;
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+      ? relation
+      : 'in';
+  }
+
+  static normalizeSurfaceRelation(
+    component: SurfaceComponent | null | undefined
+  ): Exclude<SpatialRelationType, 'near'> {
+    const relation = component?.relation;
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+      ? relation
+      : 'on';
+  }
+
+  static getInventoryComponents(entity: SceneObject | null | undefined): InventoryComponent[] {
+    if (!entity?.components) return [];
+    return entity.components.filter(
+      (component: any): component is InventoryComponent => component?.type === 'Inventory'
+    );
+  }
+
+  static getSurfaceComponents(entity: SceneObject | null | undefined): SurfaceComponent[] {
+    if (!entity?.components) return [];
+    return entity.components.filter(
+      (component: any): component is SurfaceComponent => component?.type === 'Surface'
+    );
+  }
+
   private static getDirectSpatialChildren(
     rootIds: string[],
     scene: ActivationSceneContext
@@ -275,21 +317,32 @@ export class ComponentSystem {
     return null; // OK
   }
 
-  static getInventoryComponent(entity: SceneObject | null | undefined): InventoryComponent | null {
-    if (!entity?.components) return null;
+  static getInventoryComponent(
+    entity: SceneObject | null | undefined,
+    relation?: Exclude<SpatialRelationType, 'near'> | null
+  ): InventoryComponent | null {
+    const components = this.getInventoryComponents(entity);
+    if (!components.length) return null;
+    if (!relation) {
+      return components[0] || null;
+    }
     return (
-      (entity.components.find((component: any) => component?.type === 'Inventory') as
-        | InventoryComponent
-        | undefined) || null
+      components.find((component) => this.normalizeInventoryRelation(component) === relation) ||
+      null
     );
   }
 
-  static getSurfaceComponent(entity: SceneObject | null | undefined): SurfaceComponent | null {
-    if (!entity?.components) return null;
+  static getSurfaceComponent(
+    entity: SceneObject | null | undefined,
+    relation?: Exclude<SpatialRelationType, 'near'> | null
+  ): SurfaceComponent | null {
+    const components = this.getSurfaceComponents(entity);
+    if (!components.length) return null;
+    if (!relation) {
+      return components[0] || null;
+    }
     return (
-      (entity.components.find((component: any) => component?.type === 'Surface') as
-        | SurfaceComponent
-        | undefined) || null
+      components.find((component) => this.normalizeSurfaceRelation(component) === relation) || null
     );
   }
 

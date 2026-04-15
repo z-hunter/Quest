@@ -187,6 +187,9 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       parentNodeId: value || null,
                       relation: value ? nextRelation || 'in' : null,
                     };
+                    if (o instanceof Entity) {
+                      game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
+                    }
                   });
                 }}
                 options={getMultiSpatialParentOptions()}
@@ -207,6 +210,9 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                         parentNodeId: o.spatial?.parentNodeId || null,
                         relation: value || (o.spatial?.parentNodeId ? 'in' : null),
                       };
+                      if (o instanceof Entity) {
+                        game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
+                      }
                     });
                   }}
                   options={getSpatialRelationOptions(true)}

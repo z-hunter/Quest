@@ -48,4 +48,27 @@ describe('Scene interaction text layer', () => {
 
     expect(fixture.messages.at(-1)).toBe('You see Back Trigger');
   });
+
+  it('click reveals a lookable hidden title but not an examinable one', () => {
+    const fixture = createSceneFixture();
+    const lookable = fixture.addTriggerbox('lookable_trigger', {
+      title: 'Lookable Trigger',
+      description: 'A discoverable trigger.',
+    });
+    lookable.hidden = 'lookable';
+
+    handleSceneClick(fixture.scene, 215, 155);
+    expect(fixture.messages.at(-1)).toBe('You see Lookable Trigger');
+
+    fixture.messages.length = 0;
+    fixture.scene.removeTriggerbox(lookable);
+    const examinable = fixture.addTriggerbox('examinable_trigger', {
+      title: 'Examinable Trigger',
+      description: 'A secret trigger.',
+    });
+    examinable.hidden = 'examinable';
+
+    handleSceneClick(fixture.scene, 215, 155);
+    expect(fixture.messages).toHaveLength(0);
+  });
 });

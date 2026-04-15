@@ -3,6 +3,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getSceneTextLayerAccessState } from './SceneTextLayer';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
@@ -150,11 +151,29 @@ function canActivateOnClick(obj: SceneObject): boolean {
 
 function hasClickOutput(scene: Scene, obj: SceneObject): boolean {
   const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  if (accessState.hiddenReason === 'examinable') {
+    return false;
+  }
   const seeMessage = scene.game.getSeeMessage(titleOwner);
   if (seeMessage) return true;
 
   const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
   return !!(title && title.trim());
+}
+
+function revealLookableByClick(scene: Scene, obj: SceneObject): void {
+  const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  if (accessState.hiddenReason === 'lookable') {
+    scene.revealHiddenEntity(titleOwner);
+  }
+}
+
+function shouldSuppressTitleByHiddenState(scene: Scene, obj: SceneObject): boolean {
+  const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  return accessState.hiddenReason === 'examinable';
 }
 
 function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
@@ -321,8 +340,11 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
     if (subsceneHit) {
       const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
+      revealLookableByClick(scene, subsceneHit);
       const seeMessage = scene.game.getSeeMessage(titleOwner);
-      const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+      const title = shouldSuppressTitleByHiddenState(scene, subsceneHit)
+        ? null
+        : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
       if (seeMessage) {
         scene.game.log(seeMessage);
       } else if (title && title.trim()) {
@@ -344,8 +366,11 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
   if (hitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, hitObj);
+    revealLookableByClick(scene, hitObj);
     const seeMessage = scene.game.getSeeMessage(titleOwner);
-    const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+    const title = shouldSuppressTitleByHiddenState(scene, hitObj)
+      ? null
+      : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
     const activated = activateSceneObject(scene, hitObj);
 
     if (seeMessage) {
@@ -366,8 +391,11 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   const visibleHitObj = findVisibleHitObject(scene, x, y);
   if (visibleHitObj) {
     const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
+    revealLookableByClick(scene, visibleHitObj);
     const seeMessage = scene.game.getSeeMessage(titleOwner);
-    const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+    const title = shouldSuppressTitleByHiddenState(scene, visibleHitObj)
+      ? null
+      : scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
     if (seeMessage) {
       scene.game.log(seeMessage);
       return;

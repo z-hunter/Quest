@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
+import { Entity } from '../../../entities/Entity';
 
 interface SectionIdentityProps {
   isScene: boolean;
@@ -183,6 +184,9 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                   parentNodeId: value || null,
                   relation: value ? o.spatial?.relation || 'in' : null,
                 };
+                if (o instanceof Entity) {
+                  game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
+                }
                 incrementObjectVersion();
                 incrementHierarchyVersion();
               }}
@@ -202,6 +206,9 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                     parentNodeId: o.spatial?.parentNodeId || null,
                     relation: value || (o.spatial?.parentNodeId ? 'in' : null),
                   };
+                  if (o instanceof Entity) {
+                    game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
+                  }
                   incrementObjectVersion();
                   incrementHierarchyVersion();
                 }}

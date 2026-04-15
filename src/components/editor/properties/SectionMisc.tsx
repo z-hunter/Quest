@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
+import { Select } from '../../common/Select';
 
 interface SectionMiscProps {
   isTriggerbox: boolean;
@@ -9,6 +10,7 @@ interface SectionMiscProps {
 export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }) => {
   const { game, obj, handleChange, mode, setSectionRef } = usePropertiesContext();
   const o = obj as any;
+  const hasTitle = !!game.textAssets.getResolvedObjectField(o, 'title')?.trim();
 
   return (
     <div ref={setSectionRef(6)} className="properties-section-block" data-section={6}>
@@ -87,6 +89,26 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
           Disabled
         </label>
       </div>
+
+      {hasTitle && (
+        <div className="e-row" style={{ marginTop: '8px' }}>
+          <label className="e-label" style={{ fontSize: '10px' }}>
+            Hidden
+          </label>
+          <Select
+            value={o.hidden || 'false'}
+            onChange={(value) =>
+              handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
+            }
+            options={[
+              { value: 'false', label: 'False' },
+              { value: 'lookable', label: 'Lookable' },
+              { value: 'examinable', label: 'Examinable' },
+            ]}
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
     </div>
   );
 };

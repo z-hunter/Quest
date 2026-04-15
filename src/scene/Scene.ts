@@ -124,6 +124,7 @@ export class Scene {
   // Subscene State
   private _activeSubscene: string | null = null;
   public subsceneEntities: Set<SceneObject> = new Set();
+  public revealedHiddenEntities: Set<string> = new Set();
 
   get activeSubscene(): string | null {
     return this._activeSubscene;
@@ -257,6 +258,18 @@ export class Scene {
     return this.normalizeSpatialPlacement((obj as any).spatial);
   }
 
+  isHiddenEntityRevealed(object: SceneObject | null | undefined): boolean {
+    if (!object) return false;
+    return this.revealedHiddenEntities.has(object.name);
+  }
+
+  revealHiddenEntity(object: SceneObject | null | undefined): boolean {
+    if (!object) return false;
+    if (this.revealedHiddenEntities.has(object.name)) return false;
+    this.revealedHiddenEntities.add(object.name);
+    return true;
+  }
+
   getSpatialDescendantObjects(nodeId: string): SceneObject[] {
     const normalizedId = String(nodeId || '').trim();
     if (!normalizedId) return [];
@@ -306,6 +319,7 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
+      this.revealedHiddenEntities.delete(entity.name);
       if (this.subsceneEntities.has(entity)) {
         this.subsceneEntities.delete(entity);
       }
@@ -319,6 +333,7 @@ export class Scene {
     const index = this.triggerboxes.indexOf(triggerbox);
     if (index > -1) {
       this.triggerboxes.splice(index, 1);
+      this.revealedHiddenEntities.delete(triggerbox.name);
       if (this.subsceneEntities.has(triggerbox)) {
         this.subsceneEntities.delete(triggerbox);
       }
@@ -332,6 +347,7 @@ export class Scene {
     const index = this.walkbox.indexOf(walkbox);
     if (index > -1) {
       this.walkbox.splice(index, 1);
+      this.revealedHiddenEntities.delete(walkbox.name);
       if (this.subsceneEntities.has(walkbox)) {
         this.subsceneEntities.delete(walkbox);
       }

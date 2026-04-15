@@ -149,4 +149,123 @@ describe('Parser world model context', () => {
       ])
     );
   });
+
+  it('omits hidden semantic objects from parser world model until they are revealed', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A hidden key.',
+      components: [{ type: 'Item' }],
+    });
+    key.hidden = 'lookable';
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const hiddenModel = builder.build('look key', null);
+    expect(hiddenModel.context.entities?.some((entity) => entity.id === 'key')).toBe(false);
+    expect(hiddenModel.scope.visible.map((entity) => entity.name)).not.toContain('key');
+
+    fixture.scene.revealHiddenEntity(key);
+
+    const revealedModel = builder.build('look key', null);
+    expect(revealedModel.context.entities?.some((entity) => entity.id === 'key')).toBe(true);
+    expect(revealedModel.scope.visible.map((entity) => entity.name)).toContain('key');
+  });
+
+  it('respects blocker blockedRelation for visibility and reachability', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    fixture.addEntity('OpaqueUnderBlocker', {
+      title: null,
+      components: [{ type: 'Blocker', blockedRelation: 'under' }],
+      spatial: { parentNodeId: 'Desk', relation: 'under' },
+    });
+    fixture.addEntity('HiddenKey', {
+      title: 'Hidden key',
+      description: 'Hidden under the desk.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'OpaqueUnderBlocker', relation: 'under' },
+    });
+    fixture.addEntity('GlassBehindBlocker', {
+      title: null,
+      components: [{ type: 'Blocker', blockedRelation: 'behind', transparent: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'behind' },
+    });
+    fixture.addEntity('VisibleGem', {
+      title: 'Visible gem',
+      description: 'Visible but blocked.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'GlassBehindBlocker', relation: 'behind' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look desk', null);
+
+    expect(model.context.entities?.some((entity) => entity.id === 'HiddenKey')).toBe(false);
+    expect(model.context.entities?.some((entity) => entity.id === 'VisibleGem')).toBe(true);
+    expect(model.scope.visible.map((entity) => entity.name)).toContain('VisibleGem');
+    expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('VisibleGem');
+    expect(model.context.spatialRelations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anchorNodeId: 'Desk',
+          relation: 'behind',
+          childNodeIds: expect.arrayContaining(['VisibleGem']),
+        }),
+      ])
+    );
+  });
+
+  it('omits player inventory items from scene text layer but projects external inventory items by slot relation', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const heldKey = fixture.addEntity('held_key', {
+      title: 'Held key',
+      description: 'A held key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventory.push(heldKey);
+    fixture.game.inventoryManager.syncPlayerInventoryComponent();
+
+    const cabinet = fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'behind',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A book.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.addInventoryEntity(cabinet as any, book as any, 'behind');
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look cabinet', null);
+
+    expect((heldKey as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(model.context.entities?.some((entity) => entity.id === 'held_key')).toBe(false);
+    expect(model.context.entities?.some((entity) => entity.id === 'book')).toBe(true);
+    expect(model.context.spatialRelations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anchorNodeId: 'cabinet',
+          relation: 'behind',
+          childNodeIds: expect.arrayContaining(['book']),
+        }),
+      ])
+    );
+  });
 });
