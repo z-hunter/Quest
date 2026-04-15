@@ -1,14 +1,20 @@
 # Project Instructions
 
+Before implementing anything, check the contents of your memory for all related information. Use RAG if available.
+
+This project uses the NotebookLM notebook `Scanline Engine` as a project knowledge base. Consult it for architecture/codebase recall and write short session summaries there when appropriate.
+
 ## Autotests Recall Rule
 
 When working on mechanics/runtime-related code or architecture-sensitive changes in:
+
 - `src/mechanics`
 - `src/scene`
 - `src/systems`
 - `src/core`
 
 and especially on:
+
 - parser behavior;
 - `Game` semantic API behavior;
 - spatial hierarchy;
@@ -17,6 +23,7 @@ and especially on:
 recall that this project has an autotest system on branch `autotests`.
 
 Before proceeding with substantial changes in those areas:
+
 - remember that autotests may already cover the contract you are touching;
 - consult memory for the current autotest workflow and coverage;
 - use `Autotests.md` for the current developer-facing description of:
@@ -28,6 +35,7 @@ Before proceeding with substantial changes in those areas:
 ## Autotests Maintenance Rule
 
 When making significant functional changes or adding important new behavior in mechanics/runtime code:
+
 - check whether existing autotests still describe the intended behavior;
 - update affected tests if the contract changed;
 - add new tests when a new important gameplay/runtime/parser contract is introduced;
