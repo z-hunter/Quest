@@ -1,8 +1,11 @@
 # Project Instructions
 
-Before implementing anything, check the contents of your memory for all related information. Use RAG if available.
+- To get answers to previous session logs and project documentation, you can use your NotebookLM skill (Scanline Engine's notebook, URL: `https://notebooklm.google.com/notebook/9f146be7-7c4a-4bb0-b7b4-7f20079e85b0`). You can ask NotebookLM questions, and it will answer based on the project's entire knowledge base.
+- Always consult NotebookLM for architecture/codebase recall first (if possible), instead of having to re-analyze the codebase each time. This saves tokens and allows us to do more.
 
-This project uses the NotebookLM notebook `Scanline Engine` as a project knowledge base. Consult it for architecture/codebase recall and write short session summaries there when appropriate.
+- You ALWAYS record all important points, decisions, and insights you, and other developers, might need in the future in your memory (agent-memory-MCP)
+
+- Before implementing anything, check the contents of your memory for all related information. Use RAG if available.
 
 ## Autotests Recall Rule
 
