@@ -17,6 +17,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "poly": [
         {
           "x": -79,
@@ -46,16 +47,10 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Surface",
-          "capacity": 8,
-          "groups": [],
-          "items": []
-        }
-      ],
+      "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "poly": [
         {
           "x": 82,
@@ -128,10 +123,7 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Desk",
-        "relation": "in"
-      },
+      "hidden": false,
       "poly": [
         {
           "x": 27,
@@ -192,10 +184,7 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Trig_sub_D",
-        "relation": "in"
-      },
+      "hidden": false,
       "poly": [
         {
           "x": -156.29411764705887,
@@ -229,6 +218,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "poly": [],
       "script": "",
       "parallax": 1
@@ -255,10 +245,7 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Trig_sub_D",
-        "relation": "in"
-      },
+      "hidden": false,
       "poly": [
         {
           "x": -156.29411764705878,
@@ -292,6 +279,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "poly": [
         {
           "x": -210,
@@ -390,12 +378,9 @@
           "items": []
         }
       ],
-      "layer": 5,
+      "layer": 0,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Drawer1",
-        "relation": "in"
-      },
+      "hidden": false,
       "poly": [
         {
           "x": -145,
@@ -429,6 +414,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "poly": [],
       "script": "",
       "parallax": 1
@@ -458,10 +444,7 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {
-        "parentNodeId": "Desk",
-        "relation": "on"
-      },
+      "hidden": false,
       "poly": [
         {
           "x": -29,
@@ -524,6 +507,7 @@
       "components": [],
       "layer": -2,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "window1",
         "relation": "in"
@@ -559,6 +543,7 @@
       "components": [],
       "layer": -1,
       "visible": true,
+      "hidden": false,
       "x": 199,
       "y": 297,
       "width": 884.8,
@@ -590,6 +575,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "x": 100.562,
       "y": 249.75294117647059,
       "width": 116.89999999999999,
@@ -631,13 +617,15 @@
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": []
+          "items": [],
+          "relation": "in"
         }
       ],
       "layer": 0,
       "visible": true,
-      "x": 92.48131257770953,
-      "y": 209.10019724273403,
+      "hidden": false,
+      "x": 112.85639984388679,
+      "y": 257.6780018313615,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -648,7 +636,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0152054247348858,
+      "parallax": 1.0468867966829882,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -686,6 +674,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "x": -328,
       "y": 307,
       "width": 171.2340644206598,
@@ -717,6 +706,7 @@
       "components": [],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "x": 135,
       "y": 310,
       "width": 614.4,
@@ -753,6 +743,7 @@
       ],
       "layer": 3,
       "visible": true,
+      "hidden": false,
       "x": 134,
       "y": 311,
       "width": 614.4,
@@ -784,6 +775,7 @@
       "components": [],
       "layer": 4,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Drawer1",
         "relation": "in"
@@ -819,6 +811,7 @@
       "components": [],
       "layer": 5,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Drawer1",
         "relation": "in"
@@ -854,6 +847,7 @@
       "components": [],
       "layer": 6,
       "visible": true,
+      "hidden": false,
       "x": 135,
       "y": -176,
       "width": 614.4,
@@ -890,6 +884,7 @@
       ],
       "layer": 6,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Drawer1",
         "relation": "in"
@@ -929,6 +924,7 @@
       ],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "x": -146.13725490196006,
       "y": 289.60784313725503,
       "parallax": 1,
@@ -979,8 +975,9 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 222.9043373174797,
-      "y": 306.9284515529541,
+      "hidden": false,
+      "x": 222.9043373174796,
+      "y": 306.9284515529539,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -991,7 +988,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.079038203629382,
+      "parallax": 1.0790382036293817,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1017,11 +1014,13 @@
           "capacity": 1,
           "groups": ["compact_cassete"],
           "protected": false,
-          "items": []
+          "items": [],
+          "relation": "in"
         }
       ],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "x": -152,
       "y": -11,
       "width": 112,
@@ -1053,6 +1052,7 @@
       "components": [],
       "layer": 15,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Drawer3",
         "relation": "in"
@@ -1088,6 +1088,7 @@
       "components": [],
       "layer": -2,
       "visible": true,
+      "hidden": false,
       "x": 56,
       "y": -192,
       "width": 27.3,
@@ -1119,30 +1120,31 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "x": 37.86773708370124,
-      "y": 190.04099088967703,
+      "hidden": false,
+      "x": 59.25350059004339,
+      "y": 238.61883015496343,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 37.86773708370124,
-          "y": 190.04099088967703,
-          "p": 1.002778616889175
+          "x": 59.25350059004339,
+          "y": 238.61883015496343,
+          "p": 1.034460759429698
         },
         {
-          "x": 134.47540945428455,
-          "y": 188.51986301926215,
-          "p": 1.0017647972523118
+          "x": 155.94430377696915,
+          "y": 237.1049758997144,
+          "p": 1.0334516655612203
         },
         {
-          "x": 104.43836684935765,
-          "y": 234.09756819672486,
-          "p": 1.0315005762709415
+          "x": 123.4694492993356,
+          "y": 282.46948284682543,
+          "p": 1.0630519495730888
         },
         {
-          "x": 55.40770011220733,
-          "y": 232.1676912533552,
-          "p": 1.0302527500060725
+          "x": 74.54064957622593,
+          "y": 280.54841826707207,
+          "p": 1.061806825990201
         }
       ],
       "color": "#000975",
@@ -1174,6 +1176,7 @@
       ],
       "layer": 5,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Drawer1",
         "relation": "in"
@@ -1213,6 +1216,7 @@
       ],
       "layer": 0,
       "visible": true,
+      "hidden": false,
       "spatial": {
         "parentNodeId": "desk_surface",
         "relation": "on"
@@ -1227,6 +1231,46 @@
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
+      "scale": 0.91,
+      "modelScale": 1,
+      "parallax": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "test_1",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "desk_surface",
+        "relation": "on"
+      },
+      "x": -153,
+      "y": 114,
+      "width": 17.926875852660302,
+      "height": 25.475034106412007,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#86cece",
       "scale": 0.91,
       "modelScale": 1,
       "parallax": 1,
