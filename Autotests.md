@@ -188,6 +188,8 @@ Covers:
 - coexistence of:
   - `targetGroupId`
   - direct spatial children
+- inventory/surface items staying synchronized with active subscene state;
+- `Subscene.itemScale` runtime behavior for items.
 
 #### `tests/scene/subscene-cleanup.test.ts`
 
@@ -208,6 +210,7 @@ Covers:
 - deterministic tie-break:
   - inventory first;
   - nearest scene object when titles are indistinguishable.
+- container-aware TAKE/PUT target resolution edge cases.
 
 #### `tests/parser/commands.test.ts`
 
@@ -235,7 +238,12 @@ Covers:
 - `lookEntity`;
 - `examineEntity`;
 - `showInventory`;
-- `removeInventoryEntity`.
+- `removeInventoryEntity`;
+- `takeEntity` / `putEntity`;
+- container placement and failure reasons;
+- hidden `lookable` / `examinable` semantics;
+- `Blocker` and `blockedRelation` behavior;
+- inventory hierarchy projection and sync.
 
 This layer verifies `Game` as the shared semantic gameplay API, separate from parser parsing.
 
@@ -256,6 +264,8 @@ This layer is especially useful for validating the shared boundary between parse
 Covers a small end-to-end slice on tiny fixtures:
 - `look under chair`
 - far-but-visible `examine`
+- container commands like `TAKE FROM ...` and `PUT ... IN|ON ...`
+- PUT clarification continuation loops preserving the original destination.
 
 This layer is intentionally small.
 
