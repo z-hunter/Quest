@@ -498,8 +498,9 @@ export class Entity extends SceneObject {
     return this.hitTestInternal(x, y, true);
   }
 
-  private hitTestInternal(x: number, y: number, ignoreLocked: boolean): boolean {
-    if (this.disabled || !this.visible || (!ignoreLocked && this.locked)) return false;
+  private hitTestInternal(x: number, y: number, ignoreInteractionLock: boolean): boolean {
+    if (this.disabled || !this.visible) return false;
+    if (!ignoreInteractionLock && this.interactionLocked) return false;
 
     // 1. Initial AABB Check (World Space)
     // Entity Pivot is Bottom-Center

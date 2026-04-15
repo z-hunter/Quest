@@ -29,7 +29,7 @@ describe('Scene interaction text layer', () => {
     expect(fixture.messages.at(-1)).toBe('You see Center Trigger');
   });
 
-  it('ignores locked top-layer entities so clicks pass through to objects below', () => {
+  it('keeps editor-locked top-layer entities interactive at runtime', () => {
     const fixture = createSceneFixture();
     const back = fixture.addTriggerbox('tb_back', {
       title: 'Back Trigger',
@@ -42,7 +42,31 @@ describe('Scene interaction text layer', () => {
       description: 'Should not intercept clicks.',
     });
     ghost.layer = 2;
+    ghost.x = 5;
+    ghost.y = 10;
     ghost.locked = true;
+
+    handleSceneClick(fixture.scene, 215, 155);
+
+    expect(fixture.messages.at(-1)).toBe('You see Ghost Item');
+  });
+
+  it('ignores interaction-locked top-layer entities so clicks pass through to objects below', () => {
+    const fixture = createSceneFixture();
+    const back = fixture.addTriggerbox('tb_back', {
+      title: 'Back Trigger',
+      description: 'Behind the ghost.',
+    });
+    back.layer = 1;
+
+    const ghost = fixture.addEntity('ghost_item', {
+      title: 'Ghost Item',
+      description: 'Should not intercept clicks.',
+    });
+    ghost.layer = 2;
+    ghost.x = 5;
+    ghost.y = 10;
+    ghost.interactionLocked = true;
 
     handleSceneClick(fixture.scene, 215, 155);
 

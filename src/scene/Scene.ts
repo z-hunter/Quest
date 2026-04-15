@@ -368,7 +368,7 @@ export class Scene {
     const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
     clone.disabled = false;
     clone.visible = true;
-    clone.locked = true;
+    clone.interactionLocked = true;
     clone.groupID = null;
     clone.components = [];
     clone.interactions = {};
@@ -395,7 +395,7 @@ export class Scene {
     const baseModelScale = entity.modelScale || 1;
     const targetY = entity.y;
 
-    entity.locked = true;
+    entity.interactionLocked = true;
     entity.y = targetY - 26;
     entity.opacity = 0;
     entity.modelScale = baseModelScale * 1.1;
@@ -418,7 +418,7 @@ export class Scene {
     entity.y = active.targetY;
     entity.opacity = active.targetOpacity;
     entity.modelScale = active.baseModelScale;
-    entity.locked = false;
+    entity.interactionLocked = false;
     this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
   }
 
@@ -817,7 +817,7 @@ export class Scene {
           anim.entity.y = anim.targetY;
           anim.entity.opacity = anim.targetOpacity;
           anim.entity.modelScale = anim.baseModelScale;
-          anim.entity.locked = false;
+          anim.entity.interactionLocked = false;
         }
       }
       this.dropAnimations = nextAnimations;

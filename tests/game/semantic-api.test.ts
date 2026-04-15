@@ -346,7 +346,8 @@ describe('Game semantic API', () => {
     expect(key.layer).toBe(desk.layer);
     expect(fixture.scene.dropAnimations).toHaveLength(1);
     expect(key.opacity).toBe(0);
-    expect(key.locked).toBe(true);
+    expect(key.locked).toBe(false);
+    expect(key.interactionLocked).toBe(true);
   });
 
   it('putEntity with IN can target a nested surface inside the object', () => {
@@ -789,12 +790,14 @@ describe('Game semantic API', () => {
     expect((floor.components[0] as { items: Array<{ id: string }> }).items).toEqual([
       expect.objectContaining({ id: 'miles_id' }),
     ]);
-    expect(idCard.locked).toBe(true);
+    expect(idCard.locked).toBe(false);
+    expect(idCard.interactionLocked).toBe(true);
 
     const takeBack = fixture.game.takeEntity(idCard);
     expect(takeBack.status).toBe('ok');
     expect((floor.components[0] as { items: Array<{ id: string }> }).items).toEqual([]);
     expect(idCard.locked).toBe(false);
+    expect(idCard.interactionLocked).toBe(false);
     expect(idCard.opacity).toBe(1);
     expect(fixture.scene.dropAnimations).toHaveLength(0);
 
