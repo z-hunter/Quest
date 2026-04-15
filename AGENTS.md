@@ -7,6 +7,23 @@
 
 - Before implementing anything, check the contents of your memory for all related information. Use RAG if available.
 
+## NotebookLM Connectivity Rule
+
+Before relying on NotebookLM MCP, do not trust `mcp__notebooklm__get_health` alone.
+
+Required readiness flow:
+
+1. Run `mcp__notebooklm__get_health`.
+2. Run a real NotebookLM smoke test with `mcp__notebooklm__ask_question` against the project notebook.
+3. If MCP `ask_question` fails with browser launch errors such as `launchPersistentContext` or `Target page, context or browser has been closed`, immediately check the CLI path:
+   - `python -m notebooklm auth check --json`
+   - `python -m notebooklm list --json`
+   - `python -m notebooklm ask "..." --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json`
+4. If CLI works, use CLI as the default NotebookLM path for project recall in that session.
+5. Only attempt MCP auth repair if both MCP and CLI fail, or if the task is explicitly to repair NotebookLM.
+
+On this machine, MCP can report `authenticated: true` while the browser-backed NotebookLM query path is still broken.
+
 ## Autotests Recall Rule
 
 When working on mechanics/runtime-related code or architecture-sensitive changes in:

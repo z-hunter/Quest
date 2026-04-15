@@ -257,26 +257,35 @@ export const HierarchyPanel: React.FC = () => {
         className="editor-header"
         style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
           <div>OBJECTS</div>
+          <Select
+            options={[
+              { value: 'Static', label: 'Static (S)' },
+              { value: 'Actor', label: 'Actor (A)' },
+              { value: 'Quad', label: 'Quad (Q)' },
+              { value: 'Walkbox', label: 'Walkbox (W)' },
+              { value: 'Triggerbox', label: 'Triggerbox (T)' },
+            ]}
+            placeholder="+ADD"
+            onChange={(value) => handleAdd(value)}
+            style={{
+              width: '7.25em',
+              minWidth: '7.25em',
+              fontSize: '12px',
+              flexShrink: 0,
+            }}
+          />
         </div>
-        <div style={{ marginBottom: '5px' }}>
+        <div style={{ marginBottom: 0 }}>
           <EditorToolbar />
-
-          <div style={{ marginTop: '5px' }}>
-            <Select
-              options={[
-                { value: 'Static', label: 'Static (S)' },
-                { value: 'Actor', label: 'Actor (A)' },
-                { value: 'Quad', label: 'Quad (Q)' },
-                { value: 'Walkbox', label: 'Walkbox (W)' },
-                { value: 'Triggerbox', label: 'Triggerbox (T)' },
-              ]}
-              placeholder="+ Add Object"
-              onChange={(value) => handleAdd(value)}
-              style={{ width: '100%', fontSize: '12px' }}
-            />
-          </div>
 
           <div style={{ marginTop: '5px', position: 'relative' }}>
             <input
