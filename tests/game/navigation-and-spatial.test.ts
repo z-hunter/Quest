@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
+import { Actor } from '../../src/entities/Actor';
+import { Entity } from '../../src/entities/Entity';
 
 describe('Game navigation and spatial API', () => {
   it('goToSceneTarget resolves scene by id and title', () => {
@@ -114,5 +116,107 @@ describe('Game navigation and spatial API', () => {
 
     expect(populated.status).toBe('ok');
     expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+  });
+
+  it('switchTo hydrates external inventory contents from component items and projects their slot relation', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('storage', 'Storage', 'You are in Storage.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const cabinet = new Entity(fixture.game as any, 10, 0, 10, 10, 'cabinet');
+    cabinet.components = [
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 2,
+        groups: [],
+        protected: false,
+        items: ['book'],
+      },
+    ];
+    target.addEntity(cabinet);
+    fixture.textAssets.setObject('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+
+    const book = new Entity(fixture.game as any, 0, 0, 10, 10, 'book');
+    book.components = [{ type: 'Item' }];
+    target.addEntity(book);
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A book.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getInventoryEntities(cabinet as any, 'behind')).toContain(book);
+    expect(book.visible).toBe(false);
+    expect((book as any).spatial).toEqual({ parentNodeId: 'cabinet', relation: 'in' });
+
+    const outcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Behind the Cabinet you see: Book.');
+  });
+
+  it('switchTo hydrates untitled nested inventory extensions and projects them through the titled anchor', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('workshop', 'Workshop', 'You are in Workshop.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const desk = new Entity(fixture.game as any, 0, 0, 10, 10, 'desk');
+    target.addEntity(desk);
+    fixture.textAssets.setObject('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+
+    const hiddenHolder = new Entity(fixture.game as any, 0, 0, 10, 10, 'hidden_holder');
+    hiddenHolder.spatial = { parentNodeId: 'desk', relation: 'behind' };
+    hiddenHolder.components = [
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 2,
+        groups: [],
+        protected: false,
+        items: ['book'],
+      },
+    ];
+    target.addEntity(hiddenHolder);
+    fixture.textAssets.setObject('hidden_holder', {
+      description: 'Untitled holder.',
+    });
+
+    const book = new Entity(fixture.game as any, 0, 0, 10, 10, 'book');
+    book.components = [{ type: 'Item' }];
+    target.addEntity(book);
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A hidden book.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getInventoryEntities(hiddenHolder as any, 'behind')).toContain(book);
+    expect(book.visible).toBe(false);
+
+    const outcome = fixture.game.describeSpatialRelation('desk', 'behind');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Behind the Desk you see: Book.');
   });
 });

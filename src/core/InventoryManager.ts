@@ -308,6 +308,43 @@ export class InventoryManager {
     entity.visible = true;
   }
 
+  handleSceneChange(): void {
+    this.inventoryEntityStore.clear();
+    this.inventory = [];
+
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      this.reconcileInventoryPreview();
+      this.notifyInventoryUiChange();
+      return;
+    }
+
+    for (const owner of scene.entities) {
+      if (!(owner instanceof Entity) || owner.disabled) continue;
+
+      for (const relation of this.getInventoryRelations(owner)) {
+        const component = ComponentSystem.getInventoryComponent(owner, relation);
+        if (!component) continue;
+
+        const resolved = this.resolveInventoryEntitiesFromComponent(owner, relation);
+        component.items = resolved.map((entity) => entity.name);
+
+        if (this.isPlayerInventoryOwner(owner) && relation === 'in') {
+          this.inventory = resolved;
+        } else {
+          this.inventoryEntityStore.set(this.getInventoryStoreKey(owner, relation), resolved);
+        }
+
+        for (const entity of resolved) {
+          this.syncInventoryEntitySceneState(owner, entity, relation);
+        }
+      }
+    }
+
+    this.reconcileInventoryPreview();
+    this.notifyInventoryUiChange();
+  }
+
   syncPlayerInventoryComponent(relation: ContainerRelation = 'in'): void {
     const player = this.getPlayerEntity();
     if (!player) return;

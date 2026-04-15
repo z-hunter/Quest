@@ -152,6 +152,34 @@ describe('Game semantic API', () => {
     expect(filledOutcome.message).toBe('You are carrying: your ID card');
   });
 
+  it('hydrates the player inventory from loaded scene inventory components', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+
+    player.components = [
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: [idCard.name],
+      },
+    ];
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(fixture.game.inventory).toContain(idCard);
+    expect(idCard.visible).toBe(false);
+    expect((idCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(fixture.game.showInventory().message).toBe('You are carrying: your ID card');
+  });
+
   it('taking an item keeps it in scene hierarchy as a hidden IN-child of the player inventory owner', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -366,7 +394,7 @@ describe('Game semantic API', () => {
       title: 'Tray',
       description: 'A tray inside the drawer.',
       spatial: { parentNodeId: 'drawer', relation: 'in' },
-      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+      components: [{ type: 'Surface', relation: 'in', capacity: 2, groups: [], items: [] }],
     });
     fixture.scene.removeEntity(key);
     fixture.game.inventory.push(key);
@@ -379,7 +407,7 @@ describe('Game semantic API', () => {
     expect((tray.components[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
-    expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'on' });
+    expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'in' });
   });
 
   it('putEntity can move a nearby scene item into a nearby reachable container without taking it first', () => {

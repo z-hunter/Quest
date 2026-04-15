@@ -124,6 +124,10 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": 27,
@@ -185,6 +189,10 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Trig_sub_D",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": -156.29411764705887,
@@ -433,18 +441,16 @@
           "type": "Surface",
           "capacity": 2,
           "groups": [],
-          "items": [
-            {
-              "id": "test",
-              "x": -126,
-              "y": 114
-            }
-          ]
+          "items": []
         }
       ],
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Desk",
+        "relation": "on"
+      },
       "poly": [
         {
           "x": -29,
@@ -504,7 +510,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": -2,
       "visible": true,
       "hidden": false,
@@ -540,7 +555,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": -1,
       "visible": true,
       "hidden": false,
@@ -572,7 +596,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "hidden": false,
@@ -617,15 +650,15 @@
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": [],
+          "items": ["test"],
           "relation": "in"
         }
       ],
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": -4.049617443648689,
-      "y": 258.3286679304263,
+      "x": 111.6101071721594,
+      "y": 201.96217627497643,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -636,7 +669,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0473373834816324,
+      "parallax": 1.0105452116652722,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -671,7 +704,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "hidden": false,
@@ -920,6 +962,14 @@
       "components": [
         {
           "type": "3d-parallax"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
         }
       ],
       "layer": 0,
@@ -972,12 +1022,21 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 222.90433731747962,
-      "y": 306.92845155295385,
+      "x": 222.9043373174796,
+      "y": 306.9284515529539,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1085,7 +1144,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": -2,
       "visible": true,
       "hidden": false,
@@ -1117,34 +1185,43 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": -57.634387764168494,
-      "y": 239.26702692047255,
+      "x": 58.30916613904122,
+      "y": 182.98985217364555,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -57.634387764168494,
-          "y": 239.26702692047255,
-          "p": 1.034856472149326
+          "x": 58.30916613904122,
+          "y": 182.98985217364555,
+          "p": 1.0000491205245856
         },
         {
-          "x": 39.22561636740364,
-          "y": 237.76803235247718,
-          "p": 1.033852242485438
+          "x": 155.52312011101384,
+          "y": 181.58485206819762,
+          "p": 1.0009782308229227
         },
         {
-          "x": 1.8749799690489724,
-          "y": 282.70409125692186,
-          "p": 1.0632955855855424
+          "x": 115.31260215690247,
+          "y": 226.1307631828957,
+          "p": 1.0263086058150008
         },
         {
-          "x": -46.84778301872848,
-          "y": 280.80139883629846,
-          "p": 1.0620653184148843
+          "x": 66.68559702101486,
+          "y": 224.23690213173666,
+          "p": 1.0250841813213207
         }
       ],
       "color": "#000975",
@@ -1212,14 +1289,22 @@
       "components": [
         {
           "type": "Item"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
         }
       ],
       "layer": 0,
-      "visible": true,
+      "visible": false,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "desk_surface",
-        "relation": "on"
+        "parentNodeId": "Hero_1",
+        "relation": "in"
       },
       "x": -126,
       "y": 114,
@@ -1252,6 +1337,14 @@
       "components": [
         {
           "type": "Item"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
         }
       ],
       "layer": 0,

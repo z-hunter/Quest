@@ -114,6 +114,7 @@ export class SceneManager {
     this.touchScene(scene.id);
     this.pinCurrentScene();
     this.syncAssetCacheState();
+    this.game.inventoryManager?.handleSceneChange?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {
       this.game.onSceneChange(scene.name);
