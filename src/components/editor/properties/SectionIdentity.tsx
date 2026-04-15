@@ -99,13 +99,10 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
             if (isValid) {
               handleChange(field, finalVal);
             } else {
-              let realObj: SceneObject | null = null;
-              if (game?.editor)
-                realObj = game.editor.selectedObject as unknown as SceneObject | null;
+              const realObj = game?.editor?.selectedObject as SceneObject | null | undefined;
 
-              if (realObj) {
-                if (isScene) o.id = realObj.id;
-                else o.name = realObj.name;
+              if (!isScene && realObj) {
+                o.name = realObj.name;
                 incrementObjectVersion();
               }
             }
