@@ -4,14 +4,30 @@ import { Select } from '../../common/Select';
 import { isTauriRuntime } from '../../../platform/fileApi';
 import { useEditorStore } from '../../../store/editorStore';
 
+interface GameSettings {
+  editor?: {
+    uiScale?: number;
+    viewportZoom?: 'fit' | '1' | '1.5' | '2';
+  };
+  crt?: {
+    enabled: boolean;
+    curvature: number;
+    vignette: number;
+    scanlineCount: number;
+    scanlineIntensity: number;
+    aberration: number;
+    bloom: number;
+    phosphor?: number;
+    bezelGlow: boolean;
+  };
+}
+
 export const SettingsProperties: React.FC = () => {
-  const { obj, formatPanelNumber, incrementObjectVersion } = usePropertiesContext();
+  const { obj, formatPanelNumber, incrementObjectVersion } = usePropertiesContext<GameSettings>();
   const isDesktopRuntime = React.useMemo(() => isTauriRuntime(), []);
-  const game = (obj as any)?.__game_ref_unused; // obj IS the settings object here
-  void game;
 
   // obj = game.settings in the parent
-  const settings = obj as any;
+  const settings = obj;
 
   return (
     <>
@@ -108,7 +124,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.01"
               value={formatPanelNumber(settings.crt.curvature)}
               onChange={(e) => {
-                settings.crt.curvature = parseFloat(e.target.value);
+                settings.crt!.curvature = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -125,7 +141,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.05"
               value={formatPanelNumber(settings.crt.vignette)}
               onChange={(e) => {
-                settings.crt.vignette = parseFloat(e.target.value);
+                settings.crt!.vignette = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -142,7 +158,7 @@ export const SettingsProperties: React.FC = () => {
               step="50"
               value={formatPanelNumber(settings.crt.scanlineCount)}
               onChange={(e) => {
-                settings.crt.scanlineCount = parseFloat(e.target.value);
+                settings.crt!.scanlineCount = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -159,7 +175,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.05"
               value={formatPanelNumber(settings.crt.scanlineIntensity)}
               onChange={(e) => {
-                settings.crt.scanlineIntensity = parseFloat(e.target.value);
+                settings.crt!.scanlineIntensity = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -176,7 +192,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.1"
               value={formatPanelNumber(settings.crt.aberration)}
               onChange={(e) => {
-                settings.crt.aberration = parseFloat(e.target.value);
+                settings.crt!.aberration = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -193,7 +209,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.05"
               value={formatPanelNumber(settings.crt.bloom)}
               onChange={(e) => {
-                settings.crt.bloom = parseFloat(e.target.value);
+                settings.crt!.bloom = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -210,7 +226,7 @@ export const SettingsProperties: React.FC = () => {
               step="0.05"
               value={formatPanelNumber(settings.crt.phosphor || 0)}
               onChange={(e) => {
-                settings.crt.phosphor = parseFloat(e.target.value);
+                settings.crt!.phosphor = parseFloat(e.target.value);
                 incrementObjectVersion();
               }}
             />
@@ -222,7 +238,7 @@ export const SettingsProperties: React.FC = () => {
                 style={{ marginRight: '5px' }}
                 checked={settings.crt.bezelGlow}
                 onChange={(e) => {
-                  settings.crt.bezelGlow = e.target.checked;
+                  settings.crt!.bezelGlow = e.target.checked;
                   incrementObjectVersion();
                 }}
               />

@@ -1,12 +1,13 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
+import { Scene } from '../../../scene/Scene';
 
 export const SceneProperties: React.FC = () => {
   const { game, obj, formatPanelNumber, setSectionRef, incrementObjectVersion, handleChange } =
-    usePropertiesContext();
+    usePropertiesContext<Scene>();
 
   if (!obj) return null;
-  const scene = obj as any;
+  const scene = obj;
 
   return (
     <>

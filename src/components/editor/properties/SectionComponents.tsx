@@ -2,10 +2,12 @@ import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 
+import { SceneObject } from '../../../entities/SceneObject';
+
 export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
-    usePropertiesContext();
-  const o = obj as any;
+    usePropertiesContext<SceneObject>();
+  const o = obj;
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
   const relationOptions = [
@@ -53,6 +55,31 @@ export const SectionComponents: React.FC = () => {
       (['in', 'on', 'under', 'behind'] as const).find((relation) => !used.has(relation)) || null
     );
   };
+
+  const SpatialRelationSelect = ({ comp, idx }: { comp: any; idx: number }) => (
+    <div className="e-row">
+      <label className="e-label" style={{ fontSize: '10px' }}>
+        Spatial Relation
+      </label>
+      <Select
+        value={normalizeContainerRelation(comp)}
+        onChange={(value) => {
+          const nextRelation = value as 'in' | 'on' | 'under' | 'behind';
+          if (getUsedContainerRelations(idx).includes(nextRelation)) {
+            game.showNotification?.(
+              `Another container already uses relation ${nextRelation.toUpperCase()}.`
+            );
+            return;
+          }
+          if (game.editor) game.editor.saveUndoState();
+          comp.relation = nextRelation;
+          incrementObjectVersion();
+        }}
+        options={relationOptions}
+        style={{ width: '100%' }}
+      />
+    </div>
+  );
 
   return (
     <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
@@ -377,29 +404,7 @@ export const SectionComponents: React.FC = () => {
                 >
                   Stores picked-up items by id.
                 </div>
-                {hasTitle && (
-                  <div className="e-row">
-                    <label className="e-label" style={{ fontSize: '10px' }}>
-                      Spatial Relation
-                    </label>
-                    <Select
-                      value={normalizeContainerRelation(comp)}
-                      onChange={(value) => {
-                        const nextRelation = value as 'in' | 'on' | 'under' | 'behind';
-                        if (getUsedContainerRelations(idx).includes(nextRelation)) {
-                          game.showNotification?.(
-                            `Another container already uses relation ${nextRelation.toUpperCase()}.`
-                          );
-                          return;
-                        }
-                        comp.relation = nextRelation;
-                        incrementObjectVersion();
-                      }}
-                      options={relationOptions}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                )}
+                {hasTitle && <SpatialRelationSelect comp={comp} idx={idx} />}
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
                     Capacity
@@ -481,29 +486,7 @@ export const SectionComponents: React.FC = () => {
                 >
                   Accepts placed items and keeps their local positions.
                 </div>
-                {hasTitle && (
-                  <div className="e-row">
-                    <label className="e-label" style={{ fontSize: '10px' }}>
-                      Spatial Relation
-                    </label>
-                    <Select
-                      value={normalizeContainerRelation(comp)}
-                      onChange={(value) => {
-                        const nextRelation = value as 'in' | 'on' | 'under' | 'behind';
-                        if (getUsedContainerRelations(idx).includes(nextRelation)) {
-                          game.showNotification?.(
-                            `Another container already uses relation ${nextRelation.toUpperCase()}.`
-                          );
-                          return;
-                        }
-                        comp.relation = nextRelation;
-                        incrementObjectVersion();
-                      }}
-                      options={relationOptions}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                )}
+                {hasTitle && <SpatialRelationSelect comp={comp} idx={idx} />}
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
                     Capacity

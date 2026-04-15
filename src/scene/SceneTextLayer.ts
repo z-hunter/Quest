@@ -219,9 +219,11 @@ export function getSceneTextLayerAccessState(
 
     const blockingComponent = getActiveBlockingComponentState(parentObject, relationToAncestor);
     if (blockingComponent) {
-      if (!gatingSwitch) gatingSwitch = parentObject;
-      gatingSwitchTransparent = blockingComponent.transparent;
-      gatingSwitchClearlyOpenable = blockingComponent.clearlyOpenable;
+      if (!gatingSwitch) {
+        gatingSwitch = parentObject;
+        gatingSwitchTransparent = blockingComponent.transparent;
+        gatingSwitchClearlyOpenable = blockingComponent.clearlyOpenable;
+      }
       if (blockingComponent.transparent) {
         blocked = true;
       } else {

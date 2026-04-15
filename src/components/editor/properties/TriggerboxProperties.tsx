@@ -3,6 +3,8 @@ import { usePropertiesContext } from './PropertiesContext';
 import { renderSection } from './propertiesUtils';
 import { getPolyCentroid } from './propertiesUtils';
 
+import { Triggerbox } from '../../../entities/Triggerbox';
+
 interface TriggerboxPropertiesProps {
   translatePolyTo: (targetX: number, targetY: number) => void;
   polygonScaleDraft: string;
@@ -14,8 +16,10 @@ export const TriggerboxProperties: React.FC<TriggerboxPropertiesProps> = ({
   polygonScaleDraft,
   applyPolygonScaleDraft,
 }) => {
-  const { game, obj, handleChange, formatPanelNumber, setSectionRef } = usePropertiesContext();
-  const tb = obj as any;
+  const { game, obj, handleChange, formatPanelNumber, setSectionRef } =
+    usePropertiesContext<Triggerbox>();
+  const tb = obj;
+  const { x: cx, y: cy } = getPolyCentroid(tb.poly);
 
   return (
     <>
@@ -33,10 +37,8 @@ export const TriggerboxProperties: React.FC<TriggerboxPropertiesProps> = ({
               <input
                 type="number"
                 className="e-input"
-                value={formatPanelNumber(getPolyCentroid(tb.poly).x)}
-                onChange={(e) =>
-                  translatePolyTo(parseFloat(e.target.value) || 0, getPolyCentroid(tb.poly).y)
-                }
+                value={formatPanelNumber(cx)}
+                onChange={(e) => translatePolyTo(parseFloat(e.target.value) || 0, cy)}
               />
             </div>
             <div>
@@ -44,10 +46,8 @@ export const TriggerboxProperties: React.FC<TriggerboxPropertiesProps> = ({
               <input
                 type="number"
                 className="e-input"
-                value={formatPanelNumber(getPolyCentroid(tb.poly).y)}
-                onChange={(e) =>
-                  translatePolyTo(getPolyCentroid(tb.poly).x, parseFloat(e.target.value) || 0)
-                }
+                value={formatPanelNumber(cy)}
+                onChange={(e) => translatePolyTo(cx, parseFloat(e.target.value) || 0)}
               />
             </div>
           </div>

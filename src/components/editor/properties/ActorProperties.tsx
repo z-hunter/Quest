@@ -1,11 +1,12 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
+import { Actor } from '../../../entities/Actor';
 
 export const ActorProperties: React.FC = () => {
   const { game, obj, handleChange, formatPanelNumber, setSectionRef, incrementObjectVersion } =
-    usePropertiesContext();
-  const actor = obj as any;
+    usePropertiesContext<Actor>();
+  const actor = obj;
 
   return (
     <>
@@ -183,7 +184,7 @@ export const ActorProperties: React.FC = () => {
               </div>
 
               {/* Directions */}
-              {['down', 'up', 'left', 'right'].map((dir) => (
+              {(['down', 'up', 'left', 'right'] as const).map((dir) => (
                 <div
                   key={dir}
                   style={{

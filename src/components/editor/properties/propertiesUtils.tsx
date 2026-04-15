@@ -72,8 +72,8 @@ export const scaleQuadVerticesByFactor = (
 ): { x: number; y: number; [key: string]: unknown }[] =>
   vertices.map((v) => ({
     ...v,
-    x: originX + (v.x - originX) * factor,
-    y: originY + (v.y - originY) * factor,
+    x: Math.round(originX + (v.x - originX) * factor),
+    y: Math.round(originY + (v.y - originY) * factor),
   }));
 
 // ─── Shared render helpers ────────────────────────────────────────────────────

@@ -23,8 +23,8 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
     setSectionRef,
     selectedVertexIndex,
     incrementObjectVersion,
-  } = usePropertiesContext();
-  const quad = obj as any;
+  } = usePropertiesContext<QuadObject>();
+  const quad = obj;
 
   return (
     <div className="e-row">

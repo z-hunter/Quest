@@ -1,12 +1,29 @@
 import React from 'react';
 import type { Game } from '../../../core/Game';
+import type { SceneObject } from '../../../entities/SceneObject';
 
-export interface PropertiesContextValue {
+export type SelectedObjectType =
+  | 'Entity'
+  | 'Actor'
+  | 'Static'
+  | 'Triggerbox'
+  | 'Walkbox'
+  | 'Quad'
+  | 'SCENE'
+  | 'SETTINGS'
+  | 'MULTI'
+  | string;
+
+export type Mode = 'edit' | 'select' | 'DRAW' | string | null;
+
+export type ObjType = SceneObject | Record<string, any> | null;
+
+export interface PropertiesContextValue<T extends ObjType = ObjType> {
   game: Game;
-  obj: unknown;
-  selectedObjectType: string;
+  obj: T;
+  selectedObjectType: SelectedObjectType;
   selectedObjectId: string | null;
-  mode: string | null;
+  mode: Mode;
   selectedVertexIndex: number | null;
   uiScale: number;
 
@@ -26,10 +43,10 @@ export interface PropertiesContextValue {
 
 export const PropertiesContext = React.createContext<PropertiesContextValue | null>(null);
 
-export const usePropertiesContext = (): PropertiesContextValue => {
+export function usePropertiesContext<T extends ObjType = ObjType>(): PropertiesContextValue<T> {
   const ctx = React.useContext(PropertiesContext);
   if (!ctx) {
     throw new Error('usePropertiesContext must be used inside PropertiesContext.Provider');
   }
-  return ctx;
-};
+  return ctx as PropertiesContextValue<T>;
+}

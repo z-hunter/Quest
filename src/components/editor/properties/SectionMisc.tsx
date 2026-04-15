@@ -7,10 +7,16 @@ interface SectionMiscProps {
   isQuad: boolean;
 }
 
+interface EditorObject {
+  locked?: boolean;
+  disabled?: boolean;
+  hidden?: boolean | 'lookable' | 'examinable';
+}
+
 export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }) => {
   const { game, obj, handleChange, mode, setSectionRef } = usePropertiesContext();
-  const o = obj as any;
-  const hasTitle = !!game.textAssets.getResolvedObjectField(o, 'title')?.trim();
+  const o = obj as EditorObject;
+  const hasTitle = !!game.textAssets.getResolvedObjectField(o as any, 'title')?.trim();
 
   return (
     <div ref={setSectionRef(6)} className="properties-section-block" data-section={6}>
@@ -96,7 +102,7 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
             Hidden
           </label>
           <Select
-            value={o.hidden || 'false'}
+            value={o.hidden === 'lookable' || o.hidden === 'examinable' ? o.hidden : 'false'}
             onChange={(value) =>
               handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
             }

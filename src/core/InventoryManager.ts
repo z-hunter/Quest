@@ -1193,20 +1193,24 @@ export class InventoryManager {
       if (parentId !== anchor.name || candidateRelation !== normalizedRelation) continue;
 
       if (candidate instanceof Entity) {
-        const inventoryComponent = ComponentSystem.getInventoryComponent(candidate);
+        const inventoryComponent = ComponentSystem.getInventoryComponent(
+          candidate,
+          normalizedRelation
+        );
         if (
           inventoryComponent &&
-          (!requireAccessible || this.isInventoryAccessible(candidate, getBlockedAccessOutcome))
+          (!requireAccessible ||
+            this.isInventoryAccessible(candidate, getBlockedAccessOutcome, normalizedRelation))
         ) {
           inventoryCandidates.push({
             owner: candidate,
             component: inventoryComponent,
-            relation: ComponentSystem.normalizeInventoryRelation(inventoryComponent),
+            relation: normalizedRelation,
           });
         }
       }
 
-      const surfaceComponent = ComponentSystem.getSurfaceComponent(candidate);
+      const surfaceComponent = ComponentSystem.getSurfaceComponent(candidate, normalizedRelation);
       if (
         surfaceComponent &&
         (!requireAccessible || this.isSurfaceAccessible(candidate, getBlockedAccessOutcome))
@@ -1214,7 +1218,7 @@ export class InventoryManager {
         surfaceCandidates.push({
           surface: candidate,
           component: surfaceComponent,
-          relation: ComponentSystem.normalizeSurfaceRelation(surfaceComponent),
+          relation: normalizedRelation,
         });
       }
     }
@@ -1262,7 +1266,13 @@ export class InventoryManager {
     const scene = this.sceneManager.currentScene;
     if (!scene || !relation) return null;
 
-    const directComponent = ComponentSystem.getSurfaceComponent(anchor, relation);
+    const normalizedRelation =
+      relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+        ? relation
+        : null;
+    if (!normalizedRelation) return null;
+
+    const directComponent = ComponentSystem.getSurfaceComponent(anchor, normalizedRelation);
     const directSurface = directComponent ? anchor : null;
     if (
       directSurface &&
@@ -1271,7 +1281,7 @@ export class InventoryManager {
       return {
         surface: directSurface,
         component: directComponent!,
-        relation,
+        relation: normalizedRelation,
       };
     }
 
@@ -1279,15 +1289,17 @@ export class InventoryManager {
       .getAllSceneObjects()
       .map((candidate: SceneObject) => ({
         surface: candidate,
-        component: ComponentSystem.getSurfaceComponent(candidate),
-        relation: relation as ContainerRelation,
+        component: ComponentSystem.getSurfaceComponent(candidate, normalizedRelation),
+        relation: normalizedRelation,
       }))
       .filter(
         (candidate): candidate is SurfaceSlotRef =>
           candidate.component !== null && candidate.component !== undefined
       )
       .filter((candidate) => (candidate.surface as any).spatial?.parentNodeId === anchor.name)
-      .filter((candidate) => ((candidate.surface as any).spatial?.relation || null) === relation)
+      .filter(
+        (candidate) => ((candidate.surface as any).spatial?.relation || null) === normalizedRelation
+      )
       .filter(
         (candidate) =>
           !requireAccessible || this.isSurfaceAccessible(candidate.surface, getBlockedAccessOutcome)
@@ -1387,7 +1399,7 @@ export class InventoryManager {
       if (!current) continue;
 
       if (current instanceof Entity) {
-        const inventoryComponent = ComponentSystem.getInventoryComponent(current);
+        const inventoryComponent = ComponentSystem.getInventoryComponent(current, relation);
         if (
           inventoryComponent &&
           (!requireAccessible ||
@@ -1396,18 +1408,18 @@ export class InventoryManager {
               anchor,
               getBlockedAccessOutcome,
               getPlayerFacingObjectTitle,
-              ComponentSystem.normalizeInventoryRelation(inventoryComponent)
+              relation
             ))
         ) {
           inventoryOwners.push({
             owner: current,
             component: inventoryComponent,
-            relation: ComponentSystem.normalizeInventoryRelation(inventoryComponent),
+            relation,
           });
         }
       }
 
-      const surfaceComponent = ComponentSystem.getSurfaceComponent(current);
+      const surfaceComponent = ComponentSystem.getSurfaceComponent(current, relation);
       if (
         surfaceComponent &&
         (!requireAccessible ||
@@ -1421,7 +1433,7 @@ export class InventoryManager {
         surfaces.push({
           surface: current,
           component: surfaceComponent,
-          relation: ComponentSystem.normalizeSurfaceRelation(surfaceComponent),
+          relation,
         });
       }
 

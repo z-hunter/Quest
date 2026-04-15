@@ -1,26 +1,25 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
+import { Walkbox } from '../../../entities/Walkbox';
 
 export const WalkboxProperties: React.FC = () => {
-  const { game, obj, handleChange, mode } = usePropertiesContext();
-  const wb = obj as any;
+  const { game, obj, handleChange, mode } = usePropertiesContext<Walkbox>();
+  const wb = obj;
 
   return (
     <div className="e-row">
-      <div className="e-row">
-        <label className="e-label">Mode</label>
-        <Select
-          value={wb.mode || 'Invert'}
-          onChange={(value) => handleChange('mode', value)}
-          options={[
-            { value: 'Invert', label: 'Invert (Standard)' },
-            { value: 'Add', label: 'Add (Bridge)' },
-            { value: 'Subtract', label: 'Subtract (Hole)' },
-          ]}
-          style={{ width: '100%', marginBottom: '5px' }}
-        />
-      </div>
+      <label className="e-label">Mode</label>
+      <Select
+        value={wb.mode || 'Invert'}
+        onChange={(value) => handleChange('mode', value)}
+        options={[
+          { value: 'Invert', label: 'Invert (Standard)' },
+          { value: 'Add', label: 'Add (Bridge)' },
+          { value: 'Subtract', label: 'Subtract (Hole)' },
+        ]}
+        style={{ width: '100%', marginBottom: '5px' }}
+      />
       <button
         className="e-btn e-btn-yellow"
         style={{ width: '100%', marginBottom: '5px' }}

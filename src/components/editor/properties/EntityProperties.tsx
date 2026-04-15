@@ -2,10 +2,12 @@ import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { renderOpacityBlurControls, renderSection } from './propertiesUtils';
+import { Entity } from '../../../entities/Entity';
 
 export const EntityProperties: React.FC = () => {
-  const { game, obj, handleChange, formatPanelNumber, setSectionRef } = usePropertiesContext();
-  const entity = obj as any;
+  const { game, obj, handleChange, formatPanelNumber, setSectionRef } =
+    usePropertiesContext<Entity>();
+  const entity = obj;
 
   return (
     <>
