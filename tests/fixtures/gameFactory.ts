@@ -61,6 +61,18 @@ export function createTestGame(): TestGameHarness {
     get inventory() {
       return (this.inventoryManager as any)?.inventory || [];
     },
+    getInventoryPreviewEntity() {
+      return (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
+    },
+    getInventoryPreviewText() {
+      return (this.inventoryManager as any)?.getInventoryPreviewText?.() || null;
+    },
+    openInventoryPreview(entity: Entity, previewText?: string | null) {
+      (this.inventoryManager as any)?.openInventoryPreview?.(entity, previewText);
+    },
+    closeInventoryPreview() {
+      (this.inventoryManager as any)?.closeInventoryPreview?.();
+    },
     showMessage(text: string) {
       messages.push(text);
     },
@@ -91,6 +103,33 @@ export function createTestGame(): TestGameHarness {
     },
     closeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_close_entity');
+    },
+    closeFocusedView() {
+      const previewEntity = (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
+      if (previewEntity) {
+        (this.inventoryManager as any)?.closeInventoryPreview?.();
+        return {
+          status: 'ok',
+          code: 'inventory_preview_closed',
+          data: { entityId: previewEntity.name },
+          effects: ['inventory_preview_closed'],
+        };
+      }
+      const activeSubscene = this.sceneManager.currentScene?.activeSubscene || null;
+      if (activeSubscene) {
+        this.sceneManager.currentScene!.activeSubscene = null;
+        return {
+          status: 'ok',
+          code: 'subscene_closed',
+          data: { subsceneId: activeSubscene },
+          effects: ['subscene_closed'],
+        };
+      }
+      return {
+        status: 'escalate',
+        code: 'no_active_view_to_close',
+        recoverable: true,
+      };
     },
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');

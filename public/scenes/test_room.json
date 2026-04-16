@@ -386,9 +386,13 @@
           "items": []
         }
       ],
-      "layer": 0,
+      "layer": 5,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Drawer1",
+        "relation": "in"
+      },
       "poly": [
         {
           "x": -145,
@@ -444,7 +448,7 @@
           "items": []
         }
       ],
-      "layer": 0,
+      "layer": 5,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -657,8 +661,8 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 111.6101071721594,
-      "y": 201.96217627497643,
+      "x": 144.25529812686491,
+      "y": 280.54262188057817,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -669,7 +673,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0105452116652722,
+      "parallax": 1.0617937141670042,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -745,10 +749,23 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Trig_sub_D",
+        "relation": "in"
+      },
       "x": 135,
       "y": 310,
       "width": 614.4,
@@ -886,7 +903,16 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": 6,
       "visible": true,
       "hidden": false,
@@ -1035,8 +1061,8 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 222.9043373174796,
-      "y": 306.9284515529539,
+      "x": 222.90433731747945,
+      "y": 306.9284515529537,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1047,7 +1073,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293817,
+      "parallax": 1.0790382036293815,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1198,30 +1224,30 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 58.30916613904122,
-      "y": 182.98985217364555,
+      "x": 89.63941936791159,
+      "y": 261.4829577468813,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 58.30916613904122,
-          "y": 182.98985217364555,
-          "p": 1.0000491205245856
+          "x": 89.63941936791159,
+          "y": 261.4829577468813,
+          "p": 1.0493567334181846
         },
         {
-          "x": 155.52312011101384,
-          "y": 181.58485206819762,
-          "p": 1.0009782308229227
+          "x": 186.49189047661804,
+          "y": 259.99921293545424,
+          "p": 1.0483576747713235
         },
         {
-          "x": 115.31260215690247,
-          "y": 226.1307631828957,
-          "p": 1.0263086058150008
+          "x": 144.90343937210187,
+          "y": 304.098168504381,
+          "p": 1.077262563551597
         },
         {
-          "x": 66.68559702101486,
-          "y": 224.23690213173666,
-          "p": 1.0250841813213207
+          "x": 96.36709602836598,
+          "y": 302.2307763317525,
+          "p": 1.0760295483987066
         }
       ],
       "color": "#000975",

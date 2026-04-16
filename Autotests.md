@@ -251,6 +251,16 @@ Covers:
 - linear plan stopping after failure;
 - core behavior independent of UI.
 
+#### `tests/parser/world-model-context.test.ts`
+
+Covers:
+- parser world-model entity context projection;
+- spatial relation flattening through untitled technical nodes;
+- hidden `lookable` / `examinable` semantic omission until reveal;
+- blocker visibility vs reachability;
+- player/external inventory projection;
+- titled objects inside inactive `Subscene` staying visible to parser scope without becoming operable while runtime-disabled.
+
 ### Game
 
 #### `tests/game/semantic-api.test.ts`
@@ -266,6 +276,10 @@ Covers:
 - hidden `lookable` / `examinable` semantics;
 - `Blocker` and `blockedRelation` behavior;
 - inventory hierarchy projection and sync.
+- Surface placement runtime contracts:
+  - placed item layer follows the target Surface layer;
+  - active `Subscene.itemScale` is applied before placement and drop animation;
+  - items placed on Switch-controlled Surface inherit the active Switch target group and are disabled/enabled with it.
 
 This layer verifies `Game` as the shared semantic gameplay API, separate from parser parsing.
 

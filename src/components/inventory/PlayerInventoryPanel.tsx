@@ -52,7 +52,12 @@ export const PlayerInventoryPanel: React.FC<PlayerInventoryPanelProps> = ({ game
               key={item.name}
               type="button"
               className={`player-inventory-slot${isActive ? ' is-active' : ''}`}
-              onClick={() => game.openInventoryPreview(item)}
+              onClick={() => {
+                const outcome = game.examineEntity(item);
+                if (outcome.message) {
+                  game.log(outcome.message);
+                }
+              }}
               title={title}
             >
               <InventoryEntityCanvas entity={item} size={60} />

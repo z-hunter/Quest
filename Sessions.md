@@ -306,3 +306,102 @@ During the session the following checks were run successfully:
   - `tests/game/semantic-api.test.ts`
 - Также в worktree уже был пользовательский/внерамочный файл `public/scenes/test_room.json`; он не изменялся в рамках этой сессии.
 - `Sessions.md` остаётся неотслеживаемым файлом в репозитории и был обновлён как cumulative session log.
+
+## Session Entry - 2026-04-15 16:38 +02:00
+
+# Session Summary
+
+## Session Goal
+
+- Слегка оптимизировать левую панель `Hierarchy` в редакторе сцены.
+- Понять, почему в этой сессии не работает доступ к NotebookLM через MCP.
+- Зафиксировать устойчивое поведение для будущих сессий, чтобы агент не застревал на ложноположительном NotebookLM health-check.
+
+## What Was Implemented
+
+### 1. UI cleanup для `Hierarchy`
+
+- В `src/components/editor/HierarchyPanel.tsx` селект создания объекта был перенесён из отдельной строки в header панели справа от `OBJECTS`.
+- Placeholder сокращён с `+ Add Object` до `+ADD`.
+- Ширина селекта уменьшена, чтобы он стабильно помещался в header.
+- Освобождена отдельная строка в верхней части панели.
+
+### 2. Уплотнение зоны filter/list
+
+- В той же панели уменьшен, а затем полностью убран нижний отступ у блока с toolbar и filter.
+- В результате список объектов начинается заметно ближе к строке фильтра.
+
+### 3. Диагностика NotebookLM
+
+- Проверено поведение NotebookLM MCP и CLI на этой Windows-машине.
+- MCP `get_health` возвращал `authenticated: true`, но реальный `mcp__notebooklm__ask_question` падал с:
+  - `browserType.launchPersistentContext`
+  - `Target page, context or browser has been closed`
+- При этом в момент диагностики CLI ещё подтверждал доступ к notebook:
+  - `python -m notebooklm list --json` видел notebook `Scanline Engine`
+  - `python -m notebooklm ask ... --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json` успешно отвечал
+
+### 4. Обновление глобальных NotebookLM skills
+
+- В `C:\Users\Professional\.codex\skills\notebooklm\SKILL.md` добавлен Windows-specific reliability override:
+  - нельзя доверять только `get_health`
+  - нужен реальный smoke-test через `ask_question`
+  - при падении MCP нужно сразу проверять CLI
+  - если CLI жив, можно продолжать работу через CLI, не блокируя задачу на починке MCP
+- В `C:\Users\Professional\.codex\skills\notebooklm-cli\SKILL.md` добавлено правило, что на этой машине CLI является предпочтительным fallback при ошибках `launchPersistentContext`.
+
+### 5. Обновление project instructions
+
+- В `AGENTS.md` проекта добавлен `NotebookLM Connectivity Rule`.
+- Теперь новый агент прямо из project-level instructions увидит:
+  - что `get_health` недостаточно;
+  - что нужен реальный `ask_question` smoke-test;
+  - что при browser-launch ошибках надо немедленно проверить CLI;
+  - что CLI fallback допустим для project recall;
+  - что MCP repair нужен только если обе ветки сломаны или задача явно про ремонт NotebookLM.
+
+## Important Architecture / Runtime Decisions
+
+### NotebookLM readiness must be validated by a real query
+
+- Для этой машины `authenticated: true` в MCP не означает, что NotebookLM реально доступен.
+- Рабочим считается только путь, который прошёл живой query:
+  - либо MCP `ask_question`,
+  - либо CLI `python -m notebooklm ask ... --notebook <uuid> --json`.
+
+### CLI fallback is acceptable for project recall
+
+- Если MCP ломается на browser/profile launch, а CLI ещё отвечает, нужно использовать CLI для recall вместо остановки работы.
+- Починка MCP должна быть отдельным troubleshooting flow, а не обязательным блокером каждой сессии.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Архитектурных изменений runtime/parser/mechanics в этой сессии не вносилось.
+- Изменения затронули editor UI (`HierarchyPanel`) и project/process documentation around NotebookLM usage.
+
+## Tests Run
+
+- `npm run typecheck`
+  - Passed
+
+## Commits Created During the Session
+
+- Коммитов в этой сессии не создавалось.
+
+## Remaining Work / Next Recommended Steps
+
+1. Если нужен именно MCP path, провести отдельный repair pass:
+   - закрыть все Chrome/Chromium окна;
+   - при необходимости выполнить cleanup persistent profile;
+   - заново пройти auth;
+   - повторно проверить не только `get_health`, но и реальный `ask_question`.
+2. Если важнее просто рабочий NotebookLM recall, можно продолжать использовать CLI path, когда он авторизован.
+3. При следующем визуальном polish-pass панели editor можно при желании ещё подправить стиль `+ADD`, чтобы он выглядел ближе к компактной кнопке.
+
+## Risks, Caveats, Open Questions, Or Non-Committed Changes
+
+- На момент wrap-up NotebookLM upload шага выполнить не удалось:
+  - CLI-команды `source list/add` начали отвечать `Authentication expired or invalid`
+  - поэтому актуальный `Sessions.md` не был перезалит в notebook автоматически
+- Важно: в ходе одной и той же сессии NotebookLM CLI сначала успешно отвечал на `list` и `ask`, а позже уже сообщал об истёкшей auth-сессии. Значит, состояние NotebookLM может быть нестабильным и его нужно перепроверять непосредственно перед операциями записи/загрузки.
+- Изменения в глобальных skill-файлах находятся вне репозитория, но важны для будущих локальных сессий на этой машине.

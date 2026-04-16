@@ -152,4 +152,44 @@ describe('Parser custom commands', () => {
     expect(fixture.game.inventory).not.toContain(cassette);
     expect((recorder.components[0] as { items: string[] }).items).toContain('cassette');
   });
+
+  it('QUIT closes the open inventory preview', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+    fixture.game.inventoryManager.openInventoryPreview(idCard, 'Your ID.');
+
+    const result = await fixture.run('quit');
+
+    expect(result.messages).toEqual([]);
+    expect(fixture.game.inventoryManager.getInventoryPreviewEntity()).toBe(null);
+  });
+
+  it('EXIT closes the active subscene', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.scene.activeSubscene = 'desk_subscene';
+
+    const result = await fixture.run('exit');
+
+    expect(result.messages).toEqual([]);
+    expect(fixture.scene.activeSubscene).toBe(null);
+  });
+
+  it('QUIT in a plain scene escalates to the parser fallback', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+
+    const result = await fixture.run('quit');
+
+    expect(result.messages.at(-1)).toBe("I don't understand.");
+    expect(fixture.scene.activeSubscene).toBe(null);
+    expect(fixture.game.inventoryManager.getInventoryPreviewEntity()).toBe(null);
+  });
 });

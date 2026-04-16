@@ -414,6 +414,38 @@ export class Parser {
             noun,
           },
         };
+      case 'quit':
+        if (!this.hasClosableView()) {
+          return {
+            stage: 'regex-v1',
+            output: {
+              kind: 'handoff_up',
+              reason: 'quit_not_applicable',
+              verb,
+              noun,
+              rawInput: input,
+            },
+            debug: {
+              rawInput: input,
+              normalizedInput: input.trim().toUpperCase(),
+              verb,
+              noun,
+            },
+          };
+        }
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [{ type: 'quitCurrentView' }],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+          },
+        };
       case 'showInventory':
         return {
           stage: 'regex-v1',
@@ -615,6 +647,8 @@ export class Parser {
         return this.resolveOpenCloseTarget('open', action.target);
       case 'closeTarget':
         return this.resolveOpenCloseTarget('close', action.target);
+      case 'quitCurrentView':
+        return this.game.closeFocusedView();
       case 'showInventory':
         return this.game.showInventory();
       case 'goToTarget':
@@ -673,6 +707,8 @@ export class Parser {
         return 'open';
       case 'closeTarget':
         return 'close';
+      case 'quitCurrentView':
+        return 'quit';
       case 'showInventory':
         return 'showInventory';
       case 'goToTarget':
@@ -2508,7 +2544,7 @@ export class Parser {
 
   private extractPendingIntent(
     actionJson: string
-  ): 'look' | 'examine' | 'take' | 'put' | 'open' | 'close' | 'goTo' {
+  ): 'look' | 'examine' | 'take' | 'put' | 'open' | 'close' | 'quit' | 'goTo' {
     try {
       const envelope = JSON.parse(actionJson) as ParserCascadeEnvelope;
       if (envelope.output.kind !== 'plan') {
@@ -2525,6 +2561,7 @@ export class Parser {
           firstAction.type === 'putTarget' ||
           firstAction.type === 'openTarget' ||
           firstAction.type === 'closeTarget' ||
+          firstAction.type === 'quitCurrentView' ||
           firstAction.type === 'goToTarget')
       ) {
         return firstAction.type === 'lookTarget'
@@ -2543,7 +2580,9 @@ export class Parser {
                       ? 'open'
                       : firstAction.type === 'closeTarget'
                         ? 'close'
-                        : 'goTo';
+                        : firstAction.type === 'quitCurrentView'
+                          ? 'quit'
+                          : 'goTo';
       }
     } catch {
       // Fall through to default.
@@ -2560,6 +2599,14 @@ export class Parser {
       return true;
     }
     return !!matchParserCommandSpec(trimmed, this.game.textAssets.getParserCommands());
+  }
+
+  private hasClosableView(): boolean {
+    if ((this.game as any).getInventoryPreviewEntity?.()) {
+      return true;
+    }
+
+    return !!this.game.sceneManager?.currentScene?.activeSubscene;
   }
 
   private buildPeekScopeSummary(scope: ParserScope): Record<string, unknown> {

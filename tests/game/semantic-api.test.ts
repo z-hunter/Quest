@@ -1174,6 +1174,63 @@ describe('Game semantic API', () => {
     expect(key.disabled).toBe(false);
   });
 
+  it('placing onto a group-controlled subscene surface applies surface layer, subscene scale, and active switch group', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '#drawer_zone', itemScale: 3 }],
+    });
+    const drawer = fixture.addTriggerbox('DrawerSwitch', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      disabled: true,
+      groupID: '#drawer_zone',
+      components: [{ type: 'Switch', state: 1, groupId1: 'nil', groupId2: '#drawer_open' }],
+    });
+    const surface = fixture.addTriggerbox('DrawerSurface', {
+      title: null,
+      disabled: true,
+      groupID: '#drawer_open',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    surface.layer = 7;
+    surface.poly = [
+      { x: -100, y: -100 },
+      { x: 100, y: -100 },
+      { x: 100, y: 100 },
+      { x: -100, y: 100 },
+    ];
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    key.ignoreScaling = true;
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    expect(fixture.game.openEntity(drawer).status).toBe('ok');
+    expect(fixture.scene.subsceneEntities.has(surface)).toBe(true);
+
+    const outcome = fixture.game.putEntity(key, surface, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(key.layer).toBe(7);
+    expect(key.subsceneItemScale).toBe(3);
+    expect(key.groupID).toContain('#drawer_open');
+    expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
+
+    fixture.scene.finishDropAnimation(key);
+    expect(key.scale).toBeCloseTo(key.modelScale * 3);
+
+    expect(fixture.game.closeEntity(drawer).status).toBe('ok');
+    expect(surface.disabled).toBe(true);
+    expect(key.disabled).toBe(true);
+  });
+
   it('openEntity and closeEntity mirror switch state changes', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

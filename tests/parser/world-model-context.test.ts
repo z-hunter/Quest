@@ -221,6 +221,47 @@ describe('Parser world model context', () => {
     );
   });
 
+  it('keeps titled inactive subscene objects visible to parser scope without making disabled objects operable', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('DeskCloseup', {
+      title: 'Desk close-up',
+      disabled: false,
+      components: [{ type: 'Subscene' }],
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Desk note',
+      description: 'A note in the close-up.',
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'in' },
+    });
+    fixture.addEntity('DeskLabel', {
+      title: 'Desk label',
+      description: 'A label in the close-up.',
+      disabled: true,
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'on' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look desk note', null);
+
+    expect(model.context.entities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'DeskNote', title: 'Desk note', item: true }),
+        expect.objectContaining({ id: 'DeskLabel', title: 'Desk label' }),
+      ])
+    );
+    expect(model.scope.visible.map((entity) => entity.name)).toEqual(
+      expect.arrayContaining(['DeskNote', 'DeskLabel'])
+    );
+    expect(model.scope.takable.map((entity) => entity.name)).not.toContain('DeskNote');
+    expect(model.scope.reachable.map((entity) => entity.name)).not.toContain('DeskNote');
+    expect(model.scope.reachable.map((entity) => entity.name)).not.toContain('DeskLabel');
+    expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskNote');
+    expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskLabel');
+  });
+
   it('omits player inventory items from scene text layer but projects external inventory items by slot relation', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 0, 0);

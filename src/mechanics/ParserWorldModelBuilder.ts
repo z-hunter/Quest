@@ -92,6 +92,7 @@ export class ParserWorldModelBuilder {
           : undefined;
         const reachable =
           isDirectSceneObject &&
+          !sceneObject.disabled &&
           !entry.blocked &&
           !entry.inInactiveSubscene &&
           !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
@@ -181,6 +182,7 @@ export class ParserWorldModelBuilder {
     const takable = visible
       .filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity)
       .filter((entity: Entity) => {
+        if (entity.disabled) return false;
         const isItem =
           entity.components &&
           entity.components.find((component: any) => component.type === 'Item');
@@ -196,6 +198,7 @@ export class ParserWorldModelBuilder {
     const reachable = scene
       ? visible.filter(
           (sceneObject: SceneObject) =>
+            !sceneObject.disabled &&
             !textLayer?.entryById.get(sceneObject.name)?.blocked &&
             !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
         )
@@ -214,7 +217,7 @@ export class ParserWorldModelBuilder {
   private getTextVisibleSceneObjects(scene: Scene): SceneObject[] {
     const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
     return textLayer.entries
-      .filter((entry) => !entry.inInactiveSubscene && !entry.object.disabled)
+      .filter((entry) => entry.inInactiveSubscene || !entry.object.disabled)
       .map((entry) => entry.object);
   }
 

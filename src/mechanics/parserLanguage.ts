@@ -7,6 +7,7 @@ export type ParserIntentId =
   | 'put'
   | 'open'
   | 'close'
+  | 'quit'
   | 'goTo'
   | 'showInventory';
 
@@ -88,6 +89,7 @@ export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): S
     'put',
     'open',
     'close',
+    'quit',
     'showInventory',
     'goTo',
   ];

@@ -18,6 +18,10 @@ export interface IGame {
   editor: SceneEditor;
   inventory: Entity[];
   inventoryManager: InventoryManager;
+  getInventoryPreviewEntity(): Entity | null;
+  getInventoryPreviewText(): string | null;
+  openInventoryPreview(entity: Entity, previewText?: string | null): void;
+  closeInventoryPreview(): void;
 
   showMessage(text: string): void;
   log(text: string): void;
@@ -29,6 +33,7 @@ export interface IGame {
   examineEntity(entity: SceneObject): GameActionOutcome;
   openEntity(entity: SceneObject): GameActionOutcome;
   closeEntity(entity: SceneObject): GameActionOutcome;
+  closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
   putEntity(
     entity: Entity,

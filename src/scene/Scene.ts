@@ -399,6 +399,7 @@ export class Scene {
     entity.y = targetY - 26;
     entity.opacity = 0;
     entity.modelScale = baseModelScale * 1.1;
+    entity.update(0);
 
     this.dropAnimations.push({
       entity,
@@ -419,6 +420,7 @@ export class Scene {
     entity.opacity = active.targetOpacity;
     entity.modelScale = active.baseModelScale;
     entity.interactionLocked = false;
+    entity.update(0);
     this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
   }
 
@@ -810,6 +812,7 @@ export class Scene {
         anim.entity.y = anim.targetY - anim.lift * (1 - eased);
         anim.entity.opacity = Math.min(anim.targetOpacity, anim.targetOpacity * progress);
         anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * (1 - eased));
+        anim.entity.update(0);
 
         if (progress < 1) {
           nextAnimations.push(anim);
@@ -818,6 +821,7 @@ export class Scene {
           anim.entity.opacity = anim.targetOpacity;
           anim.entity.modelScale = anim.baseModelScale;
           anim.entity.interactionLocked = false;
+          anim.entity.update(0);
         }
       }
       this.dropAnimations = nextAnimations;

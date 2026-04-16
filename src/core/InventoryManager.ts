@@ -602,6 +602,21 @@ export class InventoryManager {
       current = parentId ? scene.getObjectByName(parentId) : null;
     }
 
+    for (const candidate of scene.getAllSceneObjects()) {
+      const switchComponent = getSwitchComponent(candidate);
+      if (!switchComponent) continue;
+
+      const activeTarget =
+        switchComponent.state === 2 ? switchComponent.groupId2 : switchComponent.groupId1;
+      const activeGroups = this.parseGroupIds(activeTarget);
+      if (!activeGroups.length) continue;
+
+      const controlledTargets = scene.resolveTarget(activeTarget || '');
+      if (controlledTargets.includes(surface)) {
+        collected.push(...activeGroups);
+      }
+    }
+
     return Array.from(new Set(collected));
   }
 
@@ -815,6 +830,12 @@ export class InventoryManager {
       current = parentId ? scene.getObjectByName(parentId) : null;
     }
     return false;
+  }
+
+  private getSurfacePlacementSubsceneItemScale(surface: SceneObject): number {
+    const scene = this.sceneManager.currentScene;
+    if (!scene?.activeSubscene) return 1;
+    return this.isObjectInsideActiveSubscene(surface) ? scene.getActiveSubsceneItemScale() : 1;
   }
 
   getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
@@ -1639,8 +1660,14 @@ export class InventoryManager {
       };
     }
 
+    const previousSubsceneItemScale = entity.subsceneItemScale || 1;
+    const placementSubsceneItemScale = this.getSurfacePlacementSubsceneItemScale(surface);
+    entity.subsceneItemScale = placementSubsceneItemScale;
+    entity.update(0);
     const placement = this.placeEntityOnSurface(surface, entity);
     if (!placement) {
+      entity.subsceneItemScale = previousSubsceneItemScale;
+      entity.update(0);
       this.debugPut('surface-no-fit', {
         entityId: entity.name,
         surfaceId: surface.name,
@@ -1674,21 +1701,26 @@ export class InventoryManager {
     entity.visible = true;
     entity.x = placement.x;
     entity.y = placement.y;
-    entity.layer = surface.layer || 0;
+    entity.layer = Number.isFinite(surface.layer) ? surface.layer : 0;
     entity.spatial = {
       parentNodeId: surface.name,
       relation: this.getSurfaceSlotPlacementRelation({ surface, component, relation }),
     };
     if (scene?.activeSubscene) {
       if (this.isObjectInsideActiveSubscene(surface)) {
-        entity.subsceneItemScale = scene.getActiveSubsceneItemScale();
+        entity.subsceneItemScale = placementSubsceneItemScale;
         entity.update(0);
         entity.disabled = false;
         scene.subsceneEntities.add(entity);
         this.clearEntityDetachedSubsceneRoot(entity, scene.activeSubscene);
       } else if (scene.subsceneEntities.has(entity)) {
         scene.subsceneEntities.delete(entity);
+        entity.subsceneItemScale = 1;
+        entity.update(0);
       }
+    } else {
+      entity.subsceneItemScale = 1;
+      entity.update(0);
     }
     scene?.playDropAnimation(entity);
     component.items = [

@@ -78,6 +78,7 @@
     "close the drawer",
     "shut the compartment"
   ],
+  "quit": ["quit", "exit"],
   "goTo": [
     "go",
     "go office",

@@ -79,6 +79,8 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     return game.subscribeInventoryUi(() => forceInventoryRefresh((value) => value + 1));
   }, [game]);
 
+  const previewEntity = game?.getInventoryPreviewEntity() || null;
+
   useEffect(() => {
     if (!game) return;
     if (editorEnabled || isConsoleOpen) return;
@@ -92,7 +94,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [game, editorEnabled, isConsoleOpen]);
+  }, [game, editorEnabled, isConsoleOpen, previewEntity?.name]);
 
   useEffect(() => {
     if (message) {
@@ -139,9 +141,6 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [choiceDialog, handleChoiceResolve]);
-
-  const previewEntity = game?.getInventoryPreviewEntity() || null;
-  const previewText = game?.getInventoryPreviewText() || null;
 
   return (
     <>
@@ -295,7 +294,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
       {game && !editorEnabled && previewEntity && (
         <div
-          className="inventory-preview-backdrop"
+          className="inventory-preview-overlay"
           style={{ pointerEvents: 'auto' }}
           onClick={() => game.closeInventoryPreview()}
         >
@@ -303,10 +302,6 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             <InventoryEntityCanvas entity={previewEntity} size={320} />
           </div>
         </div>
-      )}
-
-      {game && !editorEnabled && previewEntity && previewText && (
-        <div className="inventory-preview-description">{previewText}</div>
       )}
 
       {/* File Browser Modal */}

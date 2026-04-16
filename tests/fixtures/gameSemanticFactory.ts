@@ -16,6 +16,7 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     'examineEntity',
     'openEntity',
     'closeEntity',
+    'closeFocusedView',
     'takeEntity',
     'putEntity',
     'addInventoryEntity',

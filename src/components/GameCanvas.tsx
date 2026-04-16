@@ -79,6 +79,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
           container.style.setProperty('--game-viewport-height', `${height}px`);
           container.style.setProperty('--game-viewport-left', `${offsetX}px`);
           container.style.setProperty('--game-viewport-top', `${offsetY}px`);
+          container.style.setProperty(
+            '--game-console-height',
+            `${Math.round(34 * appliedScale)}px`
+          );
         }
 
         const viewportWidth = viewportRef.current.clientWidth || width;
