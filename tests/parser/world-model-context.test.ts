@@ -168,8 +168,9 @@ describe('Parser world model context', () => {
     fixture.scene.revealHiddenEntity(key);
 
     const revealedModel = builder.build('look key', null);
-    expect(revealedModel.context.entities?.some((entity) => entity.id === 'key')).toBe(true);
-    expect(revealedModel.scope.visible.map((entity) => entity.name)).toContain('Key');
+    const revealedEntity = revealedModel.context.entities?.find((entity) => entity.id === 'key');
+    expect(revealedEntity?.title).toBe('Key');
+    expect(revealedModel.scope.visible.map((entity) => entity.name)).toContain('key');
   });
 
   it('respects blocker blockedRelation for visibility and reachability', () => {

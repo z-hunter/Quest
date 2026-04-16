@@ -64,6 +64,7 @@ tests/
   parser/
     commands.test.ts
     core.test.ts
+    preprocessor.test.ts
     resolution.test.ts
   scene/
     spatial-index.test.ts
@@ -198,6 +199,16 @@ Covers:
 - `sound1` playback path;
 - cleanup for spatially included objects, not only group-based ones.
 
+#### `tests/scene/scene-spatial-validator.test.ts`
+
+Covers:
+- `SceneSpatialValidator` happy path for relation-aware containers;
+- duplicate container relation detection;
+- built-in vs untitled external container extension conflicts;
+- broken inventory/surface storage references;
+- hidden semantic objects without `Title`;
+- missing spatial parents and spatial parent cycles.
+
 ### Parser
 
 #### `tests/parser/resolution.test.ts`
@@ -219,7 +230,18 @@ Covers:
 - `teleport with id`
 - wrong item for teleport -> no effect;
 - `use id on boombox`
-- missing-argument prompts for custom commands.
+- missing-argument prompts for custom commands;
+- `quit` / `exit` closing inventory preview or active subscene;
+- `quit` falling through to parser fallback when nothing is open.
+
+#### `tests/parser/preprocessor.test.ts`
+
+Covers:
+- console preprocessor shorthand expansion for:
+  - `I`
+  - `X`
+  - `L`
+  - `Q`
 
 #### `tests/parser/core.test.ts`
 
@@ -365,7 +387,6 @@ They are not necessary for the first iteration.
 
 - No browser/UI/canvas assertions yet.
 - No Playwright layer yet.
-- No direct tests for console preprocessor behavior yet.
 - No LLM-stage tests yet.
 - Parser NLP stage is not the focus of the current suite.
 - The direct `Game` tests use a semantic fixture layered on `Game.prototype`, not full `Game` construction.
@@ -374,28 +395,18 @@ They are not necessary for the first iteration.
 
 The next useful expansions would be:
 
-1. Add tests for console-preprocessor behavior:
-   - `I`
-   - `X`
-   - `L`
-   - `#STAGE1-ON/OFF`
-   - `#STAGE2-ON/OFF`
-
-2. Add more parser-core scenarios:
+1. Add more parser-core scenarios:
    - clarification continuation loops;
    - more plan-state transitions;
    - more validation branches.
 
-3. Add tests for console/preprocessor behavior:
-   - `I`
-   - `X`
-   - `L`
+2. Expand console/preprocessor coverage:
    - `#STAGE1-ON/OFF`
    - `#STAGE2-ON/OFF`
 
-4. Add tiny serialization/load fixtures if scene loading itself needs coverage.
+3. Add tiny serialization/load fixtures if scene loading itself needs coverage.
 
-5. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
+4. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
 
 ## Practical Rule
 

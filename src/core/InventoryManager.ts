@@ -148,10 +148,13 @@ export class InventoryManager {
 
   private getInventoryRelations(owner: Entity): ContainerRelation[] {
     const components = ComponentSystem.getInventoryComponents(owner);
-    if (!components.length) return ['in'];
     return Array.from(
       new Set(components.map((component) => ComponentSystem.normalizeInventoryRelation(component)))
     );
+  }
+
+  hasMainInventory(owner: Entity | null | undefined): boolean {
+    return !!owner && !!ComponentSystem.getInventoryComponent(owner, 'in');
   }
 
   private hasPlayerFacingTitle(object: SceneObject | null | undefined): boolean {
@@ -163,9 +166,11 @@ export class InventoryManager {
   getInventorySlotForEntity(entity: Entity): InventorySlotRef | null {
     const player = this.getPlayerEntity();
     if (player && this.inventory.includes(entity)) {
+      const component = ComponentSystem.getInventoryComponent(player, 'in');
+      if (!component) return null;
       return {
         owner: player,
-        component: this.ensureInventoryComponent(player, 'in'),
+        component,
         relation: 'in',
       };
     }
@@ -348,7 +353,9 @@ export class InventoryManager {
   syncPlayerInventoryComponent(relation: ContainerRelation = 'in'): void {
     const player = this.getPlayerEntity();
     if (!player) return;
-    const component = this.ensureInventoryComponent(player, relation);
+    const component = ComponentSystem.getInventoryComponent(player, relation);
+    if (!component) return;
+    if (!Array.isArray(component.items)) component.items = [];
     component.items = this.inventory.map((entity) => entity.name);
     for (const entity of this.inventory) {
       this.syncInventoryEntitySceneState(player, entity, relation);
@@ -1499,7 +1506,28 @@ export class InventoryManager {
     entity: Entity,
     relation: ContainerRelation = 'in'
   ): GameActionOutcome {
-    const component = this.ensureInventoryComponent(owner, relation);
+    const component = ComponentSystem.getInventoryComponent(owner, relation);
+    if (!component) {
+      return {
+        status: 'failed',
+        code:
+          this.isPlayerInventoryOwner(owner) && relation === 'in'
+            ? 'player_inventory_missing'
+            : 'inventory_missing',
+        message: this.getText(
+          this.isPlayerInventoryOwner(owner) && relation === 'in'
+            ? 'parser.inventory_missing'
+            : 'parser.put_no_place'
+        ),
+        recoverable: true,
+      };
+    }
+    if (!Array.isArray(component.groups)) component.groups = [];
+    if (!Array.isArray(component.items)) component.items = [];
+    if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
+      component.capacity = Number.MAX_SAFE_INTEGER;
+    }
+    component.relation = ComponentSystem.normalizeInventoryRelation(component);
     const currentItems = this.getStoredInventoryEntities(owner, relation);
     if (currentItems.includes(entity)) {
       return {

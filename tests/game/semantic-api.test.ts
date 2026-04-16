@@ -138,6 +138,7 @@ describe('Game semantic API', () => {
 
   it('showInventory returns empty and filled inventory messages', () => {
     const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
     const emptyOutcome = fixture.game.showInventory();
     expect(emptyOutcome.message).toBe('You are not carrying anything.');
 
@@ -196,6 +197,47 @@ describe('Game semantic API', () => {
     expect(fixture.scene.entities).toContain(idCard);
     expect(idCard.visible).toBe(false);
     expect((idCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+  });
+
+  it('does not create a player inventory implicitly when taking an item', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.components = [];
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+
+    const outcome = fixture.game.takeEntity(idCard);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('player_inventory_missing');
+    expect(outcome.message).toBe('You have nowhere to carry anything.');
+    expect(player.components).toEqual([]);
+    expect(fixture.game.inventory).not.toContain(idCard);
+    expect(idCard.spatial).toEqual({});
+  });
+
+  it('requires an explicit player inventory for inventory commands', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.components = [];
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventory.push(idCard);
+
+    const showOutcome = fixture.game.showInventory();
+    const dropOutcome = fixture.game.removeInventoryEntity(idCard);
+
+    expect(showOutcome.status).toBe('failed');
+    expect(showOutcome.code).toBe('player_inventory_missing');
+    expect(dropOutcome.status).toBe('failed');
+    expect(dropOutcome.code).toBe('player_inventory_missing');
+    expect(player.components).toEqual([]);
   });
 
   it('syncs a spatially reparented item into an external inventory slot for editor hierarchy workflows', () => {
@@ -328,8 +370,52 @@ describe('Game semantic API', () => {
     expect((fixture.game as any).getInventoryPreviewEntity()).toBe(null);
   });
 
+  it('closeFocusedView closes the inventory preview before touching subscene state', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+    fixture.game.openInventoryPreview(idCard, 'Your ID.');
+    fixture.scene.activeSubscene = 'desk_subscene';
+
+    const outcome = fixture.game.closeFocusedView();
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('inventory_preview_closed');
+    expect(fixture.game.getInventoryPreviewEntity()).toBe(null);
+    expect(fixture.scene.activeSubscene).toBe('desk_subscene');
+  });
+
+  it('closeFocusedView closes the active subscene when no inventory preview is open', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.scene.activeSubscene = 'desk_subscene';
+
+    const outcome = fixture.game.closeFocusedView();
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('subscene_closed');
+    expect(fixture.scene.activeSubscene).toBe(null);
+  });
+
+  it('closeFocusedView escalates when there is nothing to close', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+
+    const outcome = fixture.game.closeFocusedView();
+
+    expect(outcome.status).toBe('escalate');
+    expect(outcome.code).toBe('no_active_view_to_close');
+  });
+
   it('removeInventoryEntity succeeds only for held items', () => {
     const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
     const idCard = fixture.addEntity('miles_id', {
       title: 'your ID card',
       description: 'Your ID.',

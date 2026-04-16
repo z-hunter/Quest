@@ -70,7 +70,9 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       entity.spatial = options.spatial || {};
       scene.addEntity(entity);
       harness.textAssets.setObject(name, {
-        ...(options.title === null ? {} : { title: options.title !== undefined ? options.title : name }),
+        ...(options.title === null
+          ? {}
+          : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
       });
       return entity;
@@ -78,6 +80,15 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
     addPlayer(name = 'Hero', x = 0, y = 0) {
       const player = new Actor(harness.game, x, y, 10, 10, name);
       player.isPlayer = true;
+      player.components = [
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: Number.MAX_SAFE_INTEGER,
+          groups: [],
+          items: [],
+        },
+      ];
       scene.addEntity(player);
       harness.textAssets.setObject(name, {
         title: name,
@@ -93,7 +104,9 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       triggerbox.spatial = options.spatial || {};
       scene.triggerboxes.push(triggerbox);
       harness.textAssets.setObject(name, {
-        ...(options.title === null ? {} : { title: options.title !== undefined ? options.title : name }),
+        ...(options.title === null
+          ? {}
+          : { title: options.title !== undefined ? options.title : name }),
         description: options.description || `${name} triggerbox`,
         details: options.details,
       });

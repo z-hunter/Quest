@@ -62,6 +62,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     close_which_one: 'Which thing do you want to close: {options}?',
     close_success: 'You close the {target}.',
     close_already: 'The {target} is already closed.',
+    inventory_missing: 'You have nowhere to carry anything.',
     inventory_empty: 'You are not carrying anything.',
     inventory_items: 'You are carrying: {items}',
     go_to_prompt: 'Where do you want to go?',
@@ -102,6 +103,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     put: ['put', 'drop', 'place'],
     open: ['open'],
     close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go', 'walk', 'move'],
     showInventory: ['inventory', 'inv'],
   },
@@ -121,6 +123,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     put: ['put down', 'put', 'drop', 'place'],
     open: ['open'],
     close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: [
       'go over to',
       'walk over to',
@@ -232,6 +235,7 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
     'close the drawer',
     'shut the compartment',
   ],
+  quit: ['quit', 'exit'],
   goTo: [
     'go',
     'go office',

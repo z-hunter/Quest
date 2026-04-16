@@ -1,6 +1,7 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { SceneObject } from '../../entities/SceneObject';
+import { SceneSpatialValidator } from '../../scene/SceneSpatialValidator';
 import { useEditorStore } from '../../store/editorStore';
 import { saveProjectFile } from '../../platform/fileApi';
 
@@ -23,6 +24,22 @@ export class EditorPersistenceManager {
 
   markSceneSaved(): void {
     this.editor.undoManager.markSaved();
+  }
+
+  private reportSceneSpatialValidation(phase: 'load' | 'save'): void {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return;
+
+    const result = SceneSpatialValidator.validate(scene, this.editor.game as any);
+    if (result.issues.length === 0) {
+      console.info(`[SceneSpatialValidator] ${phase}: '${scene.name}' has no issues.`);
+      return;
+    }
+
+    const summary = `Spatial validation ${phase}: ${result.errors.length} error(s), ${result.warnings.length} warning(s)`;
+    this.editor.game.showNotification(summary);
+    const logMethod = result.errors.length > 0 ? console.warn : console.info;
+    logMethod(`[SceneSpatialValidator] ${summary} in '${scene.name}'.`, result.issues);
   }
 
   isCurrentSceneDirty(): boolean {
@@ -133,6 +150,7 @@ export class EditorPersistenceManager {
   async performSaveScene(filenameId: string, previousSceneId?: string): Promise<boolean> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return false;
+    this.reportSceneSpatialValidation('save');
 
     // Ensure filenameId uses forward slashes for URL/Path
     const normalizedPath = filenameId.replace(/\\/g, '/');
@@ -169,6 +187,7 @@ export class EditorPersistenceManager {
         if (scene) {
           this.trackedSceneRef = scene;
           this.editor.undoManager.resetForCleanScene();
+          this.reportSceneSpatialValidation('load');
         }
       });
     });

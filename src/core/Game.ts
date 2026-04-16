@@ -607,6 +607,37 @@ export class Game implements IGame {
     this.inventoryManager.closeInventoryPreview();
   }
 
+  closeFocusedView(): GameActionOutcome {
+    const previewEntity = this.getInventoryPreviewEntity();
+    if (previewEntity) {
+      this.closeInventoryPreview();
+      return {
+        status: 'ok',
+        code: 'inventory_preview_closed',
+        data: { entityId: previewEntity.name },
+        effects: ['inventory_preview_closed'],
+      };
+    }
+
+    const scene = this.sceneManager.currentScene;
+    if (scene?.activeSubscene) {
+      const subsceneId = scene.activeSubscene;
+      scene.activeSubscene = null;
+      return {
+        status: 'ok',
+        code: 'subscene_closed',
+        data: { subsceneId },
+        effects: ['subscene_closed'],
+      };
+    }
+
+    return {
+      status: 'escalate',
+      code: 'no_active_view_to_close',
+      recoverable: true,
+    };
+  }
+
   private getSurfaceDropMessage(surface: SceneObject, item: Entity): string {
     const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
     const surfaceTitle = this.getPlayerFacingObjectTitle(surface);
@@ -1488,6 +1519,17 @@ export class Game implements IGame {
         };
       }
 
+      const player = scene.player instanceof Entity ? scene.player : null;
+      if (!this.inventoryManager.hasMainInventory(player)) {
+        return {
+          status: 'failed',
+          code: 'player_inventory_missing',
+          message: this.text('parser.inventory_missing'),
+          data: { entityId: entity.name, ownerId: player?.name },
+          recoverable: true,
+        };
+      }
+
       scene.finishDropAnimation(entity);
       const containingSubsceneRootIds = this.getContainingSubsceneRootIds(entity);
 
@@ -1770,6 +1812,17 @@ export class Game implements IGame {
   }
 
   removeInventoryEntity(entity: Entity): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    const player = scene?.player instanceof Entity ? scene.player : null;
+    if (!this.inventoryManager.hasMainInventory(player)) {
+      return {
+        status: 'failed',
+        code: 'player_inventory_missing',
+        message: this.text('parser.inventory_missing'),
+        recoverable: true,
+      };
+    }
+
     const index = this.inventory.indexOf(entity);
     if (index === -1) {
       return {
@@ -1792,6 +1845,17 @@ export class Game implements IGame {
   }
 
   showInventory(): GameActionOutcome {
+    const scene = this.sceneManager.currentScene;
+    const player = scene?.player instanceof Entity ? scene.player : null;
+    if (!this.inventoryManager.hasMainInventory(player)) {
+      return {
+        status: 'failed',
+        code: 'player_inventory_missing',
+        message: this.text('parser.inventory_missing'),
+        recoverable: true,
+      };
+    }
+
     const inventoryTitles = this.inventory
       .map((entity: any) => this.getPlayerFacingObjectTitle(entity))
       .filter((title): title is string => !!title);
