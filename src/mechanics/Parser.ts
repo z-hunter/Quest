@@ -1522,17 +1522,17 @@ export class Parser {
   private resolveContainerAnchor(
     rawTarget: string,
     candidateScopes: Array<keyof ParserScope>,
-    clarificationKey: string
+    clarificationKey: string,
+    excludedTargets: Set<SceneObject> = new Set()
   ):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
     | { status: 'ambiguous'; message: string; options: string[] }
     | { status: 'escalate'; code: string } {
-    const resolved = this.resolveEntityTargetInCandidates(
-      rawTarget,
-      this.getScopeCandidates(candidateScopes),
-      clarificationKey
+    const candidates = this.getScopeCandidates(candidateScopes).filter(
+      (candidate) => !excludedTargets.has(candidate)
     );
+    const resolved = this.resolveEntityTargetInCandidates(rawTarget, candidates, clarificationKey);
     if (resolved.status !== 'not_found') {
       return resolved;
     }
@@ -1546,6 +1546,9 @@ export class Parser {
     const entity = scene?.getObjectByName(nodeResolved.node.id) || null;
     if (!entity) {
       return { status: 'escalate', code: 'spatial_node_target_missing_object' };
+    }
+    if (excludedTargets.has(entity)) {
+      return { status: 'not_found' };
     }
     return { status: 'found', entity };
   }
@@ -1873,21 +1876,26 @@ export class Parser {
         (sceneObject) => !this.game.inventory.includes(sceneObject as Entity)
       );
       if (sourceMatches.length > 1 && hasHeldMatch && hasSceneMatch) {
-        const optionTitles = this.getResolutionOptionTitles(sourceMatches);
-        if (!optionTitles) {
+        if (!this.areResolutionOptionsDistinct(sourceMatches)) {
+          const preferred = this.choosePreferredObject(sourceMatches);
+          if (preferred) sourceCandidates.splice(0, sourceCandidates.length, preferred);
+        } else {
+          const optionTitles = this.getResolutionOptionTitles(sourceMatches);
+          if (!optionTitles) {
+            return {
+              status: 'escalate',
+              code: 'ambiguous_targets_missing_titles',
+              recoverable: true,
+            };
+          }
           return {
-            status: 'escalate',
-            code: 'ambiguous_targets_missing_titles',
+            status: 'needs_clarification',
+            code: 'ambiguous_put_item',
+            message: this.game.text('parser.put_which_item', { options: optionTitles.join(', ') }),
+            data: { item: rawItem, options: optionTitles },
             recoverable: true,
           };
         }
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_put_item',
-          message: this.game.text('parser.put_which_item', { options: optionTitles.join(', ') }),
-          data: { item: rawItem, options: optionTitles },
-          recoverable: true,
-        };
       }
     }
 
@@ -1980,7 +1988,8 @@ export class Parser {
     const resolvedTarget = this.resolveContainerAnchor(
       rawTarget,
       targetScopes,
-      'parser.put_which_target'
+      'parser.put_which_target',
+      new Set([sourceEntity])
     );
 
     if (resolvedTarget.status === 'escalate') {

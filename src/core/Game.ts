@@ -1639,6 +1639,14 @@ export class Game implements IGame {
     target?: SceneObject | null,
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome {
+    if (target === entity) {
+      return {
+        status: 'failed',
+        code: 'put_target_is_source',
+        message: this.text('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
     const sourceInInventory = this.isEntityInInventory(entity);
     if (!sourceInInventory && !target) {
       return {

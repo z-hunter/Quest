@@ -1249,6 +1249,7 @@ export class InventoryManager {
     }
 
     for (const candidate of scene.getAllSceneObjects()) {
+      if (getPlayerFacingObjectTitle(candidate)) continue;
       const parentId =
         typeof (candidate as any).spatial?.parentNodeId === 'string'
           ? (candidate as any).spatial.parentNodeId.trim()
@@ -1365,6 +1366,7 @@ export class InventoryManager {
       .filter(
         (candidate) => ((candidate.surface as any).spatial?.relation || null) === normalizedRelation
       )
+      .filter((candidate) => !getPlayerFacingObjectTitle(candidate.surface))
       .filter(
         (candidate) =>
           !requireAccessible || this.isSurfaceAccessible(candidate.surface, getBlockedAccessOutcome)
@@ -1527,6 +1529,14 @@ export class InventoryManager {
     entity: Entity,
     relation: ContainerRelation = 'in'
   ): GameActionOutcome {
+    if (owner === entity) {
+      return {
+        status: 'failed',
+        code: 'inventory_owner_is_entity',
+        message: this.getText('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) {
       return {

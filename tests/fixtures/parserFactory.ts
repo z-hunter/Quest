@@ -252,6 +252,16 @@ export function createParserFixture(): ParserFixture {
       .filter((candidate): candidate is Entity => candidate instanceof Entity);
   };
 
+  (fixture.game as any).getAccessibleInventoryItems = () =>
+    fixture.scene
+      .getAllSceneObjects()
+      .filter(
+        (candidate): candidate is Entity =>
+          candidate instanceof Entity && candidate !== fixture.scene.player
+      )
+      .flatMap((owner) => fixture.game.getInventoryEntities(owner))
+      .filter((entity: Entity) => !entity.disabled);
+
   fixture.game.hasInventoryEntity = (
     owner: Entity,
     entity: Entity,
@@ -279,7 +289,24 @@ export function createParserFixture(): ParserFixture {
       owner.components[owner.components.length - 1]);
     inventoryComponent.items ||= [];
     if (inventoryComponent.items.includes(entity.name)) {
-      return { status: 'failed', code: 'inventory_item_already_present', recoverable: true };
+      return {
+        status: 'failed',
+        code: 'inventory_item_already_present',
+        message: fixture.game.text('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    if (
+      inventoryComponent.items.length >= (inventoryComponent.capacity || Number.MAX_SAFE_INTEGER)
+    ) {
+      return {
+        status: 'failed',
+        code: 'inventory_full',
+        message: fixture.game.text('parser.put_target_full_in', {
+          target: fixture.textAssets.getResolvedObjectField(owner, 'title') || owner.name,
+        }),
+        recoverable: true,
+      };
     }
     if (fixture.game.inventory.includes(entity)) {
       fixture.game.removeInventoryEntity(entity);
@@ -364,6 +391,14 @@ export function createParserFixture(): ParserFixture {
     target?: any,
     options?: { relation?: string | null }
   ) => {
+    if (target === entity) {
+      return {
+        status: 'failed',
+        code: 'put_target_is_source',
+        message: fixture.game.text('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
     const isHeld = fixture.game.inventory.includes(entity);
     if (!isHeld && !target) {
       return {
@@ -420,6 +455,7 @@ export function createParserFixture(): ParserFixture {
               candidate instanceof Entity &&
               (candidate as any).spatial?.parentNodeId === target.name &&
               (candidate as any).spatial?.relation === options.relation &&
+              !fixture.textAssets.getResolvedObjectField(candidate, 'title') &&
               candidate.components?.some((entry: any) => entry?.type === 'Inventory')
           ) ||
         null;
@@ -454,6 +490,7 @@ export function createParserFixture(): ParserFixture {
               (candidate) =>
                 (candidate as any).spatial?.parentNodeId === target.name &&
                 (candidate as any).spatial?.relation === options.relation &&
+                !fixture.textAssets.getResolvedObjectField(candidate as any, 'title') &&
                 candidate.components?.some((entry: any) => entry?.type === 'Surface')
             ) ||
           null

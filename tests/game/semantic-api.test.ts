@@ -464,7 +464,7 @@ describe('Game semantic API', () => {
     expect(key.interactionLocked).toBe(true);
   });
 
-  it('putEntity with IN can target a nested surface inside the object', () => {
+  it('putEntity with IN can target an untitled nested surface inside the object', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const key = fixture.addEntity('key', {
@@ -477,7 +477,7 @@ describe('Game semantic API', () => {
       description: 'A drawer.',
     });
     const tray = fixture.addEntity('tray', {
-      title: 'Tray',
+      title: null,
       description: 'A tray inside the drawer.',
       spatial: { parentNodeId: 'drawer', relation: 'in' },
       components: [{ type: 'Surface', relation: 'in', capacity: 2, groups: [], items: [] }],
@@ -493,7 +493,7 @@ describe('Game semantic API', () => {
     expect((tray.components[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
-    expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'in' });
+    expect((key as any).spatial).toEqual({ parentNodeId: 'tray', relation: 'on' });
   });
 
   it('putEntity can move a nearby scene item into a nearby reachable container without taking it first', () => {
@@ -520,6 +520,90 @@ describe('Game semantic API', () => {
     expect(outcome.code).toBe('item_put_into_inventory');
     expect(fixture.game.inventory).not.toContain(cassette);
     expect(fixture.game.getInventoryEntities(recorder)).toContain(cassette);
+  });
+
+  it('putEntity does not use titled contents as storage extensions for the target anchor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(musicCassette);
+    fixture.game.inventory.push(musicCassette);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', relation: 'in', capacity: 1, groups: [], items: [] }],
+    });
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      spatial: { parentNodeId: 'recorder', relation: 'in' },
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] },
+      ],
+    });
+    fixture.game.addInventoryEntity(recorder, compactCassette, 'in');
+
+    const outcome = fixture.game.putEntity(musicCassette, recorder, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('inventory_full');
+    expect(outcome.message).toBe('There is no more room in the Tape recorder.');
+    expect(fixture.game.getInventoryEntities(compactCassette)).not.toContain(musicCassette);
+    expect(fixture.game.getInventoryEntities(recorder)).toEqual([compactCassette]);
+  });
+
+  it('putEntity does not treat a titled child container as storage for a non-container anchor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+    });
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      spatial: { parentNodeId: 'recorder', relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+
+    const outcome = fixture.game.putEntity(key, recorder, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_target_not_found');
+    expect(outcome.message).toBe("You can't put that there.");
+    expect(fixture.game.getInventoryEntities(compactCassette)).not.toContain(key);
+  });
+
+  it('putEntity rejects putting an entity into itself', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A compact cassette.',
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+
+    const outcome = fixture.game.putEntity(cassette, cassette, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_target_is_source');
+    expect(outcome.message).toBe("You can't put that there.");
+    expect(fixture.game.getInventoryEntities(cassette)).not.toContain(cassette);
   });
 
   it('putEntity rejects moving a scene item when the source is too far away', () => {

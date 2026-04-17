@@ -136,7 +136,7 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(true);
   });
 
-  it('supports PUT IN object when the object contains a nested surface', async () => {
+  it('supports PUT IN object when the object contains an untitled nested surface', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const key = fixture.addEntity('key', {
@@ -151,7 +151,7 @@ describe('Parser + game integration smoke', () => {
       description: 'A drawer.',
     });
     fixture.addEntity('tray', {
-      title: 'Tray',
+      title: null,
       description: 'A tray.',
       spatial: { parentNodeId: 'drawer', relation: 'in' },
       components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
@@ -159,7 +159,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
+    expect(result.messages.at(-1)).toBe('You drop the key.');
   });
 
   it('supports PUT UNDER a titled object when it has a built-in UNDER surface', async () => {
@@ -207,7 +207,7 @@ describe('Parser + game integration smoke', () => {
       disabled: true,
     } as any);
     fixture.addEntity('tray', {
-      title: 'Tray',
+      title: null,
       description: 'A tray inside the drawer.',
       spatial: { parentNodeId: 'drawer', relation: 'in' },
       components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
@@ -215,7 +215,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the Tray.');
+    expect(result.messages.at(-1)).toBe('You drop the key.');
   });
 
   it('supports PUT from a nearby scene item into a nearby container without taking it first', async () => {
@@ -244,7 +244,117 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
-  it('asks for clarification when both a held item and a nearby scene item match PUT source', async () => {
+  it('does not resolve a PUT target to the source item itself', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'record'],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+    const recorder = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      synonyms: ['recorder'],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const first = await fixture.run('put compact cassette into recorder');
+    expect(first.messages.at(-1)).toBe('You put the cassette into the boombox.');
+
+    fixture.game.inventory.push(cassette);
+    const selfTarget = await fixture.run('put compact cassette into record');
+    expect(selfTarget.messages.at(-1)).toBe('You put the cassette into the boombox.');
+    expect(selfTarget.messages.at(-1)).not.toContain('into the Compact cassette');
+    expect(
+      (cassette.components?.[1] as { items?: string[] } | undefined)?.items || []
+    ).not.toContain(cassette.name);
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
+      cassette.name
+    );
+  });
+
+  it('does not put a clarified source into a titled item already inside the target container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      spatial: { parentNodeId: 'boombox', relation: 'in' },
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'compact'],
+    });
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    fixture.scene.removeEntity(musicCassette);
+    fixture.game.inventory.push(musicCassette);
+    const recorder = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: 1,
+          groups: [],
+          protected: false,
+          items: [compactCassette.name],
+        },
+      ],
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      synonyms: ['recorder'],
+    });
+
+    const ambiguous = await fixture.run('put cassette into recorder');
+    expect(ambiguous.messages.at(-1)).toContain('Which item do you want to put down');
+
+    const resolved = await fixture.run('Music');
+    expect(resolved.messages.at(-1)).toBe('There is no more room in the Boombox.');
+    expect(
+      (compactCassette.components?.[1] as { items?: string[] } | undefined)?.items || []
+    ).not.toContain(musicCassette.name);
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
+      compactCassette.name,
+    ]);
+  });
+
+  it('does not ask for PUT clarification when all source matches have the same title', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const heldCassette = fixture.addEntity('cassette_held', {
@@ -254,11 +364,13 @@ describe('Parser + game integration smoke', () => {
     });
     fixture.scene.removeEntity(heldCassette);
     fixture.game.inventory.push(heldCassette);
-    fixture.addEntity('cassette_scene', {
+    const nearbyCassette = fixture.addEntity('cassette_scene', {
       title: 'cassette',
       description: 'A nearby cassette.',
       components: [{ type: 'Item' }],
     });
+    nearbyCassette.x = 5;
+    nearbyCassette.y = 0;
     const recorder = fixture.addEntity('recorder', {
       title: 'Tape recorder',
       description: 'A tape recorder.',
@@ -269,8 +381,14 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put cassette in recorder');
 
-    expect(result.messages.at(-1)).toContain('Which item do you want to put down');
-    expect(result.pendingIntent).toBe('put');
+    expect(result.messages.at(-1)).toBe('You put the cassette_held into the recorder.');
+    expect(result.pendingIntent).toBeNull();
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
+      heldCassette.name
+    );
+    expect(
+      (recorder.components?.[0] as { items?: string[] } | undefined)?.items || []
+    ).not.toContain(nearbyCassette.name);
   });
 
   it('keeps the original PUT target after clarification and can use the nearby scene item', async () => {
