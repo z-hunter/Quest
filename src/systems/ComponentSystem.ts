@@ -341,9 +341,14 @@ export class ComponentSystem {
     if (!relation) {
       return components[0] || null;
     }
-    return (
-      components.find((component) => this.normalizeSurfaceRelation(component) === relation) || null
+    const exact = components.find(
+      (component) => this.normalizeSurfaceRelation(component) === relation
     );
+    if (exact) return exact;
+    if (entity?.type === 'Walkbox' && relation === 'on') {
+      return components[0] || null;
+    }
+    return null;
   }
 
   static getGroupIds(entity: SceneObject | null | undefined): string[] {

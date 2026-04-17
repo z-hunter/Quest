@@ -224,6 +224,9 @@ export function createTestTextAssets(): TestTextAssets {
       sceneAssets.set(String(id), data);
     },
     getResolvedObjectField(obj, field) {
+      if (obj?.type === 'Walkbox' && field === 'title') {
+        return 'floor';
+      }
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
       if (typeof value === 'string') return value;

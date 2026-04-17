@@ -649,6 +649,9 @@ export class TextAssetManager {
   }
 
   getResolvedObjectField(obj: SceneObject, field: string): string | null {
+    if (obj?.type === 'Walkbox' && field === 'title') {
+      return 'floor';
+    }
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
@@ -787,6 +790,18 @@ export class TextAssetManager {
 
   private async fetchUnknownJson(url: string): Promise<unknown | null> {
     try {
+      // In Tauri distributions, read from local filesystem instead of bundled assets
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      if (isTauriRuntime()) {
+        const path = `public${url.split('?')[0]}`;
+        try {
+          const content = await readProjectFileExisting(path);
+          return JSON.parse(content);
+        } catch {
+          return null;
+        }
+      }
+
       const response = await fetch(`${url}?t=${Date.now()}`);
       if (!response.ok) {
         if (response.status === 404) return null;
@@ -798,7 +813,7 @@ export class TextAssetManager {
       }
       return await response.json();
     } catch (error) {
-      console.error('[TextAssetManager] Failed to fetch text asset:', error);
+      console.error(`[TextAssetManager] error reading ${url}:`, error);
       return null;
     }
   }

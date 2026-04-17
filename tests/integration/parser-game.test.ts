@@ -792,6 +792,58 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).toContain(cassette);
   });
 
+  it('accepts floor and ground as the walkbox target for PUT', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('FloorZone');
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const floorResult = await fixture.run('put key on floor');
+    expect(floorResult.messages.at(-1)).toBe('You put the key on the floor.');
+
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const groundResult = await fixture.run('put key on ground');
+    expect(groundResult.messages.at(-1)).toBe('You put the key on the floor.');
+  });
+
+  it('prefers the walkbox floor for DROP when a separate surface is nearby', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const messages = await runSemanticParser(fixture, 'drop key');
+
+    expect(messages.at(-1)).toBe('You put the Key on the floor.');
+    expect(fixture.game.inventory).not.toContain(key);
+  });
+
   it('takes all matching plural source items without clarification', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

@@ -109,6 +109,22 @@ export async function readProjectFile(path: string, content: string): Promise<st
   return typeof result?.content === 'string' ? result.content : '';
 }
 
+export async function readProjectFileExisting(path: string): Promise<string> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<string>('read_project_file_existing', { path });
+  }
+  const result = await postJson<{ content?: string }>('/api/read-file', { path, content: '' }); // fallback
+  return typeof result?.content === 'string' ? result.content : '';
+}
+
+export async function readProjectFileBase64(path: string): Promise<string> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<string>('read_project_file_base64', { path });
+  }
+  // Not supported via POST in dev usually
+  return '';
+}
+
 export async function openProjectFile(path: string, content: string): Promise<void> {
   if (isTauriRuntime()) {
     await invokeTauri('open_project_file', { path, content });

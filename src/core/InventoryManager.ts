@@ -1426,10 +1426,26 @@ export class InventoryManager {
       );
     if (!surfaces.length) return null;
 
+    const player = scene.player;
+    const playerPoint = player ? { x: player.x || 0, y: player.y || 0 } : null;
+    const containingWalkboxes =
+      playerPoint && player
+        ? surfaces.filter(
+            (candidate) =>
+              candidate.surface.type === 'Walkbox' &&
+              Array.isArray((candidate.surface as any).poly) &&
+              Geometry.isPointInPolygon(playerPoint, (candidate.surface as any).poly)
+          )
+        : [];
+
     const subsceneFirst = scene.activeSubscene
       ? surfaces.filter((candidate) => scene.subsceneEntities.has(candidate.surface as any))
       : [];
-    const pool = subsceneFirst.length ? subsceneFirst : surfaces;
+    const pool = containingWalkboxes.length
+      ? containingWalkboxes
+      : subsceneFirst.length
+        ? subsceneFirst
+        : surfaces;
     return (
       pool.sort((left, right) => {
         const a = this.getSceneObjectSelectionPriority(left.surface as any);

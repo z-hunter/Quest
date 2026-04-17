@@ -1276,8 +1276,13 @@ export class Parser {
       sceneObject as any,
       'synonyms'
     );
+    const walkboxAliases = sceneObject.type === 'Walkbox' ? ['ground'] : [];
     return Array.from(
-      new Set([title, ...synonyms].filter((item): item is string => !!item && !!item.trim()))
+      new Set(
+        [title, ...synonyms, ...walkboxAliases].filter(
+          (item): item is string => !!item && !!item.trim()
+        )
+      )
     ).map((item) => item.toUpperCase());
   }
 

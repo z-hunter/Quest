@@ -1091,6 +1091,32 @@ describe('Game semantic API', () => {
     expect(fixture.game.inventory).toContain(cassette);
   });
 
+  it('dropEntity can use a walkbox floor surface even when its stored relation is IN', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const outcome = fixture.game.putEntity(key, floor, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('You put the Key on the floor.');
+    expect(fixture.game.inventory).not.toContain(key);
+  });
+
   it('surface placement keeps randomness by choosing among valid samples', () => {
     const runPlacement = (randomValue: number) => {
       const fixture = createGameSemanticFixture();

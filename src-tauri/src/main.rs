@@ -20,12 +20,24 @@ fn project_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     }
   }
 
-  let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  if let Some(parent) = manifest_dir.parent() {
-    return Ok(parent.to_path_buf());
+  #[cfg(debug_assertions)]
+  {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if let Some(parent) = manifest_dir.parent() {
+      return Ok(parent.to_path_buf());
+    }
   }
 
-  Err("Failed to determine project root from CARGO_MANIFEST_DIR.".into())
+  #[cfg(not(debug_assertions))]
+  {
+    if let Ok(exe_path) = std::env::current_exe() {
+      if let Some(parent) = exe_path.parent() {
+        return Ok(parent.to_path_buf());
+      }
+    }
+  }
+
+  Err("Failed to determine project root.".into())
 }
 
 fn sanitize_relative_path(raw: &str) -> Result<PathBuf, String> {
@@ -195,6 +207,20 @@ fn open_project_folder(app: tauri::AppHandle, path: String) -> Result<(), String
   open_with_system(&target)
 }
 
+#[tauri::command]
+fn read_project_file_existing(app: tauri::AppHandle, path: String) -> Result<String, String> {
+  let target = resolve_project_path(&app, &path)?;
+  fs::read_to_string(target).map_err(|error| format!("Failed to read file: {error}"))
+}
+
+#[tauri::command]
+fn read_project_file_base64(app: tauri::AppHandle, path: String) -> Result<String, String> {
+  let target = resolve_project_path(&app, &path)?;
+  let bytes = fs::read(target).map_err(|error| format!("Failed to read file bytes: {error}"))?;
+  use base64::{Engine as _, engine::general_purpose::STANDARD};
+  Ok(STANDARD.encode(&bytes))
+}
+
 fn main() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
@@ -202,6 +228,8 @@ fn main() {
       ensure_project_file,
       save_project_file,
       read_project_file,
+      read_project_file_existing,
+      read_project_file_base64,
       open_project_file,
       delete_project_file,
       open_project_folder

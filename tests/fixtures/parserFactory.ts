@@ -347,9 +347,9 @@ export function createParserFixture(): ParserFixture {
     entity: Entity,
     relation: 'in' | 'on' | 'under' | 'behind' = 'on'
   ) => {
-    const component = surface.components?.find(
-      (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === relation
-    ) as { items?: Array<{ id: string; x: number; y: number }> } | undefined;
+    const component = ComponentSystem.getSurfaceComponent(surface, relation) as
+      | { items?: Array<{ id: string; y: number; x: number }> }
+      | undefined;
     if (!component) {
       return { status: 'failed', code: 'surface_missing', recoverable: true };
     }
@@ -373,9 +373,9 @@ export function createParserFixture(): ParserFixture {
     entity: Entity,
     relation: 'in' | 'on' | 'under' | 'behind' = 'on'
   ) => {
-    const component = surface.components?.find(
-      (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === relation
-    ) as { items?: Array<{ id: string; x: number; y: number }> } | undefined;
+    const component = ComponentSystem.getSurfaceComponent(surface, relation) as
+      | { items?: Array<{ id: string; y: number; x: number }> }
+      | undefined;
     if (!component?.items?.some((item) => item.id === entity.name)) {
       return { status: 'failed', code: 'surface_item_not_found', recoverable: true };
     }
@@ -481,7 +481,10 @@ export function createParserFixture(): ParserFixture {
         ? (target?.components?.some(
             (entry: any) =>
               entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === options.relation
-          )
+          ) ||
+          (target?.type === 'Walkbox' &&
+            options.relation === 'on' &&
+            target?.components?.some((entry: any) => entry?.type === 'Surface'))
             ? target
             : null) ||
           fixture.scene
@@ -520,10 +523,13 @@ export function createParserFixture(): ParserFixture {
     const surfaceStoreRelation =
       target &&
       surface === target &&
-      target?.components?.some(
+      (target?.components?.some(
         (entry: any) =>
           entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === options?.relation
-      )
+      ) ||
+        (target?.type === 'Walkbox' &&
+          options?.relation === 'on' &&
+          target?.components?.some((entry: any) => entry?.type === 'Surface')))
         ? (options?.relation as 'in' | 'on' | 'under' | 'behind' | undefined) || 'on'
         : 'on';
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity, surfaceStoreRelation);
