@@ -44,6 +44,17 @@ export type ParserPendingState = {
   pendingEnvelopeJson?: string;
   pendingArg?: string;
   commandId?: string;
+  clarificationOptions?: ParserClarificationOption[];
+  clarificationAllowsMultiple?: boolean;
+};
+
+export type ParserClarificationScope = 'source' | 'target';
+
+export type ParserClarificationOption = {
+  index: number;
+  label: string;
+  entityId: string;
+  scope: ParserClarificationScope;
 };
 
 export type ParserRelationType = 'on' | 'under' | 'in' | 'behind' | 'near';
@@ -287,6 +298,7 @@ export type ParserPlanState = Record<string, unknown>;
 
 export type ParserResponse = {
   playerMessage?: string;
+  playerMessages?: string[];
   debugMessages?: string[];
   nextPendingState?: ParserPendingState | null;
 };

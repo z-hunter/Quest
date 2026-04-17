@@ -433,6 +433,43 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
+  it('expands multi-select PUT source clarification into sequential PUT actions', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const firstCassette = fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(firstCassette);
+    fixture.game.inventory.push(firstCassette);
+    const secondCassette = fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'Another held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(secondCassette);
+    fixture.game.inventory.push(secondCassette);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 1, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const ambiguous = await fixture.run('put cassette into recorder');
+    expect(ambiguous.messages.at(-1)).toContain('1: Cassette A, 2: Cassette B');
+    expect(ambiguous.pendingIntent).toBe('put');
+
+    const resolved = await fixture.run('1, 2');
+    expect(resolved.messages.at(-1)).toBe('There is no more room in the Tape recorder.');
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
+      firstCassette.name,
+    ]);
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(secondCassette.name);
+  });
+
   it('surfaces a distance-specific error for PUT when the target is too far away', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

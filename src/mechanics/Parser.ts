@@ -21,6 +21,8 @@ import {
 } from '../scene/SceneTextLayer';
 import type {
   ParserCascadeEnvelope,
+  ParserClarificationOption,
+  ParserClarificationScope,
   ParserCommandActionSpec,
   ParserCommandArgumentValidation,
   ParserCommandSpec,
@@ -44,6 +46,7 @@ export class Parser {
   worldModelBuilder: ParserWorldModelBuilder;
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
+  pendingClarificationRetryMessage: string | null;
 
   constructor(game: any) {
     this.game = game;
@@ -56,6 +59,7 @@ export class Parser {
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
     this.activeWorldModel = null;
     this.activeScope = null;
+    this.pendingClarificationRetryMessage = null;
   }
 
   async parse(input: string): Promise<void> {
@@ -64,6 +68,12 @@ export class Parser {
     try {
       this.nlpCascade.clearLastDebugInfo();
       const actionEnvelope = this.resolvePendingAction(trimmed);
+      if (this.pendingClarificationRetryMessage) {
+        const retryMessage = this.pendingClarificationRetryMessage;
+        this.pendingClarificationRetryMessage = null;
+        this.game.log(retryMessage);
+        return;
+      }
       const worldModel = this.worldModelBuilder.build(trimmed, this.pendingState);
       this.activeWorldModel = worldModel;
       const context = worldModel.context;
@@ -100,7 +110,11 @@ export class Parser {
       this.pendingState =
         response.nextPendingState === undefined ? this.pendingState : response.nextPendingState;
 
-      if (response.playerMessage) {
+      if (response.playerMessages?.length) {
+        for (const message of response.playerMessages) {
+          this.game.log(message);
+        }
+      } else if (response.playerMessage) {
         this.game.log(response.playerMessage);
       }
     } catch (error) {
@@ -128,66 +142,16 @@ export class Parser {
           return null;
         }
 
-        const patchedActions = envelope.output.actions.map((action) => {
-          if (action.type === 'lookTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'examineTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'takeTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'putTarget') {
-            return {
-              ...action,
-              item: input.trim(),
-            };
-          }
-          if (action.type === 'openTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'closeTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'goToTarget') {
-            return {
-              ...action,
-              target: input.trim(),
-            };
-          }
-          if (action.type === 'resolveArgumentEntity') {
-            if (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg) {
-              return {
-                ...action,
-                query: input.trim(),
-              };
-            }
-            return action;
-          }
-          if (action.type === 'lookRelationTarget') {
-            return { ...action, anchor: input.trim() || null };
-          }
-          if (action.type === 'examineRelationTarget') {
-            return { ...action, anchor: input.trim() || null };
-          }
-          return action;
-        });
+        const selectedOptions = this.resolvePendingClarificationReply(input.trim());
+        if (selectedOptions === null) {
+          this.pendingClarificationRetryMessage =
+            this.pendingState.question || this.game.text('parser.parse_unknown');
+          return null;
+        }
+        const selectedLabels = selectedOptions.map((option) => option.label);
+        const patchedActions = envelope.output.actions.flatMap((action) =>
+          this.patchPendingActionWithSelections(action, selectedLabels, input.trim())
+        );
 
         return {
           ...envelope,
@@ -240,6 +204,135 @@ export class Parser {
       },
     };
     return envelope;
+  }
+
+  private patchPendingActionWithSelections(
+    action: ParserToolAction,
+    selectedLabels: string[],
+    fallbackInput: string
+  ): ParserToolAction[] {
+    const labels = selectedLabels.length ? selectedLabels : [fallbackInput];
+    const patchSingle = (label: string): ParserToolAction => {
+      if (action.type === 'lookTarget') return { ...action, target: label };
+      if (action.type === 'examineTarget') return { ...action, target: label };
+      if (action.type === 'takeTarget') return { ...action, target: label };
+      if (action.type === 'putTarget') return { ...action, item: label };
+      if (action.type === 'openTarget') return { ...action, target: label };
+      if (action.type === 'closeTarget') return { ...action, target: label };
+      if (action.type === 'goToTarget') return { ...action, target: label };
+      if (action.type === 'resolveArgumentEntity') {
+        if (!this.pendingState?.pendingArg || action.arg === this.pendingState.pendingArg) {
+          return { ...action, query: label };
+        }
+        return action;
+      }
+      if (action.type === 'lookRelationTarget') return { ...action, anchor: label || null };
+      if (action.type === 'examineRelationTarget') return { ...action, anchor: label || null };
+      return action;
+    };
+
+    if (labels.length === 1) return [patchSingle(labels[0])];
+    if (
+      action.type === 'lookTarget' ||
+      action.type === 'examineTarget' ||
+      action.type === 'takeTarget' ||
+      action.type === 'putTarget'
+    ) {
+      return labels.map((label) => patchSingle(label));
+    }
+    return [patchSingle(labels[0])];
+  }
+
+  private resolvePendingClarificationReply(input: string): ParserClarificationOption[] | null {
+    const options = this.pendingState?.clarificationOptions || [];
+    if (!options.length) {
+      return [
+        {
+          index: 1,
+          label: input,
+          entityId: '',
+          scope: 'target',
+        },
+      ];
+    }
+
+    const normalizedInput = input.trim().toUpperCase();
+    if (!normalizedInput) return null;
+
+    const allowsMultiple = !!this.pendingState?.clarificationAllowsMultiple;
+    const allMatched = this.findClarificationOptionByText(input);
+    if (allMatched.length === 1) return allMatched;
+    if (allMatched.length > 1) return null;
+
+    let selections: ParserClarificationOption[] | null = null;
+    if (normalizedInput === 'ALL') {
+      selections = [...options];
+    } else if (normalizedInput === 'BOTH') {
+      if (options.length !== 2) return null;
+      selections = [...options];
+    } else {
+      const parts = input
+        .split(/\s*(?:,|\band\b)\s*/i)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (parts.length > 1) {
+        selections = [];
+        for (const part of parts) {
+          const matched = this.findClarificationOptionByText(part);
+          if (matched.length !== 1) return null;
+          selections.push(matched[0]);
+        }
+      }
+    }
+
+    if (!selections) {
+      const matched = this.findClarificationOptionByText(input);
+      if (matched.length !== 1) return null;
+      selections = matched;
+    }
+
+    const deduped: ParserClarificationOption[] = [];
+    const seen = new Set<string>();
+    for (const selection of selections) {
+      const key = selection.entityId || selection.label;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(selection);
+    }
+    if (deduped.length > 1 && !allowsMultiple) return null;
+    return deduped;
+  }
+
+  private findClarificationOptionByText(input: string): ParserClarificationOption[] {
+    const options = this.pendingState?.clarificationOptions || [];
+    const normalizedInput = input.trim().toUpperCase();
+    if (!normalizedInput) return [];
+
+    if (/^\d+$/.test(normalizedInput)) {
+      const index = Number(normalizedInput);
+      const option = options.find((candidate) => candidate.index === index);
+      return option ? [option] : [];
+    }
+
+    const exactMatches = options.filter((option) =>
+      this.getClarificationOptionLookupTokens(option).includes(normalizedInput)
+    );
+    if (exactMatches.length) return exactMatches;
+
+    return options.filter((option) =>
+      this.getClarificationOptionLookupTokens(option).some((token) =>
+        token.includes(normalizedInput)
+      )
+    );
+  }
+
+  private getClarificationOptionLookupTokens(option: ParserClarificationOption): string[] {
+    const scene = this.game.sceneManager.currentScene;
+    const object = option.entityId ? scene?.getObjectByName(option.entityId) : null;
+    const tokens = object ? this.getObjectLookupTokens(object) : [];
+    return Array.from(
+      new Set([option.label, ...tokens].filter((token): token is string => !!token?.trim()))
+    ).map((token) => token.trim().toUpperCase());
   }
 
   private runStage1(input: string): ParserCascadeEnvelope {
@@ -752,6 +845,39 @@ export class Parser {
     return Array.from(new Set(titles));
   }
 
+  private getResolutionClarificationOptions(
+    sceneObjects: SceneObject[],
+    scope: ParserClarificationScope = 'target'
+  ): ParserClarificationOption[] | null {
+    const options: ParserClarificationOption[] = [];
+    for (const sceneObject of sceneObjects) {
+      const label = this.getPlayerFacingObjectTitle(sceneObject);
+      if (!label) return null;
+      options.push({
+        index: options.length + 1,
+        label,
+        entityId: sceneObject.name,
+        scope,
+      });
+    }
+    return options;
+  }
+
+  private getNumberedClarificationDisplay(options: ParserClarificationOption[]): string {
+    return options.map((option) => `${option.index}: ${option.label}`).join(', ');
+  }
+
+  private withClarificationScope(
+    options: ParserClarificationOption[] | undefined,
+    scope: ParserClarificationScope
+  ): ParserClarificationOption[] | undefined {
+    return options?.map((option, index) => ({
+      ...option,
+      index: index + 1,
+      scope,
+    }));
+  }
+
   private areResolutionOptionsDistinct(sceneObjects: SceneObject[]): boolean {
     const titles = this.getResolutionOptionTitles(sceneObjects);
     if (!titles) return false;
@@ -864,7 +990,12 @@ export class Parser {
   ):
     | { status: 'found'; node: ParserSpatialNodeContext }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const normalizedTarget = String(rawTarget || '')
       .trim()
@@ -883,10 +1014,19 @@ export class Parser {
       if (options.some((option) => !option) || options.length !== exactMatches.length) {
         return { status: 'escalate', code: 'ambiguous_spatial_nodes_missing_titles' };
       }
+      const clarificationOptions = exactMatches.map((node, index) => ({
+        index: index + 1,
+        label: this.getSpatialNodeDisplayTitle(node),
+        entityId: node.id,
+        scope: 'target' as const,
+      }));
       return {
         status: 'ambiguous',
-        message: this.game.text(clarificationKey, { options: options.join(', ') }),
+        message: this.game.text(clarificationKey, {
+          options: this.getNumberedClarificationDisplay(clarificationOptions),
+        }),
         options,
+        clarificationOptions,
       };
     }
 
@@ -901,10 +1041,19 @@ export class Parser {
       if (options.some((option) => !option) || options.length !== partialMatches.length) {
         return { status: 'escalate', code: 'ambiguous_spatial_nodes_missing_titles' };
       }
+      const clarificationOptions = partialMatches.map((node, index) => ({
+        index: index + 1,
+        label: this.getSpatialNodeDisplayTitle(node),
+        entityId: node.id,
+        scope: 'target' as const,
+      }));
       return {
         status: 'ambiguous',
-        message: this.game.text(clarificationKey, { options: options.join(', ') }),
+        message: this.game.text(clarificationKey, {
+          options: this.getNumberedClarificationDisplay(clarificationOptions),
+        }),
         options,
+        clarificationOptions,
       };
     }
 
@@ -927,6 +1076,7 @@ export class Parser {
         status: 'ambiguous',
         message: broadResolved.message,
         options: broadResolved.options,
+        clarificationOptions: broadResolved.clarificationOptions,
       };
     }
     if (broadResolved.status === 'escalate') {
@@ -946,7 +1096,12 @@ export class Parser {
   ):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const normalizedTarget = String(rawTarget || '')
       .trim()
@@ -962,12 +1117,17 @@ export class Parser {
         const preferred = this.choosePreferredObject(exactMatches);
         if (preferred) return { status: 'found', entity: preferred };
       }
-      const optionTitles = this.getResolutionOptionTitles(exactMatches);
-      if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
+      const clarificationOptions = this.getResolutionClarificationOptions(exactMatches);
+      if (!clarificationOptions) {
+        return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
+      }
       return {
         status: 'ambiguous',
-        message: this.game.text(clarificationKey, { options: optionTitles.join(', ') }),
-        options: optionTitles,
+        message: this.game.text(clarificationKey, {
+          options: this.getNumberedClarificationDisplay(clarificationOptions),
+        }),
+        options: clarificationOptions.map((option) => option.label),
+        clarificationOptions,
       };
     }
 
@@ -981,12 +1141,17 @@ export class Parser {
         const preferred = this.choosePreferredObject(partialMatches);
         if (preferred) return { status: 'found', entity: preferred };
       }
-      const optionTitles = this.getResolutionOptionTitles(partialMatches);
-      if (!optionTitles) return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
+      const clarificationOptions = this.getResolutionClarificationOptions(partialMatches);
+      if (!clarificationOptions) {
+        return { status: 'escalate', code: 'ambiguous_targets_missing_titles' };
+      }
       return {
         status: 'ambiguous',
-        message: this.game.text(clarificationKey, { options: optionTitles.join(', ') }),
-        options: optionTitles,
+        message: this.game.text(clarificationKey, {
+          options: this.getNumberedClarificationDisplay(clarificationOptions),
+        }),
+        options: clarificationOptions.map((option) => option.label),
+        clarificationOptions,
       };
     }
 
@@ -1004,7 +1169,12 @@ export class Parser {
   ):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found'; message: string }
-    | { status: 'needs_clarification'; message: string; options: string[] }
+    | {
+        status: 'needs_clarification';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     if (!rawTarget) {
       return {
@@ -1031,17 +1201,26 @@ export class Parser {
     return {
       status: 'needs_clarification',
       message:
-        messages?.ambiguous?.replace('{options}', resolved.options.join(', ')) || resolved.message,
+        messages?.ambiguous?.replace(
+          '{options}',
+          resolved.clarificationOptions
+            ? this.getNumberedClarificationDisplay(resolved.clarificationOptions)
+            : resolved.options.join(', ')
+        ) || resolved.message,
       options: resolved.options,
+      clarificationOptions: resolved.clarificationOptions,
     };
   }
 
-  private resolveInactiveSubsceneSwitchTarget(
-    rawTarget: string
-  ):
+  private resolveInactiveSubsceneSwitchTarget(rawTarget: string):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return { status: 'not_found' };
@@ -1060,12 +1239,15 @@ export class Parser {
     return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
   }
 
-  private resolveHiddenSwitchGatedTarget(
-    rawTarget: string
-  ):
+  private resolveHiddenSwitchGatedTarget(rawTarget: string):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return { status: 'not_found' };
@@ -1088,7 +1270,12 @@ export class Parser {
   ):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return { status: 'not_found' };
@@ -1128,7 +1315,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_look_target',
           message: semanticHiddenResolved.message,
-          data: { target: rawTarget, options: semanticHiddenResolved.options },
+          data: {
+            target: rawTarget,
+            options: semanticHiddenResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              semanticHiddenResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1144,7 +1338,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_look_target',
           message: inactiveSwitchResolved.message,
-          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          data: {
+            target: rawTarget,
+            options: inactiveSwitchResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              inactiveSwitchResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1164,7 +1365,14 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_look_target',
         message: resolved.message,
-        data: { target: rawTarget, options: resolved.options },
+        data: {
+          target: rawTarget,
+          options: resolved.options,
+          clarificationOptions: this.withClarificationScope(
+            resolved.clarificationOptions,
+            'source'
+          ),
+        },
         recoverable: true,
       };
     }
@@ -1206,7 +1414,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_examine_target',
           message: broadResolved.message,
-          data: { target: rawTarget, options: broadResolved.options },
+          data: {
+            target: rawTarget,
+            options: broadResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              broadResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1222,7 +1437,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_examine_target',
           message: inactiveSwitchResolved.message,
-          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          data: {
+            target: rawTarget,
+            options: inactiveSwitchResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              inactiveSwitchResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1241,7 +1463,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_examine_target',
           message: semanticHiddenResolved.message,
-          data: { target: rawTarget, options: semanticHiddenResolved.options },
+          data: {
+            target: rawTarget,
+            options: semanticHiddenResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              semanticHiddenResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1257,7 +1486,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_examine_target',
           message: hiddenGatedResolved.message,
-          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          data: {
+            target: rawTarget,
+            options: hiddenGatedResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              hiddenGatedResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1277,7 +1513,14 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_examine_target',
         message: resolved.message,
-        data: { target: rawTarget, options: resolved.options },
+        data: {
+          target: rawTarget,
+          options: resolved.options,
+          clarificationOptions: this.withClarificationScope(
+            resolved.clarificationOptions,
+            'source'
+          ),
+        },
         recoverable: true,
       };
     }
@@ -1324,7 +1567,12 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_relation_anchor',
         message: resolved.message,
-        data: { relation, anchor, options: resolved.options },
+        data: {
+          relation,
+          anchor,
+          options: resolved.options,
+          clarificationOptions: resolved.clarificationOptions,
+        },
         recoverable: true,
       };
     }
@@ -1527,7 +1775,12 @@ export class Parser {
   ):
     | { status: 'found'; entity: SceneObject }
     | { status: 'not_found' }
-    | { status: 'ambiguous'; message: string; options: string[] }
+    | {
+        status: 'ambiguous';
+        message: string;
+        options: string[];
+        clarificationOptions?: ParserClarificationOption[];
+      }
     | { status: 'escalate'; code: string } {
     const candidates = this.getScopeCandidates(candidateScopes).filter(
       (candidate) => !excludedTargets.has(candidate)
@@ -1679,7 +1932,11 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_take_target_container',
           message: resolvedAnchor.message,
-          data: { target: rawAnchor, options: resolvedAnchor.options },
+          data: {
+            target: rawAnchor,
+            options: resolvedAnchor.options,
+            clarificationOptions: resolvedAnchor.clarificationOptions,
+          },
           recoverable: true,
         };
       }
@@ -1720,7 +1977,16 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_take_target',
           message: scopedResolved.message,
-          data: { target: rawTarget, anchor: rawAnchor, relation, options: scopedResolved.options },
+          data: {
+            target: rawTarget,
+            anchor: rawAnchor,
+            relation,
+            options: scopedResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              scopedResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1769,7 +2035,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_take_target',
           message: broadResolved.message,
-          data: { target: rawTarget, options: broadResolved.options },
+          data: {
+            target: rawTarget,
+            options: broadResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              broadResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1803,7 +2076,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_take_target',
           message: inactiveSwitchResolved.message,
-          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          data: {
+            target: rawTarget,
+            options: inactiveSwitchResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              inactiveSwitchResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1819,7 +2099,14 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_take_target',
           message: hiddenGatedResolved.message,
-          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          data: {
+            target: rawTarget,
+            options: hiddenGatedResolved.options,
+            clarificationOptions: this.withClarificationScope(
+              hiddenGatedResolved.clarificationOptions,
+              'source'
+            ),
+          },
           recoverable: true,
         };
       }
@@ -1839,7 +2126,14 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_take_target',
         message: resolved.message,
-        data: { target: rawTarget, options: resolved.options },
+        data: {
+          target: rawTarget,
+          options: resolved.options,
+          clarificationOptions: this.withClarificationScope(
+            resolved.clarificationOptions,
+            'source'
+          ),
+        },
         recoverable: true,
       };
     }
@@ -1887,7 +2181,11 @@ export class Parser {
           status: 'needs_clarification',
           code: 'ambiguous_put_target',
           message: preResolvedTarget.message,
-          data: { target: rawTarget, options: preResolvedTarget.options },
+          data: {
+            target: rawTarget,
+            options: preResolvedTarget.options,
+            clarificationOptions: preResolvedTarget.clarificationOptions,
+          },
           recoverable: true,
         };
       }
@@ -1932,8 +2230,11 @@ export class Parser {
           const preferred = this.choosePreferredObject(sourceMatches);
           if (preferred) sourceCandidates.splice(0, sourceCandidates.length, preferred);
         } else {
-          const optionTitles = this.getResolutionOptionTitles(sourceMatches);
-          if (!optionTitles) {
+          const clarificationOptions = this.getResolutionClarificationOptions(
+            sourceMatches,
+            'source'
+          );
+          if (!clarificationOptions) {
             return {
               status: 'escalate',
               code: 'ambiguous_targets_missing_titles',
@@ -1943,8 +2244,14 @@ export class Parser {
           return {
             status: 'needs_clarification',
             code: 'ambiguous_put_item',
-            message: this.game.text('parser.put_which_item', { options: optionTitles.join(', ') }),
-            data: { item: rawItem, options: optionTitles },
+            message: this.game.text('parser.put_which_item', {
+              options: this.getNumberedClarificationDisplay(clarificationOptions),
+            }),
+            data: {
+              item: rawItem,
+              options: clarificationOptions.map((option) => option.label),
+              clarificationOptions,
+            },
             recoverable: true,
           };
         }
@@ -1992,6 +2299,10 @@ export class Parser {
         data: {
           item: rawItem,
           options: ambiguousResult?.options || [],
+          clarificationOptions: this.withClarificationScope(
+            ambiguousResult?.clarificationOptions,
+            'source'
+          ),
         },
         recoverable: true,
       };
@@ -2052,7 +2363,11 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_put_target',
         message: resolvedTarget.message,
-        data: { target: rawTarget, options: resolvedTarget.options },
+        data: {
+          target: rawTarget,
+          options: resolvedTarget.options,
+          clarificationOptions: resolvedTarget.clarificationOptions,
+        },
         recoverable: true,
       };
     }
@@ -2139,7 +2454,11 @@ export class Parser {
         status: 'needs_clarification',
         code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
         message: resolved.message,
-        data: { target: rawTarget, options: resolved.options },
+        data: {
+          target: rawTarget,
+          options: resolved.options,
+          clarificationOptions: resolved.clarificationOptions,
+        },
         recoverable: true,
       };
     }
@@ -2150,7 +2469,11 @@ export class Parser {
           status: 'needs_clarification',
           code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
           message: broadResolved.message,
-          data: { target: rawTarget, options: broadResolved.options },
+          data: {
+            target: rawTarget,
+            options: broadResolved.options,
+            clarificationOptions: broadResolved.clarificationOptions,
+          },
           recoverable: true,
         };
       }
@@ -2166,7 +2489,11 @@ export class Parser {
           status: 'needs_clarification',
           code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
           message: inactiveSwitchResolved.message,
-          data: { target: rawTarget, options: inactiveSwitchResolved.options },
+          data: {
+            target: rawTarget,
+            options: inactiveSwitchResolved.options,
+            clarificationOptions: inactiveSwitchResolved.clarificationOptions,
+          },
           recoverable: true,
         };
       }
@@ -2182,7 +2509,11 @@ export class Parser {
           status: 'needs_clarification',
           code: intent === 'open' ? 'ambiguous_open_target' : 'ambiguous_close_target',
           message: hiddenGatedResolved.message,
-          data: { target: rawTarget, options: hiddenGatedResolved.options },
+          data: {
+            target: rawTarget,
+            options: hiddenGatedResolved.options,
+            clarificationOptions: hiddenGatedResolved.clarificationOptions,
+          },
           recoverable: true,
         };
       }
@@ -2244,7 +2575,11 @@ export class Parser {
         status: 'needs_clarification',
         code: 'ambiguous_destination',
         message: resolved.message,
-        data: { target: rawTarget, options: resolved.options },
+        data: {
+          target: rawTarget,
+          options: resolved.options,
+          clarificationOptions: resolved.clarificationOptions,
+        },
         recoverable: true,
       };
     }
@@ -2304,6 +2639,7 @@ export class Parser {
           pendingArg: action.arg,
           commandId: action.commandId,
           options: resolution.options,
+          clarificationOptions: resolution.clarificationOptions,
         },
         recoverable: true,
       };
@@ -2507,6 +2843,38 @@ export class Parser {
     }
   }
 
+  private parseClarificationOptionsFromData(
+    data: Record<string, unknown>
+  ): ParserClarificationOption[] | undefined {
+    const rawOptions = data.clarificationOptions;
+    if (!Array.isArray(rawOptions)) return undefined;
+    const options = rawOptions
+      .map((entry, index) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const option = entry as Partial<ParserClarificationOption>;
+        if (typeof option.label !== 'string' || !option.label.trim()) return null;
+        if (typeof option.entityId !== 'string') return null;
+        const scope = option.scope === 'source' ? 'source' : 'target';
+        return {
+          index: typeof option.index === 'number' ? option.index : index + 1,
+          label: option.label,
+          entityId: option.entityId,
+          scope,
+        } satisfies ParserClarificationOption;
+      })
+      .filter((option): option is ParserClarificationOption => !!option);
+    return options.length ? options : undefined;
+  }
+
+  private isMultiSourceClarification(code: string): boolean {
+    return (
+      code === 'ambiguous_look_target' ||
+      code === 'ambiguous_examine_target' ||
+      code === 'ambiguous_take_target' ||
+      code === 'ambiguous_put_item'
+    );
+  }
+
   private buildResponse(
     resultJson: string,
     envelopeJson: string,
@@ -2552,6 +2920,8 @@ export class Parser {
         typeof clarificationData.commandId === 'string' ? clarificationData.commandId : undefined;
       const relation =
         typeof clarificationData.relation === 'string' ? clarificationData.relation : undefined;
+      const clarificationOptions = this.parseClarificationOptionsFromData(clarificationData);
+      const clarificationAllowsMultiple = this.isMultiSourceClarification(clarification.code);
       const nextPendingState =
         pendingArg && commandId
           ? {
@@ -2561,6 +2931,8 @@ export class Parser {
               pendingEnvelopeJson: envelopeJson,
               pendingArg,
               commandId,
+              clarificationOptions,
+              clarificationAllowsMultiple,
             }
           : relation
             ? {
@@ -2568,12 +2940,16 @@ export class Parser {
                 question: clarification.message || this.game.text('parser.parse_unknown'),
                 originalInput: this.extractRawInput(envelopeJson),
                 pendingEnvelopeJson: envelopeJson,
+                clarificationOptions,
+                clarificationAllowsMultiple,
               }
             : {
                 intent: this.extractPendingIntent(envelopeJson),
                 question: clarification.message || this.game.text('parser.parse_unknown'),
                 originalInput: this.extractRawInput(envelopeJson),
                 pendingEnvelopeJson: envelopeJson,
+                clarificationOptions,
+                clarificationAllowsMultiple,
               };
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
@@ -2597,20 +2973,24 @@ export class Parser {
       };
     }
 
+    const outcomeMessages = result.outcomes
+      .map((outcome) => outcome.message)
+      .filter((message): message is string => !!message);
     const firstFailure = result.outcomes.find((outcome) => outcome.status === 'failed');
     if (firstFailure) {
+      const failureMessage = firstFailure.message || this.game.text('parser.parse_unknown');
+      const playerMessages = outcomeMessages.length ? outcomeMessages : [failureMessage];
       return {
-        playerMessage: firstFailure.message || this.game.text('parser.parse_unknown'),
+        playerMessage: playerMessages.length === 1 ? playerMessages[0] : undefined,
+        playerMessages: playerMessages.length > 1 ? playerMessages : undefined,
         nextPendingState: null,
         debugMessages: peekMessages,
       };
     }
 
-    const finalOutcomeWithMessage = [...result.outcomes]
-      .reverse()
-      .find((outcome) => !!outcome.message);
     return {
-      playerMessage: finalOutcomeWithMessage?.message,
+      playerMessage: outcomeMessages.length === 1 ? outcomeMessages[0] : undefined,
+      playerMessages: outcomeMessages.length > 1 ? outcomeMessages : undefined,
       nextPendingState: null,
       debugMessages: peekMessages,
     };
