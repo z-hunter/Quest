@@ -262,7 +262,8 @@ export class InventoryManager {
     owner: Entity,
     relation: ContainerRelation
   ): Entity[] {
-    const component = this.ensureInventoryComponent(owner, relation);
+    const component = ComponentSystem.getInventoryComponent(owner, relation);
+    if (!component) return [];
     const scene = this.sceneManager.currentScene;
     return (component.items || [])
       .map((id) => {
@@ -386,7 +387,9 @@ export class InventoryManager {
       return;
     }
     this.inventoryEntityStore.set(this.getInventoryStoreKey(owner, relation), entities);
-    this.ensureInventoryComponent(owner, relation).items = entities.map((entity) => entity.name);
+    const component = ComponentSystem.getInventoryComponent(owner, relation);
+    if (!component) return;
+    component.items = entities.map((entity) => entity.name);
     for (const entity of entities) {
       this.syncInventoryEntitySceneState(owner, entity, relation);
     }
@@ -402,9 +405,12 @@ export class InventoryManager {
     }
 
     const storeKey = this.getInventoryStoreKey(owner, relation);
+    const component = ComponentSystem.getInventoryComponent(owner, relation);
+    if (!component) return [];
+
     const existing = this.inventoryEntityStore.get(storeKey);
     if (existing) {
-      this.ensureInventoryComponent(owner, relation).items = existing.map((entity) => entity.name);
+      component.items = existing.map((entity) => entity.name);
       for (const entity of existing) {
         this.syncInventoryEntitySceneState(owner, entity, relation);
       }
@@ -412,7 +418,6 @@ export class InventoryManager {
     }
 
     const resolved = this.resolveInventoryEntitiesFromComponent(owner, relation);
-    const component = this.ensureInventoryComponent(owner, relation);
 
     this.inventoryEntityStore.set(storeKey, resolved);
     component.items = resolved.map((entity) => entity.name);
@@ -1103,9 +1108,10 @@ export class InventoryManager {
   placeEntityOnSurface(
     surface: SceneObject,
     entity: Entity,
-    options: SurfacePlacementOptions = {}
+    options: SurfacePlacementOptions = {},
+    surfaceComponent?: SurfaceComponent
   ): SurfaceItemPlacement | null {
-    const component = this.ensureSurfaceComponent(surface);
+    const component = surfaceComponent || this.ensureSurfaceComponent(surface);
     const bounds = this.getSurfaceBounds(surface);
     if (!bounds) return null;
 
@@ -1522,41 +1528,46 @@ export class InventoryManager {
       if (!current) continue;
 
       if (current instanceof Entity) {
-        const inventoryComponent = ComponentSystem.getInventoryComponent(current, relation);
-        if (
-          inventoryComponent &&
-          (!requireAccessible ||
-            this.isInventoryAccessibleFromAnchor(
-              current,
-              anchor,
-              getBlockedAccessOutcome,
-              getPlayerFacingObjectTitle,
-              relation
-            ))
-        ) {
+        for (const inventoryComponent of ComponentSystem.getInventoryComponents(current)) {
+          const storageRelation = ComponentSystem.normalizeInventoryRelation(inventoryComponent);
+          if (
+            inventoryComponent.protected ||
+            (requireAccessible &&
+              !this.isInventoryAccessibleFromAnchor(
+                current,
+                anchor,
+                getBlockedAccessOutcome,
+                getPlayerFacingObjectTitle,
+                storageRelation
+              ))
+          ) {
+            continue;
+          }
           inventoryOwners.push({
             owner: current,
             component: inventoryComponent,
-            relation,
+            relation: storageRelation,
           });
         }
       }
 
-      const surfaceComponent = ComponentSystem.getSurfaceComponent(current, relation);
-      if (
-        surfaceComponent &&
-        (!requireAccessible ||
-          this.isSurfaceAccessibleFromAnchor(
+      for (const surfaceComponent of ComponentSystem.getSurfaceComponents(current)) {
+        const storageRelation = ComponentSystem.normalizeSurfaceRelation(surfaceComponent);
+        if (
+          requireAccessible &&
+          !this.isSurfaceAccessibleFromAnchor(
             current,
             anchor,
             getBlockedAccessOutcome,
             getPlayerFacingObjectTitle
-          ))
-      ) {
+          )
+        ) {
+          continue;
+        }
         surfaces.push({
           surface: current,
           component: surfaceComponent,
-          relation,
+          relation: storageRelation,
         });
       }
 
@@ -1702,7 +1713,21 @@ export class InventoryManager {
     ) => import('../systems/ComponentSystem').SwitchComponent | null,
     options: SurfacePlacementOptions = {}
   ): GameActionOutcome {
-    const component = this.ensureSurfaceComponent(surface, relation);
+    const component = ComponentSystem.getSurfaceComponent(surface, relation);
+    if (!component) {
+      return {
+        status: 'failed',
+        code: 'surface_missing',
+        message: this.getText('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    if (!Array.isArray(component.groups)) component.groups = [];
+    if (!Array.isArray(component.items)) component.items = [];
+    if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
+      component.capacity = Number.MAX_SAFE_INTEGER;
+    }
+    component.relation = ComponentSystem.normalizeSurfaceRelation(component);
     if ((component.items || []).some((item) => item.id === entity.name)) {
       return {
         status: 'failed',
@@ -1731,7 +1756,7 @@ export class InventoryManager {
     const placementSubsceneItemScale = this.getSurfacePlacementSubsceneItemScale(surface);
     entity.subsceneItemScale = placementSubsceneItemScale;
     entity.update(0);
-    const placement = this.placeEntityOnSurface(surface, entity, options);
+    const placement = this.placeEntityOnSurface(surface, entity, options, component);
     if (!placement) {
       entity.subsceneItemScale = previousSubsceneItemScale;
       entity.update(0);
@@ -1807,7 +1832,14 @@ export class InventoryManager {
     entity: Entity,
     relation: ContainerRelation = 'on'
   ): GameActionOutcome {
-    const component = this.ensureSurfaceComponent(surface, relation);
+    const component = ComponentSystem.getSurfaceComponent(surface, relation);
+    if (!component) {
+      return {
+        status: 'failed',
+        code: 'surface_missing',
+        recoverable: true,
+      };
+    }
     if (!(component.items || []).some((item) => item.id === entity.name)) {
       return {
         status: 'failed',

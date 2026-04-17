@@ -2903,18 +2903,18 @@ export class Parser {
     relation: ParserRelationType | null
   ): boolean {
     if (!(source instanceof Entity)) return false;
+
+    const isSurfaceRelation = ['in', 'on', 'under', 'behind'].includes(relation as string);
+
     if (
       target instanceof Entity &&
-      (relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind') &&
-      this.game.hasInventoryEntity(target, source, relation)
+      isSurfaceRelation &&
+      this.game.hasInventoryEntity(target, source, relation as any)
     ) {
       return true;
     }
 
-    const normalizedRelation =
-      relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
-        ? relation
-        : 'on';
+    const normalizedRelation = isSurfaceRelation ? (relation as any) : 'on';
     const surfaceComponent = ComponentSystem.getSurfaceComponent(target, normalizedRelation);
     return !!surfaceComponent?.items?.some((item: any) => item?.id === source.name);
   }

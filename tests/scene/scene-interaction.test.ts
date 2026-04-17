@@ -95,4 +95,16 @@ describe('Scene interaction text layer', () => {
     handleSceneClick(fixture.scene, 215, 155);
     expect(fixture.messages).toHaveLength(0);
   });
+
+  it('moves the player when clicking a walkbox instead of showing its floor title', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 100, 100);
+    fixture.addWalkbox('wb_floor');
+
+    handleSceneClick(fixture.scene, 320, 180);
+
+    expect(fixture.messages).toHaveLength(0);
+    expect(fixture.scene.player?.visualTarget).not.toBeNull();
+    expect(fixture.scene.player?.target).toBeNull();
+  });
 });

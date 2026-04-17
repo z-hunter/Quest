@@ -543,3 +543,53 @@ During the session the following checks were run successfully:
 - `Sessions.md` was updated in the repository during this wrap-up, so the repo has an uncommitted documentation change after this entry.
 - The local RAG memory mirror can lag behind live `agent_memory`; future wrap-up runs should record durable facts first, then refresh/export memory, then build `AgentMemory.md`.
 - NotebookLM source replacement may still be blocked by auth instability on this Windows machine.
+
+## Session Entry - 2026-04-17 22:01 +02:00
+
+### Session Goals
+
+- Finish the wrap-up for the TAKE / DROP / walkbox regression line.
+- Preserve the most durable implementation details in repo docs, agent memory, and NotebookLM sources.
+- Verify the current branch state and keep the workspace ready for the next session.
+
+### What Was Implemented
+
+- Appended the latest session notes to `Sessions.md`.
+- Confirmed NotebookLM CLI access after re-authentication with `python -m notebooklm list --json` and a smoke-test `ask`.
+- Verified the repo commit history and captured the session commit hash `33f665d`.
+
+### Important Decisions
+
+- Kept the durable note that `TAKE` must not treat inventory-held items as source targets.
+- Preserved the rule that clarification should use only currently takeable candidates, while diagnostics may still surface the real failure for visible but unreachable objects.
+- Kept the contract that implicit `DROP` onto `Walkbox` should place the item near the player, while general surface placement stays random.
+
+### Parser / Mechanics / Scene Notes
+
+- The parser TAKE path now separates ambiguity filtering from failure diagnostics.
+- Walkbox drop placement continues to use the player-point preference only for implicit floor placement.
+- The session also included scene/text adjustments already captured in the commit:
+  - `public/scenes/test_room.json`
+  - `public/text/objects/test_2.json`
+  - `public/text/objects/wall.json`
+
+### Tests and Verification
+
+- `npm test -- tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts tests/parser/world-model-context.test.ts`
+- `npm run typecheck`
+- NotebookLM smoke test:
+  - `python -m notebooklm list --json`
+  - `python -m notebooklm ask "ping: reply with one short sentence confirming access" --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json`
+
+### Commit
+
+- `33f665d` - `Fix TAKE resolution and walkbox drop placement`
+
+### Remaining Work / Caveats
+
+- NotebookLM source replacement is complete for `Sessions.md`, `GDD.md`, and `AgentMemory.md`; future wrap-ups should still re-check auth before trying the same workflow again.
+- The worktree still contains user-owned local modifications outside this wrap-up entry:
+  - `src/core/Game.ts`
+  - `src/mechanics/Parser.ts`
+  - `tests/game/semantic-api.test.ts`
+- If NotebookLM source replacement fails again, the next session should re-run `list` and the smoke-test `ask` before retrying upload.

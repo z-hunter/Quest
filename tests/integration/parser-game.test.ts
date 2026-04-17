@@ -795,6 +795,34 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
   });
 
+  it('puts an item under a target using its built-in UNDER surface without creating inventory', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+
+    const messages = await runSemanticParser(fixture, 'put cassette under chair');
+
+    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'compact_cassette' })])
+    );
+    expect(
+      chair.components?.some((component: any) => component?.type === 'Inventory') ?? false
+    ).toBe(false);
+    expect((cassette as any).spatial).toEqual({ parentNodeId: 'chair', relation: 'under' });
+  });
+
   it('surfaces a distance-specific error for DROP when the nearest drop surface is too far away', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

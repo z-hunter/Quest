@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Game } from '../../src/core/Game';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
@@ -217,6 +218,27 @@ describe('Game semantic API', () => {
     expect(player.components).toEqual([]);
     expect(fixture.game.inventory).not.toContain(idCard);
     expect(idCard.spatial).toEqual({});
+  });
+
+  it('preflights missing player inventory for takeable items', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.components = [];
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+
+    const outcome = Game.prototype.canTakeEntity.call(fixture.game, idCard);
+
+    expect(outcome).toEqual({
+      status: 'failed',
+      code: 'player_inventory_missing',
+      message: 'You have nowhere to carry anything.',
+      data: { entityId: 'miles_id', ownerId: 'Hero' },
+      recoverable: false,
+    });
   });
 
   it('requires an explicit player inventory for inventory commands', () => {
@@ -800,10 +822,51 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_on_surface');
+    expect(outcome.message).toBe('You put the Key under the Desk.');
     expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
     expect((key as any).spatial).toEqual({ parentNodeId: 'desk', relation: 'under' });
+    expect(
+      desk.components?.some((component: any) => component?.type === 'Inventory') ?? false
+    ).toBe(false);
+  });
+
+  it('putEntity uses the first spatial relation for untitled nested surface extensions', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+    });
+    const underChairSurface = fixture.addEntity('chair_under_surface', {
+      title: null,
+      spatial: { parentNodeId: 'chair', relation: 'under' },
+      components: [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, chair, { relation: 'under' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_on_surface');
+    expect(outcome.message).toBe('You put the Key under the Chair.');
+    expect((underChairSurface.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'key' })])
+    );
+    expect((key as any).spatial).toEqual({
+      parentNodeId: 'chair_under_surface',
+      relation: 'on',
+    });
+    expect(
+      chair.components?.some((component: any) => component?.type === 'Inventory') ?? false
+    ).toBe(false);
   });
 
   it('putEntity can use a built-in titled inventory with relation BEHIND', () => {
@@ -1155,6 +1218,76 @@ describe('Game semantic API', () => {
     const lastPlacement = runPlacement(0.999);
 
     expect(firstPlacement).not.toEqual(lastPlacement);
+  });
+
+  it('addEntityToSurface fails without creating a missing surface component', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.addEntityToSurface(chair, idCard, 'under');
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('surface_missing');
+    expect(chair.components?.some((component: any) => component?.type === 'Surface') ?? false).toBe(
+      false
+    );
+    expect(fixture.game.inventory).toContain(idCard);
+  });
+
+  it('addInventoryEntity fails without creating a missing inventory component', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.addInventoryEntity(chair, idCard, 'in');
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('inventory_missing');
+    expect(
+      chair.components?.some((component: any) => component?.type === 'Inventory') ?? false
+    ).toBe(false);
+    expect(fixture.game.inventory).toContain(idCard);
+  });
+
+  it('inventory read helpers do not create missing inventory components', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+    });
+
+    expect(fixture.game.hasInventoryEntity(chair, idCard, 'under')).toBe(false);
+    expect(fixture.game.getInventoryEntities(chair, 'under')).toEqual([]);
+    expect(
+      chair.components?.some((component: any) => component?.type === 'Inventory') ?? false
+    ).toBe(false);
   });
 
   it('takeEntity can pull an accessible item out of another entity inventory', () => {

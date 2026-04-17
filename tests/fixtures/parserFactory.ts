@@ -276,17 +276,15 @@ export function createParserFixture(): ParserFixture {
     const component = (owner.components ||= []).find(
       (entry: any) => entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === relation
     ) as { type: 'Inventory'; items?: string[]; capacity?: number; groups?: string[] } | undefined;
-    const inventoryComponent =
-      component ||
-      ((owner.components ||= []),
-      owner.components.push({
-        type: 'Inventory',
-        relation,
-        items: [],
-        capacity: Number.MAX_SAFE_INTEGER,
-        groups: [],
-      }),
-      owner.components[owner.components.length - 1]);
+    if (!component) {
+      return {
+        status: 'failed',
+        code: 'inventory_missing',
+        message: fixture.game.text('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    const inventoryComponent = component;
     inventoryComponent.items ||= [];
     if (inventoryComponent.items.includes(entity.name)) {
       return {
@@ -535,11 +533,17 @@ export function createParserFixture(): ParserFixture {
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity, surfaceStoreRelation);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
     const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');
-    const message = surfaceTitle
-      ? fixture.game.text('parser.put_success_surface', { item: entity.name, target: surfaceTitle })
-      : surface.type === 'Walkbox'
+    const message =
+      !target && surface.type === 'Walkbox'
         ? `You drop the ${entity.name} on the floor.`
-        : `You drop the ${entity.name}.`;
+        : surfaceTitle
+          ? fixture.game.text('parser.put_success_surface', {
+              item: entity.name,
+              target: surfaceTitle,
+            })
+          : surface.type === 'Walkbox'
+            ? `You drop the ${entity.name} on the floor.`
+            : `You drop the ${entity.name}.`;
     return okOutcome('item_put_on_surface', message);
   };
 

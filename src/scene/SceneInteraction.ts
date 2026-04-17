@@ -224,6 +224,23 @@ function shouldSuppressTitleByHiddenState(scene: Scene, obj: SceneObject): boole
   return accessState.hiddenReason === 'examinable';
 }
 
+function movePlayerToClick(scene: Scene, x: number, y: number): void {
+  if (!scene.player) return;
+
+  const visualTarget = toWorld(scene, x, y);
+  if (typeof (scene.player as any).moveToVisual === 'function') {
+    (scene.player as any).moveToVisual(visualTarget.x, visualTarget.y);
+  } else if (typeof scene.player.walkTo === 'function') {
+    const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+    const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+    scene.player.walkTo(playerTarget.x, playerTarget.y);
+  } else if (typeof scene.player.moveTo === 'function') {
+    const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+    const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+    scene.player.moveTo(playerTarget.x, playerTarget.y);
+  }
+}
+
 function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
   return hasClickOutput(scene, obj) || canActivateOnClick(obj);
 }
@@ -366,6 +383,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
     if (subsceneHitRaw) {
       const subsceneHit = resolveSubtriggerTarget(scene, subsceneHitRaw);
+      if (subsceneHit.type === 'Walkbox') {
+        movePlayerToClick(scene, x, y);
+        return;
+      }
       revealLookableByClick(scene, subsceneHit);
       const seeMessage = scene.game.getSeeMessage(subsceneHit);
       const title = shouldSuppressTitleByHiddenState(scene, subsceneHit)
@@ -395,6 +416,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
 
   if (rawHitObj) {
     const hitObj = resolveSubtriggerTarget(scene, rawHitObj);
+    if (hitObj.type === 'Walkbox') {
+      movePlayerToClick(scene, x, y);
+      return;
+    }
     revealLookableByClick(scene, hitObj);
     const seeMessage = scene.game.getSeeMessage(hitObj);
     const title = shouldSuppressTitleByHiddenState(scene, hitObj)
@@ -436,17 +461,6 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   }
 
   if (scene.player) {
-    const visualTarget = toWorld(scene, x, y);
-    if (typeof (scene.player as any).moveToVisual === 'function') {
-      (scene.player as any).moveToVisual(visualTarget.x, visualTarget.y);
-    } else if (typeof scene.player.walkTo === 'function') {
-      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
-      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
-      scene.player.walkTo(playerTarget.x, playerTarget.y);
-    } else if (typeof scene.player.moveTo === 'function') {
-      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
-      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
-      scene.player.moveTo(playerTarget.x, playerTarget.y);
-    }
+    movePlayerToClick(scene, x, y);
   }
 }

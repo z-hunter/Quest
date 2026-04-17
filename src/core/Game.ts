@@ -656,6 +656,39 @@ export class Game implements IGame {
     return `You drop the ${itemTitle}.`;
   }
 
+  private getSurfacePutMessage(
+    surface: SceneObject,
+    item: Entity,
+    relation: SpatialRelationType | null,
+    target?: SceneObject | null
+  ): string {
+    if (!target) return this.getSurfaceDropMessage(surface, item);
+
+    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
+    const targetTitle =
+      this.getPlayerFacingObjectTitle(target) || this.getPlayerFacingObjectTitle(surface);
+
+    if (!targetTitle) return this.getSurfaceDropMessage(surface, item);
+
+    switch (relation) {
+      case 'in':
+        return this.text('parser.put_success_inventory', {
+          item: itemTitle,
+          target: targetTitle,
+        });
+      case 'under':
+        return `You put the ${itemTitle} under the ${targetTitle}.`;
+      case 'behind':
+        return `You put the ${itemTitle} behind the ${targetTitle}.`;
+      case 'on':
+      default:
+        return this.text('parser.put_success_surface', {
+          item: itemTitle,
+          target: targetTitle,
+        });
+    }
+  }
+
   private getPutTargetTitle(target: SceneObject | null | undefined): string | null {
     if (!target) return null;
     const title = this.getPlayerFacingObjectTitle(target);
@@ -1722,6 +1755,15 @@ export class Game implements IGame {
       };
     }
 
+    if (!this.inventoryManager.hasMainInventory(scene.player)) {
+      return {
+        status: 'failed',
+        code: 'player_inventory_missing',
+        message: this.text('parser.inventory_missing'),
+        data: { entityId: entity.name, ownerId: scene.player?.name },
+        recoverable: false,
+      };
+    }
     return null;
   }
 
@@ -1776,7 +1818,6 @@ export class Game implements IGame {
         recoverable: true,
       };
     }
-
     return null;
   }
 
@@ -1956,7 +1997,12 @@ export class Game implements IGame {
       return {
         status: 'ok',
         code: 'item_put_on_surface',
-        message: this.getSurfaceDropMessage(destinationSurface.surface, entity),
+        message: this.getSurfacePutMessage(
+          destinationSurface.surface,
+          entity,
+          relation || destinationSurface.relation,
+          target
+        ),
         data: { entityId: entity.name, targetId: destinationSurface.surface.name },
         effects: sourceInInventory
           ? ['removed_from_inventory', 'placed_on_surface']
