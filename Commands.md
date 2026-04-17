@@ -68,6 +68,42 @@ The flow is:
 
 ---
 
+## Built-In Group Syntax
+
+Direct group syntax for standard commands is implemented in the built-in parser flow, not in custom command assets.
+
+Currently this applies to standard `TAKE` and `PUT`:
+
+```text
+take all cassettes
+take both cassettes
+take blue and red pills
+take blue pill and red pill
+put all cassettes into recorder
+put blue and red pills in box
+```
+
+The behavior is equivalent to resolving an ambiguity clarification and answering with multiple source items, but without asking the intermediate question.
+
+Important rules:
+- group syntax selects **source items**, not multiple destinations;
+- group input expands into a linear parser plan of ordinary `takeTarget` / `putTarget` actions;
+- execution remains stop-on-error through `Parser Core`;
+- `all` selects every matching source item in the command's normal source scope;
+- `both` is valid only when exactly two source items match;
+- list forms use comma / `and`;
+- shared-head list forms such as `blue and red pills` expand to `blue pills` and `red pills`;
+- simple trailing-`s` plural matching is supported for group source matching only.
+
+For `PUT`, target resolution has priority:
+- the destination is validated before source fallback or source clarification;
+- unknown destinations such as `recirder` fail as target-not-found;
+- source items already stored in the selected destination are filtered out before building the batch.
+
+Custom command assets do not currently declare group syntax. They should continue to use normal argument resolution and pending clarification until the command asset format explicitly grows a group-argument feature.
+
+---
+
 ## Guiding Principles
 
 1. Custom commands should be described by **data**, not ad-hoc parser code.

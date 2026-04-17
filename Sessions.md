@@ -405,3 +405,141 @@ During the session the following checks were run successfully:
   - поэтому актуальный `Sessions.md` не был перезалит в notebook автоматически
 - Важно: в ходе одной и той же сессии NotebookLM CLI сначала успешно отвечал на `list` и `ask`, а позже уже сообщал об истёкшей auth-сессии. Значит, состояние NotebookLM может быть нестабильным и его нужно перепроверять непосредственно перед операциями записи/загрузки.
 - Изменения в глобальных skill-файлах находятся вне репозитория, но важны для будущих локальных сессий на этой машине.
+
+## Session Entry - 2026-04-17 14:08 +02:00
+
+## Session Goals
+
+1. Clarify whether `local_rag` is available and why an initial project-context lookup returned no content.
+2. Configure `local_rag` so it indexes Quest project documentation, not only exported memory docs.
+3. Document the intended knowledge-recall model for future agents.
+4. Extend the local `wrap-up-session` skill so wrap-up sends richer project context to NotebookLM.
+
+## What Was Implemented
+
+### 1. local_rag availability and indexing model
+
+- Confirmed `agent_memory` was available with hundreds of durable records.
+- Confirmed `local_rag` was available and already indexed exported memory docs.
+- Found the initial miss cause: `mcp__local_rag__summarize_project_context` was called with full Windows path context `D:\GAMES\New folder\Quest`, while indexed memory docs use context label `Quest`.
+- Verified that `mcp__local_rag__semantic_search` worked across the index and returned Quest-related memory docs.
+
+### 2. Project documentation mirroring into local_rag
+
+- Updated local RAG startup script:
+  - `C:\Users\Professional\.codex\tools\agent-memory-mcp\start-local-rag.ps1`
+- Added `Sync-QuestProjectDocsForRag`, which mirrors root Quest documentation into:
+  - `C:\Users\Professional\.codex\tools\agent-memory-mcp\local-rag-data\docs\projects\Quest`
+- Mirrored files include root human-authored docs such as:
+  - `AGENTS.md`
+  - `Autotests.md`
+  - `Commands.md`
+  - `GDD.md`
+  - `InventorySys.md`
+  - `Parser.md`
+  - `ParserSmoke.md`
+  - `README.md`
+  - `Sessions.md`
+  - `Tauri.md`
+  - `TextAssets.md`
+  - `tech-spec.md`
+- Excluded noisy/service folders such as `.git`, `node_modules`, `dist`, `.agent`, `.playwright-mcp`, and similar generated/tooling folders.
+- Ran a manual mirror and `mcp__local_rag__index_documents`.
+- Verified `mcp__local_rag__repo_list` now sees `docs/projects/Quest`.
+- Verified semantic search returns root project docs such as `docs/projects/Quest/AGENTS.md` and `docs/projects/Quest/Autotests.md`.
+
+### 3. Knowledge recall model documented
+
+- Added a `Knowledge Recall Model` section to project `AGENTS.md`.
+- The documented source order is:
+  1. `agent_memory` for precise durable facts, decisions, runbooks, incidents, commit context, and fresh conclusions.
+  2. NotebookLM for broad architecture/document synthesis, after a real readiness/smoke test.
+  3. `local_rag` as local fallback/sidecar for fuzzy recall, semantic search, and related-doc discovery.
+  4. The repository itself as source of truth for current code, verified with `rg`, file reads, and tests.
+- Documented key `local_rag` caveats:
+  - use `context: "Quest"` for `summarize_project_context`, not the full Windows path;
+  - use `semantic_search` when the exact document or memory title is unknown;
+  - use `repo_list` with `path: "docs/projects/Quest"` to verify project-doc mirror visibility;
+  - fresh `agent_memory` entries may not appear in `local_rag` until the mirror/index refreshes.
+
+### 4. wrap-up-session skill extended
+
+- Updated local skill:
+  - `C:\Users\Professional\.codex\skills\wrap-up-session\SKILL.md`
+- Added script:
+  - `C:\Users\Professional\.codex\skills\wrap-up-session\scripts\build-notebooklm-memory-dump.ps1`
+- New wrap-up contract:
+  - append/update `Sessions.md`;
+  - record durable facts to `agent_memory`;
+  - refresh the local RAG memory-doc mirror when possible;
+  - build a curated `AgentMemory.md`;
+  - replace NotebookLM sources `Sessions.md`, `GDD.md`, and `AgentMemory.md`.
+- `AgentMemory.md` is generated outside the repo by default:
+  - `C:\Users\Professional\.codex\tmp\notebooklm-wrap-up\AgentMemory.md`
+- The memory dump filters out:
+  - `working` memory;
+  - review queue / review-required records;
+  - records unrelated to Quest / Scanline / autotests terms.
+- `GDD.md` was added to the NotebookLM replacement set because Project Flow can change it when feature implementation changes.
+
+## Important Architecture / Runtime Decisions
+
+- `local_rag` is not live `agent_memory`; it indexes a file mirror.
+- Use `agent_memory` directly for freshest durable facts.
+- Use `local_rag` for semantic/fuzzy retrieval across exported memory and mirrored project docs.
+- NotebookLM remains the broad synthesis layer but must be treated as unstable on this machine and checked with a real CLI/MCP query before relying on it.
+- `GDD.md` should be kept in NotebookLM along with `Sessions.md` and curated memory because gameplay feature implementation can update product/design direction.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- No runtime/parser/mechanics implementation changes were made in this wrap-up work.
+- The work was infrastructure/process/documentation oriented:
+  - local RAG indexing setup;
+  - project instructions;
+  - wrap-up skill behavior;
+  - NotebookLM source replacement workflow.
+
+## Tests And Checks Run
+
+- `mcp__local_rag__index_documents`
+  - Passed.
+- `mcp__local_rag__repo_list` for `docs/projects/Quest`
+  - Confirmed project docs are visible.
+- `mcp__local_rag__semantic_search`
+  - Confirmed new `AGENTS.md` knowledge model is searchable.
+- PowerShell parser check for:
+  - `C:\Users\Professional\.codex\tools\agent-memory-mcp\start-local-rag.ps1`
+  - Passed.
+- `python C:\Users\Professional\.codex\skills\.system\skill-creator\scripts\quick_validate.py C:\Users\Professional\.codex\skills\wrap-up-session`
+  - Passed: `Skill is valid!`
+- PowerShell parser check for:
+  - `C:\Users\Professional\.codex\skills\wrap-up-session\scripts\build-notebooklm-memory-dump.ps1`
+  - Passed.
+- Test generation of `AgentMemory.md`
+  - Passed, then temporary test files were removed.
+
+## Commits Created During The Session
+
+- No git commits were created during this wrap-up/configuration session.
+- Recent prior commits visible in history included:
+  - `1ae89ec` - `Fix PUT target validation before source clarification`
+  - `468c154` - `Fixed critical "matroska" issue with putting items into itself and also incorrect recursive cointainer finding`
+  - `2344069` - `AI rules update`
+  - `ae2fcdf` - `Fix undo preserving polygon spatial nesting`
+  - `7f92b28` - `Fix subscene surface placement semantics`
+
+## Remaining Work / Next Recommended Steps
+
+1. On a future full wrap-up, verify NotebookLM auth immediately before source replacement:
+   - `python -m notebooklm list --json`
+   - `python -m notebooklm ask "ping..." --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json`
+2. If CLI auth fails, re-authenticate with `python -m notebooklm login` or repair state using the project NotebookLM connectivity rule.
+3. Consider adding a deterministic helper script later for NotebookLM replacement itself if CLI source deletion/addition remains repetitive or fragile.
+4. Consider including a small `wrap-up` dry-run mode later to preview `AgentMemory.md` selection before NotebookLM upload.
+
+## Risks, Caveats, Open Questions, Or Non-Committed Changes
+
+- Changes to local skill files and local RAG startup script are outside the Quest git repository.
+- `Sessions.md` was updated in the repository during this wrap-up, so the repo has an uncommitted documentation change after this entry.
+- The local RAG memory mirror can lag behind live `agent_memory`; future wrap-up runs should record durable facts first, then refresh/export memory, then build `AgentMemory.md`.
+- NotebookLM source replacement may still be blocked by auth instability on this Windows machine.
