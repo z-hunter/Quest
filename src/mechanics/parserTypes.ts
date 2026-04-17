@@ -182,6 +182,11 @@ export type ParserToolAction =
       relation?: ParserRelationType | null;
     }
   | {
+      type: 'parserFailure';
+      code: string;
+      message: string;
+    }
+  | {
       type: 'putTarget';
       item: string | null;
       target: string | null;

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 
+function inventoryNames(fixture: any): string[] {
+  return fixture.game.inventory.map((entity: any) => entity.name);
+}
+
 describe('Parser + game integration smoke', () => {
   it('describes direct spatial contents with LOOK UNDER', async () => {
     const fixture = createParserFixture();
@@ -470,6 +474,232 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(secondCassette.name);
   });
 
+  it('puts all matching plural source items into a target without clarification', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const firstCassette = fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(firstCassette);
+    fixture.game.inventory.push(firstCassette);
+    const secondCassette = fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'Another held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(secondCassette);
+    fixture.game.inventory.push(secondCassette);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const result = await fixture.run('put all cassettes into recorder');
+
+    expect(result.messages).toEqual([
+      'You put the cassette_a into the recorder.',
+      'You put the cassette_b into the recorder.',
+    ]);
+    expect(inventoryNames(fixture)).toEqual([]);
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
+      'cassette_a',
+      'cassette_b',
+    ]);
+  });
+
+  it('puts shared-noun and full item lists into a target in order', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const bluePill = fixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(bluePill);
+    fixture.game.inventory.push(bluePill);
+    const redPill = fixture.addEntity('red_pill', {
+      title: 'Red pill',
+      description: 'A red pill.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(redPill);
+    fixture.game.inventory.push(redPill);
+    const box = fixture.addEntity('box', {
+      title: 'Box',
+      description: 'A box.',
+      components: [{ type: 'Inventory', capacity: 3, groups: [], protected: false, items: [] }],
+    });
+
+    const shared = await fixture.run('put blue and red pills in box');
+
+    expect(shared.messages).toEqual([
+      'You put the blue_pill into the box.',
+      'You put the red_pill into the box.',
+    ]);
+    expect((box.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
+      'blue_pill',
+      'red_pill',
+    ]);
+
+    const fullFixture = createParserFixture();
+    fullFixture.addPlayer('Hero', 0, 0);
+    const fullBluePill = fullFixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+    fullFixture.scene.removeEntity(fullBluePill);
+    fullFixture.game.inventory.push(fullBluePill);
+    const fullRedPill = fullFixture.addEntity('red_pill', {
+      title: 'Red pill',
+      description: 'A red pill.',
+      components: [{ type: 'Item' }],
+    });
+    fullFixture.scene.removeEntity(fullRedPill);
+    fullFixture.game.inventory.push(fullRedPill);
+    fullFixture.addEntity('box', {
+      title: 'Box',
+      description: 'A box.',
+      components: [{ type: 'Inventory', capacity: 3, groups: [], protected: false, items: [] }],
+    });
+
+    const full = await fullFixture.run('put blue pill and red pill in box');
+
+    expect(full.messages).toEqual(shared.messages);
+  });
+
+  it('rejects partially invalid PUT lists before putting anything', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const bluePill = fixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(bluePill);
+    fixture.game.inventory.push(bluePill);
+    const box = fixture.addEntity('box', {
+      title: 'Box',
+      description: 'A box.',
+      components: [{ type: 'Inventory', capacity: 3, groups: [], protected: false, items: [] }],
+    });
+
+    const result = await fixture.run('put blue and banana pills in box');
+
+    expect(result.messages.at(-1)).toBe("You don't see any banana pills here.");
+    expect(inventoryNames(fixture)).toEqual(['blue_pill']);
+    expect((box.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([]);
+  });
+
+  it('validates a PUT group target before source fallback', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const firstCassette = fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(firstCassette);
+    fixture.game.inventory.push(firstCassette);
+    const secondCassette = fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'Another held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(secondCassette);
+    fixture.game.inventory.push(secondCassette);
+
+    const result = await fixture.run('put all cassettes into recirder');
+
+    expect(result.messages.at(-1)).toBe("You don't see any recirder here.");
+    expect(result.pendingIntent).toBeNull();
+    expect(inventoryNames(fixture)).toEqual(['cassette_a', 'cassette_b']);
+  });
+
+  it('filters PUT ALL sources that are already in the target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      spatial: { parentNodeId: 'boombox', relation: 'in' },
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'compact'],
+    });
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    fixture.scene.removeEntity(musicCassette);
+    fixture.game.inventory.push(musicCassette);
+    const recorder = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      components: [
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: 2,
+          groups: [],
+          protected: false,
+          items: [compactCassette.name],
+        },
+      ],
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A cassette recorder.',
+      synonyms: ['recorder'],
+    });
+
+    const result = await fixture.run('put all cassettes into recorder');
+
+    expect(result.messages).toEqual(['You put the music_cassette into the boombox.']);
+    expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
+      compactCassette.name,
+      musicCassette.name,
+    ]);
+  });
+
+  it('keeps PUT BOTH ambiguous when more than two sources match', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    for (const id of ['cassette_a', 'cassette_b', 'cassette_c']) {
+      const cassette = fixture.addEntity(id, {
+        title: id.replace('_', ' '),
+        description: 'A held cassette.',
+        components: [{ type: 'Item' }],
+      });
+      fixture.scene.removeEntity(cassette);
+      fixture.game.inventory.push(cassette);
+    }
+    fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 3, groups: [], protected: false, items: [] }],
+    });
+
+    const result = await fixture.run('put both cassettes into recorder');
+
+    expect(result.messages.at(-1)).toContain('Which item do you want to put down');
+    expect(result.pendingIntent).toBe('put');
+  });
+
   it('surfaces a distance-specific error for PUT when the target is too far away', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -491,6 +721,248 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put key on tray');
 
     expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
+  });
+
+  it('takes all matching plural source items without clarification', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take all cassettes');
+
+    expect(result.messages).toEqual([
+      'You picked up the Compact cassette.',
+      "You picked up the Cassette 'Music'.",
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['compact_cassette', 'music_cassette']);
+  });
+
+  it('treats singular and plural ALL TAKE queries the same', async () => {
+    const pluralFixture = createParserFixture();
+    pluralFixture.addPlayer('Hero', 0, 0);
+    pluralFixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    pluralFixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    const plural = await pluralFixture.run('take all cassettes');
+
+    const singularFixture = createParserFixture();
+    singularFixture.addPlayer('Hero', 0, 0);
+    singularFixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    singularFixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    const singular = await singularFixture.run('take all cassette');
+
+    expect(plural.messages).toEqual(singular.messages);
+    expect(inventoryNames(pluralFixture)).toEqual(['cassette_a', 'cassette_b']);
+    expect(inventoryNames(singularFixture)).toEqual(['cassette_a', 'cassette_b']);
+  });
+
+  it('takes both matching plural source items only when exactly two match', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take both cassettes');
+
+    expect(result.messages).toEqual([
+      'You picked up the Cassette A.',
+      'You picked up the Cassette B.',
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['cassette_a', 'cassette_b']);
+  });
+
+  it('rejects BOTH TAKE when more than two source items match', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('cassette_c', {
+      title: 'Cassette C',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take both cassettes');
+
+    expect(result.messages.at(-1)).toBe(
+      'Which item do you mean: 1: Cassette A, 2: Cassette B, 3: Cassette C?'
+    );
+    expect(result.pendingIntent).toBe('take');
+    expect(inventoryNames(fixture)).toEqual([]);
+  });
+
+  it('takes shared-noun and full item lists in order', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('red_pill', {
+      title: 'Red pill',
+      description: 'A red pill.',
+      components: [{ type: 'Item' }],
+    });
+
+    const shared = await fixture.run('take blue and red pills');
+
+    expect(shared.messages).toEqual([
+      'You picked up the Blue pill.',
+      'You picked up the Red pill.',
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['blue_pill', 'red_pill']);
+
+    const fullFixture = createParserFixture();
+    fullFixture.addPlayer('Hero', 0, 0);
+    fullFixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+    fullFixture.addEntity('red_pill', {
+      title: 'Red pill',
+      description: 'A red pill.',
+      components: [{ type: 'Item' }],
+    });
+
+    const full = await fullFixture.run('take blue pill and red pill');
+
+    expect(full.messages).toEqual(shared.messages);
+    expect(inventoryNames(fullFixture)).toEqual(['blue_pill', 'red_pill']);
+  });
+
+  it('rejects partially invalid TAKE lists before taking anything', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take blue and banana pills');
+
+    expect(result.messages.at(-1)).toBe("You don't see any banana pills here.");
+    expect(inventoryNames(fixture)).toEqual([]);
+  });
+
+  it('deduplicates repeated TAKE list entries', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('blue_pill', {
+      title: 'Blue pill',
+      description: 'A blue pill.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take blue pill and blue pill');
+
+    expect(result.messages).toEqual(['You picked up the Blue pill.']);
+    expect(inventoryNames(fixture)).toEqual(['blue_pill']);
+  });
+
+  it('takes all matching plural source items from a scoped container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('box', {
+      title: 'Box',
+      description: 'A box.',
+      components: [
+        {
+          type: 'Inventory',
+          capacity: 4,
+          groups: [],
+          protected: false,
+          items: ['cassette_a', 'cassette_b'],
+        },
+      ],
+    });
+    fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'box', relation: 'in' },
+    });
+    fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'box', relation: 'in' },
+    });
+
+    const result = await fixture.run('take all cassettes from box');
+
+    expect(result.messages).toEqual([
+      'You picked up the Cassette A.',
+      'You picked up the Cassette B.',
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['cassette_a', 'cassette_b']);
+  });
+
+  it('keeps ordinary TAKE ambiguity and clarification multi-select working', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cassette_a', {
+      title: 'Cassette A',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addEntity('cassette_b', {
+      title: 'Cassette B',
+      description: 'A cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    const ambiguous = await fixture.run('take cassette');
+    expect(ambiguous.messages.at(-1)).toBe('Which item do you mean: 1: Cassette A, 2: Cassette B?');
+    expect(ambiguous.pendingIntent).toBe('take');
+
+    const resolved = await fixture.run('all');
+    expect(resolved.messages).toEqual([
+      'You picked up the Cassette A.',
+      'You picked up the Cassette B.',
+    ]);
   });
 
   it('resolves TAKE FROM container without unnecessary ambiguity', async () => {

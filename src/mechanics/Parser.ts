@@ -335,6 +335,431 @@ export class Parser {
     ).map((token) => token.trim().toUpperCase());
   }
 
+  private buildTakeGroupActions(
+    rawItem: string | null,
+    rawAnchor: string | null,
+    relation: ParserRelationType | null
+  ): ParserToolAction[] | null {
+    const groupQuery = this.parseTakeGroupQuery(rawItem);
+    if (!groupQuery) return null;
+
+    const candidates = this.getTakeGroupSourceCandidates(rawAnchor, relation);
+    if (!candidates) return null;
+
+    const buildTakeActions = (entities: Entity[]): ParserToolAction[] =>
+      entities.map((entity) => ({
+        type: 'takeTarget' as const,
+        target: this.getPlayerFacingObjectTitle(entity) || entity.name,
+        anchor: rawAnchor,
+        relation,
+      }));
+
+    if (groupQuery.kind !== 'list') {
+      const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+      if (!matches.length) {
+        return [
+          {
+            type: 'takeTarget',
+            target: groupQuery.query,
+            anchor: rawAnchor,
+            relation,
+          },
+        ];
+      }
+      if (groupQuery.kind === 'both' && matches.length !== 2) {
+        if (matches.length > 1) {
+          return [
+            this.buildTakeTargetAction(
+              this.singularizeSimplePluralQuery(groupQuery.query),
+              rawAnchor,
+              relation
+            ),
+          ];
+        }
+        return [this.buildTakeGroupSelectionFailure(matches)];
+      }
+      return buildTakeActions(matches);
+    }
+
+    const selected: Entity[] = [];
+    for (const query of groupQuery.queries) {
+      const matches = this.findPluralAwareMatchesInCandidates(query, candidates);
+      if (matches.length !== 1) {
+        return [
+          this.buildTakeTargetAction(
+            matches.length > 1 ? this.singularizeSimplePluralQuery(query) : query,
+            rawAnchor,
+            relation
+          ),
+        ];
+      }
+      selected.push(matches[0]);
+    }
+
+    const deduped: Entity[] = [];
+    const seen = new Set<string>();
+    for (const entity of selected) {
+      if (seen.has(entity.name)) continue;
+      seen.add(entity.name);
+      deduped.push(entity);
+    }
+    return deduped.length ? buildTakeActions(deduped) : null;
+  }
+
+  private buildTakeTargetAction(
+    target: string | null,
+    anchor: string | null,
+    relation: ParserRelationType | null
+  ): Extract<ParserToolAction, { type: 'takeTarget' }> {
+    return {
+      type: 'takeTarget',
+      target,
+      anchor,
+      relation,
+    };
+  }
+
+  private buildPutGroupActions(
+    rawItem: string | null,
+    rawTarget: string | null,
+    relation: ParserRelationType | null
+  ): ParserToolAction[] | null {
+    const groupQuery = this.parseTakeGroupQuery(rawItem);
+    if (!groupQuery) return null;
+
+    const sourceCandidates = this.getPutGroupSourceCandidates(rawTarget);
+    const initialMatches = this.collectPutGroupInitialMatches(groupQuery, sourceCandidates);
+    const targetResolution = rawTarget
+      ? this.resolvePutGroupTarget(rawTarget, relation, initialMatches)
+      : null;
+
+    if (targetResolution?.status === 'failed') {
+      return [
+        {
+          type: 'parserFailure',
+          code: targetResolution.code,
+          message: targetResolution.message,
+        },
+      ];
+    }
+    if (targetResolution?.status === 'ambiguous') {
+      return [
+        {
+          type: 'parserFailure',
+          code: 'ambiguous_put_target',
+          message: targetResolution.message,
+        },
+      ];
+    }
+    if (targetResolution?.status === 'escalate') {
+      return [
+        {
+          type: 'parserFailure',
+          code: targetResolution.code,
+          message: this.game.text('parser.parse_unknown'),
+        },
+      ];
+    }
+
+    const candidates =
+      targetResolution?.status === 'found'
+        ? sourceCandidates.filter(
+            (candidate) =>
+              !this.isPutSourceAlreadyInTarget(candidate, targetResolution.entity, relation)
+          )
+        : sourceCandidates;
+
+    const buildPutActions = (entities: Entity[]): ParserToolAction[] =>
+      entities.map((entity) =>
+        this.buildPutTargetAction(
+          this.getPlayerFacingObjectTitle(entity) || entity.name,
+          rawTarget,
+          relation
+        )
+      );
+
+    if (groupQuery.kind !== 'list') {
+      const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+      if (!matches.length) {
+        return [this.buildPutTargetAction(groupQuery.query, rawTarget, relation)];
+      }
+      if (groupQuery.kind === 'both' && matches.length !== 2) {
+        return [
+          this.buildPutTargetAction(
+            this.singularizeSimplePluralQuery(groupQuery.query),
+            rawTarget,
+            relation
+          ),
+        ];
+      }
+      return buildPutActions(matches);
+    }
+
+    const selected: Entity[] = [];
+    for (const query of groupQuery.queries) {
+      const matches = this.findPluralAwareMatchesInCandidates(query, candidates);
+      if (matches.length !== 1) {
+        return [
+          this.buildPutTargetAction(
+            matches.length > 1 ? this.singularizeSimplePluralQuery(query) : query,
+            rawTarget,
+            relation
+          ),
+        ];
+      }
+      selected.push(matches[0]);
+    }
+
+    const deduped: Entity[] = [];
+    const seen = new Set<string>();
+    for (const entity of selected) {
+      if (seen.has(entity.name)) continue;
+      seen.add(entity.name);
+      deduped.push(entity);
+    }
+    return deduped.length ? buildPutActions(deduped) : null;
+  }
+
+  private buildPutTargetAction(
+    item: string | null,
+    target: string | null,
+    relation: ParserRelationType | null
+  ): Extract<ParserToolAction, { type: 'putTarget' }> {
+    return {
+      type: 'putTarget',
+      item,
+      target,
+      relation,
+    };
+  }
+
+  private getPutGroupSourceCandidates(rawTarget: string | null): Entity[] {
+    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'takable'] : ['held'];
+    return this.getScopeCandidates(sourceScopes).filter(
+      (candidate): candidate is Entity => candidate instanceof Entity
+    );
+  }
+
+  private collectPutGroupInitialMatches(
+    groupQuery: { kind: 'all' | 'both'; query: string } | { kind: 'list'; queries: string[] },
+    candidates: Entity[]
+  ): Entity[] {
+    const matches =
+      groupQuery.kind === 'list'
+        ? groupQuery.queries.flatMap((query) =>
+            this.findPluralAwareMatchesInCandidates(query, candidates)
+          )
+        : this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+    return Array.from(new Set(matches));
+  }
+
+  private resolvePutGroupTarget(
+    rawTarget: string,
+    relation: ParserRelationType | null,
+    sourceMatches: Entity[]
+  ):
+    | { status: 'found'; entity: SceneObject }
+    | { status: 'failed'; code: string; message: string }
+    | { status: 'ambiguous'; message: string }
+    | { status: 'escalate'; code: string } {
+    const targetScopes: Array<keyof ParserScope> =
+      relation === 'in'
+        ? ['held', 'visible', 'subscene']
+        : ['visible', 'reachable', 'held', 'subscene'];
+    const resolvedTarget = this.resolveContainerAnchor(
+      rawTarget,
+      targetScopes,
+      'parser.put_which_target',
+      new Set(sourceMatches)
+    );
+
+    if (resolvedTarget.status === 'found') return resolvedTarget;
+    if (resolvedTarget.status === 'ambiguous') {
+      return {
+        status: 'ambiguous',
+        message: resolvedTarget.message,
+      };
+    }
+    if (resolvedTarget.status === 'escalate') {
+      return {
+        status: 'escalate',
+        code: resolvedTarget.code,
+      };
+    }
+    return {
+      status: 'failed',
+      code: 'put_target_not_found',
+      message: this.game.text('parser.look_not_found', { target: rawTarget }),
+    };
+  }
+
+  private parseTakeGroupQuery(
+    rawItem: string | null
+  ): { kind: 'all' | 'both'; query: string } | { kind: 'list'; queries: string[] } | null {
+    const item = String(rawItem || '')
+      .replace(/[?.!,]+$/g, '')
+      .trim();
+    if (!item) return null;
+
+    const quantifierMatch = /^(all|both)\b\s*(.*)$/i.exec(item);
+    if (quantifierMatch) {
+      const query = this.stripLeadingArticles(quantifierMatch[2]);
+      if (!query) return null;
+      return {
+        kind: quantifierMatch[1].toLowerCase() === 'all' ? 'all' : 'both',
+        query,
+      };
+    }
+
+    const queries = this.parseTakeListQueries(item);
+    return queries.length > 1 ? { kind: 'list', queries } : null;
+  }
+
+  private parseTakeListQueries(rawItem: string): string[] {
+    if (!/(?:,|\band\b)/i.test(rawItem)) return [];
+    const parts = rawItem
+      .split(/\s*(?:,|\band\b)\s*/i)
+      .map((part) => this.stripLeadingArticles(part))
+      .filter(Boolean);
+    if (parts.length <= 1) return [];
+
+    const lastWords = parts[parts.length - 1].split(/\s+/).filter(Boolean);
+    const sharedHead = lastWords.length >= 2 ? lastWords[lastWords.length - 1] : null;
+    if (!sharedHead) return parts;
+
+    return parts.map((part, index) => {
+      if (index === parts.length - 1) return part;
+      const words = part.split(/\s+/).filter(Boolean);
+      const lastWord = words[words.length - 1] || '';
+      return this.arePluralEquivalentWords(lastWord, sharedHead) ? part : `${part} ${sharedHead}`;
+    });
+  }
+
+  private stripLeadingArticles(input: string): string {
+    let value = String(input || '').trim();
+    const articles = this.game.textAssets.getParserLexicon().articles || [];
+    let changed = true;
+    while (changed && value) {
+      changed = false;
+      for (const article of articles) {
+        const normalizedArticle = String(article || '').trim();
+        if (!normalizedArticle) continue;
+        const pattern = new RegExp(`^${this.escapeRegex(normalizedArticle)}\\s+`, 'i');
+        if (pattern.test(value)) {
+          value = value.replace(pattern, '').trim();
+          changed = true;
+          break;
+        }
+      }
+    }
+    return value;
+  }
+
+  private getTakeGroupSourceCandidates(
+    rawAnchor: string | null,
+    relation: ParserRelationType | null
+  ): Entity[] | null {
+    if (!rawAnchor || !relation) {
+      return this.getScopeCandidates(['takable']).filter(
+        (candidate): candidate is Entity => candidate instanceof Entity
+      );
+    }
+
+    const targetScopes: Array<keyof ParserScope> =
+      relation === 'in'
+        ? ['held', 'visible', 'subscene']
+        : ['visible', 'reachable', 'held', 'subscene'];
+    const resolvedAnchor = this.resolveContainerAnchor(
+      rawAnchor,
+      targetScopes,
+      'parser.take_which_target'
+    );
+    if (resolvedAnchor.status !== 'found') return null;
+
+    const scoped = this.getScopedTakeCandidates(resolvedAnchor.entity, relation);
+    if (scoped.status !== 'resolved' || !scoped.hasStorage) return null;
+    return scoped.candidates;
+  }
+
+  private findPluralAwareMatchesInCandidates(query: string, candidates: Entity[]): Entity[] {
+    const normalizedQuery = this.normalizeSimplePluralText(query);
+    if (!normalizedQuery) return [];
+
+    const exactMatches = candidates.filter((candidate) =>
+      this.getObjectLookupTokens(candidate).some(
+        (token) => this.normalizeSimplePluralText(token) === normalizedQuery
+      )
+    );
+    if (exactMatches.length) return exactMatches;
+
+    return candidates.filter((candidate) =>
+      this.getObjectLookupTokens(candidate).some((token) =>
+        this.normalizeSimplePluralText(token).includes(normalizedQuery)
+      )
+    );
+  }
+
+  private buildTakeGroupSelectionFailure(matches: Entity[]): ParserToolAction {
+    const clarificationOptions = this.getResolutionClarificationOptions(matches, 'source');
+    return {
+      type: 'parserFailure',
+      code: 'take_group_invalid_both',
+      message:
+        clarificationOptions && clarificationOptions.length
+          ? this.game.text('parser.take_which_one', {
+              options: this.getNumberedClarificationDisplay(clarificationOptions),
+            })
+          : this.game.text('parser.parse_unknown'),
+    };
+  }
+
+  private normalizeSimplePluralText(input: string): string {
+    return String(input || '')
+      .trim()
+      .toUpperCase()
+      .split(/\s+/)
+      .map((word) => this.normalizeSimplePluralWord(word))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private normalizeSimplePluralWord(word: string): string {
+    const value = String(word || '').trim();
+    if (value.length > 3 && value.endsWith('S') && !value.endsWith('SS')) {
+      return value.slice(0, -1);
+    }
+    return value;
+  }
+
+  private singularizeSimplePluralQuery(input: string): string {
+    return String(input || '')
+      .trim()
+      .split(/\s+/)
+      .map((word) => this.singularizeSimplePluralWord(word))
+      .join(' ')
+      .trim();
+  }
+
+  private singularizeSimplePluralWord(word: string): string {
+    const value = String(word || '').trim();
+    if (value.length > 3 && /s$/i.test(value) && !/ss$/i.test(value)) {
+      return value.slice(0, -1);
+    }
+    return value;
+  }
+
+  private arePluralEquivalentWords(left: string, right: string): boolean {
+    return (
+      this.normalizeSimplePluralWord(left.toUpperCase()) ===
+      this.normalizeSimplePluralWord(right.toUpperCase())
+    );
+  }
+
+  private escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   private runStage1(input: string): ParserCascadeEnvelope {
     const lexicon = this.game.textAssets.getParserLexicon();
     const match = matchStage1Intent(input, lexicon);
@@ -408,11 +833,16 @@ export class Parser {
       }
       case 'take': {
         const takeCommand = extractTakeCommand(input, lexicon);
+        const takeActions = this.buildTakeGroupActions(
+          takeCommand.item,
+          takeCommand.target,
+          takeCommand.relation
+        );
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
-            actions: [
+            actions: takeActions || [
               {
                 type: 'takeTarget',
                 target:
@@ -438,11 +868,16 @@ export class Parser {
       }
       case 'put': {
         const putCommand = extractPutCommand(input, lexicon);
+        const putActions = this.buildPutGroupActions(
+          putCommand.item,
+          putCommand.target,
+          putCommand.relation
+        );
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
-            actions: [
+            actions: putActions || [
               {
                 type: 'putTarget',
                 item: putCommand.item,
@@ -734,6 +1169,13 @@ export class Parser {
           action.anchor || null,
           action.relation || null
         );
+      case 'parserFailure':
+        return {
+          status: 'failed',
+          code: action.code,
+          message: action.message,
+          recoverable: true,
+        };
       case 'putTarget':
         return this.resolvePutTarget(action.item, action.target, action.relation);
       case 'openTarget':
@@ -794,6 +1236,8 @@ export class Parser {
         return 'examineRelation';
       case 'takeTarget':
         return 'take';
+      case 'parserFailure':
+        return 'parserFailure';
       case 'putTarget':
         return 'put';
       case 'openTarget':
