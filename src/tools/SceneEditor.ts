@@ -4,7 +4,6 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
-import { normalizeTriggerComponents } from '../entities/TriggerComponents';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
@@ -778,12 +777,7 @@ export class SceneEditor {
         }
 
         newObj = new Walkbox(poly, data.name);
-        if (data.mode) newObj.mode = data.mode;
-        if (data.groupID) newObj.groupID = data.groupID;
-        if (data.locked) newObj.locked = data.locked;
-        if (data.disabled) newObj.disabled = data.disabled;
-        if (data.customName) newObj.customName = data.customName;
-        if (data.interactions) newObj.interactions = data.interactions;
+        newObj.load({ ...data, poly, type: 'Walkbox' });
       } else if (type === 'Triggerbox') {
         // ... (Triggerbox logic remains) ...
         let poly = data.poly || [];
@@ -803,12 +797,7 @@ export class SceneEditor {
           poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
         }
         newObj = new Triggerbox(poly, data.name, data.script || '');
-        if (data.groupID) newObj.groupID = data.groupID;
-        if (data.components) newObj.components = normalizeTriggerComponents(data.components);
-        if (data.locked) newObj.locked = data.locked;
-        if (data.disabled) newObj.disabled = data.disabled;
-        if (data.customName) newObj.customName = data.customName;
-        if (data.interactions) newObj.interactions = data.interactions;
+        newObj.load({ ...data, poly, type: 'Triggerbox' });
       } else if (type === 'Quad') {
         newObj = QuadObject.fromJSON(this.game, data);
 
