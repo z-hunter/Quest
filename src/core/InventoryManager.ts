@@ -14,6 +14,10 @@ import type { SpatialRelationType } from '../scene/spatialTypes';
 
 type ContainerRelation = Exclude<SpatialRelationType, 'near'>;
 
+type SurfacePlacementOptions = {
+  preferPlayerPoint?: boolean;
+};
+
 type InventorySlotRef = {
   owner: Entity;
   component: InventoryComponent;
@@ -1096,15 +1100,20 @@ export class InventoryManager {
     return this.evaluateSurfacePlacement(surface, entity, x, y, placements).fits;
   }
 
-  placeEntityOnSurface(surface: SceneObject, entity: Entity): SurfaceItemPlacement | null {
+  placeEntityOnSurface(
+    surface: SceneObject,
+    entity: Entity,
+    options: SurfacePlacementOptions = {}
+  ): SurfaceItemPlacement | null {
     const component = this.ensureSurfaceComponent(surface);
     const bounds = this.getSurfaceBounds(surface);
     if (!bounds) return null;
 
     const placements = component.items || [];
     const samples: Array<{ x: number; y: number }> = [];
+    const preferredSamples: Array<{ x: number; y: number }> = [];
     const seen = new Set<string>();
-    const addSample = (x: number, y: number) => {
+    const addSample = (x: number, y: number, preferred: boolean = false) => {
       const candidateSize = this.getEntityPlacementSizeAtY(entity, y);
       const footprint = this.getSurfaceFootprintRect(surface, candidateSize, 0, y);
       const minX = bounds.rect.left + footprint.w / 2;
@@ -1120,8 +1129,21 @@ export class InventoryManager {
       const key = `${Math.round(clampedX)}:${Math.round(clampedY)}`;
       if (seen.has(key)) return;
       seen.add(key);
-      samples.push({ x: clampedX, y: clampedY });
+      const sample = { x: clampedX, y: clampedY };
+      samples.push(sample);
+      if (preferred) preferredSamples.push(sample);
     };
+
+    const player = this.sceneManager.currentScene?.player || null;
+    if (
+      options.preferPlayerPoint &&
+      surface.type === 'Walkbox' &&
+      player &&
+      Array.isArray((surface as any).poly) &&
+      Geometry.isPointInPolygon({ x: player.x || 0, y: player.y || 0 }, (surface as any).poly)
+    ) {
+      addSample(player.x || 0, player.y || 0, true);
+    }
 
     const maxEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.bottom);
     const minEntitySize = this.getEntityPlacementSizeAtY(entity, bounds.rect.top);
@@ -1166,10 +1188,15 @@ export class InventoryManager {
     const fittingSamples = samples.filter((sample) =>
       this.canFitEntityOnSurfaceAt(surface, entity, sample.x, sample.y, placements)
     );
+    const preferredSpot =
+      preferredSamples.find((sample) =>
+        this.canFitEntityOnSurfaceAt(surface, entity, sample.x, sample.y, placements)
+      ) || null;
     const openSpot =
-      fittingSamples.length > 0
+      preferredSpot ||
+      (fittingSamples.length > 0
         ? fittingSamples[Math.floor(Math.random() * fittingSamples.length)]
-        : null;
+        : null);
     const insideOnlySamples = samples.filter((sample) => {
       const evaluation = this.evaluateSurfacePlacement(
         surface,
@@ -1428,6 +1455,20 @@ export class InventoryManager {
 
     const player = scene.player;
     const playerPoint = player ? { x: player.x || 0, y: player.y || 0 } : null;
+    const subsceneContained = scene.activeSubscene
+      ? surfaces.filter(
+          (candidate) =>
+            this.isObjectInsideActiveSubscene(candidate.surface) &&
+            candidate.surface.type !== 'Walkbox'
+        )
+      : [];
+    const subsceneWalkboxes = scene.activeSubscene
+      ? surfaces.filter(
+          (candidate) =>
+            this.isObjectInsideActiveSubscene(candidate.surface) &&
+            candidate.surface.type === 'Walkbox'
+        )
+      : [];
     const containingWalkboxes =
       playerPoint && player
         ? surfaces.filter(
@@ -1438,14 +1479,13 @@ export class InventoryManager {
           )
         : [];
 
-    const subsceneFirst = scene.activeSubscene
-      ? surfaces.filter((candidate) => scene.subsceneEntities.has(candidate.surface as any))
-      : [];
-    const pool = containingWalkboxes.length
-      ? containingWalkboxes
-      : subsceneFirst.length
-        ? subsceneFirst
-        : surfaces;
+    const pool = subsceneContained.length
+      ? subsceneContained
+      : subsceneWalkboxes.length
+        ? subsceneWalkboxes
+        : containingWalkboxes.length
+          ? containingWalkboxes
+          : surfaces;
     return (
       pool.sort((left, right) => {
         const a = this.getSceneObjectSelectionPriority(left.surface as any);
@@ -1659,7 +1699,8 @@ export class InventoryManager {
     relation: ContainerRelation = 'on',
     getSwitchComponent: (
       obj: SceneObject
-    ) => import('../systems/ComponentSystem').SwitchComponent | null
+    ) => import('../systems/ComponentSystem').SwitchComponent | null,
+    options: SurfacePlacementOptions = {}
   ): GameActionOutcome {
     const component = this.ensureSurfaceComponent(surface, relation);
     if ((component.items || []).some((item) => item.id === entity.name)) {
@@ -1690,7 +1731,7 @@ export class InventoryManager {
     const placementSubsceneItemScale = this.getSurfacePlacementSubsceneItemScale(surface);
     entity.subsceneItemScale = placementSubsceneItemScale;
     entity.update(0);
-    const placement = this.placeEntityOnSurface(surface, entity);
+    const placement = this.placeEntityOnSurface(surface, entity, options);
     if (!placement) {
       entity.subsceneItemScale = previousSubsceneItemScale;
       entity.update(0);

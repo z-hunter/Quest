@@ -2413,11 +2413,20 @@ export class Parser {
         };
       }
 
+      const scopedCandidates = scoped.candidates;
       const scopedResolved = this.resolveEntityTargetInCandidates(
         rawTarget,
-        scoped.candidates,
+        this.filterCurrentlyTakeableCandidates(scopedCandidates),
         'parser.take_which_one'
       );
+      const broadScopedResolved =
+        scopedResolved.status === 'not_found'
+          ? this.resolveEntityTargetInCandidates(
+              rawTarget,
+              scopedCandidates,
+              'parser.take_which_one'
+            )
+          : null;
       if (scopedResolved.status === 'escalate') {
         return { status: 'escalate', code: scopedResolved.code, recoverable: true };
       }
@@ -2442,6 +2451,22 @@ export class Parser {
       if (scopedResolved.status === 'found') {
         return this.game.takeEntity(scopedResolved.entity as Entity);
       }
+      if (scopedResolved.status === 'not_found') {
+        if (broadScopedResolved?.status === 'ambiguous') {
+          const failure = this.resolveFailedTakeDiagnostic(rawTarget, scopedCandidates);
+          if (failure) return failure;
+        }
+        if (broadScopedResolved?.status === 'found') {
+          return this.resolveTakeFailureForKnownEntity(broadScopedResolved.entity as Entity);
+        }
+        if (broadScopedResolved?.status === 'escalate') {
+          return {
+            status: 'escalate',
+            code: broadScopedResolved.code,
+            recoverable: true,
+          };
+        }
+      }
 
       return {
         status: 'failed',
@@ -2452,16 +2477,19 @@ export class Parser {
       };
     }
 
+    const takableCandidates = this.filterCurrentlyTakeableCandidates(
+      this.getScopeCandidates(['takable'])
+    );
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['takable']),
+      takableCandidates,
       'parser.take_which_one'
     );
     const broadResolved =
       resolved.status === 'not_found'
         ? this.resolveEntityTargetInCandidates(
             rawTarget,
-            this.getScopeCandidates(['visible', 'held']),
+            this.getScopeCandidates(['visible']),
             'parser.take_which_one'
           )
         : null;
@@ -2480,41 +2508,14 @@ export class Parser {
     }
     if (resolved.status === 'not_found') {
       if (broadResolved?.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_take_target',
-          message: broadResolved.message,
-          data: {
-            target: rawTarget,
-            options: broadResolved.options,
-            clarificationOptions: this.withClarificationScope(
-              broadResolved.clarificationOptions,
-              'source'
-            ),
-          },
-          recoverable: true,
-        };
+        const failure = this.resolveFailedTakeDiagnostic(
+          rawTarget,
+          this.getScopeCandidates(['visible'])
+        );
+        if (failure) return failure;
       }
       if (broadResolved?.status === 'found') {
-        if (this.game.inventory.includes(broadResolved.entity)) {
-          return {
-            status: 'failed',
-            code: 'item_already_held',
-            message: this.game.text('parser.take_already_held', {
-              item:
-                this.getPlayerFacingObjectTitle(broadResolved.entity) || broadResolved.entity.name,
-            }),
-            data: { entityId: broadResolved.entity.name },
-            recoverable: true,
-          };
-        }
-        return {
-          status: 'failed',
-          code: 'not_takeable',
-          message: this.game.text('parser.take_cannot'),
-          data: { entityId: broadResolved.entity.name },
-          recoverable: true,
-        };
+        return this.resolveTakeFailureForKnownEntity(broadResolved.entity as Entity);
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
@@ -2587,6 +2588,67 @@ export class Parser {
       };
     }
     return this.game.takeEntity(resolved.entity as Entity);
+  }
+
+  private findResolutionMatchesInCandidates(
+    rawTarget: string,
+    candidates: SceneObject[]
+  ): SceneObject[] {
+    const normalizedTarget = String(rawTarget || '')
+      .trim()
+      .toUpperCase();
+    if (!normalizedTarget) return [];
+
+    const exactMatches = candidates.filter((sceneObject: SceneObject) =>
+      this.getObjectLookupTokens(sceneObject).includes(normalizedTarget)
+    );
+    if (exactMatches.length) return exactMatches;
+
+    return candidates.filter((sceneObject: SceneObject) => {
+      const lookupTokens = this.getObjectLookupTokens(sceneObject);
+      return lookupTokens.some((token) => token.includes(normalizedTarget));
+    });
+  }
+
+  private resolveFailedTakeDiagnostic(
+    rawTarget: string,
+    candidates: SceneObject[]
+  ): GameActionOutcome | null {
+    const matches = this.findResolutionMatchesInCandidates(rawTarget, candidates).filter(
+      (candidate): candidate is Entity =>
+        candidate instanceof Entity && !this.game.inventory.includes(candidate)
+    );
+    if (!matches.length) return null;
+
+    const preferred = (this.choosePreferredObject(matches) || matches[0]) as Entity;
+    return this.resolveTakeFailureForKnownEntity(preferred);
+  }
+
+  private resolveTakeFailureForKnownEntity(entity: Entity): GameActionOutcome {
+    const canTakeOutcome = (this.game as any).canTakeEntity?.(entity);
+    if (canTakeOutcome) return canTakeOutcome;
+
+    if (this.game.inventory.includes(entity)) {
+      return {
+        status: 'failed',
+        code: 'item_already_held',
+        message: this.game.text('parser.take_already_held', {
+          item: this.getPlayerFacingObjectTitle(entity) || entity.name,
+        }),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    return this.game.takeEntity(entity);
+  }
+
+  private filterCurrentlyTakeableCandidates(candidates: SceneObject[]): Entity[] {
+    return candidates.filter((candidate): candidate is Entity => {
+      if (!(candidate instanceof Entity)) return false;
+      const canTakeOutcome = (this.game as any).canTakeEntity?.(candidate);
+      return !canTakeOutcome;
+    });
   }
 
   private resolvePutTarget(

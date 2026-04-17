@@ -29,6 +29,7 @@ import { InventoryManager } from './InventoryManager';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
+import { Geometry } from '../utils/Geometry';
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -731,7 +732,35 @@ export class Game implements IGame {
         return left.name.localeCompare(right.name);
       });
 
-    for (const surface of surfaces) {
+    const playerPoint = scene.player ? { x: scene.player.x || 0, y: scene.player.y || 0 } : null;
+    const subsceneContained = scene.activeSubscene
+      ? surfaces.filter(
+          (surface) => this.isObjectInsideActiveSubscene(surface) && surface.type !== 'Walkbox'
+        )
+      : [];
+    const subsceneWalkboxes = scene.activeSubscene
+      ? surfaces.filter(
+          (surface) => this.isObjectInsideActiveSubscene(surface) && surface.type === 'Walkbox'
+        )
+      : [];
+    const containingWalkboxes =
+      playerPoint && scene.activeSubscene
+        ? surfaces.filter(
+            (surface) =>
+              surface.type === 'Walkbox' &&
+              Array.isArray((surface as any).poly) &&
+              Geometry.isPointInPolygon(playerPoint, (surface as any).poly)
+          )
+        : [];
+    const orderedSurfaces = subsceneContained.length
+      ? subsceneContained
+      : subsceneWalkboxes.length
+        ? subsceneWalkboxes
+        : containingWalkboxes.length
+          ? containingWalkboxes
+          : surfaces;
+
+    for (const surface of orderedSurfaces) {
       const blockedOutcome = this.getBlockedAccessOutcome(surface);
       if (blockedOutcome) continue;
 
@@ -1033,13 +1062,15 @@ export class Game implements IGame {
   addEntityToSurface(
     surface: SceneObject,
     entity: Entity,
-    relation: Exclude<SpatialRelationType, 'near'> = 'on'
+    relation: Exclude<SpatialRelationType, 'near'> = 'on',
+    options: { preferPlayerPoint?: boolean } = {}
   ): GameActionOutcome {
     return this.inventoryManager.addEntityToSurface(
       surface,
       entity,
       relation,
-      this.getSwitchComponent.bind(this)
+      this.getSwitchComponent.bind(this),
+      options
     );
   }
 
@@ -1630,6 +1661,70 @@ export class Game implements IGame {
     };
   }
 
+  canTakeEntity(entity: Entity): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    if (this.isEntityInInventory(entity)) {
+      return {
+        status: 'failed',
+        code: 'item_already_held',
+        message: this.text('parser.take_already_held', {
+          item: this.getPlayerFacingObjectTitle(entity) || entity.name,
+        }),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const inventoryOwner = this.findInventoryOwnerForEntity(entity);
+    if (!inventoryOwner) {
+      const blockedOutcome = this.getBlockedAccessOutcome(entity);
+      if (blockedOutcome) return blockedOutcome;
+    }
+
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
+    if (!(isItem || entity.isTakeable)) {
+      return {
+        status: 'failed',
+        code: 'not_takeable',
+        message: this.text('parser.take_cannot'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    if (inventoryOwner && !this.isInventoryAccessible(inventoryOwner)) {
+      return {
+        status: 'failed',
+        code: 'inventory_not_accessible',
+        message: this.text('parser.take_cannot'),
+        data: { entityId: entity.name, ownerId: inventoryOwner.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  }
+
   private getPuttableSourceFailure(entity: Entity): GameActionOutcome | null {
     const scene = this.sceneManager.currentScene;
     if (!scene) {
@@ -1844,7 +1939,10 @@ export class Game implements IGame {
       const moveOutcome = this.addEntityToSurface(
         destinationSurface.surface,
         entity,
-        destinationSurface.relation
+        destinationSurface.relation,
+        {
+          preferPlayerPoint: !target && destinationSurface.surface.type === 'Walkbox',
+        }
       );
       if (moveOutcome.status !== 'ok') {
         return this.withPutFailureContext(

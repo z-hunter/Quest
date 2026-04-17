@@ -187,7 +187,11 @@ export class ParserWorldModelBuilder {
           entity.components &&
           entity.components.find((component: any) => component.type === 'Item');
         const entry = textLayer?.entryById.get(entity.name);
-        return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
+        return (
+          (!!isItem || !!entity.isTakeable) &&
+          !entry?.blocked &&
+          !(this.game as any).canTakeEntity?.(entity)
+        );
       });
     const externalTakable = Array.isArray((this.game as any).getAccessibleInventoryItems?.())
       ? ((this.game as any).getAccessibleInventoryItems() as Entity[])
@@ -207,7 +211,10 @@ export class ParserWorldModelBuilder {
     return {
       visible,
       held,
-      takable: this.uniqueObjects([...takable, ...externalTakable]),
+      takable: this.uniqueObjects([
+        ...takable,
+        ...externalTakable.filter((entity: Entity) => !(this.game as any).canTakeEntity?.(entity)),
+      ]),
       reachable,
       examinable,
       subscene,

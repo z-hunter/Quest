@@ -6,6 +6,7 @@ import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { InventoryManager } from '../../src/core/InventoryManager';
 import { createTestTextAssets } from './textAssetFactory';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 export type TestGameHarness = {
   game: IGame;
@@ -194,6 +195,68 @@ export function createTestGame(): TestGameHarness {
     textAssets as any,
     game.text.bind(game)
   );
+
+  (game as any).canTakeEntity = (entity: Entity): GameActionOutcome | null => {
+    const scene = game.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: textAssets.getServiceText('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    if (game.inventory.includes(entity)) {
+      return {
+        status: 'failed',
+        code: 'item_already_held',
+        message: textAssets.getServiceText('parser.take_already_held', {
+          item: textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+        }),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const inventoryOwner = (game.inventoryManager as any).findInventoryOwnerForEntity?.(entity);
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+    if (!isItem && !entity.isTakeable) {
+      return {
+        status: 'failed',
+        code: 'not_takeable',
+        message: textAssets.getServiceText('parser.take_cannot'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    if (
+      inventoryOwner &&
+      !(game.inventoryManager as any).isInventoryAccessible?.(inventoryOwner, () => null)
+    ) {
+      return {
+        status: 'failed',
+        code: 'inventory_not_accessible',
+        message: textAssets.getServiceText('parser.take_cannot'),
+        data: { entityId: entity.name, ownerId: inventoryOwner.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  };
 
   (game as any).inventoryEntityStore = new Map();
 

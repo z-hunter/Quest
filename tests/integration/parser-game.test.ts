@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Parser } from '../../src/mechanics/Parser';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 function inventoryNames(fixture: any): string[] {
   return fixture.game.inventory.map((entity: any) => entity.name);
@@ -60,6 +61,60 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('examine boombox');
 
     expect(result.messages.at(-1)).toBe('You are too far away from the Boombox.');
+  });
+
+  it('surfaces the distance error for a far but visible TAKE target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 200;
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe('You are too far away from the Compact cassette.');
+    expect(fixture.game.inventory).not.toContain(cassette);
+  });
+
+  it('does not consider inventory items as TAKE source candidates', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe("You don't see any cassette here.");
+  });
+
+  it('does not ask TAKE clarification between held and unreachable matches', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const farCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    farCassette.x = 200;
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
   });
 
   it('supports OPEN and CLOSE for reachable switches', async () => {
@@ -844,6 +899,87 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).not.toContain(key);
   });
 
+  it('can TAKE an item immediately after dropping it onto the walkbox floor', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(compactCassette);
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    musicCassette.x = 300;
+    musicCassette.y = 0;
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const dropMessages = await runSemanticParser(fixture, 'drop cassette');
+    const dropMessage = dropMessages.at(-1);
+    const takeMessages = await runSemanticParser(fixture, 'take cassette');
+
+    expect(dropMessage).toBe('You put the Compact cassette on the floor.');
+    expect(takeMessages.at(-1)).toBe('You picked up the Compact cassette.');
+    expect(fixture.game.inventory).toContain(compactCassette);
+    expect(fixture.game.inventory).not.toContain(musicCassette);
+  });
+
+  it('prefers a surface inside the active subscene before the floor for DROP', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+
+    const messages = await runSemanticParser(fixture, 'drop key');
+
+    expect(messages.at(-1)).toBe('You put the Key on the Tray.');
+    expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
+    expect(floor.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(false);
+  });
+
   it('takes all matching plural source items without clarification', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -865,6 +1001,40 @@ describe('Parser + game integration smoke', () => {
       "You picked up the Cassette 'Music'.",
     ]);
     expect(inventoryNames(fixture)).toEqual(['compact_cassette', 'music_cassette']);
+  });
+
+  it('does not ask for TAKE clarification when only one matching item is currently takeable', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const nearCassette = fixture.addEntity('near_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette on the floor.',
+      components: [{ type: 'Item' }],
+    });
+    const desk = fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.addEntity('far_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette on the desk.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'desk', relation: 'on' },
+    });
+    nearCassette.x = 0;
+    nearCassette.y = 0;
+    desk.x = 300;
+    desk.y = 0;
+    const farCassette = fixture.scene.getObjectByName('far_cassette') as any;
+    farCassette.x = 300;
+    farCassette.y = 0;
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe('You picked up the Compact cassette.');
+    expect(fixture.game.inventory).toContain(nearCassette);
+    expect(fixture.game.inventory.map((entity) => entity.name)).not.toContain('far_cassette');
   });
 
   it('treats singular and plural ALL TAKE queries the same', async () => {
