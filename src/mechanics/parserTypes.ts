@@ -7,6 +7,9 @@ export type ParserEntityContext = {
   title: string;
   item?: true;
   reachable?: true;
+  visibility?: 'visible' | 'hidden';
+  accessibility?: 'reachable' | 'blocked' | 'inaccessible';
+  hiddenReason?: 'switch' | 'blocker' | 'lookable' | 'examinable';
   x?: number;
   y?: number;
   synonyms?: string[];
@@ -133,6 +136,7 @@ export type ParserContext = {
     activeSubscene?: string;
   };
   entities?: ParserEntityContext[];
+  knownEntities?: ParserEntityContext[];
   inventory?: ParserInventoryItemContext[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
@@ -143,9 +147,12 @@ export type ParserScope = {
   visible: SceneObject[];
   held: Entity[];
   takable: Entity[];
+  putSource: Entity[];
   reachable: SceneObject[];
   examinable: SceneObject[];
   subscene: SceneObject[];
+  worldKnown: SceneObject[];
+  hiddenKnown: SceneObject[];
 };
 
 export type ParserWorldModel = {

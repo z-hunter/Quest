@@ -265,8 +265,12 @@ export class ComponentSystem {
 
     let targetX = 0;
     let targetY = 0;
+    const surfacePlacement = this.getSurfacePlacementReferencePoint(entity);
 
-    if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
+    if (surfacePlacement) {
+      targetX = surfacePlacement.x;
+      targetY = surfacePlacement.y;
+    } else if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
       const poly = (entity as any).poly as Array<{ x: number; y: number }>;
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
@@ -277,7 +281,7 @@ export class ComponentSystem {
     }
 
     const dist = Math.hypot(player.x - targetX, player.y - targetY);
-    const allowedDist = (player.width || 30) * 4;
+    const allowedDist = (player.width || 30) * 3.3;
 
     if (dist > allowedDist) {
       const title = this.getPlayerFacingTitle(game, entity);
@@ -290,6 +294,34 @@ export class ComponentSystem {
       return game?.text('engine.too_far_generic') || 'You are too far away.';
     }
 
+    return null;
+  }
+
+  private static getSurfacePlacementReferencePoint(
+    entity: SceneObject
+  ): { x: number; y: number } | null {
+    const game = (entity as any).game as IGame | undefined;
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene) return null;
+
+    const entityId = String(entity.name || '').trim();
+    const parentId =
+      typeof (entity as any).spatial?.parentNodeId === 'string'
+        ? (entity as any).spatial.parentNodeId.trim()
+        : '';
+    if (!entityId || !parentId) return null;
+
+    for (const candidate of scene.getAllSceneObjects?.() || []) {
+      if (candidate.name !== parentId) continue;
+      for (const component of this.getSurfaceComponents(candidate)) {
+        const placement = component.items?.find((item: any) => item?.id === entityId);
+        const x = Number((placement as any)?.x);
+        const y = Number((placement as any)?.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          return { x, y };
+        }
+      }
+    }
     return null;
   }
 

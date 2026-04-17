@@ -258,6 +258,11 @@ export function createTestGame(): TestGameHarness {
     return null;
   };
 
+  (game as any).canPutSourceEntity = (entity: Entity): GameActionOutcome | null => {
+    if (game.inventory.includes(entity)) return null;
+    return (game as any).canTakeEntity(entity);
+  };
+
   (game as any).inventoryEntityStore = new Map();
 
   return {

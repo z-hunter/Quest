@@ -163,7 +163,20 @@ describe('Parser world model context', () => {
     const builder = new ParserWorldModelBuilder(fixture.game as any);
     const hiddenModel = builder.build('look key', null);
     expect(hiddenModel.context.entities?.some((entity) => entity.id === 'key')).toBe(false);
+    expect(hiddenModel.context.knownEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'key',
+          title: 'Key',
+          visibility: 'hidden',
+          accessibility: 'inaccessible',
+          hiddenReason: 'lookable',
+        }),
+      ])
+    );
     expect(hiddenModel.scope.visible.map((entity) => entity.name)).not.toContain('Key');
+    expect(hiddenModel.scope.hiddenKnown.map((entity) => entity.name)).toContain('key');
+    expect(hiddenModel.scope.worldKnown.map((entity) => entity.name)).toContain('key');
 
     fixture.scene.revealHiddenEntity(key);
 
@@ -260,6 +273,63 @@ describe('Parser world model context', () => {
     expect(model.scope.reachable.map((entity) => entity.name)).not.toContain('DeskLabel');
     expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskNote');
     expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskLabel');
+  });
+
+  it('separates visible knowledge from currently actionable PUT sources', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const nearCassette = fixture.addEntity('near_cassette', {
+      title: 'Near cassette',
+      description: 'A cassette nearby.',
+      components: [{ type: 'Item' }],
+    });
+    const farCassette = fixture.addEntity('far_cassette', {
+      title: 'Far cassette',
+      description: 'A cassette far away.',
+      components: [{ type: 'Item' }],
+    });
+    nearCassette.x = 5;
+    farCassette.x = 200;
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('put cassette in box', null);
+
+    expect(model.scope.visible.map((entity) => entity.name)).toEqual(
+      expect.arrayContaining(['near_cassette', 'far_cassette'])
+    );
+    expect(model.scope.putSource.map((entity) => entity.name)).toContain('near_cassette');
+    expect(model.scope.putSource.map((entity) => entity.name)).not.toContain('far_cassette');
+  });
+
+  it('uses surface item placement for actionable reachability', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const floor = fixture.addWalkbox('Walk_main', 'in');
+    floor.components = [
+      {
+        type: 'Surface',
+        relation: 'in',
+        capacity: 10,
+        groups: [],
+        items: [{ id: 'far_cassette', x: 200, y: 0 }],
+      },
+    ];
+    const staleNearCassette = fixture.addEntity('far_cassette', {
+      title: 'Far cassette',
+      description: 'A cassette on the floor.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Walk_main', relation: 'in' },
+    });
+    staleNearCassette.x = 5;
+    staleNearCassette.y = 0;
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('put cassette under chair', null);
+
+    expect(model.scope.visible.map((entity) => entity.name)).toContain('far_cassette');
+    expect(model.scope.reachable.map((entity) => entity.name)).not.toContain('far_cassette');
+    expect(model.scope.takable.map((entity) => entity.name)).not.toContain('far_cassette');
+    expect(model.scope.putSource.map((entity) => entity.name)).not.toContain('far_cassette');
   });
 
   it('omits player inventory items from scene text layer but projects external inventory items by slot relation', () => {

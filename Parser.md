@@ -121,6 +121,7 @@ flowchart TD
 - `rawInput` и `normalizedInput` как metadata текущего цикла parser-а;
 - текущую сцену (`id`, `name`, `title`, `description`, `activeSubscene`);
 - список текстово значимых объектов сцены;
+- отдельный список `knownEntities` для объектов, известных движку, но не раскрытых player-facing текстовому слою;
 - инвентарь игрока;
 - spatial nodes and relation projection, derived from the runtime scene hierarchy;
 - `pending state`, если parser уже ждёт уточнение.
@@ -129,16 +130,29 @@ flowchart TD
 - `visible`
 - `held`
 - `takable`
+- `putSource`
 - `reachable`
 - `examinable`
 - `subscene`
-- `sceneTargets`
+- `worldKnown`
+- `hiddenKnown`
 
 Важно:
 - `ParserWorldModelBuilder` не интерпретирует пользовательский ввод;
 - он не выбирает intent;
 - он не определяет target;
 - он лишь даёт parser-у картину мира.
+
+Scope slices intentionally separate knowledge from actionability:
+- `visible` means the player-facing text layer may refer to the object;
+- `reachable` means the object is visible, unblocked and close enough for direct interaction;
+- `takable` means the object is a valid current source for `TAKE`;
+- `putSource` means the object is a valid current source for `PUT` when paired with a destination; this includes held items through `held` and reachable scene items through `putSource`;
+- `worldKnown` / `hiddenKnown` are awareness-only slices for higher parser cascades and diagnostics. Built-in Stage 1 commands and clarification options must not use them as actionable candidates.
+
+Clarification must be role-aware. If a command asks the player to choose a source item, options must come from the command's actionable source scope, not from all visible or known objects. Visible-but-unreachable objects may still be used for diagnostics, so parser can answer "You are too far away from X" instead of pretending the object does not exist, but they should not appear as selectable clarification options.
+
+For items stored on `Surface` components, reachability must use the item's `Surface.items` placement coordinates when they exist. `entity.x/y` can lag behind or represent an implementation detail; clarification scopes must follow the actual surface placement that the player sees.
 
 Spatial-проекция приходит из `Game` уже в терминах world model. В частности, `Subscene` раскрывает для runtime и parser-а только **непосредственный** уровень вложенности за одну активацию: parser не должен сам вычислять рекурсивное раскрытие поддерева.
 

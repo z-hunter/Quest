@@ -534,7 +534,7 @@ export class Parser {
   }
 
   private getPutGroupSourceCandidates(rawTarget: string | null): Entity[] {
-    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'takable'] : ['held'];
+    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'putSource'] : ['held'];
     return this.getScopeCandidates(sourceScopes).filter(
       (candidate): candidate is Entity => candidate instanceof Entity
     );
@@ -2643,6 +2643,25 @@ export class Parser {
     return this.game.takeEntity(entity);
   }
 
+  private resolvePutSourceFailureForKnownEntity(entity: Entity): GameActionOutcome | null {
+    const canPutSourceOutcome = (this.game as any).canPutSourceEntity?.(entity);
+    if (canPutSourceOutcome) return canPutSourceOutcome;
+    return null;
+  }
+
+  private resolveFailedPutSourceDiagnostic(
+    rawTarget: string,
+    candidates: SceneObject[]
+  ): GameActionOutcome | null {
+    const matches = this.findResolutionMatchesInCandidates(rawTarget, candidates).filter(
+      (candidate): candidate is Entity => candidate instanceof Entity
+    );
+    if (!matches.length) return null;
+
+    const preferred = (this.choosePreferredObject(matches) || matches[0]) as Entity;
+    return this.resolvePutSourceFailureForKnownEntity(preferred);
+  }
+
   private filterCurrentlyTakeableCandidates(candidates: SceneObject[]): Entity[] {
     return candidates.filter((candidate): candidate is Entity => {
       if (!(candidate instanceof Entity)) return false;
@@ -2668,7 +2687,7 @@ export class Parser {
     const normalizedItem = String(rawItem || '')
       .trim()
       .toUpperCase();
-    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'takable'] : ['held'];
+    const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'putSource'] : ['held'];
     const sourceCandidates = this.getScopeCandidates(sourceScopes);
     if (rawTarget && normalizedItem) {
       let sourceMatches = sourceCandidates.filter((sceneObject: SceneObject) =>
@@ -2706,6 +2725,20 @@ export class Parser {
           code: 'put_target_not_found',
           message: this.game.text('parser.look_not_found', { target: rawTarget }),
           data: { target: rawTarget },
+          recoverable: true,
+        };
+      }
+      if (
+        preResolvedTarget?.status === 'found' &&
+        relation &&
+        typeof (this.game as any).hasPutStorageForRelation === 'function' &&
+        !(this.game as any).hasPutStorageForRelation(preResolvedTarget.entity, relation)
+      ) {
+        return {
+          status: 'failed',
+          code: 'put_target_not_found',
+          message: this.game.text('parser.put_no_place'),
+          data: { target: rawTarget, relation, item: rawItem },
           recoverable: true,
         };
       }
@@ -2795,26 +2828,35 @@ export class Parser {
         recoverable: true,
       };
     }
-    if (heldResolved.status === 'ambiguous' || broadResolved?.status === 'ambiguous') {
-      const ambiguousResult =
-        heldResolved.status === 'ambiguous'
-          ? heldResolved
-          : broadResolved?.status === 'ambiguous'
-            ? broadResolved
-            : null;
+    if (heldResolved.status === 'ambiguous') {
       return {
         status: 'needs_clarification',
         code: 'ambiguous_put_item',
-        message:
-          ambiguousResult?.message || this.game.text('parser.put_which_item', { options: '' }),
+        message: heldResolved.message || this.game.text('parser.put_which_item', { options: '' }),
         data: {
           item: rawItem,
-          options: ambiguousResult?.options || [],
+          options: heldResolved.options || [],
           clarificationOptions: this.withClarificationScope(
-            ambiguousResult?.clarificationOptions,
+            heldResolved.clarificationOptions,
             'source'
           ),
         },
+        recoverable: true,
+      };
+    }
+    if (broadResolved?.status === 'ambiguous') {
+      const failure = this.resolveFailedPutSourceDiagnostic(
+        rawItem,
+        this.getScopeCandidates(['visible'])
+      );
+      if (failure) return failure;
+      return {
+        status: 'failed',
+        code: rawTarget ? 'entity_not_found' : 'put_item_not_held',
+        message: rawTarget
+          ? this.game.text('parser.look_not_found', { target: rawItem })
+          : this.game.text('parser.put_item_not_held', { item: rawItem }),
+        data: { item: rawItem },
         recoverable: true,
       };
     }
@@ -2836,6 +2878,11 @@ export class Parser {
         : broadResolved?.status === 'found'
           ? (broadResolved.entity as Entity)
           : null;
+
+    if (heldResolved.status !== 'found' && sourceEntity) {
+      const sourceFailure = this.resolvePutSourceFailureForKnownEntity(sourceEntity);
+      if (sourceFailure) return sourceFailure;
+    }
 
     if (!sourceEntity) {
       return {
@@ -3588,9 +3635,12 @@ export class Parser {
       visible: scope.visible.map((entity) => entity.name),
       held: scope.held.map((entity) => entity.name),
       takable: scope.takable.map((entity) => entity.name),
+      putSource: scope.putSource.map((entity) => entity.name),
       reachable: scope.reachable.map((entity) => entity.name),
       examinable: scope.examinable.map((entity) => entity.name),
       subscene: scope.subscene.map((entity) => entity.name),
+      worldKnown: scope.worldKnown.map((entity) => entity.name),
+      hiddenKnown: scope.hiddenKnown.map((entity) => entity.name),
     };
   }
 

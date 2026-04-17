@@ -2,7 +2,7 @@ import type { Game } from '../core/Game';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
-import { buildSceneTextLayerSnapshot } from '../scene/SceneTextLayer';
+import { buildSceneTextLayerSnapshot, getSceneTextLayerAccessState } from '../scene/SceneTextLayer';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
@@ -40,6 +40,7 @@ export class ParserWorldModelBuilder {
       : undefined;
     const sceneContext = scene ? this.buildSceneContext(scene) : undefined;
     const entities = scene ? this.buildEntityContexts(scene) : [];
+    const knownEntities = scene ? this.buildKnownEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
     const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
     const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
@@ -57,6 +58,7 @@ export class ParserWorldModelBuilder {
       player: playerContext,
       scene: sceneContext,
       entities,
+      knownEntities,
       inventory,
       spatialNodes,
       spatialRelations,
@@ -111,6 +113,43 @@ export class ParserWorldModelBuilder {
           details:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           interactions,
+        });
+      })
+      .filter((entity): entity is ParserEntityContext => !!entity);
+  }
+
+  private buildKnownEntityContexts(scene: Scene): ParserEntityContext[] {
+    const visibleIds = new Set(this.buildEntityContexts(scene).map((entity) => entity.id));
+    return scene
+      .getAllSceneObjects()
+      .map((sceneObject) => {
+        const title = this.getPlayerFacingObjectTitle(sceneObject);
+        if (!title) return null;
+        if (visibleIds.has(sceneObject.name)) return null;
+        if ((this.game as any).isEntityInInventory?.(sceneObject)) return null;
+
+        const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
+        const isItem = !!sceneObject.components?.find(
+          (component: any) => component?.type === 'Item'
+        );
+        return this.compactRecord<ParserEntityContext>({
+          id: sceneObject.name,
+          title,
+          item: isItem || undefined,
+          visibility: accessState.hidden ? 'hidden' : 'visible',
+          accessibility: accessState.blocked
+            ? 'blocked'
+            : accessState.hidden || sceneObject.disabled || accessState.inInactiveSubscene
+              ? 'inaccessible'
+              : undefined,
+          hiddenReason: accessState.hiddenReason || undefined,
+          synonyms: this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms'),
+          description:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
+            undefined,
+          details:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
+          interactions: Object.keys(sceneObject.interactions || {}),
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -179,20 +218,6 @@ export class ParserWorldModelBuilder {
     const held = (this.game.inventory || []).filter(
       (entity: Entity) => !!this.getPlayerFacingObjectTitle(entity)
     );
-    const takable = visible
-      .filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity)
-      .filter((entity: Entity) => {
-        if (entity.disabled) return false;
-        const isItem =
-          entity.components &&
-          entity.components.find((component: any) => component.type === 'Item');
-        const entry = textLayer?.entryById.get(entity.name);
-        return (
-          (!!isItem || !!entity.isTakeable) &&
-          !entry?.blocked &&
-          !(this.game as any).canTakeEntity?.(entity)
-        );
-      });
     const externalTakable = Array.isArray((this.game as any).getAccessibleInventoryItems?.())
       ? ((this.game as any).getAccessibleInventoryItems() as Entity[])
       : [];
@@ -207,6 +232,22 @@ export class ParserWorldModelBuilder {
             !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
         )
       : [];
+    const reachableSet = new Set(reachable);
+    const subsceneSet = new Set(subscene);
+    const visibleItems = visible
+      .filter((sceneObject): sceneObject is Entity => sceneObject instanceof Entity)
+      .filter((entity: Entity) => {
+        if (entity.disabled) return false;
+        const isItem =
+          entity.components &&
+          entity.components.find((component: any) => component.type === 'Item');
+        const entry = textLayer?.entryById.get(entity.name);
+        return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
+      });
+    const takable = visibleItems.filter((entity) => !(this.game as any).canTakeEntity?.(entity));
+    const putSource = visibleItems
+      .filter((entity) => reachableSet.has(entity) || subsceneSet.has(entity))
+      .filter((entity) => !(this.game as any).canPutSourceEntity?.(entity));
     const examinable = this.uniqueObjects([...held, ...subscene, ...reachable]);
     return {
       visible,
@@ -215,9 +256,24 @@ export class ParserWorldModelBuilder {
         ...takable,
         ...externalTakable.filter((entity: Entity) => !(this.game as any).canTakeEntity?.(entity)),
       ]),
+      putSource: this.uniqueObjects([
+        ...putSource,
+        ...externalTakable.filter(
+          (entity: Entity) => !(this.game as any).canPutSourceEntity?.(entity)
+        ),
+      ]),
       reachable,
       examinable,
       subscene,
+      worldKnown: scene ? scene.getAllSceneObjects() : [],
+      hiddenKnown: scene
+        ? scene
+            .getAllSceneObjects()
+            .filter((sceneObject) => !!this.getPlayerFacingObjectTitle(sceneObject))
+            .filter(
+              (sceneObject) => !visible.some((visibleObject) => visibleObject === sceneObject)
+            )
+        : [],
     };
   }
 

@@ -432,6 +432,172 @@ describe('Parser + game integration smoke', () => {
     expect(typoTarget.pendingIntent).toBeNull();
   });
 
+  it('does not ask PUT source clarification for visible but unreachable source matches', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'compact'],
+    });
+    fixture.scene.removeEntity(compactCassette);
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    musicCassette.x = 200;
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+    chair.x = 10;
+
+    const messages = await runSemanticParser(fixture, 'put cassette under chair');
+
+    expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
+    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'compact_cassette' })])
+    );
+    expect(fixture.game.inventory).not.toContain(compactCassette);
+    expect(fixture.game.inventory).not.toContain(musicCassette);
+  });
+
+  it('does not ask PUT source clarification when the requested relation has no target storage', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'cassete', 'compact'],
+    });
+    fixture.scene.removeEntity(compactCassette);
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      synonyms: ['cassette', 'cassete', 'music'],
+    });
+    musicCassette.x = 200;
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+      components: [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }],
+    });
+    chair.x = 10;
+
+    const messages = await runSemanticParser(fixture, 'put cassette under chair');
+
+    expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
+    expect(messages.at(-1)).toBe("You can't put that there.");
+    expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual([]);
+    expect(fixture.game.inventory).toContain(compactCassette);
+  });
+
+  it('does not ask PUT source clarification when a walkbox item placement is unreachable', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'cassete', 'compact'],
+    });
+    fixture.scene.removeEntity(compactCassette);
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette on the floor.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette on the floor.',
+      synonyms: ['cassette', 'cassete', 'music'],
+    });
+    musicCassette.x = 5;
+    musicCassette.y = 0;
+    const floor = fixture.addWalkbox('Walk_main', 'in');
+    floor.components = [
+      {
+        type: 'Surface',
+        relation: 'in',
+        capacity: 10,
+        groups: [],
+        items: [{ id: 'music_cassette', x: 200, y: 0 }],
+      },
+    ];
+    musicCassette.spatial = { parentNodeId: 'Walk_main', relation: 'in' };
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+    chair.x = 10;
+
+    const messages = await runSemanticParser(fixture, 'put cassete under chair');
+
+    expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
+    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect(fixture.game.inventory).not.toContain(compactCassette);
+    expect(fixture.game.inventory).not.toContain(musicCassette);
+  });
+
+  it('reports why a visible PUT source cannot currently be used instead of clarifying', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A far cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    musicCassette.x = 200;
+    const chair = fixture.addEntity('chair', {
+      title: 'Chair',
+      description: 'A chair.',
+      components: [{ type: 'Surface', relation: 'under', capacity: 2, groups: [], items: [] }],
+    });
+    chair.x = 10;
+
+    const messages = await runSemanticParser(fixture, 'put cassette under chair');
+
+    expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
+    expect(messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual([]);
+  });
+
   it('does not ask for PUT clarification when all source matches have the same title', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

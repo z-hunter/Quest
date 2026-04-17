@@ -87,6 +87,7 @@ The behavior is equivalent to resolving an ambiguity clarification and answering
 
 Important rules:
 - group syntax selects **source items**, not multiple destinations;
+- source selection and clarification use actionable source scopes (`takable` for `TAKE`, `held + putSource` for `PUT`), not all visible/known objects;
 - group input expands into a linear parser plan of ordinary `takeTarget` / `putTarget` actions;
 - execution remains stop-on-error through `Parser Core`;
 - `all` selects every matching source item in the command's normal source scope;
@@ -101,6 +102,7 @@ For `PUT`, target resolution has priority:
 - source items already stored in the selected destination are filtered out before building the batch.
 - relation targets such as `PUT cassette UNDER chair` resolve only to an existing `Inventory`/`Surface` slot for that relation; parser/runtime checks must not auto-create missing containers.
 - for untitled technical storage nodes, the relation to the player-facing target is the first spatial relation from the nearest titled parent to that technical chain. A Surface inside an untitled `UNDER` child of `Chair` is therefore treated as `UNDER chair`, even if the Surface's internal placement relation is `ON`.
+- visible but currently unusable source items are reserved for diagnostics, not clarification. For example, a far cassette can produce a distance-specific failure, but it must not be offered as a selectable source option when a usable cassette is available.
 
 Custom command assets do not currently declare group syntax. They should continue to use normal argument resolution and pending clarification until the command asset format explicitly grows a group-argument feature.
 

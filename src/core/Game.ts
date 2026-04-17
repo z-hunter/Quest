@@ -1057,6 +1057,14 @@ export class Game implements IGame {
     );
   }
 
+  hasPutStorageForRelation(target: SceneObject, relation: SpatialRelationType | null): boolean {
+    if (relation !== 'in' && relation !== 'on' && relation !== 'under' && relation !== 'behind') {
+      return false;
+    }
+    const storage = this.findPreferredStorageForRelation(target, relation, false);
+    return !!storage.inventory || !!storage.surface;
+  }
+
   private getAutoDropSurface() {
     return this.inventoryManager.getAutoDropSurface(this.getBlockedAccessOutcome.bind(this));
   }
@@ -1819,6 +1827,11 @@ export class Game implements IGame {
       };
     }
     return null;
+  }
+
+  canPutSourceEntity(entity: Entity): GameActionOutcome | null {
+    if (this.isEntityInInventory(entity)) return null;
+    return this.getPuttableSourceFailure(entity);
   }
 
   putEntity(
