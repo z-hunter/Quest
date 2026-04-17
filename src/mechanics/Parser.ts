@@ -1866,9 +1866,61 @@ export class Parser {
     const sourceScopes: Array<keyof ParserScope> = rawTarget ? ['held', 'takable'] : ['held'];
     const sourceCandidates = this.getScopeCandidates(sourceScopes);
     if (rawTarget && normalizedItem) {
-      const sourceMatches = sourceCandidates.filter((sceneObject: SceneObject) =>
+      let sourceMatches = sourceCandidates.filter((sceneObject: SceneObject) =>
         this.getObjectLookupTokens(sceneObject).includes(normalizedItem)
       );
+      const preResolvedTarget = sourceMatches.length
+        ? this.resolveContainerAnchor(
+            rawTarget,
+            relation === 'in'
+              ? ['held', 'visible', 'subscene']
+              : ['visible', 'reachable', 'held', 'subscene'],
+            'parser.put_which_target',
+            new Set(sourceMatches)
+          )
+        : null;
+      if (sourceMatches.length > 1 && preResolvedTarget?.status === 'escalate') {
+        return { status: 'escalate', code: preResolvedTarget.code, recoverable: true };
+      }
+      if (sourceMatches.length > 1 && preResolvedTarget?.status === 'ambiguous') {
+        return {
+          status: 'needs_clarification',
+          code: 'ambiguous_put_target',
+          message: preResolvedTarget.message,
+          data: { target: rawTarget, options: preResolvedTarget.options },
+          recoverable: true,
+        };
+      }
+      if (sourceMatches.length > 1 && preResolvedTarget?.status === 'not_found') {
+        return {
+          status: 'failed',
+          code: 'put_target_not_found',
+          message: this.game.text('parser.look_not_found', { target: rawTarget }),
+          data: { target: rawTarget },
+          recoverable: true,
+        };
+      }
+      const viableSourceMatches =
+        preResolvedTarget?.status === 'found'
+          ? sourceMatches.filter(
+              (sceneObject) =>
+                !this.isPutSourceAlreadyInTarget(
+                  sceneObject,
+                  preResolvedTarget.entity,
+                  relation || null
+                )
+            )
+          : sourceMatches;
+      if (viableSourceMatches.length && viableSourceMatches.length < sourceMatches.length) {
+        const viableSet = new Set(viableSourceMatches);
+        for (let index = sourceCandidates.length - 1; index >= 0; index -= 1) {
+          const candidate = sourceCandidates[index];
+          if (sourceMatches.includes(candidate) && !viableSet.has(candidate)) {
+            sourceCandidates.splice(index, 1);
+          }
+        }
+        sourceMatches = viableSourceMatches;
+      }
       const hasHeldMatch = sourceMatches.some((sceneObject) =>
         this.game.inventory.includes(sceneObject as Entity)
       );
@@ -2008,7 +2060,7 @@ export class Parser {
       return {
         status: 'failed',
         code: 'put_target_not_found',
-        message: this.game.text('parser.put_target_not_found', { target: rawTarget }),
+        message: this.game.text('parser.look_not_found', { target: rawTarget }),
         data: { target: rawTarget },
         recoverable: true,
       };
@@ -2017,6 +2069,28 @@ export class Parser {
     return this.game.putEntity(sourceEntity, resolvedTarget.entity, {
       relation: relation || null,
     });
+  }
+
+  private isPutSourceAlreadyInTarget(
+    source: SceneObject,
+    target: SceneObject,
+    relation: ParserRelationType | null
+  ): boolean {
+    if (!(source instanceof Entity)) return false;
+    if (
+      target instanceof Entity &&
+      (relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind') &&
+      this.game.hasInventoryEntity(target, source, relation)
+    ) {
+      return true;
+    }
+
+    const normalizedRelation =
+      relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+        ? relation
+        : 'on';
+    const surfaceComponent = ComponentSystem.getSurfaceComponent(target, normalizedRelation);
+    return !!surfaceComponent?.items?.some((item: any) => item?.id === source.name);
   }
 
   private resolveOpenCloseTarget(

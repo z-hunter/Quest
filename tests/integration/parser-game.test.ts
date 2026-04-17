@@ -292,7 +292,7 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
-  it('does not put a clarified source into a titled item already inside the target container', async () => {
+  it('does not ask which PUT source when only one matching source is not already in the target', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const compactCassette = fixture.addEntity('compact_cassette', {
@@ -341,17 +341,19 @@ describe('Parser + game integration smoke', () => {
       synonyms: ['recorder'],
     });
 
-    const ambiguous = await fixture.run('put cassette into recorder');
-    expect(ambiguous.messages.at(-1)).toContain('Which item do you want to put down');
-
-    const resolved = await fixture.run('Music');
-    expect(resolved.messages.at(-1)).toBe('There is no more room in the Boombox.');
+    const result = await fixture.run('put cassette into recorder');
+    expect(result.messages.at(-1)).toBe('There is no more room in the Boombox.');
+    expect(result.pendingIntent).toBeNull();
     expect(
       (compactCassette.components?.[1] as { items?: string[] } | undefined)?.items || []
     ).not.toContain(musicCassette.name);
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       compactCassette.name,
     ]);
+
+    const typoTarget = await fixture.run('put cassette into recirder');
+    expect(typoTarget.messages.at(-1)).toBe("You don't see any recirder here.");
+    expect(typoTarget.pendingIntent).toBeNull();
   });
 
   it('does not ask for PUT clarification when all source matches have the same title', async () => {
