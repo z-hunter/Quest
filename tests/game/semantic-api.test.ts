@@ -1042,6 +1042,55 @@ describe('Game semantic API', () => {
     expect(placedIds).toContain('someone_id');
   });
 
+  it('dropEntity reports a full untitled auto-drop surface using its titled parent', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [],
+    });
+    fixture.addEntity('other', {
+      title: 'Other item',
+      description: 'An existing item.',
+      components: [{ type: 'Item' }],
+    });
+    const deskSurface = fixture.addTriggerbox('desk_surface', {
+      title: null,
+      description: 'Desk surface.',
+      spatial: { parentNodeId: 'desk', relation: 'on' },
+      components: [
+        {
+          type: 'Surface',
+          relation: 'on',
+          capacity: 1,
+          groups: [],
+          items: [{ id: 'other', x: 0, y: 0 }],
+        },
+      ],
+    });
+    deskSurface.poly = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ];
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A tape.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+
+    const outcome = fixture.game.putEntity(cassette, null, { relation: null });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('surface_full');
+    expect(outcome.message).toBe('There is no more room on the Desk.');
+    expect(fixture.game.inventory).toContain(cassette);
+  });
+
   it('surface placement keeps randomness by choosing among valid samples', () => {
     const runPlacement = (randomValue: number) => {
       const fixture = createGameSemanticFixture();

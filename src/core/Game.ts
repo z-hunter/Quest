@@ -660,7 +660,42 @@ export class Game implements IGame {
     const title = this.getPlayerFacingObjectTitle(target);
     if (title) return title;
     if (target.type === 'Walkbox') return 'floor';
+    const parentId =
+      typeof (target as any).spatial?.parentNodeId === 'string'
+        ? (target as any).spatial.parentNodeId.trim()
+        : '';
+    if (parentId) {
+      const parent = this.sceneManager.currentScene?.getObjectByName(parentId) || null;
+      const parentTitle = parent ? this.getPlayerFacingObjectTitle(parent) : null;
+      if (parentTitle) return parentTitle;
+    }
     return null;
+  }
+
+  private getPutDistanceFailure(
+    storageObject: SceneObject,
+    anchor?: SceneObject | null
+  ): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const distanceProbe = anchor || storageObject;
+    const distanceError = ComponentSystem.getInteractionDistanceError(
+      distanceProbe as any,
+      scene.player
+    );
+    if (!distanceError) return null;
+
+    const targetTitle = this.getPutTargetTitle(distanceProbe);
+    return {
+      status: 'failed',
+      code: 'put_target_too_far',
+      message: targetTitle
+        ? this.text('engine.too_far_from_entity', { target: targetTitle })
+        : distanceError,
+      data: { targetId: distanceProbe.name, storageId: storageObject.name },
+      recoverable: true,
+    };
   }
 
   private getPutAccessibilityFailure(
@@ -673,19 +708,35 @@ export class Game implements IGame {
     const blockedOutcome = this.getBlockedAccessOutcome(storageObject);
     if (blockedOutcome) return blockedOutcome;
 
-    const distanceProbe = anchor || storageObject;
-    const distanceError = ComponentSystem.getInteractionDistanceError(
-      distanceProbe as any,
-      scene.player
-    );
-    if (distanceError) {
-      return {
-        status: 'failed',
-        code: 'put_target_too_far',
-        message: distanceError,
-        data: { targetId: distanceProbe.name, storageId: storageObject.name },
-        recoverable: true,
-      };
+    const distanceFailure = this.getPutDistanceFailure(storageObject, anchor);
+    if (distanceFailure) return distanceFailure;
+
+    return null;
+  }
+
+  private getAutoDropUnavailableFailure(): GameActionOutcome | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const surfaces = scene
+      .getAllSceneObjects()
+      .filter((candidate) => !!ComponentSystem.getSurfaceComponent(candidate, 'on'))
+      .sort((left, right) => {
+        const a = this.getSceneObjectReferencePoint(left);
+        const b = this.getSceneObjectReferencePoint(right);
+        const player = scene.player;
+        const aDistance = player ? Math.hypot(player.x - a.x, player.y - a.y) : 0;
+        const bDistance = player ? Math.hypot(player.x - b.x, player.y - b.y) : 0;
+        if (aDistance !== bDistance) return aDistance - bDistance;
+        return left.name.localeCompare(right.name);
+      });
+
+    for (const surface of surfaces) {
+      const blockedOutcome = this.getBlockedAccessOutcome(surface);
+      if (blockedOutcome) continue;
+
+      const distanceFailure = this.getPutDistanceFailure(surface);
+      if (distanceFailure) return distanceFailure;
     }
 
     return null;
@@ -1681,6 +1732,10 @@ export class Game implements IGame {
             relation: autoDropSurface.relation,
           }
         : null;
+      if (!destinationSurface) {
+        const autoDropFailure = this.getAutoDropUnavailableFailure();
+        if (autoDropFailure) return autoDropFailure;
+      }
     } else if (
       relation === 'in' ||
       relation === 'on' ||

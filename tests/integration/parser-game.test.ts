@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
+import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
+import { Parser } from '../../src/mechanics/Parser';
 
 function inventoryNames(fixture: any): string[] {
   return fixture.game.inventory.map((entity: any) => entity.name);
+}
+
+async function runSemanticParser(
+  fixture: ReturnType<typeof createGameSemanticFixture>,
+  input: string
+) {
+  fixture.game.console = {
+    parserStage1Enabled: true,
+    parserStage2Enabled: false,
+    parserPeekEnabled: false,
+    log() {},
+  } as any;
+  const parser = new Parser(fixture.game);
+  await parser.parse(input);
+  return fixture.messages;
 }
 
 describe('Parser + game integration smoke', () => {
@@ -721,6 +738,58 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put key on tray');
 
     expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
+  });
+
+  it('surfaces a distance-specific error for DROP when the nearest drop surface is too far away', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A tape.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(cassette);
+    fixture.game.inventory.push(cassette);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [],
+    });
+    fixture.addEntity('drawer', {
+      title: 'upper drawer',
+      description: 'A closed drawer.',
+      spatial: { parentNodeId: 'desk', relation: 'in' },
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true }],
+    });
+    const drawerSurface = fixture.addTriggerbox('drawer_surface', {
+      title: null,
+      description: 'Drawer surface.',
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }],
+    });
+    drawerSurface.poly = [
+      { x: 20, y: 0 },
+      { x: 30, y: 0 },
+      { x: 30, y: 10 },
+      { x: 20, y: 10 },
+    ];
+    const deskSurface = fixture.addTriggerbox('desk_surface', {
+      title: null,
+      description: 'Desk surface.',
+      spatial: { parentNodeId: 'desk', relation: 'on' },
+      components: [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }],
+    });
+    deskSurface.poly = [
+      { x: 250, y: 0 },
+      { x: 260, y: 0 },
+      { x: 260, y: 10 },
+      { x: 250, y: 10 },
+    ];
+
+    const messages = await runSemanticParser(fixture, 'drop cassette');
+
+    expect(messages.at(-1)).toBe('You are too far away from the Desk.');
+    expect(fixture.game.inventory).toContain(cassette);
   });
 
   it('takes all matching plural source items without clarification', async () => {
