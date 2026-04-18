@@ -23,6 +23,8 @@ import {
   getInactiveSubsceneAncestors,
   getSceneTextRelationDescendants,
   getSceneTextLayerAccessState,
+  getSceneTextRelationAccessStates,
+  getSceneTextTargetDescriptor,
 } from '../scene/SceneTextLayer';
 
 import type { IGame } from './IGame';
@@ -37,6 +39,10 @@ type PutTargetTextDescriptor = {
   title: string;
   relation: SpatialRelationType;
 };
+
+type RelationScopedTakeCandidates =
+  | { status: 'resolved'; candidates: Entity[]; hasStorage: boolean }
+  | GameActionOutcome;
 
 export class Game implements IGame {
   public static instance: Game;
@@ -668,44 +674,13 @@ export class Game implements IGame {
     }
   }
 
-  private getNormalizedTextRelation(
-    relation: SpatialRelationType | null | undefined
-  ): SpatialRelationType | null {
-    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
-      ? relation
-      : null;
-  }
-
   private getPutTargetDescriptor(
     target: SceneObject | null | undefined,
     fallbackRelation?: SpatialRelationType | null
   ): PutTargetTextDescriptor | null {
-    if (!target) return null;
-
-    const relation = this.getNormalizedTextRelation(fallbackRelation) || 'on';
-    if (target.type === 'Walkbox') {
-      return { title: 'floor', relation: 'on' };
-    }
-
-    const title = this.getPlayerFacingObjectTitle(target);
-    if (title) return { title, relation };
-
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
-
-    const accessState = getSceneTextLayerAccessState(scene, this, target);
-    if (accessState.effectiveParentId && accessState.effectiveRelation) {
-      const parent = scene.getObjectByName(accessState.effectiveParentId);
-      const parentTitle = parent ? this.getPlayerFacingObjectTitle(parent) : null;
-      if (parentTitle) {
-        return {
-          title: parentTitle,
-          relation: accessState.effectiveRelation,
-        };
-      }
-    }
-
-    return null;
+    return getSceneTextTargetDescriptor(scene, this, target, fallbackRelation);
   }
 
   private getSurfaceDropMessage(
@@ -1111,6 +1086,153 @@ export class Game implements IGame {
     return !!storage.inventory || !!storage.surface;
   }
 
+  getRelationScopedTakeCandidates(
+    anchor: SceneObject,
+    relation: SpatialRelationType | 'near'
+  ): RelationScopedTakeCandidates {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || relation === 'near') {
+      return { status: 'resolved', candidates: [], hasStorage: false };
+    }
+
+    const storageCandidates = this.inventoryManager.findStorageCandidatesForRelation(
+      anchor,
+      relation,
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this),
+      false
+    );
+    const accessibleInventories = storageCandidates.inventoryOwners.filter((storage) =>
+      this.isInventoryAccessibleFromAnchor(storage.owner, anchor, storage.relation)
+    );
+    const accessibleSurfaces = storageCandidates.surfaces.filter((storage) =>
+      this.isSurfaceAccessibleFromAnchor(storage.surface, anchor)
+    );
+
+    const textLayer = buildSceneTextLayerSnapshot(scene, this);
+    const getRelationCandidates = (candidateRelation: SpatialRelationType) =>
+      getSceneTextRelationDescendants(textLayer, anchor.name, candidateRelation)
+        .map((entry) => entry.object)
+        .filter((candidate): candidate is Entity => candidate instanceof Entity)
+        .filter((candidate) => !candidate.disabled)
+        .filter(
+          (candidate) =>
+            candidate.components?.some((component: any) => component?.type === 'Item') ||
+            candidate.isTakeable
+        );
+    let directCandidates = getRelationCandidates(relation);
+
+    if (relation === 'in' && !directCandidates.length) {
+      const relationOutcome = this.describeSpatialRelation(anchor.name, 'in');
+      if (relationOutcome.status === 'failed') {
+        return relationOutcome;
+      }
+
+      directCandidates = ['on', 'under', 'behind'].flatMap((candidateRelation) =>
+        getRelationCandidates(candidateRelation as SpatialRelationType)
+      );
+    }
+
+    const semanticContents = getSceneTextRelationDescendants(textLayer, anchor.name, relation);
+    const fallbackSemanticContents =
+      relation === 'in' && !semanticContents.length
+        ? ['on', 'under', 'behind'].flatMap((candidateRelation) =>
+            getSceneTextRelationDescendants(
+              textLayer,
+              anchor.name,
+              candidateRelation as SpatialRelationType
+            )
+          )
+        : [];
+
+    if (accessibleInventories.length || accessibleSurfaces.length) {
+      const candidates: Entity[] = [];
+      for (const storage of accessibleInventories) {
+        candidates.push(...this.getInventoryEntities(storage.owner, storage.relation));
+      }
+      for (const storage of accessibleSurfaces) {
+        candidates.push(
+          ...this.inventoryManager.getSurfaceEntities(storage.surface, storage.relation)
+        );
+      }
+      candidates.push(...directCandidates);
+      return {
+        status: 'resolved',
+        candidates: Array.from(new Set(candidates)),
+        hasStorage: true,
+      };
+    }
+
+    if (directCandidates.length) {
+      return {
+        status: 'resolved',
+        candidates: directCandidates,
+        hasStorage: true,
+      };
+    }
+
+    for (const storage of [...storageCandidates.inventoryOwners, ...storageCandidates.surfaces]) {
+      const storageObject = 'owner' in storage ? storage.owner : storage.surface;
+      const blockedOutcome = this.getBlockedAccessOutcome(storageObject);
+      if (blockedOutcome) return blockedOutcome;
+    }
+
+    return {
+      status: 'resolved',
+      candidates: [],
+      hasStorage:
+        semanticContents.length > 0 ||
+        fallbackSemanticContents.length > 0 ||
+        storageCandidates.inventoryOwners.length > 0 ||
+        storageCandidates.surfaces.length > 0,
+    };
+  }
+
+  isEntityInPutTarget(
+    source: SceneObject,
+    target: SceneObject,
+    relation: SpatialRelationType | 'near' | null
+  ): boolean {
+    if (!(source instanceof Entity)) return false;
+
+    if (relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind') {
+      const storage = this.findPreferredStorageForRelation(target, relation, false);
+      if (
+        storage.inventory &&
+        this.getInventoryEntities(storage.inventory.owner, storage.inventory.relation).includes(
+          source
+        )
+      ) {
+        return true;
+      }
+      if (
+        storage.surface &&
+        this.inventoryManager
+          .getSurfaceEntities(storage.surface.surface, storage.surface.relation)
+          .includes(source)
+      ) {
+        return true;
+      }
+    }
+
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return false;
+    const textLayer = buildSceneTextLayerSnapshot(scene, this);
+    const semanticRelation =
+      relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+        ? relation
+        : null;
+    const relations: SpatialRelationType[] = semanticRelation
+      ? [semanticRelation]
+      : ['in', 'on', 'under', 'behind'];
+
+    return relations.some((candidateRelation) =>
+      getSceneTextRelationDescendants(textLayer, target.name, candidateRelation).some(
+        (entry) => entry.object === source
+      )
+    );
+  }
+
   private getAutoDropSurface() {
     return this.inventoryManager.getAutoDropSurface(this.getBlockedAccessOutcome.bind(this));
   }
@@ -1120,6 +1242,13 @@ export class Game implements IGame {
     relation: Exclude<SpatialRelationType, 'near'> = 'in'
   ): Entity[] {
     return this.inventoryManager.getInventoryEntities(owner, relation);
+  }
+
+  getSurfaceEntities(
+    surface: SceneObject,
+    relation: Exclude<SpatialRelationType, 'near'> = 'on'
+  ): Entity[] {
+    return this.inventoryManager.getSurfaceEntities(surface, relation);
   }
 
   hasInventoryEntity(
@@ -1569,29 +1698,24 @@ export class Game implements IGame {
         ?.map((entry) => entry.title)
         .filter((title): title is string => !!title) || [];
 
-    if (!childTitles.length) {
-      const revealableLookables = scene
-        .getAllSceneObjects()
-        .map((object) => getSceneTextLayerAccessState(scene, this, object))
-        .filter(
-          (accessState) =>
-            !!accessState.title &&
-            accessState.hiddenReason === 'lookable' &&
-            accessState.effectiveParentId === anchorNodeId &&
-            accessState.effectiveRelation === relation
-        );
-      if (revealableLookables.length) {
-        revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
-        const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this);
-        childTitles =
-          getSceneTextRelationDescendants(
-            revealedTextLayer,
-            anchorNodeId,
-            relation as Exclude<SpatialRelationType, 'near'>
-          )
-            ?.map((entry) => entry.title)
-            .filter((title): title is string => !!title) || [];
-      }
+    const revealableLookables = getSceneTextRelationAccessStates(
+      scene,
+      this,
+      anchorNodeId,
+      relation as Exclude<SpatialRelationType, 'near'>,
+      { includeHidden: true }
+    ).filter((accessState) => accessState.hiddenReason === 'lookable');
+    if (revealableLookables.length) {
+      revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
+      const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this);
+      childTitles =
+        getSceneTextRelationDescendants(
+          revealedTextLayer,
+          anchorNodeId,
+          relation as Exclude<SpatialRelationType, 'near'>
+        )
+          ?.map((entry) => entry.title)
+          .filter((title): title is string => !!title) || [];
     }
 
     if (!childTitles.length) {

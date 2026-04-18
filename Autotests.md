@@ -5,6 +5,7 @@
 This document describes the current automated test setup on the `autotests` branch.
 
 The first iteration is intentionally narrow:
+
 - deterministic parser behavior;
 - parser core contracts;
 - direct `Game` semantic API behavior;
@@ -43,6 +44,7 @@ The current autotest system is built around a few constraints:
 - Tests should be readable enough to act as executable architecture documentation.
 
 Out of scope for this iteration:
+
 - full browser Playwright coverage;
 - full UI/canvas assertions;
 - LLM-stage testing;
@@ -82,6 +84,7 @@ The tests use programmatic fixtures instead of real scene files.
 ### `tests/fixtures/textAssetFactory.ts`
 
 Provides a minimal in-memory text layer for tests:
+
 - object titles, descriptions, details, synonyms;
 - scene title and description;
 - parser service strings;
@@ -94,6 +97,7 @@ Use this when a test needs stable text assets without relying on `public/text/..
 ### `tests/fixtures/gameFactory.ts`
 
 Provides a minimal `IGame`-compatible harness:
+
 - captured player-facing messages;
 - captured logs;
 - captured played sounds;
@@ -109,6 +113,7 @@ Builds on top of `gameFactory.ts` and exposes the real `Game` semantic API metho
 This fixture exists specifically for direct `Game`-layer contract tests.
 
 Use it when the goal is to test:
+
 - `lookScene`
 - `lookEntity`
 - `examineEntity`
@@ -126,6 +131,7 @@ without pulling parser behavior into the assertion.
 Builds a tiny `Scene` on top of the test game harness.
 
 Helpers include:
+
 - `addEntity(...)`
 - `addPlayer(...)`
 - `addTriggerbox(...)`
@@ -138,6 +144,7 @@ This is the preferred way to build small deterministic runtime worlds for tests.
 Builds a real `Parser` instance on top of the fixture game and scene.
 
 It wires the parser to a small semantic gameplay harness for:
+
 - `lookScene`
 - `lookEntity`
 - `examineEntity`
@@ -152,10 +159,11 @@ It wires the parser to a small semantic gameplay harness for:
 It also exposes:
 
 ```ts
-await fixture.run('look under chair')
+await fixture.run('look under chair');
 ```
 
 which returns captured:
+
 - `messages`
 - `logs`
 - `pendingIntent`
@@ -169,6 +177,7 @@ This is the preferred entry point for parser-side tests.
 #### `tests/scene/spatial-index.test.ts`
 
 Covers:
+
 - parent/child spatial indexing;
 - grouping by relation:
   - `in`
@@ -182,6 +191,7 @@ Covers:
 #### `tests/scene/subscene-activation.test.ts`
 
 Covers:
+
 - direct entity child activation;
 - direct triggerbox child activation;
 - nested subscene becoming available;
@@ -195,6 +205,7 @@ Covers:
 #### `tests/scene/subscene-cleanup.test.ts`
 
 Covers:
+
 - `Switch` reset on subscene close;
 - `sound1` playback path;
 - cleanup for spatially included objects, not only group-based ones.
@@ -202,6 +213,7 @@ Covers:
 #### `tests/scene/scene-spatial-validator.test.ts`
 
 Covers:
+
 - `SceneSpatialValidator` happy path for relation-aware containers;
 - duplicate container relation detection;
 - built-in vs untitled external container extension conflicts;
@@ -214,6 +226,7 @@ Covers:
 #### `tests/parser/resolution.test.ts`
 
 Covers:
+
 - exact resolution;
 - synonym match;
 - partial match;
@@ -226,6 +239,7 @@ Covers:
 #### `tests/parser/commands.test.ts`
 
 Covers:
+
 - `teleport`
 - `teleport with id`
 - wrong item for teleport -> no effect;
@@ -237,6 +251,7 @@ Covers:
 #### `tests/parser/preprocessor.test.ts`
 
 Covers:
+
 - console preprocessor shorthand expansion for:
   - `I`
   - `X`
@@ -246,6 +261,7 @@ Covers:
 #### `tests/parser/core.test.ts`
 
 Covers:
+
 - pre-API handoff path;
 - post-API escalation path;
 - linear plan stopping after failure;
@@ -254,9 +270,11 @@ Covers:
 #### `tests/parser/world-model-context.test.ts`
 
 Covers:
+
 - parser world-model entity context projection;
 - spatial relation flattening through untitled technical nodes;
 - anchor-relative spatial projection: nested titled objects can keep their direct relation to one anchor while still inheriting the outer relation when queried from a larger container;
+- parser action resolution using the same anchor-relative relation projection for `TAKE ... FROM ...` and `TAKE ALL ... FROM ...`;
 - hidden `lookable` / `examinable` semantic omission until reveal;
 - blocker visibility vs reachability;
 - player/external inventory projection;
@@ -267,6 +285,7 @@ Covers:
 #### `tests/game/semantic-api.test.ts`
 
 Covers:
+
 - `lookScene`;
 - `lookEntity`;
 - `examineEntity`;
@@ -278,6 +297,7 @@ Covers:
 - `Blocker` and `blockedRelation` behavior;
 - inventory hierarchy projection and sync.
 - `PUT`/`DROP` success messages use the semantic parent title plus the first effective spatial relation to technical `Inventory`/`Surface` chains, not the item's final technical relation to the storage node.
+- PUT source filtering treats items already stored through untitled target extensions as already inside the player-facing target.
 - Surface placement runtime contracts:
   - placed item layer follows the target Surface layer;
   - active `Subscene.itemScale` is applied before placement and drop animation;
@@ -288,6 +308,7 @@ This layer verifies `Game` as the shared semantic gameplay API, separate from pa
 #### `tests/game/navigation-and-spatial.test.ts`
 
 Covers:
+
 - `goToSceneTarget`;
 - `goToScene`;
 - `goToEntity`;
@@ -300,6 +321,7 @@ This layer is especially useful for validating the shared boundary between parse
 #### `tests/integration/parser-game.test.ts`
 
 Covers a small end-to-end slice on tiny fixtures:
+
 - `look under chair`
 - far-but-visible `examine`
 - container commands like `TAKE FROM ...` and `PUT ... IN|ON ...`
@@ -338,6 +360,7 @@ npx vitest
 ### Add a parser test
 
 If the behavior belongs to parser resolution, parser commands, or parser core:
+
 - use `createParserFixture()`
 - build the smallest world needed
 - run parser input through `fixture.run(...)`
@@ -361,6 +384,7 @@ expect(result.messages.at(-1)).toBe('A chair.');
 ### Add a scene runtime test
 
 If the behavior belongs to scene/spatial/subscene runtime:
+
 - use `createSceneFixture()`
 - build the smallest spatial structure possible
 - call runtime helpers or component activation directly
@@ -374,6 +398,7 @@ If the behavior belongs to scene/spatial/subscene runtime:
 ### Add a new parser command fixture
 
 If a test needs custom command data:
+
 - reuse the default command fixtures already provided;
 - or override command assets through:
 
@@ -386,6 +411,7 @@ This keeps tests independent from `public/text/system/commands/*.json`.
 ## Why Programmatic Fixtures Instead Of Real Scenes
 
 The current system intentionally avoids large real content scenes because they:
+
 - change frequently during content work;
 - contain noise unrelated to the tested contract;
 - make failures harder to localize.
@@ -393,6 +419,7 @@ The current system intentionally avoids large real content scenes because they:
 Programmatic fixtures keep failures small and readable.
 
 Real JSON scene fixtures may still be useful later for:
+
 - serialization tests;
 - loader tests;
 - migration tests.

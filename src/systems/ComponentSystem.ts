@@ -450,7 +450,7 @@ export class ComponentSystem {
       }
 
       const dist = Math.hypot(player.x - cx, player.y - cy);
-      const allowedDist = (player.width || 30) * 4;
+      const allowedDist = (player.width || 30) * 4.5;
 
       if (dist > allowedDist) {
         const game = scene.game as unknown as IGame;

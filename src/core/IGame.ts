@@ -30,6 +30,15 @@ export interface IGame {
   lookScene(scene?: Scene | null): GameActionOutcome;
   lookEntity(entity: SceneObject): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
+  getRelationScopedTakeCandidates?(
+    anchor: SceneObject,
+    relation: SpatialRelationType | 'near'
+  ): { status: 'resolved'; candidates: Entity[]; hasStorage: boolean } | GameActionOutcome;
+  isEntityInPutTarget?(
+    source: SceneObject,
+    target: SceneObject,
+    relation: SpatialRelationType | 'near' | null
+  ): boolean;
   examineEntity(entity: SceneObject): GameActionOutcome;
   openEntity(entity: SceneObject): GameActionOutcome;
   closeEntity(entity: SceneObject): GameActionOutcome;

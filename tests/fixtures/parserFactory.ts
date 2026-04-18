@@ -5,6 +5,8 @@ import {
   getSceneTextLayerAccessState,
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
+  getSceneTextRelationDescendants,
+  getSceneTextTargetDescriptor,
 } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
 import { Entity } from '../../src/entities/Entity';
@@ -234,10 +236,6 @@ export function createParserFixture(): ParserFixture {
     component?.relation === 'behind'
       ? component.relation
       : 'on';
-  const normalizeTextRelation = (relation: any): 'in' | 'on' | 'under' | 'behind' =>
-    relation === 'in' || relation === 'under' || relation === 'behind' || relation === 'on'
-      ? relation
-      : 'on';
   const formatPutSuccess = (
     item: string,
     target: string,
@@ -255,43 +253,94 @@ export function createParserFixture(): ParserFixture {
         return fixture.game.text('parser.put_success_surface', { item, target });
     }
   };
+  const formatTitleList = (items: string[]) => {
+    if (items.length <= 1) return items[0] || '';
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+  };
   const getPlacementTextTarget = (
     storageObject: any,
     explicitTarget: any,
     relation: any
   ): { title: string; relation: 'in' | 'on' | 'under' | 'behind' } | null => {
-    const textRelation = normalizeTextRelation(relation);
-    if (storageObject?.type === 'Walkbox' || explicitTarget?.type === 'Walkbox') {
-      return { title: 'floor', relation: 'on' };
-    }
-
-    const explicitTitle = explicitTarget
-      ? fixture.textAssets.getResolvedObjectField(explicitTarget, 'title')?.trim()
-      : null;
-    if (explicitTitle) return { title: explicitTitle, relation: textRelation };
-
-    const storageTitle = storageObject
-      ? fixture.textAssets.getResolvedObjectField(storageObject, 'title')?.trim()
-      : null;
-    if (storageTitle) return { title: storageTitle, relation: textRelation };
-
-    if (storageObject) {
-      const accessState = getSceneTextLayerAccessState(fixture.scene, fixture.game, storageObject);
-      if (accessState.effectiveParentId && accessState.effectiveRelation) {
-        const parent = fixture.scene.getObjectByName(accessState.effectiveParentId);
-        const parentTitle = parent
-          ? fixture.textAssets.getResolvedObjectField(parent, 'title')?.trim()
-          : null;
-        if (parentTitle) {
-          return { title: parentTitle, relation: accessState.effectiveRelation };
-        }
-      }
-    }
-
-    return null;
+    return (
+      getSceneTextTargetDescriptor(fixture.scene, fixture.game, explicitTarget, relation) ||
+      getSceneTextTargetDescriptor(fixture.scene, fixture.game, storageObject, relation)
+    );
   };
   const hasTitle = (object: any) =>
     !!fixture.textAssets.getResolvedObjectField(object, 'title')?.trim();
+
+  const isRelation = (relation: any): relation is 'in' | 'on' | 'under' | 'behind' =>
+    relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind';
+
+  const getUntitledStorageExtensions = (
+    anchor: any,
+    relation: 'in' | 'on' | 'under' | 'behind'
+  ) => {
+    const queue = fixture.scene
+      .getAllSceneObjects()
+      .filter((candidate: any) => candidate?.spatial?.parentNodeId === anchor.name)
+      .filter((candidate: any) => candidate?.spatial?.relation === relation)
+      .filter((candidate: any) => !hasTitle(candidate));
+    const results: any[] = [];
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current) continue;
+      results.push(current);
+      queue.push(
+        ...fixture.scene
+          .getAllSceneObjects()
+          .filter((candidate: any) => candidate?.spatial?.parentNodeId === current.name)
+          .filter((candidate: any) => !hasTitle(candidate))
+      );
+    }
+
+    return results;
+  };
+
+  const getStorageCandidates = (anchor: any, relation: 'in' | 'on' | 'under' | 'behind') => {
+    const inventoryOwners: Array<{ owner: Entity; relation: 'in' | 'on' | 'under' | 'behind' }> =
+      [];
+    const surfaces: Array<{ surface: any; relation: 'in' | 'on' | 'under' | 'behind' }> = [];
+
+    if (
+      anchor instanceof Entity &&
+      anchor.components?.some(
+        (entry: any) =>
+          entry?.type === 'Inventory' &&
+          normalizeInventoryRelation(entry) === relation &&
+          !entry.protected
+      )
+    ) {
+      inventoryOwners.push({ owner: anchor, relation });
+    }
+    if (ComponentSystem.getSurfaceComponent(anchor, relation)) {
+      surfaces.push({ surface: anchor, relation });
+    }
+
+    for (const extension of getUntitledStorageExtensions(anchor, relation)) {
+      if (extension instanceof Entity) {
+        for (const component of extension.components || []) {
+          if (component?.type !== 'Inventory' || component.protected) continue;
+          inventoryOwners.push({
+            owner: extension,
+            relation: normalizeInventoryRelation(component),
+          });
+        }
+      }
+      for (const component of extension.components || []) {
+        if (component?.type !== 'Surface') continue;
+        surfaces.push({
+          surface: extension,
+          relation: normalizeSurfaceRelation(component),
+        });
+      }
+    }
+
+    return { inventoryOwners, surfaces };
+  };
 
   fixture.game.getInventoryEntities = (
     owner: Entity,
@@ -324,6 +373,140 @@ export function createParserFixture(): ParserFixture {
     relation: 'in' | 'on' | 'under' | 'behind' = 'in'
   ) => fixture.game.getInventoryEntities(owner, relation).includes(entity);
 
+  (fixture.game as any).getSurfaceEntities = (
+    surface: any,
+    relation: 'in' | 'on' | 'under' | 'behind' = 'on'
+  ) => {
+    const component = ComponentSystem.getSurfaceComponent(surface, relation) as
+      | { items?: Array<{ id: string }> }
+      | undefined;
+    const collected = new Set<Entity>();
+    for (const candidate of (component?.items || [])
+      .map((item) => fixture.scene.getObjectByName(item.id))
+      .filter(
+        (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
+      )) {
+      collected.add(candidate);
+    }
+    for (const candidate of fixture.scene.entities) {
+      if (!(candidate instanceof Entity) || candidate.disabled) continue;
+      let current: any = candidate;
+      while (current) {
+        const parentId = String(current?.spatial?.parentNodeId || '').trim();
+        if (!parentId) break;
+        if (parentId === surface.name) {
+          collected.add(candidate);
+          break;
+        }
+        current = fixture.scene.getObjectByName(parentId);
+      }
+    }
+    return Array.from(collected);
+  };
+
+  (fixture.game as any).hasPutStorageForRelation = (
+    target: any,
+    relation: 'in' | 'on' | 'under' | 'behind' | 'near' | null
+  ) => {
+    if (!isRelation(relation)) return false;
+    const storage = getStorageCandidates(target, relation);
+    return !!storage.inventoryOwners.length || !!storage.surfaces.length;
+  };
+
+  (fixture.game as any).getRelationScopedTakeCandidates = (
+    anchor: any,
+    relation: 'in' | 'on' | 'under' | 'behind' | 'near'
+  ) => {
+    if (!isRelation(relation)) {
+      return { status: 'resolved', candidates: [], hasStorage: false };
+    }
+
+    const textLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
+    const getRelationCandidates = (candidateRelation: 'in' | 'on' | 'under' | 'behind') =>
+      getSceneTextRelationDescendants(textLayer, anchor.name, candidateRelation)
+        .map((entry) => entry.object)
+        .filter((candidate): candidate is Entity => candidate instanceof Entity)
+        .filter((candidate) => !candidate.disabled)
+        .filter(
+          (candidate) =>
+            candidate.components?.some((component: any) => component?.type === 'Item') ||
+            candidate.isTakeable
+        );
+    const relationEntries = getSceneTextRelationDescendants(textLayer, anchor.name, relation);
+    let semanticCandidates = getRelationCandidates(relation);
+
+    if (!semanticCandidates.length && relation === 'in') {
+      const relationOutcome = fixture.game.describeSpatialRelation(anchor.name, relation);
+      if (relationOutcome.status === 'failed') return relationOutcome;
+      semanticCandidates = ['on', 'under', 'behind'].flatMap((candidateRelation) =>
+        getRelationCandidates(candidateRelation as 'on' | 'under' | 'behind')
+      );
+    }
+
+    const storage = getStorageCandidates(anchor, relation);
+    const candidates = [...semanticCandidates];
+    for (const owner of storage.inventoryOwners) {
+      candidates.push(...fixture.game.getInventoryEntities(owner.owner, owner.relation));
+    }
+    for (const surface of storage.surfaces) {
+      candidates.push(
+        ...(fixture.game as any).getSurfaceEntities(surface.surface, surface.relation)
+      );
+    }
+
+    return {
+      status: 'resolved',
+      candidates: Array.from(new Set(candidates)),
+      hasStorage:
+        relationEntries.length > 0 ||
+        semanticCandidates.length > 0 ||
+        storage.inventoryOwners.length > 0 ||
+        storage.surfaces.length > 0,
+    };
+  };
+
+  (fixture.game as any).isEntityInPutTarget = (
+    source: any,
+    target: any,
+    relation: 'in' | 'on' | 'under' | 'behind' | 'near' | null
+  ) => {
+    if (!(source instanceof Entity)) return false;
+    const relations: Array<'in' | 'on' | 'under' | 'behind'> = isRelation(relation)
+      ? [relation]
+      : ['in', 'on', 'under', 'behind'];
+
+    for (const candidateRelation of relations) {
+      const storage = getStorageCandidates(target, candidateRelation);
+      if (
+        storage.inventoryOwners.some((owner) =>
+          fixture.game.getInventoryEntities(owner.owner, owner.relation).includes(source)
+        )
+      ) {
+        return true;
+      }
+      if (
+        storage.surfaces.some((surface) =>
+          (fixture.game as any)
+            .getSurfaceEntities(surface.surface, surface.relation)
+            .includes(source)
+        )
+      ) {
+        return true;
+      }
+
+      const textLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
+      if (
+        getSceneTextRelationDescendants(textLayer, target.name, candidateRelation).some(
+          (entry) => entry.object === source
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   fixture.game.addInventoryEntity = (
     owner: Entity,
     entity: Entity,
@@ -342,7 +525,24 @@ export function createParserFixture(): ParserFixture {
     }
     const inventoryComponent = component;
     inventoryComponent.items ||= [];
-    if (inventoryComponent.items.includes(entity.name)) {
+    const storedEntities =
+      (fixture.game.inventoryManager as any).getStoredInventoryEntities?.(owner, relation) ||
+      inventoryComponent.items
+        .map((id) => fixture.scene.getObjectByName(id))
+        .filter((candidate): candidate is Entity => candidate instanceof Entity);
+    if (storedEntities.includes(entity)) {
+      if (fixture.game.inventory.includes(entity)) {
+        fixture.game.removeInventoryEntity(entity);
+        (fixture.game.inventoryManager as any).syncInventoryStore?.(
+          owner,
+          storedEntities,
+          relation
+        );
+        return okOutcome('inventory_item_added', undefined, {
+          entityId: entity.name,
+          ownerId: owner.name,
+        });
+      }
       return {
         status: 'failed',
         code: 'inventory_item_already_present',
@@ -350,9 +550,7 @@ export function createParserFixture(): ParserFixture {
         recoverable: true,
       };
     }
-    if (
-      inventoryComponent.items.length >= (inventoryComponent.capacity || Number.MAX_SAFE_INTEGER)
-    ) {
+    if (storedEntities.length >= (inventoryComponent.capacity || Number.MAX_SAFE_INTEGER)) {
       return {
         status: 'failed',
         code: 'inventory_full',
@@ -365,10 +563,17 @@ export function createParserFixture(): ParserFixture {
     if (fixture.game.inventory.includes(entity)) {
       fixture.game.removeInventoryEntity(entity);
     }
-    fixture.scene.removeEntity(entity);
-    (entity as any).spatial = null;
+    if (!fixture.scene.entities.includes(entity)) {
+      fixture.scene.addEntity(entity);
+    }
+    (entity as any).spatial = { parentNodeId: owner.name, relation: 'in' };
+    entity.visible = false;
     fixture.scene.subsceneEntities.delete(entity);
-    inventoryComponent.items.push(entity.name);
+    (fixture.game.inventoryManager as any).syncInventoryStore?.(
+      owner,
+      [...storedEntities, entity],
+      relation
+    );
     return okOutcome('inventory_item_added', undefined, {
       entityId: entity.name,
       ownerId: owner.name,
@@ -495,32 +700,19 @@ export function createParserFixture(): ParserFixture {
     }
 
     if (options?.relation && target) {
-      const nestedInventory =
-        (target?.components?.some(
-          (entry: any) =>
-            entry?.type === 'Inventory' && normalizeInventoryRelation(entry) === options.relation
-        )
-          ? target
-          : null) ||
-        fixture.scene
-          .getAllSceneObjects()
-          .find(
-            (candidate) =>
-              candidate instanceof Entity &&
-              (candidate as any).spatial?.parentNodeId === target.name &&
-              (candidate as any).spatial?.relation === options.relation &&
-              !fixture.textAssets.getResolvedObjectField(candidate, 'title') &&
-              candidate.components?.some((entry: any) => entry?.type === 'Inventory')
-          ) ||
-        null;
+      const storage = isRelation(options.relation)
+        ? getStorageCandidates(target, options.relation)
+        : { inventoryOwners: [], surfaces: [] };
+      const nestedInventory = storage.inventoryOwners[0]?.owner || null;
       if (nestedInventory) {
+        const inventoryRelation = storage.inventoryOwners[0]?.relation || options.relation;
         const outcome = fixture.game.addInventoryEntity(
           nestedInventory as Entity,
           entity,
-          options.relation as 'in' | 'on' | 'under' | 'behind'
+          inventoryRelation as 'in' | 'on' | 'under' | 'behind'
         );
         if (outcome.status !== 'ok') return outcome;
-        const textTarget = getPlacementTextTarget(nestedInventory, target, options.relation);
+        const textTarget = getPlacementTextTarget(nestedInventory, target, inventoryRelation);
         return okOutcome(
           'item_put_into_inventory',
           textTarget
@@ -533,38 +725,23 @@ export function createParserFixture(): ParserFixture {
       }
     }
 
+    const surfaceSlot =
+      target && isRelation(options?.relation)
+        ? getStorageCandidates(target, options.relation).surfaces[0] || null
+        : null;
     const surface =
-      target && options?.relation
-        ? (target?.components?.some(
-            (entry: any) =>
-              entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === options.relation
-          ) ||
-          (target?.type === 'Walkbox' &&
-            options.relation === 'on' &&
-            target?.components?.some((entry: any) => entry?.type === 'Surface'))
-            ? target
-            : null) ||
-          fixture.scene
-            .getAllSceneObjects()
-            .find(
-              (candidate) =>
-                (candidate as any).spatial?.parentNodeId === target.name &&
-                (candidate as any).spatial?.relation === options.relation &&
-                !fixture.textAssets.getResolvedObjectField(candidate as any, 'title') &&
-                candidate.components?.some((entry: any) => entry?.type === 'Surface')
-            ) ||
-          null
-        : (target?.components?.some(
-            (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === 'on'
-          )
-            ? target
-            : null) ||
-          fixture.scene
-            .getAllSceneObjects()
-            .find((candidate) =>
-              candidate.components?.some((entry: any) => entry?.type === 'Surface')
-            ) ||
-          null;
+      surfaceSlot?.surface ||
+      (target?.components?.some(
+        (entry: any) => entry?.type === 'Surface' && normalizeSurfaceRelation(entry) === 'on'
+      )
+        ? target
+        : null) ||
+      fixture.scene
+        .getAllSceneObjects()
+        .find((candidate) =>
+          candidate.components?.some((entry: any) => entry?.type === 'Surface')
+        ) ||
+      null;
     if (!surface) {
       return {
         status: 'failed',
@@ -578,7 +755,8 @@ export function createParserFixture(): ParserFixture {
       fixture.game.removeInventoryEntity(entity);
     }
     const surfaceStoreRelation =
-      target &&
+      surfaceSlot?.relation ||
+      (target &&
       surface === target &&
       (target?.components?.some(
         (entry: any) =>
@@ -588,7 +766,7 @@ export function createParserFixture(): ParserFixture {
           options?.relation === 'on' &&
           target?.components?.some((entry: any) => entry?.type === 'Surface')))
         ? (options?.relation as 'in' | 'on' | 'under' | 'behind' | undefined) || 'on'
-        : 'on';
+        : 'on');
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity, surfaceStoreRelation);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
     const textTarget = getPlacementTextTarget(
@@ -683,12 +861,13 @@ export function createParserFixture(): ParserFixture {
         }
       }
     }
-    const childTitles =
-      textLayer.childrenByParentAndRelation
-        .get(anchorNodeId)
-        ?.get(relation as 'in' | 'on' | 'under' | 'behind')
-        ?.map((entry) => entry.title)
-        .filter((title): title is string => !!title) || [];
+    const childTitles = getSceneTextRelationDescendants(
+      textLayer,
+      anchorNodeId,
+      relation as 'in' | 'on' | 'under' | 'behind'
+    )
+      .map((entry) => entry.title)
+      .filter((title): title is string => !!title);
     if (!childTitles.length) {
       return okOutcome(
         'relation_empty',
@@ -701,7 +880,7 @@ export function createParserFixture(): ParserFixture {
         Relation: relation.charAt(0).toUpperCase() + relation.slice(1),
         relation,
         target: anchorTitle,
-        items: childTitles.join(', '),
+        items: formatTitleList(childTitles),
       })
     );
   };

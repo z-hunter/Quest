@@ -144,6 +144,31 @@ describe('Game navigation and spatial API', () => {
     expect(populated.message).toBe('On the Desk you see: Piece of paper.');
   });
 
+  it('describeSpatialRelation reveals hidden lookable descendants through anchor-relative relations', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('BookA', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      spatial: { parentNodeId: 'Cabinet', relation: 'in' },
+    });
+    const bookB = fixture.addEntity('BookB', {
+      title: 'Book B',
+      description: 'A hidden book on another book.',
+      spatial: { parentNodeId: 'BookA', relation: 'on' },
+    });
+    bookB.hidden = 'lookable';
+
+    const populated = fixture.game.describeSpatialRelation('Cabinet', 'in');
+
+    expect(populated.status).toBe('ok');
+    expect(populated.message).toBe('In the Cabinet you see: Book A and Book B.');
+    expect(fixture.scene.isHiddenEntityRevealed(bookB)).toBe(true);
+  });
+
   it('switchTo hydrates external inventory contents from component items and projects their slot relation', () => {
     const fixture = createGameSemanticFixture('start');
     const target = fixture.addScene('storage', 'Storage', 'You are in Storage.');

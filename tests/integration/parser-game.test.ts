@@ -970,6 +970,52 @@ describe('Parser + game integration smoke', () => {
     ]);
   });
 
+  it('filters PUT sources already stored through an untitled target extension', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('drawer', {
+      title: 'upper drawer',
+      description: 'A drawer.',
+    });
+    const drawerStorage = fixture.addEntity('drawer_storage', {
+      title: null,
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 3, groups: [], protected: false, items: [] },
+      ],
+    });
+    const orangePaper = fixture.addEntity('orange_paper', {
+      title: 'Orange paper',
+      description: 'Orange paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('orange_paper', {
+      title: 'Orange paper',
+      description: 'Orange paper.',
+      synonyms: ['paper', 'orange'],
+    });
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'Yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'Yellow paper.',
+      synonyms: ['paper', 'yellow'],
+    });
+    fixture.scene.removeEntity(yellowPaper);
+    fixture.game.inventory.push(yellowPaper);
+    fixture.game.addInventoryEntity(drawerStorage as any, orangePaper as any, 'in');
+
+    const result = await fixture.run('put all paper in drawer');
+
+    expect(result.messages).toEqual(['You put the yellow_paper into the upper drawer.']);
+    expect(
+      (drawerStorage.components?.[0] as { items?: string[] } | undefined)?.items || []
+    ).toEqual([orangePaper.name, yellowPaper.name]);
+  });
+
   it('keeps PUT BOTH ambiguous when more than two sources match', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -1625,6 +1671,90 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe('You picked up the pencil.');
     expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain('pencil_b');
     expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain('pencil_a');
+  });
+
+  it('takes a nested semantic descendant from an outer anchor-relative container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const look = await fixture.run('look in cabinet');
+    expect(look.messages.at(-1)).toBe('In the Cabinet you see: Book A and Book B.');
+
+    const result = await fixture.run('take book b from cabinet');
+
+    expect(result.messages.at(-1)).toBe('You picked up the Book B.');
+    expect(inventoryNames(fixture)).toEqual(['book_b']);
+  });
+
+  it('takes all matching nested semantic descendants from an outer anchor-relative container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const result = await fixture.run('take all books from cabinet');
+
+    expect(result.messages).toEqual(['You picked up the Book B.', 'You picked up the Book A.']);
+    expect(inventoryNames(fixture)).toEqual(['book_b', 'book_a']);
+  });
+
+  it('keeps object-relative ON semantics while allowing generic TAKE FROM wording', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const look = await fixture.run('look on book a');
+    expect(look.messages.at(-1)).toBe('On the Book A you see: Book B.');
+
+    const result = await fixture.run('take book b from book a');
+
+    expect(result.messages.at(-1)).toBe('You picked up the Book B.');
+    expect(inventoryNames(fixture)).toEqual(['book_b']);
   });
 
   it('surfaces a closed-container failure for TAKE FROM drawer', async () => {

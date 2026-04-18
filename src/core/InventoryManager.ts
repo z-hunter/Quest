@@ -18,16 +18,21 @@ type SurfacePlacementOptions = {
   preferPlayerPoint?: boolean;
 };
 
-type InventorySlotRef = {
+export type InventorySlotRef = {
   owner: Entity;
   component: InventoryComponent;
   relation: ContainerRelation;
 };
 
-type SurfaceSlotRef = {
+export type SurfaceSlotRef = {
   surface: SceneObject;
   component: SurfaceComponent;
   relation: ContainerRelation;
+};
+
+export type StorageCandidatesForRelation = {
+  inventoryOwners: InventorySlotRef[];
+  surfaces: SurfaceSlotRef[];
 };
 
 export class InventoryManager {
@@ -1238,15 +1243,15 @@ export class InventoryManager {
 
   // ─── Scene search helpers ────────────────────────────────────────────────
 
-  findPreferredStorageForRelation(
+  findStorageCandidatesForRelation(
     anchor: SceneObject,
     relation: SpatialRelationType,
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
     getPlayerFacingObjectTitle: (target: SceneObject) => string | null,
     requireAccessible: boolean = true
-  ): { inventory: InventorySlotRef | null; surface: SurfaceSlotRef | null } {
+  ): StorageCandidatesForRelation {
     const scene = this.sceneManager.currentScene;
-    if (!scene) return { inventory: null, surface: null };
+    if (!scene) return { inventoryOwners: [], surfaces: [] };
 
     const normalizedRelation =
       relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
@@ -1344,14 +1349,33 @@ export class InventoryManager {
     }
 
     return {
-      inventory:
-        Array.from(dedupeInventory.values()).sort((left, right) =>
-          byPriority(left.owner, right.owner)
-        )[0] || null,
-      surface:
-        Array.from(dedupeSurface.values()).sort((left, right) =>
-          byPriority(left.surface, right.surface)
-        )[0] || null,
+      inventoryOwners: Array.from(dedupeInventory.values()).sort((left, right) =>
+        byPriority(left.owner, right.owner)
+      ),
+      surfaces: Array.from(dedupeSurface.values()).sort((left, right) =>
+        byPriority(left.surface, right.surface)
+      ),
+    };
+  }
+
+  findPreferredStorageForRelation(
+    anchor: SceneObject,
+    relation: SpatialRelationType,
+    getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
+    getPlayerFacingObjectTitle: (target: SceneObject) => string | null,
+    requireAccessible: boolean = true
+  ): { inventory: InventorySlotRef | null; surface: SurfaceSlotRef | null } {
+    const candidates = this.findStorageCandidatesForRelation(
+      anchor,
+      relation,
+      getBlockedAccessOutcome,
+      getPlayerFacingObjectTitle,
+      requireAccessible
+    );
+
+    return {
+      inventory: candidates.inventoryOwners[0] || null,
+      surface: candidates.surfaces[0] || null,
     };
   }
 
@@ -1585,6 +1609,40 @@ export class InventoryManager {
 
   getInventoryEntities(owner: Entity, relation: ContainerRelation = 'in'): Entity[] {
     return [...this.getStoredInventoryEntities(owner, relation)];
+  }
+
+  getSurfaceEntities(surface: SceneObject, relation: ContainerRelation = 'on'): Entity[] {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return [];
+
+    const collected = new Set<Entity>();
+    const surfaceComponent = ComponentSystem.getSurfaceComponent(surface, relation);
+    for (const candidate of (surfaceComponent?.items || [])
+      .map((item) => scene.getObjectByName(item.id))
+      .filter(
+        (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
+      )) {
+      collected.add(candidate);
+    }
+
+    for (const candidate of scene.entities) {
+      if (!(candidate instanceof Entity) || candidate.disabled) continue;
+      let current: SceneObject | null = candidate;
+      while (current) {
+        const parentId: string =
+          typeof (current as any).spatial?.parentNodeId === 'string'
+            ? (current as any).spatial.parentNodeId.trim()
+            : '';
+        if (!parentId) break;
+        if (parentId === surface.name) {
+          collected.add(candidate);
+          break;
+        }
+        current = scene.getObjectByName(parentId);
+      }
+    }
+
+    return Array.from(collected);
   }
 
   hasInventoryEntity(owner: Entity, entity: Entity, relation: ContainerRelation = 'in'): boolean {
