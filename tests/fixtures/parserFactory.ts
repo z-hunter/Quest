@@ -679,7 +679,8 @@ export function createParserFixture(): ParserFixture {
       }
     }
 
-    if (target) {
+    const getTargetDistanceFailure = () => {
+      if (!target) return null;
       const player = fixture.scene.player || null;
       const distanceProbe =
         target?.title === null || !fixture.textAssets.getResolvedObjectField(target, 'title')
@@ -689,15 +690,14 @@ export function createParserFixture(): ParserFixture {
         distanceProbe as any,
         player
       );
-      if (distanceError) {
-        return {
-          status: 'failed',
-          code: 'put_target_too_far',
-          message: distanceError,
-          recoverable: true,
-        };
-      }
-    }
+      if (!distanceError) return null;
+      return {
+        status: 'failed',
+        code: 'put_target_too_far',
+        message: distanceError,
+        recoverable: true,
+      };
+    };
 
     if (options?.relation && target) {
       const storage = isRelation(options.relation)
@@ -705,6 +705,8 @@ export function createParserFixture(): ParserFixture {
         : { inventoryOwners: [], surfaces: [] };
       const nestedInventory = storage.inventoryOwners[0]?.owner || null;
       if (nestedInventory) {
+        const distanceFailure = getTargetDistanceFailure();
+        if (distanceFailure) return distanceFailure;
         const inventoryRelation = storage.inventoryOwners[0]?.relation || options.relation;
         const outcome = fixture.game.addInventoryEntity(
           nestedInventory as Entity,
@@ -736,12 +738,13 @@ export function createParserFixture(): ParserFixture {
       )
         ? target
         : null) ||
-      fixture.scene
-        .getAllSceneObjects()
-        .find((candidate) =>
-          candidate.components?.some((entry: any) => entry?.type === 'Surface')
-        ) ||
-      null;
+      (!target
+        ? fixture.scene
+            .getAllSceneObjects()
+            .find((candidate) =>
+              candidate.components?.some((entry: any) => entry?.type === 'Surface')
+            ) || null
+        : null);
     if (!surface) {
       return {
         status: 'failed',
@@ -750,6 +753,9 @@ export function createParserFixture(): ParserFixture {
         recoverable: true,
       };
     }
+
+    const distanceFailure = getTargetDistanceFailure();
+    if (distanceFailure) return distanceFailure;
 
     if (isHeld) {
       fixture.game.removeInventoryEntity(entity);

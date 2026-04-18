@@ -182,6 +182,50 @@ describe('Game semantic API', () => {
     expect(fixture.game.showInventory().message).toBe('You are carrying: your ID card');
   });
 
+  it('treats only the player Inventory with relation IN as held inventory', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const hiddenNote = fixture.addEntity('hidden_note', {
+      title: 'Hidden note',
+      description: 'A hidden note.',
+      components: [{ type: 'Item' }],
+    });
+
+    player.components = [
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: [idCard.name],
+      },
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: [hiddenNote.name],
+      },
+    ];
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(fixture.game.inventory).toEqual([idCard]);
+    expect(fixture.game.isEntityInInventory(idCard)).toBe(true);
+    expect(fixture.game.isEntityInInventory(hiddenNote)).toBe(false);
+    expect(fixture.game.getInventoryEntities(player as any, 'behind')).toEqual([hiddenNote]);
+    expect(hiddenNote.visible).toBe(false);
+    expect((hiddenNote as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(fixture.game.showInventory().message).toBe('You are carrying: your ID card');
+  });
+
   it('taking an item keeps it in scene hierarchy as a hidden IN-child of the player inventory owner', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -678,7 +722,7 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('You are too far away from the Tray.');
   });
 
-  it('putEntity reports distance before missing storage for a distant non-container target', () => {
+  it('putEntity reports missing storage before distance for a distant non-container target', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const key = fixture.addEntity('key', {
@@ -699,8 +743,8 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.putEntity(key, cassette, { relation: 'in' });
 
     expect(outcome.status).toBe('failed');
-    expect(outcome.code).toBe('put_target_too_far');
-    expect(outcome.message).toBe("You are too far away from the Cassette 'Music'.");
+    expect(outcome.code).toBe('put_target_not_found');
+    expect(outcome.message).toBe("You can't put that there.");
   });
 
   it('putEntity reports when a surface target is full', () => {

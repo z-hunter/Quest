@@ -373,6 +373,13 @@ export class Parser {
     if (groupQuery.kind !== 'list') {
       const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
       if (!matches.length) {
+        const diagnosticMatches = this.findPluralAwareMatchesInCandidates(
+          groupQuery.query,
+          this.getVisibleTakeGroupDiagnosticCandidates(rawAnchor, relation)
+        );
+        if (diagnosticMatches.length) {
+          return buildTakeActions(diagnosticMatches);
+        }
         return [
           {
             type: 'takeTarget',
@@ -723,6 +730,16 @@ export class Parser {
     const scoped = this.getScopedTakeCandidates(resolvedAnchor.entity, relation);
     if (scoped.status !== 'resolved' || !scoped.hasStorage) return null;
     return scoped.candidates;
+  }
+
+  private getVisibleTakeGroupDiagnosticCandidates(
+    rawAnchor: string | null,
+    relation: ParserRelationType | null
+  ): Entity[] {
+    if (rawAnchor || relation) return [];
+    return this.getScopeCandidates(['visible']).filter(
+      (candidate): candidate is Entity => candidate instanceof Entity
+    );
   }
 
   private findPluralAwareMatchesInCandidates(query: string, candidates: Entity[]): Entity[] {
@@ -2581,22 +2598,6 @@ export class Parser {
         typeof (this.game as any).hasPutStorageForRelation === 'function' &&
         !(this.game as any).hasPutStorageForRelation(preResolvedTarget.entity, relation)
       ) {
-        const scene = this.game.sceneManager.currentScene;
-        const distanceError = scene
-          ? ComponentSystem.getInteractionDistanceError(
-              preResolvedTarget.entity as any,
-              scene.player
-            )
-          : null;
-        if (distanceError) {
-          return {
-            status: 'failed',
-            code: 'put_target_too_far',
-            message: distanceError,
-            data: { target: rawTarget, relation, item: rawItem },
-            recoverable: true,
-          };
-        }
         return {
           status: 'failed',
           code: 'put_target_not_found',

@@ -1063,7 +1063,7 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
   });
 
-  it('surfaces a distance-specific error for PUT before checking whether the target can store anything', async () => {
+  it('reports missing storage before distance for PUT into a distant non-container target', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const paper = fixture.addEntity('paper', {
@@ -1083,13 +1083,13 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put paper in cassette');
 
-    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(result.messages.at(-1)).toBe("You can't put that there.");
     expect(result.pendingIntent).toBeNull();
     expect(fixture.game.inventory).toContain(paper);
     expect(fixture.scene.entities).toContain(cassette);
   });
 
-  it('surfaces a distance-specific error for PUT on a distant visible target synonym', async () => {
+  it('reports missing storage before distance for PUT into a distant visible target synonym', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', -87, 257);
     const paper = fixture.addEntity('paper', {
@@ -1114,7 +1114,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put paper in music');
 
-    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(result.messages.at(-1)).toBe("You can't put that there.");
     expect(result.pendingIntent).toBeNull();
     expect(fixture.game.inventory).toContain(paper);
   });
@@ -1371,6 +1371,28 @@ describe('Parser + game integration smoke', () => {
       "You picked up the Cassette 'Music'.",
     ]);
     expect(inventoryNames(fixture)).toEqual(['compact_cassette', 'music_cassette']);
+  });
+
+  it('reports distance for TAKE ALL when plural matches are visible but not currently takable', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const orangePaper = fixture.addEntity('orange_paper', {
+      title: 'Orange paper',
+      description: 'An orange paper.',
+      components: [{ type: 'Item' }],
+    });
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    orangePaper.x = 250;
+    yellowPaper.x = 260;
+
+    const result = await fixture.run('take all papers');
+
+    expect(result.messages).toEqual(['You are too far away from the Orange paper.']);
+    expect(inventoryNames(fixture)).toEqual([]);
   });
 
   it('does not ask for TAKE clarification when only one matching item is currently takeable', async () => {

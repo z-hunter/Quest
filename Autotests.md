@@ -296,8 +296,10 @@ Covers:
 - hidden `lookable` / `examinable` semantics;
 - `Blocker` and `blockedRelation` behavior;
 - inventory hierarchy projection and sync.
+- actor main inventory semantics: only the actor `Inventory` with relation `IN` is treated as held/UI inventory; other actor inventories are hidden storage slots.
 - `PUT`/`DROP` success messages use the semantic parent title plus the first effective spatial relation to technical `Inventory`/`Surface` chains, not the item's final technical relation to the storage node.
 - PUT source filtering treats items already stored through untitled target extensions as already inside the player-facing target.
+- PUT target diagnostics: a distant target that has no compatible storage reports the semantic “you cannot put that there” failure before any distance failure; distance remains specific to targets that can actually accept the action.
 - Surface placement runtime contracts:
   - placed item layer follows the target Surface layer;
   - active `Subscene.itemScale` is applied before placement and drop animation;
@@ -325,6 +327,8 @@ Covers a small end-to-end slice on tiny fixtures:
 - `look under chair`
 - far-but-visible `examine`
 - container commands like `TAKE FROM ...` and `PUT ... IN|ON ...`
+- `TAKE ALL` plural fallback diagnostics when matching objects are visible but outside the current `takable` scope.
+- PUT diagnostics for distant valid storage targets versus distant non-container targets.
 - PUT clarification continuation loops preserving the original destination.
 
 This layer is intentionally small.
