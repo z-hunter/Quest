@@ -678,6 +678,31 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('You are too far away from the Tray.');
   });
 
+  it('putEntity reports distance before missing storage for a distant non-container target', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const cassette = fixture.addEntity('cassette', {
+      title: "Cassette 'Music'",
+      description: 'A cassette with no storage.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, cassette, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_target_too_far');
+    expect(outcome.message).toBe("You are too far away from the Cassette 'Music'.");
+  });
+
   it('putEntity reports when a surface target is full', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

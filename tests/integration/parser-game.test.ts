@@ -320,6 +320,62 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
+  it('keeps the chosen PUT target after clarification instead of swapping it with the source', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(yellowPaper);
+    fixture.game.inventory.push(yellowPaper);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'record'],
+    });
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    musicCassette.x = 10;
+    musicCassette.y = 0;
+
+    const ambiguous = await fixture.run('put paper into cassette');
+    expect(ambiguous.messages.at(-1)).toContain('Where exactly do you want to put it');
+    expect(ambiguous.pendingIntent).toBe('put');
+
+    const resolved = await fixture.run('2');
+    expect(resolved.messages.at(-1)).toBe("You can't put that there.");
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(yellowPaper.name);
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(
+      compactCassette.name
+    );
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain(
+      musicCassette.name
+    );
+    expect(fixture.scene.entities).toContain(musicCassette);
+    expect(
+      (compactCassette.components?.[1] as { items?: string[] } | undefined)?.items || []
+    ).toEqual([]);
+  });
+
   it('does not resolve a PUT target to the source item itself', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -959,6 +1015,62 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put key on tray');
 
     expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
+  });
+
+  it('surfaces a distance-specific error for PUT before checking whether the target can store anything', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const paper = fixture.addEntity('paper', {
+      title: 'Paper',
+      description: 'A paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(paper);
+    fixture.game.inventory.push(paper);
+    const cassette = fixture.addEntity('cassette', {
+      title: "Cassette 'Music'",
+      description: 'A cassette with no storage.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+
+    const result = await fixture.run('put paper in cassette');
+
+    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(result.pendingIntent).toBeNull();
+    expect(fixture.game.inventory).toContain(paper);
+    expect(fixture.scene.entities).toContain(cassette);
+  });
+
+  it('surfaces a distance-specific error for PUT on a distant visible target synonym', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', -87, 257);
+    const paper = fixture.addEntity('paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(paper);
+    fixture.game.inventory.push(paper);
+    const cassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A compact cassette.',
+      synonyms: ['music', 'cassette'],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+
+    const result = await fixture.run('put paper in music');
+
+    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(result.pendingIntent).toBeNull();
+    expect(fixture.game.inventory).toContain(paper);
   });
 
   it('puts an item under a target using its built-in UNDER surface without creating inventory', async () => {

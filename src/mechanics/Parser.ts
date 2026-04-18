@@ -148,9 +148,8 @@ export class Parser {
             this.pendingState.question || this.game.text('parser.parse_unknown');
           return null;
         }
-        const selectedLabels = selectedOptions.map((option) => option.label);
         const patchedActions = envelope.output.actions.flatMap((action) =>
-          this.patchPendingActionWithSelections(action, selectedLabels, input.trim())
+          this.patchPendingActionWithSelections(action, selectedOptions, input.trim())
         );
 
         return {
@@ -208,15 +207,28 @@ export class Parser {
 
   private patchPendingActionWithSelections(
     action: ParserToolAction,
-    selectedLabels: string[],
+    selectedOptions: ParserClarificationOption[],
     fallbackInput: string
   ): ParserToolAction[] {
-    const labels = selectedLabels.length ? selectedLabels : [fallbackInput];
+    const options = selectedOptions.length
+      ? selectedOptions
+      : [
+          {
+            index: 1,
+            label: fallbackInput,
+            entityId: '',
+            scope: 'target' as const,
+          },
+        ];
+    const labels = options.map((option) => option.label);
+    const scope = options[0]?.scope || 'target';
     const patchSingle = (label: string): ParserToolAction => {
       if (action.type === 'lookTarget') return { ...action, target: label };
       if (action.type === 'examineTarget') return { ...action, target: label };
       if (action.type === 'takeTarget') return { ...action, target: label };
-      if (action.type === 'putTarget') return { ...action, item: label };
+      if (action.type === 'putTarget') {
+        return scope === 'target' ? { ...action, target: label } : { ...action, item: label };
+      }
       if (action.type === 'openTarget') return { ...action, target: label };
       if (action.type === 'closeTarget') return { ...action, target: label };
       if (action.type === 'goToTarget') return { ...action, target: label };
@@ -238,6 +250,9 @@ export class Parser {
       action.type === 'takeTarget' ||
       action.type === 'putTarget'
     ) {
+      if (action.type === 'putTarget' && scope === 'target') {
+        return [patchSingle(labels[0])];
+      }
       return labels.map((label) => patchSingle(label));
     }
     return [patchSingle(labels[0])];
@@ -2734,6 +2749,22 @@ export class Parser {
         typeof (this.game as any).hasPutStorageForRelation === 'function' &&
         !(this.game as any).hasPutStorageForRelation(preResolvedTarget.entity, relation)
       ) {
+        const scene = this.game.sceneManager.currentScene;
+        const distanceError = scene
+          ? ComponentSystem.getInteractionDistanceError(
+              preResolvedTarget.entity as any,
+              scene.player
+            )
+          : null;
+        if (distanceError) {
+          return {
+            status: 'failed',
+            code: 'put_target_too_far',
+            message: distanceError,
+            data: { target: rawTarget, relation, item: rawItem },
+            recoverable: true,
+          };
+        }
         return {
           status: 'failed',
           code: 'put_target_not_found',
@@ -3433,6 +3464,40 @@ export class Parser {
     );
   }
 
+  private formatPeekObject(obj: any): string {
+    const truncateStrings = (input: any): any => {
+      if (typeof input === 'string') {
+        return input.length > 20 ? input.substring(0, 20) + '...' : input;
+      }
+      if (Array.isArray(input)) {
+        return input.map(truncateStrings);
+      }
+      if (input !== null && typeof input === 'object') {
+        const result: any = {};
+        for (const key of Object.keys(input)) {
+          result[key] = truncateStrings(input[key]);
+        }
+        return result;
+      }
+      return input;
+    };
+
+    const data = truncateStrings(obj);
+    if (data === null || typeof data !== 'object') return String(data);
+
+    if (Array.isArray(data)) {
+      if (data.length === 0) return '[]';
+      const items = data.map((item) => JSON.stringify(item));
+      return `[\n  ${items.join(',\n  ')}\n]`;
+    }
+
+    const entries = Object.entries(data);
+    if (entries.length === 0) return '{}';
+
+    const lines = entries.map(([key, value]) => `  "${key}": ${JSON.stringify(value)}`);
+    return `{\n${lines.join(',\n')}\n}`;
+  }
+
   private buildResponse(
     resultJson: string,
     envelopeJson: string,
@@ -3441,15 +3506,21 @@ export class Parser {
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
-    const coreDecisionJson = result.coreDecision ? JSON.stringify(result.coreDecision) : undefined;
+    const coreDecision = result.coreDecision;
+
+    const formatSection = (title: string, json: string | object) => {
+      const obj = typeof json === 'string' ? JSON.parse(json) : json;
+      return `--- ${title.toUpperCase()} ---\n${this.formatPeekObject(obj)}`;
+    };
+
     const peekMessages = this.game.console?.parserPeekEnabled
       ? [
-          `[Parser peek] context=${contextJson}`,
-          `[Parser peek] scope=${scopeJson}`,
-          `[Parser peek] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser peek] core=${coreDecisionJson}`] : []),
-          `[Parser peek] result=${resultJson}`,
-          ...(nlpDebug ? [`[Parser peek] nlp=${JSON.stringify(nlpDebug)}`] : []),
+          formatSection('context', contextJson),
+          formatSection('scope', scopeJson),
+          formatSection('envelope', envelopeJson),
+          ...(coreDecision ? [formatSection('core', coreDecision)] : []),
+          formatSection('result', resultJson),
+          ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
         ]
       : undefined;
 
@@ -3458,11 +3529,11 @@ export class Parser {
         playerMessage: this.game.text('parser.parse_unknown'),
         nextPendingState: null,
         debugMessages: peekMessages || [
-          `[Parser handoff] context=${contextJson}`,
-          `[Parser handoff] scope=${scopeJson}`,
-          `[Parser handoff] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
-          `[Parser handoff] result=${resultJson}`,
+          formatSection('handoff context', contextJson),
+          formatSection('handoff scope', scopeJson),
+          formatSection('handoff envelope', envelopeJson),
+          ...(coreDecision ? [formatSection('handoff core', coreDecision)] : []),
+          formatSection('handoff result', resultJson),
         ],
       };
     }
@@ -3525,7 +3596,7 @@ export class Parser {
           `[Parser handoff] context=${contextJson}`,
           `[Parser handoff] scope=${scopeJson}`,
           `[Parser handoff] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
+          ...(coreDecision ? [`[Parser handoff] core=${JSON.stringify(coreDecision)}`] : []),
           `[Parser handoff] result=${resultJson}`,
         ],
       };

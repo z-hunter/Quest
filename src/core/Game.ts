@@ -1864,6 +1864,11 @@ export class Game implements IGame {
     }
 
     const relation = options?.relation || null;
+    if (target) {
+      const targetDistanceFailure = this.getPutDistanceFailure(target, target);
+      if (targetDistanceFailure) return targetDistanceFailure;
+    }
+
     let destinationSurface: {
       surface: SceneObject;
       relation: Exclude<SpatialRelationType, 'near'>;
