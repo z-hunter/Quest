@@ -78,6 +78,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     parse_unknown: "I don't understand.",
   },
   engine: {
+    floor_label: 'floor',
     click_you_see: 'You see {title}',
     too_far_generic: 'You are too far away.',
     too_far_from_entity: 'You are too far away from the {target}.',
@@ -650,7 +651,7 @@ export class TextAssetManager {
 
   getResolvedObjectField(obj: SceneObject, field: string): string | null {
     if (obj?.type === 'Walkbox' && field === 'title') {
-      return 'floor';
+      return this.getServiceText('engine.floor_label');
     }
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;

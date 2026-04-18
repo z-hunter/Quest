@@ -1,4 +1,5 @@
 {
+  "floor_label": "floor",
   "click_you_see": "You see {title}",
   "too_far_generic": "You are too far away.",
   "too_far_from_entity": "You are too far away from the {target}.",

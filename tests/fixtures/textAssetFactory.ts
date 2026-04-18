@@ -22,6 +22,7 @@ export type TestTextAssets = TextAssetLike & {
 };
 
 const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+  'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
@@ -225,7 +226,7 @@ export function createTestTextAssets(): TestTextAssets {
     },
     getResolvedObjectField(obj, field) {
       if (obj?.type === 'Walkbox' && field === 'title') {
-        return 'floor';
+        return DEFAULT_SERVICE_TEXT['engine.floor_label'];
       }
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];

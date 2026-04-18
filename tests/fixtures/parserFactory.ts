@@ -391,9 +391,12 @@ export function createParserFixture(): ParserFixture {
     for (const candidate of fixture.scene.entities) {
       if (!(candidate instanceof Entity) || candidate.disabled) continue;
       let current: any = candidate;
+      const visitedParentIds = new Set<string>();
       while (current) {
         const parentId = String(current?.spatial?.parentNodeId || '').trim();
         if (!parentId) break;
+        if (visitedParentIds.has(parentId)) break;
+        visitedParentIds.add(parentId);
         if (parentId === surface.name) {
           collected.add(candidate);
           break;
@@ -436,7 +439,9 @@ export function createParserFixture(): ParserFixture {
     let semanticCandidates = getRelationCandidates(relation);
 
     if (!semanticCandidates.length && relation === 'in') {
-      const relationOutcome = fixture.game.describeSpatialRelation(anchor.name, relation);
+      // describeSpatialRelation produces relationOutcome just to validate before semanticCandidates falls back to getRelationCandidates.
+      const _relationOutcome = fixture.game.describeSpatialRelation(anchor.name, relation);
+      const relationOutcome = _relationOutcome;
       if (relationOutcome.status === 'failed') return relationOutcome;
       semanticCandidates = ['on', 'under', 'behind'].flatMap((candidateRelation) =>
         getRelationCandidates(candidateRelation as 'on' | 'under' | 'behind')
@@ -566,7 +571,7 @@ export function createParserFixture(): ParserFixture {
     if (!fixture.scene.entities.includes(entity)) {
       fixture.scene.addEntity(entity);
     }
-    (entity as any).spatial = { parentNodeId: owner.name, relation: 'in' };
+    (entity as any).spatial = { parentNodeId: owner.name, relation };
     entity.visible = false;
     fixture.scene.subsceneEntities.delete(entity);
     (fixture.game.inventoryManager as any).syncInventoryStore?.(

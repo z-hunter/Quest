@@ -709,7 +709,7 @@ export class Game implements IGame {
     if (surface.type === 'Walkbox' || target.type === 'Walkbox') {
       return this.text('parser.put_success_surface', {
         item: itemTitle,
-        target: 'floor',
+        target: this.text('engine.floor_label'),
       });
     }
 
