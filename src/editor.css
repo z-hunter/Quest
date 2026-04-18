@@ -609,3 +609,36 @@ input[type='range']:focus::-webkit-slider-runnable-track {
 .e-label:has(input[type='checkbox']):hover {
   color: var(--ui-main-color);
 }
+
+.hierarchy-row .drag-handle {
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.hierarchy-row:hover .drag-handle {
+  opacity: 1;
+}
+
+.e-input.e-inherited {
+  border-color: #5a4a8a;
+  background: #1a1428;
+}
+.e-btn-reset {
+  padding: 2px 5px;
+  font-size: 0.8em;
+  min-width: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.e-input-inherited-wrapper {
+  position: relative;
+}
+.e-inherited-dot {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7c6cb0;
+  pointer-events: none;
+}

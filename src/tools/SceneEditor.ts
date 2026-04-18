@@ -4,6 +4,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import { Folder } from '../entities/Folder';
 import { normalizeTriggerComponents } from '../entities/TriggerComponents';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
@@ -626,6 +627,9 @@ export class SceneEditor {
     const name = sep >= 0 ? key.slice(sep + 1) : key;
     if (!type || !name) return null;
 
+    if (type === 'Folder') {
+      return (scene.folders || []).find((obj: any) => obj?.name === name) || null;
+    }
     if (type === 'Entity' || type === 'Actor') {
       return (scene.entities || []).find((obj: any) => obj?.name === name) || null;
     }
@@ -846,6 +850,8 @@ export class SceneEditor {
         newObj = Actor.fromJSON(this.game, data);
       } else if (type === 'Player') {
         newObj = Actor.fromJSON(this.game, { ...data, type: 'Actor', isPlayer: true });
+      } else if (type === 'Folder') {
+        newObj = Folder.fromData(this.game, data);
       } else if (type === 'Static' || type === 'Entity') {
         newObj = Entity.fromJSON(this.game, data);
       }
@@ -863,6 +869,8 @@ export class SceneEditor {
       } else if (type === 'Triggerbox') {
         if (!scene.triggerboxes) scene.triggerboxes = [];
         scene.triggerboxes.push(newObj);
+      } else if (type === 'Folder') {
+        scene.addFolder(newObj);
       } else {
         scene.addEntity(newObj);
       }
@@ -911,13 +919,28 @@ export class SceneEditor {
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
-      if (this.selectedObject instanceof Walkbox) {
+      // If deleting a folder, also remove its contents
+      if (this.selectedObject.type === 'Folder') {
+        const folderId = (this.selectedObject as any).folderId;
+        const children = [
+          ...scene.entities.filter((e: any) => e.folder === folderId),
+          ...scene.walkbox.filter((w: any) => w.folder === folderId),
+          ...scene.triggerboxes.filter((t: any) => t.folder === folderId),
+        ];
+        for (const child of children) {
+          if (child instanceof Walkbox) scene.removeWalkbox(child);
+          else if (child instanceof Triggerbox) scene.removeTriggerbox(child);
+          else if (child instanceof Entity) scene.removeEntity(child);
+        }
+      }
+
+      if (this.selectedObject.type === 'Folder') {
+        scene.removeFolder(this.selectedObject as any);
+      } else if (this.selectedObject instanceof Walkbox) {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
         scene.removeTriggerbox(this.selectedObject);
       } else if (this.selectedObject instanceof Entity) {
-        scene.removeEntity(this.selectedObject);
-      } else if (this.selectedObject instanceof Actor) {
         scene.removeEntity(this.selectedObject);
       }
     }

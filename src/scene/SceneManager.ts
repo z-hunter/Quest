@@ -6,6 +6,7 @@ import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
 import { listProjectFiles } from '../platform/fileApi';
+import { Folder } from '../entities/Folder';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -439,6 +440,12 @@ export class SceneManager {
 
     if (data.entities) {
       data.entities.forEach((entityData: any) => {
+        if (entityData.type === 'Folder') {
+          const folder = Folder.fromData(this.game, entityData);
+          newScene.addFolder(folder);
+          return;
+        }
+
         let entity: Entity;
 
         if (entityData.type === 'Player') {
@@ -452,6 +459,13 @@ export class SceneManager {
         }
 
         newScene.addEntity(entity);
+      });
+    }
+
+    if (data.folders) {
+      data.folders.forEach((folderData: any) => {
+        const folder = Folder.fromData(this.game, folderData);
+        newScene.addFolder(folder);
       });
     }
 
