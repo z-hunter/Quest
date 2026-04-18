@@ -256,6 +256,7 @@ Covers:
 Covers:
 - parser world-model entity context projection;
 - spatial relation flattening through untitled technical nodes;
+- anchor-relative spatial projection: nested titled objects can keep their direct relation to one anchor while still inheriting the outer relation when queried from a larger container;
 - hidden `lookable` / `examinable` semantic omission until reveal;
 - blocker visibility vs reachability;
 - player/external inventory projection;
@@ -276,6 +277,7 @@ Covers:
 - hidden `lookable` / `examinable` semantics;
 - `Blocker` and `blockedRelation` behavior;
 - inventory hierarchy projection and sync.
+- `PUT`/`DROP` success messages use the semantic parent title plus the first effective spatial relation to technical `Inventory`/`Surface` chains, not the item's final technical relation to the storage node.
 - Surface placement runtime contracts:
   - placed item layer follows the target Surface layer;
   - active `Subscene.itemScale` is applied before placement and drop animation;

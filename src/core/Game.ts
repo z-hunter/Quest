@@ -21,6 +21,7 @@ import {
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
   getInactiveSubsceneAncestors,
+  getSceneTextRelationDescendants,
   getSceneTextLayerAccessState,
 } from '../scene/SceneTextLayer';
 
@@ -32,6 +33,10 @@ import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
 import { Geometry } from '../utils/Geometry';
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
+type PutTargetTextDescriptor = {
+  title: string;
+  relation: SpatialRelationType;
+};
 
 export class Game implements IGame {
   public static instance: Game;
@@ -639,37 +644,11 @@ export class Game implements IGame {
     };
   }
 
-  private getSurfaceDropMessage(surface: SceneObject, item: Entity): string {
-    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
-    const surfaceTitle = this.getPlayerFacingObjectTitle(surface);
-    if (surfaceTitle) {
-      return this.text('parser.put_success_surface', {
-        item: itemTitle,
-        target: surfaceTitle,
-      });
-    }
-
-    if (surface.type === 'Walkbox') {
-      return `You drop the ${itemTitle} on the floor.`;
-    }
-
-    return `You drop the ${itemTitle}.`;
-  }
-
-  private getSurfacePutMessage(
-    surface: SceneObject,
-    item: Entity,
-    relation: SpatialRelationType | null,
-    target?: SceneObject | null
+  private getPutSuccessMessage(
+    itemTitle: string,
+    targetTitle: string,
+    relation: SpatialRelationType
   ): string {
-    if (!target) return this.getSurfaceDropMessage(surface, item);
-
-    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
-    const targetTitle =
-      this.getPlayerFacingObjectTitle(target) || this.getPlayerFacingObjectTitle(surface);
-
-    if (!targetTitle) return this.getSurfaceDropMessage(surface, item);
-
     switch (relation) {
       case 'in':
         return this.text('parser.put_success_inventory', {
@@ -689,21 +668,87 @@ export class Game implements IGame {
     }
   }
 
-  private getPutTargetTitle(target: SceneObject | null | undefined): string | null {
+  private getNormalizedTextRelation(
+    relation: SpatialRelationType | null | undefined
+  ): SpatialRelationType | null {
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+      ? relation
+      : null;
+  }
+
+  private getPutTargetDescriptor(
+    target: SceneObject | null | undefined,
+    fallbackRelation?: SpatialRelationType | null
+  ): PutTargetTextDescriptor | null {
     if (!target) return null;
-    const title = this.getPlayerFacingObjectTitle(target);
-    if (title) return title;
-    if (target.type === 'Walkbox') return 'floor';
-    const parentId =
-      typeof (target as any).spatial?.parentNodeId === 'string'
-        ? (target as any).spatial.parentNodeId.trim()
-        : '';
-    if (parentId) {
-      const parent = this.sceneManager.currentScene?.getObjectByName(parentId) || null;
-      const parentTitle = parent ? this.getPlayerFacingObjectTitle(parent) : null;
-      if (parentTitle) return parentTitle;
+
+    const relation = this.getNormalizedTextRelation(fallbackRelation) || 'on';
+    if (target.type === 'Walkbox') {
+      return { title: 'floor', relation: 'on' };
     }
+
+    const title = this.getPlayerFacingObjectTitle(target);
+    if (title) return { title, relation };
+
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const accessState = getSceneTextLayerAccessState(scene, this, target);
+    if (accessState.effectiveParentId && accessState.effectiveRelation) {
+      const parent = scene.getObjectByName(accessState.effectiveParentId);
+      const parentTitle = parent ? this.getPlayerFacingObjectTitle(parent) : null;
+      if (parentTitle) {
+        return {
+          title: parentTitle,
+          relation: accessState.effectiveRelation,
+        };
+      }
+    }
+
     return null;
+  }
+
+  private getSurfaceDropMessage(
+    surface: SceneObject,
+    item: Entity,
+    relation: SpatialRelationType | null
+  ): string {
+    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
+    const target = this.getPutTargetDescriptor(surface, relation);
+    if (target) {
+      return this.getPutSuccessMessage(itemTitle, target.title, target.relation);
+    }
+
+    return `You drop the ${itemTitle}.`;
+  }
+
+  private getSurfacePutMessage(
+    surface: SceneObject,
+    item: Entity,
+    relation: SpatialRelationType | null,
+    target?: SceneObject | null
+  ): string {
+    if (!target) return this.getSurfaceDropMessage(surface, item, relation);
+
+    const itemTitle = this.getPlayerFacingObjectTitle(item) || item.name;
+    if (surface.type === 'Walkbox' || target.type === 'Walkbox') {
+      return this.text('parser.put_success_surface', {
+        item: itemTitle,
+        target: 'floor',
+      });
+    }
+
+    const textTarget =
+      this.getPutTargetDescriptor(target, relation) ||
+      this.getPutTargetDescriptor(surface, relation);
+
+    if (!textTarget) return this.getSurfaceDropMessage(surface, item, relation);
+
+    return this.getPutSuccessMessage(itemTitle, textTarget.title, textTarget.relation);
+  }
+
+  private getPutTargetTitle(target: SceneObject | null | undefined): string | null {
+    return this.getPutTargetDescriptor(target)?.title || null;
   }
 
   private getPutDistanceFailure(
@@ -812,8 +857,9 @@ export class Game implements IGame {
     anchor?: SceneObject | null
   ): string | null {
     const itemTitle = this.getPlayerFacingObjectTitle(entity) || entity.name;
-    const targetTitle = this.getPutTargetTitle(anchor || storageObject);
-    const targetRelation = relation === 'in' ? 'in' : 'on';
+    const target = this.getPutTargetDescriptor(anchor || storageObject, relation);
+    const targetTitle = target?.title || null;
+    const targetRelation = target?.relation || (relation === 'in' ? 'in' : 'on');
 
     if (!targetTitle) {
       return moveOutcome.message || null;
@@ -1515,9 +1561,11 @@ export class Game implements IGame {
     }
 
     let childTitles =
-      textLayer.childrenByParentAndRelation
-        .get(anchorNodeId)
-        ?.get(relation as Exclude<SpatialRelationType, 'near'>)
+      getSceneTextRelationDescendants(
+        textLayer,
+        anchorNodeId,
+        relation as Exclude<SpatialRelationType, 'near'>
+      )
         ?.map((entry) => entry.title)
         .filter((title): title is string => !!title) || [];
 
@@ -1536,9 +1584,11 @@ export class Game implements IGame {
         revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
         const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this);
         childTitles =
-          revealedTextLayer.childrenByParentAndRelation
-            .get(anchorNodeId)
-            ?.get(relation as Exclude<SpatialRelationType, 'near'>)
+          getSceneTextRelationDescendants(
+            revealedTextLayer,
+            anchorNodeId,
+            relation as Exclude<SpatialRelationType, 'near'>
+          )
             ?.map((entry) => entry.title)
             .filter((title): title is string => !!title) || [];
       }
@@ -1962,16 +2012,25 @@ export class Game implements IGame {
           target
         );
       }
-      const targetTitle =
-        this.getPlayerFacingObjectTitle(destinationInventory.owner) ||
-        destinationInventory.owner.name;
+      const textTarget =
+        this.getPutTargetDescriptor(
+          target || destinationInventory.owner,
+          destinationInventory.relation
+        ) ||
+        ({
+          title:
+            this.getPlayerFacingObjectTitle(destinationInventory.owner) ||
+            destinationInventory.owner.name,
+          relation: destinationInventory.relation,
+        } satisfies PutTargetTextDescriptor);
       return {
         status: 'ok',
         code: 'item_put_into_inventory',
-        message: this.text('parser.put_success_inventory', {
-          item: this.getPlayerFacingObjectTitle(entity) || entity.name,
-          target: targetTitle,
-        }),
+        message: this.getPutSuccessMessage(
+          this.getPlayerFacingObjectTitle(entity) || entity.name,
+          textTarget.title,
+          textTarget.relation
+        ),
         data: { entityId: entity.name, ownerId: destinationInventory.owner.name },
         effects: sourceInInventory
           ? ['removed_from_inventory', 'moved_to_inventory']

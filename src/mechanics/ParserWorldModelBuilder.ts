@@ -2,7 +2,11 @@ import type { Game } from '../core/Game';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
-import { buildSceneTextLayerSnapshot, getSceneTextLayerAccessState } from '../scene/SceneTextLayer';
+import {
+  buildSceneTextLayerSnapshot,
+  getSceneTextLayerAccessState,
+  getSceneTextRelationDescendants,
+} from '../scene/SceneTextLayer';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
@@ -199,11 +203,13 @@ export class ParserWorldModelBuilder {
     const relations: ParserSpatialRelationContext[] = [];
 
     for (const [anchorNodeId, relationMap] of textLayer.childrenByParentAndRelation.entries()) {
-      for (const [relation, nodes] of relationMap.entries()) {
+      for (const relation of relationMap.keys()) {
         relations.push({
           anchorNodeId,
           relation,
-          childNodeIds: nodes.map((node) => node.object.name),
+          childNodeIds: getSceneTextRelationDescendants(textLayer, anchorNodeId, relation).map(
+            (node) => node.object.name
+          ),
         });
       }
     }

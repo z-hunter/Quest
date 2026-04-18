@@ -234,6 +234,62 @@ export function createParserFixture(): ParserFixture {
     component?.relation === 'behind'
       ? component.relation
       : 'on';
+  const normalizeTextRelation = (relation: any): 'in' | 'on' | 'under' | 'behind' =>
+    relation === 'in' || relation === 'under' || relation === 'behind' || relation === 'on'
+      ? relation
+      : 'on';
+  const formatPutSuccess = (
+    item: string,
+    target: string,
+    relation: 'in' | 'on' | 'under' | 'behind'
+  ) => {
+    switch (relation) {
+      case 'in':
+        return fixture.game.text('parser.put_success_inventory', { item, target });
+      case 'under':
+        return `You put the ${item} under the ${target}.`;
+      case 'behind':
+        return `You put the ${item} behind the ${target}.`;
+      case 'on':
+      default:
+        return fixture.game.text('parser.put_success_surface', { item, target });
+    }
+  };
+  const getPlacementTextTarget = (
+    storageObject: any,
+    explicitTarget: any,
+    relation: any
+  ): { title: string; relation: 'in' | 'on' | 'under' | 'behind' } | null => {
+    const textRelation = normalizeTextRelation(relation);
+    if (storageObject?.type === 'Walkbox' || explicitTarget?.type === 'Walkbox') {
+      return { title: 'floor', relation: 'on' };
+    }
+
+    const explicitTitle = explicitTarget
+      ? fixture.textAssets.getResolvedObjectField(explicitTarget, 'title')?.trim()
+      : null;
+    if (explicitTitle) return { title: explicitTitle, relation: textRelation };
+
+    const storageTitle = storageObject
+      ? fixture.textAssets.getResolvedObjectField(storageObject, 'title')?.trim()
+      : null;
+    if (storageTitle) return { title: storageTitle, relation: textRelation };
+
+    if (storageObject) {
+      const accessState = getSceneTextLayerAccessState(fixture.scene, fixture.game, storageObject);
+      if (accessState.effectiveParentId && accessState.effectiveRelation) {
+        const parent = fixture.scene.getObjectByName(accessState.effectiveParentId);
+        const parentTitle = parent
+          ? fixture.textAssets.getResolvedObjectField(parent, 'title')?.trim()
+          : null;
+        if (parentTitle) {
+          return { title: parentTitle, relation: accessState.effectiveRelation };
+        }
+      }
+    }
+
+    return null;
+  };
   const hasTitle = (object: any) =>
     !!fixture.textAssets.getResolvedObjectField(object, 'title')?.trim();
 
@@ -464,12 +520,15 @@ export function createParserFixture(): ParserFixture {
           options.relation as 'in' | 'on' | 'under' | 'behind'
         );
         if (outcome.status !== 'ok') return outcome;
+        const textTarget = getPlacementTextTarget(nestedInventory, target, options.relation);
         return okOutcome(
           'item_put_into_inventory',
-          fixture.game.text('parser.put_success_inventory', {
-            item: entity.name,
-            target: nestedInventory.name,
-          })
+          textTarget
+            ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
+            : fixture.game.text('parser.put_success_inventory', {
+                item: entity.name,
+                target: nestedInventory.name,
+              })
         );
       }
     }
@@ -532,18 +591,14 @@ export function createParserFixture(): ParserFixture {
         : 'on';
     const surfaceOutcome = fixture.game.addEntityToSurface(surface, entity, surfaceStoreRelation);
     if (surfaceOutcome.status !== 'ok') return surfaceOutcome;
-    const surfaceTitle = fixture.textAssets.getResolvedObjectField(surface, 'title');
-    const message =
-      !target && surface.type === 'Walkbox'
-        ? `You drop the ${entity.name} on the floor.`
-        : surfaceTitle
-          ? fixture.game.text('parser.put_success_surface', {
-              item: entity.name,
-              target: surfaceTitle,
-            })
-          : surface.type === 'Walkbox'
-            ? `You drop the ${entity.name} on the floor.`
-            : `You drop the ${entity.name}.`;
+    const textTarget = getPlacementTextTarget(
+      surface,
+      target,
+      options?.relation || surfaceStoreRelation
+    );
+    const message = textTarget
+      ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
+      : `You drop the ${entity.name}.`;
     return okOutcome('item_put_on_surface', message);
   };
 

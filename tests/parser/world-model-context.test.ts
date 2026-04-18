@@ -33,7 +33,6 @@ describe('Parser world model context', () => {
           id: 'note',
           title: 'Piece of paper',
           item: true,
-          reachable: true,
           x: 0,
           y: 0,
         }),
@@ -145,6 +144,43 @@ describe('Parser world model context', () => {
           anchorNodeId: 'Drawer',
           relation: 'in',
           childNodeIds: expect.arrayContaining(['Key']),
+        }),
+      ])
+    );
+  });
+
+  it('projects nested titled descendants relative to each semantic anchor', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('Cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('BookA', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      spatial: { parentNodeId: 'Cabinet', relation: 'in' },
+    });
+    fixture.addEntity('BookB', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      spatial: { parentNodeId: 'BookA', relation: 'on' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look in cabinet', null);
+
+    expect(model.context.spatialRelations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anchorNodeId: 'Cabinet',
+          relation: 'in',
+          childNodeIds: expect.arrayContaining(['BookA', 'BookB']),
+        }),
+        expect.objectContaining({
+          anchorNodeId: 'BookA',
+          relation: 'on',
+          childNodeIds: expect.arrayContaining(['BookB']),
         }),
       ])
     );

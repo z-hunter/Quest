@@ -88,6 +88,32 @@ describe('Game navigation and spatial API', () => {
     expect(populated.message).toBe('In the Desk you see: Piece of paper.');
   });
 
+  it('describeSpatialRelation is relative to the queried semantic anchor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('BookA', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      spatial: { parentNodeId: 'Cabinet', relation: 'in' },
+    });
+    fixture.addEntity('BookB', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      spatial: { parentNodeId: 'BookA', relation: 'on' },
+    });
+
+    const cabinetContents = fixture.game.describeSpatialRelation('Cabinet', 'in');
+    const bookStack = fixture.game.describeSpatialRelation('BookA', 'on');
+
+    expect(cabinetContents.status).toBe('ok');
+    expect(cabinetContents.message).toBe('In the Cabinet you see: Book A and Book B.');
+    expect(bookStack.status).toBe('ok');
+    expect(bookStack.message).toBe('On the Book A you see: Book B.');
+  });
+
   it('describeSpatialRelation treats items on untitled nested container extensions as lying on the titled object', () => {
     const fixture = createGameSemanticFixture();
     fixture.addEntity('Desk', {

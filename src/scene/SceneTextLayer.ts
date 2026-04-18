@@ -327,3 +327,26 @@ export function buildSceneTextLayerSnapshot(scene: Scene, game: IGame): SceneTex
     childrenByParentAndRelation,
   };
 }
+
+export function getSceneTextRelationDescendants(
+  snapshot: SceneTextLayerSnapshot,
+  anchorNodeId: string,
+  relation: EffectiveRelation
+): SceneTextLayerEntry[] {
+  const directChildren =
+    snapshot.childrenByParentAndRelation.get(anchorNodeId)?.get(relation) || [];
+  const results: SceneTextLayerEntry[] = [];
+  const visited = new Set<string>();
+  const stack = [...directChildren];
+
+  while (stack.length) {
+    const entry = stack.shift();
+    if (!entry || visited.has(entry.object.name)) continue;
+
+    visited.add(entry.object.name);
+    results.push(entry);
+    stack.push(...(snapshot.childrenByParentId.get(entry.object.name) || []));
+  }
+
+  return results;
+}

@@ -235,7 +235,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You drop the key.');
+    expect(result.messages.at(-1)).toBe('You put the key into the Drawer.');
   });
 
   it('supports PUT UNDER a titled object when it has a built-in UNDER surface', async () => {
@@ -256,7 +256,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key under desk');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the Desk.');
+    expect(result.messages.at(-1)).toBe('You put the key under the Desk.');
     expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
@@ -291,7 +291,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You drop the key.');
+    expect(result.messages.at(-1)).toBe('You put the key into the upper drawer.');
   });
 
   it('supports PUT from a nearby scene item into a nearby container without taking it first', async () => {
@@ -314,7 +314,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put cassette in recorder');
 
-    expect(result.messages.at(-1)).toBe('You put the cassette into the recorder.');
+    expect(result.messages.at(-1)).toBe('You put the cassette into the Tape recorder.');
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       cassette.name
     );
@@ -410,11 +410,11 @@ describe('Parser + game integration smoke', () => {
     recorder.y = 0;
 
     const first = await fixture.run('put compact cassette into recorder');
-    expect(first.messages.at(-1)).toBe('You put the cassette into the boombox.');
+    expect(first.messages.at(-1)).toBe('You put the cassette into the Boombox.');
 
     fixture.game.inventory.push(cassette);
     const selfTarget = await fixture.run('put compact cassette into record');
-    expect(selfTarget.messages.at(-1)).toBe('You put the cassette into the boombox.');
+    expect(selfTarget.messages.at(-1)).toBe('You put the cassette into the Boombox.');
     expect(selfTarget.messages.at(-1)).not.toContain('into the Compact cassette');
     expect(
       (cassette.components?.[1] as { items?: string[] } | undefined)?.items || []
@@ -681,7 +681,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put cassette in recorder');
 
-    expect(result.messages.at(-1)).toBe('You put the cassette_held into the recorder.');
+    expect(result.messages.at(-1)).toBe('You put the cassette_held into the Tape recorder.');
     expect(result.pendingIntent).toBeNull();
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       heldCassette.name
@@ -721,7 +721,7 @@ describe('Parser + game integration smoke', () => {
     expect(ambiguous.pendingIntent).toBe('put');
 
     const resolved = await fixture.run('Cassette B');
-    expect(resolved.messages.at(-1)).toBe('You put the cassette_b into the recorder.');
+    expect(resolved.messages.at(-1)).toBe('You put the cassette_b into the Tape recorder.');
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       nearbyCassette.name
     );
@@ -796,8 +796,8 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put all cassettes into recorder');
 
     expect(result.messages).toEqual([
-      'You put the cassette_a into the recorder.',
-      'You put the cassette_b into the recorder.',
+      'You put the cassette_a into the Tape recorder.',
+      'You put the cassette_b into the Tape recorder.',
     ]);
     expect(inventoryNames(fixture)).toEqual([]);
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
@@ -832,8 +832,8 @@ describe('Parser + game integration smoke', () => {
     const shared = await fixture.run('put blue and red pills in box');
 
     expect(shared.messages).toEqual([
-      'You put the blue_pill into the box.',
-      'You put the red_pill into the box.',
+      'You put the blue_pill into the Box.',
+      'You put the red_pill into the Box.',
     ]);
     expect((box.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       'blue_pill',
@@ -963,7 +963,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put all cassettes into recorder');
 
-    expect(result.messages).toEqual(['You put the music_cassette into the boombox.']);
+    expect(result.messages).toEqual(['You put the music_cassette into the Boombox.']);
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       compactCassette.name,
       musicCassette.name,
@@ -1175,6 +1175,24 @@ describe('Parser + game integration smoke', () => {
     expect(groundResult.messages.at(-1)).toBe('You put the key on the floor.');
   });
 
+  it('reports floor placement for explicit PUT IN floor targets', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('FloorZone');
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const result = await fixture.run('put key in floor');
+
+    expect(result.messages.at(-1)).toBe('You put the key on the floor.');
+  });
+
   it('prefers the walkbox floor for DROP when a separate surface is nearby', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -1246,7 +1264,7 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).not.toContain(musicCassette);
   });
 
-  it('prefers a surface inside the active subscene before the floor for DROP', async () => {
+  it('prefers an untitled surface inside the active subscene before the floor for DROP', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const drawerZone = fixture.addTriggerbox('DrawerZone', {
@@ -1255,7 +1273,7 @@ describe('Parser + game integration smoke', () => {
       components: [{ type: 'Subscene', targetGroupId: '' }],
     });
     const tray = fixture.addEntity('tray', {
-      title: 'Tray',
+      title: null,
       description: 'A tray.',
       disabled: true,
       spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
@@ -1281,7 +1299,7 @@ describe('Parser + game integration smoke', () => {
 
     const messages = await runSemanticParser(fixture, 'drop key');
 
-    expect(messages.at(-1)).toBe('You put the Key on the Tray.');
+    expect(messages.at(-1)).toBe('You put the Key into the Drawer front.');
     expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
     expect(floor.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(false);
   });

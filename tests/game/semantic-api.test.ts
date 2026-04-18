@@ -923,6 +923,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_into_inventory');
+    expect(outcome.message).toBe('You put the Cassette behind the Shelf.');
     expect(fixture.game.getInventoryEntities(shelf, 'behind')).toContain(cassette);
     expect(fixture.game.getInventoryEntities(shelf, 'in')).not.toContain(cassette);
   });
