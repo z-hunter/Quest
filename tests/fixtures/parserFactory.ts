@@ -245,9 +245,9 @@ export function createParserFixture(): ParserFixture {
       case 'in':
         return fixture.game.text('parser.put_success_inventory', { item, target });
       case 'under':
-        return `You put the ${item} under the ${target}.`;
+        return fixture.game.text('parser.put_success_under', { item, target });
       case 'behind':
-        return `You put the ${item} behind the ${target}.`;
+        return fixture.game.text('parser.put_success_behind', { item, target });
       case 'on':
       default:
         return fixture.game.text('parser.put_success_surface', { item, target });
@@ -787,7 +787,7 @@ export function createParserFixture(): ParserFixture {
     );
     const message = textTarget
       ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
-      : `You drop the ${entity.name}.`;
+      : fixture.game.text('parser.drop_success', { item: entity.name });
     return okOutcome('item_put_on_surface', message);
   };
 

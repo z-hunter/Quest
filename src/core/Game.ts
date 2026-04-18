@@ -662,9 +662,15 @@ export class Game implements IGame {
           target: targetTitle,
         });
       case 'under':
-        return `You put the ${itemTitle} under the ${targetTitle}.`;
+        return this.text('parser.put_success_under', {
+          item: itemTitle,
+          target: targetTitle,
+        });
       case 'behind':
-        return `You put the ${itemTitle} behind the ${targetTitle}.`;
+        return this.text('parser.put_success_behind', {
+          item: itemTitle,
+          target: targetTitle,
+        });
       case 'on':
       default:
         return this.text('parser.put_success_surface', {
@@ -694,7 +700,7 @@ export class Game implements IGame {
       return this.getPutSuccessMessage(itemTitle, target.title, target.relation);
     }
 
-    return `You drop the ${itemTitle}.`;
+    return this.text('parser.drop_success', { item: itemTitle });
   }
 
   private getSurfacePutMessage(

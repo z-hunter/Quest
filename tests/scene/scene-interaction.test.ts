@@ -12,7 +12,9 @@ describe('Scene interaction text layer', () => {
 
     handleSceneClick(fixture.scene, 215, 155);
 
-    expect(fixture.messages.at(-1)).toBe('You see Desk Drawer');
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Desk Drawer' })
+    );
   });
 
   it('uses the actual canvas size for screen-to-world click mapping', () => {
@@ -26,7 +28,9 @@ describe('Scene interaction text layer', () => {
 
     handleSceneClick(fixture.scene, 320, 180);
 
-    expect(fixture.messages.at(-1)).toBe('You see Center Trigger');
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Center Trigger' })
+    );
   });
 
   it('keeps editor-locked top-layer entities interactive at runtime', () => {
@@ -48,7 +52,9 @@ describe('Scene interaction text layer', () => {
 
     handleSceneClick(fixture.scene, 215, 155);
 
-    expect(fixture.messages.at(-1)).toBe('You see Ghost Item');
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Ghost Item' })
+    );
   });
 
   it('ignores interaction-locked top-layer entities so clicks pass through to objects below', () => {
@@ -70,7 +76,9 @@ describe('Scene interaction text layer', () => {
 
     handleSceneClick(fixture.scene, 215, 155);
 
-    expect(fixture.messages.at(-1)).toBe('You see Back Trigger');
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Back Trigger' })
+    );
   });
 
   it('click reveals a lookable hidden title but not an examinable one', () => {
@@ -82,7 +90,9 @@ describe('Scene interaction text layer', () => {
     lookable.hidden = 'lookable';
 
     handleSceneClick(fixture.scene, 215, 155);
-    expect(fixture.messages.at(-1)).toBe('You see Lookable Trigger');
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Lookable Trigger' })
+    );
 
     fixture.messages.length = 0;
     fixture.scene.removeTriggerbox(lookable);

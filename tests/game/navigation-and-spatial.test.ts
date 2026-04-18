@@ -41,7 +41,7 @@ describe('Game navigation and spatial API', () => {
     const outcome = fixture.game.goToEntity(chair);
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('You go to Chair.');
+    expect(outcome.message).toBe(fixture.game.text('parser.go_to_success', { target: 'Chair' }));
     expect(player.target).toEqual({ x: 42, y: 84 });
   });
 
@@ -59,11 +59,19 @@ describe('Game navigation and spatial API', () => {
 
     const populated = fixture.game.describeSpatialRelation('Desk', 'in');
     expect(populated.status).toBe('ok');
-    expect(populated.message).toBe('In the Desk you see: Piece of paper.');
+    expect(populated.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        target: 'Desk',
+        items: 'Piece of paper',
+      })
+    );
 
     const empty = fixture.game.describeSpatialRelation('Desk', 'under');
     expect(empty.status).toBe('ok');
-    expect(empty.message).toBe('You see nothing under the Desk.');
+    expect(empty.message).toBe(
+      fixture.game.text('parser.relation_empty', { relation: 'under', target: 'Desk' })
+    );
   });
 
   it('describeSpatialRelation uses the collapsed ancestor relation for untitled intermediates', () => {
@@ -85,7 +93,13 @@ describe('Game navigation and spatial API', () => {
     const populated = fixture.game.describeSpatialRelation('Desk', 'in');
 
     expect(populated.status).toBe('ok');
-    expect(populated.message).toBe('In the Desk you see: Piece of paper.');
+    expect(populated.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        target: 'Desk',
+        items: 'Piece of paper',
+      })
+    );
   });
 
   it('describeSpatialRelation is relative to the queried semantic anchor', () => {
@@ -109,9 +123,21 @@ describe('Game navigation and spatial API', () => {
     const bookStack = fixture.game.describeSpatialRelation('BookA', 'on');
 
     expect(cabinetContents.status).toBe('ok');
-    expect(cabinetContents.message).toBe('In the Cabinet you see: Book A and Book B.');
+    expect(cabinetContents.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        target: 'Cabinet',
+        items: 'Book A and Book B',
+      })
+    );
     expect(bookStack.status).toBe('ok');
-    expect(bookStack.message).toBe('On the Book A you see: Book B.');
+    expect(bookStack.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'On',
+        target: 'Book A',
+        items: 'Book B',
+      })
+    );
   });
 
   it('describeSpatialRelation treats items on untitled nested container extensions as lying on the titled object', () => {
@@ -141,7 +167,13 @@ describe('Game navigation and spatial API', () => {
     const populated = fixture.game.describeSpatialRelation('Desk', 'on');
 
     expect(populated.status).toBe('ok');
-    expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+    expect(populated.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'On',
+        target: 'Desk',
+        items: 'Piece of paper',
+      })
+    );
   });
 
   it('describeSpatialRelation reveals hidden lookable descendants through anchor-relative relations', () => {
@@ -165,7 +197,13 @@ describe('Game navigation and spatial API', () => {
     const populated = fixture.game.describeSpatialRelation('Cabinet', 'in');
 
     expect(populated.status).toBe('ok');
-    expect(populated.message).toBe('In the Cabinet you see: Book A and Book B.');
+    expect(populated.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        target: 'Cabinet',
+        items: 'Book A and Book B',
+      })
+    );
     expect(fixture.scene.isHiddenEntityRevealed(bookB)).toBe(true);
   });
 
@@ -214,7 +252,13 @@ describe('Game navigation and spatial API', () => {
 
     const outcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('Behind the Cabinet you see: Book.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Cabinet',
+        items: 'Book',
+      })
+    );
   });
 
   it('switchTo hydrates untitled nested inventory extensions and projects them through the titled anchor', () => {
@@ -268,6 +312,12 @@ describe('Game navigation and spatial API', () => {
 
     const outcome = fixture.game.describeSpatialRelation('desk', 'behind');
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('Behind the Desk you see: Book.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Desk',
+        items: 'Book',
+      })
+    );
   });
 });
