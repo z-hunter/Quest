@@ -4,7 +4,8 @@ import type { SceneObject } from '../../src/entities/SceneObject';
 import type { SpatialRelationType } from '../../src/scene/spatialTypes';
 import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
-import { InventoryManager } from '../../src/core/InventoryManager';
+import { InventoryManager } from '../../src/systems/InventoryManager';
+import { GameSemanticAPI } from '../../src/systems/GameSemanticAPI';
 import { createTestTextAssets } from './textAssetFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
@@ -59,6 +60,7 @@ export function createTestGame(): TestGameHarness {
       },
     } as any,
     inventoryManager: {} as any,
+    semantic: {} as any,
     get inventory() {
       return (this.inventoryManager as any)?.inventory || [];
     },
@@ -86,6 +88,23 @@ export function createTestGame(): TestGameHarness {
     },
     getSeeMessage(_target: SceneObject) {
       return null;
+    },
+    isEntityInInventory(entity: Entity) {
+      return this.inventoryManager.isEntityInInventory(entity);
+    },
+    getBlockedAccessOutcome(entity: SceneObject) {
+      return this.semantic.getBlockedAccessOutcome(entity);
+    },
+    getSurfacePutMessage(
+      surface: SceneObject,
+      item: Entity,
+      relation: SpatialRelationType | null,
+      target?: SceneObject | null
+    ) {
+      return this.semantic.getSurfacePutMessage(surface, item, relation, target);
+    },
+    getSwitchComponent(entity: SceneObject) {
+      return this.semantic.getSwitchComponent(entity);
     },
     lookScene(_scene?: Scene | null) {
       return notImplementedOutcome('not_implemented_look_scene');
@@ -195,6 +214,7 @@ export function createTestGame(): TestGameHarness {
     textAssets as any,
     game.text.bind(game)
   );
+  game.semantic = new GameSemanticAPI(game);
 
   (game as any).canTakeEntity = (entity: Entity): GameActionOutcome | null => {
     const scene = game.sceneManager.currentScene;

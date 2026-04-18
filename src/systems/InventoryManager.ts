@@ -1,14 +1,10 @@
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
-import { ComponentSystem } from '../systems/ComponentSystem';
-import type {
-  InventoryComponent,
-  SurfaceComponent,
-  SurfaceItemPlacement,
-} from '../systems/ComponentSystem';
+import { ComponentSystem } from './ComponentSystem';
+import type { InventoryComponent, SurfaceComponent, SurfaceItemPlacement } from './ComponentSystem';
 import { Geometry } from '../utils/Geometry';
-import type { GameActionOutcome } from './GameActionTypes';
-import type { TextAssetManager } from './TextAssetManager';
+import type { GameActionOutcome } from '../core/GameActionTypes';
+import type { TextAssetManager } from '../core/TextAssetManager';
 import type { SceneManager } from '../scene/SceneManager';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 

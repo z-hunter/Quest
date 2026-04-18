@@ -1,27 +1,28 @@
-# Current Task: Completed Refactoring Sprint
+# Current Task: Completed Refactoring Sprint & Decomposition
 
 ## Status: COMPLETED ✅
 
 ## What was done this session
 
-### 1. PropertiesPanel.tsx refactoring ✅
-- Монолит 4404 строк / 177 KB → 16 файлов в `src/components/editor/properties/`
-- Оригинальный путь импорта сохранён через re-export (ни один внешний файл не тронут)
-- `tsc --noEmit` и `npm run build` проходят чисто
+### 1. Game.ts Decomposition ✅
+- **InventoryManager** moved: `src/core/InventoryManager.ts` → `src/systems/InventoryManager.ts`
+- **GameSemanticAPI** extracted: logic from `Game.ts` → `src/systems/GameSemanticAPI.ts`
+- `Game.ts` reduced from ~80KB to ~40KB (delegation pattern).
+- `IGame` interface updated to support the new system structure.
 
-### 2. Fix: Vertex dragging for Walkbox/Triggerbox ✅
-- **Причина**: В `onMouseMove` вершины `{x,y}` полигонов не имеют поля `p`,
-  из-за чего вычислялось `NaN`; плюс `group[]` никогда не заполнялся для не-Quad объектов
-- **Файл**: `src/tools/editor/EditorTransformManager.ts`
-- Non-Quad ветка теперь присваивает snap-позицию напрямую в `v.x / v.y`
+### 2. Type Safety Improvements ✅
+- Introduced `AnyComponent` union type in `ComponentSystem.ts`.
+- Updated `SceneObject.components` from `any[]` to `AnyComponent[]`.
 
-### 3. Fix: Vertex hit detection order ✅
-- Проверка вершин перемещена **до** box-select guard в `onMouseDown`
-- Hit radius увеличен с `vertexRadius/2` до `vertexRadius`
+### 3. Verification ✅
+- Test fixtures (`gameFactory.ts`, `gameSemanticFactory.ts`) updated to match new architecture.
+- Full test suite passed (202 tests).
 
-## Next Steps (Phase 2 Refactoring)
-1. Декомпозиция `Game.ts` (~93 KB):
-   - Извлечь `InventoryManager` в `src/systems/InventoryManager.ts`
-   - Извлечь `GameSemanticAPI` в `src/systems/GameSemanticAPI.ts`
-2. Type safety: заменить `any[]` в Component System на union type `AnyComponent`
-3. Вернуться к разработке фич (согласно `GDD.md`)
+### 4. Fixes and Cleanup ✅
+- Removed duplicate `onSceneChange` in `Game.ts`.
+- Implemented `isEntityInInventory` in `IGame` and delegated appropriately.
+
+## Next Steps
+1. **Feature Development**: Return to gameplay features as per `GDD.md`.
+2. **Architecture Audit**: Review remaining "any" casts in `ComponentSystem.ts` for potential further tightening.
+3. **Tauri Integration**: Move forward with explicit project/workspace model for desktop build.

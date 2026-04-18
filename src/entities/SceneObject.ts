@@ -1,3 +1,5 @@
+import type { AnyComponent } from '../systems/ComponentSystem';
+
 export class SceneObject {
   name: string;
   type: string;
@@ -18,7 +20,7 @@ export class SceneObject {
   interactions: Record<string, string> = {};
 
   // Components (e.g. { type: 'Item' }, { type: 'Switch', ... })
-  components: any[] = [];
+  components: AnyComponent[] = [];
 
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)

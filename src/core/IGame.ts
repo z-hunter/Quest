@@ -8,7 +8,7 @@ import type { GameActionOutcome } from './GameActionTypes';
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
-import type { InventoryManager } from './InventoryManager';
+import type { InventoryManager } from '../systems/InventoryManager';
 
 export interface IGame {
   assets: AssetLoader;
@@ -23,10 +23,12 @@ export interface IGame {
   openInventoryPreview(entity: Entity, previewText?: string | null): void;
   closeInventoryPreview(): void;
 
+  isEntityInInventory(entity: Entity): boolean;
   showMessage(text: string): void;
   log(text: string): void;
   text(key: string, params?: Record<string, string | number>): string;
   getSeeMessage(target: SceneObject): string | null;
+  getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null;
   lookScene(scene?: Scene | null): GameActionOutcome;
   lookEntity(entity: SceneObject): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
@@ -44,6 +46,12 @@ export interface IGame {
   closeEntity(entity: SceneObject): GameActionOutcome;
   closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
+  getSurfacePutMessage(
+    surface: SceneObject,
+    item: Entity,
+    relation: SpatialRelationType | null,
+    target?: SceneObject | null
+  ): string;
   putEntity(
     entity: Entity,
     target?: SceneObject | null,
@@ -68,8 +76,10 @@ export interface IGame {
   addEntityToSurface(
     surface: SceneObject,
     entity: Entity,
-    relation?: Exclude<SpatialRelationType, 'near'>
+    relation?: Exclude<SpatialRelationType, 'near'>,
+    options?: { preferPlayerPoint?: boolean }
   ): GameActionOutcome;
+  getSwitchComponent(entity: SceneObject): any;
   removeEntityFromSurface(
     surface: SceneObject,
     entity: Entity,

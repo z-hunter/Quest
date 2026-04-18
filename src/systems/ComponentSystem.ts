@@ -78,6 +78,20 @@ export interface WalkBoxComponent {
   mode?: 'Invert' | 'Add' | 'Subtract';
 }
 
+export type AnyComponent = (
+  | SubsceneComponent
+  | SwitchComponent
+  | BlockerComponent
+  | SubtriggerComponent
+  | ItemComponent
+  | InventoryComponent
+  | SurfaceComponent
+  | WalkBoxComponent
+  | ShadowComponent
+  | BackfaceComponent
+  | ThreeDParallaxComponent
+) & { mode?: string };
+
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
