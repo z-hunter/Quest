@@ -628,3 +628,127 @@ During the session the following checks were run successfully:
      failures.
 - Circular Dependencies: While largely mitigated by using the IGame interface, adding complex logic to GameSemanticAPI should be
      monitored for new circular paths.
+
+## Session Entry - 2026-04-19 20:42 +02:00
+
+### Session Goals
+
+- Create a reusable Codex skill for using the locally installed Gemini CLI as an external technical worker.
+- Add project-level startup guidance to prefer Gemini CLI for bounded technical tasks when safe.
+- Validate and commit the new Exit / Entry scene transition functionality.
+- Preserve durable lessons from the Gemini-assisted implementation attempt.
+
+### What Was Implemented
+
+- Created the local Codex skill `gemini-cli-agent` at:
+  - `C:\Users\Professional\.codex\skills\gemini-cli-agent`
+- Added a bundled wrapper:
+  - `scripts\invoke_gemini_task.ps1`
+  - The wrapper pipes long prompts through stdin and uses `--prompt " "` because the npm PowerShell shim can drop an empty string after `--prompt`.
+- Verified Gemini CLI is installed on this machine:
+  - `C:\Users\Professional\AppData\Roaming\npm\gemini.ps1`
+  - version `0.38.2`
+- Added a `Gemini CLI Worker Rule` to `AGENTS.md`:
+  - use Gemini where practical for bounded technical chores;
+  - allow parallel Gemini workers only with disjoint file ownership;
+  - keep Codex responsible for memory/NotebookLM/RAG recall, architecture decisions, diff review, tests, and integration.
+
+### Exit / Entry Runtime Work
+
+- Committed universal Exit / Entry scene transitions in commit:
+  - `559725d` - `Add Exit and Entry scene transitions`
+- Implemented `Exit` and `Entry` component support in the runtime component model.
+- Added Exit activation through `ComponentSystem`:
+  - `Exit.targetSceneId` switches scenes;
+  - empty `targetSceneId` performs same-scene teleport;
+  - `Exit.targetEntryId` is stored as `SceneManager.pendingEntryId`.
+- Added actor collision checks against Exit-bearing scene objects during `Scene.update`.
+- Updated `SceneManager.switchTo` to:
+  - transfer the live actor/player to the destination scene;
+  - remove duplicate player instances in the target scene;
+  - place the activator at the center of the target Entry object;
+  - apply Entry direction when present;
+  - snap the camera to the player after transition when auto-centering is enabled.
+- Added `Scene.snapCameraToPlayer()` for immediate camera placement after transitions.
+- Extended scene/test fixtures to support multi-scene transition tests.
+- Added `tests/scene/scene-transition.test.ts`, covering:
+  - cross-scene Exit -> Entry transition;
+  - same-scene teleport via empty `targetSceneId`;
+  - Exit on a normal `Entity`;
+  - Entry direction application;
+  - ensuring the Exit entity itself is not moved to the destination scene.
+
+### Important Architecture / Runtime Decisions
+
+- Exit / Entry behavior was kept in the scene transition layer rather than rewriting storage, parser, inventory, or semantic API contracts.
+- A Gemini-generated broad rewrite touched systems outside the Exit / Entry scope, especially storage and semantic runtime code. That version caused wide regressions around inventory, PUT/DROP, and subscene behavior.
+- The risky Gemini changes were removed before commit:
+  - simplified `InventoryManager` rewrite was discarded;
+  - incompatible `GameSemanticAPI` / `Game` / `IGame` storage API changes were discarded;
+  - fixture changes that masked those incompatibilities were removed or narrowed.
+- Final implementation restored the existing storage/semantic contracts and kept the feature scoped to:
+  - component typing / normalization;
+  - scene activation;
+  - scene switching;
+  - transition tests.
+
+### Parser / Mechanics / Scene / Inventory Notes
+
+- Parser and semantic API behavior was intentionally preserved.
+- Inventory and PUT/DROP contracts remain protected by the existing autotests.
+- Subscene activation, cleanup, and interaction tests continued to pass after the risky rewrites were removed.
+- Scene transition behavior now works with any object carrying an `Exit` component, including triggerboxes and normal entities.
+
+### Tests Run and Outcomes
+
+- `npm run typecheck`
+  - Passed.
+- `npm run test`
+  - Passed after commit.
+  - 18 test files passed.
+  - 205 tests passed.
+- Targeted checks also passed during debugging:
+  - `tests/scene/scene-transition.test.ts`
+  - `tests/game/semantic-api.test.ts`
+  - `tests/integration/parser-game.test.ts`
+  - `tests/parser/commands.test.ts`
+  - `tests/scene/subscene-activation.test.ts`
+  - `tests/scene/shadow-system.test.ts`
+
+### Commits Created
+
+- `559725d` - `Add Exit and Entry scene transitions`
+
+### Gemini CLI Lessons
+
+- Gemini CLI can be useful, but only as a tightly bounded external worker.
+- In this session, Gemini was not useful on the critical path for implementation because it overreached into unrelated runtime systems.
+- The attempted read-only Gemini review also timed out and did not materially help the final fix.
+- Durable workflow lesson:
+  - use Gemini for narrow mechanical edits, focused read-only review, or tests for an already specified contract;
+  - avoid broad runtime feature prompts unless the allowed write scope is extremely small;
+  - never accept Gemini summaries without Codex diff review and full relevant tests.
+
+### Current State
+
+- Branch: `feature-comp-exit`
+- Git status after commit: clean.
+- Branch is ahead of `origin/feature-comp-exit` by 1 commit.
+- `AGENTS.md` now contains the Gemini CLI worker rule.
+- Durable memory entries were stored for:
+  - Gemini CLI skill availability;
+  - preference for bounded Gemini workers;
+  - Exit / Entry commit context and regression cleanup.
+
+### Remaining Work / Next Recommended Steps
+
+- Push `feature-comp-exit` when ready.
+- Optionally perform browser/editor QA for scene transitions and instant camera snap.
+- Keep future Gemini tasks constrained to small, explicit write scopes.
+- Consider cleaning old `working` review-queue memories later if they are no longer useful.
+
+### Risks / Caveats / Open Questions
+
+- The local `gemini-cli-agent` skill lives outside the repo under the Codex skills directory; the repo only records the usage rule in `AGENTS.md`.
+- `npm install` was run to restore missing local `.bin` scripts after a temporary worktree/junction test setup disrupted the local dependency executable links. `package.json` and lockfiles remained unchanged.
+- NotebookLM source replacement still depends on CLI auth and may require the standard readiness flow if auth has expired.
