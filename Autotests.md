@@ -275,6 +275,7 @@ Covers:
 - `final_response` and `clarification` conversion into `showText`;
 - invalid JSON / invalid shape / provider error debug data;
 - Anthropic SSE parsing without live API calls.
+- forced Cascade 1 handoff prompt context for LLM experiments.
 
 #### `tests/parser/llm-parser.test.ts`
 
@@ -284,6 +285,7 @@ Covers:
 - `#C1-OFF` / `#C1-ON` forced LLM handoff test mode;
 - parser calling the LLM cascade only after lower cascades hand off;
 - parser avoiding LLM calls for commands already handled by Stage 1.
+- one post-API escalation retry through LLM when `#LLM-ON` is active.
 
 #### `tests/parser/world-model-context.test.ts`
 
@@ -468,6 +470,7 @@ The next useful expansions would be:
 2. Expand console/preprocessor coverage:
    - `#STAGE1-ON/OFF`
    - `#STAGE2-ON/OFF`
+   - regression checks that `#STAGE2` still means NLP while `#LLM` controls the LLM cascade
 
 3. Add tiny serialization/load fixtures if scene loading itself needs coverage.
 

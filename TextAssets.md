@@ -9,6 +9,8 @@ Text assets are stored separately from scene and prefab JSON files:
 - `public/text/scenes/<scene-id>.json`
 - `public/text/objects/<object-id>.json`
 
+System-level text assets live under `public/text/system/`. The current parser/GM LLM system prompt is stored as markdown in `public/text/system/parser-llm-system.md` so it can be edited without changing TypeScript code.
+
 Since scene/object IDs according to GDD can contain paths like "building\room", which means that the 'room.json scene' is located in the 'building' folder, there may be subfolders inside these folders.
 
 ## Main rules
@@ -69,3 +71,4 @@ Scripts do not generate text themselves. They only change which named text field
 - `description` maps to the basic text used by parser/runtime for `look` or `look around`.
 - Existing runtime fields remain as fallback and for backward compatibility.
 - Parser and UI should read only the resolved standard fields, not custom variant names directly.
+- The LLM parser cascade receives resolved parser/world context plus the system prompt asset; it should not read arbitrary scene files directly.
