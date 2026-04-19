@@ -46,9 +46,9 @@ For a desktop package:
 npm run tauri:build
 ```
 
-## Next Recommended Steps
+## Next Recommended Steps (COMPLETED)
 
-1. Add the official Tauri npm dependency and lockfile update.
-2. Smoke-test `tauri dev`.
-3. Replace the temporary working-directory project-root assumption with an explicit project/workspace model.
-4. Decide whether the integrated editor is supported in packaged builds or only in desktop-dev/editor builds.
+1. [x] Add the official Tauri npm dependency and lockfile update.
+2. [x] Smoke-test `tauri dev`.
+3. [x] Replace the temporary working-directory project-root assumption with an explicit project/workspace model.
+4. [ ] Decide whether the integrated editor is supported in packaged builds or only in desktop-dev/editor builds.

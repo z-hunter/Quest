@@ -194,7 +194,7 @@
           "groupId1": "nil",
           "groupId2": "#D1",
           "state": 1,
-          "idKey": "",
+          "keyId": "",
           "sound1": "drawer_open.wav",
           "sound2": "drawer_close.wav",
           "clearlyOpenable": true
@@ -260,7 +260,7 @@
           "groupId1": "nil",
           "groupId2": "#D2",
           "state": 1,
-          "idKey": "",
+          "keyId": "",
           "sound1": "drawer_open.wav",
           "sound2": "drawer_close.wav"
         }
@@ -557,6 +557,28 @@
       ],
       "script": "",
       "parallax": 1
+    },
+    {
+      "name": "entry",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Entry",
+          "direction": "left"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "poly": [],
+      "script": "",
+      "parallax": 1
     }
   ],
   "scaling": {
@@ -722,8 +744,8 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 191.01427925193806,
-      "y": 251.6724522673108,
+      "x": 195.15987568672656,
+      "y": 251.6724017789711,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -734,7 +756,7 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0429520460222221,
+      "parallax": 1.0429510848780243,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -1040,14 +1062,6 @@
       "components": [
         {
           "type": "3d-parallax"
-        },
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
         }
       ],
       "layer": 0,
@@ -1113,8 +1127,8 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 222.90433731747981,
-      "y": 306.92845155295447,
+      "x": 222.9043373174799,
+      "y": 306.92845155295464,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1125,7 +1139,7 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.079038203629382,
+      "parallax": 1.0790382036293824,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1276,30 +1290,30 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 136.402342176165,
-      "y": 232.61357155466692,
+      "x": 140.53391040317646,
+      "y": 232.51675433854237,
       "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 136.402342176165,
-          "y": 232.61357155466692,
-          "p": 1.0305324746301354
+          "x": 140.53391040317646,
+          "y": 232.51675433854237,
+          "p": 1.0304695546570963
         },
         {
-          "x": 233.67237882725732,
-          "y": 231.21067887610485,
-          "p": 1.0295911200894134
+          "x": 237.8050038950988,
+          "y": 231.11410685583928,
+          "p": 1.0295328678986841
         },
         {
-          "x": 180.1114411646327,
-          "y": 273.0051177762303,
-          "p": 1.0568981427434418
+          "x": 184.23616712419644,
+          "y": 272.9067130971723,
+          "p": 1.0568050023114235
         },
         {
-          "x": 132.0890279092334,
-          "y": 271.23726646502195,
-          "p": 1.0557502368255889
+          "x": 136.21505230962873,
+          "y": 271.1391630350319,
+          "p": 1.0556628312582463
         }
       ],
       "color": "#000975",
@@ -1537,7 +1551,7 @@
     "y": 52.529411764705884,
     "zoom": 0.51
   },
-  "autoCenter": true,
+  "autoCenter": false,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,

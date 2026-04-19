@@ -1,28 +1,30 @@
-# Current Task: Completed Refactoring Sprint & Decomposition
+# Current Task: Entry/Exit Implementation & Camera Snapping
 
 ## Status: COMPLETED ✅
 
 ## What was done this session
 
 ### 1. Game.ts Decomposition ✅
-- **InventoryManager** moved: `src/core/InventoryManager.ts` → `src/systems/InventoryManager.ts`
-- **GameSemanticAPI** extracted: logic from `Game.ts` → `src/systems/GameSemanticAPI.ts`
-- `Game.ts` reduced from ~80KB to ~40KB (delegation pattern).
-- `IGame` interface updated to support the new system structure.
+- **InventoryManager** moved to `src/systems/`.
+- **GameSemanticAPI** extracted to `src/systems/`.
+- MONOLITH reduced from 80KB to 40KB.
 
-### 2. Type Safety Improvements ✅
-- Introduced `AnyComponent` union type in `ComponentSystem.ts`.
-- Updated `SceneObject.components` from `any[]` to `AnyComponent[]`.
+### 2. Universal Exit/Entry Components ✅
+- Implemented `Exit` and `Entry` components working on ANY object type (Entities, Triggerboxes, Quads).
+- Supported **Same-Scene Teleportation** (empty `targetSceneId`).
+- Automated collision-based transitions in `ComponentSystem`.
+- Verified actor transfer and state persistence (NPCs & Player).
 
-### 3. Verification ✅
-- Test fixtures (`gameFactory.ts`, `gameSemanticFactory.ts`) updated to match new architecture.
-- Full test suite passed (202 tests).
+### 3. Camera Snap ✅
+- Implemented `scene.snapCameraToPlayer()` for instant positioning after transition.
+- Fixed bug where camera would "stick" to old player reference after scene load.
 
-### 4. Fixes and Cleanup ✅
-- Removed duplicate `onSceneChange` in `Game.ts`.
-- Implemented `isEntityInInventory` in `IGame` and delegated appropriately.
+### 4. Verification ✅
+- `npm run typecheck` passed.
+- `npm run test` passed: 18 files, 205 tests.
+- Restored storage/semantic runtime contracts after a partial API rewrite caused PUT/DROP and inventory regressions.
 
 ## Next Steps
-1. **Feature Development**: Return to gameplay features as per `GDD.md`.
-2. **Architecture Audit**: Review remaining "any" casts in `ComponentSystem.ts` for potential further tightening.
-3. **Tauri Integration**: Move forward with explicit project/workspace model for desktop build.
+1. **Feature Development**: Resume gameplay features as per `GDD.md`.
+2. **Architecture Audit**: Review remaining "any" casts in `ComponentSystem.ts`.
+3. **Browser QA**: Optionally verify instant camera snap visually in the editor/runtime.

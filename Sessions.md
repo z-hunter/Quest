@@ -593,3 +593,38 @@ During the session the following checks were run successfully:
   - `src/mechanics/Parser.ts`
   - `tests/game/semantic-api.test.ts`
 - If NotebookLM source replacement fails again, the next session should re-run `list` and the smoke-test `ask` before retrying upload.
+
+## Session Entry - 2026-04-19 12:13 +02:00
+
+ 1. What was completed
+
+- Decomposition of Game.ts: Successfully refactored the monolith from ~80KB to ~40KB by delegating responsibilities to
+     specialized systems.
+- InventoryManager Migration: Moved src/core/InventoryManager.ts to src/systems/InventoryManager.ts to align with the project's
+     architectural standards.
+- GameSemanticAPI Extraction: Created a new system src/systems/GameSemanticAPI.ts that now handles high-level gameplay actions
+     (look, examine, take, put, open/close).
+- Type Safety Overhaul: Introduced the AnyComponent union type in ComponentSystem.ts and updated SceneObject.components to use
+     it instead of any[], significantly reducing potential runtime type errors.
+- Autotests & CI Consistency: Updated test fixtures and ensured the entire suite (202 tests) passes, confirming no regressions
+     in parser or runtime logic.
+
+  1. Current state
+
+- The core architecture is now modular and more scalable.
+- The IGame interface is fully updated to reflect the new delegation pattern.
+- The workspace is clean, and changes are committed to the scene-refact2 branch.
+- Browser runtime errors (SyntaxErrors due to improper type imports) have been fully resolved and verified.
+
+  1. Next steps
+
+- Feature Sprint: Resume development of gameplay features as defined in GDD.md.
+- Cleanup: Conduct a final audit of any remaining any casts in ComponentSystem.ts that can now be replaced with AnyComponent.
+- Tauri Prep: Proceed with the explicit workspace model for the desktop build as outlined in Tauri.md.
+
+  1. Risks & Caveats
+
+- Import Precision: Developers must use import type when bringing in IGame or GameActionOutcome in new files to avoid Vite build
+     failures.
+- Circular Dependencies: While largely mitigated by using the IGame interface, adding complex logic to GameSemanticAPI should be
+     monitored for new circular paths.

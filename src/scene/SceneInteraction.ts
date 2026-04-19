@@ -1,6 +1,7 @@
 import type { Scene } from './Scene';
 import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
+import { Actor } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
 import { getSceneTextLayerAccessState } from './SceneTextLayer';
@@ -349,13 +350,18 @@ export function getHoverCursorAtScreenPoint(
   return null;
 }
 
-export function activateSceneObject(scene: Scene, obj: SceneObject, depth: number = 0): boolean {
+export function activateSceneObject(
+  scene: Scene,
+  obj: SceneObject,
+  depth: number = 0,
+  activator?: Actor
+): boolean {
   if (depth > 5) {
     console.warn('[Scene] Recursion limit reached.');
     return false;
   }
 
-  if (ComponentSystem.handleActivation(obj, scene, depth)) {
+  if (ComponentSystem.handleActivation(obj, scene, depth, activator)) {
     return true;
   }
 

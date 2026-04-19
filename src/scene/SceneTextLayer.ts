@@ -1,7 +1,8 @@
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Triggerbox } from '../entities/Triggerbox';
-import type { BlockerComponent, SwitchComponent } from '../systems/ComponentSystem';
+import type { BlockerComponent } from '../systems/ComponentSystem';
+import type { SwitchTrigger } from '../entities/TriggerComponents';
 import type { Scene } from './Scene';
 import type { SpatialPlacement, SpatialRelationType } from './spatialTypes';
 
@@ -74,12 +75,6 @@ function getInventorySlotProjection(
   };
 }
 
-function getSwitchComponent(object: SceneObject | null): SwitchComponent | null {
-  if (!object?.components?.length) return null;
-  const component = object.components.find((candidate: any) => candidate?.type === 'Switch');
-  return (component as SwitchComponent | undefined) || null;
-}
-
 function getBlockerComponent(object: SceneObject | null): BlockerComponent | null {
   if (!object?.components?.length) return null;
   const component = object.components.find((candidate: any) => candidate?.type === 'Blocker');
@@ -113,7 +108,9 @@ export function getActiveBlockingComponentState(
     };
   }
 
-  const switchComponent = getSwitchComponent(object);
+  const switchComponent = object.components?.find((c: any) => c.type === 'Switch') as
+    | SwitchTrigger
+    | undefined;
   if (
     switchComponent &&
     (switchComponent.state || 1) !== 2 &&

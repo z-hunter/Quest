@@ -1,10 +1,7 @@
 import { SceneObject } from '../entities/SceneObject';
 import { QuadObject } from '../entities/QuadObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
-// We use 'any' for Actor/Entity imports inside methods to avoid circular dependency at top level if possible,
-// or just import them. Circular imports are handled by webpack/vite usually, but let's be careful.
-// Actually, using them as Types is fine.
-import type { Actor } from '../entities/Actor';
+import { Actor } from '../entities/Actor';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
@@ -21,6 +18,7 @@ export interface SubsceneComponent {
 export interface SwitchComponent {
   type: 'Switch';
   idKey?: string;
+  keyId?: string;
   state?: number;
   sound1?: string;
   sound2?: string;
@@ -40,6 +38,17 @@ export interface BlockerComponent {
 export interface SubtriggerComponent {
   type: 'Subtrigger';
   target: string;
+}
+
+export interface ExitComponent {
+  type: 'Exit';
+  targetSceneId: string;
+  targetEntryId: string;
+}
+
+export interface EntryComponent {
+  type: 'Entry';
+  direction?: 'up' | 'down' | 'left' | 'right';
 }
 
 export interface ItemComponent {
@@ -83,6 +92,8 @@ export type AnyComponent = (
   | SwitchComponent
   | BlockerComponent
   | SubtriggerComponent
+  | ExitComponent
+  | EntryComponent
   | ItemComponent
   | InventoryComponent
   | SurfaceComponent
@@ -220,7 +231,24 @@ export class ComponentSystem {
     return title && title.trim() ? title.trim() : null;
   }
 
-  static update(entity: any, _dt: number) {
+  static update(context: ActivationSceneContext | SceneObject, dt: number) {
+    if ((context as ActivationSceneContext).entities) {
+      const scene = context as ActivationSceneContext;
+      const allObjects: SceneObject[] = [
+        ...scene.entities,
+        ...(scene.walkbox || []),
+        ...scene.triggerboxes,
+      ];
+      for (const entity of allObjects) {
+        this.updateSingleObject(entity, dt);
+      }
+      return;
+    }
+
+    this.updateSingleObject(context as SceneObject, dt);
+  }
+
+  private static updateSingleObject(entity: SceneObject, _dt: number) {
     if (!entity.components) return;
 
     for (const comp of entity.components) {
@@ -251,12 +279,15 @@ export class ComponentSystem {
   static handleActivation(
     entity: SceneObject,
     scene: ActivationSceneContext,
-    depth: number = 0
+    depth: number = 0,
+    activator?: Actor
   ): boolean {
     if (!entity.components) return false;
 
     for (const comp of entity.components) {
-      if (comp.type === 'Subtrigger') {
+      if (comp.type === 'Exit') {
+        return this.handleExit(comp as ExitComponent, scene, activator);
+      } else if (comp.type === 'Subtrigger') {
         return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene, depth);
       } else if (comp.type === 'Subscene') {
         return this.handleSubscene(entity, comp as SubsceneComponent, scene);
@@ -265,6 +296,40 @@ export class ComponentSystem {
       }
     }
     return false;
+  }
+
+  private static handleExit(
+    exit: ExitComponent,
+    scene: ActivationSceneContext,
+    activator?: Actor
+  ): boolean {
+    const sceneManager = scene.game?.sceneManager;
+    const targetSceneId = exit.targetSceneId?.trim() || scene.id;
+    if (!sceneManager || !targetSceneId) return false;
+
+    sceneManager.pendingEntryId = exit.targetEntryId?.trim() || null;
+    sceneManager.switchTo(targetSceneId, activator);
+    return true;
+  }
+
+  static checkTriggerboxCollisions(scene: ActivationSceneContext): void {
+    const actors = scene.entities.filter(
+      (entity): entity is Actor => entity instanceof Actor && !entity.disabled && entity.visible
+    );
+    if (actors.length === 0) return;
+
+    const exitObjects = [...scene.entities, ...scene.triggerboxes].filter(
+      (obj) => !obj.disabled && obj.components?.some((component) => component.type === 'Exit')
+    );
+    if (exitObjects.length === 0) return;
+
+    for (const actor of actors) {
+      for (const exitObject of exitObjects) {
+        if (!exitObject.containsPoint(actor.x, actor.y)) continue;
+        scene.activateObject(exitObject, 0, actor);
+        return;
+      }
+    }
   }
 
   // Called when trying to TAKE an item
