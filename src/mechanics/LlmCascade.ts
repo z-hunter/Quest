@@ -39,7 +39,7 @@ type ConsoleLike = {
 };
 
 export type LlmCascadePreviousAttempt = {
-  kind?: 'post_api_escalation' | 'forced_cascade_handoff';
+  kind?: 'post_api_escalation' | 'post_api_not_found' | 'forced_cascade_handoff';
   envelope: ParserCascadeEnvelope;
   result: unknown;
 };
@@ -100,8 +100,10 @@ export class LlmCascade {
                   'If the lower cascade action is genuinely the best answer, you may return that action plan.',
                 ]
               : [
-                  'The previous parser/game attempt escalated instead of completing.',
-                  'Do not repeat the same failing action unless the previous result shows it can now succeed.',
+                  previousAttempt.kind === 'post_api_not_found'
+                    ? 'The previous parser/game attempt reported that it could not see the target. This often means the lower cascade misread a verb, adjective, or phrase fragment as the noun.'
+                    : 'The previous parser/game attempt escalated instead of completing.',
+                  'Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.',
                   'If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.',
                 ]),
           ]

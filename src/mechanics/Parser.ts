@@ -147,13 +147,16 @@ export class Parser {
         !actionEnvelope &&
         this.game.console?.parserLlmEnabled === true &&
         !llmAttempted &&
-        this.resultHasEscalation(resultJson)
+        this.resultShouldRetryWithLlm(resultJson)
       ) {
         llmAttempted = true;
+        const parsedResult = this.safeParseJson(resultJson);
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
-          kind: 'post_api_escalation',
+          kind: this.resultHasEscalation(parsedResult)
+            ? 'post_api_escalation'
+            : 'post_api_not_found',
           envelope,
-          result: this.safeParseJson(resultJson),
+          result: parsedResult,
         });
         if (llmEnvelope) {
           envelope = llmEnvelope;
@@ -1241,16 +1244,48 @@ export class Parser {
     }
   }
 
-  private resultHasEscalation(resultJson: string): boolean {
+  private resultShouldRetryWithLlm(resultJson: string): boolean {
     try {
       const result = JSON.parse(resultJson) as ParserResult;
-      return (
-        result.type === 'outcomes' &&
-        result.outcomes.some((outcome) => outcome.status === 'escalate')
-      );
+      return this.resultHasEscalation(result) || this.resultHasSoftNotFoundFailure(result);
     } catch {
       return false;
     }
+  }
+
+  private resultHasEscalation(result: unknown): boolean {
+    return (
+      this.isParserOutcomeResult(result) &&
+      result.outcomes.some((outcome) => outcome.status === 'escalate')
+    );
+  }
+
+  private resultHasSoftNotFoundFailure(result: unknown): boolean {
+    if (!this.isParserOutcomeResult(result)) return false;
+    return result.outcomes.some((outcome) => {
+      if (outcome.status !== 'failed') return false;
+      const code = String(outcome.code || '');
+      if (
+        code === 'entity_not_found' ||
+        code === 'take_target_not_found' ||
+        code === 'relation_anchor_not_found'
+      ) {
+        return true;
+      }
+      const message = String(outcome.message || '');
+      return /^You don't see any .+ here\.$/i.test(message);
+    });
+  }
+
+  private isParserOutcomeResult(
+    result: unknown
+  ): result is Extract<ParserResult, { type: 'outcomes' }> {
+    return (
+      !!result &&
+      typeof result === 'object' &&
+      (result as ParserResult).type === 'outcomes' &&
+      Array.isArray((result as ParserResult).outcomes)
+    );
   }
 
   private safeParseJson(json: string): unknown {

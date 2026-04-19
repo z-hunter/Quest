@@ -18,6 +18,7 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     'closeEntity',
     'closeFocusedView',
     'takeEntity',
+    'canTakeEntity',
     'canPutSourceEntity',
     'putEntity',
     'hasPutStorageForRelation',

@@ -127,4 +127,42 @@ describe('Parser LLM Integration', () => {
     expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('target_is_not_switch');
     expect(fixture.messages).toContain('The window gives you a cold stare.');
   });
+
+  it('Parser calls llmCascade after a Stage 1 command fails with a soft not-found result', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('red_key', {
+      title: 'Red key',
+      description: 'A small red key.',
+    });
+    fixture.textAssets.setObject('red_key', {
+      title: 'Red key',
+      description: 'A small red key.',
+      synonyms: ['key'],
+    });
+
+    const mockLlmParse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [{ type: 'lookTarget', target: 'key' }],
+      },
+      debug: {
+        rawInput: 'look shiny red key',
+        normalizedInput: 'LOOK SHINY RED KEY',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('look shiny red key');
+
+    expect(mockLlmParse).toHaveBeenCalled();
+    const previousAttempt = mockLlmParse.mock.calls[0]?.[3];
+    expect(previousAttempt?.kind).toBe('post_api_not_found');
+    expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('entity_not_found');
+    expect(fixture.messages).toContain('A small red key.');
+  });
 });

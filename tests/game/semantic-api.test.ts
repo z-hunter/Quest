@@ -1433,6 +1433,33 @@ describe('Game semantic API', () => {
     expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
   });
 
+  it('takeEntity checks distance to an external inventory owner, not stale item coordinates', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A cassette tape.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+
+    fixture.game.addInventoryEntity(recorder, cassette);
+
+    expect((fixture.game as any).canTakeEntity(cassette)).toBeNull();
+    const taken = fixture.game.takeEntity(cassette);
+
+    expect(taken.status).toBe('ok');
+    expect(fixture.game.inventory).toContain(cassette);
+    expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+  });
+
   it('placing an item onto a surface inside the active subscene keeps it visible there', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
