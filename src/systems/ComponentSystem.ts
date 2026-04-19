@@ -1,5 +1,6 @@
 import { SceneObject } from '../entities/SceneObject';
 import { QuadObject } from '../entities/QuadObject';
+import type { SpatialRelationType } from '../scene/spatialTypes';
 // We use 'any' for Actor/Entity imports inside methods to avoid circular dependency at top level if possible,
 // or just import them. Circular imports are handled by webpack/vite usually, but let's be careful.
 // Actually, using them as Types is fine.
@@ -12,6 +13,7 @@ import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
 export interface SubsceneComponent {
   type: 'Subscene';
   targetGroupId: string;
+  itemScale?: number;
   title?: string;
   description?: string | null;
 }
@@ -24,6 +26,15 @@ export interface SwitchComponent {
   sound2?: string;
   groupId1?: string;
   groupId2?: string;
+  transparent?: boolean;
+  clearlyOpenable?: boolean;
+  blockedRelation?: Exclude<SpatialRelationType, 'near'> | 'none';
+}
+
+export interface BlockerComponent {
+  type: 'Blocker';
+  transparent?: boolean;
+  blockedRelation?: Exclude<SpatialRelationType, 'near'> | 'none';
 }
 
 export interface SubtriggerComponent {
@@ -34,6 +45,29 @@ export interface SubtriggerComponent {
 export interface ItemComponent {
   type: 'Item';
   ignoreDistance?: boolean;
+}
+
+export interface InventoryComponent {
+  type: 'Inventory';
+  relation?: Exclude<SpatialRelationType, 'near'>;
+  capacity?: number;
+  groups?: string[];
+  protected?: boolean;
+  items?: string[];
+}
+
+export interface SurfaceItemPlacement {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface SurfaceComponent {
+  type: 'Surface';
+  relation?: Exclude<SpatialRelationType, 'near'>;
+  capacity?: number;
+  groups?: string[];
+  items?: SurfaceItemPlacement[];
 }
 
 import { ThreeDParallaxSystem, type ThreeDParallaxComponent } from './ThreeDParallaxSystem';
@@ -47,6 +81,38 @@ export interface WalkBoxComponent {
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  static normalizeInventoryRelation(
+    component: InventoryComponent | null | undefined
+  ): Exclude<SpatialRelationType, 'near'> {
+    const relation = component?.relation;
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+      ? relation
+      : 'in';
+  }
+
+  static normalizeSurfaceRelation(
+    component: SurfaceComponent | null | undefined
+  ): Exclude<SpatialRelationType, 'near'> {
+    const relation = component?.relation;
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+      ? relation
+      : 'on';
+  }
+
+  static getInventoryComponents(entity: SceneObject | null | undefined): InventoryComponent[] {
+    if (!entity?.components) return [];
+    return entity.components.filter(
+      (component: any): component is InventoryComponent => component?.type === 'Inventory'
+    );
+  }
+
+  static getSurfaceComponents(entity: SceneObject | null | undefined): SurfaceComponent[] {
+    if (!entity?.components) return [];
+    return entity.components.filter(
+      (component: any): component is SurfaceComponent => component?.type === 'Surface'
+    );
+  }
+
   private static getDirectSpatialChildren(
     rootIds: string[],
     scene: ActivationSceneContext
@@ -73,10 +139,66 @@ export class ComponentSystem {
         result.add(obj);
         continue;
       }
-
     }
 
     return Array.from(result);
+  }
+
+  private static collectSubsceneSpatialTargets(
+    rootIds: string[],
+    scene: ActivationSceneContext
+  ): SceneObject[] {
+    const result = new Set<SceneObject>();
+    const visitedParentIds = new Set<string>();
+    const queue = rootIds.map((value) => String(value || '').trim()).filter((value) => !!value);
+
+    while (queue.length > 0) {
+      const parentId = queue.shift();
+      if (!parentId || visitedParentIds.has(parentId)) continue;
+      visitedParentIds.add(parentId);
+
+      const children = this.getDirectSpatialChildren([parentId], scene);
+      for (const child of children) {
+        if (!result.has(child)) {
+          result.add(child);
+        }
+
+        const isNestedSubscene = child.components?.some(
+          (component: any) => component?.type === 'Subscene'
+        );
+        if (!isNestedSubscene) {
+          queue.push(child.name);
+        }
+      }
+    }
+
+    return Array.from(result);
+  }
+
+  private static syncSubsceneSwitchStates(
+    targets: SceneObject[],
+    scene: ActivationSceneContext
+  ): void {
+    for (const target of targets) {
+      const switchComponent = target.components?.find(
+        (component: any) => component?.type === 'Switch'
+      ) as SwitchComponent | undefined;
+      if (!switchComponent) continue;
+      const currentState = switchComponent.state === 2 ? 2 : 1;
+      this.applySwitchState(target, switchComponent, scene, currentState, { playSound: false });
+    }
+  }
+
+  private static isDetachedFromSubsceneRoot(
+    target: SceneObject,
+    subsceneRootId: string | null | undefined
+  ): boolean {
+    const normalizedRoot = String(subsceneRootId || '').trim();
+    if (!normalizedRoot) return false;
+    const detached = Array.isArray((target as any).__detachedSubsceneRootIds)
+      ? ((target as any).__detachedSubsceneRootIds as string[])
+      : [];
+    return detached.includes(normalizedRoot);
   }
 
   private static getPlayerFacingTitle(game: IGame | undefined, entity: SceneObject): string | null {
@@ -143,11 +265,12 @@ export class ComponentSystem {
 
     let targetX = 0;
     let targetY = 0;
+    const surfacePlacement = this.getSurfacePlacementReferencePoint(entity);
 
-    if (
-      Array.isArray((entity as any).poly) &&
-      (entity as any).poly.length > 0
-    ) {
+    if (surfacePlacement) {
+      targetX = surfacePlacement.x;
+      targetY = surfacePlacement.y;
+    } else if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
       const poly = (entity as any).poly as Array<{ x: number; y: number }>;
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
@@ -158,7 +281,7 @@ export class ComponentSystem {
     }
 
     const dist = Math.hypot(player.x - targetX, player.y - targetY);
-    const allowedDist = (player.width || 30) * 4;
+    const allowedDist = (player.width || 30) * 3.3;
 
     if (dist > allowedDist) {
       const title = this.getPlayerFacingTitle(game, entity);
@@ -174,6 +297,34 @@ export class ComponentSystem {
     return null;
   }
 
+  private static getSurfacePlacementReferencePoint(
+    entity: SceneObject
+  ): { x: number; y: number } | null {
+    const game = (entity as any).game as IGame | undefined;
+    const scene = game?.sceneManager?.currentScene;
+    if (!scene) return null;
+
+    const entityId = String(entity.name || '').trim();
+    const parentId =
+      typeof (entity as any).spatial?.parentNodeId === 'string'
+        ? (entity as any).spatial.parentNodeId.trim()
+        : '';
+    if (!entityId || !parentId) return null;
+
+    for (const candidate of scene.getAllSceneObjects?.() || []) {
+      if (candidate.name !== parentId) continue;
+      for (const component of this.getSurfaceComponents(candidate)) {
+        const placement = component.items?.find((item: any) => item?.id === entityId);
+        const x = Number((placement as any)?.x);
+        const y = Number((placement as any)?.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  }
+
   static canTakeItem(entity: SceneObject, player: Actor | null): string | null {
     const game = (entity as any).game as IGame | undefined;
     if (!entity.components) return game?.text('parser.take_cannot') || 'You cannot take that.';
@@ -186,12 +337,63 @@ export class ComponentSystem {
 
     if (!itemComp) return null; // Not an item component, let caller handle legacy or fail
 
+    const scene = game?.sceneManager?.currentScene as ActivationSceneContext | undefined | null;
+    const ignoreDistanceForActiveSubscene =
+      !!scene?.activeSubscene && !!scene.subsceneEntities?.has(entity);
+
     const distanceError = this.getInteractionDistanceError(entity, player, {
-      ignoreDistance: !!itemComp.ignoreDistance,
+      ignoreDistance: !!itemComp.ignoreDistance || ignoreDistanceForActiveSubscene,
     });
     if (distanceError) return distanceError;
 
     return null; // OK
+  }
+
+  static getInventoryComponent(
+    entity: SceneObject | null | undefined,
+    relation?: Exclude<SpatialRelationType, 'near'> | null
+  ): InventoryComponent | null {
+    const components = this.getInventoryComponents(entity);
+    if (!components.length) return null;
+    if (!relation) {
+      return components[0] || null;
+    }
+    return (
+      components.find((component) => this.normalizeInventoryRelation(component) === relation) ||
+      null
+    );
+  }
+
+  static getSurfaceComponent(
+    entity: SceneObject | null | undefined,
+    relation?: Exclude<SpatialRelationType, 'near'> | null
+  ): SurfaceComponent | null {
+    const components = this.getSurfaceComponents(entity);
+    if (!components.length) return null;
+    if (!relation) {
+      return components[0] || null;
+    }
+    const exact = components.find(
+      (component) => this.normalizeSurfaceRelation(component) === relation
+    );
+    if (exact) return exact;
+    if (entity?.type === 'Walkbox' && relation === 'on') {
+      return components[0] || null;
+    }
+    return null;
+  }
+
+  static getGroupIds(entity: SceneObject | null | undefined): string[] {
+    const raw = String(entity?.groupID || '').trim();
+    if (!raw) return [];
+    return Array.from(
+      new Set(
+        raw
+          .split(/[,\s]+/)
+          .map((value) => value.trim())
+          .filter((value) => value.startsWith('#'))
+      )
+    );
   }
 
   private static handleSubtrigger(
@@ -266,10 +468,12 @@ export class ComponentSystem {
           .filter((value) => !!value)
       )
     );
-    const spatialTargets = this.getDirectSpatialChildren(spatialRootIds, scene);
+    const spatialTargets = this.collectSubsceneSpatialTargets(spatialRootIds, scene);
     const groupTargets = targetStr ? scene.resolveTarget(targetStr) : [];
-    const targets = Array.from(new Set([...groupTargets, ...spatialTargets]));
     const activeSubsceneId = entity.name || targetStr;
+    const targets = Array.from(new Set([...groupTargets, ...spatialTargets])).filter(
+      (target) => !this.isDetachedFromSubsceneRoot(target, activeSubsceneId)
+    );
 
     scene.activeSubscene = activeSubsceneId;
     scene.subsceneEntities.clear();
@@ -277,6 +481,7 @@ export class ComponentSystem {
       t.disabled = false;
       scene.subsceneEntities.add(t);
     });
+    this.syncSubsceneSwitchStates(targets, scene);
     return true; // Handled
   }
 
@@ -285,73 +490,85 @@ export class ComponentSystem {
     sw: SwitchComponent,
     scene: ActivationSceneContext
   ): boolean {
-    // 1. Check Key
-    if (sw.idKey) {
-      const game = scene.game as unknown as IGame;
-      if (game && game.inventory) {
-        const hasKey = game.inventory.some(
-          (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-        );
-        if (!hasKey) {
-          const keyEntity =
-            game.inventory.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            ) ||
-            scene.entities.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            ) ||
-            scene.triggerboxes.find(
-              (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-            );
-          const keyTitle = keyEntity
-            ? this.getPlayerFacingTitle(game, keyEntity as SceneObject)
-            : null;
-          game.showMessage(
-            keyTitle
-              ? game.text('engine.locked_needs', { item: keyTitle })
-              : game.text('engine.locked_generic')
-          );
-          return true; // Handled (Blocked)
-        }
-      }
+    const blocked = this.getSwitchLockError(entity, sw, scene);
+    if (blocked) {
+      (scene.game as unknown as IGame).showMessage(blocked.message);
+      return true;
     }
 
-    // 2. Toggle State
-    // Default to state 1 if undefined
-    const currentState = sw.state || 1;
+    const currentState = sw.state === 2 ? 2 : 1;
     const nextState = currentState === 1 ? 2 : 1;
+    this.applySwitchState(entity, sw, scene, nextState);
+    return true;
+  }
+
+  static getSwitchLockError(
+    _entity: SceneObject,
+    sw: SwitchComponent,
+    scene: ActivationSceneContext
+  ): { code: 'switch_locked'; message: string } | null {
+    if (!sw.idKey) return null;
+
+    const game = scene.game as unknown as IGame;
+    if (!game?.inventory) return null;
+
+    const hasKey = game.inventory.some(
+      (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+    );
+    if (hasKey) return null;
+
+    const keyEntity =
+      game.inventory.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      ) ||
+      scene.entities.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      ) ||
+      scene.triggerboxes.find(
+        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+      );
+    const keyTitle = keyEntity ? this.getPlayerFacingTitle(game, keyEntity as SceneObject) : null;
+
+    return {
+      code: 'switch_locked',
+      message: keyTitle
+        ? game.text('engine.locked_needs', { item: keyTitle })
+        : game.text('engine.locked_generic'),
+    };
+  }
+
+  static applySwitchState(
+    entity: SceneObject,
+    sw: SwitchComponent,
+    scene: ActivationSceneContext,
+    nextState: 1 | 2,
+    options?: { playSound?: boolean }
+  ): void {
     sw.state = nextState;
 
-    // 3. Audio
     const game = scene.game as unknown as IGame;
-    if (game) {
-      if (nextState === 1 && sw.sound1) game.playSound(sw.sound1);
-      if (nextState === 2 && sw.sound2) game.playSound(sw.sound2);
+    if (options?.playSound !== false) {
+      if (nextState === 1 && sw.sound1) game?.playSound(sw.sound1);
+      if (nextState === 2 && sw.sound2) game?.playSound(sw.sound2);
     }
 
-    // 4. Update Targets
     const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
     const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
 
-    // Resolve
-    if (scene.resolveTarget) {
-      const toShow = scene.resolveTarget(targetStrShow || '');
-      const toHide = scene.resolveTarget(targetStrHide || '');
+    if (!scene.resolveTarget) return;
 
-      toShow.forEach((t) => {
-        t.disabled = false;
-        if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(t);
-      });
+    const toShow = scene.resolveTarget(targetStrShow || '');
+    const toHide = scene.resolveTarget(targetStrHide || '');
 
-      toHide.forEach((t) => {
-        // Don't disable self if self is in target list (safety)
-        if (t === entity) return;
+    toShow.forEach((target) => {
+      target.disabled = false;
+      if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.add(target);
+    });
 
-        t.disabled = true;
-        if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(t);
-      });
-    }
-
-    return true; // Handled
+    toHide.forEach((target) => {
+      if (target === entity) return;
+      target.disabled = true;
+      if (scene.activeSubscene && scene.subsceneEntities) scene.subsceneEntities.delete(target);
+    });
   }
 }

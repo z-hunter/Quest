@@ -1,30 +1,27 @@
-# Current Status: Maintenance & Refinement
+# Current Task: Completed Refactoring Sprint
 
-**Overview:** The core architecture for scenes, actors, and unified referencing is stable. Current efforts focus on refining the editor experience and expanding scriptable interactions.
+## Status: COMPLETED ✅
 
-## Recently Completed
+## What was done this session
 
-- [x] **Object Locking:** Implemented `Alt+L` hotkey and click-through logic for locked objects in Scene Editor.
-- [x] **Unified Object and Group Referencing:** Integrated `#group` syntax across all components.
-- [x] **UI Layout Refinement:** Panel resizing, grouped properties, and SVG icons.
-- [x] **Quad Object Documentation:** Added comprehensive details to `GDD.md`.
-- [x] **Entity Visual Properties:** Added Opacity, Blur, and Blend Mode support to Entity, Static, and Actor classes.
-- [x] **Sprite Editor Fixes:** Resolved issues with saving and path handling.
-- [x] **Subscene & Undo Fixes:** Resolved rendering context leaks and deep serialization issues for Undo.
-- [x] **Anchor-Based Parallax:** Removed `visualOffset` and replaced it with Editor-side coordinate compensation for a smoother workflow.
-- [x] **Shadow & Parallax System:** Fixed 'Inside-Out' distortion, 'Pillar' bugs, and implemented Delta Scaling for robust depth alignment.
-- [x] **SceneEditor IO Refactoring:** Decoupled file I/O logic into `EditorPersistenceManager` for better modularity.
-- [x] **Advanced Snapping & Y-Sorting:** Implemented horizontal grid snapping, Entity corner snapping (parallax-aware), and unified Visual Y-sorting.
-- [x] **Auto-Center Fix:** Resolved keyboard movement blockage during camera auto-centering.
-- [x] **Magnetic Move & Quad Paste:** Implemented magnetized whole-quad dragging and cursor-aware pasting with auto-unlocking.
+### 1. PropertiesPanel.tsx refactoring ✅
+- Монолит 4404 строк / 177 KB → 16 файлов в `src/components/editor/properties/`
+- Оригинальный путь импорта сохранён через re-export (ни один внешний файл не тронут)
+- `tsc --noEmit` и `npm run build` проходят чисто
 
-## Active/Pending Tasks
+### 2. Fix: Vertex dragging for Walkbox/Triggerbox ✅
+- **Причина**: В `onMouseMove` вершины `{x,y}` полигонов не имеют поля `p`,
+  из-за чего вычислялось `NaN`; плюс `group[]` никогда не заполнялся для не-Quad объектов
+- **Файл**: `src/tools/editor/EditorTransformManager.ts`
+- Non-Quad ветка теперь присваивает snap-позицию напрямую в `v.x / v.y`
 
-- [ ] **Interaction Scripting:** Implement more complex demo scripts in `src/scripts/main.ts` to test `Subscene`, `Switch`, and `Subtrigger`.
-- [ ] **Inventory System:** Basic logic for picking up items (currently `Item` component exists but full inventory UI/logic is minimal).
-- [ ] **Click Occlusion Logic:** Further refine cursor behavior when multiple interactive objects overlap.
+### 3. Fix: Vertex hit detection order ✅
+- Проверка вершин перемещена **до** box-select guard в `onMouseDown`
+- Hit radius увеличен с `vertexRadius/2` до `vertexRadius`
 
-## Notes
-
-- `context.md` has been updated to reflect the new architecture.
-- Follow the **Serialization Standard** when adding new properties.
+## Next Steps (Phase 2 Refactoring)
+1. Декомпозиция `Game.ts` (~93 KB):
+   - Извлечь `InventoryManager` в `src/systems/InventoryManager.ts`
+   - Извлечь `GameSemanticAPI` в `src/systems/GameSemanticAPI.ts`
+2. Type safety: заменить `any[]` в Component System на union type `AnyComponent`
+3. Вернуться к разработке фич (согласно `GDD.md`)

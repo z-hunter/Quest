@@ -1,4 +1,5 @@
 import { ScriptRegistry } from './ScriptRegistry';
+import { SceneSpatialValidator } from '../scene/SceneSpatialValidator';
 
 export type ConsoleLineType = 'output' | 'command' | 'error' | 'info';
 
@@ -70,6 +71,10 @@ export class Console {
 
     if (/^l(?:\s|$)/i.test(trimmed)) {
       return trimmed.replace(/^l/i, 'LOOK');
+    }
+
+    if (/^q$/i.test(trimmed)) {
+      return 'QUIT';
     }
 
     return trimmed;
@@ -162,6 +167,28 @@ export class Console {
     this.registerCommand('#STAGE2-ON', () => {
       this.parserStage2Enabled = true;
       this.log('Parser stage2 enabled.', 'info');
+    });
+
+    this.registerCommand('#VALIDATE-SPATIAL', () => {
+      const scene = this.game?.sceneManager?.currentScene || null;
+      const result = SceneSpatialValidator.validate(scene, this.game);
+      if (!scene) {
+        this.log('Spatial validation failed: no current scene.', 'error');
+        return;
+      }
+
+      this.log(
+        `Spatial validation for '${scene.name}': ${result.errors.length} error(s), ${result.warnings.length} warning(s).`,
+        result.ok ? 'info' : 'error'
+      );
+
+      for (const issue of result.issues) {
+        const prefix = issue.severity === 'error' ? 'ERROR' : 'WARN';
+        this.log(
+          `[${prefix}] ${issue.code}: ${issue.message}`,
+          issue.severity === 'error' ? 'error' : 'info'
+        );
+      }
     });
   }
 

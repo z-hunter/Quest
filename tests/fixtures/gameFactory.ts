@@ -4,7 +4,9 @@ import type { SceneObject } from '../../src/entities/SceneObject';
 import type { SpatialRelationType } from '../../src/scene/spatialTypes';
 import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
+import { InventoryManager } from '../../src/core/InventoryManager';
 import { createTestTextAssets } from './textAssetFactory';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 export type TestGameHarness = {
   game: IGame;
@@ -56,7 +58,22 @@ export function createTestGame(): TestGameHarness {
         notifyObjectChanged() {},
       },
     } as any,
-    inventory: [],
+    inventoryManager: {} as any,
+    get inventory() {
+      return (this.inventoryManager as any)?.inventory || [];
+    },
+    getInventoryPreviewEntity() {
+      return (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
+    },
+    getInventoryPreviewText() {
+      return (this.inventoryManager as any)?.getInventoryPreviewText?.() || null;
+    },
+    openInventoryPreview(entity: Entity, previewText?: string | null) {
+      (this.inventoryManager as any)?.openInventoryPreview?.(entity, previewText);
+    },
+    closeInventoryPreview() {
+      (this.inventoryManager as any)?.closeInventoryPreview?.();
+    },
     showMessage(text: string) {
       messages.push(text);
     },
@@ -82,8 +99,62 @@ export function createTestGame(): TestGameHarness {
     examineEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_examine_entity');
     },
+    openEntity(_entity: Entity) {
+      return notImplementedOutcome('not_implemented_open_entity');
+    },
+    closeEntity(_entity: Entity) {
+      return notImplementedOutcome('not_implemented_close_entity');
+    },
+    closeFocusedView() {
+      const previewEntity = (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
+      if (previewEntity) {
+        (this.inventoryManager as any)?.closeInventoryPreview?.();
+        return {
+          status: 'ok',
+          code: 'inventory_preview_closed',
+          data: { entityId: previewEntity.name },
+          effects: ['inventory_preview_closed'],
+        };
+      }
+      const activeSubscene = this.sceneManager.currentScene?.activeSubscene || null;
+      if (activeSubscene) {
+        this.sceneManager.currentScene!.activeSubscene = null;
+        return {
+          status: 'ok',
+          code: 'subscene_closed',
+          data: { subsceneId: activeSubscene },
+          effects: ['subscene_closed'],
+        };
+      }
+      return {
+        status: 'escalate',
+        code: 'no_active_view_to_close',
+        recoverable: true,
+      };
+    },
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
+    },
+    putEntity(_entity: Entity, _target?: SceneObject | null) {
+      return notImplementedOutcome('not_implemented_put_entity');
+    },
+    addInventoryEntity(_owner: Entity, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_add_inventory_entity');
+    },
+    removeEntityFromInventory(_owner: Entity, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_remove_entity_from_inventory');
+    },
+    hasInventoryEntity(_owner: Entity, _entity: Entity) {
+      return false;
+    },
+    getInventoryEntities(_owner: Entity) {
+      return [];
+    },
+    addEntityToSurface(_surface: SceneObject, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_add_entity_to_surface');
+    },
+    removeEntityFromSurface(_surface: SceneObject, _entity: Entity) {
+      return notImplementedOutcome('not_implemented_remove_entity_from_surface');
     },
     removeInventoryEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_remove_inventory_entity');
@@ -118,6 +189,81 @@ export function createTestGame(): TestGameHarness {
     ctx: null,
     bufferCanvas: {} as HTMLCanvasElement,
   };
+
+  game.inventoryManager = new InventoryManager(
+    game.sceneManager as any,
+    textAssets as any,
+    game.text.bind(game)
+  );
+
+  (game as any).canTakeEntity = (entity: Entity): GameActionOutcome | null => {
+    const scene = game.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: textAssets.getServiceText('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+
+    if (game.inventory.includes(entity)) {
+      return {
+        status: 'failed',
+        code: 'item_already_held',
+        message: textAssets.getServiceText('parser.take_already_held', {
+          item: textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+        }),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const inventoryOwner = (game.inventoryManager as any).findInventoryOwnerForEntity?.(entity);
+    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (errorMsg) {
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: errorMsg,
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+    if (!isItem && !entity.isTakeable) {
+      return {
+        status: 'failed',
+        code: 'not_takeable',
+        message: textAssets.getServiceText('parser.take_cannot'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+
+    if (
+      inventoryOwner &&
+      !(game.inventoryManager as any).isInventoryAccessible?.(inventoryOwner, () => null)
+    ) {
+      return {
+        status: 'failed',
+        code: 'inventory_not_accessible',
+        message: textAssets.getServiceText('parser.take_cannot'),
+        data: { entityId: entity.name, ownerId: inventoryOwner.name },
+        recoverable: true,
+      };
+    }
+
+    return null;
+  };
+
+  (game as any).canPutSourceEntity = (entity: Entity): GameActionOutcome | null => {
+    if (game.inventory.includes(entity)) return null;
+    return (game as any).canTakeEntity(entity);
+  };
+
+  (game as any).inventoryEntityStore = new Map();
 
   return {
     game,

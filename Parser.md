@@ -121,6 +121,7 @@ flowchart TD
 - `rawInput` и `normalizedInput` как metadata текущего цикла parser-а;
 - текущую сцену (`id`, `name`, `title`, `description`, `activeSubscene`);
 - список текстово значимых объектов сцены;
+- отдельный список `knownEntities` для объектов, известных движку, но не раскрытых player-facing текстовому слою;
 - инвентарь игрока;
 - spatial nodes and relation projection, derived from the runtime scene hierarchy;
 - `pending state`, если parser уже ждёт уточнение.
@@ -129,16 +130,29 @@ flowchart TD
 - `visible`
 - `held`
 - `takable`
+- `putSource`
 - `reachable`
 - `examinable`
 - `subscene`
-- `sceneTargets`
+- `worldKnown`
+- `hiddenKnown`
 
 Важно:
 - `ParserWorldModelBuilder` не интерпретирует пользовательский ввод;
 - он не выбирает intent;
 - он не определяет target;
 - он лишь даёт parser-у картину мира.
+
+Scope slices intentionally separate knowledge from actionability:
+- `visible` means the player-facing text layer may refer to the object;
+- `reachable` means the object is visible, unblocked and close enough for direct interaction;
+- `takable` means the object is a valid current source for `TAKE`;
+- `putSource` means the object is a valid current source for `PUT` when paired with a destination; this includes held items through `held` and reachable scene items through `putSource`;
+- `worldKnown` / `hiddenKnown` are awareness-only slices for higher parser cascades and diagnostics. Built-in Stage 1 commands and clarification options must not use them as actionable candidates.
+
+Clarification must be role-aware. If a command asks the player to choose a source item, options must come from the command's actionable source scope, not from all visible or known objects. Visible-but-unreachable objects may still be used for diagnostics, so parser can answer "You are too far away from X" instead of pretending the object does not exist, but they should not appear as selectable clarification options.
+
+For items stored on `Surface` components, reachability must use the item's `Surface.items` placement coordinates when they exist. `entity.x/y` can lag behind or represent an implementation detail; clarification scopes must follow the actual surface placement that the player sees.
 
 Spatial-проекция приходит из `Game` уже в терминах world model. В частности, `Subscene` раскрывает для runtime и parser-а только **непосредственный** уровень вложенности за одну активацию: parser не должен сам вычислять рекурсивное раскрытие поддерева.
 
@@ -230,11 +244,16 @@ Stage 1 на самом деле состоит из двух внутренни
 - `EXAMINE BOOMBOX`
 - `EXAMINE IN DRAWER`
 - `TAKE KEY`
+- `TAKE ALL CASSETTES`
+- `TAKE BLUE AND RED PILLS`
+- `PUT ALL CASSETTES INTO RECORDER`
+- `PUT BLUE PILL AND RED PILL IN BOX`
 - `INV`
 - `GO TO OFFICE`
 
 Важно:
 - relation-aware parsing уже начинается на уровне `Stage 1.1`;
+- direct group syntax для стандартных `TAKE` и `PUT` тоже обрабатывается на уровне `Stage 1.1`, но исполняется как обычный batch plan в `Core`;
 - пока runtime не хранит явные object relations, `Core` умеет только:
   - распознать relation-query;
   - разрешить anchor-object через обычный resolution/clarification flow;
@@ -504,10 +523,21 @@ Parser сначала проверяет:
 Текущие `ParserToolAction`:
 - `lookScene`
 - `lookTarget`
+- `lookRelationTarget`
 - `examineTarget`
+- `examineRelationTarget`
 - `takeTarget`
+- `putTarget`
+- `openTarget`
+- `closeTarget`
 - `showInventory`
 - `goToTarget`
+- `resolveArgumentEntity`
+- `ensureHeldEntity`
+- `goToSceneById`
+- `removeInventoryEntity`
+- `showText`
+- `parserFailure`
 
 Текущий envelope имеет вид:
 - `output.kind = 'plan'`
@@ -592,7 +622,47 @@ Parser:
 Сейчас:
 - `LOOK` может находить предметы в инвентаре;
 - `EXAMINE` может находить предметы в инвентаре;
-- `TAKE` и `GO TO` inventory не используют.
+- `TAKE` не использует inventory как источник, кроме scoped container cases;
+- `PUT` использует inventory и, когда есть target, также может использовать nearby/takable scene items как source;
+- `GO TO` inventory не использует.
+
+### Group syntax for TAKE and PUT
+
+Стандартные `TAKE` и `PUT` поддерживают прямой групповой source-синтаксис:
+
+```text
+take all cassettes
+take both cassettes
+take blue and red pills
+take blue pill and red pill
+put all cassettes into recorder
+put blue and red pills in box
+```
+
+Это parser-level syntax sugar:
+- `Stage 1.1` распознаёт group source phrase;
+- parser собирает matching source entities из того же scope, что использовался бы для обычной команды;
+- затем команда разворачивается в последовательный DSL plan из обычных `takeTarget` или `putTarget` actions;
+- `executeCorePlan` исполняет actions по порядку и останавливается на первом non-`ok` outcome.
+
+Поддерживаемые формы:
+- `all <query>` — выбрать все matching source items;
+- `both <query>` — выбрать оба source items, только если matches ровно два;
+- `<item>, <item>` и `<item> and <item>` — список отдельных source items;
+- `<modifier> and <modifier> <head>` — shared-head форма, например `blue and red pills` -> `blue pills`, `red pills`.
+
+Plural matching в v1 намеренно простой:
+- нормализация действует только внутри group source matching;
+- trailing `s` у слов длиннее 3 символов считается простым plural marker;
+- `cassette/cassettes` и `pill/pills` совпадают;
+- сложная английская морфология (`-ies`, `-es`, irregulars) не поддерживается.
+
+Важные ограничения:
+- group syntax относится к source items, а не к множественным destinations;
+- частично неверный список reject-ится целиком до выполнения действий;
+- duplicate entries дедуплицируются с сохранением порядка первого появления;
+- для `PUT` target валидируется до source clarification/fallback;
+- `PUT` фильтрует source items, которые уже находятся в выбранном target, чтобы не выполнять повторное помещение туда же.
 
 ### EXAMINE
 
@@ -639,6 +709,34 @@ Parser хранит `pendingState`:
 - intent
 - question
 - originalInput
+- pending envelope JSON
+- structured clarification options
+
+Ambiguity options имеют временную структуру:
+- `index` — 1-based номер, действующий только для текущего вопроса;
+- `label` — player-facing title;
+- `entityId` — стабильный id/name объекта;
+- `scope` — internal marker, например source/target.
+
+Вопросы форматируются с номерами:
+
+```text
+Which item do you mean: 1: Compact cassette, 2: Cassette 'Music'?
+```
+
+Ответ на clarification может быть:
+- номером: `1`;
+- title/synonym/unique partial: `Music`;
+- списком: `1, 2`, `Compact and Music`;
+- `all`;
+- `both`, если options ровно два.
+
+Multi-select clarification v1 применяется только к source-item clarification. Для target/container/destination clarification multi-select не включён.
+
+Если ответ на clarification частично неверный или неоднозначный:
+- parser ничего не выполняет;
+- pending clarification не сбрасывается;
+- игрок снова видит тот же numbered prompt.
 
 Следующий ввод:
 - либо трактуется как продолжение текущей команды;

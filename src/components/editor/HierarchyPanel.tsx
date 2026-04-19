@@ -583,10 +583,34 @@ export const HierarchyPanel: React.FC = () => {
         className="editor-header"
         style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
           <div>OBJECTS</div>
+          <Select
+            options={[
+              { value: 'Static', label: 'Static (S)' },
+              { value: 'Actor', label: 'Actor (A)' },
+              { value: 'Quad', label: 'Quad (Q)' },
+              { value: 'Walkbox', label: 'Walkbox (W)' },
+              { value: 'Triggerbox', label: 'Triggerbox (T)' },
+            ]}
+            placeholder="+ADD"
+            onChange={(value) => handleAdd(value)}
+            style={{
+              width: '7.25em',
+              minWidth: '7.25em',
+              fontSize: '12px',
+              flexShrink: 0,
+            }}
+          />
         </div>
-        <div style={{ marginBottom: '5px' }}>
+        <div style={{ marginBottom: 0 }}>
           <EditorToolbar />
 
           <div style={{ marginTop: '5px' }}>
@@ -680,14 +704,21 @@ export const HierarchyPanel: React.FC = () => {
 
         {visibleObjects.map(({ item, depth }, i) => {
           const isSelected = isItemSelected(item);
+          const isFolder = item.type === 'Folder';
+          const inventorySlot =
+            item?.type !== 'Walkbox' && item?.type !== 'Triggerbox'
+              ? game.inventoryManager?.getInventorySlotForEntity?.(item as any) || null
+              : null;
+          const isStoredInInventory = !!inventorySlot;
+
           const isDragged = dragState.dragging && dragState.draggedNames.has(item.name);
           const isDropInto =
             dragState.dropTarget?.type === 'into' && dragState.dropTarget.targetName === item.name;
           const isDropBefore =
             dragState.dropTarget?.type === 'before' &&
             dragState.dropTarget.targetName === item.name;
-          const isFolder = item.type === 'Folder';
           const isCollapsed = isFolder && collapsedFolders.has(item.name);
+
           const icon = isFolder
             ? isCollapsed
               ? '📁'
@@ -753,7 +784,8 @@ export const HierarchyPanel: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  opacity: item.disabled ? 0.5 : 1.0,
+                  opacity: item.disabled ? 0.5 : isStoredInInventory ? 0.68 : 1.0,
+                  color: isStoredInInventory && !isSelected ? '#8fa28f' : undefined,
                 }}
               >
                 <span

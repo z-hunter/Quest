@@ -8,6 +8,7 @@ import type { GameActionOutcome } from './GameActionTypes';
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
+import type { InventoryManager } from './InventoryManager';
 
 export interface IGame {
   assets: AssetLoader;
@@ -16,6 +17,11 @@ export interface IGame {
   sceneManager: SceneManager;
   editor: SceneEditor;
   inventory: Entity[];
+  inventoryManager: InventoryManager;
+  getInventoryPreviewEntity(): Entity | null;
+  getInventoryPreviewText(): string | null;
+  openInventoryPreview(entity: Entity, previewText?: string | null): void;
+  closeInventoryPreview(): void;
 
   showMessage(text: string): void;
   log(text: string): void;
@@ -25,7 +31,41 @@ export interface IGame {
   lookEntity(entity: SceneObject): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
   examineEntity(entity: SceneObject): GameActionOutcome;
+  openEntity(entity: SceneObject): GameActionOutcome;
+  closeEntity(entity: SceneObject): GameActionOutcome;
+  closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
+  putEntity(
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
+  addInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  removeEntityFromInventory(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  hasInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): boolean;
+  getInventoryEntities(owner: Entity, relation?: Exclude<SpatialRelationType, 'near'>): Entity[];
+  addEntityToSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
+  removeEntityFromSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation?: Exclude<SpatialRelationType, 'near'>
+  ): GameActionOutcome;
   removeInventoryEntity(entity: Entity): GameActionOutcome;
   showInventory(): GameActionOutcome;
   goToSceneTarget(target: string): GameActionOutcome;

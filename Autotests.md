@@ -64,6 +64,7 @@ tests/
   parser/
     commands.test.ts
     core.test.ts
+    preprocessor.test.ts
     resolution.test.ts
   scene/
     spatial-index.test.ts
@@ -188,6 +189,8 @@ Covers:
 - coexistence of:
   - `targetGroupId`
   - direct spatial children
+- inventory/surface items staying synchronized with active subscene state;
+- `Subscene.itemScale` runtime behavior for items.
 
 #### `tests/scene/subscene-cleanup.test.ts`
 
@@ -195,6 +198,16 @@ Covers:
 - `Switch` reset on subscene close;
 - `sound1` playback path;
 - cleanup for spatially included objects, not only group-based ones.
+
+#### `tests/scene/scene-spatial-validator.test.ts`
+
+Covers:
+- `SceneSpatialValidator` happy path for relation-aware containers;
+- duplicate container relation detection;
+- built-in vs untitled external container extension conflicts;
+- broken inventory/surface storage references;
+- hidden semantic objects without `Title`;
+- missing spatial parents and spatial parent cycles.
 
 ### Parser
 
@@ -208,6 +221,7 @@ Covers:
 - deterministic tie-break:
   - inventory first;
   - nearest scene object when titles are indistinguishable.
+- container-aware TAKE/PUT target resolution edge cases.
 
 #### `tests/parser/commands.test.ts`
 
@@ -216,7 +230,18 @@ Covers:
 - `teleport with id`
 - wrong item for teleport -> no effect;
 - `use id on boombox`
-- missing-argument prompts for custom commands.
+- missing-argument prompts for custom commands;
+- `quit` / `exit` closing inventory preview or active subscene;
+- `quit` falling through to parser fallback when nothing is open.
+
+#### `tests/parser/preprocessor.test.ts`
+
+Covers:
+- console preprocessor shorthand expansion for:
+  - `I`
+  - `X`
+  - `L`
+  - `Q`
 
 #### `tests/parser/core.test.ts`
 
@@ -225,6 +250,16 @@ Covers:
 - post-API escalation path;
 - linear plan stopping after failure;
 - core behavior independent of UI.
+
+#### `tests/parser/world-model-context.test.ts`
+
+Covers:
+- parser world-model entity context projection;
+- spatial relation flattening through untitled technical nodes;
+- hidden `lookable` / `examinable` semantic omission until reveal;
+- blocker visibility vs reachability;
+- player/external inventory projection;
+- titled objects inside inactive `Subscene` staying visible to parser scope without becoming operable while runtime-disabled.
 
 ### Game
 
@@ -235,7 +270,16 @@ Covers:
 - `lookEntity`;
 - `examineEntity`;
 - `showInventory`;
-- `removeInventoryEntity`.
+- `removeInventoryEntity`;
+- `takeEntity` / `putEntity`;
+- container placement and failure reasons;
+- hidden `lookable` / `examinable` semantics;
+- `Blocker` and `blockedRelation` behavior;
+- inventory hierarchy projection and sync.
+- Surface placement runtime contracts:
+  - placed item layer follows the target Surface layer;
+  - active `Subscene.itemScale` is applied before placement and drop animation;
+  - items placed on Switch-controlled Surface inherit the active Switch target group and are disabled/enabled with it.
 
 This layer verifies `Game` as the shared semantic gameplay API, separate from parser parsing.
 
@@ -256,6 +300,8 @@ This layer is especially useful for validating the shared boundary between parse
 Covers a small end-to-end slice on tiny fixtures:
 - `look under chair`
 - far-but-visible `examine`
+- container commands like `TAKE FROM ...` and `PUT ... IN|ON ...`
+- PUT clarification continuation loops preserving the original destination.
 
 This layer is intentionally small.
 
@@ -355,7 +401,6 @@ They are not necessary for the first iteration.
 
 - No browser/UI/canvas assertions yet.
 - No Playwright layer yet.
-- No direct tests for console preprocessor behavior yet.
 - No LLM-stage tests yet.
 - Parser NLP stage is not the focus of the current suite.
 - The direct `Game` tests use a semantic fixture layered on `Game.prototype`, not full `Game` construction.
@@ -364,28 +409,18 @@ They are not necessary for the first iteration.
 
 The next useful expansions would be:
 
-1. Add tests for console-preprocessor behavior:
-   - `I`
-   - `X`
-   - `L`
-   - `#STAGE1-ON/OFF`
-   - `#STAGE2-ON/OFF`
-
-2. Add more parser-core scenarios:
+1. Add more parser-core scenarios:
    - clarification continuation loops;
    - more plan-state transitions;
    - more validation branches.
 
-3. Add tests for console/preprocessor behavior:
-   - `I`
-   - `X`
-   - `L`
+2. Expand console/preprocessor coverage:
    - `#STAGE1-ON/OFF`
    - `#STAGE2-ON/OFF`
 
-4. Add tiny serialization/load fixtures if scene loading itself needs coverage.
+3. Add tiny serialization/load fixtures if scene loading itself needs coverage.
 
-5. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
+4. Add a very small browser smoke layer only if a runtime contract cannot be tested elsewhere.
 
 ## Practical Rule
 

@@ -1,9 +1,6 @@
 import type { Scene } from '../../src/scene/Scene';
 import type { SceneObject } from '../../src/entities/SceneObject';
-import type {
-  ObjectTextAssetData,
-  SceneTextAssetData,
-} from '../../src/core/TextAssetManager';
+import type { ObjectTextAssetData, SceneTextAssetData } from '../../src/core/TextAssetManager';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../../src/mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
@@ -28,6 +25,9 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
+  'engine.cant_reach_generic': "You can't reach it.",
+  'engine.blocked_inside_closed': "You can't reach that while it is inside something closed.",
+  'engine.closed_container': 'The {target} is closed.',
   'engine.locked_needs': 'Locked. Needs {item}',
   'engine.locked_generic': 'Locked.',
   'parser.look_default_scene': 'You are in {scene}.',
@@ -38,8 +38,32 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.examine_which_one': 'Which one do you want to examine: {options}?',
   'parser.take_prompt': 'Take what?',
   'parser.take_which_one': 'Which item do you mean: {options}?',
+  'parser.take_which_target': 'Which container do you mean: {options}?',
+  'parser.take_target_not_found': "You don't see any suitable container near {target}.",
   'parser.take_pickup_success': 'You picked up the {item}.',
+  'parser.take_already_held': 'You are already carrying the {item}.',
   'parser.take_cannot': 'You cannot take that.',
+  'parser.put_prompt': 'Put what?',
+  'parser.put_which_item': 'Which item do you want to put down: {options}?',
+  'parser.put_which_target': 'Where exactly do you want to put it: {options}?',
+  'parser.put_item_not_held': "You aren't carrying the {item}.",
+  'parser.put_target_not_found': "You don't see anywhere suitable near {target}.",
+  'parser.put_no_place': "You can't put that there.",
+  'parser.put_target_full_in': 'There is no more room in the {target}.',
+  'parser.put_target_full_on': 'There is no more room on the {target}.',
+  'parser.put_target_no_fit_in': 'The {item} does not fit in the {target}.',
+  'parser.put_target_no_fit_on': 'The {item} does not fit on the {target}.',
+  'parser.put_success_surface': 'You put the {item} on the {target}.',
+  'parser.put_success_inventory': 'You put the {item} into the {target}.',
+  'parser.open_prompt': 'Open what?',
+  'parser.open_which_one': 'Which thing do you want to open: {options}?',
+  'parser.open_success': 'You open the {target}.',
+  'parser.open_already': 'The {target} is already open.',
+  'parser.close_prompt': 'Close what?',
+  'parser.close_which_one': 'Which thing do you want to close: {options}?',
+  'parser.close_success': 'You close the {target}.',
+  'parser.close_already': 'The {target} is already closed.',
+  'parser.inventory_missing': 'You have nowhere to carry anything.',
   'parser.inventory_empty': 'You are not carrying anything.',
   'parser.inventory_items': 'You are carrying: {items}',
   'parser.go_to_prompt': 'Where do you want to go?',
@@ -57,6 +81,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check', 'x'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    put: ['put', 'drop', 'place'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go', 'walk', 'move'],
     showInventory: ['inventory', 'inv'],
   },
@@ -64,6 +92,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
     examine: ['look closely at', 'take a closer look at', 'examine', 'inspect', 'check'],
     take: ['pick up', 'take', 'get', 'grab'],
+    put: ['put down', 'put', 'drop', 'place'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go to', 'walk to', 'move to', 'go', 'walk', 'move'],
     showInventory: [],
   },
@@ -73,7 +105,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   relationMarkers: {
     on: ['on'],
     under: ['under', 'beneath'],
-    in: ['in', 'inside'],
+    in: ['in', 'inside', 'into'],
     behind: ['behind'],
     near: ['near', 'next to', 'by'],
   },
@@ -82,7 +114,11 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
 const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   look: ['look chair', 'look at the chair', 'describe the chair'],
   examine: ['examine chair', 'inspect the chair', 'check the card'],
-  take: ['take key', 'pick up key'],
+  take: ['take key', 'pick up key', 'take key from drawer'],
+  put: ['put key', 'drop key', 'put key on desk', 'put cassette into recorder'],
+  open: ['open drawer', 'open cabinet'],
+  close: ['close drawer', 'shut cabinet'],
+  quit: ['quit', 'exit'],
   goTo: ['go to office', 'walk office'],
   showInventory: ['inventory', 'show inventory', 'what do i have'],
 };
@@ -188,10 +224,16 @@ export function createTestTextAssets(): TestTextAssets {
       sceneAssets.set(String(id), data);
     },
     getResolvedObjectField(obj, field) {
+      if (obj?.type === 'Walkbox' && field === 'title') {
+        return 'floor';
+      }
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
       if (typeof value === 'string') return value;
-      if (field === 'description' && typeof (obj as { description?: unknown }).description === 'string') {
+      if (
+        field === 'description' &&
+        typeof (obj as { description?: unknown }).description === 'string'
+      ) {
         return (obj as { description?: string }).description || null;
       }
       return null;
@@ -199,13 +241,16 @@ export function createTestTextAssets(): TestTextAssets {
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
-      return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+      return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : [];
     },
     getResolvedSceneField(scene, field) {
       const asset = sceneAssets.get(scene.id);
       const value = asset?.[field];
       if (typeof value === 'string') return value;
-      if (field === 'description' && typeof scene.description === 'string') return scene.description || null;
+      if (field === 'description' && typeof scene.description === 'string')
+        return scene.description || null;
       return null;
     },
     getParserLexicon() {

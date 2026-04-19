@@ -2,7 +2,10 @@ export class SceneObject {
   name: string;
   type: string;
 
+  // Editor-only lock for transform/selection UX.
   locked: boolean = false;
+  // Runtime-only transient interaction suppression. Never serialized.
+  interactionLocked: boolean = false;
   disabled: boolean = false;
   // Comma-separated list of group IDs (each starting with #).
   groupID: string | null = null;
@@ -25,6 +28,7 @@ export class SceneObject {
 
   layer: number = 0;
   visible: boolean = true; // Controls rendering only (optimization/culling)
+  hidden: false | 'lookable' | 'examinable' = false;
   spatial: { parentNodeId?: string | null; relation?: 'in' | 'on' | 'under' | 'behind' | null } =
     {};
 
@@ -46,6 +50,7 @@ export class SceneObject {
     'inheritedProps',
     'layer',
     'visible',
+    'hidden',
     'spatial',
   ];
 
@@ -53,11 +58,13 @@ export class SceneObject {
     this.name = name.trim();
     this.type = type;
     this.locked = false;
+    this.interactionLocked = false;
     this.disabled = false;
     this.layer = 0;
     this.visible = true;
     this.folder = null;
     this.inheritedProps = new Set();
+    this.hidden = false;
     this.spatial = {};
     this.customName = '';
     this.textRedirects = {};
@@ -105,6 +112,8 @@ export class SceneObject {
   }
 
   load(data: any): void {
+    this.interactionLocked = false;
+
     const props =
       (this.constructor as typeof SceneObject).SERIALIZABLE_PROPS || SceneObject.SERIALIZABLE_PROPS;
 
@@ -156,5 +165,15 @@ export class SceneObject {
    */
   hitTest(_x: number, _y: number): boolean {
     return false;
+  }
+
+  /**
+   * Checks whether a point is inside the object's zone for non-interaction systems.
+   * By default this uses hitTest, but subclasses may ignore interaction-only state
+   * such as editor lock or transient interaction suppression while still
+   * respecting real visibility/disabled state.
+   */
+  containsPoint(x: number, y: number): boolean {
+    return this.hitTest(x, y);
   }
 }

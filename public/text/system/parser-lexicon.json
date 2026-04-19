@@ -3,6 +3,10 @@
     "look": ["look"],
     "examine": ["examine", "inspect", "check"],
     "take": ["take", "get", "pickup", "pick up"],
+    "put": ["put", "drop", "place"],
+    "open": ["open"],
+    "close": ["close", "shut"],
+    "quit": ["quit", "exit"],
     "goTo": ["go", "walk", "move"],
     "showInventory": ["inventory", "inv"]
   },
@@ -19,6 +23,10 @@
       "check"
     ],
     "take": ["pick up", "take", "get", "grab"],
+    "put": ["put down", "put", "drop", "place"],
+    "open": ["open"],
+    "close": ["close", "shut"],
+    "quit": ["quit", "exit"],
     "goTo": [
       "go over to",
       "walk over to",
@@ -34,7 +42,8 @@
       "head",
       "travel"
     ],
-    "showInventory": []
+    "showInventory": [],
+    "quit": ["quit", "exit"]
   },
   "politePrefixes": [
     "please",

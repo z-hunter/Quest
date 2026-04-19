@@ -3,6 +3,7 @@ import { Game } from '../core/Game';
 import { FileBrowser } from './FileBrowser';
 import { useEditorStore } from '../store/editorStore';
 import { ConsoleOverlay } from './ConsoleOverlay';
+import { InventoryEntityCanvas } from './inventory/InventoryEntityCanvas';
 
 interface UIOverlayProps {
   game: Game | null;
@@ -28,6 +29,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
   // Console History State
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [, forceInventoryRefresh] = useState(0);
 
   // Editor Store State
   const { enabled: editorEnabled } = useEditorStore();
@@ -74,6 +76,13 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
   useEffect(() => {
     if (!game) return;
+    return game.subscribeInventoryUi(() => forceInventoryRefresh((value) => value + 1));
+  }, [game]);
+
+  const previewEntity = game?.getInventoryPreviewEntity() || null;
+
+  useEffect(() => {
+    if (!game) return;
     if (editorEnabled || isConsoleOpen) return;
 
     const timer = window.setTimeout(() => {
@@ -85,7 +94,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [game, editorEnabled, isConsoleOpen]);
+  }, [game, editorEnabled, isConsoleOpen, previewEntity?.name]);
 
   useEffect(() => {
     if (message) {
@@ -282,6 +291,18 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
       {/* Virtual Console Overlay (High Res, Open State) */}
       {game && <ConsoleOverlay game={game} />}
+
+      {game && !editorEnabled && previewEntity && (
+        <div
+          className="inventory-preview-overlay"
+          style={{ pointerEvents: 'auto' }}
+          onClick={() => game.closeInventoryPreview()}
+        >
+          <div className="inventory-preview-card" onClick={(e) => e.stopPropagation()}>
+            <InventoryEntityCanvas entity={previewEntity} size={320} />
+          </div>
+        </div>
+      )}
 
       {/* File Browser Modal */}
       {fileBrowser && fileBrowser.open && (

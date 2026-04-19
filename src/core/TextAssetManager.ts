@@ -40,7 +40,29 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
     take_pickup_success: 'You picked up the {item}.',
+    take_already_held: 'You are already carrying the {item}.',
     take_cannot: 'You cannot take that.',
+    put_prompt: 'Put what?',
+    put_which_item: 'Which item do you want to put down: {options}?',
+    put_which_target: 'Where exactly do you want to put it: {options}?',
+    put_item_not_held: "You aren't carrying the {item}.",
+    put_target_not_found: "You don't see anywhere suitable near {target}.",
+    put_no_place: "You can't put that there.",
+    put_target_full_in: 'There is no more room in the {target}.',
+    put_target_full_on: 'There is no more room on the {target}.',
+    put_target_no_fit_in: 'The {item} does not fit in the {target}.',
+    put_target_no_fit_on: 'The {item} does not fit on the {target}.',
+    put_success_surface: 'You put the {item} on the {target}.',
+    put_success_inventory: 'You put the {item} into the {target}.',
+    open_prompt: 'Open what?',
+    open_which_one: 'Which thing do you want to open: {options}?',
+    open_success: 'You open the {target}.',
+    open_already: 'The {target} is already open.',
+    close_prompt: 'Close what?',
+    close_which_one: 'Which thing do you want to close: {options}?',
+    close_success: 'You close the {target}.',
+    close_already: 'The {target} is already closed.',
+    inventory_missing: 'You have nowhere to carry anything.',
     inventory_empty: 'You are not carrying anything.',
     inventory_items: 'You are carrying: {items}',
     go_to_prompt: 'Where do you want to go?',
@@ -59,6 +81,9 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     click_you_see: 'You see {title}',
     too_far_generic: 'You are too far away.',
     too_far_from_entity: 'You are too far away from the {target}.',
+    cant_reach_generic: "You can't reach it.",
+    blocked_inside_closed: "You can't reach that while it is inside something closed.",
+    closed_container: 'The {target} is closed.',
     locked_needs: 'Locked. Needs {item}',
     locked_generic: 'Locked.',
   },
@@ -75,6 +100,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    put: ['put', 'drop', 'place'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go', 'walk', 'move'],
     showInventory: ['inventory', 'inv'],
   },
@@ -91,6 +120,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
       'check',
     ],
     take: ['pick up', 'take', 'get', 'grab'],
+    put: ['put down', 'put', 'drop', 'place'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: [
       'go over to',
       'walk over to',
@@ -178,6 +211,31 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
     'i want to take the key',
     'please pick up the card',
   ],
+  put: [
+    'put key',
+    'drop key',
+    'put key on table',
+    'drop the tape on desk',
+    'put cassette into recorder',
+    'place note under table',
+  ],
+  open: [
+    'open',
+    'open drawer',
+    'open desk drawer',
+    'open cabinet',
+    'open the drawer',
+    'open the compartment',
+  ],
+  close: [
+    'close',
+    'close drawer',
+    'close desk drawer',
+    'shut drawer',
+    'close the drawer',
+    'shut the compartment',
+  ],
+  quit: ['quit', 'exit'],
   goTo: [
     'go',
     'go office',
@@ -591,6 +649,9 @@ export class TextAssetManager {
   }
 
   getResolvedObjectField(obj: SceneObject, field: string): string | null {
+    if (obj?.type === 'Walkbox' && field === 'title') {
+      return 'floor';
+    }
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
@@ -729,6 +790,18 @@ export class TextAssetManager {
 
   private async fetchUnknownJson(url: string): Promise<unknown | null> {
     try {
+      // In Tauri distributions, read from local filesystem instead of bundled assets
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      if (isTauriRuntime()) {
+        const path = `public${url.split('?')[0]}`;
+        try {
+          const content = await readProjectFileExisting(path);
+          return JSON.parse(content);
+        } catch {
+          return null;
+        }
+      }
+
       const response = await fetch(`${url}?t=${Date.now()}`);
       if (!response.ok) {
         if (response.status === 404) return null;
@@ -740,7 +813,7 @@ export class TextAssetManager {
       }
       return await response.json();
     } catch (error) {
-      console.error('[TextAssetManager] Failed to fetch text asset:', error);
+      console.error(`[TextAssetManager] error reading ${url}:`, error);
       return null;
     }
   }

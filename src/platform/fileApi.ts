@@ -59,7 +59,15 @@ async function postJson<T>(url: string, payload: Record<string, unknown>): Promi
 
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    return undefined as T;
+    const text = await response.text();
+    if (!text.trim()) {
+      return undefined as T;
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return undefined as T;
+    }
   }
 
   return (await response.json()) as T;
@@ -99,6 +107,22 @@ export async function readProjectFile(path: string, content: string): Promise<st
 
   const result = await postJson<{ content?: string }>('/api/read-file', { path, content });
   return typeof result?.content === 'string' ? result.content : '';
+}
+
+export async function readProjectFileExisting(path: string): Promise<string> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<string>('read_project_file_existing', { path });
+  }
+  const result = await postJson<{ content?: string }>('/api/read-file', { path, content: '' }); // fallback
+  return typeof result?.content === 'string' ? result.content : '';
+}
+
+export async function readProjectFileBase64(path: string): Promise<string> {
+  if (isTauriRuntime()) {
+    return await invokeTauri<string>('read_project_file_base64', { path });
+  }
+  // Not supported via POST in dev usually
+  return '';
 }
 
 export async function openProjectFile(path: string, content: string): Promise<void> {

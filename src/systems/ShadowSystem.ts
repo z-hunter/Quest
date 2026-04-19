@@ -43,8 +43,8 @@ export class ShadowSystem {
     let inside = false;
 
     for (const t of targets) {
-      if (typeof t.hitTest === 'function') {
-        const hit = t.hitTest(checkX, checkY);
+      if (typeof t.containsPoint === 'function') {
+        const hit = t.containsPoint(checkX, checkY);
         if (hit) {
           inside = true;
           break;

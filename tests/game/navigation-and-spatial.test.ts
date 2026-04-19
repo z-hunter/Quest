@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
+import { Actor } from '../../src/entities/Actor';
+import { Entity } from '../../src/entities/Entity';
 
 describe('Game navigation and spatial API', () => {
   it('goToSceneTarget resolves scene by id and title', () => {
@@ -62,5 +64,159 @@ describe('Game navigation and spatial API', () => {
     const empty = fixture.game.describeSpatialRelation('Desk', 'under');
     expect(empty.status).toBe('ok');
     expect(empty.message).toBe('You see nothing under the Desk.');
+  });
+
+  it('describeSpatialRelation uses the collapsed ancestor relation for untitled intermediates', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'An office desk.',
+    });
+    fixture.addEntity('HiddenHolder', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    fixture.addEntity('note', {
+      title: 'Piece of paper',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'HiddenHolder', relation: 'on' },
+    });
+
+    const populated = fixture.game.describeSpatialRelation('Desk', 'in');
+
+    expect(populated.status).toBe('ok');
+    expect(populated.message).toBe('In the Desk you see: Piece of paper.');
+  });
+
+  it('describeSpatialRelation treats items on untitled nested container extensions as lying on the titled object', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'An office desk.',
+    });
+    fixture.addEntity('TechHolder', {
+      title: null,
+      spatial: { parentNodeId: 'Desk', relation: 'on' },
+    });
+    fixture.addEntity('TechSwitch', {
+      title: null,
+      spatial: { parentNodeId: 'TechHolder', relation: 'in' },
+    });
+    fixture.addEntity('SurfaceNode', {
+      title: null,
+      spatial: { parentNodeId: 'TechSwitch', relation: 'in' },
+    });
+    fixture.addEntity('note', {
+      title: 'Piece of paper',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'SurfaceNode', relation: 'on' },
+    });
+
+    const populated = fixture.game.describeSpatialRelation('Desk', 'on');
+
+    expect(populated.status).toBe('ok');
+    expect(populated.message).toBe('On the Desk you see: Piece of paper.');
+  });
+
+  it('switchTo hydrates external inventory contents from component items and projects their slot relation', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('storage', 'Storage', 'You are in Storage.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const cabinet = new Entity(fixture.game as any, 10, 0, 10, 10, 'cabinet');
+    cabinet.components = [
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 2,
+        groups: [],
+        protected: false,
+        items: ['book'],
+      },
+    ];
+    target.addEntity(cabinet);
+    fixture.textAssets.setObject('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+
+    const book = new Entity(fixture.game as any, 0, 0, 10, 10, 'book');
+    book.components = [{ type: 'Item' }];
+    target.addEntity(book);
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A book.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getInventoryEntities(cabinet as any, 'behind')).toContain(book);
+    expect(book.visible).toBe(false);
+    expect((book as any).spatial).toEqual({ parentNodeId: 'cabinet', relation: 'in' });
+
+    const outcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Behind the Cabinet you see: Book.');
+  });
+
+  it('switchTo hydrates untitled nested inventory extensions and projects them through the titled anchor', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('workshop', 'Workshop', 'You are in Workshop.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const desk = new Entity(fixture.game as any, 0, 0, 10, 10, 'desk');
+    target.addEntity(desk);
+    fixture.textAssets.setObject('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+
+    const hiddenHolder = new Entity(fixture.game as any, 0, 0, 10, 10, 'hidden_holder');
+    hiddenHolder.spatial = { parentNodeId: 'desk', relation: 'behind' };
+    hiddenHolder.components = [
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 2,
+        groups: [],
+        protected: false,
+        items: ['book'],
+      },
+    ];
+    target.addEntity(hiddenHolder);
+    fixture.textAssets.setObject('hidden_holder', {
+      description: 'Untitled holder.',
+    });
+
+    const book = new Entity(fixture.game as any, 0, 0, 10, 10, 'book');
+    book.components = [{ type: 'Item' }];
+    target.addEntity(book);
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A hidden book.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getInventoryEntities(hiddenHolder as any, 'behind')).toContain(book);
+    expect(book.visible).toBe(false);
+
+    const outcome = fixture.game.describeSpatialRelation('desk', 'behind');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Behind the Desk you see: Book.');
   });
 });

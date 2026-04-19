@@ -150,10 +150,12 @@ export class AssetLoader {
       const spriteKey = this.normalizeSpriteKey(rawSpriteKey);
       if (!spriteKey) continue;
       const { image } = await this.loadSprite(spriteKey);
-      const imagePath = this.spriteToImagePath.get(spriteKey) || image.currentSrc || image.src || spriteKey;
+      const imagePath =
+        this.spriteToImagePath.get(spriteKey) || image.currentSrc || image.src || spriteKey;
       if (uniqueImages.has(imagePath)) continue;
       uniqueImages.add(imagePath);
-      bytes += (image.naturalWidth || image.width || 0) * (image.naturalHeight || image.height || 0) * 4;
+      bytes +=
+        (image.naturalWidth || image.width || 0) * (image.naturalHeight || image.height || 0) * 4;
     }
 
     return {
@@ -175,11 +177,18 @@ export class AssetLoader {
       return this.pending.get(path);
     }
 
-    const promise = fetch(path)
-      .then((res) => {
+    const promise = (async () => {
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      if (isTauriRuntime()) {
+        const localPath = `public${path.split('?')[0]}`;
+        const content = await readProjectFileExisting(localPath);
+        return JSON.parse(content);
+      } else {
+        const res = await fetch(path);
         if (!res.ok) throw new Error(`Failed to load JSON: ${res.statusText}`);
         return res.json();
-      })
+      }
+    })()
       .then((data) => {
         this.jsonCache.set(path, data);
         return data;
@@ -206,23 +215,48 @@ export class AssetLoader {
       return this.pending.get(path);
     }
 
-    const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.src = path;
-      img.onload = () => {
-        const entry: ImageCacheEntry = {
-          image: img,
-          estimatedBytes: (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4,
-          lastAccessed: Date.now(),
-          refSceneIds: new Set<string>(),
-          state: 'cold',
+    const promise = (async () => {
+      const { isTauriRuntime, readProjectFileBase64 } = await import('../platform/fileApi');
+
+      let finalSrc = path;
+      if (isTauriRuntime() && !path.startsWith('http') && !path.startsWith('data:')) {
+        try {
+          const localPath = `public${path.split('?')[0]}`;
+          const base64 = await readProjectFileBase64(localPath);
+
+          // Determine mime type from extension
+          let mimeType = 'image/png';
+          if (localPath.endsWith('.jpg') || localPath.endsWith('.jpeg')) mimeType = 'image/jpeg';
+          else if (localPath.endsWith('.webp')) mimeType = 'image/webp';
+          else if (localPath.endsWith('.gif')) mimeType = 'image/gif';
+          else if (localPath.endsWith('.svg')) mimeType = 'image/svg+xml';
+
+          finalSrc = `data:${mimeType};base64,${base64}`;
+        } catch (e) {
+          console.warn('[AssetLoader] Failed to load local image via Tauri API, falling back', e);
+        }
+      }
+
+      return new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.src = finalSrc;
+        img.onload = () => {
+          const entry: ImageCacheEntry = {
+            image: img,
+            estimatedBytes:
+              (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0) * 4,
+            lastAccessed: Date.now(),
+            refSceneIds: new Set<string>(),
+            state: 'cold',
+          };
+          this.imageCache.set(path, entry);
+          this.rehydrateImageRefs(path);
+          resolve(img);
         };
-        this.imageCache.set(path, entry);
-        this.rehydrateImageRefs(path);
-        resolve(img);
-      };
-      img.onerror = (e) => reject(e);
-    }).finally(() => {
+        img.onerror = (e) => reject(e);
+      });
+    })().finally(() => {
       this.pending.delete(path);
       this.evictUnusedImagesIfNeeded();
     });
@@ -238,7 +272,7 @@ export class AssetLoader {
   async loadSprite(spriteName: string): Promise<SpriteData> {
     const normalizedSpriteKey = this.normalizeSpriteKey(spriteName);
 
-    let filename = normalizedSpriteKey;
+    const filename = normalizedSpriteKey;
     let jsonPath = filename;
     if (jsonPath.startsWith('public/')) {
       jsonPath = '/' + jsonPath.substring(7);

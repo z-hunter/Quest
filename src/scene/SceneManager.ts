@@ -115,6 +115,7 @@ export class SceneManager {
     this.touchScene(scene.id);
     this.pinCurrentScene();
     this.syncAssetCacheState();
+    this.game.inventoryManager?.handleSceneChange?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {
       this.game.onSceneChange(scene.name);
@@ -151,9 +152,16 @@ export class SceneManager {
   async loadScene(filename: string): Promise<void> {
     try {
       const idFromPath = filename.replace('.json', '').replace(/\//g, '\\');
-      const response = await fetch(`/scenes/${filename}?t=${Date.now()}`);
-      if (!response.ok) throw new Error('File not found');
-      const data = await response.json();
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      let data: any = null;
+      if (isTauriRuntime()) {
+        const content = await readProjectFileExisting(`public/scenes/${filename}`);
+        data = JSON.parse(content);
+      } else {
+        const response = await fetch(`/scenes/${filename}?t=${Date.now()}`);
+        if (!response.ok) throw new Error('File not found');
+        data = await response.json();
+      }
       await this.loadSceneData(data, idFromPath, filename);
     } catch (e) {
       console.error(e);
@@ -636,9 +644,16 @@ export class SceneManager {
   private async readSceneTitle(sceneId: string): Promise<string | null> {
     try {
       const scenePath = sceneId.replace(/\\/g, '/');
-      const response = await fetch(`/text/scenes/${scenePath}.json?t=${Date.now()}`);
-      if (!response.ok) return null;
-      const data = (await response.json()) as Record<string, unknown>;
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      let data: any = null;
+      if (isTauriRuntime()) {
+        const content = await readProjectFileExisting(`public/text/scenes/${scenePath}.json`);
+        data = JSON.parse(content);
+      } else {
+        const response = await fetch(`/text/scenes/${scenePath}.json?t=${Date.now()}`);
+        if (!response.ok) return null;
+        data = await response.json();
+      }
       return typeof data.title === 'string' ? data.title : null;
     } catch {
       return null;

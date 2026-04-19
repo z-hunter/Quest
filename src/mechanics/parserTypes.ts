@@ -7,6 +7,9 @@ export type ParserEntityContext = {
   title: string;
   item?: true;
   reachable?: true;
+  visibility?: 'visible' | 'hidden';
+  accessibility?: 'reachable' | 'blocked' | 'inaccessible';
+  hiddenReason?: 'switch' | 'blocker' | 'lookable' | 'examinable';
   x?: number;
   y?: number;
   synonyms?: string[];
@@ -38,12 +41,23 @@ export type ParserSpatialRelationContext = {
 };
 
 export type ParserPendingState = {
-  intent: 'look' | 'examine' | 'take' | 'goTo' | 'custom';
+  intent: 'look' | 'examine' | 'take' | 'put' | 'open' | 'close' | 'quit' | 'goTo' | 'custom';
   question: string;
   originalInput: string;
   pendingEnvelopeJson?: string;
   pendingArg?: string;
   commandId?: string;
+  clarificationOptions?: ParserClarificationOption[];
+  clarificationAllowsMultiple?: boolean;
+};
+
+export type ParserClarificationScope = 'source' | 'target';
+
+export type ParserClarificationOption = {
+  index: number;
+  label: string;
+  entityId: string;
+  scope: ParserClarificationScope;
 };
 
 export type ParserRelationType = 'on' | 'under' | 'in' | 'behind' | 'near';
@@ -122,6 +136,7 @@ export type ParserContext = {
     activeSubscene?: string;
   };
   entities?: ParserEntityContext[];
+  knownEntities?: ParserEntityContext[];
   inventory?: ParserInventoryItemContext[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
@@ -132,9 +147,12 @@ export type ParserScope = {
   visible: SceneObject[];
   held: Entity[];
   takable: Entity[];
+  putSource: Entity[];
   reachable: SceneObject[];
   examinable: SceneObject[];
   subscene: SceneObject[];
+  worldKnown: SceneObject[];
+  hiddenKnown: SceneObject[];
 };
 
 export type ParserWorldModel = {
@@ -167,6 +185,30 @@ export type ParserToolAction =
   | {
       type: 'takeTarget';
       target: string | null;
+      anchor?: string | null;
+      relation?: ParserRelationType | null;
+    }
+  | {
+      type: 'parserFailure';
+      code: string;
+      message: string;
+    }
+  | {
+      type: 'putTarget';
+      item: string | null;
+      target: string | null;
+      relation?: ParserRelationType | null;
+    }
+  | {
+      type: 'openTarget';
+      target: string | null;
+    }
+  | {
+      type: 'closeTarget';
+      target: string | null;
+    }
+  | {
+      type: 'quitCurrentView';
     }
   | {
       type: 'showInventory';
@@ -268,6 +310,7 @@ export type ParserPlanState = Record<string, unknown>;
 
 export type ParserResponse = {
   playerMessage?: string;
+  playerMessages?: string[];
   debugMessages?: string[];
   nextPendingState?: ParserPendingState | null;
 };

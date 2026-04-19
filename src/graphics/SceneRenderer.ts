@@ -13,6 +13,8 @@ export class SceneRenderer {
 
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
     const { camera, entities, activeSubscene, subsceneEntities, pickupAnimations } = scene;
+    const inventoryPreviewActive = !!this.game?.getInventoryPreviewEntity();
+    const focusOverlayActive = !!activeSubscene || inventoryPreviewActive;
 
     // Sorting Logic moved from Scene.render
     // Sort by Y (Depth) and Parallax
@@ -105,7 +107,7 @@ export class SceneRenderer {
     this.renderLayer(ctx, normalLayer, scene, halfW, halfH);
 
     // 2. Dimmer / Blur (if active)
-    if (activeSubscene) {
+    if (focusOverlayActive) {
       this.renderBlurEffect(ctx);
 
       // Optional Dimmer Overlay

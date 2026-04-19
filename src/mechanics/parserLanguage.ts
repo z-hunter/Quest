@@ -1,6 +1,15 @@
 import type { ParserRelationType } from './parserTypes';
 
-export type ParserIntentId = 'look' | 'examine' | 'take' | 'goTo' | 'showInventory';
+export type ParserIntentId =
+  | 'look'
+  | 'examine'
+  | 'take'
+  | 'put'
+  | 'open'
+  | 'close'
+  | 'quit'
+  | 'goTo'
+  | 'showInventory';
 
 export type ParserLexiconAsset = {
   stage1Aliases: Record<ParserIntentId, string[]>;
@@ -73,7 +82,17 @@ export function matchStage1Intent(input: string, lexicon: ParserLexiconAsset): S
   if (!trimmed) return null;
   const lowered = trimmed.toLowerCase();
 
-  const intents: ParserIntentId[] = ['look', 'examine', 'take', 'showInventory', 'goTo'];
+  const intents: ParserIntentId[] = [
+    'look',
+    'examine',
+    'take',
+    'put',
+    'open',
+    'close',
+    'quit',
+    'showInventory',
+    'goTo',
+  ];
   for (const intent of intents) {
     const aliases = sortByLengthDesc(lexicon.stage1Aliases[intent] || []);
     for (const alias of aliases) {
@@ -157,5 +176,116 @@ export function extractRelationTargetForIntent(
   return {
     relation: relationMatch.relation,
     anchor: anchor || null,
+  };
+}
+
+export function extractPutCommand(
+  input: string,
+  lexicon: ParserLexiconAsset
+): { item: string | null; target: string | null; relation: ParserRelationType | null } {
+  let value = input.replace(/[?.!,]+$/g, '').trim();
+  if (!value) {
+    return { item: null, target: null, relation: null };
+  }
+
+  value = stripFromList(value, lexicon.politePrefixes || []);
+  value = stripFromList(value, lexicon.normalizationPrefixes.put || []);
+  if (!value) {
+    return { item: null, target: null, relation: null };
+  }
+
+  const relationCandidates: Array<{ relation: ParserRelationType; marker: string }> = [];
+  for (const relation of ['in', 'on', 'under', 'behind'] as ParserRelationType[]) {
+    for (const marker of lexicon.relationMarkers?.[relation] || []) {
+      if (marker.trim()) {
+        relationCandidates.push({ relation, marker: marker.trim() });
+      }
+    }
+  }
+
+  relationCandidates.sort((left, right) => right.marker.length - left.marker.length);
+
+  for (const candidate of relationCandidates) {
+    const pattern = new RegExp(
+      `\\s+${candidate.marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`,
+      'i'
+    );
+    const match = pattern.exec(value);
+    if (!match?.index) continue;
+
+    const item = stripFromList(value.slice(0, match.index).trim(), lexicon.articles || []);
+    const target = stripFromList(
+      value.slice(match.index + match[0].length).trim(),
+      lexicon.articles || []
+    );
+
+    return {
+      item: item || null,
+      target: target || null,
+      relation: candidate.relation,
+    };
+  }
+
+  return {
+    item: stripFromList(value, lexicon.articles || []) || null,
+    target: null,
+    relation: null,
+  };
+}
+
+export function extractTakeCommand(
+  input: string,
+  lexicon: ParserLexiconAsset
+): { item: string | null; target: string | null; relation: ParserRelationType | null } {
+  let value = input.replace(/[?.!,]+$/g, '').trim();
+  if (!value) {
+    return { item: null, target: null, relation: null };
+  }
+
+  value = stripFromList(value, lexicon.politePrefixes || []);
+  value = stripFromList(value, lexicon.normalizationPrefixes.take || []);
+  if (!value) {
+    return { item: null, target: null, relation: null };
+  }
+
+  // "take X from Y" implies X was in Y (semantic inversion)
+  const relationCandidates: Array<{ relation: ParserRelationType; marker: string }> = [
+    { relation: 'in', marker: 'from' },
+  ];
+  for (const relation of ['in', 'on', 'under', 'behind'] as ParserRelationType[]) {
+    for (const marker of lexicon.relationMarkers?.[relation] || []) {
+      if (marker.trim()) {
+        relationCandidates.push({ relation, marker: marker.trim() });
+      }
+    }
+  }
+
+  relationCandidates.sort((left, right) => right.marker.length - left.marker.length);
+
+  for (const candidate of relationCandidates) {
+    const pattern = new RegExp(
+      `\\s+${candidate.marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`,
+      'i'
+    );
+    const match = pattern.exec(value);
+    if (!match?.index) continue;
+
+    const item = stripFromList(value.slice(0, match.index).trim(), lexicon.articles || []);
+    const target = stripFromList(
+      value.slice(match.index + match[0].length).trim(),
+      lexicon.articles || []
+    );
+
+    return {
+      item: item || null,
+      target: target || null,
+      relation: candidate.relation,
+    };
+  }
+
+  return {
+    item: stripFromList(value, lexicon.articles || []) || null,
+    target: null,
+    relation: null,
   };
 }

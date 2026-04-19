@@ -14,6 +14,19 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     'lookScene',
     'lookEntity',
     'examineEntity',
+    'openEntity',
+    'closeEntity',
+    'closeFocusedView',
+    'takeEntity',
+    'canPutSourceEntity',
+    'putEntity',
+    'hasPutStorageForRelation',
+    'addInventoryEntity',
+    'removeEntityFromInventory',
+    'hasInventoryEntity',
+    'getInventoryEntities',
+    'addEntityToSurface',
+    'removeEntityFromSurface',
     'showInventory',
     'removeInventoryEntity',
     'goToSceneTarget',
@@ -29,6 +42,7 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     const scene = fixture.game.sceneManager.scenes.get(id);
     if (scene) {
       fixture.game.sceneManager.currentScene = scene;
+      fixture.game.inventoryManager.handleSceneChange();
       if (fixture.game.onSceneChange) {
         fixture.game.onSceneChange(scene.name);
       }

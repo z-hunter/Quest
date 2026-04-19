@@ -36,6 +36,16 @@ interface PickupAnimation {
   baseModelScale: number;
 }
 
+interface DropAnimation {
+  entity: Entity;
+  targetY: number;
+  lift: number;
+  duration: number;
+  elapsed: number;
+  baseModelScale: number;
+  targetOpacity: number;
+}
+
 export interface SceneScaling {
   enabled: boolean;
   min: number;
@@ -87,6 +97,7 @@ export class Scene {
   entities: Entity[];
   folders: Folder[] = [];
   pickupAnimations: PickupAnimation[] = [];
+  dropAnimations: DropAnimation[] = [];
   walkbox: Walkbox[];
   triggerboxes: Triggerbox[];
   scaling: SceneScaling;
@@ -116,6 +127,7 @@ export class Scene {
   // Subscene State
   private _activeSubscene: string | null = null;
   public subsceneEntities: Set<SceneObject> = new Set();
+  public revealedHiddenEntities: Set<string> = new Set();
 
   get activeSubscene(): string | null {
     return this._activeSubscene;
@@ -249,6 +261,18 @@ export class Scene {
     return this.normalizeSpatialPlacement((obj as any).spatial);
   }
 
+  isHiddenEntityRevealed(object: SceneObject | null | undefined): boolean {
+    if (!object) return false;
+    return this.revealedHiddenEntities.has(object.name);
+  }
+
+  revealHiddenEntity(object: SceneObject | null | undefined): boolean {
+    if (!object) return false;
+    if (this.revealedHiddenEntities.has(object.name)) return false;
+    this.revealedHiddenEntities.add(object.name);
+    return true;
+  }
+
   getSpatialDescendantObjects(nodeId: string): SceneObject[] {
     const normalizedId = String(nodeId || '').trim();
     if (!normalizedId) return [];
@@ -312,6 +336,7 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
+      this.revealedHiddenEntities.delete(entity.name);
       if (this.subsceneEntities.has(entity)) {
         this.subsceneEntities.delete(entity);
       }
@@ -325,6 +350,7 @@ export class Scene {
     const index = this.triggerboxes.indexOf(triggerbox);
     if (index > -1) {
       this.triggerboxes.splice(index, 1);
+      this.revealedHiddenEntities.delete(triggerbox.name);
       if (this.subsceneEntities.has(triggerbox)) {
         this.subsceneEntities.delete(triggerbox);
       }
@@ -338,21 +364,34 @@ export class Scene {
     const index = this.walkbox.indexOf(walkbox);
     if (index > -1) {
       this.walkbox.splice(index, 1);
+      this.revealedHiddenEntities.delete(walkbox.name);
       if (this.subsceneEntities.has(walkbox)) {
         this.subsceneEntities.delete(walkbox);
       }
     }
   }
 
+  getAllSceneObjects(): SceneObject[] {
+    return [...this.entities, ...this.walkbox, ...this.triggerboxes];
+  }
+
+  getObjectByName(name: string): SceneObject | null {
+    const normalized = String(name || '').trim();
+    if (!normalized) return null;
+    return this.getAllSceneObjects().find((obj) => obj.name === normalized) || null;
+  }
+
   playPickupAnimation(entity: Entity): void {
     const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
     clone.disabled = false;
     clone.visible = true;
-    clone.locked = true;
+    clone.interactionLocked = true;
     clone.groupID = null;
     clone.components = [];
     clone.interactions = {};
     clone.opacity = entity.opacity ?? 1.0;
+    clone.subsceneItemScale = entity.subsceneItemScale || 1;
+    clone.update(0);
     // @ts-ignore
     clone.scene = this;
 
@@ -364,6 +403,42 @@ export class Scene {
       elapsed: 0,
       baseModelScale: clone.modelScale || 1,
     });
+  }
+
+  playDropAnimation(entity: Entity): void {
+    this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
+
+    const targetOpacity = entity.opacity ?? 1.0;
+    const baseModelScale = entity.modelScale || 1;
+    const targetY = entity.y;
+
+    entity.interactionLocked = true;
+    entity.y = targetY - 26;
+    entity.opacity = 0;
+    entity.modelScale = baseModelScale * 1.1;
+    entity.update(0);
+
+    this.dropAnimations.push({
+      entity,
+      targetY,
+      lift: 26,
+      duration: 260,
+      elapsed: 0,
+      baseModelScale,
+      targetOpacity,
+    });
+  }
+
+  finishDropAnimation(entity: Entity): void {
+    const active = this.dropAnimations.find((anim) => anim.entity === entity);
+    if (!active) return;
+
+    entity.y = active.targetY;
+    entity.opacity = active.targetOpacity;
+    entity.modelScale = active.baseModelScale;
+    entity.interactionLocked = false;
+    entity.update(0);
+    this.dropAnimations = this.dropAnimations.filter((anim) => anim.entity !== entity);
   }
 
   findEntity(name: string): Entity | undefined {
@@ -668,9 +743,46 @@ export class Scene {
     activateSceneObject(this, obj, depth);
   }
 
+  getActiveSubsceneItemScale(): number {
+    const activeSubsceneId = String(this.activeSubscene || '').trim();
+    if (!activeSubsceneId) return 1;
+
+    const triggerbox = this.triggerboxes.find((candidate) => {
+      if (candidate.name === activeSubsceneId) return true;
+      return candidate.components?.some(
+        (component: any) =>
+          component?.type === 'Subscene' &&
+          String(component.targetGroupId || '').trim() === activeSubsceneId
+      );
+    });
+    const subsceneComponent = triggerbox?.components?.find(
+      (component: any) => component?.type === 'Subscene'
+    ) as { itemScale?: number } | undefined;
+    const itemScale = subsceneComponent?.itemScale;
+    return typeof itemScale === 'number' && Number.isFinite(itemScale) && itemScale > 0
+      ? itemScale
+      : 1;
+  }
+
+  private syncSubsceneItemScales(): void {
+    const activeItemScale = this.getActiveSubsceneItemScale();
+
+    for (const entity of this.entities) {
+      const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+      const nextScale =
+        !!this.activeSubscene && isItem && this.subsceneEntities.has(entity) ? activeItemScale : 1;
+      if (entity.subsceneItemScale === nextScale) continue;
+      entity.subsceneItemScale = nextScale;
+      if (entity.disabled) {
+        entity.update(0);
+      }
+    }
+  }
+
   update(deltaTime: number): void {
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
+    this.syncSubsceneItemScales();
 
     const cameraState = updateSceneCamera(this, deltaTime, {
       isCenteringX: this._isCenteringX,
@@ -703,6 +815,33 @@ export class Scene {
         }
       }
       this.pickupAnimations = nextAnimations;
+    }
+
+    if (this.dropAnimations.length > 0) {
+      const nextAnimations: DropAnimation[] = [];
+      for (const anim of this.dropAnimations) {
+        if (!this.entities.includes(anim.entity)) continue;
+
+        anim.elapsed += deltaTime;
+        const progress = Math.min(anim.elapsed / anim.duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 2);
+
+        anim.entity.y = anim.targetY - anim.lift * (1 - eased);
+        anim.entity.opacity = Math.min(anim.targetOpacity, anim.targetOpacity * progress);
+        anim.entity.modelScale = anim.baseModelScale * (1 + 0.1 * (1 - eased));
+        anim.entity.update(0);
+
+        if (progress < 1) {
+          nextAnimations.push(anim);
+        } else {
+          anim.entity.y = anim.targetY;
+          anim.entity.opacity = anim.targetOpacity;
+          anim.entity.modelScale = anim.baseModelScale;
+          anim.entity.interactionLocked = false;
+          anim.entity.update(0);
+        }
+      }
+      this.dropAnimations = nextAnimations;
     }
   }
 
