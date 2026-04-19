@@ -215,7 +215,7 @@ export class EditorSnappingSystem {
                 type: 'vertex',
                 index: q.vertices.indexOf(qv),
               };
-              snapP = undefined; // Will use binding logic to resolve P
+              snapP = qv.p;
             }
           });
 
@@ -224,6 +224,7 @@ export class EditorSnappingSystem {
             const visualVerts = q.vertices.map((v) => ({
               x: Math.round(v.x - camX * (v.p - 1.0)),
               y: Math.round(v.y - camY * (v.p - 1.0)),
+              p: v.p,
             }));
 
             const v0 = visualVerts[0];
@@ -238,25 +239,27 @@ export class EditorSnappingSystem {
               // Left Edge (V0-V3)
               const lx = v0.x + (v3.x - v0.x) * v;
               const ly = v0.y + (v3.y - v0.y) * v;
+              const lp = v0.p + (v3.p - v0.p) * v;
 
               let d = Math.abs(lx - result.x);
               let d2 = Math.abs(ly - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: lx, y: ly };
                 binding = { targetName: q.name, type: 'grid', gridU: 0, gridV: v };
-                snapP = undefined;
+                snapP = lp;
               }
 
               // Right Edge (V1-V2)
               const rx = v1.x + (v2.x - v1.x) * v;
               const ry = v1.y + (v2.y - v1.y) * v;
+              const rp = v1.p + (v2.p - v1.p) * v;
 
               d = Math.abs(rx - result.x);
               d2 = Math.abs(ry - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: rx, y: ry };
                 binding = { targetName: q.name, type: 'grid', gridU: 1, gridV: v };
-                snapP = undefined;
+                snapP = rp;
               }
             }
 
@@ -267,25 +270,27 @@ export class EditorSnappingSystem {
               // Top Edge (V0-V1)
               const tx = v0.x + (v1.x - v0.x) * u;
               const ty = v0.y + (v1.y - v0.y) * u;
+              const tp = v0.p + (v1.p - v0.p) * u;
 
               let d = Math.abs(tx - result.x);
               let d2 = Math.abs(ty - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: tx, y: ty };
                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 0 };
-                snapP = undefined;
+                snapP = tp;
               }
 
               // Bottom Edge (V3-V2)
               const bx = v3.x + (v2.x - v3.x) * u;
               const by = v3.y + (v2.y - v3.y) * u;
+              const bp = v3.p + (v2.p - v3.p) * u;
 
               d = Math.abs(bx - result.x);
               d2 = Math.abs(by - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: bx, y: by };
                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 1 };
-                snapP = undefined;
+                snapP = bp;
               }
 
               // Internal Nodes
@@ -295,13 +300,15 @@ export class EditorSnappingSystem {
                   (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
                 const ny =
                   (1 - u) * (1 - v) * v0.y + u * (1 - v) * v1.y + (1 - u) * v * v3.y + u * v * v2.y;
+                const np =
+                  (1 - u) * (1 - v) * v0.p + u * (1 - v) * v1.p + (1 - u) * v * v3.p + u * v * v2.p;
 
                 const dx = Math.abs(nx - result.x);
                 const dy = Math.abs(ny - result.y);
                 if (dx < bestDist && dy < bestDist) {
                   snapTarget = { x: nx, y: ny };
                   binding = { targetName: q.name, type: 'grid', gridU: u, gridV: v };
-                  snapP = undefined;
+                  snapP = np;
                 }
               }
             }
