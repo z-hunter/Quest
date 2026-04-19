@@ -21,6 +21,43 @@ Expected:
 - parser accepts commands normally
 - `#PEEK` shows `context`, `scope`, `envelope`, `core`, `result`
 
+## LLM Cascade Smoke
+
+These checks are opt-in and require the Vite dev server. They should not be part of normal autotests.
+
+1. Ensure lower layers are enabled:
+   - `#STAGE1-ON`
+   - `#STAGE2-ON`
+2. Enable LLM and debug:
+   - `#LLM-ON`
+   - `#PEEK-ON`
+3. Enter a command the lower layers should not resolve, for example:
+   - `hello`
+   - `look logotype`
+4. Disable LLM:
+   - `#LLM-OFF`
+
+Expected:
+- normal mode shows only a live `...` thinking line plus the final game response or fallback
+- with `#PEEK-ON`, output includes an `LLM` block with provider/model/duration/rawResponse/extractedJson/actions/error data
+- without `ANTHROPIC_API_KEY`, the game falls back safely and the LLM debug block reports the provider/proxy error
+- with `ANTHROPIC_API_KEY`, conversational input can return a short in-world response and semantic aliases can return a safe DSL action
+- after `#LLM-OFF`, unresolved commands return to the lower-cascade fallback behavior
+
+Optional Cascade 1 bypass test:
+
+1. Enable forced LLM handoff after Cascade 1:
+   - `#C1-OFF`
+2. Enter a command Cascade 1 normally understands:
+   - `LOOK IN WINDOW`
+3. Restore normal execution:
+   - `#C1-ON`
+
+Expected:
+- Cascade 1 still builds its normal envelope for debug/reference
+- parser sends that lower-cascade interpretation to the LLM instead of executing it directly
+- `#PEEK-ON` shows an LLM block for the command
+
 ## Stage Toggles
 
 1. Disable stage 1:

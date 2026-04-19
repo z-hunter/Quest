@@ -22,6 +22,8 @@ export class Console {
   parserPeekEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
+  parserLlmEnabled: boolean = false;
+  parserCascade1ForceLlm: boolean = false;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -169,6 +171,30 @@ export class Console {
       this.log('Parser stage2 enabled.', 'info');
     });
 
+    this.registerCommand('#LLM-ON', () => {
+      this.parserLlmEnabled = true;
+      this.log('LLM cascade enabled.', 'info');
+    });
+
+    this.registerCommand('#LLM-OFF', () => {
+      this.parserLlmEnabled = false;
+      this.log('LLM cascade disabled.', 'info');
+    });
+
+    const enableCascade1 = () => {
+      this.parserCascade1ForceLlm = false;
+      this.log('Cascade 1 normal execution enabled.', 'info');
+    };
+    const forceCascade1ToLlm = () => {
+      this.parserCascade1ForceLlm = true;
+      this.log('Cascade 1 forced LLM handoff enabled.', 'info');
+    };
+
+    this.registerCommand('#C1-ON', enableCascade1);
+    this.registerCommand('#C1-OFF', forceCascade1ToLlm);
+    this.registerCommand('#С1-ON', enableCascade1);
+    this.registerCommand('#С1-OFF', forceCascade1ToLlm);
+
     this.registerCommand('#VALIDATE-SPATIAL', () => {
       const scene = this.game?.sceneManager?.currentScene || null;
       const result = SceneSpatialValidator.validate(scene, this.game);
@@ -217,7 +243,7 @@ export class Console {
     this.notifyListeners();
   }
 
-  log(text: string, type: ConsoleLineType = 'output'): void {
+  log(text: string, type: ConsoleLineType = 'output'): number {
     const line: ConsoleLine = {
       text,
       type,
@@ -231,6 +257,19 @@ export class Console {
       this.buffer.shift();
     }
 
+    this.notifyListeners();
+    return this.buffer.length - 1;
+  }
+
+  updateLine(index: number, text: string, type?: ConsoleLineType): void {
+    const line = this.buffer[index];
+    if (!line) return;
+    this.buffer[index] = {
+      ...line,
+      text,
+      type: type || line.type,
+      timestamp: Date.now(),
+    };
     this.notifyListeners();
   }
 
