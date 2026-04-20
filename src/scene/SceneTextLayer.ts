@@ -36,6 +36,18 @@ export type SceneTextLayerSnapshot = {
   entryById: Map<string, SceneTextLayerEntry>;
   childrenByParentId: Map<string, SceneTextLayerEntry[]>;
   childrenByParentAndRelation: Map<string, Map<EffectiveRelation, SceneTextLayerEntry[]>>;
+  objectById: Map<string, SceneObject>;
+  titleById: Map<string, string | null>;
+};
+
+export type SceneTextTargetDescriptor = {
+  title: string;
+  relation: EffectiveRelation;
+};
+
+type SceneTextRelationAccessState = SceneTextLayerAccessState & {
+  object: SceneObject;
+  title: string;
 };
 
 function getSceneObjectTitle(game: IGame, object: SceneObject): string | null {
@@ -325,5 +337,218 @@ export function buildSceneTextLayerSnapshot(scene: Scene, game: IGame): SceneTex
     entryById,
     childrenByParentId,
     childrenByParentAndRelation,
+    objectById,
+    titleById,
   };
+}
+
+export function getSceneTextRelationDescendants(
+  snapshot: SceneTextLayerSnapshot,
+  anchorNodeId: string,
+  relation: EffectiveRelation
+): SceneTextLayerEntry[] {
+  const directChildren =
+    snapshot.childrenByParentAndRelation.get(anchorNodeId)?.get(relation) || [];
+  const results: SceneTextLayerEntry[] = [];
+  const visited = new Set<string>();
+  const stack = [...directChildren];
+
+  for (let i = 0; i < stack.length; i++) {
+    const entry = stack[i];
+    if (!entry || visited.has(entry.object.name)) continue;
+
+    visited.add(entry.object.name);
+    results.push(entry);
+    stack.push(...(snapshot.childrenByParentId.get(entry.object.name) || []));
+  }
+
+  return results;
+}
+
+export function getSceneTextRelationAccessStates(
+  scene: Scene,
+  game: IGame,
+  anchorNodeId: string,
+  relation: EffectiveRelation,
+  options: { includeHidden?: boolean } = {}
+): SceneTextRelationAccessState[] {
+  const allObjects = scene.getAllSceneObjects();
+  const objectById = new Map(allObjects.map((object) => [object.name, object] as const));
+  const titleById = new Map(
+    allObjects.map((object) => [object.name, getSceneObjectTitle(game, object)] as const)
+  );
+  const includeHidden = !!options.includeHidden;
+
+  const states = allObjects
+    .map((object) => {
+      const accessState = getSceneTextLayerAccessState(scene, game, object, objectById, titleById);
+      if (!accessState.title) return null;
+      const inventorySlot = getInventorySlotProjection(game, object);
+      if (inventorySlot?.playerOwned || inventorySlot?.protected) return null;
+      if (accessState.hidden && !includeHidden) return null;
+      return accessState as SceneTextRelationAccessState;
+    })
+    .filter((state): state is SceneTextRelationAccessState => !!state);
+
+  const childrenByParentId = new Map<string, SceneTextRelationAccessState[]>();
+  const childrenByParentAndRelation = new Map<
+    string,
+    Map<EffectiveRelation, SceneTextRelationAccessState[]>
+  >();
+
+  for (const state of states) {
+    if (!state.effectiveParentId || !state.effectiveRelation) continue;
+
+    const children = childrenByParentId.get(state.effectiveParentId) || [];
+    children.push(state);
+    childrenByParentId.set(state.effectiveParentId, children);
+
+    const relationMap = childrenByParentAndRelation.get(state.effectiveParentId) || new Map();
+    const relationChildren = relationMap.get(state.effectiveRelation) || [];
+    relationChildren.push(state);
+    relationMap.set(state.effectiveRelation, relationChildren);
+    childrenByParentAndRelation.set(state.effectiveParentId, relationMap);
+  }
+
+  const directChildren = childrenByParentAndRelation.get(anchorNodeId)?.get(relation) || [];
+  const results: SceneTextRelationAccessState[] = [];
+  const visited = new Set<string>();
+  const stack = [...directChildren];
+
+  for (let idx = 0; idx < stack.length; idx++) {
+    const state = stack[idx];
+    if (!state || visited.has(state.object.name)) continue;
+
+    visited.add(state.object.name);
+    results.push(state);
+    stack.push(...(childrenByParentId.get(state.object.name) || []));
+  }
+
+  return results;
+}
+
+export function getSceneTextTargetDescriptor(
+  scene: Scene,
+  game: IGame,
+  target: SceneObject | null | undefined,
+  fallbackRelation?: SpatialPlacement['relation'] | null
+): SceneTextTargetDescriptor | null {
+  if (!target) return null;
+
+  const relation = normalizeRelation(fallbackRelation) || 'on';
+  if (target.type === 'Walkbox') {
+    return { title: game.text('engine.floor_label'), relation: 'on' };
+  }
+
+  const title = getSceneObjectTitle(game, target);
+  if (title) return { title, relation };
+
+  const accessState = getSceneTextLayerAccessState(scene, game, target);
+  if (accessState.effectiveParentId && accessState.effectiveRelation) {
+    const parent = scene.getObjectByName(accessState.effectiveParentId);
+    const parentTitle = parent ? getSceneObjectTitle(game, parent) : null;
+    if (parentTitle) {
+      return {
+        title: parentTitle,
+        relation: accessState.effectiveRelation,
+      };
+    }
+  }
+
+  return null;
+}
+
+export class SceneTextLayerQuery {
+  private readonly scene: Scene;
+  private readonly game: IGame;
+  private snapshot: SceneTextLayerSnapshot;
+  private snapshotKey: string;
+
+  constructor(scene: Scene, game: IGame) {
+    this.scene = scene;
+    this.game = game;
+    this.snapshot = buildSceneTextLayerSnapshot(scene, game);
+    this.snapshotKey = this.getSnapshotKey();
+  }
+
+  private getSnapshotKey(): string {
+    const activeSubscene = this.scene.activeSubscene || '';
+    return [
+      activeSubscene,
+      ...this.scene.getAllSceneObjects().map((object) => {
+        const spatial = (object as any).spatial || {};
+        return [
+          object.name,
+          object.disabled ? '1' : '0',
+          object.visible ? '1' : '0',
+          String(spatial.parentNodeId || ''),
+          String(spatial.relation || ''),
+        ].join(':');
+      }),
+    ].join('|');
+  }
+
+  private ensureSnapshot(): void {
+    const nextKey = this.getSnapshotKey();
+    if (nextKey === this.snapshotKey) return;
+    this.snapshot = buildSceneTextLayerSnapshot(this.scene, this.game);
+    this.snapshotKey = nextKey;
+  }
+
+  get entries(): SceneTextLayerEntry[] {
+    this.ensureSnapshot();
+    return this.snapshot.entries;
+  }
+
+  get entryById(): Map<string, SceneTextLayerEntry> {
+    this.ensureSnapshot();
+    return this.snapshot.entryById;
+  }
+
+  get childrenByParentId(): Map<string, SceneTextLayerEntry[]> {
+    this.ensureSnapshot();
+    return this.snapshot.childrenByParentId;
+  }
+
+  get childrenByParentAndRelation(): Map<string, Map<EffectiveRelation, SceneTextLayerEntry[]>> {
+    this.ensureSnapshot();
+    return this.snapshot.childrenByParentAndRelation;
+  }
+
+  getAccessState(object: SceneObject): SceneTextLayerAccessState {
+    this.ensureSnapshot();
+    return getSceneTextLayerAccessState(
+      this.scene,
+      this.game,
+      object,
+      this.snapshot.objectById,
+      this.snapshot.titleById
+    );
+  }
+
+  getRelationDescendants(anchorNodeId: string, relation: EffectiveRelation): SceneTextLayerEntry[] {
+    this.ensureSnapshot();
+    return getSceneTextRelationDescendants(this.snapshot, anchorNodeId, relation);
+  }
+
+  getRelationAccessStates(
+    anchorNodeId: string,
+    relation: EffectiveRelation,
+    options?: { includeHidden?: boolean }
+  ): SceneTextRelationAccessState[] {
+    this.ensureSnapshot();
+    return getSceneTextRelationAccessStates(this.scene, this.game, anchorNodeId, relation, options);
+  }
+
+  getTargetDescriptor(
+    target: SceneObject | null | undefined,
+    fallbackRelation?: SpatialPlacement['relation'] | null
+  ): SceneTextTargetDescriptor | null {
+    this.ensureSnapshot();
+    return getSceneTextTargetDescriptor(this.scene, this.game, target, fallbackRelation);
+  }
+}
+
+export function createSceneTextLayerQuery(scene: Scene, game: IGame): SceneTextLayerQuery {
+  return new SceneTextLayerQuery(scene, game);
 }

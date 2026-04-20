@@ -1,3 +1,5 @@
+import type { AnyComponent } from '../systems/ComponentSystem';
+
 export class SceneObject {
   name: string;
   type: string;
@@ -18,7 +20,7 @@ export class SceneObject {
   interactions: Record<string, string> = {};
 
   // Components (e.g. { type: 'Item' }, { type: 'Switch', ... })
-  components: any[] = [];
+  components: AnyComponent[] = [];
 
   // Stable folder ID this object belongs to (null = top-level).
   folder: string | null = null;

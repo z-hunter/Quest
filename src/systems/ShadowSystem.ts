@@ -5,7 +5,7 @@ import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
 
 export interface ShadowComponent {
   type: 'Shadow';
-  id: string;
+  id?: string;
   shadowQuadId: string;
   offsetX: number;
   offsetY: number;

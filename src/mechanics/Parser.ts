@@ -18,6 +18,7 @@ import {
   buildSceneTextLayerSnapshot,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
+  getSceneTextRelationDescendants,
 } from '../scene/SceneTextLayer';
 import type {
   ParserCascadeEnvelope,
@@ -148,9 +149,8 @@ export class Parser {
             this.pendingState.question || this.game.text('parser.parse_unknown');
           return null;
         }
-        const selectedLabels = selectedOptions.map((option) => option.label);
         const patchedActions = envelope.output.actions.flatMap((action) =>
-          this.patchPendingActionWithSelections(action, selectedLabels, input.trim())
+          this.patchPendingActionWithSelections(action, selectedOptions, input.trim())
         );
 
         return {
@@ -208,15 +208,28 @@ export class Parser {
 
   private patchPendingActionWithSelections(
     action: ParserToolAction,
-    selectedLabels: string[],
+    selectedOptions: ParserClarificationOption[],
     fallbackInput: string
   ): ParserToolAction[] {
-    const labels = selectedLabels.length ? selectedLabels : [fallbackInput];
+    const options = selectedOptions.length
+      ? selectedOptions
+      : [
+          {
+            index: 1,
+            label: fallbackInput,
+            entityId: '',
+            scope: 'target' as const,
+          },
+        ];
+    const labels = options.map((option) => option.label);
+    const scope = options[0]?.scope || 'target';
     const patchSingle = (label: string): ParserToolAction => {
       if (action.type === 'lookTarget') return { ...action, target: label };
       if (action.type === 'examineTarget') return { ...action, target: label };
       if (action.type === 'takeTarget') return { ...action, target: label };
-      if (action.type === 'putTarget') return { ...action, item: label };
+      if (action.type === 'putTarget') {
+        return scope === 'target' ? { ...action, target: label } : { ...action, item: label };
+      }
       if (action.type === 'openTarget') return { ...action, target: label };
       if (action.type === 'closeTarget') return { ...action, target: label };
       if (action.type === 'goToTarget') return { ...action, target: label };
@@ -238,6 +251,9 @@ export class Parser {
       action.type === 'takeTarget' ||
       action.type === 'putTarget'
     ) {
+      if (action.type === 'putTarget' && scope === 'target') {
+        return [patchSingle(labels[0])];
+      }
       return labels.map((label) => patchSingle(label));
     }
     return [patchSingle(labels[0])];
@@ -347,7 +363,7 @@ export class Parser {
     if (!candidates) return null;
 
     const buildTakeActions = (entities: Entity[]): ParserToolAction[] =>
-      entities.map((entity) => ({
+      this.orderRelationScopedTakeEntities(entities, rawAnchor).map((entity) => ({
         type: 'takeTarget' as const,
         target: this.getPlayerFacingObjectTitle(entity) || entity.name,
         anchor: rawAnchor,
@@ -357,6 +373,13 @@ export class Parser {
     if (groupQuery.kind !== 'list') {
       const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
       if (!matches.length) {
+        const diagnosticMatches = this.findPluralAwareMatchesInCandidates(
+          groupQuery.query,
+          this.getVisibleTakeGroupDiagnosticCandidates(rawAnchor, relation)
+        );
+        if (diagnosticMatches.length) {
+          return buildTakeActions(diagnosticMatches);
+        }
         return [
           {
             type: 'takeTarget',
@@ -417,6 +440,34 @@ export class Parser {
       anchor,
       relation,
     };
+  }
+
+  private orderRelationScopedTakeEntities(entities: Entity[], rawAnchor: string | null): Entity[] {
+    if (!rawAnchor || entities.length < 2) return entities;
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return entities;
+
+    const depthFromAnchor = (entity: Entity): number => {
+      let depth = 0;
+      let current: SceneObject | null = entity;
+      const visited = new Set<string>();
+
+      while (current && !visited.has(current.name)) {
+        visited.add(current.name);
+        const parentId: string =
+          typeof (current as any).spatial?.parentNodeId === 'string'
+            ? (current as any).spatial.parentNodeId.trim()
+            : '';
+        if (!parentId) break;
+        depth += 1;
+        if (parentId === rawAnchor) return depth;
+        current = scene.getObjectByName(parentId);
+      }
+
+      return depth;
+    };
+
+    return [...entities].sort((left, right) => depthFromAnchor(right) - depthFromAnchor(left));
   }
 
   private buildPutGroupActions(
@@ -679,6 +730,16 @@ export class Parser {
     const scoped = this.getScopedTakeCandidates(resolvedAnchor.entity, relation);
     if (scoped.status !== 'resolved' || !scoped.hasStorage) return null;
     return scoped.candidates;
+  }
+
+  private getVisibleTakeGroupDiagnosticCandidates(
+    rawAnchor: string | null,
+    relation: ParserRelationType | null
+  ): Entity[] {
+    if (rawAnchor || relation) return [];
+    return this.getScopeCandidates(['visible']).filter(
+      (candidate): candidate is Entity => candidate instanceof Entity
+    );
   }
 
   private findPluralAwareMatchesInCandidates(query: string, candidates: Entity[]): Entity[] {
@@ -2053,169 +2114,6 @@ export class Parser {
     return this.game.describeSpatialRelation(resolved.node.id, relation);
   }
 
-  private collectTakeStorageCandidates(
-    anchor: SceneObject,
-    relation: ParserRelationType
-  ): {
-    inventoryOwners: Array<{
-      owner: Entity;
-      relation: Exclude<ParserRelationType, 'near'>;
-    }>;
-    surfaces: Array<{
-      surface: SceneObject;
-      relation: Exclude<ParserRelationType, 'near'>;
-    }>;
-  } {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) {
-      return { inventoryOwners: [], surfaces: [] };
-    }
-
-    if (relation === 'near') {
-      return { inventoryOwners: [], surfaces: [] };
-    }
-
-    const inventoryOwners: Array<{
-      owner: Entity;
-      relation: Exclude<ParserRelationType, 'near'>;
-    }> = [];
-    const surfaces: Array<{
-      surface: SceneObject;
-      relation: Exclude<ParserRelationType, 'near'>;
-    }> = [];
-
-    const directInventory =
-      anchor instanceof Entity ? ComponentSystem.getInventoryComponent(anchor, relation) : null;
-    if (directInventory && !directInventory.protected && anchor instanceof Entity) {
-      inventoryOwners.push({ owner: anchor, relation });
-    }
-    const directSurface = ComponentSystem.getSurfaceComponent(anchor, relation);
-    if (directSurface) {
-      surfaces.push({ surface: anchor, relation });
-    }
-
-    for (const candidate of scene.getAllSceneObjects()) {
-      const parentId =
-        typeof (candidate as any).spatial?.parentNodeId === 'string'
-          ? (candidate as any).spatial.parentNodeId.trim()
-          : '';
-      const candidateRelation = ((candidate as any).spatial?.relation ||
-        null) as ParserRelationType | null;
-      if (parentId !== anchor.name || candidateRelation !== relation) continue;
-
-      if (candidate instanceof Entity) {
-        const inventoryComponent = candidate.components?.find(
-          (component: any) => component?.type === 'Inventory'
-        ) as { protected?: boolean } | undefined;
-        if (inventoryComponent && !inventoryComponent.protected) {
-          inventoryOwners.push({ owner: candidate, relation: 'in' });
-        }
-      }
-
-      if (candidate.components?.some((component: any) => component?.type === 'Surface')) {
-        surfaces.push({ surface: candidate, relation: 'on' });
-      }
-    }
-
-    return { inventoryOwners, surfaces };
-  }
-
-  private getStorageCandidateItems(
-    storage:
-      | { owner: Entity; relation: Exclude<ParserRelationType, 'near'> }
-      | { surface: SceneObject; relation: Exclude<ParserRelationType, 'near'> }
-  ): Entity[] {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return [];
-    const collected = new Set<Entity>();
-
-    if ('owner' in storage) {
-      const inventoryComponent = ComponentSystem.getInventoryComponent(
-        storage.owner,
-        storage.relation
-      );
-      if (inventoryComponent && !inventoryComponent.protected) {
-        for (const candidate of (inventoryComponent.items || [])
-          .map((id) => scene.getObjectByName(id))
-          .filter(
-            (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
-          )) {
-          collected.add(candidate);
-        }
-      }
-    }
-
-    const surfaceObject = 'surface' in storage ? storage.surface : null;
-    const surfaceComponent = surfaceObject
-      ? ComponentSystem.getSurfaceComponent(surfaceObject, storage.relation)
-      : null;
-    for (const candidate of (surfaceComponent?.items || [])
-      .map((item) => scene.getObjectByName(item.id))
-      .filter(
-        (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
-      )) {
-      collected.add(candidate);
-    }
-
-    for (const candidate of scene.entities) {
-      if (!(candidate instanceof Entity) || candidate.disabled) continue;
-      let current: SceneObject | null = candidate;
-      while (current) {
-        const parentId: string =
-          typeof (current as any).spatial?.parentNodeId === 'string'
-            ? (current as any).spatial.parentNodeId.trim()
-            : '';
-        if (!parentId) break;
-        if (surfaceObject && parentId === surfaceObject.name) {
-          collected.add(candidate);
-          break;
-        }
-        current = scene.getObjectByName(parentId);
-      }
-    }
-
-    return Array.from(collected);
-  }
-
-  private getObjectAccessOutcome(entity: SceneObject): GameActionOutcome | null {
-    if (this.game.inventory.includes(entity)) return null;
-
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return null;
-
-    const accessState = getSceneTextLayerAccessState(scene, this.game, entity);
-    if (!accessState.hidden && !accessState.blocked) return null;
-
-    const closedMessage =
-      accessState.gatingSwitchClearlyOpenable && accessState.gatingSwitchTitle
-        ? this.game.text('engine.closed_container', {
-            target: accessState.gatingSwitchTitle,
-          })
-        : null;
-
-    if (accessState.hidden) {
-      return {
-        status: 'failed',
-        code: accessState.gatingSwitchClearlyOpenable
-          ? 'blocked_by_closed_container'
-          : 'cannot_reach_hidden_target',
-        message: closedMessage || this.game.text('engine.cant_reach_generic'),
-        data: { entityId: entity.name },
-        recoverable: true,
-      };
-    }
-
-    return {
-      status: 'failed',
-      code: 'blocked_inside_closed',
-      message: accessState.gatingSwitchClearlyOpenable
-        ? this.game.text('engine.blocked_inside_closed')
-        : this.game.text('engine.cant_reach_generic'),
-      data: { entityId: entity.name },
-      recoverable: true,
-    };
-  }
-
   private resolveContainerAnchor(
     rawTarget: string,
     candidateScopes: Array<keyof ParserScope>,
@@ -2255,7 +2153,7 @@ export class Parser {
     return { status: 'found', entity };
   }
 
-  private getDirectRelationTakeCandidates(
+  private getSemanticRelationTakeCandidates(
     anchor: SceneObject,
     relation: ParserRelationType
   ): Entity[] {
@@ -2265,12 +2163,13 @@ export class Parser {
     if (!scene) return [];
 
     const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
-    const directEntries =
-      textLayer.childrenByParentAndRelation
-        .get(anchor.name)
-        ?.get(relation as Exclude<ParserRelationType, 'near'>) || [];
+    const relationEntries = getSceneTextRelationDescendants(
+      textLayer,
+      anchor.name,
+      relation as Exclude<ParserRelationType, 'near'>
+    );
 
-    return directEntries
+    return relationEntries
       .map((entry) => entry.object)
       .filter((candidate): candidate is Entity => candidate instanceof Entity)
       .filter((candidate) => !candidate.disabled)
@@ -2285,36 +2184,9 @@ export class Parser {
     anchor: SceneObject,
     relation: ParserRelationType
   ): { status: 'resolved'; candidates: Entity[]; hasStorage: boolean } | GameActionOutcome {
-    const { inventoryOwners, surfaces } = this.collectTakeStorageCandidates(anchor, relation);
-    const orderByPriority = (left: SceneObject, right: SceneObject) => {
-      const a = this.getSceneObjectSelectionPriority(left);
-      const b = this.getSceneObjectSelectionPriority(right);
-      if (a.bucket !== b.bucket) return a.bucket - b.bucket;
-      if (a.order !== b.order) return a.order - b.order;
-      if (a.distance !== b.distance) return a.distance - b.distance;
-      return left.name.localeCompare(right.name);
-    };
-    const orderedStorages = [
-      ...inventoryOwners.sort((left, right) => orderByPriority(left.owner, right.owner)),
-      ...surfaces.sort((left, right) => orderByPriority(left.surface, right.surface)),
-    ];
-    const accessibleStorages = orderedStorages.filter(
-      (storage) =>
-        !this.getObjectAccessOutcome('owner' in storage ? storage.owner : storage.surface)
-    );
-    const directCandidates = this.getDirectRelationTakeCandidates(anchor, relation);
-
-    if (accessibleStorages.length) {
-      const candidates: Entity[] = [];
-      for (const storage of accessibleStorages) {
-        candidates.push(...this.getStorageCandidateItems(storage));
-      }
-      candidates.push(...directCandidates);
-      return {
-        status: 'resolved',
-        candidates: Array.from(new Set(candidates)),
-        hasStorage: true,
-      };
+    const gameScoped = (this.game as any).getRelationScopedTakeCandidates;
+    if (typeof gameScoped === 'function') {
+      return gameScoped.call(this.game, anchor, relation);
     }
 
     if (relation === 'in') {
@@ -2324,27 +2196,19 @@ export class Parser {
       }
     }
 
-    if (directCandidates.length) {
+    const semanticCandidates = this.getSemanticRelationTakeCandidates(anchor, relation);
+    if (semanticCandidates.length) {
       return {
         status: 'resolved',
-        candidates: directCandidates,
+        candidates: semanticCandidates,
         hasStorage: true,
       };
-    }
-
-    for (const storage of orderedStorages) {
-      const blockedOutcome = this.getObjectAccessOutcome(
-        'owner' in storage ? storage.owner : storage.surface
-      );
-      if (blockedOutcome) {
-        return blockedOutcome;
-      }
     }
 
     return {
       status: 'resolved',
       candidates: [],
-      hasStorage: orderedStorages.length > 0,
+      hasStorage: false,
     };
   }
 
@@ -2950,20 +2814,26 @@ export class Parser {
     relation: ParserRelationType | null
   ): boolean {
     if (!(source instanceof Entity)) return false;
+    if (this.game.inventory.includes(source)) return false;
 
-    const isSurfaceRelation = ['in', 'on', 'under', 'behind'].includes(relation as string);
-
-    if (
-      target instanceof Entity &&
-      isSurfaceRelation &&
-      this.game.hasInventoryEntity(target, source, relation as any)
-    ) {
-      return true;
+    const gameCheck = (this.game as any).isEntityInPutTarget;
+    if (typeof gameCheck === 'function') {
+      return !!gameCheck.call(this.game, source, target, relation);
     }
 
-    const normalizedRelation = isSurfaceRelation ? (relation as any) : 'on';
-    const surfaceComponent = ComponentSystem.getSurfaceComponent(target, normalizedRelation);
-    return !!surfaceComponent?.items?.some((item: any) => item?.id === source.name);
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return false;
+    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const relations: Array<Exclude<ParserRelationType, 'near'>> =
+      relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
+        ? [relation]
+        : ['in', 'on', 'under', 'behind'];
+
+    return relations.some((candidateRelation) =>
+      getSceneTextRelationDescendants(textLayer, target.name, candidateRelation).some(
+        (entry) => entry.object === source
+      )
+    );
   }
 
   private resolveOpenCloseTarget(
@@ -3433,6 +3303,40 @@ export class Parser {
     );
   }
 
+  private formatPeekObject(obj: any): string {
+    const truncateStrings = (input: any): any => {
+      if (typeof input === 'string') {
+        return input.length > 20 ? input.substring(0, 20) + '...' : input;
+      }
+      if (Array.isArray(input)) {
+        return input.map(truncateStrings);
+      }
+      if (input !== null && typeof input === 'object') {
+        const result: any = {};
+        for (const key of Object.keys(input)) {
+          result[key] = truncateStrings(input[key]);
+        }
+        return result;
+      }
+      return input;
+    };
+
+    const data = truncateStrings(obj);
+    if (data === null || typeof data !== 'object') return String(data);
+
+    if (Array.isArray(data)) {
+      if (data.length === 0) return '[]';
+      const items = data.map((item) => JSON.stringify(item));
+      return `[\n  ${items.join(',\n  ')}\n]`;
+    }
+
+    const entries = Object.entries(data);
+    if (entries.length === 0) return '{}';
+
+    const lines = entries.map(([key, value]) => `  "${key}": ${JSON.stringify(value)}`);
+    return `{\n${lines.join(',\n')}\n}`;
+  }
+
   private buildResponse(
     resultJson: string,
     envelopeJson: string,
@@ -3441,15 +3345,21 @@ export class Parser {
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
-    const coreDecisionJson = result.coreDecision ? JSON.stringify(result.coreDecision) : undefined;
+    const coreDecision = result.coreDecision;
+
+    const formatSection = (title: string, json: string | object) => {
+      const obj = typeof json === 'string' ? JSON.parse(json) : json;
+      return `--- ${title.toUpperCase()} ---\n${this.formatPeekObject(obj)}`;
+    };
+
     const peekMessages = this.game.console?.parserPeekEnabled
       ? [
-          `[Parser peek] context=${contextJson}`,
-          `[Parser peek] scope=${scopeJson}`,
-          `[Parser peek] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser peek] core=${coreDecisionJson}`] : []),
-          `[Parser peek] result=${resultJson}`,
-          ...(nlpDebug ? [`[Parser peek] nlp=${JSON.stringify(nlpDebug)}`] : []),
+          formatSection('context', contextJson),
+          formatSection('scope', scopeJson),
+          formatSection('envelope', envelopeJson),
+          ...(coreDecision ? [formatSection('core', coreDecision)] : []),
+          formatSection('result', resultJson),
+          ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
         ]
       : undefined;
 
@@ -3458,11 +3368,11 @@ export class Parser {
         playerMessage: this.game.text('parser.parse_unknown'),
         nextPendingState: null,
         debugMessages: peekMessages || [
-          `[Parser handoff] context=${contextJson}`,
-          `[Parser handoff] scope=${scopeJson}`,
-          `[Parser handoff] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
-          `[Parser handoff] result=${resultJson}`,
+          formatSection('handoff context', contextJson),
+          formatSection('handoff scope', scopeJson),
+          formatSection('handoff envelope', envelopeJson),
+          ...(coreDecision ? [formatSection('handoff core', coreDecision)] : []),
+          formatSection('handoff result', resultJson),
         ],
       };
     }
@@ -3525,7 +3435,7 @@ export class Parser {
           `[Parser handoff] context=${contextJson}`,
           `[Parser handoff] scope=${scopeJson}`,
           `[Parser handoff] envelope=${envelopeJson}`,
-          ...(coreDecisionJson ? [`[Parser handoff] core=${coreDecisionJson}`] : []),
+          ...(coreDecision ? [`[Parser handoff] core=${JSON.stringify(coreDecision)}`] : []),
           `[Parser handoff] result=${resultJson}`,
         ],
       };

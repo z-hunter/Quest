@@ -78,6 +78,20 @@ export interface WalkBoxComponent {
   mode?: 'Invert' | 'Add' | 'Subtract';
 }
 
+export type AnyComponent = (
+  | SubsceneComponent
+  | SwitchComponent
+  | BlockerComponent
+  | SubtriggerComponent
+  | ItemComponent
+  | InventoryComponent
+  | SurfaceComponent
+  | WalkBoxComponent
+  | ShadowComponent
+  | BackfaceComponent
+  | ThreeDParallaxComponent
+) & { mode?: string };
+
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
@@ -450,7 +464,7 @@ export class ComponentSystem {
       }
 
       const dist = Math.hypot(player.x - cx, player.y - cy);
-      const allowedDist = (player.width || 30) * 4;
+      const allowedDist = (player.width || 30) * 4.5;
 
       if (dist > allowedDist) {
         const game = scene.game as unknown as IGame;

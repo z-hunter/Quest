@@ -39,7 +39,13 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('look under chair');
 
-    expect(result.messages.at(-1)).toBe('Under the Chair you see: Piece of paper.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Under',
+        target: 'Chair',
+        items: 'Piece of paper',
+      })
+    );
   });
 
   it('surfaces the distance error for a far but visible EXAMINE target', async () => {
@@ -60,7 +66,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('examine boombox');
 
-    expect(result.messages.at(-1)).toBe('You are too far away from the Boombox.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Boombox' })
+    );
   });
 
   it('surfaces the distance error for a far but visible TAKE target', async () => {
@@ -75,7 +83,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take cassette');
 
-    expect(result.messages.at(-1)).toBe('You are too far away from the Compact cassette.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Compact cassette' })
+    );
     expect(fixture.game.inventory).not.toContain(cassette);
   });
 
@@ -114,7 +124,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take cassette');
 
-    expect(result.messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: "Cassette 'Music'" })
+    );
   });
 
   it('supports OPEN and CLOSE for reachable switches', async () => {
@@ -127,10 +139,14 @@ describe('Parser + game integration smoke', () => {
     });
 
     const openResult = await fixture.run('open drawer');
-    expect(openResult.messages.at(-1)).toBe('You open the Drawer.');
+    expect(openResult.messages.at(-1)).toBe(
+      fixture.game.text('parser.open_success', { target: 'Drawer' })
+    );
 
     const closeResult = await fixture.run('close drawer');
-    expect(closeResult.messages.at(-1)).toBe('You close the Drawer.');
+    expect(closeResult.messages.at(-1)).toBe(
+      fixture.game.text('parser.close_success', { target: 'Drawer' })
+    );
   });
 
   it('elevates OPEN on non-switch objects to the next parser cascade', async () => {
@@ -143,7 +159,7 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('open chair');
 
-    expect(result.messages.at(-1)).toBe("I don't understand.");
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
   });
 
   it('reports a clearly openable closed container on LOOK IN but not on direct LOOK of hidden contents', async () => {
@@ -167,7 +183,9 @@ describe('Parser + game integration smoke', () => {
     });
 
     const relationResult = await fixture.run('look in drawer');
-    expect(relationResult.messages.at(-1)).toBe('The Drawer is closed.');
+    expect(relationResult.messages.at(-1)).toBe(
+      fixture.game.text('engine.closed_container', { target: 'Drawer' })
+    );
 
     const directResult = await fixture.run('look note');
     expect(directResult.messages.at(-1)).toBe("You don't see any note here.");
@@ -235,7 +253,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You drop the key.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', { item: 'key', target: 'Drawer' })
+    );
   });
 
   it('supports PUT UNDER a titled object when it has a built-in UNDER surface', async () => {
@@ -256,7 +276,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key under desk');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the Desk.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_under', { item: 'key', target: 'Desk' })
+    );
     expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
@@ -291,7 +313,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key in drawer');
 
-    expect(result.messages.at(-1)).toBe('You drop the key.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', { item: 'key', target: 'upper drawer' })
+    );
   });
 
   it('supports PUT from a nearby scene item into a nearby container without taking it first', async () => {
@@ -314,10 +338,71 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put cassette in recorder');
 
-    expect(result.messages.at(-1)).toBe('You put the cassette into the recorder.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'cassette',
+        target: 'Tape recorder',
+      })
+    );
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       cassette.name
     );
+  });
+
+  it('keeps the chosen PUT target after clarification instead of swapping it with the source', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(yellowPaper);
+    fixture.game.inventory.push(yellowPaper);
+    const compactCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'record'],
+    });
+    fixture.game.inventory.push(compactCassette);
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'music'],
+    });
+    musicCassette.x = 10;
+    musicCassette.y = 0;
+
+    const ambiguous = await fixture.run('put paper into cassette');
+    expect(ambiguous.messages.at(-1)).toContain('Where exactly do you want to put it');
+    expect(ambiguous.pendingIntent).toBe('put');
+
+    const resolved = await fixture.run('2');
+    expect(resolved.messages.at(-1)).toBe(fixture.game.text('parser.put_no_place'));
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(yellowPaper.name);
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain(
+      compactCassette.name
+    );
+    expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain(
+      musicCassette.name
+    );
+    expect(fixture.scene.entities).toContain(musicCassette);
+    expect(
+      (compactCassette.components?.[1] as { items?: string[] } | undefined)?.items || []
+    ).toEqual([]);
   });
 
   it('does not resolve a PUT target to the source item itself', async () => {
@@ -354,11 +439,15 @@ describe('Parser + game integration smoke', () => {
     recorder.y = 0;
 
     const first = await fixture.run('put compact cassette into recorder');
-    expect(first.messages.at(-1)).toBe('You put the cassette into the boombox.');
+    expect(first.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', { item: 'cassette', target: 'Boombox' })
+    );
 
     fixture.game.inventory.push(cassette);
     const selfTarget = await fixture.run('put compact cassette into record');
-    expect(selfTarget.messages.at(-1)).toBe('You put the cassette into the boombox.');
+    expect(selfTarget.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', { item: 'cassette', target: 'Boombox' })
+    );
     expect(selfTarget.messages.at(-1)).not.toContain('into the Compact cassette');
     expect(
       (cassette.components?.[1] as { items?: string[] } | undefined)?.items || []
@@ -418,7 +507,9 @@ describe('Parser + game integration smoke', () => {
     });
 
     const result = await fixture.run('put cassette into recorder');
-    expect(result.messages.at(-1)).toBe('There is no more room in the Boombox.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_target_full_in', { target: 'Boombox' })
+    );
     expect(result.pendingIntent).toBeNull();
     expect(
       (compactCassette.components?.[1] as { items?: string[] } | undefined)?.items || []
@@ -468,7 +559,12 @@ describe('Parser + game integration smoke', () => {
     const messages = await runSemanticParser(fixture, 'put cassette under chair');
 
     expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
-    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_under', {
+        item: 'Compact cassette',
+        target: 'Chair',
+      })
+    );
     expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'compact_cassette' })])
     );
@@ -512,7 +608,7 @@ describe('Parser + game integration smoke', () => {
     const messages = await runSemanticParser(fixture, 'put cassette under chair');
 
     expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
-    expect(messages.at(-1)).toBe("You can't put that there.");
+    expect(messages.at(-1)).toBe(fixture.game.text('parser.put_no_place'));
     expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual([]);
     expect(fixture.game.inventory).toContain(compactCassette);
   });
@@ -565,7 +661,12 @@ describe('Parser + game integration smoke', () => {
     const messages = await runSemanticParser(fixture, 'put cassete under chair');
 
     expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
-    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_under', {
+        item: 'Compact cassette',
+        target: 'Chair',
+      })
+    );
     expect(fixture.game.inventory).not.toContain(compactCassette);
     expect(fixture.game.inventory).not.toContain(musicCassette);
   });
@@ -594,7 +695,9 @@ describe('Parser + game integration smoke', () => {
     const messages = await runSemanticParser(fixture, 'put cassette under chair');
 
     expect(messages.some((message) => message.includes('Which item do you want'))).toBe(false);
-    expect(messages.at(-1)).toBe("You are too far away from the Cassette 'Music'.");
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: "Cassette 'Music'" })
+    );
     expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual([]);
   });
 
@@ -625,7 +728,12 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put cassette in recorder');
 
-    expect(result.messages.at(-1)).toBe('You put the cassette_held into the recorder.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'cassette_held',
+        target: 'Tape recorder',
+      })
+    );
     expect(result.pendingIntent).toBeNull();
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       heldCassette.name
@@ -665,7 +773,12 @@ describe('Parser + game integration smoke', () => {
     expect(ambiguous.pendingIntent).toBe('put');
 
     const resolved = await fixture.run('Cassette B');
-    expect(resolved.messages.at(-1)).toBe('You put the cassette_b into the recorder.');
+    expect(resolved.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'cassette_b',
+        target: 'Tape recorder',
+      })
+    );
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toContain(
       nearbyCassette.name
     );
@@ -705,7 +818,9 @@ describe('Parser + game integration smoke', () => {
     expect(ambiguous.pendingIntent).toBe('put');
 
     const resolved = await fixture.run('1, 2');
-    expect(resolved.messages.at(-1)).toBe('There is no more room in the Tape recorder.');
+    expect(resolved.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_target_full_in', { target: 'Tape recorder' })
+    );
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       firstCassette.name,
     ]);
@@ -740,8 +855,14 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('put all cassettes into recorder');
 
     expect(result.messages).toEqual([
-      'You put the cassette_a into the recorder.',
-      'You put the cassette_b into the recorder.',
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'cassette_a',
+        target: 'Tape recorder',
+      }),
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'cassette_b',
+        target: 'Tape recorder',
+      }),
     ]);
     expect(inventoryNames(fixture)).toEqual([]);
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
@@ -776,8 +897,8 @@ describe('Parser + game integration smoke', () => {
     const shared = await fixture.run('put blue and red pills in box');
 
     expect(shared.messages).toEqual([
-      'You put the blue_pill into the box.',
-      'You put the red_pill into the box.',
+      fixture.game.text('parser.put_success_inventory', { item: 'blue_pill', target: 'Box' }),
+      fixture.game.text('parser.put_success_inventory', { item: 'red_pill', target: 'Box' }),
     ]);
     expect((box.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       'blue_pill',
@@ -907,11 +1028,67 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put all cassettes into recorder');
 
-    expect(result.messages).toEqual(['You put the music_cassette into the boombox.']);
+    expect(result.messages).toEqual([
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'music_cassette',
+        target: 'Boombox',
+      }),
+    ]);
     expect((recorder.components?.[0] as { items?: string[] } | undefined)?.items || []).toEqual([
       compactCassette.name,
       musicCassette.name,
     ]);
+  });
+
+  it('filters PUT sources already stored through an untitled target extension', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('drawer', {
+      title: 'upper drawer',
+      description: 'A drawer.',
+    });
+    const drawerStorage = fixture.addEntity('drawer_storage', {
+      title: null,
+      spatial: { parentNodeId: 'drawer', relation: 'in' },
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 3, groups: [], protected: false, items: [] },
+      ],
+    });
+    const orangePaper = fixture.addEntity('orange_paper', {
+      title: 'Orange paper',
+      description: 'Orange paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('orange_paper', {
+      title: 'Orange paper',
+      description: 'Orange paper.',
+      synonyms: ['paper', 'orange'],
+    });
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'Yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'Yellow paper.',
+      synonyms: ['paper', 'yellow'],
+    });
+    fixture.scene.removeEntity(yellowPaper);
+    fixture.game.inventory.push(yellowPaper);
+    fixture.game.addInventoryEntity(drawerStorage as any, orangePaper as any, 'in');
+
+    const result = await fixture.run('put all paper in drawer');
+
+    expect(result.messages).toEqual([
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'yellow_paper',
+        target: 'upper drawer',
+      }),
+    ]);
+    expect(
+      (drawerStorage.components?.[0] as { items?: string[] } | undefined)?.items || []
+    ).toEqual([orangePaper.name, yellowPaper.name]);
   });
 
   it('keeps PUT BOTH ambiguous when more than two sources match', async () => {
@@ -958,7 +1135,65 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('put key on tray');
 
-    expect(result.messages.at(-1)).toBe('You are too far away from the Tray.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Tray' })
+    );
+  });
+
+  it('reports missing storage before distance for PUT into a distant non-container target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const paper = fixture.addEntity('paper', {
+      title: 'Paper',
+      description: 'A paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(paper);
+    fixture.game.inventory.push(paper);
+    const cassette = fixture.addEntity('cassette', {
+      title: "Cassette 'Music'",
+      description: 'A cassette with no storage.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+
+    const result = await fixture.run('put paper in cassette');
+
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.put_no_place'));
+    expect(result.pendingIntent).toBeNull();
+    expect(fixture.game.inventory).toContain(paper);
+    expect(fixture.scene.entities).toContain(cassette);
+  });
+
+  it('reports missing storage before distance for PUT into a distant visible target synonym', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', -87, 257);
+    const paper = fixture.addEntity('paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(paper);
+    fixture.game.inventory.push(paper);
+    const cassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A compact cassette.',
+      synonyms: ['music', 'cassette'],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+
+    const result = await fixture.run('put paper in music');
+
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.put_no_place'));
+    expect(result.pendingIntent).toBeNull();
+    expect(fixture.game.inventory).toContain(paper);
   });
 
   it('puts an item under a target using its built-in UNDER surface without creating inventory', async () => {
@@ -979,7 +1214,12 @@ describe('Parser + game integration smoke', () => {
 
     const messages = await runSemanticParser(fixture, 'put cassette under chair');
 
-    expect(messages.at(-1)).toBe('You put the Compact cassette under the Chair.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_under', {
+        item: 'Compact cassette',
+        target: 'Chair',
+      })
+    );
     expect((chair.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'compact_cassette' })])
     );
@@ -1037,7 +1277,9 @@ describe('Parser + game integration smoke', () => {
 
     const messages = await runSemanticParser(fixture, 'drop cassette');
 
-    expect(messages.at(-1)).toBe('You are too far away from the Desk.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Desk' })
+    );
     expect(fixture.game.inventory).toContain(cassette);
   });
 
@@ -1053,14 +1295,41 @@ describe('Parser + game integration smoke', () => {
     fixture.game.inventory.push(key);
     const floor = fixture.addWalkbox('FloorZone');
     floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+    const expectedFloorPut = fixture.game.text('parser.put_success_surface', {
+      item: 'key',
+      target: fixture.game.text('engine.floor_label'),
+    });
 
     const floorResult = await fixture.run('put key on floor');
-    expect(floorResult.messages.at(-1)).toBe('You put the key on the floor.');
+    expect(floorResult.messages.at(-1)).toBe(expectedFloorPut);
 
     fixture.scene.removeEntity(key);
     fixture.game.inventory.push(key);
     const groundResult = await fixture.run('put key on ground');
-    expect(groundResult.messages.at(-1)).toBe('You put the key on the floor.');
+    expect(groundResult.messages.at(-1)).toBe(expectedFloorPut);
+  });
+
+  it('reports floor placement for explicit PUT IN floor targets', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('FloorZone');
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const result = await fixture.run('put key in floor');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'key',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
   });
 
   it('prefers the walkbox floor for DROP when a separate surface is nearby', async () => {
@@ -1089,7 +1358,12 @@ describe('Parser + game integration smoke', () => {
 
     const messages = await runSemanticParser(fixture, 'drop key');
 
-    expect(messages.at(-1)).toBe('You put the Key on the floor.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'Key',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
     expect(fixture.game.inventory).not.toContain(key);
   });
 
@@ -1128,13 +1402,20 @@ describe('Parser + game integration smoke', () => {
     const dropMessage = dropMessages.at(-1);
     const takeMessages = await runSemanticParser(fixture, 'take cassette');
 
-    expect(dropMessage).toBe('You put the Compact cassette on the floor.');
-    expect(takeMessages.at(-1)).toBe('You picked up the Compact cassette.');
+    expect(dropMessage).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'Compact cassette',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
+    expect(takeMessages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
+    );
     expect(fixture.game.inventory).toContain(compactCassette);
     expect(fixture.game.inventory).not.toContain(musicCassette);
   });
 
-  it('prefers a surface inside the active subscene before the floor for DROP', async () => {
+  it('prefers an untitled surface inside the active subscene before the floor for DROP', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const drawerZone = fixture.addTriggerbox('DrawerZone', {
@@ -1143,7 +1424,7 @@ describe('Parser + game integration smoke', () => {
       components: [{ type: 'Subscene', targetGroupId: '' }],
     });
     const tray = fixture.addEntity('tray', {
-      title: 'Tray',
+      title: null,
       description: 'A tray.',
       disabled: true,
       spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
@@ -1169,7 +1450,12 @@ describe('Parser + game integration smoke', () => {
 
     const messages = await runSemanticParser(fixture, 'drop key');
 
-    expect(messages.at(-1)).toBe('You put the Key on the Tray.');
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'Key',
+        target: 'Drawer front',
+      })
+    );
     expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
     expect(floor.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(false);
   });
@@ -1191,10 +1477,34 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('take all cassettes');
 
     expect(result.messages).toEqual([
-      'You picked up the Compact cassette.',
-      "You picked up the Cassette 'Music'.",
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' }),
+      fixture.game.text('parser.take_pickup_success', { item: "Cassette 'Music'" }),
     ]);
     expect(inventoryNames(fixture)).toEqual(['compact_cassette', 'music_cassette']);
+  });
+
+  it('reports distance for TAKE ALL when plural matches are visible but not currently takable', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const orangePaper = fixture.addEntity('orange_paper', {
+      title: 'Orange paper',
+      description: 'An orange paper.',
+      components: [{ type: 'Item' }],
+    });
+    const yellowPaper = fixture.addEntity('yellow_paper', {
+      title: 'Yellow paper',
+      description: 'A yellow paper.',
+      components: [{ type: 'Item' }],
+    });
+    orangePaper.x = 250;
+    yellowPaper.x = 260;
+
+    const result = await fixture.run('take all papers');
+
+    expect(result.messages).toEqual([
+      fixture.game.text('engine.too_far_from_entity', { target: 'Orange paper' }),
+    ]);
+    expect(inventoryNames(fixture)).toEqual([]);
   });
 
   it('does not ask for TAKE clarification when only one matching item is currently takeable', async () => {
@@ -1226,7 +1536,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take cassette');
 
-    expect(result.messages.at(-1)).toBe('You picked up the Compact cassette.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
+    );
     expect(fixture.game.inventory).toContain(nearCassette);
     expect(fixture.game.inventory.map((entity) => entity.name)).not.toContain('far_cassette');
   });
@@ -1282,8 +1594,8 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('take both cassettes');
 
     expect(result.messages).toEqual([
-      'You picked up the Cassette A.',
-      'You picked up the Cassette B.',
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette A' }),
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette B' }),
     ]);
     expect(inventoryNames(fixture)).toEqual(['cassette_a', 'cassette_b']);
   });
@@ -1333,8 +1645,8 @@ describe('Parser + game integration smoke', () => {
     const shared = await fixture.run('take blue and red pills');
 
     expect(shared.messages).toEqual([
-      'You picked up the Blue pill.',
-      'You picked up the Red pill.',
+      fixture.game.text('parser.take_pickup_success', { item: 'Blue pill' }),
+      fixture.game.text('parser.take_pickup_success', { item: 'Red pill' }),
     ]);
     expect(inventoryNames(fixture)).toEqual(['blue_pill', 'red_pill']);
 
@@ -1383,7 +1695,9 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take blue pill and blue pill');
 
-    expect(result.messages).toEqual(['You picked up the Blue pill.']);
+    expect(result.messages).toEqual([
+      fixture.game.text('parser.take_pickup_success', { item: 'Blue pill' }),
+    ]);
     expect(inventoryNames(fixture)).toEqual(['blue_pill']);
   });
 
@@ -1419,8 +1733,8 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('take all cassettes from box');
 
     expect(result.messages).toEqual([
-      'You picked up the Cassette A.',
-      'You picked up the Cassette B.',
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette A' }),
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette B' }),
     ]);
     expect(inventoryNames(fixture)).toEqual(['cassette_a', 'cassette_b']);
   });
@@ -1445,8 +1759,8 @@ describe('Parser + game integration smoke', () => {
 
     const resolved = await fixture.run('all');
     expect(resolved.messages).toEqual([
-      'You picked up the Cassette A.',
-      'You picked up the Cassette B.',
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette A' }),
+      fixture.game.text('parser.take_pickup_success', { item: 'Cassette B' }),
     ]);
   });
 
@@ -1492,9 +1806,114 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take pencil from drawer');
 
-    expect(result.messages.at(-1)).toBe('You picked up the pencil.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'pencil' })
+    );
     expect(fixture.game.inventory.map((entity: any) => entity.name)).toContain('pencil_b');
     expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain('pencil_a');
+  });
+
+  it('takes a nested semantic descendant from an outer anchor-relative container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const look = await fixture.run('look in cabinet');
+    expect(look.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        target: 'Cabinet',
+        items: 'Book A and Book B',
+      })
+    );
+
+    const result = await fixture.run('take book b from cabinet');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Book B' })
+    );
+    expect(inventoryNames(fixture)).toEqual(['book_b']);
+  });
+
+  it('takes all matching nested semantic descendants from an outer anchor-relative container', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const result = await fixture.run('take all books from cabinet');
+
+    expect(result.messages).toEqual([
+      fixture.game.text('parser.take_pickup_success', { item: 'Book B' }),
+      fixture.game.text('parser.take_pickup_success', { item: 'Book A' }),
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['book_b', 'book_a']);
+  });
+
+  it('keeps object-relative ON semantics while allowing generic TAKE FROM wording', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A cabinet.',
+    });
+    fixture.addEntity('book_a', {
+      title: 'Book A',
+      description: 'A book inside the cabinet.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'cabinet', relation: 'in' },
+    });
+    fixture.addEntity('book_b', {
+      title: 'Book B',
+      description: 'A book on another book.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'book_a', relation: 'on' },
+    });
+
+    const look = await fixture.run('look on book a');
+    expect(look.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'On',
+        target: 'Book A',
+        items: 'Book B',
+      })
+    );
+
+    const result = await fixture.run('take book b from book a');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Book B' })
+    );
+    expect(inventoryNames(fixture)).toEqual(['book_b']);
   });
 
   it('surfaces a closed-container failure for TAKE FROM drawer', async () => {
@@ -1524,6 +1943,8 @@ describe('Parser + game integration smoke', () => {
 
     const result = await fixture.run('take note from drawer');
 
-    expect(result.messages.at(-1)).toBe('The Drawer is closed.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('engine.closed_container', { target: 'Drawer' })
+    );
   });
 });

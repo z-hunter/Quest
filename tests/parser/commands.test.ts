@@ -107,7 +107,9 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('drop key');
 
-    expect(result.messages.at(-1)).toBe('You put the key on the Desk.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', { item: 'key', target: 'Desk' })
+    );
     expect(fixture.game.inventory).not.toContain(key);
   });
 
@@ -126,7 +128,12 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('drop key');
 
-    expect(result.messages.at(-1)).toBe('You drop the key on the floor.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'key',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
     expect(fixture.game.inventory).not.toContain(key);
   });
 
@@ -148,7 +155,9 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('put cassette into recorder');
 
-    expect(result.messages.at(-1)).toBe('You put the cassette into the recorder.');
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', { item: 'cassette', target: 'Recorder' })
+    );
     expect(fixture.game.inventory).not.toContain(cassette);
     expect((recorder.components[0] as { items: string[] }).items).toContain('cassette');
   });
@@ -188,7 +197,7 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('quit');
 
-    expect(result.messages.at(-1)).toBe("I don't understand.");
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
     expect(fixture.scene.activeSubscene).toBe(null);
     expect(fixture.game.inventoryManager.getInventoryPreviewEntity()).toBe(null);
   });

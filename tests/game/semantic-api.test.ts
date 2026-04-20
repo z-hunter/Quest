@@ -141,7 +141,7 @@ describe('Game semantic API', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const emptyOutcome = fixture.game.showInventory();
-    expect(emptyOutcome.message).toBe('You are not carrying anything.');
+    expect(emptyOutcome.message).toBe(fixture.game.text('parser.inventory_empty'));
 
     const idCard = fixture.addEntity('miles_id', {
       title: 'your ID card',
@@ -151,7 +151,9 @@ describe('Game semantic API', () => {
     fixture.game.inventory.push(idCard);
 
     const filledOutcome = fixture.game.showInventory();
-    expect(filledOutcome.message).toBe('You are carrying: your ID card');
+    expect(filledOutcome.message).toBe(
+      fixture.game.text('parser.inventory_items', { items: 'your ID card' })
+    );
   });
 
   it('hydrates the player inventory from loaded scene inventory components', () => {
@@ -179,7 +181,55 @@ describe('Game semantic API', () => {
     expect(fixture.game.inventory).toContain(idCard);
     expect(idCard.visible).toBe(false);
     expect((idCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
-    expect(fixture.game.showInventory().message).toBe('You are carrying: your ID card');
+    expect(fixture.game.showInventory().message).toBe(
+      fixture.game.text('parser.inventory_items', { items: 'your ID card' })
+    );
+  });
+
+  it('treats only the player Inventory with relation IN as held inventory', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your ID.',
+      components: [{ type: 'Item' }],
+    });
+    const hiddenNote = fixture.addEntity('hidden_note', {
+      title: 'Hidden note',
+      description: 'A hidden note.',
+      components: [{ type: 'Item' }],
+    });
+
+    player.components = [
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: [idCard.name],
+      },
+      {
+        type: 'Inventory',
+        relation: 'behind',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: [hiddenNote.name],
+      },
+    ];
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(fixture.game.inventory).toEqual([idCard]);
+    expect(fixture.game.isEntityInInventory(idCard)).toBe(true);
+    expect(fixture.game.isEntityInInventory(hiddenNote)).toBe(false);
+    expect(fixture.game.getInventoryEntities(player as any, 'behind')).toEqual([hiddenNote]);
+    expect(hiddenNote.visible).toBe(false);
+    expect((hiddenNote as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(fixture.game.showInventory().message).toBe(
+      fixture.game.text('parser.inventory_items', { items: 'your ID card' })
+    );
   });
 
   it('taking an item keeps it in scene hierarchy as a hidden IN-child of the player inventory owner', () => {
@@ -214,7 +264,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('player_inventory_missing');
-    expect(outcome.message).toBe('You have nowhere to carry anything.');
+    expect(outcome.message).toBe(fixture.game.text('parser.inventory_missing'));
     expect(player.components).toEqual([]);
     expect(fixture.game.inventory).not.toContain(idCard);
     expect(idCard.spatial).toEqual({});
@@ -235,7 +285,7 @@ describe('Game semantic API', () => {
     expect(outcome).toEqual({
       status: 'failed',
       code: 'player_inventory_missing',
-      message: 'You have nowhere to carry anything.',
+      message: fixture.game.text('parser.inventory_missing'),
       data: { entityId: 'miles_id', ownerId: 'Hero' },
       recoverable: false,
     });
@@ -294,7 +344,13 @@ describe('Game semantic API', () => {
 
     const relationOutcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
     expect(relationOutcome.status).toBe('ok');
-    expect(relationOutcome.message).toBe('Behind the Cabinet you see: Book.');
+    expect(relationOutcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Cabinet',
+        items: 'Book',
+      })
+    );
   });
 
   it('removing a spatial child from an inventory owner also removes it from inventory storage', () => {
@@ -574,7 +630,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('inventory_full');
-    expect(outcome.message).toBe('There is no more room in the Tape recorder.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_target_full_in', { target: 'Tape recorder' })
+    );
     expect(fixture.game.getInventoryEntities(compactCassette)).not.toContain(musicCassette);
     expect(fixture.game.getInventoryEntities(recorder)).toEqual([compactCassette]);
   });
@@ -604,7 +662,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('put_target_not_found');
-    expect(outcome.message).toBe("You can't put that there.");
+    expect(outcome.message).toBe(fixture.game.text('parser.put_no_place'));
     expect(fixture.game.getInventoryEntities(compactCassette)).not.toContain(key);
   });
 
@@ -624,7 +682,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('put_target_is_source');
-    expect(outcome.message).toBe("You can't put that there.");
+    expect(outcome.message).toBe(fixture.game.text('parser.put_no_place'));
     expect(fixture.game.getInventoryEntities(cassette)).not.toContain(cassette);
   });
 
@@ -650,7 +708,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('put_source_not_accessible');
-    expect(outcome.message).toBe('You are too far away from the Cassette.');
+    expect(outcome.message).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Cassette' })
+    );
   });
 
   it('putEntity reports a distance-specific error when the target is too far away', () => {
@@ -675,7 +735,34 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('put_target_too_far');
-    expect(outcome.message).toBe('You are too far away from the Tray.');
+    expect(outcome.message).toBe(
+      fixture.game.text('engine.too_far_from_entity', { target: 'Tray' })
+    );
+  });
+
+  it('putEntity reports missing storage before distance for a distant non-container target', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A small key.',
+      components: [{ type: 'Item' }],
+    });
+    const cassette = fixture.addEntity('cassette', {
+      title: "Cassette 'Music'",
+      description: 'A cassette with no storage.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    const outcome = fixture.game.putEntity(key, cassette, { relation: 'in' });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_target_not_found');
+    expect(outcome.message).toBe(fixture.game.text('parser.put_no_place'));
   });
 
   it('putEntity reports when a surface target is full', () => {
@@ -700,7 +787,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('surface_full');
-    expect(outcome.message).toBe('There is no more room on the Tray.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_target_full_on', { target: 'Tray' })
+    );
   });
 
   it('putEntity reports when an item does not fit on the target surface', () => {
@@ -729,7 +818,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('surface_no_fit');
-    expect(outcome.message).toBe('The ID card does not fit on the Box.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_target_no_fit_on', { item: 'ID card', target: 'Box' })
+    );
   });
 
   it('putEntity reports when a container inventory is full', () => {
@@ -759,7 +850,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('inventory_full');
-    expect(outcome.message).toBe('There is no more room in the Drawer.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_target_full_in', { target: 'Drawer' })
+    );
   });
 
   it('putEntity can target an untitled nested surface that extends a titled object relation', () => {
@@ -822,7 +915,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_on_surface');
-    expect(outcome.message).toBe('You put the Key under the Desk.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_success_under', { item: 'Key', target: 'Desk' })
+    );
     expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
@@ -856,7 +951,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_on_surface');
-    expect(outcome.message).toBe('You put the Key under the Chair.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_success_under', { item: 'Key', target: 'Chair' })
+    );
     expect((underChairSurface.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'key' })])
     );
@@ -898,6 +995,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_into_inventory');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_success_behind', { item: 'Cassette', target: 'Shelf' })
+    );
     expect(fixture.game.getInventoryEntities(shelf, 'behind')).toContain(cassette);
     expect(fixture.game.getInventoryEntities(shelf, 'in')).not.toContain(cassette);
   });
@@ -933,7 +1033,13 @@ describe('Game semantic API', () => {
     const relationOutcome = fixture.game.describeSpatialRelation('cabinet', 'behind');
 
     expect(relationOutcome.status).toBe('ok');
-    expect(relationOutcome.message).toBe('Behind the Cabinet you see: Book.');
+    expect(relationOutcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Cabinet',
+        items: 'Book',
+      })
+    );
   });
 
   it('putEntity can place an item on a polygon desk surface with relation ON', () => {
@@ -1023,7 +1129,7 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('You drop the Key.');
+    expect(outcome.message).toBe(fixture.game.text('parser.drop_success', { item: 'Key' }));
   });
 
   it('taking an item during drop animation settles it so it can be dropped again', () => {
@@ -1150,7 +1256,9 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('surface_full');
-    expect(outcome.message).toBe('There is no more room on the Desk.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_target_full_on', { target: 'Desk' })
+    );
     expect(fixture.game.inventory).toContain(cassette);
   });
 
@@ -1176,7 +1284,12 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.putEntity(key, floor, { relation: 'on' });
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('You put the Key on the floor.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'Key',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
     expect(fixture.game.inventory).not.toContain(key);
   });
 
@@ -1534,7 +1647,7 @@ describe('Game semantic API', () => {
 
     const opened = fixture.game.openEntity(drawer);
     expect(opened.status).toBe('ok');
-    expect(opened.message).toBe('You open the Drawer.');
+    expect(opened.message).toBe(fixture.game.text('parser.open_success', { target: 'Drawer' }));
     expect((drawer.components[0] as { state: number }).state).toBe(2);
     expect(fixture.sounds).toContain('open.wav');
 
@@ -1544,7 +1657,7 @@ describe('Game semantic API', () => {
 
     const closed = fixture.game.closeEntity(drawer);
     expect(closed.status).toBe('ok');
-    expect(closed.message).toBe('You close the Drawer.');
+    expect(closed.message).toBe(fixture.game.text('parser.close_success', { target: 'Drawer' }));
     expect((drawer.components[0] as { state: number }).state).toBe(1);
     expect(fixture.sounds).toContain('close.wav');
   });
@@ -1572,7 +1685,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('blocked_inside_closed');
-    expect(outcome.message).toBe("You can't reach it.");
+    expect(outcome.message).toBe(fixture.game.text('engine.cant_reach_generic'));
   });
 
   it('hidden contents behind a clearly openable closed switch report the container as closed', () => {
@@ -1597,11 +1710,13 @@ describe('Game semantic API', () => {
 
     const look = fixture.game.lookEntity(note);
     expect(look.status).toBe('failed');
-    expect(look.message).toBe('The Drawer is closed.');
+    expect(look.message).toBe(fixture.game.text('engine.closed_container', { target: 'Drawer' }));
 
     const examine = fixture.game.examineEntity(note);
     expect(examine.status).toBe('failed');
-    expect(examine.message).toBe('The Drawer is closed.');
+    expect(examine.message).toBe(
+      fixture.game.text('engine.closed_container', { target: 'Drawer' })
+    );
   });
 
   it('held items no longer keep stale closed-container access state after pickup', () => {
@@ -1668,7 +1783,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('blocked_inside_closed');
-    expect(outcome.message).toBe("You can't reach that while it is inside something closed.");
+    expect(outcome.message).toBe(fixture.game.text('engine.blocked_inside_closed'));
   });
 
   it('opaque blockers hide only the configured blocked relation', () => {
@@ -1702,7 +1817,13 @@ describe('Game semantic API', () => {
     expect(underOutcome.status).toBe('ok');
     expect(underOutcome.code).toBe('relation_empty');
     expect(onOutcome.status).toBe('ok');
-    expect(onOutcome.message).toBe('On the Desk you see: Note.');
+    expect(onOutcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'On',
+        target: 'Desk',
+        items: 'Note',
+      })
+    );
   });
 
   it('transparent blockers keep objects visible but block interaction on the configured relation', () => {
@@ -1728,10 +1849,16 @@ describe('Game semantic API', () => {
     const examine = fixture.game.examineEntity(gem);
 
     expect(lookUnder.status).toBe('ok');
-    expect(lookUnder.message).toBe('Under the Desk you see: Gem.');
+    expect(lookUnder.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Under',
+        target: 'Desk',
+        items: 'Gem',
+      })
+    );
     expect(examine.status).toBe('failed');
     expect(examine.code).toBe('blocked_inside_closed');
-    expect(examine.message).toBe("You can't reach it.");
+    expect(examine.message).toBe(fixture.game.text('engine.cant_reach_generic'));
   });
 
   it('closed switches respect blockedRelation outside of IN', () => {
@@ -1753,7 +1880,7 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('failed');
     expect(outcome.code).toBe('blocked_by_closed_container');
-    expect(outcome.message).toBe('The Desk is closed.');
+    expect(outcome.message).toBe(fixture.game.text('engine.closed_container', { target: 'Desk' }));
   });
 
   it('auto-opens inactive ancestor subscene before operating on a titled switch target', () => {
@@ -1775,7 +1902,9 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.openEntity(latch);
 
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('You open the Drawer latch.');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.open_success', { target: 'Drawer latch' })
+    );
     expect(fixture.scene.activeSubscene).toBe('DrawerZone');
     expect(fixture.scene.subsceneEntities.has(latch)).toBe(true);
     expect((latch.components[0] as { state: number }).state).toBe(2);

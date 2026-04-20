@@ -21,6 +21,8 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     'canPutSourceEntity',
     'putEntity',
     'hasPutStorageForRelation',
+    'getRelationScopedTakeCandidates',
+    'isEntityInPutTarget',
     'addInventoryEntity',
     'removeEntityFromInventory',
     'hasInventoryEntity',

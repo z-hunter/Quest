@@ -54,6 +54,9 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     put_target_no_fit_on: 'The {item} does not fit on the {target}.',
     put_success_surface: 'You put the {item} on the {target}.',
     put_success_inventory: 'You put the {item} into the {target}.',
+    put_success_under: 'You put the {item} under the {target}.',
+    put_success_behind: 'You put the {item} behind the {target}.',
+    drop_success: 'You drop the {item}.',
     open_prompt: 'Open what?',
     open_which_one: 'Which thing do you want to open: {options}?',
     open_success: 'You open the {target}.',
@@ -78,6 +81,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     parse_unknown: "I don't understand.",
   },
   engine: {
+    floor_label: 'floor',
     click_you_see: 'You see {title}',
     too_far_generic: 'You are too far away.',
     too_far_from_entity: 'You are too far away from the {target}.',
@@ -650,7 +654,7 @@ export class TextAssetManager {
 
   getResolvedObjectField(obj: SceneObject, field: string): string | null {
     if (obj?.type === 'Walkbox' && field === 'title') {
-      return 'floor';
+      return this.getServiceText('engine.floor_label');
     }
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;

@@ -2,7 +2,7 @@ import type { Game } from '../core/Game';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
-import { buildSceneTextLayerSnapshot, getSceneTextLayerAccessState } from '../scene/SceneTextLayer';
+import { createSceneTextLayerQuery, getSceneTextLayerAccessState } from '../scene/SceneTextLayer';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
@@ -76,7 +76,7 @@ export class ParserWorldModelBuilder {
   }
 
   private buildEntityContexts(scene: Scene): ParserEntityContext[] {
-    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const textLayer = createSceneTextLayerQuery(scene, this.game);
     return textLayer.entries
       .map((entry) => {
         const sceneObject = entry.object;
@@ -173,7 +173,7 @@ export class ParserWorldModelBuilder {
   }
 
   private buildSpatialNodes(scene: Scene): ParserSpatialNodeContext[] {
-    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const textLayer = createSceneTextLayerQuery(scene, this.game);
     const connectedNodeIds = new Set<string>();
     for (const [parentId, children] of textLayer.childrenByParentId.entries()) {
       if (children.length) connectedNodeIds.add(parentId);
@@ -195,15 +195,17 @@ export class ParserWorldModelBuilder {
   }
 
   private buildSpatialRelations(scene: Scene): ParserSpatialRelationContext[] {
-    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const textLayer = createSceneTextLayerQuery(scene, this.game);
     const relations: ParserSpatialRelationContext[] = [];
 
     for (const [anchorNodeId, relationMap] of textLayer.childrenByParentAndRelation.entries()) {
-      for (const [relation, nodes] of relationMap.entries()) {
+      for (const relation of relationMap.keys()) {
         relations.push({
           anchorNodeId,
           relation,
-          childNodeIds: nodes.map((node) => node.object.name),
+          childNodeIds: textLayer
+            .getRelationDescendants(anchorNodeId, relation)
+            .map((node) => node.object.name),
         });
       }
     }
@@ -214,7 +216,7 @@ export class ParserWorldModelBuilder {
   private buildScope(): ParserScope {
     const scene = this.game.sceneManager.currentScene;
     const visible = scene ? this.getTextVisibleSceneObjects(scene) : [];
-    const textLayer = scene ? buildSceneTextLayerSnapshot(scene, this.game) : null;
+    const textLayer = scene ? createSceneTextLayerQuery(scene, this.game) : null;
     const held = (this.game.inventory || []).filter(
       (entity: Entity) => !!this.getPlayerFacingObjectTitle(entity)
     );
@@ -278,7 +280,7 @@ export class ParserWorldModelBuilder {
   }
 
   private getTextVisibleSceneObjects(scene: Scene): SceneObject[] {
-    const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const textLayer = createSceneTextLayerQuery(scene, this.game);
     return textLayer.entries
       .filter((entry) => entry.inInactiveSubscene || !entry.object.disabled)
       .map((entry) => entry.object);
