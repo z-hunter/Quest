@@ -4,6 +4,17 @@ export class SceneObject {
   name: string;
   type: string;
 
+  protected _parallax: number = 1.0;
+  get parallax(): number {
+    return this._parallax;
+  }
+  set parallax(val: number) {
+    this._parallax = val;
+  }
+
+  // @ts-ignore
+  scene: any; // Reference to the Scene instance
+
   // Editor-only lock for transform/selection UX.
   locked: boolean = false;
   // Runtime-only transient interaction suppression. Never serialized.
@@ -54,6 +65,7 @@ export class SceneObject {
     'visible',
     'hidden',
     'spatial',
+    'parallax',
   ];
 
   constructor(name: string, type: string) {

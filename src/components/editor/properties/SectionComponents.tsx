@@ -23,6 +23,12 @@ export const SectionComponents: React.FC = () => {
     { value: 'behind', label: 'BEHIND' },
     { value: 'none', label: 'NONE' },
   ];
+  const directionOptions = [
+    { value: 'up', label: 'UP' },
+    { value: 'down', label: 'DOWN' },
+    { value: 'left', label: 'LEFT' },
+    { value: 'right', label: 'RIGHT' },
+  ];
   const normalizeContainerRelation = (comp: any): 'in' | 'on' | 'under' | 'behind' => {
     if (comp?.type === 'Inventory') {
       return comp?.relation === 'on' ||
@@ -104,6 +110,8 @@ export const SectionComponents: React.FC = () => {
               { value: 'Subtrigger', label: 'Subtrigger' },
               { value: 'Switch', label: 'Switch' },
               { value: 'Blocker', label: 'Blocker' },
+              { value: 'Exit', label: 'Exit (Transition)' },
+              { value: 'Entry', label: 'Entry (Spawn Point)' },
               ...(selectedObjectType === 'Quad'
                 ? [
                     { value: 'Backface', label: 'Backface' },
@@ -131,6 +139,10 @@ export const SectionComponents: React.FC = () => {
                 });
               } else if (type === 'Subtrigger') {
                 o.components.push({ type: 'Subtrigger', target: '' });
+              } else if (type === 'Exit') {
+                o.components.push({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
+              } else if (type === 'Entry') {
+                o.components.push({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
                 o.components.push({ type: 'Item' });
               } else if (type === 'Inventory') {
@@ -164,7 +176,7 @@ export const SectionComponents: React.FC = () => {
                   groupId1: '',
                   groupId2: '',
                   state: 1,
-                  idKey: '',
+                  keyId: '',
                   sound1: '',
                   sound2: '',
                   transparent: false,
@@ -645,6 +657,78 @@ export const SectionComponents: React.FC = () => {
                       comp.target = e.target.value;
                       incrementObjectVersion();
                     }}
+                  />
+                </div>
+              </>
+            )}
+
+            {comp.type === 'Exit' && (
+              <>
+                <div className="e-row">
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: '#ccc',
+                      fontStyle: 'italic',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    Transitions an Actor to another scene and Entry point.
+                  </div>
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Target Scene ID (e.g. room2.json)
+                  </label>
+                  <input
+                    type="text"
+                    className="e-input"
+                    value={comp.targetSceneId || ''}
+                    onChange={(e) => {
+                      comp.targetSceneId = e.target.value;
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Target Entry ID (Trigger Name)
+                  </label>
+                  <input
+                    type="text"
+                    className="e-input"
+                    value={comp.targetEntryId || ''}
+                    onChange={(e) => {
+                      comp.targetEntryId = e.target.value;
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {comp.type === 'Entry' && (
+              <>
+                <div className="e-row">
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: '#ccc',
+                      fontStyle: 'italic',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    Defines a landing point for scene transitions.
+                  </div>
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Facing Direction
+                  </label>
+                  <Select
+                    value={comp.direction || 'down'}
+                    onChange={(value) => {
+                      comp.direction = value as 'up' | 'down' | 'left' | 'right';
+                      incrementObjectVersion();
+                    }}
+                    options={directionOptions}
+                    style={{ width: '100%' }}
                   />
                 </div>
               </>

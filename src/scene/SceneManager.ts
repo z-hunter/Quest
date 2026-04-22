@@ -4,6 +4,7 @@ import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import type { EntryTrigger } from '../entities/TriggerComponents';
 import { QuadObject } from '../entities/QuadObject';
 import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
@@ -74,6 +75,9 @@ type CachedSceneEntry = {
 export class SceneManager {
   game: IGame;
   currentScene: Scene | null;
+  /** ID of the Entry trigger to use when loading the next scene. */
+  pendingEntryId: string | null = null;
+
   scenes: Map<string, Scene>;
   sceneRegistry: Map<string, SceneDescriptor>;
   private sceneCacheMeta: Map<string, CachedSceneEntry>;
@@ -104,11 +108,86 @@ export class SceneManager {
     this.cacheScene(scene, false);
   }
 
-  switchTo(sceneId: string): void {
+  switchTo(sceneId: string, activator?: Actor): void {
+    const oldScene = this.currentScene;
     const scene = this.ensureSceneLoaded(sceneId);
     if (!scene) {
       console.error(`Scene ${sceneId} not found!`);
       return;
+    }
+
+    // --- PLAYER TRANSFER PRIORITY ---
+    // If the activator is a player, we must ensure they are the ONLY player in the target scene.
+    if (activator && (activator as any).isPlayer) {
+      // 1. Remove ANY existing player instance from the target scene's entities (except the activator itself)
+      const existingPlayer = scene.entities.find((e) => (e as any).isPlayer && e !== activator);
+      if (existingPlayer) {
+        scene.removeEntity(existingPlayer);
+      }
+
+      // 2. Transfer the live player
+      if (oldScene && oldScene !== scene) {
+        oldScene.removeEntity(activator as Entity);
+        scene.addEntity(activator as Entity);
+      }
+
+      // 3. FORCE the scene's player reference to our live activator
+      scene.player = activator;
+    } else if (activator && oldScene && oldScene !== scene) {
+      // Handle NPC transfer
+      oldScene.removeEntity(activator as Entity);
+      scene.addEntity(activator as Entity);
+    }
+
+    // Handle Entry point placement (works for both scene switch and same-scene teleport)
+    if (this.pendingEntryId) {
+      const entryObj = scene.getObjectByName(this.pendingEntryId);
+      if (entryObj) {
+        const entryComp = entryObj.components?.find((c) => c.type === 'Entry') as
+          | EntryTrigger
+          | undefined;
+        if (entryComp) {
+          // Calculate center of object
+          let targetX: number | null = null;
+          let targetY: number | null = null;
+
+          if (entryObj.type === 'Triggerbox' || (entryObj as any).poly) {
+            const poly = (entryObj as any).poly as { x: number; y: number }[];
+            if (poly && poly.length > 0) {
+              let cx = 0,
+                cy = 0;
+              poly.forEach((p) => {
+                cx += p.x;
+                cy += p.y;
+              });
+              targetX = cx / poly.length;
+              targetY = cy / poly.length;
+            }
+          } else if ('x' in entryObj && 'y' in entryObj) {
+            // It's an Entity or Quad
+            targetX = (entryObj as any).x;
+            targetY = (entryObj as any).y;
+          }
+
+          if (activator && targetX !== null && targetY !== null) {
+            activator.x = targetX;
+            activator.y = targetY;
+            if (entryComp.direction && typeof (activator as any).setDirection === 'function') {
+              (activator as any).setDirection(entryComp.direction);
+            }
+            activator.update(0);
+
+            // Ensure player reference is set before snapping
+            if ((activator as any).isPlayer) {
+              scene.player = activator;
+              if (scene.autoCenter) {
+                scene.snapCameraToPlayer();
+              }
+            }
+          }
+        }
+      }
+      this.pendingEntryId = null;
     }
 
     this.currentScene = scene;
@@ -429,20 +508,20 @@ export class SceneManager {
     if (data.scaling) newScene.scaling = data.scaling;
 
     if (data.walkbox) {
-      newScene.walkbox = (data.walkbox || []).map((wb: any) => {
+      (data.walkbox || []).forEach((wb: any) => {
         const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
         const w = new Walkbox(poly, wb.name || 'Walkbox');
         w.load(wb);
-        return w;
+        newScene.addWalkbox(w);
       });
     }
 
     if (data.triggerboxes) {
-      newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
+      (data.triggerboxes || []).forEach((t: any) => {
         const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
         const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
         tb.load(t);
-        return tb;
+        newScene.addTriggerbox(tb);
       });
     }
 

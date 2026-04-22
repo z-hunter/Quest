@@ -105,7 +105,7 @@ export class SpriteEditor {
     // HMR/Reload Protection:
     // If this editor belongs to an old Game instance (zombie), kill the listener.
     const globalGame = Game.instance;
-    if (globalGame && this.game !== globalGame) {
+    if (globalGame && (this.game as any) !== globalGame) {
       console.warn('[SpriteEditor] Detected Zombie Instance - Removing Listener');
       document.removeEventListener('keydown', this.boundKeyHandler, true);
       return;

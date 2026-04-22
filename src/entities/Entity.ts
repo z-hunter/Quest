@@ -99,13 +99,14 @@ export class Entity extends SceneObject {
   colliderHeight: number;
   animator: Animator | null;
   flipX: boolean;
-  scene: any; // Reference to the scene this entity belongs to
 
-  private _parallax: number = 1.0;
-  get parallax(): number {
+  /**
+   * Override parallax to notify editor on change.
+   */
+  override get parallax(): number {
     return this._parallax;
   }
-  set parallax(val: number) {
+  override set parallax(val: number) {
     if (this._parallax === val) return;
     this._parallax = val;
     if (this.game.editor && this.game.editor.enabled) {
@@ -502,12 +503,22 @@ export class Entity extends SceneObject {
     if (this.disabled || !this.visible) return false;
     if (!ignoreInteractionLock && this.interactionLocked) return false;
 
-    // 1. Initial AABB Check (World Space)
-    // Entity Pivot is Bottom-Center
-    const left = this.x - this.width / 2;
-    const right = this.x + this.width / 2;
-    const top = this.y - this.height;
-    const bottom = this.y;
+    // Use this.scene if available, fallback to global scene manager
+    // @ts-ignore
+    const scene = this.scene || this.game?.sceneManager?.currentScene;
+    const camX = scene?.camera?.x || 0;
+    const camY = scene?.camera?.y || 0;
+    const p = this.parallax !== undefined ? this.parallax : 1.0;
+
+    // 1. Initial AABB Check (Projected to Visual Space)
+    // We must compare the input (x,y) with our VISUAL boundaries.
+    const visualX = this.x - camX * (p - 1.0);
+    const visualY = this.y - camY * (p - 1.0);
+
+    const left = visualX - this.width / 2;
+    const right = visualX + this.width / 2;
+    const top = visualY - this.height;
+    const bottom = visualY;
 
     // Fast Fail
     if (x < left || x > right || y < top || y > bottom) return false;

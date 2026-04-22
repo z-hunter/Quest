@@ -665,9 +665,14 @@ export class EditorTransformManager {
 
           const diffX = newX - currentVisX;
           const diffY = newY - currentVisY;
+          const nextPrimaryP = snapResult.p !== undefined ? snapResult.p : v.p;
 
           // If NO interaction (diff is 0), skip
-          if (Math.abs(diffX) < 0.001 && Math.abs(diffY) < 0.001) {
+          if (
+            Math.abs(diffX) < 0.001 &&
+            Math.abs(diffY) < 0.001 &&
+            Math.abs(nextPrimaryP - v.p) < 0.001
+          ) {
             return;
           }
 
@@ -737,11 +742,12 @@ export class EditorTransformManager {
 
           // 4. Move Group
           group.forEach((ref) => {
-            if (snapResult.p !== undefined) {
-              ref.v.p = snapResult.p;
-            }
-            ref.v.x += diffX;
-            ref.v.y += diffY;
+            const nextP = snapResult.p !== undefined ? snapResult.p : ref.v.p;
+            const refVisX = ref.v.x - camX * (ref.v.p - 1.0);
+            const refVisY = ref.v.y - camY * (ref.v.p - 1.0);
+            ref.v.p = nextP;
+            ref.v.x = refVisX + diffX + camX * (nextP - 1.0);
+            ref.v.y = refVisY + diffY + camY * (nextP - 1.0);
             ref.v.x = Math.round(ref.v.x);
             ref.v.y = Math.round(ref.v.y);
           });

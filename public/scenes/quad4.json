@@ -7,7 +7,7 @@
   "walkbox": [],
   "triggerboxes": [
     {
-      "name": "Trig_137",
+      "name": "entry",
       "type": "Triggerbox",
       "locked": false,
       "disabled": false,
@@ -15,27 +15,34 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Entry",
+          "direction": "left"
+        }
+      ],
       "layer": 0,
       "visible": true,
-      "spatial": {},
-      "poly": [],
-      "script": ""
-    },
-    {
-      "name": "Trig_29",
-      "type": "Triggerbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "spatial": {},
-      "poly": [],
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -281.2806109656908,
+          "y": 114.87268547779229
+        },
+        {
+          "x": -283.2806109656908,
+          "y": 103.87268547779229
+        },
+        {
+          "x": -256.2806109656908,
+          "y": 97.87268547779229
+        },
+        {
+          "x": -264.2806109656908,
+          "y": 117.87268547779229
+        }
+      ],
       "script": ""
     }
   ],
@@ -59,7 +66,8 @@
       "components": [],
       "layer": -10,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.1,
       "x": 21,
       "y": 307,
       "width": 796.32,
@@ -72,7 +80,6 @@
       "color": "#AAAAAA",
       "scale": 0.63,
       "modelScale": 0.7,
-      "parallax": 0.1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -91,10 +98,10 @@
       "components": [],
       "layer": -1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 19.66326736878159,
       "y": 8.75,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -142,7 +149,8 @@
       "components": [],
       "layer": -1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.65,
       "x": 79,
       "y": 62,
       "width": 164.69142857142856,
@@ -155,7 +163,6 @@
       "color": "#AAAAAA",
       "scale": 0.14076190476190475,
       "modelScale": 0.2,
-      "parallax": 0.65,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -174,7 +181,8 @@
       "components": [],
       "layer": -1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.65,
       "x": -75,
       "y": 62,
       "width": 164.69142857142856,
@@ -187,7 +195,6 @@
       "color": "#AAAAAA",
       "scale": 0.14076190476190475,
       "modelScale": 0.2,
-      "parallax": 0.65,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -206,10 +213,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 50.35518543794477,
       "y": 56.98544526105304,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -223,9 +230,14 @@
           "p": 0.65
         },
         {
-          "x": 150.09999999999997,
-          "y": 61.29999999999999,
-          "p": 0.65
+          "x": 149.65358299671635,
+          "y": 63.03569717109512,
+          "p": 0.699,
+          "binding": {
+            "targetName": "Quad_275",
+            "type": "vertex",
+            "index": 1
+          }
         },
         {
           "x": -160.53360594543213,
@@ -257,10 +269,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -92.63369640031912,
       "y": -65.95591650446437,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -308,10 +320,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 1.5,
       "y": -5.5,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -359,10 +371,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 52.16326736878159,
       "y": 140.25,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -410,7 +422,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.7,
       "x": 58,
       "y": 54,
       "width": 55.44680072970669,
@@ -423,7 +436,6 @@
       "color": "#4a1215",
       "scale": 0.7,
       "modelScale": 1,
-      "parallax": 0.7,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -442,10 +454,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -5.0976058382019325,
       "y": 11.589932781834104,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -502,22 +514,32 @@
         }
       ],
       "layer": 0,
-      "visible": false,
-      "spatial": {},
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
       "x": -391.5,
       "y": 119.5,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -449,
-          "y": 128.05718906574896,
-          "p": 1
+          "x": 134.88141317106655,
+          "y": 91.89878093528154,
+          "p": 0.845,
+          "binding": {
+            "targetName": "Quad",
+            "type": "vertex",
+            "index": 3
+          }
         },
         {
           "x": -338,
-          "y": 62.3,
-          "p": 0.65
+          "y": 62,
+          "p": 0.65,
+          "binding": {
+            "targetName": "lightspot1_1",
+            "type": "vertex",
+            "index": 0
+          }
         },
         {
           "x": -335,
@@ -562,10 +584,10 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 0.5995731785992522,
       "y": 18.186447655482453,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -613,10 +635,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 45.71298290802447,
       "y": 163.46124773339642,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -664,16 +686,21 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -240.36825872762117,
       "y": 130.71254989539653,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -315,
+          "x": -338,
           "y": 62,
-          "p": 0.65
+          "p": 0.65,
+          "binding": {
+            "targetName": "Quad_1",
+            "type": "vertex",
+            "index": 1
+          }
         },
         {
           "x": -164,
@@ -681,14 +708,19 @@
           "p": 0.65
         },
         {
-          "x": -319,
-          "y": 125,
-          "p": 0.9969905705682787
+          "x": -319.61761009885475,
+          "y": 124.82958454377511,
+          "p": 1
         },
         {
-          "x": -417,
-          "y": 125,
-          "p": 1
+          "x": -447,
+          "y": 124,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad",
+            "type": "vertex",
+            "index": 2
+          }
         }
       ],
       "color": "#c95618",
@@ -715,10 +747,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 55.331970640694806,
       "y": 141.72490207880932,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -766,10 +798,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -94.35007280706921,
       "y": 132.21254989539653,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -817,10 +849,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 181.47444229637748,
       "y": 65.98012041511447,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -834,9 +866,14 @@
           "p": 0.8
         },
         {
-          "x": 173.46379974629514,
-          "y": 90.89321745665244,
-          "p": 0.8
+          "x": 172.88141317106655,
+          "y": 91.89878093528154,
+          "p": 0.845,
+          "binding": {
+            "targetName": "Quad_275",
+            "type": "vertex",
+            "index": 2
+          }
         },
         {
           "x": 154.98999999999998,
@@ -868,7 +905,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.748,
       "x": 15,
       "y": 78,
       "width": 28.70935763453951,
@@ -881,7 +919,6 @@
       "color": "#381a1a",
       "scale": 0.07508698412698413,
       "modelScale": 0.1,
-      "parallax": 0.748,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -900,10 +937,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -135.3242980143822,
       "y": 162.32192586595625,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -951,10 +988,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 29.72577036587564,
       "y": 152.95900020457972,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1012,10 +1049,10 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -189.21706697024933,
       "y": 58.32628202579792,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1063,10 +1100,10 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -207,
       "y": 76.75,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1137,10 +1174,10 @@
       ],
       "layer": 0,
       "visible": false,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -206.21706697024933,
       "y": 61.32628202579792,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1198,10 +1235,10 @@
       ],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -207.71706697024933,
       "y": 79.32628202579792,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1238,93 +1275,42 @@
       "blur": 0
     },
     {
-      "name": "lightspot1_2",
-      "type": "Quad",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "spatial": {},
-      "x": -301.32662389675636,
-      "y": 144.63442346911063,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "vertices": [
-        {
-          "x": -449,
-          "y": 128.05718906574896,
-          "p": 1
-        },
-        {
-          "x": -336.6738448329766,
-          "y": 59.3718735737141,
-          "p": 0.65
-        },
-        {
-          "x": -313,
-          "y": 61,
-          "p": 0.65
-        },
-        {
-          "x": -418,
-          "y": 126,
-          "p": 1
-        }
-      ],
-      "color": "#c95618",
-      "sortMode": "v0",
-      "opacity": 0.2,
-      "blendMode": "lighter",
-      "isGrid": false,
-      "gridLinesX": 5,
-      "gridLinesY": 5,
-      "lineWidth": 1,
-      "gridColor": "#ffffff",
-      "filled": true,
-      "blur": 2
-    },
-    {
       "name": "shadow_hero",
       "type": "Quad",
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": true,
-      "spatial": {},
-      "x": -58.38940219735827,
-      "y": 90.05888362114656,
+      "visible": false,
+      "hidden": false,
       "parallax": 1,
+      "x": -28.475100830614515,
+      "y": 83.60041599119995,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -58.38940219735827,
-          "y": 90.05888362114656,
-          "p": 0.8018414752248832
+          "x": -28.475100830614515,
+          "y": 83.60041599119995,
+          "p": 0.767375066864736
         },
         {
-          "x": -33.0497420477009,
-          "y": 90.17377655121713,
-          "p": 0.8030099773830363
+          "x": -4.809789438288288,
+          "y": 83.81263375657423,
+          "p": 0.7690152216643636
         },
         {
-          "x": -101.38069836073447,
-          "y": 132.64466865932502,
-          "p": 0.9969905705682787
+          "x": -106.59812605338605,
+          "y": 134.7769337747976,
+          "p": 0.9965357150707409
         },
         {
-          "x": -103.81194334935691,
-          "y": 120.404686934742,
-          "p": 0.9658771764546956
+          "x": -107.99586538390915,
+          "y": 122.93980115610466,
+          "p": 0.9794088283518501
         }
       ],
       "color": "#535246",
@@ -1361,10 +1347,10 @@
       ],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -189.21706697024933,
       "y": 58.32628202579792,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1422,10 +1408,10 @@
       ],
       "layer": 1,
       "visible": false,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -214.2170669702493,
       "y": 63.88183758135348,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1473,10 +1459,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -188.1239844818758,
       "y": 46.14256198347107,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1524,10 +1510,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 179.97444229637748,
       "y": 67.48012041511447,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1575,10 +1561,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -20.53908115474743,
       "y": 12.675865196363418,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1626,7 +1612,8 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.7,
       "x": 65,
       "y": 40,
       "width": 65.1612685556661,
@@ -1639,7 +1626,6 @@
       "color": "#1d4853",
       "scale": 0.7,
       "modelScale": 1,
-      "parallax": 0.7,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1658,10 +1644,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 12.960918845252571,
       "y": 13.175865196363418,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1709,7 +1695,8 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.75,
       "x": 15,
       "y": 54,
       "width": 33.18208520382986,
@@ -1722,7 +1709,6 @@
       "color": "#1d4853",
       "scale": 0.7,
       "modelScale": 1,
-      "parallax": 0.75,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1741,10 +1727,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -71.60279117198134,
       "y": 140.47520024754013,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1792,10 +1778,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 7.712982908024468,
       "y": 164.46124773339642,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1843,7 +1829,8 @@
       "components": [],
       "layer": 0,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.648,
       "x": -121,
       "y": 69,
       "width": 62.735725714285714,
@@ -1856,7 +1843,6 @@
       "color": "#AAAAAA",
       "scale": 0.1452215873015873,
       "modelScale": 0.2,
-      "parallax": 0.648,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1875,7 +1861,8 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 0.69,
       "x": 58,
       "y": 77,
       "width": 35.06554666666667,
@@ -1888,7 +1875,6 @@
       "color": "#AAAAAA",
       "scale": 0.20997333333333335,
       "modelScale": 0.28,
-      "parallax": 0.69,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1917,10 +1903,10 @@
       ],
       "layer": 1,
       "visible": false,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -233.8281780813605,
       "y": 74.88183758135345,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1976,20 +1962,20 @@
       ],
       "layer": 1,
       "visible": true,
-      "spatial": {},
-      "x": -55.25117461216202,
-      "y": 90.89600096647854,
-      "width": 25.013972096100225,
-      "height": 102.14038605907592,
+      "hidden": false,
+      "parallax": 0.7710044397854223,
+      "x": -25.66797394584988,
+      "y": 84.25601705784521,
+      "width": 24.388970071630826,
+      "height": 99.5882944591592,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.26056220933437735,
+      "scale": 0.2540517715794878,
       "modelScale": 0.33,
-      "parallax": 0.8064607016689532,
       "ignoreScaling": false,
       "animationSpeed": 30,
       "opacity": 1,
@@ -1997,7 +1983,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.14,
-      "direction": "left",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -2037,10 +2023,10 @@
       ],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -207.71706697024933,
       "y": 79.32628202579792,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2088,10 +2074,10 @@
       "components": [],
       "layer": 1,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -245.72222222222223,
       "y": 133.91666666666663,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2139,10 +2125,10 @@
       "components": [],
       "layer": 2,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -158.13739111340288,
       "y": -247.54630050191656,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2190,10 +2176,10 @@
       "components": [],
       "layer": 2,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -173.87012979571483,
       "y": 224.39393470676015,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2241,10 +2227,10 @@
       "components": [],
       "layer": 2,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 251.2525776259888,
       "y": -6.459972841696704,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2302,10 +2288,10 @@
       ],
       "layer": 2,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": -187.12107701481986,
       "y": 57.681818181818166,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2353,10 +2339,10 @@
       "components": [],
       "layer": 2,
       "visible": true,
-      "spatial": {},
+      "hidden": false,
+      "parallax": 1,
       "x": 98.16326736878159,
       "y": 142.75,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -2391,6 +2377,73 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 10
+    },
+    {
+      "name": "exit1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "",
+          "targetEntryId": "entry"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 92.80011470996007,
+      "y": 146.24489375407632,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 118.65358299671635,
+          "y": 63.03569717109512,
+          "p": 0.699
+        },
+        {
+          "x": 149.65358299671635,
+          "y": 63.03569717109512,
+          "p": 0.699,
+          "binding": {
+            "targetName": "glass",
+            "type": "vertex",
+            "index": 2
+          }
+        },
+        {
+          "x": 172.88141317106655,
+          "y": 91.89878093528154,
+          "p": 0.845,
+          "binding": {
+            "targetName": "Quad_303",
+            "type": "vertex",
+            "index": 2
+          }
+        },
+        {
+          "x": 134.88141317106655,
+          "y": 91.89878093528154,
+          "p": 0.845
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 0,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
     }
   ],
   "camera": {

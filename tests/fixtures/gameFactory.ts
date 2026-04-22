@@ -2,6 +2,7 @@ import type { IGame } from '../../src/core/IGame';
 import type { Scene } from '../../src/scene/Scene';
 import type { SceneObject } from '../../src/entities/SceneObject';
 import type { SpatialRelationType } from '../../src/scene/spatialTypes';
+import { Actor } from '../../src/entities/Actor';
 import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { InventoryManager } from '../../src/systems/InventoryManager';
@@ -33,6 +34,46 @@ export function createTestGame(): TestGameHarness {
   const notifications: string[] = [];
   const textAssets = createTestTextAssets();
 
+  const sceneManager: any = {
+    currentScene: null,
+    scenes: new Map(),
+    sceneRegistry: new Map(),
+    pendingEntryId: null,
+    switchTo(sceneId: string, activator?: Actor) {
+      const targetScene = this.scenes.get(sceneId);
+      if (!targetScene) return;
+
+      const oldScene = this.currentScene;
+      if (activator && oldScene && oldScene !== targetScene) {
+        oldScene.removeEntity(activator);
+        targetScene.addEntity(activator);
+        if (activator.isPlayer) {
+          targetScene.player = activator;
+        }
+      }
+
+      this.currentScene = targetScene;
+
+      if (this.pendingEntryId) {
+        const entryObj = targetScene.getObjectByName(this.pendingEntryId);
+        const entryComp = entryObj?.components?.find(
+          (component: any) => component.type === 'Entry'
+        );
+        const poly = (entryObj as any)?.poly as { x: number; y: number }[] | undefined;
+        if (activator && entryComp && Array.isArray(poly) && poly.length > 0) {
+          activator.x = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
+          activator.y = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
+          if (entryComp.direction && typeof (activator as any).setDirection === 'function') {
+            (activator as any).setDirection(entryComp.direction);
+          }
+        }
+        this.pendingEntryId = null;
+      }
+
+      game.inventoryManager?.handleSceneChange?.();
+    },
+  };
+
   const game: IGame = {
     assets: {
       setImageCacheBudget() {},
@@ -47,12 +88,7 @@ export function createTestGame(): TestGameHarness {
     } as any,
     audio: {} as any,
     textAssets: textAssets as any,
-    sceneManager: {
-      currentScene: null,
-      scenes: new Map(),
-      sceneRegistry: new Map(),
-      switchTo() {},
-    } as any,
+    sceneManager: sceneManager as any,
     editor: {
       enabled: false,
       selectionManager: {
@@ -184,8 +220,14 @@ export function createTestGame(): TestGameHarness {
     goToSceneTarget(_target: string) {
       return notImplementedOutcome('not_implemented_go_to_scene_target');
     },
-    goToScene(_sceneId: string) {
-      return notImplementedOutcome('not_implemented_go_to_scene');
+    goToScene(sceneId: string) {
+      this.sceneManager.switchTo(sceneId);
+      return {
+        status: 'ok',
+        code: 'scene_changed',
+        data: { sceneId },
+        effects: ['scene_changed'],
+      };
     },
     goToEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_go_to_entity');
@@ -202,12 +244,17 @@ export function createTestGame(): TestGameHarness {
       return null;
     },
     focusCommandInput() {},
-    input: {},
+    input: {
+      mouse: { x: 0, y: 0, clicked: false },
+      isDown: () => false,
+    },
     isMouseOverUI: false,
     canvas: {} as HTMLCanvasElement,
     ctx: null,
     bufferCanvas: {} as HTMLCanvasElement,
   };
+
+  sceneManager.game = game;
 
   game.inventoryManager = new InventoryManager(
     game.sceneManager as any,

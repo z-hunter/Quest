@@ -27,6 +27,7 @@ type TriggerboxOptions = {
 
 export type SceneFixture = TestGameHarness & {
   scene: Scene;
+  addScene(id: string, name?: string, description?: string): Scene;
   addEntity(name: string, options?: EntityOptions): Entity;
   addPlayer(name?: string, x?: number, y?: number): Actor;
   addTriggerbox(name: string, options?: TriggerboxOptions): Triggerbox;
@@ -61,6 +62,24 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
   return {
     ...harness,
     scene,
+    addScene(id, name = id, description = '') {
+      const nextScene = new Scene(harness.game, id, name);
+      nextScene.description = description;
+      harness.game.sceneManager.scenes.set(id, nextScene);
+      harness.game.sceneManager.sceneRegistry.set(id, {
+        id,
+        path: `${id}.json`,
+        name,
+        title: name,
+        sourceData: null,
+        lastIndexed: Date.now(),
+      });
+      harness.textAssets.setScene(id, {
+        title: name,
+        description,
+      });
+      return nextScene;
+    },
     addEntity(name, options = {}) {
       const entity = new Entity(harness.game, 0, 0, 10, 10, name);
       entity.description = options.description || `Description for ${name}`;
@@ -97,12 +116,14 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       return player;
     },
     addTriggerbox(name, options = {}) {
+      const targetScene = harness.game.sceneManager.currentScene || scene;
       const triggerbox = new Triggerbox(DEFAULT_POLY, name, '');
       triggerbox.disabled = options.disabled ?? false;
       triggerbox.groupID = options.groupID ?? null;
       triggerbox.components = options.components || [];
       triggerbox.spatial = options.spatial || {};
-      scene.triggerboxes.push(triggerbox);
+      targetScene.triggerboxes.push(triggerbox);
+      (triggerbox as any).scene = targetScene;
       harness.textAssets.setObject(name, {
         ...(options.title === null
           ? {}

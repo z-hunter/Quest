@@ -18,6 +18,18 @@ Use the project knowledge sources in this order, depending on the question:
 3. `local_rag` is the local fallback/sidecar for fuzzy recall: semantic search, related-document discovery, and cases where the exact memory title, file name, or subsystem name is unknown.
 4. The repository itself is the source of truth for current code. Use `rg`, file reads, and tests to verify behavior before editing.
 
+## Gemini CLI Worker Rule
+
+When Gemini CLI is installed, use it as an external helper for technical tasks wherever this is practical and safe. This is intended to increase throughput and reduce Codex token use.
+
+- Prefer the `gemini-cli-agent` skill for this workflow.
+- Use Gemini for bounded implementation chores, mechanical edits, small test-writing tasks, focused bug fixes, and independent read-only reviews.
+- Run multiple Gemini CLI processes in parallel when tasks are independent and have disjoint file ownership.
+- Codex remains responsible for project memory/NotebookLM/RAG recall, architecture decisions, prompt scoping, diff review, test selection, and final integration.
+- Give Gemini strict prompts with allowed write scope, forbidden files, allowed commands, validation expectations, and an instruction to stop if the task exceeds scope.
+- Do not delegate broad architecture/design decisions, project-knowledge recall, GDD interpretation, or open-ended refactors to Gemini.
+- After Gemini edits, inspect `git status`/`git diff`, reject out-of-scope changes, and run relevant tests before considering the work complete.
+
 `local_rag` does not query live `agent_memory` directly. It indexes a file mirror:
 
 - exported durable memory docs under `docs/memory`;

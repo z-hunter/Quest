@@ -147,6 +147,34 @@ export class Scene {
     this._activeSubscene = value;
   }
 
+  /**
+   * Instantly centers camera on player without smoothing/deadzones,
+   * respecting min/max bounds.
+   */
+  snapCameraToPlayer(): void {
+    if (!this.player || !this.autoCenter) return;
+
+    // Use current coordinates directly
+    const pX = this.player.x;
+    const pY = this.player.y;
+    const pHeight = this.player.height || 0;
+
+    let targetX = pX;
+    let targetY = pY - pHeight / 2;
+
+    if (this.camMinX !== undefined && targetX < this.camMinX) targetX = this.camMinX;
+    if (this.camMaxX !== undefined && targetX > this.camMaxX) targetX = this.camMaxX;
+    if (this.camMinY !== undefined && targetY < this.camMinY) targetY = this.camMinY;
+    if (this.camMaxY !== undefined && targetY > this.camMaxY) targetY = this.camMaxY;
+
+    this.camera.x = targetX;
+    this.camera.y = targetY;
+
+    // Explicitly reset any cached centering state
+    this._isCenteringX = false;
+    this._isCenteringY = false;
+  }
+
   private normalizeSpatialPlacement(
     value: SpatialPlacement | undefined | null
   ): SpatialPlacement | null {
@@ -314,8 +342,8 @@ export class Scene {
     // @ts-ignore
     entity.scene = this;
     // If this entity is the player, store a reference
-    if (entity instanceof Actor && entity.isPlayer) {
-      this.player = entity;
+    if ((entity as any).isPlayer) {
+      this.player = entity as Actor;
     }
   }
 
@@ -330,6 +358,18 @@ export class Scene {
     if (index > -1) {
       this.folders.splice(index, 1);
     }
+  }
+
+  addTriggerbox(triggerbox: Triggerbox): void {
+    this.triggerboxes.push(triggerbox);
+    // @ts-ignore
+    triggerbox.scene = this;
+  }
+
+  addWalkbox(walkbox: Walkbox): void {
+    this.walkbox.push(walkbox);
+    // @ts-ignore
+    walkbox.scene = this;
   }
 
   removeEntity(entity: Entity): void {
@@ -378,7 +418,12 @@ export class Scene {
   getObjectByName(name: string): SceneObject | null {
     const normalized = String(name || '').trim();
     if (!normalized) return null;
-    return this.getAllSceneObjects().find((obj) => obj.name === normalized) || null;
+    return (
+      this.entities.find((obj) => obj.name === normalized) ||
+      this.triggerboxes.find((obj) => obj.name === normalized) ||
+      this.walkbox.find((obj) => obj.name === normalized) ||
+      null
+    );
   }
 
   playPickupAnimation(entity: Entity): void {
@@ -739,8 +784,8 @@ export class Scene {
     handleSceneClick(this, x, y);
   }
 
-  activateObject(obj: SceneObject, depth: number = 0): void {
-    activateSceneObject(this, obj, depth);
+  activateObject(obj: SceneObject, depth: number = 0, activator?: Actor): void {
+    activateSceneObject(this, obj, depth, activator);
   }
 
   getActiveSubsceneItemScale(): number {
@@ -782,6 +827,7 @@ export class Scene {
   update(deltaTime: number): void {
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
+    ComponentSystem.checkTriggerboxCollisions(this);
     this.syncSubsceneItemScales();
 
     const cameraState = updateSceneCamera(this, deltaTime, {
