@@ -10,6 +10,7 @@
     "tauri:build": "tauri build",
     "lint": "eslint .",
     "test": "vitest run",
+    "check:anthropic": "node scripts/check-anthropic.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "prepare": "husky",
     "format": "prettier --write .",

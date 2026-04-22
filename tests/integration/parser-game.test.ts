@@ -89,6 +89,42 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).not.toContain(cassette);
   });
 
+  it('takes an item from a reachable container even when the stored item has stale far coordinates', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    fixture.textAssets.setObject('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      synonyms: ['boombox', 'recorder'],
+    });
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 250;
+    cassette.y = 0;
+    fixture.textAssets.setObject('cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'cassete'],
+    });
+    fixture.game.addInventoryEntity(recorder, cassette);
+
+    const messages = await runSemanticParser(fixture, 'take cassete from boombox');
+
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
+    );
+    expect(fixture.game.inventory).toContain(cassette);
+  });
+
   it('does not consider inventory items as TAKE source candidates', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

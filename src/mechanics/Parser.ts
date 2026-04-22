@@ -1,4 +1,7 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
+import { AnthropicProvider } from './llm/AnthropicProvider';
+import type { LlmCascadePreviousAttempt } from './LlmCascade';
+import { LlmCascade } from './LlmCascade';
 import { NlpCascade } from './NlpCascade';
 import { matchParserCommandSpec } from './parserCommands';
 import {
@@ -44,6 +47,7 @@ export class Parser {
   inputField: HTMLInputElement | null;
   pendingState: ParserPendingState | null;
   nlpCascade: NlpCascade;
+  llmCascade: LlmCascade;
   worldModelBuilder: ParserWorldModelBuilder;
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
@@ -54,6 +58,11 @@ export class Parser {
     this.inputField = null;
     this.pendingState = null;
     this.nlpCascade = new NlpCascade(
+      () => this.game.textAssets,
+      () => this.game.console
+    );
+    this.llmCascade = new LlmCascade(
+      new AnthropicProvider(),
       () => this.game.textAssets,
       () => this.game.console
     );
@@ -68,6 +77,7 @@ export class Parser {
     if (!trimmed) return;
     try {
       this.nlpCascade.clearLastDebugInfo();
+      this.llmCascade.clearLastDebugInfo();
       const actionEnvelope = this.resolvePendingAction(trimmed);
       if (this.pendingClarificationRetryMessage) {
         const retryMessage = this.pendingClarificationRetryMessage;
@@ -97,9 +107,64 @@ export class Parser {
         }
       }
 
+      let llmAttempted = false;
+      const forceCascade1ToLlm =
+        !actionEnvelope &&
+        this.game.console?.parserLlmEnabled === true &&
+        this.game.console?.parserCascade1ForceLlm === true;
+
+      if (forceCascade1ToLlm) {
+        llmAttempted = true;
+        const cascade1Envelope = envelope;
+        const llmEnvelope = await this.runLlmCascade(trimmed, context, {
+          kind: 'forced_cascade_handoff',
+          envelope: cascade1Envelope,
+          result: {
+            type: 'forced_cascade_handoff',
+            reason: 'c1_off',
+          },
+        });
+        envelope = llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope);
+      }
+
+      if (
+        !actionEnvelope &&
+        this.game.console?.parserLlmEnabled === true &&
+        !llmAttempted &&
+        this.isHandoffEnvelope(envelope)
+      ) {
+        llmAttempted = true;
+        const llmEnvelope = await this.runLlmCascade(trimmed, context);
+        if (llmEnvelope) {
+          envelope = llmEnvelope;
+        }
+      }
+
       const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
+      let resultJson = this.runParserCore(envelope);
+
+      if (
+        !actionEnvelope &&
+        this.game.console?.parserLlmEnabled === true &&
+        !llmAttempted &&
+        this.resultShouldRetryWithLlm(resultJson)
+      ) {
+        llmAttempted = true;
+        const parsedResult = this.safeParseJson(resultJson);
+        const llmEnvelope = await this.runLlmCascade(trimmed, context, {
+          kind: this.resultHasEscalation(parsedResult)
+            ? 'post_api_escalation'
+            : 'post_api_not_found',
+          envelope,
+          result: parsedResult,
+        });
+        if (llmEnvelope) {
+          envelope = llmEnvelope;
+          resultJson = this.runParserCore(envelope);
+        }
+      }
+
       const envelopeJson = JSON.stringify(envelope);
-      const resultJson = this.runParserCore(envelope);
       const response = this.buildResponse(resultJson, envelopeJson, contextJson, scopeJson);
 
       if (response.debugMessages?.length) {
@@ -1118,6 +1183,117 @@ export class Parser {
 
   private isHandoffEnvelope(envelope: ParserCascadeEnvelope): boolean {
     return envelope.output.kind === 'handoff_up';
+  }
+
+  private buildForcedLlmHandoff(
+    input: string,
+    cascade1Envelope: ParserCascadeEnvelope
+  ): ParserCascadeEnvelope {
+    return {
+      stage: 'llm-v3',
+      output: {
+        kind: 'handoff_up',
+        reason: 'forced_llm_handoff_unhandled',
+        rawInput: input,
+        verb: 'LLM',
+        noun: '',
+      },
+      debug: {
+        rawInput: input,
+        normalizedInput: input.trim().toUpperCase(),
+        verb: 'LLM',
+        noun: '',
+        pendingIntent: cascade1Envelope.debug.intent,
+      },
+    };
+  }
+
+  private async runLlmCascade(
+    input: string,
+    context: ParserWorldModel['context'],
+    previousAttempt?: LlmCascadePreviousAttempt
+  ): Promise<ParserCascadeEnvelope | null> {
+    let thinkingLineIndex: number | undefined;
+    let thinkingTicks = 0;
+    const consoleRef = this.game.console;
+    if (consoleRef?.log) {
+      const index = consoleRef.log('...', 'output');
+      thinkingLineIndex = typeof index === 'number' ? index : undefined;
+    }
+
+    try {
+      return await this.llmCascade.parse(
+        input,
+        context,
+        () => {
+          thinkingTicks += 1;
+          const dots = '.'.repeat(3 + (thinkingTicks % 4));
+          if (thinkingLineIndex !== undefined && typeof consoleRef?.updateLine === 'function') {
+            consoleRef.updateLine(thinkingLineIndex, dots, 'output');
+          }
+        },
+        previousAttempt
+      );
+    } catch (llmError) {
+      this.game.console?.log(`[LLM error] ${String(llmError)}`, 'error');
+      return null;
+    } finally {
+      if (thinkingLineIndex !== undefined && typeof consoleRef?.updateLine === 'function') {
+        consoleRef.updateLine(thinkingLineIndex, '...', 'output');
+      }
+    }
+  }
+
+  private resultShouldRetryWithLlm(resultJson: string): boolean {
+    try {
+      const result = JSON.parse(resultJson) as ParserResult;
+      return this.resultHasEscalation(result) || this.resultHasSoftNotFoundFailure(result);
+    } catch {
+      return false;
+    }
+  }
+
+  private resultHasEscalation(result: unknown): boolean {
+    return (
+      this.isParserOutcomeResult(result) &&
+      result.outcomes.some((outcome) => outcome.status === 'escalate')
+    );
+  }
+
+  private resultHasSoftNotFoundFailure(result: unknown): boolean {
+    if (!this.isParserOutcomeResult(result)) return false;
+    return result.outcomes.some((outcome) => {
+      if (outcome.status !== 'failed') return false;
+      const code = String(outcome.code || '');
+      if (
+        code === 'entity_not_found' ||
+        code === 'take_target_not_found' ||
+        code === 'relation_anchor_not_found'
+      ) {
+        return true;
+      }
+      const message = String(outcome.message || '');
+      return /^You don't see any .+ here\.$/i.test(message);
+    });
+  }
+
+  private isParserOutcomeResult(
+    result: unknown
+  ): result is Extract<ParserResult, { type: 'outcomes' }> {
+    return (
+      !!result &&
+      typeof result === 'object' &&
+      (result as ParserResult).type === 'outcomes' &&
+      Array.isArray((result as ParserResult).outcomes)
+    );
+  }
+
+  private safeParseJson(json: string): unknown {
+    try {
+      return JSON.parse(json);
+    } catch {
+      return { raw: json };
+    }
   }
 
   private runParserCore(envelope: ParserCascadeEnvelope): string {
@@ -3345,6 +3521,7 @@ export class Parser {
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
+    const llmDebug = this.llmCascade.getLastDebugInfo();
     const coreDecision = result.coreDecision;
 
     const formatSection = (title: string, json: string | object) => {
@@ -3360,6 +3537,7 @@ export class Parser {
           ...(coreDecision ? [formatSection('core', coreDecision)] : []),
           formatSection('result', resultJson),
           ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
+          ...(llmDebug ? [formatSection('llm', llmDebug)] : []),
         ]
       : undefined;
 

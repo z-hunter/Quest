@@ -36,9 +36,9 @@ Instead:
 - each custom command is described by data
 - `Parser Core` executes a generic plan
 
-This is also the best preparation for the future LLM cascade:
-- lower layers and mocked scenarios can emit the same plan format
-- `Core` can be hardened before real LLM integration
+This is also the shared execution foundation for the LLM cascade:
+- lower layers, custom commands, mocked scenarios, and LLM outputs can emit the same plan format
+- `Core` stays the only place where parser plans are executed against gameplay rules
 
 ---
 
@@ -400,7 +400,7 @@ Custom command assets are one of the producers of the unified parser DSL.
 
 They are not a separate execution system.
 
-Built-in commands and future LLM outputs should converge on the same general model:
+Built-in commands and LLM outputs converge on the same general model:
 - envelope
 - plan
 - `Parser Core`
@@ -408,7 +408,7 @@ Built-in commands and future LLM outputs should converge on the same general mod
 
 This is why `TELEPORT WITH` is useful as a test scenario:
 - it exercises a richer plan
-- without needing a real LLM yet
+- without needing a live LLM provider during deterministic tests
 
 ---
 
@@ -597,6 +597,6 @@ Later, command assets may grow to support:
 - richer scope policies
 - optional conditions
 - richer message overrides
-- LLM-generated plans that still reuse the same execution model
+- richer LLM-generated plans that still reuse the same execution model
 
 But the first version should stay deliberately small and stable.

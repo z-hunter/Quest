@@ -342,16 +342,16 @@ flowchart TD
 - затем уровень собирает единый envelope/protocol для `Core`;
 - в `Core` приходит уже не сырой ввод, а первичная интерпретация команды.
 
-## Stage 2 — LLM / Future
+## Stage 2 — LLM
 
-Следующий каскад — старший, LLM-based.
+Следующий каскад — старший, LLM-based. Текущая реализация v1 уже подключена как opt-in слой поверх `Parser Core`.
 
 Его роль намного шире:
 
 - понимать сложные смысловые соответствия;
-- строить многошаговые планы;
+- строить безопасные DSL-планы в пределах разрешённых parser actions;
 - генерировать player-facing тексты, когда lower layers не справились;
-- задавать сложные уточнения;
+- задавать уточнения в виде player-facing текста;
 - работать как настоящий Game Master.
 
 Например:
@@ -360,7 +360,33 @@ flowchart TD
 - `go to office` -> построить цепочку действий;
 - `examine the thing under the desk` -> понять relation и target.
 
-В отличие от первых двух уровней, stage2 не обязан возвращать только `intent`.
+В отличие от первых двух уровней, Stage 2 не обязан возвращать только `intent`.
+
+Текущий v1 работает как **single-shot planner/responder**:
+
+- включается вручную через `#LLM-ON`;
+- использует `LlmCascade` и swappable `ILlmProvider`;
+- первый provider — `AnthropicProvider` через Vite proxy `/api/llm`;
+- временная модель по умолчанию — `claude-haiku-4-5-20251001`;
+- ключ берётся только из `process.env.ANTHROPIC_API_KEY` на dev-server side;
+- prompt хранится в `public/text/system/parser-llm-system.md`;
+- ответ модели нормализуется в существующий `ParserCascadeEnvelope`;
+- `plan` исполняется обычным `Parser Core`;
+- `final_response` и `clarification` в v1 конвертируются в `showText`;
+- модель не получает доступ к runtime напрямую и не исполняет код.
+
+Stage 2 вызывается в трёх случаях:
+
+1. Lower cascades вернули `handoff_up`, и `#LLM-ON` активен.
+2. Lower cascade построил стандартный plan, но `Game API` вернул outcome со `status: "escalate"`; тогда Stage 2 получает предыдущий envelope/result и может дать GM-ответ или новый safe plan.
+3. В тестовом режиме `#C1-OFF`, когда Cascade 1 строит обычный envelope, но parser принудительно отправляет эту интерпретацию в LLM вместо прямого исполнения.
+
+Ограничение v1:
+
+- нет бесконечного agent loop;
+- нет полноценного outcome-aware replanning цикла;
+- максимум один дополнительный LLM-вызов после post-API escalation;
+- richer native handling для `final_response` / `clarification` в `Parser Core` остаётся следующим шагом.
 
 ---
 
@@ -1030,6 +1056,10 @@ sequenceDiagram
 - `#STAGE1-OFF`
 - `#STAGE2-ON`
 - `#STAGE2-OFF`
+- `#LLM-ON`
+- `#LLM-OFF`
+- `#C1-ON`
+- `#C1-OFF`
 
 ### PEEK
 
@@ -1041,6 +1071,7 @@ sequenceDiagram
 - `core=...`
 - `result=...`
 - `nlp=...` при участии NLP-слоя
+- `llm=...` при попытке Stage 2
 
 Это даёт возможность смотреть отдельно:
 
@@ -1049,14 +1080,19 @@ sequenceDiagram
 - cascade output;
 - решение `Core`;
 - итоговые outcomes.
+- raw LLM response, extracted JSON, accepted/filtered actions, provider/model, duration, token count and error reason.
 
 ### Stage toggles
 
 Можно изолированно тестировать разные уровни:
 
 - `#STAGE1-ON` / `#STAGE1-OFF` управляют `Stage 1.1`;
-- `#STAGE2-ON` / `#STAGE2-OFF` управляют `Stage 1.2`;
-- это полезно для отладки `Core` и DSL без реальной LLM.
+- `#STAGE2-ON` / `#STAGE2-OFF` управляют `Stage 1.2` / NLP. Это историческое имя console toggle-а; LLM-каскад управляется отдельно через `#LLM`;
+- `#LLM-ON` / `#LLM-OFF` управляют Stage 2 LLM cascade;
+- `#C1-OFF` включает тестовый режим, в котором Cascade 1 продолжает строить envelope/debug как обычно, но parser отправляет эту lower-cascade interpretation в LLM вместо прямого исполнения;
+- `#C1-ON` возвращает нормальное прямое исполнение Cascade 1.
+
+`#C1-OFF` нужен только для исследования поведения LLM на командах, которые нижние каскады уже умеют разбирать, например `LOOK IN WINDOW`. В этом режиме LLM получает сухую интерпретацию lower cascade как hint и может либо вернуть тот же safe plan, либо заменить его более атмосферным `final_response` / `showText`.
 
 ---
 
@@ -1081,6 +1117,7 @@ Parser должен быть локализуемым без переписыв�
 Текущая раскладка:
 
 - `public/text/system/parser.json` — player-facing parser strings;
+- `public/text/system/parser-llm-system.md` — system prompt для Stage 2 LLM / Game Master;
 - `public/text/system/parser-lexicon.json` — stage1 lexicon и normalization vocabulary;
 - `public/text/system/parser-training.json` — training phrases для NLP-слоя.
 - `public/text/system/commands/*.json` — custom command assets;
@@ -1232,6 +1269,27 @@ already execute against real runtime spatial data. `near` remains parser-recogni
   - intent recognition + target cleanup
   - возвращает тот же `ParserCascadeEnvelope`, что и regex-слой
 
+- `src/mechanics/LlmCascade.ts`
+  - Stage 2 (`llm-v3`)
+  - builds the LLM request from `ParserContext`, `ParserScope`, and optional lower-cascade hints
+  - loads and caches `public/text/system/parser-llm-system.md`
+  - calls the configured `ILlmProvider`
+  - extracts fenced or unfenced JSON from model output
+  - normalizes `plan`, `final_response`, and `clarification` into parser envelopes
+  - records `LlmCascadeDebugInfo` for `#PEEK`
+
+- `src/mechanics/llm/ILlmProvider.ts`
+  - provider-agnostic LLM interface
+  - request/response/message types
+  - streaming delta callback type
+  - debug fields shared by current and future providers
+
+- `src/mechanics/llm/AnthropicProvider.ts`
+  - temporary Anthropic Claude Haiku provider
+  - posts Anthropic Messages payloads to the local `/api/llm` proxy
+  - parses streamed SSE chunks
+  - supports injected `fetchImpl` for deterministic tests
+
 - `src/mechanics/parserLanguage.ts`
   - stage1 lexicon helpers
   - target normalization
@@ -1247,6 +1305,7 @@ already execute against real runtime spatial data. `near` remains parser-recogni
   - `ParserWorldModel`
   - `ParserScope`
   - `ParserCascadeEnvelope`
+  - `ParserCascadeEnvelope.stage = "regex-v1" | "nlp-v2" | "llm-v3"`
   - `ParserCoreDecision`
   - `ParserToolAction`
   - `ParserCommandSpec`
@@ -1272,14 +1331,23 @@ already execute against real runtime spatial data. `near` remains parser-recogni
 - `src/core/Console.ts`
   - console command handling before gameplay parser
   - gameplay input preprocessor
+  - live parser/LLM status line updates
   - stage toggles:
-    - `#STAGE1-ON/OFF`
-    - `#STAGE2-ON/OFF`
+    - `#STAGE1-ON/OFF` for regex stage
+    - `#STAGE2-ON/OFF` for NLP stage
+    - `#LLM-ON/OFF` for LLM stage
+    - `#C1-ON/OFF` for forced Cascade 1 handoff experiments
   - parser debug toggle:
     - `#PEEK-ON/OFF`
 
 - `src/components/UIOverlay.tsx`
   - entry point from UI input to console preprocessor and gameplay parser
+
+- `vite.config.ts`
+  - dev-server endpoint `POST /api/llm`
+  - keeps `ANTHROPIC_API_KEY` server-side
+  - streams Anthropic SSE responses through to the browser
+  - returns JSON diagnostics for missing key, upstream failure, malformed request, and proxy exceptions
 
 ### Code Map By Architecture Block
 
@@ -1291,11 +1359,13 @@ already execute against real runtime spatial data. `near` remains parser-recogni
 | Stage 1.1 regex         | `src/mechanics/Parser.ts`, `src/mechanics/parserLanguage.ts` | `runStage1(...)`, `matchStage1Intent(...)`, `normalizeTargetForIntent(...)`                                                                                        |
 | Custom command matching | `src/mechanics/parserCommands.ts`, `src/mechanics/Parser.ts` | `matchParserCommandSpec(...)`, `buildCustomCommandEnvelope(...)`, multi-argument extraction                                                                        |
 | Stage 1.2 NLP           | `src/mechanics/NlpCascade.ts`                                | `parse(...)`, training on parser language assets, envelope generation                                                                                              |
+| Stage 2 LLM             | `src/mechanics/LlmCascade.ts`                                | `parse(...)`, prompt assembly, provider call, JSON extraction, response normalization, `LlmCascadeDebugInfo`                                                       |
+| LLM provider layer      | `src/mechanics/llm/*.ts`, `vite.config.ts`                   | `ILlmProvider`, `AnthropicProvider`, streamed `/api/llm` proxy, server-side Anthropic API key handling                                                             |
 | Parser Core             | `src/mechanics/Parser.ts`                                    | `runParserCore(...)`, `makeCoreDecision(...)`, `executeCoreDecision(...)`, `executeCorePlan(...)`                                                                  |
 | Scope-driven resolution | `src/mechanics/Parser.ts`                                    | `resolveLookTarget(...)`, `resolveExamineTarget(...)`, `resolveTakeTarget(...)`, `resolveGoToTarget(...)`, `resolveEntityTargetInCandidates(...)`                  |
 | Shared gameplay API     | `src/core/Game.ts`, `src/core/IGame.ts`                      | `lookScene(...)`, `lookEntity(...)`, `examineEntity(...)`, `takeEntity(...)`, `goToScene(...)`, `goToEntity(...)`, `showInventory()`, `removeInventoryEntity(...)` |
-| Text assets             | `src/core/TextAssetManager.ts`, `public/text/system/*.json`  | `getParserLexicon()`, `getParserTraining()`, `getParserCommands()`, `getResolvedObjectField(...)`, `getResolvedObjectListField(...)`                               |
-| Parser debugging        | `src/mechanics/Parser.ts`, `src/core/Console.ts`             | `#PEEK`, stage toggles, debug output for `scope/envelope/core/result/nlp`                                                                                          |
+| Text assets             | `src/core/TextAssetManager.ts`, `public/text/system/*`       | parser lexicon/training/commands JSON, `parser-llm-system.md`, resolved object text fields                                                                         |
+| Parser debugging        | `src/mechanics/Parser.ts`, `src/core/Console.ts`             | `#PEEK`, `#LLM`, `#C1`, debug output for `scope/envelope/core/result/nlp/llm`, live thinking line                                                                  |
 
 ### Separation of concerns
 
@@ -1342,14 +1412,22 @@ flowchart TD
 - parser custom command assets via `public/text/system/commands/*.json`;
 - first generic multi-step command `TELEPORT WITH`;
 - first generic two-argument command path `USE X ON Y`;
-- базовая groundwork for future stage-2 DSL.
+- Stage 2 LLM cascade v1:
+  - provider abstraction через `ILlmProvider`;
+  - `AnthropicProvider` через `/api/llm`;
+  - opt-in `#LLM-ON` / `#LLM-OFF`;
+  - LLM debug в `#PEEK`;
+  - pre-API lower-cascade handoff;
+  - one-shot post-API escalation retry;
+  - forced Cascade 1 handoff test mode via `#C1-OFF`;
+  - mocked LLM/autotest coverage.
 
 ### Дальше
 
-- parser relations (`on`, `under`, `in`, `behind`, ...);
-- richer stage-2 (LLM) handoff;
-- полноценный DSL execution loop;
+- полноценный outcome-aware LLM replanning loop;
+- richer native `final_response` / `clarification` handling in `Parser Core`;
 - более сложные semantic actions (`use`, `open`, `talkTo`, ...);
+- local small LM provider replacing temporary Claude API backend;
 - richer dialog/session state.
 
 ---

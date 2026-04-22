@@ -6,6 +6,7 @@ import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { IGame } from '../core/IGame';
 import { ComponentSystem } from './ComponentSystem';
 import type { SwitchComponent } from './ComponentSystem';
+import type { InventorySlotRef } from './InventoryManager';
 import {
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
@@ -143,6 +144,70 @@ export class GameSemanticAPI {
     if (distanceFailure) return distanceFailure;
 
     return null;
+  }
+
+  private getStorageAccessProbe(storageObject: SceneObject): SceneObject {
+    if (this.getPlayerFacingObjectTitle(storageObject)) return storageObject;
+
+    const scene = this.game.sceneManager.currentScene;
+    let current: SceneObject | null = storageObject;
+    const visited = new Set<string>();
+    while (current) {
+      const parentId: string =
+        typeof (current as any).spatial?.parentNodeId === 'string'
+          ? (current as any).spatial.parentNodeId.trim()
+          : '';
+      if (!parentId || visited.has(parentId)) break;
+      visited.add(parentId);
+
+      const parent: SceneObject | null = scene?.getObjectByName(parentId) || null;
+      if (!parent) break;
+      if (this.getPlayerFacingObjectTitle(parent)) return parent;
+      current = parent;
+    }
+
+    return storageObject;
+  }
+
+  private getInventoryTakeAccessFailure(
+    entity: Entity,
+    slot: InventorySlotRef
+  ): GameActionOutcome | null {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+    if (this.game.inventoryManager.isPlayerInventoryOwner(slot.owner)) return null;
+
+    if (slot.owner.disabled || !slot.component || slot.component.protected) {
+      return {
+        status: 'failed',
+        code: 'inventory_not_accessible',
+        message: this.game.text('parser.take_cannot'),
+        data: { entityId: entity.name, ownerId: slot.owner.name },
+        recoverable: true,
+      };
+    }
+
+    const blockedOutcome = this.getBlockedAccessOutcome(slot.owner);
+    if (blockedOutcome) return blockedOutcome;
+
+    if (scene.activeSubscene && scene.subsceneEntities.has(slot.owner as any)) {
+      return null;
+    }
+
+    const accessProbe = this.getStorageAccessProbe(slot.owner);
+    const distanceError = ComponentSystem.getInteractionDistanceError(
+      accessProbe as any,
+      scene.player
+    );
+    if (!distanceError) return null;
+
+    return {
+      status: 'failed',
+      code: 'cannot_take',
+      message: distanceError,
+      data: { entityId: entity.name, ownerId: slot.owner.name },
+      recoverable: true,
+    };
   }
 
   private getAutoDropUnavailableFailure(): GameActionOutcome | null {
@@ -529,21 +594,27 @@ export class GameSemanticAPI {
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
     if (autoOpenOutcome) return autoOpenOutcome;
 
-    const inventoryOwner = this.game.inventoryManager.findInventoryOwnerForEntity(entity);
-    if (!inventoryOwner) {
+    const inventorySlot = this.game.inventoryManager.getInventorySlotForEntity(entity);
+    const inventoryOwner = inventorySlot?.owner || null;
+    if (inventorySlot && !this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const inventoryAccessFailure = this.getInventoryTakeAccessFailure(entity, inventorySlot);
+      if (inventoryAccessFailure) return inventoryAccessFailure;
+    } else {
       const blockedOutcome = this.getBlockedAccessOutcome(entity);
       if (blockedOutcome) return blockedOutcome;
     }
 
-    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
-    if (errorMsg) {
-      return {
-        status: 'failed',
-        code: 'put_source_not_accessible',
-        message: errorMsg,
-        data: { entityId: entity.name },
-        recoverable: true,
-      };
+    if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+      if (errorMsg) {
+        return {
+          status: 'failed',
+          code: 'put_source_not_accessible',
+          message: errorMsg,
+          data: { entityId: entity.name },
+          recoverable: true,
+        };
+      }
     }
 
     const isItem = entity.components?.some((component: any) => component?.type === 'Item');
@@ -557,22 +628,6 @@ export class GameSemanticAPI {
       };
     }
 
-    if (
-      inventoryOwner &&
-      !this.game.inventoryManager.isInventoryAccessible(
-        inventoryOwner,
-        this.getBlockedAccessOutcome.bind(this),
-        'in'
-      )
-    ) {
-      return {
-        status: 'failed',
-        code: 'inventory_not_accessible',
-        message: this.game.text('parser.take_cannot'),
-        data: { entityId: entity.name, ownerId: inventoryOwner.name },
-        recoverable: true,
-      };
-    }
     return null;
   }
 
@@ -1041,8 +1096,12 @@ export class GameSemanticAPI {
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
     if (autoOpenOutcome) return autoOpenOutcome;
 
-    const inventoryOwner = this.game.inventoryManager.findInventoryOwnerForEntity(entity);
-    if (!inventoryOwner) {
+    const inventorySlot = this.game.inventoryManager.getInventorySlotForEntity(entity);
+    const inventoryOwner = inventorySlot?.owner || null;
+    if (inventorySlot && !this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const inventoryAccessFailure = this.getInventoryTakeAccessFailure(entity, inventorySlot);
+      if (inventoryAccessFailure) return inventoryAccessFailure;
+    } else {
       const blockedOutcome = this.getBlockedAccessOutcome(entity);
       if (blockedOutcome) return blockedOutcome;
     }
@@ -1059,36 +1118,21 @@ export class GameSemanticAPI {
       };
     }
 
-    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
-    if (errorMsg) {
-      return {
-        status: 'failed',
-        code: 'cannot_take',
-        message: errorMsg,
-        data: { entityId: entity.name },
-        recoverable: true,
-      };
+    if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+      if (errorMsg) {
+        return {
+          status: 'failed',
+          code: 'cannot_take',
+          message: errorMsg,
+          data: { entityId: entity.name },
+          recoverable: true,
+        };
+      }
     }
 
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (isItem || entity.isTakeable) {
-      if (
-        inventoryOwner &&
-        !this.game.inventoryManager.isInventoryAccessible(
-          inventoryOwner,
-          this.getBlockedAccessOutcome.bind(this),
-          'in'
-        )
-      ) {
-        return {
-          status: 'failed',
-          code: 'inventory_not_accessible',
-          message: this.game.text('parser.take_cannot'),
-          data: { entityId: entity.name, ownerId: inventoryOwner.name },
-          recoverable: true,
-        };
-      }
-
       const player = scene.player instanceof Entity ? scene.player : null;
       if (!this.game.inventoryManager.hasMainInventory(player)) {
         return {
@@ -1176,21 +1220,27 @@ export class GameSemanticAPI {
       };
     }
 
-    const inventoryOwner = this.game.inventoryManager.findInventoryOwnerForEntity(entity);
-    if (!inventoryOwner) {
+    const inventorySlot = this.game.inventoryManager.getInventorySlotForEntity(entity);
+    const inventoryOwner = inventorySlot?.owner || null;
+    if (inventorySlot && !this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const inventoryAccessFailure = this.getInventoryTakeAccessFailure(entity, inventorySlot);
+      if (inventoryAccessFailure) return inventoryAccessFailure;
+    } else {
       const blockedOutcome = this.getBlockedAccessOutcome(entity);
       if (blockedOutcome) return blockedOutcome;
     }
 
-    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
-    if (errorMsg) {
-      return {
-        status: 'failed',
-        code: 'cannot_take',
-        message: errorMsg,
-        data: { entityId: entity.name },
-        recoverable: true,
-      };
+    if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
+      const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+      if (errorMsg) {
+        return {
+          status: 'failed',
+          code: 'cannot_take',
+          message: errorMsg,
+          data: { entityId: entity.name },
+          recoverable: true,
+        };
+      }
     }
 
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
@@ -1200,23 +1250,6 @@ export class GameSemanticAPI {
         code: 'not_takeable',
         message: this.game.text('parser.take_cannot'),
         data: { entityId: entity.name },
-        recoverable: true,
-      };
-    }
-
-    if (
-      inventoryOwner &&
-      !this.game.inventoryManager.isInventoryAccessible(
-        inventoryOwner,
-        this.getBlockedAccessOutcome.bind(this),
-        'in'
-      )
-    ) {
-      return {
-        status: 'failed',
-        code: 'inventory_not_accessible',
-        message: this.game.text('parser.take_cannot'),
-        data: { entityId: entity.name, ownerId: inventoryOwner.name },
         recoverable: true,
       };
     }

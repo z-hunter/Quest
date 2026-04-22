@@ -249,7 +249,7 @@ export type ParserToolAction =
     };
 
 export type ParserCascadeEnvelope = {
-  stage: 'regex-v1' | 'pending-resolution' | 'nlp-v2';
+  stage: 'regex-v1' | 'pending-resolution' | 'nlp-v2' | 'llm-v3';
   output:
     | {
         kind: 'plan';
@@ -313,4 +313,20 @@ export type ParserResponse = {
   playerMessages?: string[];
   debugMessages?: string[];
   nextPendingState?: ParserPendingState | null;
+};
+
+export type LlmCascadeDebugInfo = {
+  input: string;
+  normalizedInput: string;
+  matched: boolean;
+  provider: string;
+  model?: string;
+  durationMs?: number;
+  tokensGenerated?: number;
+  rawResponse?: string;
+  extractedJson?: string;
+  acceptedActions?: ParserToolAction[];
+  filteredActions?: unknown[];
+  error?: string;
+  reason?: 'provider_unavailable' | 'api_error' | 'invalid_response' | 'timeout' | 'disabled';
 };

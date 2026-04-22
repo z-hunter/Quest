@@ -47,7 +47,7 @@ Out of scope for this iteration:
 
 - full browser Playwright coverage;
 - full UI/canvas assertions;
-- LLM-stage testing;
+- live LLM/API testing;
 - using live content scenes as the main source of truth.
 
 ## File Layout
@@ -267,6 +267,26 @@ Covers:
 - linear plan stopping after failure;
 - core behavior independent of UI.
 
+#### `tests/parser/llm-cascade.test.ts`
+
+Covers:
+
+- mocked LLM plan normalization;
+- `final_response` and `clarification` conversion into `showText`;
+- invalid JSON / invalid shape / provider error debug data;
+- Anthropic SSE parsing without live API calls.
+- forced Cascade 1 handoff prompt context for LLM experiments.
+
+#### `tests/parser/llm-parser.test.ts`
+
+Covers:
+
+- `#LLM-ON` / `#LLM-OFF` console toggles;
+- `#C1-OFF` / `#C1-ON` forced LLM handoff test mode;
+- parser calling the LLM cascade only after lower cascades hand off;
+- parser avoiding LLM calls for commands already handled by Stage 1.
+- one post-API escalation retry through LLM when `#LLM-ON` is active.
+
 #### `tests/parser/world-model-context.test.ts`
 
 Covers:
@@ -434,7 +454,7 @@ They are not necessary for the first iteration.
 
 - No browser/UI/canvas assertions yet.
 - No Playwright layer yet.
-- No LLM-stage tests yet.
+- LLM-stage tests are mocked only; normal tests must not call a live provider.
 - Parser NLP stage is not the focus of the current suite.
 - The direct `Game` tests use a semantic fixture layered on `Game.prototype`, not full `Game` construction.
 
@@ -450,6 +470,7 @@ The next useful expansions would be:
 2. Expand console/preprocessor coverage:
    - `#STAGE1-ON/OFF`
    - `#STAGE2-ON/OFF`
+   - regression checks that `#STAGE2` still means NLP while `#LLM` controls the LLM cascade
 
 3. Add tiny serialization/load fixtures if scene loading itself needs coverage.
 
