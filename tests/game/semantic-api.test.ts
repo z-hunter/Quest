@@ -1426,11 +1426,37 @@ describe('Game semantic API', () => {
     const taken = fixture.game.takeEntity(cassette);
 
     expect(taken.status).toBe('ok');
+    expect(taken.message).toBe(
+      fixture.game.text('parser.take_pickup_success_from', {
+        item: 'Cassette',
+        source: 'Tape recorder',
+      })
+    );
     expect(fixture.game.inventory).toContain(cassette);
     expect(fixture.game.getInventoryEntities(recorder)).not.toContain(cassette);
     expect(fixture.scene.entities).toContain(cassette);
     expect(cassette.visible).toBe(false);
     expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+  });
+
+  it('takeEntity keeps the old success message for untitled technical parents', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('storage_pocket', {
+      title: null,
+      description: 'A technical holder.',
+    });
+    const note = fixture.addEntity('note', {
+      title: 'Note',
+      description: 'A note.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'storage_pocket', relation: 'in' },
+    });
+
+    const taken = fixture.game.takeEntity(note);
+
+    expect(taken.status).toBe('ok');
+    expect(taken.message).toBe(fixture.game.text('parser.take_pickup_success', { item: 'Note' }));
   });
 
   it('takeEntity checks distance to an external inventory owner, not stale item coordinates', () => {

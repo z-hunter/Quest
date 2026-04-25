@@ -40,6 +40,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
     take_pickup_success: 'You picked up the {item}.',
+    take_pickup_success_from: 'You picked up the {item} from the {source}.',
     take_already_held: 'You are already carrying the {item}.',
     take_cannot: 'You cannot take that.',
     put_prompt: 'Put what?',

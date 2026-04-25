@@ -120,7 +120,10 @@ describe('Parser + game integration smoke', () => {
     const messages = await runSemanticParser(fixture, 'take cassete from boombox');
 
     expect(messages.at(-1)).toBe(
-      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
+      fixture.game.text('parser.take_pickup_success_from', {
+        item: 'Compact cassette',
+        source: 'Tape recorder',
+      })
     );
     expect(fixture.game.inventory).toContain(cassette);
   });

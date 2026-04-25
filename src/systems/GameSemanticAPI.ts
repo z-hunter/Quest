@@ -104,6 +104,31 @@ export class GameSemanticAPI {
     return this.getPutTargetDescriptor(target)?.title || null;
   }
 
+  private getTakeSourceTitle(entity: Entity): string | null {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const sourceState = getSceneTextLayerAccessState(scene, this.game, entity);
+    if (!sourceState.effectiveParentId) return null;
+
+    const sourceObject = scene.getObjectByName(sourceState.effectiveParentId);
+    if (sourceObject?.type === 'Walkbox') return null;
+    return sourceObject ? this.getPlayerFacingObjectTitle(sourceObject) : null;
+  }
+
+  private getTakeSuccessMessage(itemTitle: string, sourceTitle: string | null): string {
+    if (sourceTitle) {
+      return this.game.text('parser.take_pickup_success_from', {
+        item: itemTitle,
+        source: sourceTitle,
+      });
+    }
+
+    return this.game.text('parser.take_pickup_success', {
+      item: itemTitle,
+    });
+  }
+
   private getPutDistanceFailure(
     storageObject: SceneObject,
     anchor?: SceneObject | null
@@ -1145,6 +1170,7 @@ export class GameSemanticAPI {
       }
 
       scene.finishDropAnimation(entity);
+      const takeSourceTitle = this.getTakeSourceTitle(entity);
       const containingSubsceneRootIds =
         this.game.inventoryManager.getContainingSubsceneRootIds(entity);
 
@@ -1180,9 +1206,7 @@ export class GameSemanticAPI {
       return {
         status: 'ok',
         code: 'item_taken',
-        message: this.game.text('parser.take_pickup_success', {
-          item: itemTitle,
-        }),
+        message: this.getTakeSuccessMessage(itemTitle, takeSourceTitle),
         data: { entityId: entity.name },
         effects: ['moved_to_inventory'],
       };

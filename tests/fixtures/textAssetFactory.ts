@@ -42,6 +42,7 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.take_which_target': 'Which container do you mean: {options}?',
   'parser.take_target_not_found': "You don't see any suitable container near {target}.",
   'parser.take_pickup_success': 'You picked up the {item}.',
+  'parser.take_pickup_success_from': 'You picked up the {item} from the {source}.',
   'parser.take_already_held': 'You are already carrying the {item}.',
   'parser.take_cannot': 'You cannot take that.',
   'parser.put_prompt': 'Put what?',
