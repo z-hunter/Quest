@@ -1027,6 +1027,11 @@ export class SceneEditor {
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
       if (selected instanceof Entity) {
+        if (this.game.inventoryManager?.getInventorySlotForEntity(selected)) {
+          ctx.restore();
+          continue;
+        }
+
         if ((selected as any).type === 'Quad') {
           // ** QUAD SELECTION RENDERING **
           const quad = selected as QuadObject;

@@ -370,12 +370,14 @@ describe('Parser world model context', () => {
 
   it('omits player inventory items from scene text layer but projects external inventory items by slot relation', () => {
     const fixture = createSceneFixture();
-    const player = fixture.addPlayer('Hero', 0, 0);
+    const player = fixture.addPlayer('Hero', 12, 34);
     const heldKey = fixture.addEntity('held_key', {
       title: 'Held key',
       description: 'A held key.',
       components: [{ type: 'Item' }],
     });
+    heldKey.x = 100;
+    heldKey.y = 200;
     fixture.game.inventory.push(heldKey);
     fixture.game.inventoryManager.syncPlayerInventoryComponent();
 
@@ -393,17 +395,25 @@ describe('Parser world model context', () => {
         },
       ],
     });
+    cabinet.x = 56;
+    cabinet.y = 78;
     const book = fixture.addEntity('book', {
       title: 'Book',
       description: 'A book.',
       components: [{ type: 'Item' }],
     });
+    book.x = 300;
+    book.y = 400;
     fixture.game.inventoryManager.addInventoryEntity(cabinet as any, book as any, 'behind');
 
     const builder = new ParserWorldModelBuilder(fixture.game as any);
     const model = builder.build('look cabinet', null);
 
     expect((heldKey as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(heldKey.x).toBe(player.x);
+    expect(heldKey.y).toBe(player.y);
+    expect(book.x).toBe(cabinet.x);
+    expect(book.y).toBe(cabinet.y);
     expect(model.context.entities?.some((entity) => entity.id === 'held_key')).toBe(false);
     expect(model.context.entities?.some((entity) => entity.id === 'book')).toBe(true);
     expect(model.context.spatialRelations).toEqual(

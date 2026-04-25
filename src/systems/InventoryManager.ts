@@ -305,6 +305,7 @@ export class InventoryManager {
       scene.addEntity(entity);
     }
     (entity as any).__inventoryRelation = relation;
+    entity.setInventoryPositionOwner(owner);
     entity.visible = false;
     entity.spatial = {
       parentNodeId: owner.name,
@@ -316,6 +317,7 @@ export class InventoryManager {
   private releaseInventoryEntitySceneState(entity: Entity): void {
     if (this.getInventorySlotForEntity(entity)) return;
     delete (entity as any).__inventoryRelation;
+    entity.setInventoryPositionOwner(null);
     entity.visible = true;
   }
 

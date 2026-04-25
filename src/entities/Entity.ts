@@ -42,7 +42,10 @@ export interface EntityData {
 
 export class Entity extends SceneObject {
   private _x: number = 0;
+  private inventoryPositionOwner: Entity | null = null;
+
   get x(): number {
+    if (this.inventoryPositionOwner) return this.inventoryPositionOwner.x;
     return this._x;
   }
   set x(val: number) {
@@ -55,6 +58,7 @@ export class Entity extends SceneObject {
 
   private _y: number = 0;
   get y(): number {
+    if (this.inventoryPositionOwner) return this.inventoryPositionOwner.y;
     return this._y;
   }
   set y(val: number) {
@@ -148,6 +152,28 @@ export class Entity extends SceneObject {
 
   animationSpeed: number; // Added
   game: IGame;
+
+  getInventoryPositionOwner(): Entity | null {
+    return this.inventoryPositionOwner;
+  }
+
+  setInventoryPositionOwner(owner: Entity | null): void {
+    if (owner === this) owner = null;
+    let current = owner;
+    while (current) {
+      if (current === this) {
+        owner = null;
+        break;
+      }
+      current = current.getInventoryPositionOwner();
+    }
+
+    if (this.inventoryPositionOwner === owner) return;
+    this.inventoryPositionOwner = owner;
+    if (this.game.editor && this.game.editor.enabled) {
+      this.game.editor.selectionManager.notifyObjectChanged(this);
+    }
+  }
 
   /**
    * List of properties to be serialized to/from JSON.
