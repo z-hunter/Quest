@@ -261,6 +261,114 @@ describe('Game navigation and spatial API', () => {
     );
   });
 
+  it('switchTo hydrates surface item placements into entity scene state', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('gallery', 'Gallery', 'You are in Gallery.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const table = new Entity(fixture.game as any, 0, 0, 10, 10, 'table');
+    table.layer = 5;
+    table.components = [
+      {
+        type: 'Surface',
+        relation: 'on',
+        capacity: 2,
+        groups: [],
+        items: [{ id: 'coin', x: 42, y: 24 }],
+      },
+    ];
+    target.addEntity(table);
+    fixture.textAssets.setObject('table', {
+      title: 'Table',
+      description: 'A table.',
+    });
+
+    const coin = new Entity(fixture.game as any, 999, 999, 10, 10, 'coin');
+    coin.components = [{ type: 'Item' }];
+    target.addEntity(coin);
+    fixture.textAssets.setObject('coin', {
+      title: 'Coin',
+      description: 'A coin.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getSurfaceEntities(table, 'on')).toContain(coin);
+    expect(coin.visible).toBe(true);
+    expect(coin.x).toBe(42);
+    expect(coin.y).toBe(24);
+    expect(coin.layer).toBe(5);
+    expect((coin as any).spatial).toEqual({ parentNodeId: 'table', relation: 'on' });
+  });
+
+  it('switchTo hydrates untitled nested surface extensions and projects them through the titled anchor', () => {
+    const fixture = createGameSemanticFixture('start');
+    const target = fixture.addScene('library', 'Library', 'You are in Library.');
+
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    player.isPlayer = true;
+    target.addEntity(player);
+    fixture.textAssets.setObject('Hero', {
+      title: 'Hero',
+      description: 'Hero player',
+    });
+
+    const desk = new Entity(fixture.game as any, 0, 0, 10, 10, 'desk');
+    target.addEntity(desk);
+    fixture.textAssets.setObject('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+
+    const hiddenShelf = new Entity(fixture.game as any, 0, 0, 10, 10, 'hidden_shelf');
+    hiddenShelf.spatial = { parentNodeId: 'desk', relation: 'behind' };
+    hiddenShelf.components = [
+      {
+        type: 'Surface',
+        relation: 'on',
+        capacity: 2,
+        groups: [],
+        items: [{ id: 'note', x: 11, y: 12 }],
+      },
+    ];
+    target.addEntity(hiddenShelf);
+    fixture.textAssets.setObject('hidden_shelf', {
+      description: 'Untitled hidden shelf.',
+    });
+
+    const note = new Entity(fixture.game as any, 400, 400, 10, 10, 'note');
+    note.components = [{ type: 'Item' }];
+    target.addEntity(note);
+    fixture.textAssets.setObject('note', {
+      title: 'Note',
+      description: 'A note.',
+    });
+
+    fixture.game.sceneManager.switchTo(target.id);
+
+    expect(fixture.game.getSurfaceEntities(hiddenShelf, 'on')).toContain(note);
+    expect(note.x).toBe(11);
+    expect(note.y).toBe(12);
+    expect((note as any).spatial).toEqual({ parentNodeId: 'hidden_shelf', relation: 'on' });
+
+    const outcome = fixture.game.describeSpatialRelation('desk', 'behind');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Desk',
+        items: 'Note',
+      })
+    );
+  });
+
   it('switchTo hydrates untitled nested inventory extensions and projects them through the titled anchor', () => {
     const fixture = createGameSemanticFixture('start');
     const target = fixture.addScene('workshop', 'Workshop', 'You are in Workshop.');

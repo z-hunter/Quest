@@ -321,6 +321,50 @@ export class InventoryManager {
     entity.visible = true;
   }
 
+  private hydrateSurfaceEntitySceneState(
+    surface: SceneObject,
+    component: SurfaceComponent,
+    entity: Entity,
+    placement: SurfaceItemPlacement
+  ): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+    if (!scene.entities.includes(entity)) {
+      scene.addEntity(entity);
+    }
+
+    delete (entity as any).__inventoryRelation;
+    entity.setInventoryPositionOwner(null);
+    entity.visible = true;
+    entity.x = placement.x;
+    entity.y = placement.y;
+    entity.layer = Number.isFinite(surface.layer) ? surface.layer : 0;
+    entity.spatial = {
+      parentNodeId: surface.name,
+      relation: this.getSurfaceSlotPlacementRelation({
+        surface,
+        component,
+        relation: ComponentSystem.normalizeSurfaceRelation(component),
+      }),
+    };
+
+    if (scene.activeSubscene) {
+      if (this.isObjectInsideActiveSubscene(surface)) {
+        entity.subsceneItemScale = this.getSurfacePlacementSubsceneItemScale(surface);
+        entity.disabled = false;
+        scene.subsceneEntities.add(entity);
+        this.clearEntityDetachedSubsceneRoot(entity, scene.activeSubscene);
+      } else {
+        scene.subsceneEntities.delete(entity);
+        entity.subsceneItemScale = 1;
+      }
+    } else {
+      scene.subsceneEntities.delete(entity);
+      entity.subsceneItemScale = 1;
+    }
+    entity.update(0);
+  }
+
   handleSceneChange(): void {
     this.inventoryEntityStore.clear();
     this.inventory = [];
@@ -351,6 +395,34 @@ export class InventoryManager {
         for (const entity of resolved) {
           this.syncInventoryEntitySceneState(owner, entity, relation);
         }
+      }
+    }
+
+    for (const surface of scene.getAllSceneObjects()) {
+      if (surface.disabled) continue;
+
+      for (const component of ComponentSystem.getSurfaceComponents(surface)) {
+        if (!Array.isArray(component.items)) component.items = [];
+        if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
+          component.capacity = Number.MAX_SAFE_INTEGER;
+        }
+        component.relation = ComponentSystem.normalizeSurfaceRelation(component);
+
+        component.items = component.items.filter((placement) => {
+          const entityId = typeof placement?.id === 'string' ? placement.id.trim() : '';
+          const entity = entityId ? scene.getObjectByName(entityId) : null;
+          if (
+            !(entity instanceof Entity) ||
+            !Number.isFinite(placement?.x) ||
+            !Number.isFinite(placement?.y)
+          ) {
+            return false;
+          }
+
+          placement.id = entity.name;
+          this.hydrateSurfaceEntitySceneState(surface, component, entity, placement);
+          return true;
+        });
       }
     }
 
