@@ -1,7 +1,11 @@
 import { SceneObject } from '../entities/SceneObject';
+import { Entity } from '../entities/Entity';
+import { PolygonObject } from '../entities/PolygonObject';
 import { QuadObject } from '../entities/QuadObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 import { Actor } from '../entities/Actor';
+import { Geometry } from '../utils/Geometry';
+import { toVisualPosition } from '../utils/Parallax';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
@@ -325,11 +329,114 @@ export class ComponentSystem {
 
     for (const actor of actors) {
       for (const exitObject of exitObjects) {
-        if (!exitObject.containsPoint(actor.x, actor.y)) continue;
+        if (!this.exitObjectIntersectsActor(exitObject, actor, scene)) continue;
         scene.activateObject(exitObject, 0, actor);
         return;
       }
     }
+  }
+
+  private static exitObjectIntersectsActor(
+    exitObject: SceneObject,
+    actor: Actor,
+    scene: ActivationSceneContext
+  ): boolean {
+    const actorRect = this.getActorVisualColliderRect(actor, scene);
+    if (!actorRect) {
+      const point = this.getActorVisualPoint(actor, scene);
+      return exitObject.containsPoint(point.x, point.y);
+    }
+
+    if (exitObject instanceof QuadObject) {
+      const poly = this.getQuadVisualPolygon(exitObject, scene);
+      return Geometry.rectIntersectsPolygon(actorRect, poly);
+    }
+
+    if (exitObject instanceof PolygonObject) {
+      const poly = this.getPolygonVisualPolygon(exitObject, scene);
+      return Geometry.rectIntersectsPolygon(actorRect, poly);
+    }
+
+    if (exitObject instanceof Entity) {
+      const targetRect = this.getEntityVisualRect(exitObject, scene);
+      return Geometry.rectIntersectsRect(actorRect, targetRect);
+    }
+
+    return this.getRectProbePoints(actorRect).some((point) =>
+      exitObject.containsPoint(point.x, point.y)
+    );
+  }
+
+  private static getActorVisualPoint(
+    actor: Actor,
+    scene: ActivationSceneContext
+  ): { x: number; y: number } {
+    const p = actor.parallax !== undefined ? actor.parallax : 1.0;
+    const visualOffset = (actor as any).visualOffset || { x: 0, y: 0 };
+    return toVisualPosition({ x: actor.x, y: actor.y }, scene.camera, p, visualOffset);
+  }
+
+  private static getActorVisualColliderRect(
+    actor: Actor,
+    scene: ActivationSceneContext
+  ): { x: number; y: number; w: number; h: number } | null {
+    if (actor.colliderWidth <= 0 || actor.colliderHeight <= 0) return null;
+
+    const visual = this.getActorVisualPoint(actor, scene);
+    return {
+      x: visual.x - actor.colliderWidth / 2,
+      y: visual.y - actor.colliderHeight,
+      w: actor.colliderWidth,
+      h: actor.colliderHeight,
+    };
+  }
+
+  private static getQuadVisualPolygon(
+    quad: QuadObject,
+    scene: ActivationSceneContext
+  ): { x: number; y: number }[] {
+    return quad.vertices.map((v) => {
+      const p = v.p !== undefined ? v.p : quad.parallax !== undefined ? quad.parallax : 1.0;
+      return toVisualPosition({ x: v.x, y: v.y }, scene.camera, p);
+    });
+  }
+
+  private static getPolygonVisualPolygon(
+    polygon: PolygonObject,
+    scene: ActivationSceneContext
+  ): { x: number; y: number }[] {
+    const p = polygon.parallax !== undefined ? polygon.parallax : 1.0;
+    return polygon.poly.map((v) => toVisualPosition(v, scene.camera, p));
+  }
+
+  private static getEntityVisualRect(
+    entity: Entity,
+    scene: ActivationSceneContext
+  ): { x: number; y: number; w: number; h: number } {
+    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+    const visualOffset = (entity as any).visualOffset || { x: 0, y: 0 };
+    const visual = toVisualPosition({ x: entity.x, y: entity.y }, scene.camera, p, visualOffset);
+    return {
+      x: visual.x - entity.width / 2,
+      y: visual.y - entity.height,
+      w: entity.width,
+      h: entity.height,
+    };
+  }
+
+  private static getRectProbePoints(rect: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }): { x: number; y: number }[] {
+    return [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y + rect.h },
+      { x: rect.x, y: rect.y + rect.h },
+      { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+    ];
   }
 
   // Called when trying to TAKE an item
