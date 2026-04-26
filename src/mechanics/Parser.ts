@@ -436,19 +436,23 @@ export class Parser {
       }));
 
     if (groupQuery.kind !== 'list') {
-      const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+      const matches = !groupQuery.query
+        ? candidates
+        : this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
       if (!matches.length) {
-        const diagnosticMatches = this.findPluralAwareMatchesInCandidates(
-          groupQuery.query,
-          this.getVisibleTakeGroupDiagnosticCandidates(rawAnchor, relation)
-        );
+        const diagnosticMatches = !groupQuery.query
+          ? []
+          : this.findPluralAwareMatchesInCandidates(
+              groupQuery.query,
+              this.getVisibleTakeGroupDiagnosticCandidates(rawAnchor, relation)
+            );
         if (diagnosticMatches.length) {
           return buildTakeActions(diagnosticMatches);
         }
         return [
           {
             type: 'takeTarget',
-            target: groupQuery.query,
+            target: groupQuery.query || 'all',
             anchor: rawAnchor,
             relation,
           },
@@ -458,7 +462,7 @@ export class Parser {
         if (matches.length > 1) {
           return [
             this.buildTakeTargetAction(
-              this.singularizeSimplePluralQuery(groupQuery.query),
+              groupQuery.query ? this.singularizeSimplePluralQuery(groupQuery.query) : 'all',
               rawAnchor,
               relation
             ),
@@ -595,14 +599,16 @@ export class Parser {
       );
 
     if (groupQuery.kind !== 'list') {
-      const matches = this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+      const matches = !groupQuery.query
+        ? candidates
+        : this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
       if (!matches.length) {
-        return [this.buildPutTargetAction(groupQuery.query, rawTarget, relation)];
+        return [this.buildPutTargetAction(groupQuery.query || 'all', rawTarget, relation)];
       }
       if (groupQuery.kind === 'both' && matches.length !== 2) {
         return [
           this.buildPutTargetAction(
-            this.singularizeSimplePluralQuery(groupQuery.query),
+            groupQuery.query ? this.singularizeSimplePluralQuery(groupQuery.query) : 'all',
             rawTarget,
             relation
           ),
@@ -665,7 +671,9 @@ export class Parser {
         ? groupQuery.queries.flatMap((query) =>
             this.findPluralAwareMatchesInCandidates(query, candidates)
           )
-        : this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
+        : !groupQuery.query
+          ? candidates
+          : this.findPluralAwareMatchesInCandidates(groupQuery.query, candidates);
     return Array.from(new Set(matches));
   }
 
@@ -720,7 +728,6 @@ export class Parser {
     const quantifierMatch = /^(all|both)\b\s*(.*)$/i.exec(item);
     if (quantifierMatch) {
       const query = this.stripLeadingArticles(quantifierMatch[2]);
-      if (!query) return null;
       return {
         kind: quantifierMatch[1].toLowerCase() === 'all' ? 'all' : 'both',
         query,
