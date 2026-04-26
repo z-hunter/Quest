@@ -26,20 +26,21 @@ export class EditorPersistenceManager {
     this.editor.undoManager.markSaved();
   }
 
-  private reportSceneSpatialValidation(phase: 'load' | 'save'): void {
+  private reportSceneSpatialValidation(phase: 'load' | 'save') {
     const scene = this.editor.game.sceneManager.currentScene;
-    if (!scene) return;
+    if (!scene) return null;
 
     const result = SceneSpatialValidator.validate(scene, this.editor.game as any);
     if (result.issues.length === 0) {
       console.info(`[SceneSpatialValidator] ${phase}: '${scene.name}' has no issues.`);
-      return;
+      return result;
     }
 
     const summary = `Spatial validation ${phase}: ${result.errors.length} error(s), ${result.warnings.length} warning(s)`;
     this.editor.game.showNotification(summary);
     const logMethod = result.errors.length > 0 ? console.warn : console.info;
     logMethod(`[SceneSpatialValidator] ${summary} in '${scene.name}'.`, result.issues);
+    return result;
   }
 
   isCurrentSceneDirty(): boolean {
@@ -150,7 +151,13 @@ export class EditorPersistenceManager {
   async performSaveScene(filenameId: string, previousSceneId?: string): Promise<boolean> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return false;
-    this.reportSceneSpatialValidation('save');
+    const validation = this.reportSceneSpatialValidation('save');
+    if (validation && validation.errors.length > 0) {
+      this.editor.game.showNotification(
+        `Scene not saved: fix ${validation.errors.length} spatial validation error(s)`
+      );
+      return false;
+    }
 
     // Ensure filenameId uses forward slashes for URL/Path
     const normalizedPath = filenameId.replace(/\\/g, '/');

@@ -137,6 +137,13 @@ export class InventoryManager {
     return this.inventory.includes(entity);
   }
 
+  hasEntityIdInInventory(entity: Entity): boolean {
+    if (this.isEntityInInventory(entity)) return true;
+    const entityName = String(entity?.name || '').trim();
+    if (!entityName) return false;
+    return this.inventory.some((held) => String(held?.name || '').trim() === entityName);
+  }
+
   getPlayerEntity(): Entity | null {
     const player = this.sceneManager.currentScene?.player;
     return player instanceof Entity ? player : null;
@@ -1532,6 +1539,29 @@ export class InventoryManager {
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
 
+    const activeSubsceneSurfaces = scene.activeSubscene
+      ? this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, null)
+          .filter(
+            (surface) => this.isObjectInsideActiveSubscene(surface) && surface.type !== 'Walkbox'
+          )
+          .flatMap((surface) =>
+            ComponentSystem.getSurfaceComponents(surface).map((component) => ({
+              surface,
+              component,
+              relation: ComponentSystem.normalizeSurfaceRelation(component),
+            }))
+          )
+      : [];
+    if (activeSubsceneSurfaces.length) {
+      return (
+        activeSubsceneSurfaces.sort((left, right) => {
+          const a = this.getSceneObjectSelectionPriority(left.surface as any);
+          const b = this.getSceneObjectSelectionPriority(right.surface as any);
+          return a - b;
+        })[0] || null
+      );
+    }
+
     const surfaces = this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, 'on')
       .map((surface) => {
         const component = ComponentSystem.getSurfaceComponent(surface, 'on');
@@ -1555,13 +1585,6 @@ export class InventoryManager {
 
     const player = scene.player;
     const playerPoint = player ? { x: player.x || 0, y: player.y || 0 } : null;
-    const subsceneContained = scene.activeSubscene
-      ? surfaces.filter(
-          (candidate) =>
-            this.isObjectInsideActiveSubscene(candidate.surface) &&
-            candidate.surface.type !== 'Walkbox'
-        )
-      : [];
     const subsceneWalkboxes = scene.activeSubscene
       ? surfaces.filter(
           (candidate) =>
@@ -1579,13 +1602,11 @@ export class InventoryManager {
           )
         : [];
 
-    const pool = subsceneContained.length
-      ? subsceneContained
-      : subsceneWalkboxes.length
-        ? subsceneWalkboxes
-        : containingWalkboxes.length
-          ? containingWalkboxes
-          : surfaces;
+    const pool = subsceneWalkboxes.length
+      ? subsceneWalkboxes
+      : containingWalkboxes.length
+        ? containingWalkboxes
+        : surfaces;
     return (
       pool.sort((left, right) => {
         const a = this.getSceneObjectSelectionPriority(left.surface as any);
@@ -1616,10 +1637,11 @@ export class InventoryManager {
           relation
       )
       .filter((candidate) => !getPlayerFacingObjectTitle(candidate));
-
+    const visited = new Set<string>();
     while (queue.length > 0) {
       const current = queue.shift();
-      if (!current) continue;
+      if (!current || visited.has(current.name)) continue;
+      visited.add(current.name);
 
       if (current instanceof Entity) {
         for (const inventoryComponent of ComponentSystem.getInventoryComponents(current)) {

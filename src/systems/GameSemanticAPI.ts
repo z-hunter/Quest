@@ -1106,7 +1106,7 @@ export class GameSemanticAPI {
       };
     }
 
-    if (this.game.inventoryManager.isEntityInInventory(entity)) {
+    if (this.game.inventoryManager.hasEntityIdInInventory(entity)) {
       return {
         status: 'failed',
         code: 'item_already_held',
@@ -1232,7 +1232,7 @@ export class GameSemanticAPI {
       };
     }
 
-    if (this.game.inventoryManager.isEntityInInventory(entity)) {
+    if (this.game.inventoryManager.hasEntityIdInInventory(entity)) {
       return {
         status: 'failed',
         code: 'item_already_held',

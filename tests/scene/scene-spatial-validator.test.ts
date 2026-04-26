@@ -43,6 +43,32 @@ describe('SceneSpatialValidator', () => {
     expect(result.errors.some((issue) => issue.code === 'duplicate_container_relation')).toBe(true);
   });
 
+  it('reports duplicate scene object ids across object categories', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    player.components = [{ type: 'Inventory', relation: 'in', capacity: 10, items: [] }];
+
+    fixture.addEntity('cassette', {
+      title: 'Cassette',
+      components: [{ type: 'Item' }],
+    });
+    fixture.addTriggerbox('cassette', {
+      title: 'Duplicate cassette trigger',
+    });
+
+    const result = SceneSpatialValidator.validate(fixture.scene, fixture.game as any);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'duplicate_object_id',
+          objectId: 'cassette',
+        }),
+      ])
+    );
+  });
+
   it('reports external untitled container extensions that conflict with built-in slots', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero');

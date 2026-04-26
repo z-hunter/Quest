@@ -110,7 +110,7 @@ export function createParserFixture(): ParserFixture {
 
   fixture.game.lookEntity = (entity: Entity) => {
     revealHiddenEntityForIntent(entity, 'look');
-    if (fixture.game.inventory.includes(entity)) {
+    if (fixture.game.inventoryManager.isEntityInInventory(entity)) {
       const details = fixture.textAssets.getResolvedObjectField(entity, 'details');
       const description = fixture.textAssets.getResolvedObjectField(entity, 'description');
       if (details) return okOutcome('entity_details', details, { entityId: entity.name });
@@ -138,7 +138,7 @@ export function createParserFixture(): ParserFixture {
       entity as any,
       fixture.scene.player
     );
-    if (distanceError && !fixture.game.inventory.includes(entity)) {
+    if (distanceError && !fixture.game.inventoryManager.isEntityInInventory(entity)) {
       return {
         status: 'failed',
         code: 'too_far_to_examine',
@@ -203,6 +203,17 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.takeEntity = (entity: Entity) => {
+    if (fixture.game.inventoryManager.hasEntityIdInInventory(entity)) {
+      return {
+        status: 'failed',
+        code: 'item_already_held',
+        message: fixture.game.text('parser.take_already_held', {
+          item: fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name,
+        }),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
     const accessOutcome = getAccessOutcome(entity, 'interact');
     if (accessOutcome) return accessOutcome;
     const error = ComponentSystem.canTakeItem(entity as any, fixture.scene.player);

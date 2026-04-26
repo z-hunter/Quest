@@ -144,6 +144,28 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe("You don't see any cassette here.");
   });
 
+  it('does not retake a scene duplicate when the same item id is already held', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A stale scene duplicate.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe("You don't see any cassette here.");
+    expect(fixture.game.inventory).toEqual([heldCassette]);
+  });
+
   it('does not ask TAKE clarification between held and unreachable matches', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -1454,6 +1476,47 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).not.toContain(musicCassette);
   });
 
+  it('DROP moves the held item instance, not a stale scene duplicate with the same id', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'The held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const staleDuplicate = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A stale scene duplicate.',
+      components: [{ type: 'Item' }],
+    });
+    staleDuplicate.x = 100;
+    staleDuplicate.y = 100;
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    const result = await fixture.run('drop cassette');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', {
+        item: 'compact_cassette',
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
+    expect(fixture.game.inventory).toEqual([]);
+    expect((heldCassette as any).spatial).toEqual({ parentNodeId: 'Walk_main', relation: 'on' });
+    expect((staleDuplicate as any).spatial).toEqual({});
+    expect(staleDuplicate.x).toBe(100);
+    expect(staleDuplicate.y).toBe(100);
+  });
+
   it('prefers an untitled surface inside the active subscene before the floor for DROP', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -1497,6 +1560,52 @@ describe('Parser + game integration smoke', () => {
     );
     expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
     expect(floor.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(false);
+  });
+
+  it('prefers an IN surface inside the active subscene before the floor for DROP', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'middle drawer',
+      description: 'A middle drawer.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('drawer_surface', {
+      title: null,
+      description: 'The inside of the drawer.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: -40, y: -40 },
+      { x: 40, y: -40 },
+      { x: 40, y: 40 },
+      { x: -40, y: 40 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] }];
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+
+    const messages = await runSemanticParser(fixture, 'drop key');
+
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'Key',
+        target: 'middle drawer',
+      })
+    );
+    expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
+    expect(floor.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(false);
+    expect((key as any).spatial).toEqual({ parentNodeId: 'drawer_surface', relation: 'on' });
   });
 
   it('takes all matching plural source items without clarification', async () => {

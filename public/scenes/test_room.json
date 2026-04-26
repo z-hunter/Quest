@@ -18,6 +18,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "poly": [
         {
           "x": -79,
@@ -65,6 +66,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "poly": [
         {
           "x": 82,
@@ -132,7 +134,7 @@
         {
           "type": "Subscene",
           "targetGroupId": "#D",
-          "itemScale": 9.5
+          "itemScale": 8
         }
       ],
       "layer": 0,
@@ -142,6 +144,7 @@
         "parentNodeId": "Desk",
         "relation": "in"
       },
+      "parallax": 1,
       "poly": [
         {
           "x": 27,
@@ -176,8 +179,7 @@
           "y": 194
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "Drawer1",
@@ -200,13 +202,14 @@
           "clearlyOpenable": true
         }
       ],
-      "layer": 0,
+      "layer": 1,
       "visible": true,
       "hidden": false,
       "spatial": {
         "parentNodeId": "Trig_sub_D",
         "relation": "in"
       },
+      "parallax": 1,
       "poly": [
         {
           "x": -156.29411764705887,
@@ -225,8 +228,7 @@
           "y": -95
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "Trig_834",
@@ -241,12 +243,12 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "poly": [],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
-      "name": "sub_sw_d2",
+      "name": "Drawer2",
       "type": "Triggerbox",
       "locked": false,
       "disabled": true,
@@ -268,6 +270,11 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Trig_sub_D",
+        "relation": "in"
+      },
+      "parallax": 1,
       "poly": [
         {
           "x": -156.29411764705878,
@@ -286,8 +293,7 @@
           "y": -10.68627450980393
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "Desk",
@@ -302,6 +308,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "poly": [
         {
           "x": -209.1508060212592,
@@ -380,8 +387,7 @@
           "y": 211
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "d1_surface",
@@ -408,6 +414,7 @@
         "parentNodeId": "Drawer1",
         "relation": "in"
       },
+      "parallax": 1,
       "poly": [
         {
           "x": -145,
@@ -426,25 +433,7 @@
           "y": -23
         }
       ],
-      "script": "",
-      "parallax": 1
-    },
-    {
-      "name": "Trig_338",
-      "type": "Triggerbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "poly": [],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "desk_surface",
@@ -471,6 +460,7 @@
         "parentNodeId": "Desk",
         "relation": "on"
       },
+      "parallax": 1,
       "poly": [
         {
           "x": -29,
@@ -509,8 +499,7 @@
           "y": 107
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
       "name": "wall",
@@ -525,6 +514,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "poly": [
         {
           "x": -238,
@@ -555,30 +545,53 @@
           "y": 12
         }
       ],
-      "script": "",
-      "parallax": 1
+      "script": ""
     },
     {
-      "name": "entry",
+      "name": "d2_surface",
       "type": "Triggerbox",
       "locked": false,
-      "disabled": false,
-      "groupID": null,
+      "disabled": true,
+      "groupID": "#D2",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [
         {
-          "type": "Entry",
-          "direction": "left"
+          "type": "Surface",
+          "relation": "in",
+          "capacity": 5,
+          "groups": [],
+          "items": []
         }
       ],
-      "layer": 0,
+      "layer": 4,
       "visible": true,
       "hidden": false,
-      "poly": [],
-      "script": "",
-      "parallax": 1
+      "spatial": {
+        "parentNodeId": "Drawer2",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -80,
+          "y": 66
+        },
+        {
+          "x": 346,
+          "y": 66
+        },
+        {
+          "x": 326,
+          "y": -19
+        },
+        {
+          "x": -60,
+          "y": -20
+        }
+      ],
+      "script": ""
     }
   ],
   "scaling": {
@@ -615,6 +628,7 @@
         "parentNodeId": "window1",
         "relation": "in"
       },
+      "parallax": 0.4,
       "x": 119.67896209456934,
       "y": 234,
       "width": 821.6,
@@ -627,7 +641,6 @@
       "color": "#00ff00",
       "scale": 0.65,
       "modelScale": 0.65,
-      "parallax": 0.4,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -656,6 +669,7 @@
       "layer": -1,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": 199,
       "y": 297,
       "width": 884.8,
@@ -668,7 +682,6 @@
       "color": "#888888",
       "scale": 0.7,
       "modelScale": 0.7,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -696,6 +709,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": 100.562,
       "y": 249.75294117647059,
       "width": 116.89999999999999,
@@ -708,7 +722,6 @@
       "color": "#00ff00",
       "scale": 0.7,
       "modelScale": 0.7,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -744,8 +757,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 195.15987568672656,
-      "y": 251.6724017789711,
+      "parallax": 1.0572798870396043,
+      "x": 194.30236238320973,
+      "y": 273.63822717059463,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -756,7 +770,6 @@
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
-      "parallax": 1.0429510848780243,
       "ignoreScaling": true,
       "animationSpeed": 30,
       "opacity": 1,
@@ -804,6 +817,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": -328,
       "y": 307,
       "width": 171.2340644206598,
@@ -816,7 +830,6 @@
       "color": "#000000",
       "scale": 1.1,
       "modelScale": 1.1,
-      "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -840,6 +853,7 @@
         "parentNodeId": "Trig_sub_D",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 135,
       "y": 310,
       "width": 614.4,
@@ -852,7 +866,6 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -871,12 +884,17 @@
       "components": [
         {
           "type": "Subtrigger",
-          "target": "sub_sw_d2"
+          "target": "Drawer2"
         }
       ],
       "layer": 3,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "Drawer2",
+        "relation": "in"
+      },
+      "parallax": 1,
       "x": 134,
       "y": 311,
       "width": 614.4,
@@ -889,7 +907,6 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -913,6 +930,7 @@
         "parentNodeId": "Drawer1",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 136,
       "y": -4,
       "width": 614.4,
@@ -925,7 +943,6 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -949,6 +966,7 @@
         "parentNodeId": "Drawer1",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 320,
       "y": 184,
       "width": 979,
@@ -961,7 +979,6 @@
       "color": "#00ff00",
       "scale": 1,
       "modelScale": 1,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -990,6 +1007,11 @@
       "layer": 6,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "sub_D_main",
+        "relation": "in"
+      },
+      "parallax": 1,
       "x": 135,
       "y": -176,
       "width": 614.4,
@@ -1002,7 +1024,6 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1031,6 +1052,7 @@
         "parentNodeId": "Drawer1",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 135,
       "y": 66,
       "width": 614.4,
@@ -1043,7 +1065,6 @@
       "color": "#00ff00",
       "scale": 0.6,
       "modelScale": 0.6,
-      "parallax": 1,
       "ignoreScaling": true,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1067,9 +1088,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": -146.13725490196006,
       "y": 289.60784313725503,
-      "parallax": 1,
       "ignoreScaling": false,
       "vertices": [
         {
@@ -1127,8 +1148,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 222.9043373174799,
-      "y": 306.92845155295464,
+      "parallax": 1.0790382036293824,
+      "x": 222.90433731747981,
+      "y": 306.92845155295527,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1139,7 +1161,6 @@
       "color": "#36d87fff",
       "scale": 0.8,
       "modelScale": 0.8,
-      "parallax": 1.0790382036293824,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1172,6 +1193,7 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": -152,
       "y": -11,
       "width": 112,
@@ -1184,46 +1206,9 @@
       "color": "#AAAAAA",
       "scale": 0.91,
       "modelScale": 1,
-      "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 0,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "Static_649",
-      "type": "Entity",
-      "locked": false,
-      "disabled": true,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 15,
-      "visible": true,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Drawer3",
-        "relation": "in"
-      },
-      "x": 138,
-      "y": 101,
-      "width": 492,
-      "height": 58,
-      "baseWidth": 540.6593406593406,
-      "baseHeight": 63.73626373626374,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#b83ed0",
-      "scale": 0.91,
-      "modelScale": 1,
-      "parallax": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
       "blendMode": "source-over",
       "blur": 0
     },
@@ -1249,6 +1234,7 @@
       "layer": -2,
       "visible": true,
       "hidden": false,
+      "parallax": 1,
       "x": 56,
       "y": -192,
       "width": 27.3,
@@ -1261,7 +1247,6 @@
       "color": "#AAAAAA",
       "scale": 0.91,
       "modelScale": 1,
-      "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1290,30 +1275,30 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "x": 140.53391040317646,
-      "y": 232.51675433854237,
       "parallax": 1,
+      "x": 139.68693090675706,
+      "y": 254.5786519356021,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 140.53391040317646,
-          "y": 232.51675433854237,
-          "p": 1.0304695546570963
+          "x": 139.68693090675706,
+          "y": 254.5786519356021,
+          "p": 1.0448448818175478
         },
         {
-          "x": 237.8050038950988,
-          "y": 231.11410685583928,
-          "p": 1.0295328678986841
+          "x": 237.03683022735026,
+          "y": 253.21082877980723,
+          "p": 1.0439129162701501
         },
         {
-          "x": 184.23616712419644,
-          "y": 272.9067130971723,
-          "p": 1.0568050023114235
+          "x": 181.07715375429132,
+          "y": 293.97438989495856,
+          "p": 1.070637230610974
         },
         {
-          "x": 136.21505230962873,
-          "y": 271.1391630350319,
-          "p": 1.0556628312582463
+          "x": 133.15407933325008,
+          "y": 292.24977718295406,
+          "p": 1.0695044581782378
         }
       ],
       "color": "#000975",
@@ -1350,19 +1335,19 @@
         "parentNodeId": "Drawer1",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 82,
       "y": -2,
-      "width": 15.044362633477071,
-      "height": 9.32343137254902,
+      "width": 19.55767142352019,
+      "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
       "baseHeight": 102.45528980823099,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
-      "scale": 0.09100000000000001,
-      "modelScale": 0.1,
-      "parallax": 1,
+      "scale": 0.1183,
+      "modelScale": 0.13,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1383,26 +1368,26 @@
           "type": "Item"
         }
       ],
-      "layer": 0,
+      "layer": 4,
       "visible": false,
       "hidden": false,
       "spatial": {
         "parentNodeId": "Hero_1",
         "relation": "in"
       },
-      "x": 339,
-      "y": 223,
-      "width": 18.62673942701228,
-      "height": 26.46957708049113,
+      "parallax": 1,
+      "x": 194.30236238320973,
+      "y": 273.63822717059463,
+      "width": 15.759890859481585,
+      "height": 22.395634379263303,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.9455263157894737,
-      "modelScale": 1,
-      "parallax": 1,
+      "scale": 0.8,
+      "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1430,19 +1415,19 @@
         "parentNodeId": "Walk_main",
         "relation": "in"
       },
+      "parallax": 1,
       "x": 555,
       "y": 214,
-      "width": 18.416780354706685,
-      "height": 26.171214188267395,
+      "width": 14.73342428376535,
+      "height": 20.936971350613916,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#86cece",
-      "scale": 0.9348684210526316,
-      "modelScale": 1,
-      "parallax": 1,
+      "scale": 0.7478947368421053,
+      "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1478,6 +1463,7 @@
         "parentNodeId": "wall",
         "relation": "on"
       },
+      "parallax": 1,
       "x": -193,
       "y": 57,
       "width": 14.999999999999998,
@@ -1490,7 +1476,6 @@
       "color": "#d66e29",
       "scale": 0.91,
       "modelScale": 1,
-      "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1526,6 +1511,7 @@
         "parentNodeId": "wall",
         "relation": "on"
       },
+      "parallax": 1,
       "x": -200,
       "y": 46,
       "width": 14.999999999999998,
@@ -1538,7 +1524,6 @@
       "color": "#d0cb39",
       "scale": 0.91,
       "modelScale": 1,
-      "parallax": 1,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1546,12 +1531,13 @@
       "blur": 0
     }
   ],
+  "folders": [],
   "camera": {
     "x": 226.41176470588238,
     "y": 52.529411764705884,
     "zoom": 0.51
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 1.5,
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,

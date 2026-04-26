@@ -274,7 +274,7 @@ export function createTestGame(): TestGameHarness {
       };
     }
 
-    if (game.inventory.includes(entity)) {
+    if (game.inventoryManager.hasEntityIdInInventory(entity)) {
       return {
         status: 'failed',
         code: 'item_already_held',
@@ -326,7 +326,7 @@ export function createTestGame(): TestGameHarness {
   };
 
   (game as any).canPutSourceEntity = (entity: Entity): GameActionOutcome | null => {
-    if (game.inventory.includes(entity)) return null;
+    if (game.inventoryManager.isEntityInInventory(entity)) return null;
     return (game as any).canTakeEntity(entity);
   };
 

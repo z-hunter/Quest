@@ -2461,16 +2461,17 @@ export class Parser {
       }
 
       const scopedCandidates = scoped.candidates;
+      const scopedTakeDiagnosticCandidates = this.filterNeverTakeCandidates(scopedCandidates);
       const scopedResolved = this.resolveEntityTargetInCandidates(
         rawTarget,
-        this.filterCurrentlyTakeableCandidates(scopedCandidates),
+        this.filterCurrentlyTakeableCandidates(scopedTakeDiagnosticCandidates),
         'parser.take_which_one'
       );
       const broadScopedResolved =
         scopedResolved.status === 'not_found'
           ? this.resolveEntityTargetInCandidates(
               rawTarget,
-              scopedCandidates,
+              scopedTakeDiagnosticCandidates,
               'parser.take_which_one'
             )
           : null;
@@ -2500,7 +2501,10 @@ export class Parser {
       }
       if (scopedResolved.status === 'not_found') {
         if (broadScopedResolved?.status === 'ambiguous') {
-          const failure = this.resolveFailedTakeDiagnostic(rawTarget, scopedCandidates);
+          const failure = this.resolveFailedTakeDiagnostic(
+            rawTarget,
+            scopedTakeDiagnosticCandidates
+          );
           if (failure) return failure;
         }
         if (broadScopedResolved?.status === 'found') {
@@ -2527,6 +2531,9 @@ export class Parser {
     const takableCandidates = this.filterCurrentlyTakeableCandidates(
       this.getScopeCandidates(['takable'])
     );
+    const takeDiagnosticCandidates = this.filterNeverTakeCandidates(
+      this.getScopeCandidates(['visible'])
+    );
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
       takableCandidates,
@@ -2536,7 +2543,7 @@ export class Parser {
       resolved.status === 'not_found'
         ? this.resolveEntityTargetInCandidates(
             rawTarget,
-            this.getScopeCandidates(['visible']),
+            takeDiagnosticCandidates,
             'parser.take_which_one'
           )
         : null;
@@ -2555,10 +2562,7 @@ export class Parser {
     }
     if (resolved.status === 'not_found') {
       if (broadResolved?.status === 'ambiguous') {
-        const failure = this.resolveFailedTakeDiagnostic(
-          rawTarget,
-          this.getScopeCandidates(['visible'])
-        );
+        const failure = this.resolveFailedTakeDiagnostic(rawTarget, takeDiagnosticCandidates);
         if (failure) return failure;
       }
       if (broadResolved?.status === 'found') {
@@ -2663,7 +2667,7 @@ export class Parser {
   ): GameActionOutcome | null {
     const matches = this.findResolutionMatchesInCandidates(rawTarget, candidates).filter(
       (candidate): candidate is Entity =>
-        candidate instanceof Entity && !this.game.inventory.includes(candidate)
+        candidate instanceof Entity && !this.isEntityHeldForTake(candidate)
     );
     if (!matches.length) return null;
 
@@ -2675,7 +2679,7 @@ export class Parser {
     const canTakeOutcome = (this.game as any).canTakeEntity?.(entity);
     if (canTakeOutcome) return canTakeOutcome;
 
-    if (this.game.inventory.includes(entity)) {
+    if (this.isEntityHeldForTake(entity)) {
       return {
         status: 'failed',
         code: 'item_already_held',
@@ -2712,9 +2716,30 @@ export class Parser {
   private filterCurrentlyTakeableCandidates(candidates: SceneObject[]): Entity[] {
     return candidates.filter((candidate): candidate is Entity => {
       if (!(candidate instanceof Entity)) return false;
+      if (this.isEntityHeldForTake(candidate)) return false;
       const canTakeOutcome = (this.game as any).canTakeEntity?.(candidate);
       return !canTakeOutcome;
     });
+  }
+
+  private filterNeverTakeCandidates(candidates: SceneObject[]): SceneObject[] {
+    return candidates.filter((candidate) => {
+      if (!(candidate instanceof Entity)) return true;
+      return !this.isEntityHeldForTake(candidate);
+    });
+  }
+
+  private isEntityHeldForTake(entity: Entity): boolean {
+    const inventoryManagerCheck = (this.game as any).inventoryManager?.hasEntityIdInInventory;
+    if (typeof inventoryManagerCheck === 'function') {
+      return !!inventoryManagerCheck.call((this.game as any).inventoryManager, entity);
+    }
+    if (this.game.inventory.includes(entity)) return true;
+    const entityName = String(entity?.name || '').trim();
+    if (!entityName) return false;
+    return this.game.inventory.some(
+      (held: Entity) => String(held?.name || '').trim() === entityName
+    );
   }
 
   private resolvePutTarget(
@@ -2818,7 +2843,10 @@ export class Parser {
       );
       if (sourceMatches.length > 1 && hasHeldMatch && hasSceneMatch) {
         if (!this.areResolutionOptionsDistinct(sourceMatches)) {
-          const preferred = this.choosePreferredObject(sourceMatches);
+          const preferred =
+            sourceMatches.find((sceneObject) =>
+              this.game.inventory.includes(sceneObject as Entity)
+            ) || this.choosePreferredObject(sourceMatches);
           if (preferred) sourceCandidates.splice(0, sourceCandidates.length, preferred);
         } else {
           const clarificationOptions = this.getResolutionClarificationOptions(

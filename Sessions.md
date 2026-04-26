@@ -596,7 +596,7 @@ During the session the following checks were run successfully:
 
 ## Session Entry - 2026-04-19 12:13 +02:00
 
- 1. What was completed
+1. What was completed
 
 - Decomposition of Game.ts: Successfully refactored the monolith from ~80KB to ~40KB by delegating responsibilities to
      specialized systems.
@@ -609,20 +609,20 @@ During the session the following checks were run successfully:
 - Autotests & CI Consistency: Updated test fixtures and ensured the entire suite (202 tests) passes, confirming no regressions
      in parser or runtime logic.
 
-  1. Current state
+2. Current state
 
 - The core architecture is now modular and more scalable.
 - The IGame interface is fully updated to reflect the new delegation pattern.
 - The workspace is clean, and changes are committed to the scene-refact2 branch.
 - Browser runtime errors (SyntaxErrors due to improper type imports) have been fully resolved and verified.
 
-  1. Next steps
+3. Next steps
 
 - Feature Sprint: Resume development of gameplay features as defined in GDD.md.
 - Cleanup: Conduct a final audit of any remaining any casts in ComponentSystem.ts that can now be replaced with AnyComponent.
 - Tauri Prep: Proceed with the explicit workspace model for the desktop build as outlined in Tauri.md.
 
-  1. Risks & Caveats
+4. Risks & Caveats
 
 - Import Precision: Developers must use import type when bringing in IGame or GameActionOutcome in new files to avoid Vite build
      failures.

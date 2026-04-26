@@ -22,7 +22,12 @@ export const FolderProperties: React.FC = () => {
     const scene = game?.sceneManager?.currentScene;
     if (!scene) return;
     const fid = (folder as any).folderId;
-    const allObjects = [...scene.entities, ...(scene.walkbox || []), ...(scene.triggerboxes || [])];
+    const allObjects = [
+      ...scene.entities,
+      ...(scene.folders || []),
+      ...(scene.walkbox || []),
+      ...(scene.triggerboxes || []),
+    ];
     for (const child of allObjects as any[]) {
       if ((child as any).folder !== fid) continue;
       if (!((child as any).inheritedProps instanceof Set)) {
@@ -78,17 +83,19 @@ export const FolderProperties: React.FC = () => {
         <button
           className="e-btn"
           onClick={() => {
-            const scene = game?.sceneManager?.currentScene;
+            if (!game) return;
+            const scene = game.sceneManager?.currentScene;
             if (!scene) return;
             const fid = (folder as any).folderId;
             const allObjects = [
               ...scene.entities,
+              ...(scene.folders || []),
               ...(scene.triggerboxes || []),
               ...(scene.walkbox || []),
             ];
             const children = allObjects.filter((o: any) => o.folder === fid);
             if (children.length > 0) {
-              game.editor.selectionManager.setMultiSelection(children);
+              game.editor?.selectionManager?.setMultiSelection(children);
             }
           }}
         >
@@ -104,7 +111,7 @@ export const FolderProperties: React.FC = () => {
           const defaults = (folder as any).defaults || {};
 
           const handleDefault = (prop: string, value: any, enforceNumber = false) => {
-            game.editor.saveUndoState();
+            game?.editor?.saveUndoState();
             let finalVal = value;
             if (enforceNumber) {
               finalVal = parseFloat(String(value));
@@ -118,7 +125,7 @@ export const FolderProperties: React.FC = () => {
           };
 
           const clearDefault = (prop: string) => {
-            game.editor.saveUndoState();
+            game?.editor?.saveUndoState();
             removeFolderDefault(prop);
             if ((folder as any).defaults) delete (folder as any).defaults[prop];
             incrementObjectVersion();
@@ -146,6 +153,7 @@ export const FolderProperties: React.FC = () => {
                     {hasDefault('modelScale') && (
                       <button
                         className="e-btn e-btn-reset"
+                        aria-label="Clear modelScale default"
                         onClick={() => clearDefault('modelScale')}
                       >
                         x
@@ -164,7 +172,11 @@ export const FolderProperties: React.FC = () => {
                       onChange={(e) => handleDefault('layer', e.target.value, true)}
                     />
                     {hasDefault('layer') && (
-                      <button className="e-btn e-btn-reset" onClick={() => clearDefault('layer')}>
+                      <button
+                        className="e-btn e-btn-reset"
+                        aria-label="Clear layer default"
+                        onClick={() => clearDefault('layer')}
+                      >
                         x
                       </button>
                     )}
@@ -184,6 +196,7 @@ export const FolderProperties: React.FC = () => {
                     {hasDefault('parallax') && (
                       <button
                         className="e-btn e-btn-reset"
+                        aria-label="Clear parallax default"
                         onClick={() => clearDefault('parallax')}
                       >
                         x
@@ -222,7 +235,11 @@ export const FolderProperties: React.FC = () => {
                       onChange={(e) => handleDefault('color', e.target.value)}
                     />
                     {hasDefault('color') && (
-                      <button className="e-btn e-btn-reset" onClick={() => clearDefault('color')}>
+                      <button
+                        className="e-btn e-btn-reset"
+                        aria-label="Clear color default"
+                        onClick={() => clearDefault('color')}
+                      >
                         x
                       </button>
                     )}
@@ -248,6 +265,7 @@ export const FolderProperties: React.FC = () => {
                     {hasDefault('blendMode') && (
                       <button
                         className="e-btn e-btn-reset"
+                        aria-label="Clear blendMode default"
                         onClick={() => clearDefault('blendMode')}
                       >
                         x

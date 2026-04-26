@@ -25,6 +25,15 @@ export const HierarchyPanel: React.FC = () => {
     startY: 0,
   });
   const dragPending = React.useRef<{ startY: number; item: any } | null>(null);
+  const pendingListenersRef = React.useRef<(() => void) | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (pendingListenersRef.current) {
+        pendingListenersRef.current();
+      }
+    };
+  }, []);
 
   // Force re-render on hierarchy version change (subscription)
   React.useEffect(() => {
@@ -347,6 +356,7 @@ export const HierarchyPanel: React.FC = () => {
         dragPending.current = null;
         window.removeEventListener('mousemove', armDragIfMoved);
         window.removeEventListener('mouseup', cancelPending);
+        pendingListenersRef.current = null;
         setDragState({
           dragging: true,
           draggedNames: names,
@@ -358,7 +368,9 @@ export const HierarchyPanel: React.FC = () => {
         dragPending.current = null;
         window.removeEventListener('mousemove', armDragIfMoved);
         window.removeEventListener('mouseup', cancelPending);
+        pendingListenersRef.current = null;
       };
+      pendingListenersRef.current = cancelPending;
       window.addEventListener('mousemove', armDragIfMoved);
       window.addEventListener('mouseup', cancelPending);
     },
@@ -390,34 +402,42 @@ export const HierarchyPanel: React.FC = () => {
         const draggedWalkboxes: any[] = [];
         const draggedTriggers: any[] = [];
 
-        scene.entities = scene.entities.filter((e: any) => {
-          if (draggedNames.has(e.name)) {
-            draggedEntities.push(e);
-            return false;
-          }
-          return true;
-        });
-        scene.folders = scene.folders.filter((f: any) => {
-          if (draggedNames.has(f.name)) {
-            draggedFolders.push(f);
-            return false;
-          }
-          return true;
-        });
-        scene.walkbox = scene.walkbox.filter((w: any) => {
-          if (draggedNames.has(w.name)) {
-            draggedWalkboxes.push(w);
-            return false;
-          }
-          return true;
-        });
-        scene.triggerboxes = scene.triggerboxes.filter((t: any) => {
-          if (draggedNames.has(t.name)) {
-            draggedTriggers.push(t);
-            return false;
-          }
-          return true;
-        });
+        scene.entities = Array.isArray(scene.entities)
+          ? scene.entities.filter((e: any) => {
+              if (draggedNames.has(e.name)) {
+                draggedEntities.push(e);
+                return false;
+              }
+              return true;
+            })
+          : [];
+        scene.folders = Array.isArray(scene.folders)
+          ? scene.folders.filter((f: any) => {
+              if (draggedNames.has(f.name)) {
+                draggedFolders.push(f);
+                return false;
+              }
+              return true;
+            })
+          : [];
+        scene.walkbox = Array.isArray(scene.walkbox)
+          ? scene.walkbox.filter((w: any) => {
+              if (draggedNames.has(w.name)) {
+                draggedWalkboxes.push(w);
+                return false;
+              }
+              return true;
+            })
+          : [];
+        scene.triggerboxes = Array.isArray(scene.triggerboxes)
+          ? scene.triggerboxes.filter((t: any) => {
+              if (draggedNames.has(t.name)) {
+                draggedTriggers.push(t);
+                return false;
+              }
+              return true;
+            })
+          : [];
 
         let newFolder: string | null = null;
         if (targetName !== '__end__') {

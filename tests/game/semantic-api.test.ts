@@ -250,6 +250,52 @@ describe('Game semantic API', () => {
     expect((idCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
   });
 
+  it('does not take a scene duplicate when an item with the same id is already held', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const sceneDuplicate = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A stale scene duplicate.',
+      components: [{ type: 'Item' }],
+    });
+
+    const outcome = fixture.game.takeEntity(sceneDuplicate);
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('item_already_held');
+    expect(fixture.game.inventory).toEqual([heldCassette]);
+  });
+
+  it('does not treat a scene duplicate as the held item for DROP', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const sceneDuplicate = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A stale scene duplicate.',
+      components: [{ type: 'Item' }],
+    });
+
+    const outcome = fixture.game.putEntity(sceneDuplicate, null, { relation: null });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('put_item_not_held');
+    expect(fixture.game.inventory).toEqual([heldCassette]);
+  });
+
   it('does not create a player inventory implicitly when taking an item', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);

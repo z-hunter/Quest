@@ -23,9 +23,15 @@ Raw hierarchy остаётся правдой сцены. Но player-facing т�
 - `on` - на поверхности.
 - `under` - под.
 - `behind` - за.
-- `near` - распознаётся parser-ом как relation word, но не является полноценным storage relation и не используется как container relation.
+- `near` - пространственное отношение (proximity). Допускается в `spatial.relation` для визуальной/семантической группировки, но **запрещено** использовать в качестве storage relation.
 
-В данных сцены relation обычно задаётся в нижнем регистре. В user-facing тексте relation форматируется человекочитаемо: `in`, `on`, `under`, `behind`.
+### Правила использования `near`
+
+- **(1) Validity в данных сцены (Scene Data):** `near` является полностью валидным значением для `spatial.relation` при расстановке объектов на сцене, когда нужно указать, что один объект находится "около" или "рядом" с другим (anchor).
+- **(2) Parser / Runtime handling:** Парсер распознает токен `near` (например, `LOOK NEAR DESK`), а рантайм использует это значение исключительно для расчета пространственной близости (proximity-only relation). В отличие от `in` или `on`, `near` не дает доступа к вложенному хранилищу.
+- **(3) Validation rules:** Валидатор (validator) **обязан отклонять** (reject) значение `near`, если оно указано внутри конфигурации любых storage containers (например, у компонентов `Inventory` или `Surface`), так как "рядом" не может быть слотом для хранения предметов.
+
+В данных сцены relation обычно задаётся в нижнем регистре. В user-facing тексте relation форматируется человекочитаемо: `in`, `on`, `under`, `behind`, `near`.
 
 ## Raw Spatial Hierarchy
 
@@ -34,6 +40,7 @@ Raw hierarchy остаётся правдой сцены. Но player-facing т�
 ```ts
 spatial?: {
   parentNodeId: string;
+  // 'near' используется только для proximity и отклоняется в storage components
   relation: 'in' | 'on' | 'under' | 'behind' | 'near';
 }
 ```
@@ -272,7 +279,14 @@ Chair (Title, Surface relation under)
 - `PUT book ON SHELF` ищет storage с relation `on` на `Shelf`.
 - `PUT cassette UNDER CHAIR` ищет storage с relation `under` на `Chair`.
 
-У одного titled object не должно быть двух storage components одного kind/relation, создающих конфликт. Валидатор должен подсвечивать duplicate relation slots.
+У одного titled object не должно быть двух storage components с одинаковым relation — даже если это разные типы компонентов (например, один `Inventory`, а другой `Surface`). Валидатор должен подсвечивать такие duplicate relation slots как ошибку.
+
+Пример конфликта (invalid):
+- `Box` (Title)
+  - `Inventory` (relation: `in`)
+  - `Surface` (relation: `in`)
+
+В таком случае команды типа `PUT key IN BOX` должны быть отклонены валидатором из-за неоднозначности (неясно, в какой именно из `in`-слотов класть предмет).
 
 ## External / Technical Containers
 

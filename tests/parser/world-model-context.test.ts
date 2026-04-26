@@ -368,6 +368,28 @@ describe('Parser world model context', () => {
     expect(model.scope.putSource.map((entity) => entity.name)).not.toContain('far_cassette');
   });
 
+  it('omits scene duplicates whose stable id is already held from takable scope', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A stale scene duplicate.',
+      components: [{ type: 'Item' }],
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('take cassette', null);
+
+    expect(model.scope.takable.map((entity) => entity.name)).not.toContain('compact_cassette');
+  });
+
   it('omits player inventory items from scene text layer but projects external inventory items by slot relation', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 12, 34);
