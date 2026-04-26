@@ -246,6 +246,24 @@ function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
   return hasClickOutput(scene, obj) || canActivateOnClick(obj);
 }
 
+function isTechnicalStorageSurface(scene: Scene, obj: SceneObject): boolean {
+  const hasSurface = obj.components?.some((component: any) => component?.type === 'Surface');
+  if (!hasSurface) return false;
+  if (hasMeaningfulClickResult(scene, obj)) return false;
+
+  const nonSurfaceComponents =
+    obj.components?.filter((component: any) => component?.type !== 'Surface') || [];
+  if (nonSurfaceComponents.length > 0) return false;
+
+  return true;
+}
+
+function getSubsceneClickCandidates(scene: Scene): SceneObject[] {
+  return Array.from(scene.subsceneEntities).filter(
+    (obj) => !obj.disabled && obj.visible && !isTechnicalStorageSurface(scene, obj)
+  );
+}
+
 function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | null {
   if (obj.components) {
     const sub = obj.components.find((c) => c.type === 'Subscene') as any;
@@ -317,9 +335,7 @@ export function getHoverCursorAtScreenPoint(
   screenY: number
 ): HoverCursor | null {
   if (scene.activeSubscene) {
-    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
-    );
+    const subsceneCandidates = getSubsceneClickCandidates(scene);
     const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
       scene,
       subsceneCandidates,
@@ -375,9 +391,7 @@ export function activateSceneObject(
 
 export function handleSceneClick(scene: Scene, x: number, y: number): void {
   if (scene.activeSubscene) {
-    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
-    );
+    const subsceneCandidates = getSubsceneClickCandidates(scene);
     const subsceneHitCandidates = findTopLayerHitCandidatesAtScreenPoint(
       scene,
       subsceneCandidates,

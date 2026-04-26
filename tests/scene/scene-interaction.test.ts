@@ -81,6 +81,33 @@ describe('Scene interaction text layer', () => {
     );
   });
 
+  it('ignores untitled technical subscene surfaces so clicks pass through to objects below', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.activeSubscene = 'DrawerZone';
+
+    const drawerBody = fixture.addTriggerbox('drawer_body', {
+      title: 'Middle drawer',
+      description: 'The drawer body.',
+      components: [{ type: 'Switch', state: 2 }],
+    });
+    drawerBody.layer = 1;
+    fixture.scene.subsceneEntities.add(drawerBody);
+
+    const surface = fixture.addTriggerbox('drawer_surface', {
+      title: null,
+      description: 'Technical storage surface.',
+      components: [{ type: 'Surface', relation: 'in', capacity: 2, items: [] }],
+    });
+    surface.layer = 4;
+    fixture.scene.subsceneEntities.add(surface);
+
+    handleSceneClick(fixture.scene, 215, 155);
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Middle drawer' })
+    );
+  });
+
   it('click reveals a lookable hidden title but not an examinable one', () => {
     const fixture = createSceneFixture();
     const lookable = fixture.addTriggerbox('lookable_trigger', {
