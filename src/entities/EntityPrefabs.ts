@@ -27,6 +27,7 @@ export const DefaultActorData: ActorData = {
   speed: 0.1,
   animSets: {},
   isPlayer: false,
+  components: [{ type: 'Actor' }],
 };
 
 export const DefaultQuadData: any = {

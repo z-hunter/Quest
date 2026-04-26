@@ -595,6 +595,86 @@ export class SceneEditor {
     this.selectionManager.selectObject(obj);
   }
 
+  convertEntityToActor(entity: Entity): Actor | null {
+    if (!entity || entity instanceof Actor || entity.type === 'Quad') return null;
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const index = scene.entities.indexOf(entity);
+    if (index < 0) return null;
+
+    this.saveUndoState();
+
+    const inventoryOwner = entity.getInventoryPositionOwner?.() || null;
+    const data = entity.toJSON();
+    const components = Array.isArray(data.components) ? data.components : [];
+    const actor = Actor.fromJSON(this.game, {
+      ...data,
+      type: 'Actor',
+      direction: data.direction || 'down',
+      speed: typeof data.speed === 'number' ? data.speed : 0.1,
+      animSets: data.animSets || {},
+      isPlayer: !!data.isPlayer,
+      components: components.some((component: any) => component?.type === 'Actor')
+        ? components
+        : [{ type: 'Actor' }, ...components],
+    });
+
+    actor.scene = scene;
+    actor.setInventoryPositionOwner?.(inventoryOwner);
+    scene.entities[index] = actor;
+    if (actor.isPlayer) scene.player = actor;
+    if (scene.subsceneEntities.has(entity)) {
+      scene.subsceneEntities.delete(entity);
+      scene.subsceneEntities.add(actor);
+    }
+
+    this.game.sceneManager.exposeEntitiesToWindow();
+    this.selectObject(actor);
+    useEditorStore.getState().incrementObjectVersion();
+    this.refreshHierarchy();
+    return actor;
+  }
+
+  convertActorToEntity(actor: Actor): Entity | null {
+    if (!actor || !(actor instanceof Actor)) return null;
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const index = scene.entities.indexOf(actor);
+    if (index < 0) return null;
+
+    this.saveUndoState();
+
+    const inventoryOwner = actor.getInventoryPositionOwner?.() || null;
+    const data = actor.toJSON();
+    const components = Array.isArray(data.components)
+      ? data.components.filter(
+          (component: any) => component?.type !== 'Actor' && component?.type !== 'Shadow'
+        )
+      : [];
+    const entity = Entity.fromJSON(this.game, {
+      ...data,
+      type: 'Entity',
+      components,
+    });
+
+    entity.scene = scene;
+    entity.setInventoryPositionOwner?.(inventoryOwner);
+    scene.entities[index] = entity;
+    if (scene.player === actor) scene.player = null;
+    if (scene.subsceneEntities.has(actor)) {
+      scene.subsceneEntities.delete(actor);
+      scene.subsceneEntities.add(entity);
+    }
+
+    this.game.sceneManager.exposeEntitiesToWindow();
+    this.selectObject(entity);
+    useEditorStore.getState().incrementObjectVersion();
+    this.refreshHierarchy();
+    return entity;
+  }
+
   toggleObjectSelection(obj: SceneObject): void {
     this.selectionManager.toggleObjectSelection(obj);
   }
@@ -835,7 +915,12 @@ export class SceneEditor {
             });
           }
         }
-      } else if (type === 'Actor') {
+      } else if (
+        type === 'Actor' ||
+        (Array.isArray(data.components) &&
+          data.components.some((component: any) => component?.type === 'Actor'))
+      ) {
+        data.type = 'Actor';
         newObj = Actor.fromJSON(this.game, data);
       } else if (type === 'Player') {
         newObj = Actor.fromJSON(this.game, { ...data, type: 'Actor', isPlayer: true });

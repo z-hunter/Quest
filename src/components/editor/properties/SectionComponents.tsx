@@ -3,6 +3,8 @@ import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 
 import { SceneObject } from '../../../entities/SceneObject';
+import { Actor } from '../../../entities/Actor';
+import { Entity } from '../../../entities/Entity';
 
 export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
@@ -10,6 +12,11 @@ export const SectionComponents: React.FC = () => {
   const o = obj;
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
+  const hasActorComponent = (o.components || []).some((comp: any) => comp?.type === 'Actor');
+  const renderedComponents =
+    selectedObjectType === 'Actor' && !hasActorComponent
+      ? [{ type: 'Actor', __virtualActorComponent: true }, ...(o.components || [])]
+      : o.components || [];
   const relationOptions = [
     { value: 'in', label: 'IN' },
     { value: 'on', label: 'ON' },
@@ -112,6 +119,9 @@ export const SectionComponents: React.FC = () => {
               { value: 'Blocker', label: 'Blocker' },
               { value: 'Exit', label: 'Exit (Transition)' },
               { value: 'Entry', label: 'Entry (Spawn Point)' },
+              ...(selectedObjectType === 'Static' || selectedObjectType === 'Entity'
+                ? [{ value: 'Actor', label: 'Actor' }]
+                : []),
               ...(selectedObjectType === 'Quad'
                 ? [
                     { value: 'Backface', label: 'Backface' },
@@ -125,6 +135,12 @@ export const SectionComponents: React.FC = () => {
             onChange={(value) => {
               const type = value;
               if (!type) return;
+              if (type === 'Actor') {
+                if (game.editor.selectedObject instanceof Entity) {
+                  game.editor.convertEntityToActor(game.editor.selectedObject);
+                }
+                return;
+              }
               if (game.editor) game.editor.saveUndoState();
               if (!o.components) o.components = [];
               const relation = hasTitle ? getNextAvailableContainerRelation() : null;
@@ -224,10 +240,14 @@ export const SectionComponents: React.FC = () => {
         </div>
       </div>
 
-      {o.components &&
-        o.components.map((comp: any, idx: number) => (
+      {renderedComponents.map((comp: any, displayIdx: number) => {
+        const idx =
+          selectedObjectType === 'Actor' && !hasActorComponent ? displayIdx - 1 : displayIdx;
+        const isVirtualActorComponent = !!comp.__virtualActorComponent;
+
+        return (
           <div
-            key={idx}
+            key={isVirtualActorComponent ? 'actor-component' : idx}
             style={{
               background: '#332',
               padding: '5px',
@@ -249,7 +269,24 @@ export const SectionComponents: React.FC = () => {
               <button
                 className="e-btn e-btn-red"
                 style={{ padding: '0 5px' }}
-                onClick={() => {
+                onClick={async () => {
+                  if (comp.type === 'Actor') {
+                    if (game.editor.selectedObject instanceof Actor) {
+                      const choice = await game.requestChoiceDialog(
+                        'Remove Actor Component',
+                        'This object will become Static and permanently lose all Actor settings, including direction, player mode, move speed, visual states, animation sets, and Actor-only components.',
+                        [
+                          { id: 'cancel', label: 'Cancel', variant: 'neutral' },
+                          { id: 'proceed', label: 'Proceed', variant: 'danger' },
+                        ]
+                      );
+                      if (choice === 'proceed') {
+                        game.editor.convertActorToEntity(game.editor.selectedObject);
+                      }
+                    }
+                    return;
+                  }
+                  if (idx < 0) return;
                   if (game.editor) game.editor.saveUndoState();
                   o.components.splice(idx, 1);
                   if (game.editor.selectedObject) {
@@ -261,6 +298,19 @@ export const SectionComponents: React.FC = () => {
                 x
               </button>
             </div>
+
+            {comp.type === 'Actor' && (
+              <div
+                style={{
+                  fontSize: '10px',
+                  color: '#ccc',
+                  fontStyle: 'italic',
+                  marginBottom: '4px',
+                }}
+              >
+                Enables Actor movement, direction, player mode, and animation sets.
+              </div>
+            )}
 
             {comp.type === 'Backface' && (
               <>
@@ -1090,7 +1140,8 @@ export const SectionComponents: React.FC = () => {
               </>
             )}
           </div>
-        ))}
+        );
+      })}
     </div>
   );
 };

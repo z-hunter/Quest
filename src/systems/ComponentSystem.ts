@@ -60,6 +60,10 @@ export interface ItemComponent {
   ignoreDistance?: boolean;
 }
 
+export interface ActorComponent {
+  type: 'Actor';
+}
+
 export interface InventoryComponent {
   type: 'Inventory';
   relation?: Exclude<SpatialRelationType, 'near'>;
@@ -99,6 +103,7 @@ export type AnyComponent = (
   | ExitComponent
   | EntryComponent
   | ItemComponent
+  | ActorComponent
   | InventoryComponent
   | SurfaceComponent
   | WalkBoxComponent

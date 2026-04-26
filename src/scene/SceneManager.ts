@@ -535,10 +535,14 @@ export class SceneManager {
 
         let entity: Entity;
 
+        const hasActorComponent = Array.isArray(entityData.components)
+          ? entityData.components.some((component: any) => component?.type === 'Actor')
+          : false;
+
         if (entityData.type === 'Player') {
           entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
-        } else if (entityData.type === 'Actor') {
-          entity = Actor.fromJSON(this.game, entityData);
+        } else if (entityData.type === 'Actor' || hasActorComponent) {
+          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
         } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
           entity = QuadObject.fromJSON(this.game, entityData);
         } else {

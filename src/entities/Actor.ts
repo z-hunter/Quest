@@ -364,6 +364,10 @@ export class Actor extends Entity {
   toJSON() {
     const data = super.toJSON();
     data.type = 'Actor';
+    const components = Array.isArray(data.components) ? data.components : [];
+    if (!components.some((component: any) => component?.type === 'Actor')) {
+      data.components = [{ type: 'Actor' }, ...components];
+    }
     return data;
   }
 
