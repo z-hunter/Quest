@@ -274,7 +274,7 @@ export function createTestGame(): TestGameHarness {
       };
     }
 
-    if (game.inventoryManager.hasEntityIdInInventory(entity)) {
+    if (game.inventoryManager.isEntityInInventory(entity)) {
       return {
         status: 'failed',
         code: 'item_already_held',

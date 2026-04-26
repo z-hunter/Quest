@@ -137,8 +137,24 @@ export class InventoryManager {
     return this.inventory.includes(entity);
   }
 
+  /**
+   * Checks whether this exact entity, or a serialized duplicate of it, is already held.
+   * Prefer a stable explicit `id` when present; older scene data uses `name` as the
+   * item identity, so name matching remains the fallback for legacy entities.
+   */
   hasEntityIdInInventory(entity: Entity): boolean {
     if (this.isEntityInInventory(entity)) return true;
+    const entityId =
+      typeof (entity as unknown as { id?: unknown })?.id === 'string'
+        ? (entity as unknown as { id: string }).id.trim()
+        : '';
+    if (entityId) {
+      return this.inventory.some(
+        (held) =>
+          typeof (held as unknown as { id?: unknown })?.id === 'string' &&
+          (held as unknown as { id: string }).id.trim() === entityId
+      );
+    }
     const entityName = String(entity?.name || '').trim();
     if (!entityName) return false;
     return this.inventory.some((held) => String(held?.name || '').trim() === entityName);

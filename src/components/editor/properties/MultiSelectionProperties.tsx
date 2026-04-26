@@ -4,6 +4,7 @@ import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
 import { Triggerbox } from '../../../entities/Triggerbox';
 import { useEditorStore } from '../../../store/editorStore';
+import { normalizeGroupIdList } from '../../../utils/GroupIds';
 
 import {
   getSharedValue,
@@ -132,18 +133,11 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   e.preventDefault();
                   const raw = groupIdDraft.trim();
                   if (!raw) return;
-                  const prepared = raw
-                    .split(',')
-                    .map((x) => x.trim())
-                    .filter(Boolean)
-                    .map((x) => (x.startsWith('#') ? x : `#${x}`));
+                  const prepared = normalizeGroupIdList(raw).split(',').filter(Boolean);
 
                   let changedCount = 0;
                   multiObjects.forEach((o: any) => {
-                    const existing = (o.groupID || '')
-                      .split(',')
-                      .map((x: string) => x.trim())
-                      .filter(Boolean);
+                    const existing = normalizeGroupIdList(o.groupID).split(',').filter(Boolean);
 
                     if (e.ctrlKey) {
                       const filtered = existing.filter((x: string) => !prepared.includes(x));

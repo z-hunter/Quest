@@ -263,10 +263,10 @@ export class EditorPersistenceManager {
 
     try {
       await saveProjectFile(filePath, json);
-      this.editor.game.showNotification(`Prefab Saved: ${filename} `);
+      this.editor.game.showNotification(`Prefab Saved: ${filename}`);
     } catch (e) {
       console.error('Failed to save prefab:', e);
-      this.editor.game.showNotification(`Error: ${e} `);
+      this.editor.game.showNotification(`Error: ${e}`);
     }
   }
 

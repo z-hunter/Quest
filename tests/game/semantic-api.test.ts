@@ -273,6 +273,27 @@ describe('Game semantic API', () => {
     expect(fixture.game.inventory).toEqual([heldCassette]);
   });
 
+  it('does not treat same-name entities with different stable ids as the same held item', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const heldCassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A held cassette.',
+      components: [{ type: 'Item' }],
+    });
+    (heldCassette as any).id = 'cassette-held';
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+    const sceneCassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A different cassette.',
+      components: [{ type: 'Item' }],
+    });
+    (sceneCassette as any).id = 'cassette-scene';
+
+    expect(fixture.game.inventoryManager.hasEntityIdInInventory(sceneCassette)).toBe(false);
+  });
+
   it('does not treat a scene duplicate as the held item for DROP', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

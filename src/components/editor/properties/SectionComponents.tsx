@@ -893,9 +893,9 @@ export const SectionComponents: React.FC = () => {
                       type="text"
                       className="e-input"
                       style={{ width: '100%' }}
-                      value={comp.idKey || ''}
+                      value={comp.keyId || ''}
                       onChange={(e) => {
-                        comp.idKey = e.target.value;
+                        comp.keyId = e.target.value;
                         incrementObjectVersion();
                       }}
                     />

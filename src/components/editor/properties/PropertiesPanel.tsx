@@ -17,6 +17,7 @@ import {
   scalePolyByFactor,
   scaleQuadVerticesByFactor,
 } from './propertiesUtils';
+import { normalizeGroupIdList } from '../../../utils/GroupIds';
 
 import { MultiSelectionProperties } from './MultiSelectionProperties';
 import { SectionIdentity } from './SectionIdentity';
@@ -541,6 +542,9 @@ export const PropertiesPanel: React.FC = () => {
       if (enforceNumber) {
         finalVal = parseFloat(String(value));
         if (isNaN(finalVal)) finalVal = 0;
+      }
+      if (field === 'groupID') {
+        finalVal = normalizeGroupIdList(finalVal, { preserveEmptyTokens: true });
       }
 
       obj[field] = finalVal;

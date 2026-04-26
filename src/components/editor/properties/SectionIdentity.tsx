@@ -4,6 +4,7 @@ import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
 import { SceneObject } from '../../../entities/SceneObject';
 import { Triggerbox } from '../../../entities/Triggerbox';
+import { normalizeGroupIdList } from '../../../utils/GroupIds';
 
 interface SectionIdentityData {
   id?: string;
@@ -153,19 +154,13 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
             className="e-input"
             value={o.groupID || ''}
             onChange={(e) => {
-              const val = e.target.value;
-              const tokens = val.split(',');
-              const newTokens = tokens.map((t) => {
-                if (t.length === 0) return '';
-                let clean = t;
-                const trimmed = t.trimStart();
-                if (trimmed.length > 0 && !trimmed.startsWith('#')) {
-                  const firstCharIdx = t.length - trimmed.length;
-                  clean = t.substring(0, firstCharIdx) + '#' + trimmed;
-                }
-                return clean;
-              });
-              handleChange('groupID', newTokens.join(','));
+              handleChange(
+                'groupID',
+                normalizeGroupIdList(e.target.value, { preserveEmptyTokens: true })
+              );
+            }}
+            onBlur={(e) => {
+              handleChange('groupID', normalizeGroupIdList(e.target.value));
             }}
           />
         </div>

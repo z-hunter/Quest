@@ -1,4 +1,5 @@
 import type { AnyComponent } from '../systems/ComponentSystem';
+import { normalizeGroupIdList } from '../utils/GroupIds';
 
 export class SceneObject {
   name: string;
@@ -103,6 +104,10 @@ export class SceneObject {
           }
           return;
         }
+        if (prop === 'groupID' && typeof value === 'string') {
+          json[prop] = normalizeGroupIdList(value);
+          return;
+        }
         if (
           prop === 'spatial' &&
           value &&
@@ -138,6 +143,10 @@ export class SceneObject {
           if (Array.isArray(value)) {
             this.inheritedProps = new Set(value);
           }
+          return;
+        }
+        if (prop === 'groupID' && typeof value === 'string') {
+          (this as any)[prop] = normalizeGroupIdList(value);
           return;
         }
         // Deep clone objects and arrays

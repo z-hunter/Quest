@@ -158,7 +158,7 @@
       "locked": false,
       "disabled": true,
       "layer": 0,
-      "groupID": "#D ",
+      "groupID": "#D",
       "customName": "",
       "interactions": {},
       "components": [
@@ -213,7 +213,7 @@
       "locked": false,
       "disabled": true,
       "layer": 0,
-      "groupID": "#D ",
+      "groupID": "#D",
       "customName": "",
       "interactions": {},
       "components": [
@@ -454,7 +454,7 @@
       "locked": true,
       "disabled": true,
       "customName": "",
-      "groupID": "#D ",
+      "groupID": "#D",
       "components": [],
       "interactions": {}
     },
@@ -480,7 +480,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "#D2 ",
+      "groupID": "#D2",
       "components": [],
       "interactions": {}
     },
@@ -506,7 +506,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "#D1 ",
+      "groupID": "#D1",
       "components": [],
       "interactions": {}
     },
@@ -532,7 +532,7 @@
       "locked": false,
       "disabled": true,
       "customName": "id",
-      "groupID": "#D1 ",
+      "groupID": "#D1",
       "components": [
         {
           "type": "Item",
@@ -563,7 +563,7 @@
       "locked": false,
       "disabled": true,
       "customName": "",
-      "groupID": "#D1 ",
+      "groupID": "#D1",
       "components": [],
       "interactions": {}
     },
@@ -589,7 +589,7 @@
       "locked": true,
       "disabled": true,
       "customName": "",
-      "groupID": "#D ",
+      "groupID": "#D",
       "components": [],
       "interactions": {}
     },

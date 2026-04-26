@@ -1278,12 +1278,13 @@ export class GameSemanticAPI {
       };
     }
 
-    if (!this.game.inventoryManager.hasMainInventory(scene.player)) {
+    const player = scene.player instanceof Entity ? scene.player : null;
+    if (!this.game.inventoryManager.hasMainInventory(player)) {
       return {
         status: 'failed',
         code: 'player_inventory_missing',
         message: this.game.text('parser.inventory_missing'),
-        data: { entityId: entity.name, ownerId: scene.player?.name },
+        data: { entityId: entity.name, ownerId: player?.name },
         recoverable: false,
       };
     }

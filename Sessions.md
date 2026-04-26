@@ -752,3 +752,108 @@ During the session the following checks were run successfully:
 - The local `gemini-cli-agent` skill lives outside the repo under the Codex skills directory; the repo only records the usage rule in `AGENTS.md`.
 - `npm install` was run to restore missing local `.bin` scripts after a temporary worktree/junction test setup disrupted the local dependency executable links. `package.json` and lockfiles remained unchanged.
 - NotebookLM source replacement still depends on CLI auth and may require the standard readiness flow if auth has expired.
+
+## Session Entry - 2026-04-27 01:27 +02:00
+
+### Session Goals
+
+- Continue work on Scanline Engine after verifying NotebookLM access.
+- Evaluate and implement the idea that Static/Entity objects can become Actors by adding an Actor component, and Actors can become Static again by removing it.
+- Add a confirmation popup for removing the Actor component because that operation discards Actor-only data.
+- Commit the completed improvement and verify follow-up review findings against the actual current code.
+
+### What Was Implemented
+
+- Verified NotebookLM CLI authorization using the project readiness flow:
+  - `python -m notebooklm auth check --json` succeeded.
+  - `python -m notebooklm list --json` succeeded and showed the `Scanline Engine` notebook.
+  - Targeted notebook smoke test succeeded for notebook `9f146be7-7c4a-4bb0-b7b4-7f20079e85b0`.
+- Implemented Actor component conversion:
+  - Static/Entity objects can add an `Actor` component from the Components section.
+  - Adding the component replaces the scene object with an `Actor` instance at the same `scene.entities` index.
+  - Actor objects display an `Actor` marker component in the Components section.
+  - Removing the `Actor` component replaces the object with a normal `Entity`.
+  - Actor serialization now emits `{ type: 'Actor' }` in `components` for editor consistency.
+  - Static/Entity JSON that contains an Actor component marker now loads as an Actor, preserving compatibility with the new authoring model.
+- Added a destructive confirmation dialog when removing the Actor component:
+  - Title: `Remove Actor Component`.
+  - Buttons: `Cancel` and `Proceed`.
+  - Proceed warns that the object becomes Static and loses Actor settings, including direction, player mode, move speed, visual states, animation sets, and Actor-only components.
+- Added tests for:
+  - Entity -> Actor conversion preserving common properties and adding the Actor marker.
+  - Actor -> Entity conversion dropping Actor-only serialized data and removing Actor/Shadow components.
+
+### Important Architecture / Runtime Decisions
+
+- Actor component is currently a UI/editor conversion handle, not a full component-first runtime rewrite.
+- Runtime continues to use the existing class split where `Actor extends Entity`, and systems that rely on `instanceof Actor`, `entity.type === 'Actor'`, Actor movement methods, player state, direction, and animation sets remain valid.
+- Conversion helpers live on `SceneEditor` and perform the undo snapshot internally before mutating the scene:
+  - `convertEntityToActor()`
+  - `convertActorToEntity()`
+- Review findings asking for additional `saveUndoState()` calls in `SectionComponents.tsx` were checked against current code and intentionally not applied:
+  - Both conversion helpers already call `this.saveUndoState()` before mutation.
+  - Adding UI-level undo snapshots would create duplicate undo entries for one conversion action.
+- Removing Actor strips Actor-only state and also removes `Shadow`, which remains Actor-only for this slice.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- No parser, command-resolution, inventory, subscene, or semantic API behavior was intentionally changed.
+- Scene loading changed only insofar as Entity/Static JSON carrying the Actor marker is instantiated as `Actor`.
+- Existing runtime Actor behavior is preserved rather than moved into a component system.
+
+### Tests Run and Outcomes
+
+- `npm run typecheck`
+  - Passed.
+- `npm test`
+  - Passed.
+  - 21 test files passed.
+  - 244 tests passed.
+- `npm run build`
+  - Passed during implementation.
+  - Vite emitted only existing-style warnings about chunk size and dynamic/static imports of `fileApi`.
+- During wrap-up, `npm run typecheck` and `npm test` were re-run and passed again.
+
+### Commits Created
+
+- `ec18c3e2f9dc8102ea2f5483caad926328411a2c` - `Add Actor component conversion`
+
+### Current State
+
+- Branch: `scene-refact3`.
+- Last commit: `ec18c3e Add Actor component conversion`.
+- After the commit, additional uncommitted changes are present in the worktree. They were not made as part of the committed Actor conversion wrap-up and were intentionally left untouched:
+  - `public/scenes/home/room.json`
+  - `public/scenes/home/room_backup.json`
+  - `public/scenes/test_room (10).json`
+  - `public/scenes/test_room.json`
+  - `public/scenes/test_room1.json`
+  - `src/components/editor/properties/MultiSelectionProperties.tsx`
+  - `src/components/editor/properties/PropertiesPanel.tsx`
+  - `src/components/editor/properties/SectionComponents.tsx`
+  - `src/components/editor/properties/SectionIdentity.tsx`
+  - `src/entities/SceneObject.ts`
+  - `src/systems/GameSemanticAPI.ts`
+  - `public/text/objects/Sofa.json`
+  - `src/utils/GroupIds.ts`
+  - `tests/editor/group-id-normalization.test.ts`
+- This wrap-up appends a new entry to `Sessions.md`, which is expected to remain as an additional documentation change unless separately committed.
+
+### Remaining Work / Next Recommended Steps
+
+- Manually QA the editor flow in the running app:
+  - create Static;
+  - add Actor component;
+  - verify Actor Properties appear;
+  - undo/redo the conversion;
+  - remove Actor component;
+  - verify Cancel does nothing and Proceed converts to Static;
+  - verify Actor-only fields and Shadow are removed after Proceed.
+- Decide whether `GDD.md` should be updated to describe Actor as an editor-visible component marker while preserving the current runtime class split.
+- Review the unrelated dirty files before any future commit so the Actor conversion commit remains isolated from group-id or scene-content work.
+
+### Risks / Caveats / Open Questions
+
+- Actor component is not yet a pure runtime component architecture. It is intentionally an authoring/conversion affordance over existing classes.
+- If future work moves Actor behavior into a true component system, the current conversion helpers should become a migration bridge rather than the final architecture.
+- The confirmation dialog prevents accidental loss, but once the user chooses Proceed, Actor-only settings are removed from the object data by design.
