@@ -3536,6 +3536,11 @@ export class Parser {
       return `--- ${title.toUpperCase()} ---\n${this.formatPeekObject(obj)}`;
     };
 
+    const formatFullSection = (title: string, value: unknown) => {
+      const body = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      return `--- ${title.toUpperCase()} ---\n${body}`;
+    };
+
     const peekMessages = this.game.console?.parserPeekEnabled
       ? [
           formatSection('context', contextJson),
@@ -3548,11 +3553,32 @@ export class Parser {
         ]
       : undefined;
 
+    const peekLlmMessages =
+      this.game.console?.parserPeekLlmEnabled && llmDebug
+        ? [
+            formatFullSection('llm prompt', llmDebug.prompt || null),
+            formatFullSection('llm response', {
+              rawResponse: llmDebug.rawResponse || '',
+              error: llmDebug.error,
+              reason: llmDebug.reason,
+              provider: llmDebug.provider,
+              model: llmDebug.model,
+              durationMs: llmDebug.durationMs,
+              tokensGenerated: llmDebug.tokensGenerated,
+            }),
+          ]
+        : undefined;
+
+    const debugMessages =
+      peekMessages || peekLlmMessages
+        ? [...(peekMessages || []), ...(peekLlmMessages || [])]
+        : undefined;
+
     if (result.type === 'handoff') {
       return {
         playerMessage: this.game.text('parser.parse_unknown'),
         nextPendingState: null,
-        debugMessages: peekMessages || [
+        debugMessages: debugMessages || [
           formatSection('handoff context', contextJson),
           formatSection('handoff scope', scopeJson),
           formatSection('handoff envelope', envelopeJson),
@@ -3607,7 +3633,7 @@ export class Parser {
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
         nextPendingState,
-        debugMessages: peekMessages,
+        debugMessages,
       };
     }
 
@@ -3616,7 +3642,7 @@ export class Parser {
       return {
         playerMessage: escalation.message || this.game.text('parser.parse_unknown'),
         nextPendingState: null,
-        debugMessages: peekMessages || [
+        debugMessages: debugMessages || [
           `[Parser handoff] context=${contextJson}`,
           `[Parser handoff] scope=${scopeJson}`,
           `[Parser handoff] envelope=${envelopeJson}`,
@@ -3637,7 +3663,7 @@ export class Parser {
         playerMessage: playerMessages.length === 1 ? playerMessages[0] : undefined,
         playerMessages: playerMessages.length > 1 ? playerMessages : undefined,
         nextPendingState: null,
-        debugMessages: peekMessages,
+        debugMessages,
       };
     }
 
@@ -3645,7 +3671,7 @@ export class Parser {
       playerMessage: outcomeMessages.length === 1 ? outcomeMessages[0] : undefined,
       playerMessages: outcomeMessages.length > 1 ? outcomeMessages : undefined,
       nextPendingState: null,
-      debugMessages: peekMessages,
+      debugMessages,
     };
   }
 

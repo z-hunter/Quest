@@ -92,6 +92,7 @@ export function createParserFixture(): ParserFixture {
     parserStage1Enabled: true,
     parserStage2Enabled: false,
     parserPeekEnabled: false,
+    parserPeekLlmEnabled: false,
     log() {},
   };
 

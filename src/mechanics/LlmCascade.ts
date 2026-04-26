@@ -112,9 +112,15 @@ export class LlmCascade {
       'Respond with a single JSON object. Do not add any text outside the JSON.',
     ].join('\n');
 
+    const messages = [{ role: 'user' as const, content: userMessage }];
+    const prompt = {
+      system: systemPrompt,
+      messages,
+    };
+
     const response = await this.provider.sendMessageStream(
       systemPrompt,
-      [{ role: 'user', content: userMessage }],
+      messages,
       (delta, accumulated) => {
         onThinkingDelta?.(delta, accumulated);
       }
@@ -123,6 +129,7 @@ export class LlmCascade {
     if (!response.ok) {
       this.lastDebugInfo = {
         ...baseDebug,
+        prompt,
         durationMs: response.durationMs,
         tokensGenerated: response.tokensGenerated,
         rawResponse: response.text,
@@ -138,6 +145,7 @@ export class LlmCascade {
     if (!parsed) {
       this.lastDebugInfo = {
         ...baseDebug,
+        prompt,
         durationMs: response.durationMs,
         tokensGenerated: response.tokensGenerated,
         rawResponse,
@@ -151,6 +159,7 @@ export class LlmCascade {
     const normalized = this.normalizeResponse(parsed);
     this.lastDebugInfo = {
       ...baseDebug,
+      prompt,
       matched: normalized.actions.length > 0,
       durationMs: response.durationMs,
       tokensGenerated: response.tokensGenerated,

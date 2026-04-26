@@ -321,6 +321,13 @@ export type LlmCascadeDebugInfo = {
   matched: boolean;
   provider: string;
   model?: string;
+  prompt?: {
+    system: string;
+    messages: Array<{
+      role: 'user' | 'assistant';
+      content: string;
+    }>;
+  };
   durationMs?: number;
   tokensGenerated?: number;
   rawResponse?: string;

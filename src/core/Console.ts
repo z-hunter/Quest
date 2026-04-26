@@ -20,6 +20,7 @@ export class Console {
   history: string[] = [];
   isOpen: boolean = false;
   parserPeekEnabled: boolean = false;
+  parserPeekLlmEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
   parserLlmEnabled: boolean = false;
@@ -146,6 +147,16 @@ export class Console {
     this.registerCommand('#PEEK-OFF', () => {
       this.parserPeekEnabled = false;
       this.log('Parser peek disabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKLLM-ON', () => {
+      this.parserPeekLlmEnabled = true;
+      this.log('LLM prompt/response peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKLLM-OFF', () => {
+      this.parserPeekLlmEnabled = false;
+      this.log('LLM prompt/response peek disabled.', 'info');
     });
 
     this.registerCommand('#STAGE1-OFF', () => {

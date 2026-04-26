@@ -78,6 +78,23 @@ describe('LlmCascade', () => {
     expect(debug?.acceptedActions).toHaveLength(1);
   });
 
+  it('stores the full prompt and raw response in debug info', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'final_response',
+      message: 'Full response text.',
+    });
+
+    await cascade.parse('speak to the terminal', mockContext);
+
+    const debug = cascade.getLastDebugInfo();
+    expect(debug?.prompt?.system).toContain('Respond with exactly one JSON object');
+    expect(debug?.prompt?.messages[0]?.role).toBe('user');
+    expect(debug?.prompt?.messages[0]?.content).toContain(
+      'Player command: "speak to the terminal"'
+    );
+    expect(debug?.rawResponse).toBe(provider.response.text);
+  });
+
   it('converts final_response to a showText action', async () => {
     provider.response.text = JSON.stringify({
       kind: 'final_response',
