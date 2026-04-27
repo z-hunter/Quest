@@ -18,6 +18,18 @@ Use the project knowledge sources in this order, depending on the question:
 3. `local_rag` is the local fallback/sidecar for fuzzy recall: semantic search, related-document discovery, and cases where the exact memory title, file name, or subsystem name is unknown.
 4. The repository itself is the source of truth for current code. Use `rg`, file reads, and tests to verify behavior before editing.
 
+## Kairo TaskOps
+
+Use Kairo as the shared task/action layer when MCP or CLI access is available. Kairo is for actionable work with an owner, status, and next step; `agent_memory` remains the durable knowledge layer.
+
+- Create or update Kairo tasks for work that continues beyond the current response, needs user acceptance/manual action, is delegated to another agent, or comes from review/test follow-up.
+- Do not create Kairo tasks for trivial internal steps, raw notes, architecture facts, or temporary debugging thoughts.
+- Use `proj:quest` for this repository. Prefer tags: `owner:<codex|user|gemini|agent-name>`, `type:<bug|feature|review|test|docs|research|decision|chore|followup>`, `area:<subsystem>`, `source:<chat|review|test|notebooklm|memory|gdd|user>`, `status-meta:<blocked|needs-user|needs-acceptance|waiting|delegated>`, and `session:<YYYY-MM-DD>`.
+- Priority convention: `0` blocker/urgent user action/regression risk, `1` important current-session work, `2` normal follow-up, `3` low-priority cleanup or someday.
+- Title convention: start with `[Quest]`, use an action phrase, and mention the owner only when delegated or user-facing.
+- Description convention: include owner, context, expected outcome, acceptance criteria, relevant files/links, and source when useful.
+- Lifecycle: set active/delegated work to `doing`, completed work to `done` after validation or required acceptance, and store durable conclusions from completed tasks in `agent_memory`.
+
 ## Gemini CLI Worker Rule
 
 When Gemini CLI is installed, use it as an external helper for technical tasks wherever this is practical and safe. This is intended to increase throughput and reduce Codex token use.
