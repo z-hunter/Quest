@@ -44,6 +44,33 @@ class MockProvider implements ILlmProvider {
 describe('LlmCascade', () => {
   let provider: MockProvider;
   let cascade: LlmCascade;
+  const mockPromptAssets = {
+    previous_attempt_label: 'Previous parser attempt:',
+    forced_handoff_label: 'Lower cascade interpretation:',
+    forced_handoff_instructions: [
+      'Cascade 1 test mode asks you to handle this command yourself.',
+      'Use the lower cascade interpretation as a hint for what the dry machine parser would do.',
+      'If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.',
+      'If the lower cascade action is genuinely the best answer, you may return that action plan.',
+      'If you cannot improve the lower cascade result safely, return fallback.',
+    ],
+    post_api_escalation_instructions: [
+      'The previous parser/game attempt escalated instead of completing.',
+      'Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.',
+      'If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.',
+    ],
+    post_api_not_found_instructions: [
+      'The previous parser/game attempt reported that it could not see the target. This often means the lower cascade misread a verb, adjective, or phrase fragment as the noun.',
+      'Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.',
+    ],
+    post_api_recovery_instructions: [
+      'The previous parser/game attempt recognized a command but ended in a recoverable failed outcome.',
+      'First decide whether the lower parser likely misunderstood the player intent, target, relation, or action.',
+      'If the intent and target are correct but the game outcome says the action is impossible, do not override game state.',
+      'If you cannot improve the previous attempt safely or interestingly, return fallback.',
+    ],
+    response_reminder: 'Respond with a single JSON object. Do not add any text outside the JSON.',
+  };
   const mockContext: ParserContext = {
     rawInput: '',
     normalizedInput: '',
@@ -56,7 +83,10 @@ describe('LlmCascade', () => {
     provider = new MockProvider();
     cascade = new LlmCascade(
       provider,
-      () => undefined,
+      () =>
+        ({
+          readServiceAsset: vi.fn().mockResolvedValue(mockPromptAssets),
+        }) as any,
       () => undefined
     );
   });
@@ -119,6 +149,19 @@ describe('LlmCascade', () => {
     expect(result?.output.actions).toEqual([
       { type: 'showText', message: 'Which one do you mean?' },
     ]);
+  });
+
+  it('treats explicit fallback as no LLM envelope', async () => {
+    provider.response.text = JSON.stringify({ kind: 'fallback' });
+
+    const result = await cascade.parse('take book', mockContext);
+
+    expect(result).toBeNull();
+    const debug = cascade.getLastDebugInfo();
+    expect(debug?.matched).toBe(false);
+    expect(debug?.reason).toBe('fallback');
+    expect(debug?.error).toBeUndefined();
+    expect(debug?.filteredActions).toEqual([]);
   });
 
   it('returns null and populates debug reason invalid_response for invalid JSON', async () => {
@@ -264,6 +307,39 @@ describe('LlmCascade', () => {
     expect(userMessage).toContain('Cascade 1 test mode asks you to handle this command yourself');
     expect(userMessage).toContain('richer, more atmospheric');
     expect(userMessage).toContain('you may return that action plan');
+  });
+
+  it('includes recovery instructions for recoverable failed parser attempts', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'fallback',
+    });
+
+    await cascade.parse('take book', mockContext, undefined, {
+      kind: 'post_api_recovery',
+      envelope: {
+        stage: 'regex-v1',
+        output: {
+          kind: 'plan',
+          actions: [{ type: 'takeTarget', target: 'Book' }],
+        },
+        debug: {
+          rawInput: 'take book',
+          normalizedInput: 'TAKE BOOK',
+          verb: 'TAKE',
+          noun: 'book',
+        },
+      },
+      result: {
+        type: 'outcomes',
+        outcomes: [{ status: 'failed', code: 'cannot_take', message: 'You cannot take that.' }],
+      },
+    });
+
+    const userMessage = provider.messages[0]?.content || '';
+    expect(userMessage).toContain('Previous parser attempt');
+    expect(userMessage).toContain('cannot_take');
+    expect(userMessage).toContain('recoverable failed outcome');
+    expect(userMessage).toContain('return fallback');
   });
 });
 

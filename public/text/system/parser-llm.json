@@ -1,0 +1,33 @@
+{
+  "previous_attempt_label": "Previous parser attempt:",
+  "forced_handoff_label": "Lower cascade interpretation:",
+  "forced_handoff_instructions": [
+    "Cascade 1 test mode asks you to handle this command yourself.",
+    "Use the lower cascade interpretation as a hint for what the dry machine parser would do.",
+    "If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.",
+    "If the lower cascade action is genuinely the best answer, you may return that action plan.",
+    "If you cannot improve the lower cascade result safely, return fallback."
+  ],
+  "post_api_escalation_instructions": [
+    "The previous parser/game attempt escalated instead of completing.",
+    "First try to correct the player intent, target, relation, or action plan if the lower parser likely misunderstood the command.",
+    "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
+    "If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.",
+    "If you cannot improve the previous attempt safely, return fallback."
+  ],
+  "post_api_not_found_instructions": [
+    "The previous parser/game attempt reported that it could not see the target. This often means the lower cascade misread a verb, adjective, or phrase fragment as the noun.",
+    "First try to correct the player intent or target by using only real visible or inventory titles from the context.",
+    "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
+    "If no safe correction exists, return final_response with a short grounded in-world reason, or fallback if the standard parser response is better."
+  ],
+  "post_api_recovery_instructions": [
+    "The previous parser/game attempt recognized a command but ended in a recoverable failed outcome.",
+    "First decide whether the lower parser likely misunderstood the player intent, target, relation, or action. If so, return a corrected safe action plan using only real context titles.",
+    "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or showText with a short atmospheric in-world reason.",
+    "Do not claim that an action succeeded unless the returned plan can actually execute it.",
+    "If you cannot improve the previous attempt safely or interestingly, return fallback.",
+    "If the requested action is impossible in the current world, return final_response or showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description."
+  ],
+  "response_reminder": "Respond with a single JSON object. Do not add any text outside the JSON."
+}

@@ -335,5 +335,11 @@ export type LlmCascadeDebugInfo = {
   acceptedActions?: ParserToolAction[];
   filteredActions?: unknown[];
   error?: string;
-  reason?: 'provider_unavailable' | 'api_error' | 'invalid_response' | 'timeout' | 'disabled';
+  reason?:
+    | 'provider_unavailable'
+    | 'api_error'
+    | 'invalid_response'
+    | 'timeout'
+    | 'disabled'
+    | 'fallback';
 };

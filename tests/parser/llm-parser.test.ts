@@ -185,4 +185,66 @@ describe('Parser LLM Integration', () => {
     expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('entity_not_found');
     expect(fixture.messages).toContain('A small red key.');
   });
+
+  it('Parser calls llmCascade after a recoverable standard command failure', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A heavy reference book.',
+    });
+
+    const mockLlmParse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'showText',
+            message: 'The book has done its talking. Now it is your turn to move.',
+          },
+        ],
+      },
+      debug: {
+        rawInput: 'take book',
+        normalizedInput: 'TAKE BOOK',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('take book');
+
+    expect(mockLlmParse).toHaveBeenCalled();
+    const previousAttempt = mockLlmParse.mock.calls[0]?.[3];
+    expect(previousAttempt?.kind).toBe('post_api_recovery');
+    expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('not_takeable');
+    expect(fixture.messages).toContain(
+      'The book has done its talking. Now it is your turn to move.'
+    );
+    expect(fixture.messages).not.toContain(fixture.game.text('parser.take_cannot'));
+  });
+
+  it('keeps the standard parser failure when LLM recovery returns no envelope', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A heavy reference book.',
+    });
+
+    const mockLlmParse = vi.fn().mockResolvedValue(null);
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('take book');
+
+    expect(mockLlmParse).toHaveBeenCalled();
+    const previousAttempt = mockLlmParse.mock.calls[0]?.[3];
+    expect(previousAttempt?.kind).toBe('post_api_recovery');
+    expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('not_takeable');
+    expect(fixture.messages).toContain(fixture.game.text('parser.take_cannot'));
+  });
 });

@@ -9,11 +9,12 @@ import type {
 } from './parserTypes';
 
 const SYSTEM_PROMPT_URL = '/text/system/parser-llm-system.md';
+const PROMPT_ASSET_DOMAIN = 'parser-llm';
 
 const FALLBACK_SYSTEM_PROMPT = [
   'You are a command-line parser and Game Master for a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
-  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, or {"kind":"clarification","question":"..."}.',
+  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"..."}, or {"kind":"fallback"}.',
   'Use only real titles from the provided context and only safe parser action types.',
 ].join('\n');
 
@@ -39,7 +40,11 @@ type ConsoleLike = {
 };
 
 export type LlmCascadePreviousAttempt = {
-  kind?: 'post_api_escalation' | 'post_api_not_found' | 'forced_cascade_handoff';
+  kind?:
+    | 'post_api_escalation'
+    | 'post_api_not_found'
+    | 'post_api_recovery'
+    | 'forced_cascade_handoff';
   envelope: ParserCascadeEnvelope;
   result: unknown;
 };
@@ -78,7 +83,10 @@ export class LlmCascade {
       return null;
     }
 
-    const systemPrompt = await this.loadSystemPrompt();
+    const [systemPrompt, promptAssets] = await Promise.all([
+      this.loadSystemPrompt(),
+      this.loadPromptAssets(),
+    ]);
     const userMessage = [
       `Player command: "${input}"`,
       '',
@@ -87,29 +95,28 @@ export class LlmCascade {
       ...(previousAttempt
         ? [
             '',
-            previousAttempt.kind === 'forced_cascade_handoff'
-              ? 'Lower cascade interpretation:'
-              : 'Previous parser attempt:',
+            this.promptText(
+              promptAssets,
+              previousAttempt.kind === 'forced_cascade_handoff'
+                ? 'forced_handoff_label'
+                : 'previous_attempt_label'
+            ),
             JSON.stringify(previousAttempt, null, 2),
             '',
             ...(previousAttempt.kind === 'forced_cascade_handoff'
-              ? [
-                  'Cascade 1 test mode asks you to handle this command yourself.',
-                  'Use the lower cascade interpretation as a hint for what the dry machine parser would do.',
-                  'If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.',
-                  'If the lower cascade action is genuinely the best answer, you may return that action plan.',
-                ]
-              : [
+              ? this.promptList(promptAssets, 'forced_handoff_instructions')
+              : this.promptList(
+                  promptAssets,
                   previousAttempt.kind === 'post_api_not_found'
-                    ? 'The previous parser/game attempt reported that it could not see the target. This often means the lower cascade misread a verb, adjective, or phrase fragment as the noun.'
-                    : 'The previous parser/game attempt escalated instead of completing.',
-                  'Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.',
-                  'If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.',
-                ]),
+                    ? 'post_api_not_found_instructions'
+                    : previousAttempt.kind === 'post_api_recovery'
+                      ? 'post_api_recovery_instructions'
+                      : 'post_api_escalation_instructions'
+                )),
           ]
         : []),
       '',
-      'Respond with a single JSON object. Do not add any text outside the JSON.',
+      this.promptText(promptAssets, 'response_reminder'),
     ].join('\n');
 
     const messages = [{ role: 'user' as const, content: userMessage }];
@@ -167,9 +174,16 @@ export class LlmCascade {
       extractedJson,
       acceptedActions: normalized.actions,
       filteredActions: normalized.filteredActions,
-      reason: normalized.actions.length > 0 ? undefined : 'invalid_response',
+      reason:
+        normalized.actions.length > 0
+          ? undefined
+          : normalized.fallback
+            ? 'fallback'
+            : 'invalid_response',
       error:
-        normalized.actions.length > 0 ? undefined : 'LLM response did not contain valid actions',
+        normalized.actions.length > 0 || normalized.fallback
+          ? undefined
+          : 'LLM response did not contain valid actions',
     };
 
     if (!normalized.actions.length) {
@@ -232,6 +246,29 @@ export class LlmCascade {
     return this.systemPromptCache;
   }
 
+  private async loadPromptAssets(): Promise<Record<string, string | string[]>> {
+    const textAssets = this.getTextAssets();
+    if (!textAssets?.readServiceAsset) return {};
+    try {
+      return await textAssets.readServiceAsset(PROMPT_ASSET_DOMAIN);
+    } catch (error) {
+      this.getConsole()?.log(`[LLM prompt asset fallback] ${String(error)}`, 'info');
+      return {};
+    }
+  }
+
+  private promptText(assets: Record<string, string | string[]>, key: string): string {
+    const value = assets[key];
+    return typeof value === 'string' ? value : '';
+  }
+
+  private promptList(assets: Record<string, string | string[]>, key: string): string[] {
+    const value = assets[key];
+    if (Array.isArray(value)) return value.filter((item) => typeof item === 'string');
+    if (typeof value === 'string') return [value];
+    return [];
+  }
+
   private extractJson(text: string): string {
     const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(text);
     if (fenceMatch) return fenceMatch[1].trim();
@@ -251,27 +288,36 @@ export class LlmCascade {
   private normalizeResponse(parsed: unknown): {
     actions: ParserToolAction[];
     filteredActions: unknown[];
+    fallback: boolean;
   } {
     if (!this.isRecord(parsed)) {
-      return { actions: [], filteredActions: [parsed] };
+      return { actions: [], filteredActions: [parsed], fallback: false };
+    }
+
+    if (parsed.kind === 'fallback') {
+      return { actions: [], filteredActions: [], fallback: true };
     }
 
     if (parsed.kind === 'final_response') {
       const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
       return message
-        ? { actions: [{ type: 'showText', message }], filteredActions: [] }
-        : { actions: [], filteredActions: [parsed] };
+        ? { actions: [{ type: 'showText', message }], filteredActions: [], fallback: false }
+        : { actions: [], filteredActions: [parsed], fallback: false };
     }
 
     if (parsed.kind === 'clarification') {
       const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
       return question
-        ? { actions: [{ type: 'showText', message: question }], filteredActions: [] }
-        : { actions: [], filteredActions: [parsed] };
+        ? {
+            actions: [{ type: 'showText', message: question }],
+            filteredActions: [],
+            fallback: false,
+          }
+        : { actions: [], filteredActions: [parsed], fallback: false };
     }
 
     if (parsed.kind !== 'plan' || !Array.isArray(parsed.actions)) {
-      return { actions: [], filteredActions: [parsed] };
+      return { actions: [], filteredActions: [parsed], fallback: false };
     }
 
     const actions: ParserToolAction[] = [];
@@ -286,7 +332,7 @@ export class LlmCascade {
       }
     }
 
-    return { actions, filteredActions };
+    return { actions, filteredActions, fallback: false };
   }
 
   private validateAction(action: unknown): ParserToolAction | null {

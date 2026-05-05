@@ -152,9 +152,7 @@ export class Parser {
         llmAttempted = true;
         const parsedResult = this.safeParseJson(resultJson);
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
-          kind: this.resultHasEscalation(parsedResult)
-            ? 'post_api_escalation'
-            : 'post_api_not_found',
+          kind: this.getPostApiLlmRetryKind(parsedResult),
           envelope,
           result: parsedResult,
         });
@@ -1254,7 +1252,11 @@ export class Parser {
   private resultShouldRetryWithLlm(resultJson: string): boolean {
     try {
       const result = JSON.parse(resultJson) as ParserResult;
-      return this.resultHasEscalation(result) || this.resultHasSoftNotFoundFailure(result);
+      return (
+        this.resultHasEscalation(result) ||
+        this.resultHasSoftNotFoundFailure(result) ||
+        this.resultHasRecoverableFailureForLlm(result)
+      );
     } catch {
       return false;
     }
@@ -1265,6 +1267,12 @@ export class Parser {
       this.isParserOutcomeResult(result) &&
       result.outcomes.some((outcome) => outcome.status === 'escalate')
     );
+  }
+
+  private getPostApiLlmRetryKind(result: unknown): LlmCascadePreviousAttempt['kind'] {
+    if (this.resultHasEscalation(result)) return 'post_api_escalation';
+    if (this.resultHasSoftNotFoundFailure(result)) return 'post_api_not_found';
+    return 'post_api_recovery';
   }
 
   private resultHasSoftNotFoundFailure(result: unknown): boolean {
@@ -1281,6 +1289,29 @@ export class Parser {
       }
       const message = String(outcome.message || '');
       return /^You don't see any .+ here\.$/i.test(message);
+    });
+  }
+
+  private resultHasRecoverableFailureForLlm(result: unknown): boolean {
+    if (!this.isParserOutcomeResult(result)) return false;
+    const recoveryCodes = new Set([
+      'cannot_take',
+      'not_takeable',
+      'inventory_not_accessible',
+      'put_target_is_source',
+      'put_item_not_held',
+      'put_target_not_accessible',
+      'put_target_not_found',
+      'relation_not_supported',
+      'destination_not_found',
+      'custom_command_invalid_argument',
+      'custom_command_target_too_far',
+      'take_group_invalid_both',
+    ]);
+
+    return result.outcomes.some((outcome) => {
+      if (outcome.status !== 'failed' || outcome.recoverable === false) return false;
+      return recoveryCodes.has(String(outcome.code || ''));
     });
   }
 
