@@ -18,11 +18,73 @@ Use the project knowledge sources in this order, depending on the question:
 3. `local_rag` is the local fallback/sidecar for fuzzy recall: semantic search, related-document discovery, and cases where the exact memory title, file name, or subsystem name is unknown.
 4. The repository itself is the source of truth for current code. Use `rg`, file reads, and tests to verify behavior before editing.
 
+## NotebookLM Architecture Recall Workflow
+
+NotebookLM is not just a passive documentation search tool. Treat it as a free, high-context analysis assistant over the full project knowledge base: project documentation, important exported session history (`Sessions.md`), memory exports, GDD/autotest docs, and other curated sources in the Scanline Engine notebook.
+
+Before architecture-sensitive, subsystem-level, gameplay/runtime, parser, scene, or troubleshooting-heavy work:
+
+1. Complete the NotebookLM CLI readiness flow below.
+2. Ask NotebookLM for a structured subsystem overview before scanning large parts of the repository.
+3. Use `agent_memory` after NotebookLM for precise fresh facts, decisions, incidents, commit hashes, and runbooks.
+4. Use `local_rag` as fallback or sidecar when NotebookLM is unavailable, noisy, or when fuzzy related-document discovery is needed.
+5. Verify all conclusions against the current repository before editing.
+
+Preferred NotebookLM query template:
+
+```text
+For Scanline Engine, give a subsystem overview for `<topic>`.
+
+Return:
+- Current contract and intended behavior
+- Key runtime/editor/parser files
+- Relevant tests/autotests and how to run them
+- Recent decisions, incidents, sessions, and commits
+- Known caveats, regressions, or gotchas
+- Recommended implementation checklist
+
+Keep it concise, actionable, and prefer exact file paths when known.
+```
+
+Use more specific variants when useful:
+
+```text
+For Scanline Engine, analyze `<bug or symptom>`.
+
+Return:
+- Most likely subsystems involved
+- Known similar incidents or prior fixes
+- Files and functions to inspect first
+- Tests that should reproduce or protect this behavior
+- Risks and rollback considerations
+```
+
+```text
+For Scanline Engine, prepare an implementation brief for `<feature>`.
+
+Return:
+- Existing architecture to reuse
+- Contract changes needed
+- Minimal file/test plan
+- Documentation/GDD updates needed
+- Open questions for the user
+```
+
+Important NotebookLM usage rules:
+
+- Prefer asking for a specific output shape over broad "summarize this" prompts.
+- NotebookLM analysis is cheap relative to Codex context. Use it to synthesize prior knowledge before spending tokens re-reading large code or docs.
+- The notebook may include `Sessions.md`, which is a curated history of important chat sessions. Ask about prior sessions explicitly when chronology or "why was this done?" matters.
+- NotebookLM answers are guidance, not source of truth. Validate file paths, contracts, and behavior in the repo before editing.
+- If NotebookLM is unavailable, use `local_rag` with `context: "Quest"` plus direct `agent_memory` recall, then verify in code.
+
 ## Kairo TaskOps
 
 Use Kairo as the shared task/action layer when MCP or CLI access is available. Kairo is for actionable work with an owner, status, and next step; `agent_memory` remains the durable knowledge layer.
 
+- Kairo task sync uses the private GitHub repo `z-hunter/kairo-tasks-sync` (`git@github.com:z-hunter/kairo-tasks-sync.git`) with local repo path `C:\Users\Professional\AppData\Roaming\kairo\tasks-sync`.
 - Create or update Kairo tasks for work that continues beyond the current response, needs user acceptance/manual action, is delegated to another agent, or comes from review/test follow-up.
+- Gemini can also access Kairo and `agent_memory`; create `owner:gemini` tasks when useful, but include explicit instructions because Gemini's startup prompt may not require using these systems by default.
 - Do not create Kairo tasks for trivial internal steps, raw notes, architecture facts, or temporary debugging thoughts.
 - Use `proj:quest` for this repository. Prefer tags: `owner:<codex|user|gemini|agent-name>`, `type:<bug|feature|review|test|docs|research|decision|chore|followup>`, `area:<subsystem>`, `source:<chat|review|test|notebooklm|memory|gdd|user>`, `status-meta:<blocked|needs-user|needs-acceptance|waiting|delegated>`, and `session:<YYYY-MM-DD>`.
 - Priority convention: `0` blocker/urgent user action/regression risk, `1` important current-session work, `2` normal follow-up, `3` low-priority cleanup or someday.
@@ -37,6 +99,7 @@ When Gemini CLI is installed, use it as an external helper for technical tasks w
 - Prefer the `gemini-cli-agent` skill for this workflow.
 - Use Gemini for bounded implementation chores, mechanical edits, small test-writing tasks, focused bug fixes, and independent read-only reviews.
 - Run multiple Gemini CLI processes in parallel when tasks are independent and have disjoint file ownership.
+- Local Gemini has access to `agent_memory` and Kairo. When relevant, Codex may create Kairo tasks for Gemini and tell Gemini exactly which memory/task context to consult or update.
 - Codex remains responsible for project memory/NotebookLM/RAG recall, architecture decisions, prompt scoping, diff review, test selection, and final integration.
 - Give Gemini strict prompts with allowed write scope, forbidden files, allowed commands, validation expectations, and an instruction to stop if the task exceeds scope.
 - Do not delegate broad architecture/design decisions, project-knowledge recall, GDD interpretation, or open-ended refactors to Gemini.
