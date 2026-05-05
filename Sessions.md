@@ -857,3 +857,128 @@ During the session the following checks were run successfully:
 - Actor component is not yet a pure runtime component architecture. It is intentionally an authoring/conversion affordance over existing classes.
 - If future work moves Actor behavior into a true component system, the current conversion helpers should become a migration bridge rather than the final architecture.
 - The confirmation dialog prevents accidental loss, but once the user chooses Proceed, Actor-only settings are removed from the object data by design.
+
+## Session Entry - 2026-05-05 22:22 +02:00
+
+### Session Goals
+
+- Improve `Actor.moveTo` so Actors can route around obstacles instead of moving only in a direct line.
+- Make route outcomes usable by future AI/NPC logic: immediate unreachable result, arrival result, and route-blocked/replan-needed result.
+- Ensure click-to-move uses the same route planning as scripted `moveTo`.
+- Tune path following until it matches keyboard movement better in narrow passages.
+- Improve the agent setup by documenting a stronger NotebookLM/Kairo/memory startup workflow in `AGENTS.md`.
+- Preserve durable conclusions in `agent_memory`, Kairo, and this session log.
+
+### What Was Implemented
+
+- Added route planning to `src/entities/Actor.ts`.
+  - `Actor.moveTo(x, y)` now returns an `ActorMoveResult`.
+  - `Actor.moveToVisual(x, y)` also routes after converting the click/visual target into the Actor's parallax-corrected world target.
+  - `Actor.getMoveResult()` exposes the latest movement outcome for future AI/NPC polling.
+  - Movement results include statuses/codes such as `started`, `arrived`, `unreachable`, and `blocked` / `route_blocked`.
+- Implemented path planning using `Scene.isWalkable` as the single source of truth for current collision and Walkbox semantics.
+  - Direct segment sampling is tried first.
+  - If direct movement is blocked, bounded grid A* builds a waypoint route.
+  - Route smoothing removes unnecessary intermediate waypoints when a segment is clear.
+  - Search cap is based on the generated grid area rather than a fixed 4000-iteration cap, which matters for large/complex Walkbox areas.
+  - Segment-clear checks were tightened to sample at `gridSize / 2` with a minimum step of 2.
+- Added route-following axis-slide fallback.
+  - If a diagonal route step is blocked, Actor tries X-only or Y-only movement before reporting `route_blocked`.
+  - This mirrors keyboard movement and helps narrow passages where manual control can already pass.
+  - A zero-displacement axis fallback is not treated as progress, so true blocks still report `blocked`.
+- Updated click-to-move tests so Walkbox clicks assert route planning rather than the old `visualTarget` behavior.
+- Updated `GDD.md` to document `actor.getMoveResult()` and the new `moveTo` route/outcome contract.
+- Added `tests/entities/actor-movement.test.ts`.
+  - Direct route.
+  - Route around blocking collider.
+  - Immediate unreachable destination.
+  - Dynamic blocker causing `route_blocked`.
+  - Axis-slide behavior for narrow/diagonal blocked steps.
+  - Large Walkbox route that would exceed the old fixed search cap.
+
+### Important Architecture / Runtime Decisions
+
+- `Scene.isWalkable` remains the single authoritative movement oracle. The path planner does not duplicate collision, Walkbox Add/Subtract/Invert, parallax, or dynamic-scene rules.
+- `moveToVisual` must be kept in sync with `moveTo`, because `SceneInteraction.movePlayerToClick` uses `moveToVisual` for mouse click movement.
+- AI/NPC movement should poll `actor.getMoveResult()` for `arrived`, `unreachable`, or `route_blocked` rather than inferring from `target`/`state` alone.
+- Route movement should preserve keyboard parity in narrow spaces by attempting axis-separated progress before failing.
+- NotebookLM should be used as a structured architecture-analysis assistant, not just a broad summarizer. `AGENTS.md` now includes explicit NotebookLM query templates and workflow.
+- Kairo is now explicitly part of session startup/resume flow; agents should check active/high-priority `proj:quest` tasks and close their own completed tasks after validation/acceptance.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Runtime movement changed in `Actor`.
+- Scene interaction changed only through test expectations and the use of routed `moveToVisual`; no parser behavior was intentionally changed.
+- `GameSemanticAPI`, inventory, spatial text semantics, and parser command resolution were not intentionally changed.
+- Existing `Scene.isWalkable` collision/Walkbox behavior was reused rather than modified.
+
+### Tests Run and Outcomes
+
+- `npm test -- tests/entities/actor-movement.test.ts`
+  - Passed during focused implementation.
+- `npm test -- tests/entities/actor-movement.test.ts tests/scene/scene-interaction.test.ts`
+  - Passed.
+- `npm test -- tests/game/navigation-and-spatial.test.ts tests/entities/actor-movement.test.ts tests/scene/scene-interaction.test.ts`
+  - Passed.
+  - Final relevant run: 3 files passed, 26 tests passed.
+- `npm run typecheck`
+  - Passed.
+- Full `npm test`
+  - Run during the session and failed on an unrelated existing parser world-model test:
+    - `tests/parser/world-model-context.test.ts`
+    - case: `omits scene duplicates whose stable id is already held from takable scope`
+    - actual issue: `compact_cassette` still appears in takable scope.
+  - The failure was reproduced with the single parser test file and tracked separately in Kairo.
+
+### Commits Created
+
+- `11d990d Add Actor route pathfinding`
+  - Adds routed `moveTo` / `moveToVisual`, movement result API, pathfinding tests, click-to-move regression coverage, and GDD documentation.
+- `fbea8ff AI settings update`
+  - Adds NotebookLM structured recall workflow to `AGENTS.md`.
+- `af53e2f AI settings update`
+  - Refactors `AGENTS.md` into a more useful operational startup protocol, including Startup Protocol, Responsibility Model, NotebookLM workflow, Kairo lifecycle, memory policy, validation ladder, and autotest rules.
+
+### Kairo / Memory Updates
+
+- Kairo task `[Quest] Implement Actor MoveTo route planning` was completed and marked `done`.
+- Kairo follow-up created for unrelated parser duplicate held-item failure:
+  - `aaaaaaabtx4yd3f45sovk3pbwhktwukd`
+  - `[Quest] Fix duplicate held item leaking into parser takable scope`
+- Durable `agent_memory` entries were stored for:
+  - final MoveTo pathfinding contract and caveats;
+  - click-to-move using `moveToVisual` route planning;
+  - large Walkbox search cap behavior;
+  - narrow passage axis-slide parity with keyboard movement;
+  - commit `11d990d`;
+  - NotebookLM structured recall workflow;
+  - `AGENTS.md` operational startup protocol refactor.
+
+### Current State
+
+- Branch: `scene-refact3`.
+- Latest commit: `af53e2f AI settings update`.
+- Worktree was clean before this wrap-up entry was appended.
+- This wrap-up adds a new `Sessions.md` documentation change that should remain uncommitted unless the user wants to commit the session log.
+
+### Remaining Work / Next Recommended Steps
+
+- Investigate and fix the unrelated parser world-model duplicate held-item failure:
+  - `tests/parser/world-model-context.test.ts`
+  - `compact_cassette` appears in takable scope when the stable id is already held.
+- Continue manual QA of click-to-move and scripted `moveTo` in real scenes with:
+  - large Walkbox polygons;
+  - foreground occluders such as the sofa;
+  - narrow passages;
+  - dynamic blockers.
+- Consider adding an engine diagnostic helper such as `scene.explainWalkable(x, y, actor)` or route debug output that reports which object/Walkbox caused a blocked point.
+- If route planning performance becomes an issue in large scenes, consider caching sampled walkability grids per route request, using a binary heap for A*, or coarser/finer adaptive grids.
+- If future NPC AI relies heavily on `ActorMoveResult`, consider adding event/callback hooks in addition to polling.
+
+### Risks / Caveats / Open Questions
+
+- The path planner is intentionally conservative and depends on `Scene.isWalkable`; any existing `isWalkable` quirks will be inherited by pathfinding.
+- `Actor.moveTo` now returns a result where old code ignored a `void` return. TypeScript accepted this, but scripts may need to start checking results for AI/NPC behavior.
+- `moveToVisual` now clears `visualTarget` and stores world-route waypoints in `target`/`route`; tests were updated to reflect this.
+- Large Walkbox pathfinding works after removing the fixed cap, but the new regression test shows a nontrivial runtime cost. Keep an eye on route planning latency in very large scenes.
+- Full `npm test` is not green because of the unrelated parser duplicate held-item test. Focused movement/navigation/typecheck validation is green.

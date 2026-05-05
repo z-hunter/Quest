@@ -246,7 +246,9 @@ export class ParserWorldModelBuilder {
         const entry = textLayer?.entryById.get(entity.name);
         return (!!isItem || !!entity.isTakeable) && !entry?.blocked;
       });
-    const takable = visibleItems.filter((entity) => !(this.game as any).canTakeEntity?.(entity));
+    const takable = visibleItems
+      .filter((entity) => !this.isEntityHeldForTake(entity))
+      .filter((entity) => !(this.game as any).canTakeEntity?.(entity));
     const putSource = visibleItems
       .filter((entity) => reachableSet.has(entity) || subsceneSet.has(entity))
       .filter((entity) => !(this.game as any).canPutSourceEntity?.(entity));
@@ -256,7 +258,9 @@ export class ParserWorldModelBuilder {
       held,
       takable: this.uniqueObjects([
         ...takable,
-        ...externalTakable.filter((entity: Entity) => !(this.game as any).canTakeEntity?.(entity)),
+        ...externalTakable
+          .filter((entity: Entity) => !this.isEntityHeldForTake(entity))
+          .filter((entity: Entity) => !(this.game as any).canTakeEntity?.(entity)),
       ]),
       putSource: this.uniqueObjects([
         ...putSource,
@@ -284,6 +288,20 @@ export class ParserWorldModelBuilder {
     return textLayer.entries
       .filter((entry) => entry.inInactiveSubscene || !entry.object.disabled)
       .map((entry) => entry.object);
+  }
+
+  private isEntityHeldForTake(entity: Entity): boolean {
+    const inventoryManager = (this.game as any).inventoryManager;
+    const stableIdCheck = inventoryManager?.hasEntityIdInInventory;
+    if (typeof stableIdCheck === 'function') {
+      return !!stableIdCheck.call(inventoryManager, entity);
+    }
+    if ((this.game.inventory || []).includes(entity)) return true;
+    const entityName = String(entity?.name || '').trim();
+    if (!entityName) return false;
+    return (this.game.inventory || []).some(
+      (held: Entity) => String(held?.name || '').trim() === entityName
+    );
   }
 
   private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
