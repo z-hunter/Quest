@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Entity } from '../../src/entities/Entity';
 import { handleSceneClick } from '../../src/scene/SceneInteraction';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
@@ -141,7 +142,35 @@ describe('Scene interaction text layer', () => {
     handleSceneClick(fixture.scene, 320, 180);
 
     expect(fixture.messages).toHaveLength(0);
-    expect(fixture.scene.player?.visualTarget).not.toBeNull();
-    expect(fixture.scene.player?.target).toBeNull();
+    expect(fixture.scene.player?.getMoveResult().status).toBe('started');
+    expect(fixture.scene.player?.target).not.toBeNull();
+    expect(fixture.scene.player?.visualTarget).toBeNull();
+  });
+
+  it('click-to-move uses route planning around blocking colliders', () => {
+    const fixture = createSceneFixture();
+    fixture.game.canvas.width = 640;
+    fixture.game.canvas.height = 360;
+    const player = fixture.addPlayer('Hero', -80, 0);
+    player.colliderWidth = 4;
+    player.colliderHeight = 4;
+    player.speed = 1;
+    const floor = fixture.addWalkbox('wb_floor');
+    floor.poly = [
+      { x: -100, y: -50 },
+      { x: 100, y: -50 },
+      { x: 100, y: 50 },
+      { x: -100, y: 50 },
+    ];
+
+    const obstacle = new Entity(fixture.game as any, 0, 20, 10, 10, 'Blocker');
+    obstacle.colliderWidth = 20;
+    obstacle.colliderHeight = 40;
+    fixture.scene.addEntity(obstacle);
+
+    handleSceneClick(fixture.scene, 400, 180);
+
+    expect(player.getMoveResult().status).toBe('started');
+    expect(player.getMoveResult().route.length).toBeGreaterThan(1);
   });
 });

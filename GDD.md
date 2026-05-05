@@ -964,10 +964,13 @@ ScriptRegistry.register('interaction.lamp.use', ({ entity }) => {
 - `actor.setDirection(dir: 'up' | 'down' | 'left' | 'right')`
 - `actor.walkTo(x, y)`
 - `actor.moveTo(x, y)`
+- `actor.getMoveResult()`
 - `actor.stop()`
 - `actor.setState(state)`
 - `actor.playAnimSet(id: string)`
 - `actor.resetAnimSet()`
+
+`actor.moveTo(x, y)` строит маршрут до указанной точки через текущие правила проходимости сцены. Если точка недостижима, метод сразу возвращает результат со статусом `unreachable`. Если маршрут построен, метод возвращает `started`, а Actor начинает идти по точкам маршрута. После прибытия `actor.getMoveResult()` возвращает `arrived`; если во время движения маршрут внезапно оказался заблокирован из-за другого объекта или изменения сцены, Actor останавливается, а `actor.getMoveResult()` возвращает `blocked` с сообщением, что маршрут нужно пересмотреть.
 
 Пример:
 
