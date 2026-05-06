@@ -19,6 +19,8 @@ import {
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import { Geometry } from '../utils/Geometry';
 
+type EffectiveRelation = Exclude<SpatialRelationType, 'near'>;
+
 export type PutTargetTextDescriptor = {
   title: string;
   relation: SpatialRelationType;
@@ -36,6 +38,12 @@ export class GameSemanticAPI {
   }
 
   // --- Helper Methods ---
+
+  private isEffectiveRelation(
+    relation: SpatialRelationType | null | undefined
+  ): relation is EffectiveRelation {
+    return relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind';
+  }
 
   private getPlayerFacingObjectTitle(target: SceneObject): string | null {
     const title = this.game.textAssets.getResolvedObjectField(target as any, 'title');
@@ -856,8 +864,9 @@ export class GameSemanticAPI {
     }
 
     const anchorObject = scene.getObjectByName(anchorNodeId);
+    const effectiveRelation = this.isEffectiveRelation(relation) ? relation : null;
     const blockingComponent = anchorObject
-      ? getActiveBlockingComponentState(anchorObject, relation)
+      ? getActiveBlockingComponentState(anchorObject, effectiveRelation)
       : null;
     if (blockingComponent && !blockingComponent.transparent) {
       if (blockingComponent.clearlyOpenable) {
@@ -871,31 +880,22 @@ export class GameSemanticAPI {
       }
     }
 
-    let childTitles =
-      getSceneTextRelationDescendants(
-        textLayer,
-        anchorNodeId,
-        relation as Exclude<SpatialRelationType, 'near'>
-      )
-        ?.map((entry) => entry.title)
-        .filter((title): title is string => !!title) || [];
+    let childTitles = effectiveRelation
+      ? getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
+          ?.map((entry) => entry.title)
+          .filter((title): title is string => !!title) || []
+      : [];
 
-    const revealableLookables = getSceneTextRelationAccessStates(
-      scene,
-      this.game,
-      anchorNodeId,
-      relation as Exclude<SpatialRelationType, 'near'>,
-      { includeHidden: true }
-    ).filter((accessState) => accessState.hiddenReason === 'lookable');
-    if (revealableLookables.length) {
+    const revealableLookables = effectiveRelation
+      ? getSceneTextRelationAccessStates(scene, this.game, anchorNodeId, effectiveRelation, {
+          includeHidden: true,
+        }).filter((accessState) => accessState.hiddenReason === 'lookable')
+      : [];
+    if (effectiveRelation && revealableLookables.length) {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
       const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this.game);
       childTitles =
-        getSceneTextRelationDescendants(
-          revealedTextLayer,
-          anchorNodeId,
-          relation as Exclude<SpatialRelationType, 'near'>
-        )
+        getSceneTextRelationDescendants(revealedTextLayer, anchorNodeId, effectiveRelation)
           ?.map((entry) => entry.title)
           .filter((title): title is string => !!title) || [];
     }
@@ -966,7 +966,7 @@ export class GameSemanticAPI {
     );
 
     const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
-    const getRelationCandidates = (candidateRelation: SpatialRelationType) =>
+    const getRelationCandidates = (candidateRelation: EffectiveRelation) =>
       getSceneTextRelationDescendants(textLayer, anchor.name, candidateRelation)
         .map((entry) => entry.object)
         .filter((candidate): candidate is Entity => candidate instanceof Entity)
@@ -984,20 +984,16 @@ export class GameSemanticAPI {
         return relationOutcome;
       }
 
-      directCandidates = ['on', 'under', 'behind'].flatMap((candidateRelation) =>
-        getRelationCandidates(candidateRelation as SpatialRelationType)
+      directCandidates = (['on', 'under', 'behind'] as EffectiveRelation[]).flatMap(
+        (candidateRelation) => getRelationCandidates(candidateRelation)
       );
     }
 
     const semanticContents = getSceneTextRelationDescendants(textLayer, anchor.name, relation);
     const fallbackSemanticContents =
       relation === 'in' && !semanticContents.length
-        ? ['on', 'under', 'behind'].flatMap((candidateRelation) =>
-            getSceneTextRelationDescendants(
-              textLayer,
-              anchor.name,
-              candidateRelation as SpatialRelationType
-            )
+        ? (['on', 'under', 'behind'] as EffectiveRelation[]).flatMap((candidateRelation) =>
+            getSceneTextRelationDescendants(textLayer, anchor.name, candidateRelation)
           )
         : [];
 
@@ -1084,7 +1080,7 @@ export class GameSemanticAPI {
       relation === 'in' || relation === 'on' || relation === 'under' || relation === 'behind'
         ? relation
         : null;
-    const relations: SpatialRelationType[] = semanticRelation
+    const relations: EffectiveRelation[] = semanticRelation
       ? [semanticRelation]
       : ['in', 'on', 'under', 'behind'];
 

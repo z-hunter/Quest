@@ -243,7 +243,7 @@ export class SceneSpatialValidator {
       for (const component of object.components || []) {
         const type = getComponentLabel(component);
         if (type === 'Inventory' && (component as InventoryComponent).relation != null) {
-          const relation = (component as InventoryComponent).relation;
+          const relation = (component as any).relation;
           if (relation === 'near') {
             this.addIssue(
               'error',
@@ -262,7 +262,7 @@ export class SceneSpatialValidator {
         }
 
         if (type === 'Surface' && (component as SurfaceComponent).relation != null) {
-          const relation = (component as SurfaceComponent).relation;
+          const relation = (component as any).relation;
           if (relation === 'near') {
             this.addIssue(
               'error',
