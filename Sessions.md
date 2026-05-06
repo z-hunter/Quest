@@ -982,3 +982,109 @@ During the session the following checks were run successfully:
 - `moveToVisual` now clears `visualTarget` and stores world-route waypoints in `target`/`route`; tests were updated to reflect this.
 - Large Walkbox pathfinding works after removing the fixed cap, but the new regression test shows a nontrivial runtime cost. Keep an eye on route planning latency in very large scenes.
 - Full `npm test` is not green because of the unrelated parser duplicate held-item test. Focused movement/navigation/typecheck validation is green.
+
+## Session Entry - 2026-05-06 02:17 +02:00
+
+### Session Goals
+
+- Improve the Stage 2 LLM parser context so it understands authored scene semantics such as "the cassette is already loaded in the boombox".
+- Replace the temporary media-specific heuristic with a generic Text Asset driven model.
+- Keep v1 scoped to LLM context only: no new runtime command verbs such as `PLAY`, `DRIVE`, or `FUEL`.
+- Document the new TA authoring contract and commit the implementation.
+
+### What Was Implemented
+
+- Added structured object Text Asset support in `TextAssetManager`.
+  - Object TA can now contain `semanticTags: string[]`.
+  - Object TA can now contain `relationFacts: Array<{ relation, childTags, fact }>`.
+  - Added `getResolvedObjectStructuredListField` as a safe accessor for structured list fields without breaking existing string/list text fields.
+- Extended parser world model context.
+  - `ParserEntityContext` now includes optional `semanticTags`.
+  - `ParserWorldModelBuilder` still emits generic facts such as `Boombox contains Compact cassette.` and `Compact cassette is inside Boombox.`
+  - It now additionally emits TA-driven semantic facts when a parent object's `relationFacts` match a child object's `semanticTags`.
+  - Supported semantic relation matching is currently `in`, `on`, `under`, and `behind`.
+  - `fact` templates support `{self}`, `{child}`, and `{relation}`.
+- Removed the previous hardcoded media heuristic.
+  - The previous `boombox/recorder/cassette/disk` inference is gone.
+  - Loaded-media knowledge is now authored in object TA.
+- Updated current scene Text Assets.
+  - `public/text/objects/boombox.json` now defines audio/media semantic tags and a relation fact for loaded media.
+  - `public/text/objects/test.json` and `test_1.json` now tag cassettes as `media`, `audio_media`, and `cassette`.
+- Updated LLM prompt assets.
+  - `parser-llm.json` now gives generic `worldFacts` authority instructions.
+  - Media-specific prompt wording for PLAY/MUSIC/CASSETTE/RECORDER was removed.
+  - `parser-llm-system.md` now describes world facts as current location, containment, and Text Asset semantic relation facts.
+- Updated documentation.
+  - `TextAssets.md` now documents `semanticTags`, `relationFacts`, examples, placeholders, supported relations, and v1 limitations.
+  - `Parser.md` now documents `worldFacts` as a mix of generic runtime facts and authored semantic facts, plus the object TA template changes.
+
+### Important Architecture Decisions
+
+- Semantic facts for the LLM are authored in Text Assets, not runtime components, parser code, or prompt-specific hacks.
+- `worldFacts` are treated as concise authoritative state facts for the LLM.
+- Semantic relation facts are context only in v1. They help the LLM avoid contradicting the scene but do not execute commands or mutate state.
+- The same mechanism should be used for future domains:
+  - boombox + cassette -> loaded media;
+  - disk drive + floppy -> inserted disk;
+  - car + gasoline -> fueled vehicle;
+  - lamp + bulb -> installed component.
+- The LLM prompt should remain generic and trust `worldFacts`; it should not contain per-domain rules such as "if recorder contains cassette...".
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser mechanics changed only in world model context construction and LLM prompt preparation.
+- Runtime gameplay effects, inventory rules, spatial placement behavior, scene transitions, and command execution were not changed.
+- No real `PLAY`, `DRIVE`, `FUEL`, or similar command mechanic was added.
+- `LlmCascade` prompt asset typing was widened to tolerate structured service/object text data while still reading only string and string-list prompt fields.
+
+### Tests Run and Outcomes
+
+- `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`
+  - Passed: 2 files, 27 tests.
+- `npm test -- tests/parser tests/integration/parser-game.test.ts`
+  - Passed: 9 files, 125 tests.
+- `npm run typecheck`
+  - Passed.
+- `git diff --check`
+  - Passed.
+- Full `npm test`
+  - Passed: 23 files, 261 tests.
+
+### Commits Created
+
+- `51e64b6 Add TA-driven semantic facts for LLM parser context`
+  - Implements structured TA semantic fields, TA-driven semantic world facts, generic LLM world fact instructions, current boombox/cassette TA metadata, tests, and documentation.
+
+### Kairo / Memory Updates
+
+- Kairo task completed:
+  - `aaaaaaabtx5ixylx5tpg5nq3qygv5tss`
+  - `[Quest] Make parser LLM context expose explicit containment`
+- Durable `agent_memory` entries stored for:
+  - the TA-driven semantic facts architecture;
+  - the documentation update;
+  - commit `51e64b6`.
+
+### Current State
+
+- Branch: `scene-refact3`.
+- Latest code commit: `51e64b6 Add TA-driven semantic facts for LLM parser context`.
+- Worktree was clean immediately after the commit.
+- This wrap-up appends a new `Sessions.md` entry after the code commit.
+
+### Remaining Work / Next Recommended Steps
+
+- Manually smoke-test `#LLM-ON` with commands around:
+  - `play cassette`;
+  - `play music`;
+  - future non-media examples once authored, such as fuel/vehicle or disk/drive.
+- Consider editor support for authoring `semanticTags` and `relationFacts` directly in the TA UI.
+- Consider adding schema validation or linting for malformed `relationFacts`.
+- If semantic facts become gameplay-critical later, design a separate runtime component/command contract instead of overloading LLM context facts.
+
+### Risks / Caveats / Open Questions
+
+- Semantic facts are only as correct as the TA authoring. A wrong tag or relation fact can mislead the LLM even though runtime state is unchanged.
+- Facts should stay concise and factual; atmospheric sarcasm belongs in LLM responses, not TA semantic facts.
+- Empty or missing `childTags` currently means the relation rule applies to any child in that relation.
+- NotebookLM source replacement completed after this entry was written: fresh `Sessions.md`, `GDD.md`, `AgentMemory.md`, `Parser.md`, and `TextAssets.md` sources were uploaded and reached `ready` status in the Scanline Engine notebook.
