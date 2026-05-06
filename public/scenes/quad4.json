@@ -230,11 +230,11 @@
           "p": 0.65
         },
         {
-          "x": 149.65358299671635,
-          "y": 63.03569717109512,
+          "x": 165,
+          "y": 62,
           "p": 0.699,
           "binding": {
-            "targetName": "Quad_275",
+            "targetName": "exit1",
             "type": "vertex",
             "index": 1
           }
@@ -337,9 +337,14 @@
           "p": 0.65
         },
         {
-          "x": 150.1,
-          "y": 61.8,
-          "p": 0.65
+          "x": 150,
+          "y": 62,
+          "p": 0.65,
+          "binding": {
+            "targetName": "exit1",
+            "type": "vertex",
+            "index": 0
+          }
         },
         {
           "x": 199,
@@ -522,11 +527,11 @@
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 134.88141317106655,
-          "y": 91.89878093528154,
+          "x": 169,
+          "y": 89,
           "p": 0.845,
           "binding": {
-            "targetName": "Quad",
+            "targetName": "exit1",
             "type": "vertex",
             "index": 3
           }
@@ -713,13 +718,13 @@
           "p": 1
         },
         {
-          "x": -447,
-          "y": 124,
+          "x": -449,
+          "y": 128.05718906574896,
           "p": 1,
           "binding": {
-            "targetName": "Quad",
+            "targetName": "floor",
             "type": "vertex",
-            "index": 2
+            "index": 3
           }
         }
       ],
@@ -868,12 +873,7 @@
         {
           "x": 172.88141317106655,
           "y": 91.89878093528154,
-          "p": 0.845,
-          "binding": {
-            "targetName": "Quad_275",
-            "type": "vertex",
-            "index": 2
-          }
+          "p": 0.845
         },
         {
           "x": 154.98999999999998,
@@ -1278,39 +1278,39 @@
       "name": "shadow_hero",
       "type": "Quad",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": -28.475100830614515,
-      "y": 83.60041599119995,
+      "x": -97.57017864354819,
+      "y": 88.54366671904958,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -28.475100830614515,
-          "y": 83.60041599119995,
-          "p": 0.767375066864736
+          "x": -97.57017864354819,
+          "y": 88.54366671904958,
+          "p": 0.7927593974333667
         },
         {
-          "x": -4.809789438288288,
-          "y": 83.81263375657423,
-          "p": 0.7690152216643636
+          "x": -73.17073234552487,
+          "y": 88.7637495524327,
+          "p": 0.7944469628409929
         },
         {
-          "x": -106.59812605338605,
-          "y": 134.7769337747976,
-          "p": 0.9965357150707409
+          "x": -197.7707913007259,
+          "y": 141.18539967775646,
+          "p": 0.9910943320051704
         },
         {
-          "x": -107.99586538390915,
-          "y": 122.93980115610466,
-          "p": 0.9794088283518501
+          "x": -199.80700236822938,
+          "y": 129.18590369879365,
+          "p": 0.9971687824531933
         }
       ],
       "color": "#535246",
@@ -1953,6 +1953,9 @@
       "interactions": {},
       "components": [
         {
+          "type": "Actor"
+        },
+        {
           "type": "Shadow",
           "shadowQuadId": "shadow_hero",
           "offsetX": -13,
@@ -1963,18 +1966,18 @@
       "layer": 1,
       "visible": true,
       "hidden": false,
-      "parallax": 0.7710044397854223,
-      "x": -25.66797394584988,
-      "y": 84.25601705784521,
-      "width": 24.388970071630826,
-      "height": 99.5882944591592,
+      "parallax": 0.7973542641647748,
+      "x": -94.64497210664521,
+      "y": 89.37605822772225,
+      "width": 24.87209945266463,
+      "height": 101.56107276504724,
       "baseWidth": 96,
       "baseHeight": 392,
       "colliderWidth": 32,
       "colliderHeight": 6,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
-      "scale": 0.2540517715794878,
+      "scale": 0.2590843692985899,
       "modelScale": 0.33,
       "ignoreScaling": false,
       "animationSpeed": 30,
@@ -2392,6 +2395,10 @@
           "type": "Exit",
           "targetSceneId": "",
           "targetEntryId": "entry"
+        },
+        {
+          "type": "WalkBox",
+          "mode": "Add"
         }
       ],
       "layer": 0,
@@ -2403,34 +2410,34 @@
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 118.65358299671635,
-          "y": 63.03569717109512,
+          "x": 150,
+          "y": 62,
+          "p": 0.65,
+          "binding": {
+            "targetName": "wall_2",
+            "type": "vertex",
+            "index": 2
+          }
+        },
+        {
+          "x": 165,
+          "y": 62,
           "p": 0.699
         },
         {
-          "x": 149.65358299671635,
-          "y": 63.03569717109512,
-          "p": 0.699,
-          "binding": {
-            "targetName": "glass",
-            "type": "vertex",
-            "index": 2
-          }
+          "x": 172,
+          "y": 70,
+          "p": 0.845
         },
         {
-          "x": 172.88141317106655,
-          "y": 91.89878093528154,
+          "x": 169,
+          "y": 89,
           "p": 0.845,
           "binding": {
-            "targetName": "Quad_303",
+            "targetName": "Quad_1",
             "type": "vertex",
-            "index": 2
+            "index": 0
           }
-        },
-        {
-          "x": 134.88141317106655,
-          "y": 91.89878093528154,
-          "p": 0.845
         }
       ],
       "color": "#52779aff",
@@ -2446,6 +2453,7 @@
       "blur": 0
     }
   ],
+  "folders": [],
   "camera": {
     "x": 0,
     "y": 0,

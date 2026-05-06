@@ -43,7 +43,13 @@ export class ShadowSystem {
     let inside = false;
 
     for (const t of targets) {
-      if (typeof t.containsPoint === 'function') {
+      if (t instanceof QuadObject) {
+        const hit = t.hitTest(checkX, checkY);
+        if (hit) {
+          inside = true;
+          break;
+        }
+      } else if (typeof t.containsPoint === 'function') {
         const hit = t.containsPoint(checkX, checkY);
         if (hit) {
           inside = true;

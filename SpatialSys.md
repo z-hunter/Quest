@@ -174,7 +174,9 @@ Cabinet (Title)
 Runtime нормализует relations:
 
 - `Inventory.relation` по умолчанию считается `in`.
-- `Surface.relation` в runtime по умолчанию считается `on`, если relation отсутствует. Для authored built-in surfaces лучше задавать relation явно.
+- `Surface.relation` в runtime по умолчанию считается `on`, если relation отсутствует.
+
+Несмотря на то, что отсутствие `Inventory.relation` и `Surface.relation` является валидным с точки зрения runtime, **SceneSpatialValidator** должен выдавать non-blocking warning, если relation опущен (чтобы явно подсветить implicit defaults). Кроме того, валидатор должен строго требовать (enforce) явного указания `Surface.relation` для authored built-in surfaces.
 
 ## Inventory
 
@@ -632,6 +634,8 @@ Active subscene:
 - missing spatial parents;
 - spatial cycles;
 - invalid container relations;
+- `near` relation used in storage container configuration (must be rejected per Rule (3));
+- missing container relations (выдавать non-blocking warning для отсутствующего `Inventory.relation` или `Surface.relation`, чтобы подсветить implicit runtime defaults, и требовать явного `Surface.relation` для authored built-in surfaces);
 - duplicate storage slots for same relation;
 - конфликт built-in и untitled external container extensions;
 - inventory/surface items referencing missing objects;

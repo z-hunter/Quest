@@ -35,12 +35,18 @@ type ContainerSlot = {
   external: boolean;
 };
 
-function isValidRelation(value: unknown): value is ContainerRelation {
+function isSpatialRelation(value: unknown): value is SpatialRelationType {
+  return (
+    value === 'in' || value === 'on' || value === 'under' || value === 'behind' || value === 'near'
+  );
+}
+
+function isStorageRelation(value: unknown): value is ContainerRelation {
   return value === 'in' || value === 'on' || value === 'under' || value === 'behind';
 }
 
 function isValidBlockedRelation(value: unknown): value is ContainerRelation | 'none' {
-  return value === 'none' || isValidRelation(value);
+  return value === 'none' || isStorageRelation(value);
 }
 
 function hasItemComponent(object: SceneObject | null | undefined): boolean {
@@ -125,7 +131,7 @@ export class SceneSpatialValidator {
   }
 
   private normalizeSpatialRelation(value: unknown): ContainerRelation | null {
-    return isValidRelation(value) ? value : null;
+    return isStorageRelation(value) ? value : null;
   }
 
   private getParent(object: SceneObject): SceneObject | null {
@@ -164,7 +170,7 @@ export class SceneSpatialValidator {
           : '';
       const rawRelation = (object as any).spatial?.relation;
 
-      if (rawRelation != null && !isValidRelation(rawRelation)) {
+      if (rawRelation != null && !isSpatialRelation(rawRelation)) {
         this.addIssue(
           'error',
           'invalid_spatial_relation',
@@ -189,7 +195,7 @@ export class SceneSpatialValidator {
         );
       }
 
-      if (!isValidRelation(rawRelation)) {
+      if (!isSpatialRelation(rawRelation)) {
         this.addIssue(
           'warning',
           'spatial_parent_without_relation',
@@ -238,7 +244,14 @@ export class SceneSpatialValidator {
         const type = getComponentLabel(component);
         if (type === 'Inventory' && (component as InventoryComponent).relation != null) {
           const relation = (component as InventoryComponent).relation;
-          if (!isValidRelation(relation)) {
+          if (relation === 'near') {
+            this.addIssue(
+              'error',
+              'invalid_inventory_relation',
+              `${object.name} has Inventory with forbidden relation 'near' (Rule (3)).`,
+              { objectId: object.name }
+            );
+          } else if (!isStorageRelation(relation)) {
             this.addIssue(
               'error',
               'invalid_inventory_relation',
@@ -250,7 +263,14 @@ export class SceneSpatialValidator {
 
         if (type === 'Surface' && (component as SurfaceComponent).relation != null) {
           const relation = (component as SurfaceComponent).relation;
-          if (!isValidRelation(relation)) {
+          if (relation === 'near') {
+            this.addIssue(
+              'error',
+              'invalid_surface_relation',
+              `${object.name} has Surface with forbidden relation 'near' (Rule (3)).`,
+              { objectId: object.name }
+            );
+          } else if (!isStorageRelation(relation)) {
             this.addIssue(
               'error',
               'invalid_surface_relation',

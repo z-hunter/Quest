@@ -85,13 +85,13 @@ export class Folder extends Entity {
 
   static fromData(game: IGame, data: FolderData): Folder {
     const folder = new Folder(game, data.name);
-    if (data.folderId) folder.folderId = data.folderId;
-    if (data.collapsed) folder.collapsed = data.collapsed;
-    if (data.groupID) folder.groupID = data.groupID;
-    if (data.locked) folder.locked = data.locked;
-    if (data.disabled) folder.disabled = data.disabled;
-    if (data.spatial) folder.spatial = JSON.parse(JSON.stringify(data.spatial));
-    if (data.defaults) folder.defaults = JSON.parse(JSON.stringify(data.defaults));
+    if (data.folderId !== undefined) folder.folderId = data.folderId;
+    if (data.collapsed !== undefined) folder.collapsed = data.collapsed;
+    if (data.groupID !== undefined) folder.groupID = data.groupID;
+    if (data.locked !== undefined) folder.locked = data.locked;
+    if (data.disabled !== undefined) folder.disabled = data.disabled;
+    if (data.spatial !== undefined) folder.spatial = JSON.parse(JSON.stringify(data.spatial));
+    if (data.defaults !== undefined) folder.defaults = JSON.parse(JSON.stringify(data.defaults));
     return folder;
   }
 }

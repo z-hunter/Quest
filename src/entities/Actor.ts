@@ -773,14 +773,20 @@ export class Actor extends Entity {
     const route: { x: number; y: number }[] = [];
     let key = currentKey;
 
+    const visited = new Set<string>();
     while (cameFrom.has(key)) {
+      if (visited.has(key)) break;
+      visited.add(key);
+
       const cell = cells.get(key);
       if (cell) {
         route.unshift(
           this.cellToRoutePoint(cell, key, bounds, gridSize, startKey, targetKey, start, target)
         );
       }
-      key = cameFrom.get(key) || key;
+      const nextKey = cameFrom.get(key);
+      if (nextKey === undefined || nextKey === key) break;
+      key = nextKey;
     }
 
     if (route.length === 0) return [target];
