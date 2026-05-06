@@ -101,6 +101,8 @@ NotebookLM usage rules:
 
 ## NotebookLM CLI Readiness
 
+*(Note: Substitute `<Quest-project-path>` with your actual local checkout location.)*
+
 Use NotebookLM through the CLI first. Do not start with the NotebookLM MCP for normal project recall on this machine.
 
 Required readiness flow:
@@ -111,7 +113,7 @@ Required readiness flow:
    `python -m notebooklm ask "ping: reply with one short sentence confirming access" --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json`
 4. If `list` and the smoke-test `ask` work, reuse the current CLI auth and do not re-authorize.
 5. If a real CLI command returns `Authentication expired or invalid` or redirects to Google sign-in, organize CLI re-auth with the user:
-   `Start-Process powershell -ArgumentList @('-NoExit','-Command','Set-Location -LiteralPath "D:\GAMES\New folder\Quest"; python -m notebooklm login')`
+   `Start-Process powershell -ArgumentList @('-NoExit','-Command','Set-Location -LiteralPath "<Quest-project-path>"; python -m notebooklm login')`
    Ask the user to complete Google login in the opened browser, wait for the NotebookLM homepage, then press Enter in that terminal. Re-run `list` and the project smoke test.
 
 Important caveats:
