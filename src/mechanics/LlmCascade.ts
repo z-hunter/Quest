@@ -92,6 +92,7 @@ export class LlmCascade {
       '',
       'Game world context:',
       JSON.stringify(context, null, 2),
+      ...this.promptList(promptAssets, 'world_fact_instructions'),
       ...(previousAttempt
         ? [
             '',
@@ -246,7 +247,7 @@ export class LlmCascade {
     return this.systemPromptCache;
   }
 
-  private async loadPromptAssets(): Promise<Record<string, string | string[]>> {
+  private async loadPromptAssets(): Promise<Record<string, unknown>> {
     const textAssets = this.getTextAssets();
     if (!textAssets?.readServiceAsset) return {};
     try {
@@ -257,12 +258,12 @@ export class LlmCascade {
     }
   }
 
-  private promptText(assets: Record<string, string | string[]>, key: string): string {
+  private promptText(assets: Record<string, unknown>, key: string): string {
     const value = assets[key];
     return typeof value === 'string' ? value : '';
   }
 
-  private promptList(assets: Record<string, string | string[]>, key: string): string[] {
+  private promptList(assets: Record<string, unknown>, key: string): string[] {
     const value = assets[key];
     if (Array.isArray(value)) return value.filter((item) => typeof item === 'string');
     if (typeof value === 'string') return [value];

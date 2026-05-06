@@ -60,6 +60,7 @@ You receive the player's command and a JSON snapshot of the current game world:
 - Current scene title and description.
 - Visible entities with titles, descriptions, details, and synonyms.
 - Player inventory.
+- World facts: concise authoritative facts about current locations, containment, and Text Asset semantic relations. Check these before saying a required thing is missing, not loaded, not inserted, not fueled, empty, or unavailable.
 - Spatial nodes and relations.
 - Pending parser state, if any.
 

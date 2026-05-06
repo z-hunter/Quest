@@ -13,6 +13,8 @@ type EntityOptions = {
   groupID?: string | null;
   components?: any[];
   spatial?: SpatialPlacement;
+  semanticTags?: string[];
+  relationFacts?: Array<Record<string, unknown>>;
 };
 
 type TriggerboxOptions = {
@@ -93,6 +95,8 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
           ? {}
           : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
+        semanticTags: options.semanticTags,
+        relationFacts: options.relationFacts as any,
       });
       return entity;
     },

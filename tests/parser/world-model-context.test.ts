@@ -149,6 +149,98 @@ describe('Parser world model context', () => {
     );
   });
 
+  it('exposes explicit entity location and contents for LLM context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A tape recorder.',
+      semanticTags: ['device', 'audio_device', 'media_player'],
+      relationFacts: [
+        {
+          relation: 'in',
+          childTags: ['media', 'audio_media'],
+          fact: '{self} already has {child} loaded.',
+        },
+      ],
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      description: 'A cassette.',
+      semanticTags: ['media', 'audio_media', 'cassette'],
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'boombox', relation: 'in' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('play cassette', null);
+    const boombox = model.context.entities?.find((entity) => entity.id === 'boombox');
+    const cassette = model.context.entities?.find((entity) => entity.id === 'cassette');
+
+    expect(boombox?.contents).toEqual(
+      expect.arrayContaining([
+        {
+          relation: 'in',
+          id: 'cassette',
+          title: 'Compact cassette',
+        },
+      ])
+    );
+    expect(cassette?.location).toEqual({
+      relation: 'in',
+      parentId: 'boombox',
+      parentTitle: 'Boombox',
+    });
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining([
+        'Boombox contains Compact cassette.',
+        'Compact cassette is inside Boombox.',
+        'Boombox already has Compact cassette loaded.',
+      ])
+    );
+  });
+
+  it('generates semantic relation facts from text assets without media-specific rules', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('car', {
+      title: 'Car',
+      description: 'A tired sedan.',
+      semanticTags: ['vehicle'],
+      relationFacts: [
+        {
+          relation: 'in',
+          childTags: ['fuel'],
+          fact: '{self} has {child} in the tank.',
+        },
+      ],
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.addEntity('gasoline', {
+      title: 'Gasoline',
+      description: 'A mean little promise of motion.',
+      semanticTags: ['fuel', 'liquid'],
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'car', relation: 'in' },
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('drive car', null);
+
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining([
+        'Car contains Gasoline.',
+        'Gasoline is inside Car.',
+        'Car has Gasoline in the tank.',
+      ])
+    );
+  });
+
   it('projects nested titled descendants relative to each semantic anchor', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);

@@ -6,14 +6,30 @@ import { createSceneTextLayerQuery, getSceneTextLayerAccessState } from '../scen
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   ParserContext,
+  ParserEntityContentContext,
   ParserEntityContext,
+  ParserEntityLocationContext,
   ParserInventoryItemContext,
   ParserPendingState,
+  ParserRelationType,
   ParserScope,
   ParserSpatialNodeContext,
   ParserSpatialRelationContext,
   ParserWorldModel,
 } from './parserTypes';
+
+type ParserSemanticRelationFact = {
+  relation: Exclude<ParserRelationType, 'near'>;
+  childTags: string[];
+  fact: string;
+};
+
+const SEMANTIC_RELATIONS: Array<ParserSemanticRelationFact['relation']> = [
+  'on',
+  'under',
+  'in',
+  'behind',
+];
 
 export class ParserWorldModelBuilder {
   private readonly game: Game;
@@ -42,6 +58,7 @@ export class ParserWorldModelBuilder {
     const entities = scene ? this.buildEntityContexts(scene) : [];
     const knownEntities = scene ? this.buildKnownEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
+    const worldFacts = scene ? this.buildWorldFacts(scene, entities, inventory) : [];
     const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
     const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
     const pending = pendingState
@@ -60,6 +77,7 @@ export class ParserWorldModelBuilder {
       entities,
       knownEntities,
       inventory,
+      worldFacts,
       spatialNodes,
       spatialRelations,
       pending,
@@ -104,9 +122,15 @@ export class ParserWorldModelBuilder {
           id: sceneObject.name,
           title: entry.title,
           item: isItem || undefined,
+          location: this.buildEntityLocationContext(entry, textLayer),
+          contents: this.buildEntityContentsContext(sceneObject.name, textLayer),
           reachable,
           ...coordinates,
           synonyms,
+          semanticTags: this.game.textAssets.getResolvedObjectListField(
+            sceneObject as any,
+            'semanticTags'
+          ),
           description:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
             undefined,
@@ -119,6 +143,7 @@ export class ParserWorldModelBuilder {
   }
 
   private buildKnownEntityContexts(scene: Scene): ParserEntityContext[] {
+    const textLayer = createSceneTextLayerQuery(scene, this.game);
     const visibleIds = new Set(this.buildEntityContexts(scene).map((entity) => entity.id));
     return scene
       .getAllSceneObjects()
@@ -136,6 +161,12 @@ export class ParserWorldModelBuilder {
           id: sceneObject.name,
           title,
           item: isItem || undefined,
+          location: this.buildLocationContext(
+            accessState.effectiveParentId,
+            accessState.effectiveRelation,
+            textLayer
+          ),
+          contents: this.buildEntityContentsContext(sceneObject.name, textLayer),
           visibility: accessState.hidden ? 'hidden' : 'visible',
           accessibility: accessState.blocked
             ? 'blocked'
@@ -144,6 +175,10 @@ export class ParserWorldModelBuilder {
               : undefined,
           hiddenReason: accessState.hiddenReason || undefined,
           synonyms: this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms'),
+          semanticTags: this.game.textAssets.getResolvedObjectListField(
+            sceneObject as any,
+            'semanticTags'
+          ),
           description:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
             undefined,
@@ -170,6 +205,226 @@ export class ParserWorldModelBuilder {
         });
       })
       .filter((entity): entity is ParserInventoryItemContext => !!entity);
+  }
+
+  private buildEntityLocationContext(
+    entry: ReturnType<typeof createSceneTextLayerQuery>['entries'][number],
+    textLayer: ReturnType<typeof createSceneTextLayerQuery>
+  ): ParserEntityLocationContext | undefined {
+    return this.buildLocationContext(entry.effectiveParentId, entry.effectiveRelation, textLayer);
+  }
+
+  private buildLocationContext(
+    parentId: string | null,
+    relation: ParserEntityLocationContext['relation'] | null,
+    textLayer: ReturnType<typeof createSceneTextLayerQuery>
+  ): ParserEntityLocationContext | undefined {
+    if (!parentId || !relation) return undefined;
+    const parentEntry = textLayer.entryById.get(parentId);
+    return this.compactRecord<ParserEntityLocationContext>({
+      relation,
+      parentId,
+      parentTitle: parentEntry?.title || undefined,
+    });
+  }
+
+  private buildEntityContentsContext(
+    entityId: string,
+    textLayer: ReturnType<typeof createSceneTextLayerQuery>
+  ): ParserEntityContentContext[] {
+    const relationMap = textLayer.childrenByParentAndRelation.get(entityId);
+    if (!relationMap) return [];
+
+    const contents: ParserEntityContentContext[] = [];
+    for (const [relation] of relationMap.entries()) {
+      for (const child of textLayer.getRelationDescendants(entityId, relation)) {
+        contents.push(
+          this.compactRecord<ParserEntityContentContext>({
+            relation,
+            id: child.object.name,
+            title: child.title,
+          })
+        );
+      }
+    }
+    return contents;
+  }
+
+  private buildWorldFacts(
+    scene: Scene,
+    entities: ParserEntityContext[],
+    inventory: ParserInventoryItemContext[]
+  ): string[] {
+    const facts: string[] = [];
+    const titleById = new Map(entities.map((entity) => [entity.id, entity.title] as const));
+    const semanticTagsById = new Map(
+      entities.map((entity) => [entity.id, entity.semanticTags || []] as const)
+    );
+
+    for (const item of inventory) {
+      facts.push(`Player carries ${item.title}.`);
+    }
+
+    for (const entity of entities) {
+      if (entity.location?.parentTitle) {
+        facts.push(
+          this.formatLocationFact(
+            entity.title,
+            entity.location.relation,
+            entity.location.parentTitle
+          )
+        );
+      }
+
+      if (entity.contents?.length) {
+        const contentsByRelation = new Map<string, string[]>();
+        for (const content of entity.contents) {
+          const title = titleById.get(content.id) || content.title;
+          const titles = contentsByRelation.get(content.relation) || [];
+          titles.push(title);
+          contentsByRelation.set(content.relation, titles);
+        }
+
+        for (const [relation, titles] of contentsByRelation.entries()) {
+          facts.push(this.formatContentsFact(entity.title, relation, titles));
+        }
+
+        for (const semanticFact of this.buildSemanticRelationFacts(
+          scene,
+          entity,
+          entity.contents,
+          titleById,
+          semanticTagsById
+        )) {
+          facts.push(semanticFact);
+        }
+      }
+    }
+
+    if (scene.activeSubscene) {
+      facts.push(`Active subscene is ${scene.activeSubscene}.`);
+    }
+
+    return Array.from(new Set(facts));
+  }
+
+  private buildSemanticRelationFacts(
+    scene: Scene,
+    entity: ParserEntityContext,
+    contents: ParserEntityContentContext[],
+    titleById: Map<string, string>,
+    semanticTagsById: Map<string, string[]>
+  ): string[] {
+    const sceneObject = scene.getObjectByName(entity.id);
+    if (!sceneObject) return [];
+
+    const relationFacts = this.getObjectRelationFacts(sceneObject);
+    if (!relationFacts.length) return [];
+
+    const facts: string[] = [];
+    for (const relationFact of relationFacts) {
+      for (const content of contents) {
+        if (content.relation !== relationFact.relation) continue;
+        const childTags = semanticTagsById.get(content.id) || [];
+        if (!this.semanticTagsMatch(childTags, relationFact.childTags)) continue;
+        facts.push(
+          this.interpolateSemanticFact(relationFact.fact, {
+            self: entity.title,
+            child: titleById.get(content.id) || content.title,
+            relation: content.relation,
+          })
+        );
+      }
+    }
+
+    return facts;
+  }
+
+  private getObjectRelationFacts(sceneObject: SceneObject): ParserSemanticRelationFact[] {
+    const accessor = (this.game.textAssets as any).getResolvedObjectStructuredListField;
+    if (typeof accessor !== 'function') return [];
+    return accessor.call(this.game.textAssets, sceneObject, 'relationFacts', (value: unknown) =>
+      this.normalizeSemanticRelationFact(value)
+    );
+  }
+
+  private normalizeSemanticRelationFact(value: unknown): ParserSemanticRelationFact | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const record = value as Record<string, unknown>;
+    const relation = String(record.relation || '').trim();
+    const fact = typeof record.fact === 'string' ? record.fact.trim() : '';
+    if (!SEMANTIC_RELATIONS.includes(relation as ParserSemanticRelationFact['relation']) || !fact) {
+      return null;
+    }
+    const childTags = Array.isArray(record.childTags)
+      ? record.childTags
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean)
+      : [];
+    return {
+      relation: relation as ParserSemanticRelationFact['relation'],
+      childTags,
+      fact,
+    };
+  }
+
+  private semanticTagsMatch(childTags: string[], requiredTags: string[]): boolean {
+    if (!requiredTags.length) return true;
+    const normalizedChildTags = new Set(childTags.map((tag) => tag.trim().toLowerCase()));
+    return requiredTags.some((tag) => normalizedChildTags.has(tag));
+  }
+
+  private interpolateSemanticFact(
+    template: string,
+    params: Record<'self' | 'child' | 'relation', string>
+  ): string {
+    return template.replace(/\{(self|child|relation)\}/g, (_match, token: keyof typeof params) => {
+      return params[token];
+    });
+  }
+
+  private formatLocationFact(
+    title: string,
+    relation: ParserEntityLocationContext['relation'],
+    parentTitle: string
+  ): string {
+    if (relation === 'in' && this.isFloorTitle(parentTitle)) {
+      return `${title} is on ${parentTitle}.`;
+    }
+    switch (relation) {
+      case 'in':
+        return `${title} is inside ${parentTitle}.`;
+      case 'on':
+        return `${title} is on ${parentTitle}.`;
+      case 'under':
+        return `${title} is under ${parentTitle}.`;
+      case 'behind':
+        return `${title} is behind ${parentTitle}.`;
+    }
+  }
+
+  private formatContentsFact(title: string, relation: string, contents: string[]): string {
+    const listed = contents.join(', ');
+    if (relation === 'in' && this.isFloorTitle(title)) {
+      return `${listed} is on ${title}.`;
+    }
+    switch (relation) {
+      case 'in':
+        return `${title} contains ${listed}.`;
+      case 'on':
+        return `${listed} is on ${title}.`;
+      case 'under':
+        return `${listed} is under ${title}.`;
+      case 'behind':
+        return `${listed} is behind ${title}.`;
+      default:
+        return `${title} is related to ${listed}.`;
+    }
+  }
+
+  private isFloorTitle(title: string): boolean {
+    return title.trim().toLowerCase() === this.game.textAssets.getServiceText('engine.floor_label');
   }
 
   private buildSpatialNodes(scene: Scene): ParserSpatialNodeContext[] {

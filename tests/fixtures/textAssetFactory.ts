@@ -7,6 +7,11 @@ import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
+  getResolvedObjectStructuredListField<T>(
+    obj: SceneObject,
+    field: string,
+    normalize: (value: unknown) => T | null
+  ): T[];
   getResolvedSceneField(scene: Scene, field: string): string | null;
   getServiceText(key: string, params?: Record<string, string | number>): string;
   getParserLexicon(): ParserLexiconAsset;
@@ -249,6 +254,12 @@ export function createTestTextAssets(): TestTextAssets {
       return Array.isArray(value)
         ? value.filter((item): item is string => typeof item === 'string')
         : [];
+    },
+    getResolvedObjectStructuredListField(obj, field, normalize) {
+      const asset = objectAssets.get(obj.name);
+      const value = asset?.[field];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => normalize(item)).filter((item): item is T => item !== null);
     },
     getResolvedSceneField(scene, field) {
       const asset = sceneAssets.get(scene.id);

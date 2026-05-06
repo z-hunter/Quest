@@ -9,7 +9,19 @@ import {
   saveProjectFile,
 } from '../platform/fileApi';
 
-type TextAssetValue = string | string[];
+export type TextAssetStructuredValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TextAssetStructuredValue[]
+  | { [key: string]: TextAssetStructuredValue };
+
+type TextAssetValue =
+  | string
+  | string[]
+  | TextAssetStructuredValue[]
+  | Record<string, TextAssetStructuredValue>;
 type TextAssetData = Record<string, TextAssetValue>;
 export type SceneTextAssetData = TextAssetData & {
   title?: string;
@@ -20,6 +32,8 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: string;
   details?: string;
   synonyms?: string[];
+  semanticTags?: string[];
+  relationFacts?: TextAssetStructuredValue[];
 };
 
 const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
@@ -669,6 +683,18 @@ export class TextAssetManager {
     return this.resolveListField(asset, field);
   }
 
+  getResolvedObjectStructuredListField<T>(
+    obj: SceneObject,
+    field: string,
+    normalize: (value: unknown) => T | null
+  ): T[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const raw = asset?.[field];
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) => normalize(item)).filter((item): item is T => item !== null);
+  }
+
   getServiceText(key: string, params?: Record<string, string | number>, fallback?: string): string {
     const rawKey = String(key || '').trim();
     if (!rawKey) return fallback || '';
@@ -724,10 +750,13 @@ export class TextAssetManager {
   private resolveListField(asset: TextAssetData | null | undefined, field: string): string[] {
     const raw = asset?.[field];
     if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const values: string[] = [];
+    for (const item of raw) {
+      if (typeof item !== 'string') continue;
+      const trimmed = item.trim();
+      if (trimmed) values.push(trimmed);
+    }
+    return values;
   }
 
   private async fetchJson(url: string): Promise<TextAssetData | null> {

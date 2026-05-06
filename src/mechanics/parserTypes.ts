@@ -2,10 +2,24 @@ import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 
+export type ParserEntityLocationContext = {
+  relation: Exclude<ParserRelationType, 'near'>;
+  parentId: string;
+  parentTitle?: string;
+};
+
+export type ParserEntityContentContext = {
+  relation: Exclude<ParserRelationType, 'near'>;
+  id: string;
+  title: string;
+};
+
 export type ParserEntityContext = {
   id: string;
   title: string;
   item?: true;
+  location?: ParserEntityLocationContext;
+  contents?: ParserEntityContentContext[];
   reachable?: true;
   visibility?: 'visible' | 'hidden';
   accessibility?: 'reachable' | 'blocked' | 'inaccessible';
@@ -13,6 +27,7 @@ export type ParserEntityContext = {
   x?: number;
   y?: number;
   synonyms?: string[];
+  semanticTags?: string[];
   description?: string;
   details?: string;
   interactions?: string[];
@@ -138,6 +153,7 @@ export type ParserContext = {
   entities?: ParserEntityContext[];
   knownEntities?: ParserEntityContext[];
   inventory?: ParserInventoryItemContext[];
+  worldFacts?: string[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
   pending?: ParserPendingState;

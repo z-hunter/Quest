@@ -69,6 +69,10 @@ describe('LlmCascade', () => {
       'If the intent and target are correct but the game outcome says the action is impossible, do not override game state.',
       'If you cannot improve the previous attempt safely or interestingly, return fallback.',
     ],
+    world_fact_instructions: [
+      'World facts are authoritative, including semantic facts generated from Text Assets.',
+      'Before saying that a required object is missing, not loaded, not inserted, not fueled, empty, or unavailable, check worldFacts and entity contents/location.',
+    ],
     response_reminder: 'Respond with a single JSON object. Do not add any text outside the JSON.',
   };
   const mockContext: ParserContext = {
@@ -122,6 +126,7 @@ describe('LlmCascade', () => {
     expect(debug?.prompt?.messages[0]?.content).toContain(
       'Player command: "speak to the terminal"'
     );
+    expect(debug?.prompt?.messages[0]?.content).toContain('World facts are authoritative');
     expect(debug?.rawResponse).toBe(provider.response.text);
   });
 

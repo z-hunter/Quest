@@ -131,6 +131,7 @@ flowchart TD
 - список текстово значимых объектов сцены;
 - отдельный список `knownEntities` для объектов, известных движку, но не раскрытых player-facing текстовому слою;
 - инвентарь игрока;
+- `worldFacts`: краткие авторитетные факты о переноске, containment/location и TA-driven semantic relations;
 - spatial nodes and relation projection, derived from the runtime scene hierarchy;
 - `pending state`, если parser уже ждёт уточнение.
 
@@ -152,6 +153,14 @@ flowchart TD
 - он не выбирает intent;
 - он не определяет target;
 - он лишь даёт parser-у картину мира.
+
+`worldFacts` deliberately combine generic runtime facts and authored semantic facts:
+
+- generic: `Player carries ID card.`, `Boombox contains Compact cassette.`, `Compact cassette is inside Boombox.`;
+- authored semantic: `Boombox already has Compact cassette loaded.`, `Car has Gasoline in the tank.`;
+- semantic facts come from object Text Assets, not from hardcoded parser heuristics.
+
+For v1, semantic facts only improve LLM context. They do not create real command mechanics or runtime effects.
 
 Scope slices intentionally separate knowledge from actionability:
 
@@ -656,6 +665,8 @@ Parser:
 Но и новое опциональное поле:
 
 - `synonyms`
+- `semanticTags`
+- `relationFacts`
 
 Пример:
 
@@ -664,7 +675,8 @@ Parser:
   "title": "logo",
   "description": "You see Scanline Engine logo.",
   "details": "Extended description here.",
-  "synonyms": ["logotype", "emblem", "scanline symbol"]
+  "synonyms": ["logotype", "emblem", "scanline symbol"],
+  "semanticTags": ["signage", "brand_marker"]
 }
 ```
 
@@ -680,6 +692,65 @@ Parser:
 - используется действием `EXAMINE`;
 - тоже входит в стандартный шаблон нового object TA.
 
+Поля `semanticTags` и `relationFacts`:
+
+- являются authoring metadata для `ParserWorldModelBuilder`;
+- генерируют `worldFacts` для Stage 2 LLM context;
+- не являются player-facing текстом;
+- не добавляют новые команды или runtime effects сами по себе.
+
+`semanticTags` задаются на объекте-ребёнке или любом объекте, которому нужен смысловой маркер:
+
+```json
+{
+  "title": "Compact cassette",
+  "synonyms": ["tape", "cassette"],
+  "semanticTags": ["media", "audio_media", "cassette"]
+}
+```
+
+`relationFacts` задаются на parent/container/device объекте:
+
+```json
+{
+  "title": "Boombox",
+  "relationFacts": [
+    {
+      "relation": "in",
+      "childTags": ["media", "audio_media"],
+      "fact": "{self} already has {child} loaded."
+    }
+  ]
+}
+```
+
+Если объект с тегом `media` или `audio_media` находится `in` Boombox, в LLM context появится semantic world fact:
+
+```text
+Boombox already has Compact cassette loaded.
+```
+
+Та же модель должна использоваться для других доменов:
+
+```json
+{
+  "title": "Car",
+  "relationFacts": [
+    {
+      "relation": "in",
+      "childTags": ["fuel"],
+      "fact": "{self} has {child} in the tank."
+    }
+  ]
+}
+```
+
+Supported placeholders in `fact`:
+
+- `{self}` - resolved title parent-объекта;
+- `{child}` - resolved title child-объекта;
+- `{relation}` - matched relation.
+
 Стандартный шаблон нового object TA:
 
 ```json
@@ -687,7 +758,9 @@ Parser:
   "title": "Object",
   "description": "You see nothing special.",
   "details": "",
-  "synonyms": []
+  "synonyms": [],
+  "semanticTags": [],
+  "relationFacts": []
 }
 ```
 
@@ -1121,6 +1194,7 @@ Parser должен быть локализуемым без переписыв�
 - `public/text/system/parser-lexicon.json` — stage1 lexicon и normalization vocabulary;
 - `public/text/system/parser-training.json` — training phrases для NLP-слоя.
 - `public/text/system/commands/*.json` — custom command assets;
+- `public/text/objects/*.json` — object title/description/details/synonyms plus optional semantic tags and relation facts for LLM context;
 - `Commands.md` — формат и принципы command TA.
 
 Текущее применение:

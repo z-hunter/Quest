@@ -1,5 +1,6 @@
 {
   "title": "Compact cassette",
   "description": "You see a compact cassette",
-  "synonyms": ["tape", "cassette", "cassete", "record"]
+  "synonyms": ["tape", "cassette", "cassete", "record"],
+  "semanticTags": ["media", "audio_media", "cassette"]
 }
