@@ -661,8 +661,9 @@ Parser:
 - `title`
 - `description`
 - `details`
+- `takeFailure`
 
-Но и новое опциональное поле:
+Также важны опциональные поля:
 
 - `synonyms`
 - `semanticTags`
@@ -691,6 +692,27 @@ Parser:
 - является стандартным полем object TA;
 - используется действием `EXAMINE`;
 - тоже входит в стандартный шаблон нового object TA.
+
+Player-facing текстовые поля object/scene TA можно задавать строкой или массивом строк. Массив
+склеивается через `\n`, пустая строка внутри массива даёт пустую строку в выводе:
+
+```json
+{
+  "details": [
+    "First paragraph.",
+    "",
+    "Second paragraph."
+  ]
+}
+```
+
+Поле `takeFailure`:
+
+- является стандартным player-facing полем object TA;
+- используется стандартным `TAKE`, когда runtime определил, что объект не является
+  берущимся предметом и иначе вернул бы generic `parser.take_cannot`;
+- если задано непустой строкой, выводится напрямую и делает failed outcome
+  terminal (`recoverable: false`), поэтому post-API LLM recovery не запускается.
 
 Поля `semanticTags` и `relationFacts`:
 
@@ -758,6 +780,7 @@ Supported placeholders in `fact`:
   "title": "Object",
   "description": "You see nothing special.",
   "details": "",
+  "takeFailure": "",
   "synonyms": [],
   "semanticTags": [],
   "relationFacts": []

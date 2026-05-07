@@ -289,23 +289,27 @@ export function createTestGame(): TestGameHarness {
     const inventoryOwner = (game.inventoryManager as any).findInventoryOwnerForEntity?.(entity);
     const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
     if (errorMsg) {
+      const authoredTakeFailure = textAssets.getResolvedObjectField(entity, 'takeFailure')?.trim();
+      const genericTakeFailure = textAssets.getServiceText('parser.take_cannot');
+      const useAuthoredFailure = !!authoredTakeFailure && errorMsg === genericTakeFailure;
       return {
         status: 'failed',
         code: 'cannot_take',
-        message: errorMsg,
+        message: useAuthoredFailure ? authoredTakeFailure : errorMsg,
         data: { entityId: entity.name },
-        recoverable: true,
+        recoverable: useAuthoredFailure ? false : true,
       };
     }
 
     const isItem = entity.components?.some((component: any) => component?.type === 'Item');
     if (!isItem && !entity.isTakeable) {
+      const authoredTakeFailure = textAssets.getResolvedObjectField(entity, 'takeFailure')?.trim();
       return {
         status: 'failed',
         code: 'not_takeable',
-        message: textAssets.getServiceText('parser.take_cannot'),
+        message: authoredTakeFailure || textAssets.getServiceText('parser.take_cannot'),
         data: { entityId: entity.name },
-        recoverable: true,
+        recoverable: authoredTakeFailure ? false : true,
       };
     }
 

@@ -23,14 +23,16 @@ type TextAssetValue =
   | TextAssetStructuredValue[]
   | Record<string, TextAssetStructuredValue>;
 type TextAssetData = Record<string, TextAssetValue>;
+type TextAssetTextValue = string | string[];
 export type SceneTextAssetData = TextAssetData & {
-  title?: string;
-  description?: string;
+  title?: TextAssetTextValue;
+  description?: TextAssetTextValue;
 };
 export type ObjectTextAssetData = TextAssetData & {
-  title?: string;
-  description?: string;
-  details?: string;
+  title?: TextAssetTextValue;
+  description?: TextAssetTextValue;
+  details?: TextAssetTextValue;
+  takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
   relationFacts?: TextAssetStructuredValue[];
@@ -460,6 +462,7 @@ export class TextAssetManager {
       title: fallbackTitle,
       description: fallbackDescription,
       details: '',
+      takeFailure: '',
       synonyms: [],
     };
   }
@@ -719,12 +722,13 @@ export class TextAssetManager {
 
     const domainAsset = this.serviceCache.get(domain) || {};
     const template = domainAsset[entryKey];
-    if (typeof template !== 'string') {
+    const text = this.resolveTextValue(template);
+    if (text === null) {
       console.warn(`[TextAssetManager] Missing service text '${rawKey}'.`);
       return fallback || rawKey;
     }
 
-    return this.interpolate(template, params);
+    return this.interpolate(text, params);
   }
 
   private resolveField(
@@ -737,14 +741,23 @@ export class TextAssetManager {
     const redirectTarget = redirects && redirects[field];
     if (redirectTarget) {
       const redirected = asset[redirectTarget];
-      if (typeof redirected === 'string') return redirected;
+      const redirectedText = this.resolveTextValue(redirected);
+      if (redirectedText !== null) return redirectedText;
       console.warn(
         `[TextAssetManager] Missing redirected field '${redirectTarget}' for '${field}'.`
       );
     }
     const direct = asset[field];
-    if (typeof direct === 'string') return direct;
+    const directText = this.resolveTextValue(direct);
+    if (directText !== null) return directText;
     return fallback;
+  }
+
+  private resolveTextValue(value: TextAssetValue | undefined): string | null {
+    if (typeof value === 'string') return value;
+    if (!Array.isArray(value)) return null;
+    if (!value.every((item) => typeof item === 'string')) return null;
+    return value.join('\n');
   }
 
   private resolveListField(asset: TextAssetData | null | undefined, field: string): string[] {
@@ -807,17 +820,26 @@ export class TextAssetManager {
   private normalizeSceneAssetData(asset: TextAssetData | null): SceneTextAssetData | null {
     if (!asset) return null;
     const normalized: SceneTextAssetData = { ...asset };
-    if (typeof asset.title === 'string') normalized.title = asset.title;
-    if (typeof asset.description === 'string') normalized.description = asset.description;
+    if (this.resolveTextValue(asset.title) !== null) {
+      normalized.title = asset.title as TextAssetTextValue;
+    }
+    if (this.resolveTextValue(asset.description) !== null)
+      normalized.description = asset.description as TextAssetTextValue;
     return normalized;
   }
 
   private normalizeObjectAssetData(asset: TextAssetData | null): ObjectTextAssetData | null {
     if (!asset) return null;
     const normalized: ObjectTextAssetData = { ...asset };
-    if (typeof asset.title === 'string') normalized.title = asset.title;
-    if (typeof asset.description === 'string') normalized.description = asset.description;
-    if (typeof asset.details === 'string') normalized.details = asset.details;
+    if (this.resolveTextValue(asset.title) !== null) {
+      normalized.title = asset.title as TextAssetTextValue;
+    }
+    if (this.resolveTextValue(asset.description) !== null)
+      normalized.description = asset.description as TextAssetTextValue;
+    if (this.resolveTextValue(asset.details) !== null)
+      normalized.details = asset.details as TextAssetTextValue;
+    if (this.resolveTextValue(asset.takeFailure) !== null)
+      normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');
     return normalized;
   }

@@ -218,7 +218,29 @@ export function createParserFixture(): ParserFixture {
     if (accessOutcome) return accessOutcome;
     const error = ComponentSystem.canTakeItem(entity as any, fixture.scene.player);
     if (error) {
-      return { status: 'failed', code: 'cannot_take', message: error, recoverable: true };
+      const authoredTakeFailure = fixture.textAssets
+        .getResolvedObjectField(entity, 'takeFailure')
+        ?.trim();
+      const genericTakeFailure = fixture.game.text('parser.take_cannot');
+      const useAuthoredFailure = !!authoredTakeFailure && error === genericTakeFailure;
+      return {
+        status: 'failed',
+        code: 'cannot_take',
+        message: useAuthoredFailure ? authoredTakeFailure : error,
+        recoverable: useAuthoredFailure ? false : true,
+      };
+    }
+    const isItem = entity.components?.some((component: any) => component?.type === 'Item');
+    if (!isItem && !entity.isTakeable) {
+      const authoredTakeFailure = fixture.textAssets
+        .getResolvedObjectField(entity, 'takeFailure')
+        ?.trim();
+      return {
+        status: 'failed',
+        code: 'not_takeable',
+        message: authoredTakeFailure || fixture.game.text('parser.take_cannot'),
+        recoverable: authoredTakeFailure ? false : true,
+      };
     }
     fixture.scene.removeEntity(entity);
     (entity as any).spatial = null;

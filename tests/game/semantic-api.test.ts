@@ -96,6 +96,25 @@ describe('Game semantic API', () => {
     expect(fallback.message).toBe('Cassette recorder.');
   });
 
+  it('resolves object text fields from arrays of lines', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer();
+    const boombox = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+      details: ['Line one.', '', 'Line three.'],
+    });
+
+    const outcome = fixture.game.examineEntity(boombox);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Line one.\n\nLine three.');
+  });
+
   it('examineEntity reveals an examinable hidden object', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -356,6 +375,29 @@ describe('Game semantic API', () => {
       data: { entityId: 'miles_id', ownerId: 'Hero' },
       recoverable: false,
     });
+  });
+
+  it('uses object TA takeFailure as a terminal not-takeable response', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const marbleColumn = fixture.addEntity('marble_column', {
+      title: 'Marble column',
+      description: 'A load-bearing marble column.',
+      takeFailure: 'The column is doing important architectural work.',
+    });
+
+    const outcome = fixture.game.takeEntity(marbleColumn);
+    const preflight = Game.prototype.canTakeEntity.call(fixture.game, marbleColumn);
+
+    expect(outcome).toEqual({
+      status: 'failed',
+      code: 'not_takeable',
+      message: 'The column is doing important architectural work.',
+      data: { entityId: 'marble_column' },
+      recoverable: false,
+    });
+    expect(preflight).toEqual(outcome);
+    expect(fixture.game.inventory).not.toContain(marbleColumn);
   });
 
   it('requires an explicit player inventory for inventory commands', () => {

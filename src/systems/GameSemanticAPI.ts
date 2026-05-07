@@ -50,6 +50,11 @@ export class GameSemanticAPI {
     return title && title.trim() ? title.trim() : null;
   }
 
+  private getAuthoredTakeFailure(target: SceneObject): string | null {
+    const message = this.game.textAssets.getResolvedObjectField(target as any, 'takeFailure');
+    return message && message.trim() ? message.trim() : null;
+  }
+
   private getRelationDisplayText(relation: SpatialRelationType): string {
     switch (relation) {
       case 'in':
@@ -805,10 +810,15 @@ export class GameSemanticAPI {
       };
     }
 
+    const objectDescription = this.game.textAssets.getResolvedObjectField(entity, 'description');
+    const runtimeDescription =
+      typeof (entity as any).description === 'string' ? (entity as any).description : null;
+    const description = objectDescription || runtimeDescription;
+
     const details = this.game.textAssets.getResolvedObjectField(entity, 'details');
     if (details && details.trim()) {
       if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
-        this.game.openInventoryPreview(entity, details);
+        this.game.openInventoryPreview(entity, description);
       }
       return {
         status: 'ok',
@@ -818,10 +828,6 @@ export class GameSemanticAPI {
       };
     }
 
-    const objectDescription = this.game.textAssets.getResolvedObjectField(entity, 'description');
-    const runtimeDescription =
-      typeof (entity as any).description === 'string' ? (entity as any).description : null;
-    const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
       if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
         this.game.openInventoryPreview(entity, description);
@@ -1142,12 +1148,15 @@ export class GameSemanticAPI {
     if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
       const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
       if (errorMsg) {
+        const authoredTakeFailure = this.getAuthoredTakeFailure(entity);
+        const genericTakeFailure = this.game.text('parser.take_cannot');
+        const useAuthoredFailure = !!authoredTakeFailure && errorMsg === genericTakeFailure;
         return {
           status: 'failed',
           code: 'cannot_take',
-          message: errorMsg,
+          message: useAuthoredFailure ? authoredTakeFailure : errorMsg,
           data: { entityId: entity.name },
-          recoverable: true,
+          recoverable: useAuthoredFailure ? false : true,
         };
       }
     }
@@ -1208,12 +1217,13 @@ export class GameSemanticAPI {
       };
     }
 
+    const authoredTakeFailure = this.getAuthoredTakeFailure(entity);
     return {
       status: 'failed',
       code: 'not_takeable',
-      message: this.game.text('parser.take_cannot'),
+      message: authoredTakeFailure || this.game.text('parser.take_cannot'),
       data: { entityId: entity.name },
-      recoverable: true,
+      recoverable: authoredTakeFailure ? false : true,
     };
   }
 
@@ -1253,24 +1263,28 @@ export class GameSemanticAPI {
     if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
       const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
       if (errorMsg) {
+        const authoredTakeFailure = this.getAuthoredTakeFailure(entity);
+        const genericTakeFailure = this.game.text('parser.take_cannot');
+        const useAuthoredFailure = !!authoredTakeFailure && errorMsg === genericTakeFailure;
         return {
           status: 'failed',
           code: 'cannot_take',
-          message: errorMsg,
+          message: useAuthoredFailure ? authoredTakeFailure : errorMsg,
           data: { entityId: entity.name },
-          recoverable: true,
+          recoverable: useAuthoredFailure ? false : true,
         };
       }
     }
 
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (!(isItem || entity.isTakeable)) {
+      const authoredTakeFailure = this.getAuthoredTakeFailure(entity);
       return {
         status: 'failed',
         code: 'not_takeable',
-        message: this.game.text('parser.take_cannot'),
+        message: authoredTakeFailure || this.game.text('parser.take_cannot'),
         data: { entityId: entity.name },
-        recoverable: true,
+        recoverable: authoredTakeFailure ? false : true,
       };
     }
 

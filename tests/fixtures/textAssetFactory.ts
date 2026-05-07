@@ -221,6 +221,13 @@ function interpolate(template: string, params?: Record<string, string | number>)
   });
 }
 
+function resolveTextValue(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return null;
+  if (!value.every((item) => typeof item === 'string')) return null;
+  return value.join('\n');
+}
+
 export function createTestTextAssets(): TestTextAssets {
   const objectAssets = new Map<string, ObjectTextAssetData>();
   const sceneAssets = new Map<string, SceneTextAssetData>();
@@ -239,7 +246,8 @@ export function createTestTextAssets(): TestTextAssets {
       }
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
-      if (typeof value === 'string') return value;
+      const text = resolveTextValue(value);
+      if (text !== null) return text;
       if (
         field === 'description' &&
         typeof (obj as { description?: unknown }).description === 'string'
@@ -264,7 +272,8 @@ export function createTestTextAssets(): TestTextAssets {
     getResolvedSceneField(scene, field) {
       const asset = sceneAssets.get(scene.id);
       const value = asset?.[field];
-      if (typeof value === 'string') return value;
+      const text = resolveTextValue(value);
+      if (text !== null) return text;
       if (field === 'description' && typeof scene.description === 'string')
         return scene.description || null;
       return null;

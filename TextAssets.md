@@ -33,11 +33,30 @@ Object asset:
 - `title`
 - `description`
 - `details`
+- `takeFailure`
 - `synonyms`
 - `semanticTags`
 - `relationFacts`
 
 Minimal object assets may still contain only `title` and `description`. Missing optional fields are treated as empty.
+
+## Multiline text
+
+Any TA field resolved as player-facing text may be authored either as a normal JSON string or as
+an array of strings. Arrays are joined with `\n`, and empty strings become blank lines:
+
+```json
+{
+  "details": [
+    "Line one.",
+    "",
+    "Line three after a blank line."
+  ]
+}
+```
+
+This is valid JSON and is preferred for long descriptions. List fields such as `synonyms`,
+`semanticTags`, and `relationFacts.childTags` keep their existing list semantics.
 
 ## Custom text variants
 
@@ -76,6 +95,10 @@ Scripts do not generate text themselves. They only change which named text field
 - `title` maps to the user-facing object or scene name.
 - `description` maps to the basic text used by parser/runtime for `look` or `look around`.
 - `details` maps to the richer text used by parser/runtime for `examine`.
+- `takeFailure` overrides the generic `parser.take_cannot` response when the player tries
+  to `TAKE` this object and standard runtime logic determines that it is not takeable.
+  Authored `takeFailure` responses are terminal: they are shown directly and do not trigger
+  post-API LLM recovery.
 - `synonyms` helps the parser and LLM map player wording to this object.
 - Existing runtime fields remain as fallback and for backward compatibility.
 - Parser and UI should read only the resolved standard fields, not custom variant names directly.

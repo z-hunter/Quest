@@ -227,6 +227,26 @@ describe('Parser LLM Integration', () => {
     expect(fixture.messages).not.toContain(fixture.game.text('parser.take_cannot'));
   });
 
+  it('uses object TA takeFailure instead of LLM recovery for non-takeable objects', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A heavy reference book.',
+      takeFailure: 'The book is bolted to the lectern.',
+    });
+
+    const mockLlmParse = vi.fn();
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('take book');
+
+    expect(mockLlmParse).not.toHaveBeenCalled();
+    expect(fixture.messages).toContain('The book is bolted to the lectern.');
+    expect(fixture.messages).not.toContain(fixture.game.text('parser.take_cannot'));
+  });
+
   it('keeps the standard parser failure when LLM recovery returns no envelope', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

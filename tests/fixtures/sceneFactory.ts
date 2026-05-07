@@ -9,6 +9,7 @@ import { createTestGame, type TestGameHarness } from './gameFactory';
 type EntityOptions = {
   title?: string | null;
   description?: string;
+  takeFailure?: string;
   disabled?: boolean;
   groupID?: string | null;
   components?: any[];
@@ -95,6 +96,7 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
           ? {}
           : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
+        takeFailure: options.takeFailure,
         semanticTags: options.semanticTags,
         relationFacts: options.relationFacts as any,
       });
