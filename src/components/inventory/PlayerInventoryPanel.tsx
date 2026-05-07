@@ -46,6 +46,9 @@ export const PlayerInventoryPanel: React.FC<PlayerInventoryPanelProps> = ({ game
       <div className="player-inventory-grid">
         {inventoryItems.map((item: Entity) => {
           const title = game.textAssets.getResolvedObjectField(item, 'title') || item.name;
+          const objectDescription = game.textAssets.getResolvedObjectField(item, 'description');
+          const runtimeDescription = typeof item.description === 'string' ? item.description : null;
+          const description = objectDescription || runtimeDescription;
           const isActive = previewedItem === item;
           return (
             <button
@@ -53,9 +56,9 @@ export const PlayerInventoryPanel: React.FC<PlayerInventoryPanelProps> = ({ game
               type="button"
               className={`player-inventory-slot${isActive ? ' is-active' : ''}`}
               onClick={() => {
-                const outcome = game.examineEntity(item);
-                if (outcome.message) {
-                  game.log(outcome.message);
+                game.openInventoryPreview(item, null);
+                if (description && description.trim()) {
+                  game.log(description);
                 }
               }}
               title={title}

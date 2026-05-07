@@ -424,7 +424,10 @@ export class ParserWorldModelBuilder {
   }
 
   private isFloorTitle(title: string): boolean {
-    return title.trim().toLowerCase() === this.game.textAssets.getServiceText('engine.floor_label');
+    return (
+      title.trim().toLowerCase() ===
+      this.game.textAssets.getServiceText('engine.floor_label').trim().toLowerCase()
+    );
   }
 
   private buildSpatialNodes(scene: Scene): ParserSpatialNodeContext[] {

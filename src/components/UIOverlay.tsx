@@ -144,6 +144,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [choiceDialog, handleChoiceResolve]);
 
+  const continueConsoleModalFirst = React.useCallback(() => {
+    return game?.console.continueClosedModal() || false;
+  }, [game]);
+
   return (
     <>
       <div id="ui-layer" style={{ pointerEvents: 'none' }}>
@@ -312,9 +316,18 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
         <div
           className="inventory-preview-overlay"
           style={{ pointerEvents: 'auto' }}
-          onClick={() => game.closeInventoryPreview()}
+          onClick={() => {
+            if (continueConsoleModalFirst()) return;
+            game.closeInventoryPreview();
+          }}
         >
-          <div className="inventory-preview-card" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="inventory-preview-card"
+            onClick={(e) => {
+              e.stopPropagation();
+              continueConsoleModalFirst();
+            }}
+          >
             <InventoryEntityCanvas entity={previewEntity} size={320} />
           </div>
         </div>

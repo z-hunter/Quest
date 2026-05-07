@@ -735,6 +735,9 @@ export class GameSemanticAPI {
       typeof (entity as any).description === 'string' ? (entity as any).description : null;
     const description = objectDescription || runtimeDescription;
     if (description && description.trim()) {
+      if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
+        this.game.openInventoryPreview(entity, null);
+      }
       return {
         status: 'ok',
         code: 'entity_description',
@@ -746,6 +749,9 @@ export class GameSemanticAPI {
     const targetTitle = this.getPlayerFacingObjectTitle(entity);
     if (targetTitle) {
       const genericMessage = this.game.text('parser.look_default_object', { target: targetTitle });
+      if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
+        this.game.openInventoryPreview(entity, null);
+      }
       return {
         status: 'ok',
         code: 'entity_generic_description',
@@ -818,7 +824,7 @@ export class GameSemanticAPI {
     const details = this.game.textAssets.getResolvedObjectField(entity, 'details');
     if (details && details.trim()) {
       if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
-        this.game.openInventoryPreview(entity, description);
+        this.game.openInventoryPreview(entity, null);
       }
       return {
         status: 'ok',
@@ -830,7 +836,7 @@ export class GameSemanticAPI {
 
     if (description && description.trim()) {
       if (entity instanceof Entity && this.game.inventoryManager.isEntityInInventory(entity)) {
-        this.game.openInventoryPreview(entity, description);
+        this.game.openInventoryPreview(entity, null);
       }
       return {
         status: 'ok',

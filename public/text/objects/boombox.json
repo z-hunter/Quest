@@ -10,7 +10,7 @@
     "",
     "Most days it works fine. Other days the tape head needs a screwdriver and a little faith."
   ],
-  "takeFailure": "You consider hauling the little Sharp around on your shoulder like some street king with a ghetto blaster. \nBut let's be honest. It's not going to make you look cool.. \nBesides, that's what the pocket cassette player is for. Easier to carry. Easier to disappear into.",
+  "takeFailure": "You consider hauling the little Sharp around on your shoulder like some street king with a ghetto blaster. \nShame carrying it around alone would make you look considerably less sharp. \nBesides, that's what the pocket cassette player is for. Easier to carry. Easier to disappear into.",
   "synonyms": ["recorder", "radio", "tape recorder", "player", "Sharp", "GF-7"],
   "semanticTags": ["device", "audio_device", "media_player"],
   "relationFacts": [

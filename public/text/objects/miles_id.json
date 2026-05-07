@@ -1,4 +1,10 @@
 {
   "title": "ID card",
-  "description": "You see nothing special."
+  "description": "It's your employee ID badge. \nYou can put it on clothing.",
+  "details": [
+    "This is a laminated card with a colorful print and a metal clip for attaching to clothing. It looks impressive and corporate.",
+    "It's immediately obvious that Syntrack doesn't skimp on the little things. You're pleased to see your name on this.",
+    "The photo came out surprisingly well. You look like someone who makes responsible decisions."
+  ],
+  "synonyms": ["id", "badge"]
 }

@@ -510,8 +510,47 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect((fixture.game as any).getInventoryPreviewEntity()).toBe(idCard);
-    expect((fixture.game as any).getInventoryPreviewText()).toBe('Your ID.');
+    expect((fixture.game as any).getInventoryPreviewText()).toBe(null);
     expect(player.direction).toBe('right');
+  });
+
+  it('looking at an inventory item opens preview and reports description only as outcome text', () => {
+    const fixture = createGameSemanticFixture();
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Short ID description.',
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.lookEntity(idCard);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Short ID description.');
+    expect((fixture.game as any).getInventoryPreviewEntity()).toBe(idCard);
+    expect((fixture.game as any).getInventoryPreviewText()).toBe(null);
+  });
+
+  it('examining an inventory item reports details and opens preview without preview text', () => {
+    const fixture = createGameSemanticFixture();
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Short ID description.',
+    });
+    fixture.textAssets.setObject('miles_id', {
+      title: 'your ID card',
+      description: 'Short ID description.',
+      details: 'Long ID details.',
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+
+    const outcome = fixture.game.examineEntity(idCard);
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.message).toBe('Long ID details.');
+    expect((fixture.game as any).getInventoryPreviewEntity()).toBe(idCard);
+    expect((fixture.game as any).getInventoryPreviewText()).toBe(null);
   });
 
   it('examineEntity does not turn the player toward objects inside subscenes', () => {

@@ -107,9 +107,6 @@ export class InventoryManager {
   }
 
   private resolveInventoryPreviewText(entity: Entity): string | null {
-    const details = this.textAssets.getResolvedObjectField(entity, 'details');
-    if (details && details.trim()) return details;
-
     const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
     const runtimeDescription = typeof entity.description === 'string' ? entity.description : null;
     const description = objectDescription || runtimeDescription;
