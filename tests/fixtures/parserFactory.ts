@@ -6,6 +6,7 @@ import {
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
   getSceneTextRelationDescendants,
+  getSceneTextRelationAccessStates,
   getSceneTextTargetDescriptor,
 } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
@@ -41,6 +42,22 @@ export function createParserFixture(): ParserFixture {
     if (intent === 'look' && hiddenMode !== 'lookable') return false;
     fixture.scene.revealHiddenEntity(entity);
     return true;
+  };
+
+  const revealHiddenDescendantsForExamine = (anchor: Entity): void => {
+    for (const relation of ['in', 'on', 'under', 'behind'] as const) {
+      const revealableDescendants = getSceneTextRelationAccessStates(
+        fixture.scene,
+        fixture.game,
+        anchor.name,
+        relation,
+        { includeHidden: true }
+      ).filter((accessState) => accessState.hiddenReason === 'examinable');
+
+      revealableDescendants.forEach((accessState) =>
+        fixture.scene.revealHiddenEntity(accessState.object)
+      );
+    }
   };
 
   const getAccessOutcome = (entity: Entity, _mode: 'look' | 'interact') => {
@@ -131,9 +148,9 @@ export function createParserFixture(): ParserFixture {
   };
 
   fixture.game.examineEntity = (entity: Entity) => {
-    revealHiddenEntityForIntent(entity, 'examine');
     const accessOutcome = getAccessOutcome(entity, 'interact');
     if (accessOutcome) return accessOutcome;
+    revealHiddenDescendantsForExamine(entity);
     const distanceError = ComponentSystem.getInteractionDistanceError(
       entity as any,
       fixture.scene.player
@@ -906,13 +923,30 @@ export function createParserFixture(): ParserFixture {
         }
       }
     }
-    const childTitles = getSceneTextRelationDescendants(
-      textLayer,
-      anchorNodeId,
-      relation as 'in' | 'on' | 'under' | 'behind'
-    )
+    const effectiveRelation = relation as 'in' | 'on' | 'under' | 'behind';
+    let childTitles = getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
       .map((entry) => entry.title)
       .filter((title): title is string => !!title);
+    const revealableLookables = getSceneTextRelationAccessStates(
+      fixture.scene,
+      fixture.game,
+      anchorNodeId,
+      effectiveRelation,
+      { includeHidden: true }
+    ).filter((accessState) => accessState.hiddenReason === 'lookable');
+    if (revealableLookables.length) {
+      revealableLookables.forEach((accessState) =>
+        fixture.scene.revealHiddenEntity(accessState.object)
+      );
+      const revealedTextLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
+      childTitles = getSceneTextRelationDescendants(
+        revealedTextLayer,
+        anchorNodeId,
+        effectiveRelation
+      )
+        .map((entry) => entry.title)
+        .filter((title): title is string => !!title);
+    }
     if (!childTitles.length) {
       return okOutcome(
         'relation_empty',

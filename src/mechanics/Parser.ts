@@ -1995,38 +1995,6 @@ export class Parser {
     return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
   }
 
-  private resolveSemanticHiddenTarget(
-    rawTarget: string,
-    allowedModes: Array<'lookable' | 'examinable'>
-  ):
-    | { status: 'found'; entity: SceneObject }
-    | { status: 'not_found' }
-    | {
-        status: 'ambiguous';
-        message: string;
-        options: string[];
-        clarificationOptions?: ParserClarificationOption[];
-      }
-    | { status: 'escalate'; code: string } {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return { status: 'not_found' };
-
-    const candidates = [...scene.entities, ...scene.triggerboxes].filter(
-      (sceneObject: SceneObject) => {
-        const title = this.getPlayerFacingObjectTitle(sceneObject);
-        if (!title) return false;
-        const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
-        return (
-          accessState.hidden &&
-          !!accessState.hiddenReason &&
-          allowedModes.includes(accessState.hiddenReason as 'lookable' | 'examinable')
-        );
-      }
-    );
-
-    return this.resolveEntityTargetInCandidates(rawTarget, candidates, 'parser.examine_which_one');
-  }
-
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
@@ -2037,29 +2005,6 @@ export class Parser {
       return { status: 'escalate', code: resolved.code, recoverable: true };
     }
     if (resolved.status === 'not_found') {
-      const semanticHiddenResolved = this.resolveSemanticHiddenTarget(rawTarget, ['lookable']);
-      if (semanticHiddenResolved.status === 'found') {
-        return this.game.lookEntity(semanticHiddenResolved.entity as any);
-      }
-      if (semanticHiddenResolved.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_look_target',
-          message: semanticHiddenResolved.message,
-          data: {
-            target: rawTarget,
-            options: semanticHiddenResolved.options,
-            clarificationOptions: this.withClarificationScope(
-              semanticHiddenResolved.clarificationOptions,
-              'source'
-            ),
-          },
-          recoverable: true,
-        };
-      }
-      if (semanticHiddenResolved.status === 'escalate') {
-        return { status: 'escalate', code: semanticHiddenResolved.code, recoverable: true };
-      }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
         return this.game.lookEntity(inactiveSwitchResolved.entity as any);
@@ -2181,32 +2126,6 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
-      }
-      const semanticHiddenResolved = this.resolveSemanticHiddenTarget(rawTarget, [
-        'lookable',
-        'examinable',
-      ]);
-      if (semanticHiddenResolved.status === 'found') {
-        return this.game.examineEntity(semanticHiddenResolved.entity as any);
-      }
-      if (semanticHiddenResolved.status === 'ambiguous') {
-        return {
-          status: 'needs_clarification',
-          code: 'ambiguous_examine_target',
-          message: semanticHiddenResolved.message,
-          data: {
-            target: rawTarget,
-            options: semanticHiddenResolved.options,
-            clarificationOptions: this.withClarificationScope(
-              semanticHiddenResolved.clarificationOptions,
-              'source'
-            ),
-          },
-          recoverable: true,
-        };
-      }
-      if (semanticHiddenResolved.status === 'escalate') {
-        return { status: 'escalate', code: semanticHiddenResolved.code, recoverable: true };
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {

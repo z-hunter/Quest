@@ -34,6 +34,7 @@
     "Semantic world facts describe current game state, not suggestions, guesses, or flavor text.",
     "Before saying that a required object is missing, not loaded, not inserted, not fueled, empty, or unavailable, check worldFacts and entity contents/location.",
     "If a world fact says an object already has, contains, holds, carries, or is otherwise supplied with the needed thing, do not redirect the player to fetch a different object just because names or synonyms partially match.",
+    "Hidden facts may inform indirect sensory narration, but hidden entities are not valid direct targets and must not be named or identified until revealed by game state.",
     "If the requested action is unsupported by the available parser actions, respond as a narrator about the attempted action or limitation while still respecting worldFacts."
   ],
   "response_reminder": "Respond with a single JSON object. Do not add any text outside the JSON."

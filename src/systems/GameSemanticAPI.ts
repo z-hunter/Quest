@@ -397,6 +397,23 @@ export class GameSemanticAPI {
     return true;
   }
 
+  private revealHiddenDescendantsForExamine(anchor: SceneObject): void {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return;
+
+    for (const relation of ['in', 'on', 'under', 'behind'] as const) {
+      const revealableDescendants = getSceneTextRelationAccessStates(
+        scene,
+        this.game,
+        anchor.name,
+        relation,
+        { includeHidden: true }
+      ).filter((accessState) => accessState.hiddenReason === 'examinable');
+
+      revealableDescendants.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
+    }
+  }
+
   private shouldFacePlayerTowardObservedObject(entity: SceneObject): boolean {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return false;
@@ -769,12 +786,13 @@ export class GameSemanticAPI {
   }
 
   examineEntity(entity: SceneObject): GameActionOutcome {
-    this.revealHiddenEntityForIntent(entity, 'examine');
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity);
     if (autoOpenOutcome) return autoOpenOutcome;
 
     const accessError = this.canExamineObject(entity);
     if (accessError) return accessError;
+
+    this.revealHiddenDescendantsForExamine(entity);
 
     const subsceneComponent = entity.components?.find(
       (component: any) => component?.type === 'Subscene'

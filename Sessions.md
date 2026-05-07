@@ -1232,3 +1232,106 @@ During the session the following checks were run successfully:
   - generated `AgentMemory.md`
 - The local memory mirror was refreshed and the NotebookLM memory dump was regenerated as part of this wrap-up workflow.
 - Fresh NotebookLM sources reached `ready` status in the Scanline Engine notebook.
+## Session Entry - 2026-05-08 00:40 +02:00
+
+### Session Goals
+
+- Finish and stabilize the inventory item preview behavior.
+- Make inventory click, `LOOK`, and `EXAMINE` semantics line up with the intended text channels:
+  - overlay is visual-only;
+  - console owns all text;
+  - click/`LOOK` use `description`;
+  - `EXAMINE` uses `details`.
+- Ensure the closed console modal `[Continue]` state has higher click priority than the inventory preview overlay.
+- Record the current repo state and durable behavior contract for future sessions.
+
+### What Was Implemented
+
+- Inventory overlay is now image-only:
+  - text rendering was removed from the overlay path;
+  - stale `.inventory-preview-text` styling was removed.
+- Clicking a player inventory slot now behaves like `LOOK`:
+  - opens the inventory preview overlay with no preview text;
+  - logs the item `description` to the game console.
+- `LOOK` on a held inventory item now opens the same image preview and returns/logs `description`.
+- `EXAMINE` on a held inventory item now opens the image preview and returns/logs `details`.
+- Inventory preview default text resolution no longer prefers `details`; explicit callers now decide whether preview text should exist, and the current player-facing overlay path passes `null`.
+- Inventory overlay click handling now respects the closed-console modal:
+  - if the console is in `[Continue]` state, the first click calls `console.continueClosedModal()`;
+  - that click does not close the inventory preview;
+  - subsequent backdrop clicks close the preview normally;
+  - clicks on the preview card itself still do not close the overlay.
+
+### Important Decisions
+
+- Inventory preview overlay should be visual-only for current gameplay UX. Text belongs in the console.
+- Clicking an inventory slot is equivalent to `LOOK` for text semantics, not `EXAMINE`.
+- `EXAMINE` remains the detailed text command and uses `details`, including for held inventory items.
+- The closed console modal has higher input priority than the inventory overlay. This avoids losing the preview when the player is only trying to dismiss `[Continue]`.
+
+### Parser / Mechanics / Inventory Changes
+
+- `src/components/inventory/PlayerInventoryPanel.tsx`
+  - click handler now opens preview with `null` preview text and logs `description` to console.
+- `src/systems/GameSemanticAPI.ts`
+  - `lookEntity(...)` opens image-only preview for inventory items while returning `description`;
+  - `examineEntity(...)` opens image-only preview for inventory items while returning `details`.
+- `src/systems/InventoryManager.ts`
+  - preview fallback text resolution was changed to use `description` instead of `details`, but the current overlay flow intentionally passes `null`.
+- `src/components/UIOverlay.tsx`
+  - preview text rendering removed;
+  - overlay click handling checks `console.continueClosedModal()` before closing preview.
+
+### Tests Run
+
+- `npx vitest run tests/game/semantic-api.test.ts`
+  - Passed: 80 tests.
+- `npx vitest run tests/game/semantic-api.test.ts tests/parser/commands.test.ts`
+  - Passed: 91 tests.
+- `npm run typecheck`
+  - Passed.
+
+### Commits Created During This Session
+
+- Latest commit at wrap-up time:
+  - `1b43375 Imrovement: Click on Inventory Item now work as LOOK command instead of EXAMINE.`
+- No additional commit was created by this wrap-up step.
+
+### Durable Memory Updates
+
+- Stored `agent_memory` decision:
+  - `5e584cec-59f7-4a32-943c-ade76c5cc271`
+  - `Inventory item LOOK/click/EXAMINE preview contract`
+
+### Current Worktree State
+
+- Worktree still has uncommitted changes at wrap-up time:
+  - `public/scenes/test_room.json`
+  - `public/text/system/parser-llm-system.md`
+  - `public/text/system/parser-llm.json`
+  - `src/mechanics/Parser.ts`
+  - `src/systems/GameSemanticAPI.ts`
+  - `tests/fixtures/parserFactory.ts`
+  - `tests/game/semantic-api.test.ts`
+  - `tests/integration/parser-game.test.ts`
+  - `public/text/objects/audio_cables.json` (untracked)
+- The dirty tree includes ongoing hidden-object / relation-discovery changes beyond the inventory preview contract:
+  - direct `LOOK` / `EXAMINE` of hidden semantic targets is being constrained;
+  - relation `LOOK` can reveal `lookable` hidden contents;
+  - examining an anchor can reveal `examinable` hidden descendants;
+  - LLM instructions now distinguish hidden facts from visible target candidates and allow only indirect non-revealing hints.
+
+### Remaining Work / Next Steps
+
+- Review and commit the remaining dirty hidden-object / relation-discovery changes separately from the already committed inventory-preview behavior, if accepted.
+- Consider a browser/UI-level test later for the overlay-vs-closed-modal click priority, since the current validation is mostly semantic/type-level.
+- Optionally update `GDD.md` or a parser/UI behavior doc with the final inventory item contract:
+  - click/`LOOK` = image preview + `description` in console;
+  - `EXAMINE` = image preview + `details` in console;
+  - overlay itself renders no text.
+
+### Risks / Caveats
+
+- `UIOverlay.tsx` behavior depends on `console.continueClosedModal()` returning `true` only when the console is actually in modal `[Continue]` state.
+- The current dirty worktree includes user/session changes outside the final inventory preview fix; future agents should inspect diffs carefully before committing.
+- The latest commit message contains a typo: `Imrovement`.

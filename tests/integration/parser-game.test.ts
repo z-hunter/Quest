@@ -252,23 +252,72 @@ describe('Parser + game integration smoke', () => {
     expect(directResult.messages.at(-1)).toBe("You don't see any note here.");
   });
 
-  it('reveals a lookable hidden target through LOOK', async () => {
+  it('reveals a lookable hidden target through relation LOOK, not direct LOOK', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Chair', {
+      title: 'Chair',
+      description: 'A wooden chair.',
+    });
     const key = fixture.addEntity('key', {
       title: 'Key',
       description: 'A hidden key.',
       components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Chair', relation: 'under' },
     });
     key.hidden = 'lookable';
 
-    const result = await fixture.run('look key');
+    const directResult = await fixture.run('look key');
+    expect(directResult.messages.at(-1)).toBe("You don't see any key here.");
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(false);
 
-    expect(result.messages.at(-1)).toBe('A hidden key.');
+    const relationResult = await fixture.run('look under chair');
+    expect(relationResult.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Under',
+        target: 'Chair',
+        items: 'Key',
+      })
+    );
     expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
+
+    const revealedResult = await fixture.run('look key');
+    expect(revealedResult.messages.at(-1)).toBe('A hidden key.');
   });
 
-  it('reveals an examinable hidden target through EXAMINE but not LOOK', async () => {
+  it('keeps hidden lookable relation contents absent from direct LOOK until discovered', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+    });
+    const cables = fixture.addEntity('audio_cables', {
+      title: 'audio cables',
+      description: 'Two standard tape recorder cables.',
+      spatial: { parentNodeId: 'boombox', relation: 'behind' },
+    });
+    cables.hidden = 'lookable';
+
+    const directResult = await fixture.run('look cables');
+    expect(directResult.messages.at(-1)).toBe("You don't see any cables here.");
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(false);
+
+    const relationResult = await fixture.run('look behind boombox');
+    expect(relationResult.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'Behind',
+        target: 'Boombox',
+        items: 'audio cables',
+      })
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(true);
+
+    const revealedResult = await fixture.run('look cables');
+    expect(revealedResult.messages.at(-1)).toBe('Two standard tape recorder cables.');
+  });
+
+  it('does not reveal a direct hidden examinable target through LOOK or EXAMINE', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const cache = fixture.addEntity('cache', {
@@ -287,8 +336,40 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(false);
 
     const examineResult = await fixture.run('examine cache');
-    expect(examineResult.messages.at(-1)).toBe('A concealed niche with a tiny latch.');
-    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(true);
+    expect(examineResult.messages.at(-1)).toBe("You don't see any cache here.");
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(false);
+  });
+
+  it('reveals examinable hidden relation contents by examining their anchor', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+      details: 'A dusty cassette recorder.',
+    } as any);
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+      details: 'A dusty cassette recorder.',
+    });
+    const cables = fixture.addEntity('audio_cables', {
+      title: 'audio cables',
+      description: 'Two standard tape recorder cables.',
+      spatial: { parentNodeId: 'boombox', relation: 'behind' },
+    });
+    cables.hidden = 'examinable';
+
+    const lookResult = await fixture.run('look cables');
+    expect(lookResult.messages.at(-1)).toBe("You don't see any cables here.");
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(false);
+
+    const examineAnchorResult = await fixture.run('examine boombox');
+    expect(examineAnchorResult.messages.at(-1)).toBe('A dusty cassette recorder.');
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(true);
+
+    const revealedResult = await fixture.run('look cables');
+    expect(revealedResult.messages.at(-1)).toBe('Two standard tape recorder cables.');
   });
 
   it('supports PUT IN object when the object contains an untitled nested surface', async () => {

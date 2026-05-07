@@ -115,7 +115,7 @@ describe('Game semantic API', () => {
     expect(outcome.message).toBe('Line one.\n\nLine three.');
   });
 
-  it('examineEntity reveals an examinable hidden object', () => {
+  it('examineEntity does not reveal a direct hidden examinable target', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
     const cache = fixture.addEntity('cache', {
@@ -134,9 +134,38 @@ describe('Game semantic API', () => {
 
     const outcome = fixture.game.examineEntity(cache);
 
+    expect(outcome.status).toBe('failed');
+    expect(outcome.code).toBe('hidden_semantic_target');
+    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(false);
+  });
+
+  it('examineEntity reveals examinable hidden descendants around the examined anchor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const boombox = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+      details: 'A dusty cassette recorder.',
+    } as any);
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'Cassette recorder.',
+      details: 'A dusty cassette recorder.',
+    });
+    const cables = fixture.addEntity('audio_cables', {
+      title: 'audio cables',
+      description: 'Two standard tape recorder cables.',
+      spatial: { parentNodeId: 'boombox', relation: 'behind' },
+    });
+    cables.hidden = 'examinable';
+
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(false);
+
+    const outcome = fixture.game.examineEntity(boombox);
+
     expect(outcome.status).toBe('ok');
-    expect(outcome.message).toBe('A concealed niche with a tiny latch.');
-    expect(fixture.scene.isHiddenEntityRevealed(cache)).toBe(true);
+    expect(outcome.message).toBe('A dusty cassette recorder.');
+    expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(true);
   });
 
   it('examineEntity turns the player toward a visible scene object', () => {
