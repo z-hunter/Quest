@@ -140,6 +140,9 @@ export type ParserCommandSpec = {
 export type ParserContext = {
   rawInput: string;
   normalizedInput: string;
+  focusedTarget?: ParserInventoryItemContext & {
+    source: 'inventoryPreview';
+  };
   player?: {
     x: number;
     y: number;
@@ -289,6 +292,7 @@ export type ParserCascadeEnvelope = {
     intent?: string;
     score?: number;
     source?: 'nlpjs';
+    focusedDefaultTarget?: string;
   };
 };
 

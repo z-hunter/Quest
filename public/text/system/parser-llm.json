@@ -11,6 +11,7 @@
   "post_api_escalation_instructions": [
     "The previous parser/game attempt escalated instead of completing.",
     "First try to correct the player intent, target, relation, or action plan if the lower parser likely misunderstood the command.",
+    "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
     "If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.",
     "If you cannot improve the previous attempt safely, return fallback."
@@ -18,12 +19,14 @@
   "post_api_not_found_instructions": [
     "The previous parser/game attempt reported that it could not see the target. This often means the lower cascade misread a verb, adjective, or phrase fragment as the noun.",
     "First try to correct the player intent or target by using only real visible or inventory titles from the context.",
+    "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
     "If no safe correction exists, return final_response with a short grounded in-world reason, or fallback if the standard parser response is better."
   ],
   "post_api_recovery_instructions": [
     "The previous parser/game attempt recognized a command but ended in a recoverable failed outcome.",
     "First decide whether the lower parser likely misunderstood the player intent, target, relation, or action. If so, return a corrected safe action plan using only real context titles.",
+    "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or showText with a short atmospheric in-world reason.",
     "Do not claim that an action succeeded unless the returned plan can actually execute it.",
     "If you cannot improve the previous attempt safely or interestingly, return fallback.",

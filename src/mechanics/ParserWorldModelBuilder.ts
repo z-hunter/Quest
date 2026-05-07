@@ -58,6 +58,7 @@ export class ParserWorldModelBuilder {
     const entities = scene ? this.buildEntityContexts(scene) : [];
     const knownEntities = scene ? this.buildKnownEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
+    const focusedTarget = this.buildFocusedTargetContext();
     const worldFacts = scene ? this.buildWorldFacts(scene, entities, inventory) : [];
     const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
     const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
@@ -72,6 +73,7 @@ export class ParserWorldModelBuilder {
     return this.compactRecord({
       rawInput,
       normalizedInput,
+      focusedTarget,
       player: playerContext,
       scene: sceneContext,
       entities,
@@ -81,6 +83,21 @@ export class ParserWorldModelBuilder {
       spatialNodes,
       spatialRelations,
       pending,
+    });
+  }
+
+  private buildFocusedTargetContext(): ParserContext['focusedTarget'] | undefined {
+    const entity = this.game.getInventoryPreviewEntity?.();
+    if (!entity || !(this.game.inventory || []).includes(entity)) return undefined;
+    const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
+    if (!title) return undefined;
+    return this.compactRecord<NonNullable<ParserContext['focusedTarget']>>({
+      id: entity.name,
+      title,
+      source: 'inventoryPreview',
+      synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
+      description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
+      details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
     });
   }
 

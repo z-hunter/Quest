@@ -113,6 +113,82 @@ describe('Parser custom commands', () => {
     expect(fixture.game.inventory).not.toContain(key);
   });
 
+  it('uses the previewed inventory item as default target for LOOK and EXAMINE', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A thumbed paperback.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A thumbed paperback.',
+      details: 'Someone has underlined every pessimistic sentence.',
+    });
+    fixture.scene.removeEntity(book);
+    fixture.game.inventory.push(book);
+    fixture.game.openInventoryPreview(book, null);
+
+    const look = await fixture.run('look');
+    const examine = await fixture.run('examine');
+
+    expect(look.messages.at(-1)).toBe('A thumbed paperback.');
+    expect(examine.messages.at(-1)).toBe('Someone has underlined every pessimistic sentence.');
+  });
+
+  it('drops the previewed inventory item when DROP has no explicit item', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+    fixture.game.openInventoryPreview(key, null);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('drop');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', { item: 'key', target: 'Desk' })
+    );
+    expect(fixture.game.inventory).not.toContain(key);
+  });
+
+  it('uses the previewed inventory item for the first missing custom command argument', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const yourId = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Your card.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(yourId);
+    fixture.game.inventory.push(yourId);
+    fixture.game.openInventoryPreview(yourId, null);
+    fixture.game.sceneManager.scenes.set('test1', fixture.scene);
+    fixture.game.sceneManager.sceneRegistry.set('test1', {
+      id: 'test1',
+      path: 'test1.json',
+      name: 'Test Destination',
+      title: 'Test Destination',
+      sourceData: null,
+      lastIndexed: Date.now(),
+    });
+
+    const result = await fixture.run('teleport');
+
+    expect(result.messages.at(-1)).toBe('You vanish in a flash and arrive somewhere else.');
+    expect(fixture.game.inventory).not.toContain(yourId);
+  });
+
   it('drops a held item onto a walkbox surface as floor text', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

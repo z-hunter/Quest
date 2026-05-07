@@ -148,6 +148,14 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     return game?.console.continueClosedModal() || false;
   }, [game]);
 
+  const keepCommandInputFocused = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      game?.focusCommandInput();
+    },
+    [game]
+  );
+
   return (
     <>
       <div id="ui-layer" style={{ pointerEvents: 'none' }}>
@@ -316,6 +324,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
         <div
           className="inventory-preview-overlay"
           style={{ pointerEvents: 'auto' }}
+          onMouseDown={keepCommandInputFocused}
           onClick={() => {
             if (continueConsoleModalFirst()) return;
             game.closeInventoryPreview();
@@ -323,6 +332,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
         >
           <div
             className="inventory-preview-card"
+            onMouseDown={keepCommandInputFocused}
             onClick={(e) => {
               e.stopPropagation();
               continueConsoleModalFirst();

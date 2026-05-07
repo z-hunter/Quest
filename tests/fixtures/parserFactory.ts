@@ -128,9 +128,7 @@ export function createParserFixture(): ParserFixture {
   fixture.game.lookEntity = (entity: Entity) => {
     revealHiddenEntityForIntent(entity, 'look');
     if (fixture.game.inventoryManager.isEntityInInventory(entity)) {
-      const details = fixture.textAssets.getResolvedObjectField(entity, 'details');
       const description = fixture.textAssets.getResolvedObjectField(entity, 'description');
-      if (details) return okOutcome('entity_details', details, { entityId: entity.name });
       if (description)
         return okOutcome('entity_description', description, { entityId: entity.name });
     }

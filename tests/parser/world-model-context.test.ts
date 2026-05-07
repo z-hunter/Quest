@@ -3,6 +3,35 @@ import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBui
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Parser world model context', () => {
+  it('includes the inventory preview item as focusedTarget for LLM default target resolution', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const book = fixture.addEntity('book', {
+      title: 'Book',
+      description: 'A thumbed paperback.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('book', {
+      title: 'Book',
+      description: 'A thumbed paperback.',
+      details: 'Someone has underlined every pessimistic sentence.',
+    });
+    fixture.scene.removeEntity(book);
+    fixture.game.inventory.push(book);
+    fixture.game.openInventoryPreview(book, null);
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('examine', null);
+
+    expect(model.context.focusedTarget).toEqual({
+      id: 'book',
+      title: 'Book',
+      source: 'inventoryPreview',
+      description: 'A thumbed paperback.',
+      details: 'Someone has underlined every pessimistic sentence.',
+    });
+  });
+
   it('omits technical scene object type and includes item flag only when Item component exists', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 12, 34);

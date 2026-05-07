@@ -95,6 +95,7 @@ export class Parser {
         (this.game.console?.parserStage1Enabled === false
           ? this.buildStage1BypassAction(trimmed)
           : this.runStage1(trimmed));
+      envelope = this.applyFocusedDefaultTargets(envelope);
 
       if (
         !actionEnvelope &&
@@ -103,7 +104,7 @@ export class Parser {
       ) {
         const stage2Envelope = await this.nlpCascade.parse(trimmed, context);
         if (stage2Envelope) {
-          envelope = stage2Envelope;
+          envelope = this.applyFocusedDefaultTargets(stage2Envelope);
         }
       }
 
@@ -124,7 +125,9 @@ export class Parser {
             reason: 'c1_off',
           },
         });
-        envelope = llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope);
+        envelope = this.applyFocusedDefaultTargets(
+          llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope)
+        );
       }
 
       if (
@@ -136,7 +139,7 @@ export class Parser {
         llmAttempted = true;
         const llmEnvelope = await this.runLlmCascade(trimmed, context);
         if (llmEnvelope) {
-          envelope = llmEnvelope;
+          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
         }
       }
 
@@ -157,7 +160,7 @@ export class Parser {
           result: parsedResult,
         });
         if (llmEnvelope) {
-          envelope = llmEnvelope;
+          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
           resultJson = this.runParserCore(envelope);
         }
       }
@@ -195,6 +198,61 @@ export class Parser {
       this.game.console?.log(`[Parser error] ${String(error)}`, 'error');
       this.game.log(this.game.text('parser.parse_unknown'));
     }
+  }
+
+  private getFocusedDefaultTargetTitle(): string | null {
+    const entity = this.game.getInventoryPreviewEntity?.();
+    if (!entity || !(entity instanceof Entity)) return null;
+    if (!this.game.inventory?.includes(entity)) return null;
+    const title = this.getPlayerFacingObjectTitle(entity);
+    return title && title.trim() ? title.trim() : null;
+  }
+
+  private applyFocusedDefaultTargets(envelope: ParserCascadeEnvelope): ParserCascadeEnvelope {
+    if (envelope.output.kind !== 'plan') return envelope;
+    const focusedTitle = this.getFocusedDefaultTargetTitle();
+    if (!focusedTitle) return envelope;
+
+    let customDefaultConsumed = false;
+    const actions = envelope.output.actions.map((action): ParserToolAction => {
+      switch (action.type) {
+        case 'lookScene':
+          if (envelope.debug.verb === 'LOOK' && !envelope.debug.noun) {
+            return { type: 'lookTarget', target: focusedTitle };
+          }
+          return action;
+        case 'examineTarget':
+          return action.target ? action : { ...action, target: focusedTitle };
+        case 'takeTarget':
+          return action.target ? action : { ...action, target: focusedTitle };
+        case 'putTarget':
+          return action.item ? action : { ...action, item: focusedTitle };
+        case 'openTarget':
+          return action.target ? action : { ...action, target: focusedTitle };
+        case 'closeTarget':
+          return action.target ? action : { ...action, target: focusedTitle };
+        case 'goToTarget':
+          return action.target ? action : { ...action, target: focusedTitle };
+        case 'resolveArgumentEntity':
+          if (action.query || customDefaultConsumed) return action;
+          customDefaultConsumed = true;
+          return { ...action, query: focusedTitle };
+        default:
+          return action;
+      }
+    });
+
+    return {
+      ...envelope,
+      output: {
+        ...envelope.output,
+        actions,
+      },
+      debug: {
+        ...envelope.debug,
+        focusedDefaultTarget: focusedTitle,
+      },
+    };
   }
 
   private resolvePendingAction(input: string): ParserCascadeEnvelope | null {
