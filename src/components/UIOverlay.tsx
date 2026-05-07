@@ -36,6 +36,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
   // Console State for Input Unlocking
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+  const [isConsoleModal, setIsConsoleModal] = useState(false);
   const parserInputRef = React.useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     if (game && game.console) {
       const unsubscribe = game.console.subscribe(() => {
         setIsConsoleOpen(game.console.isOpen);
+        setIsConsoleModal(game.console.isClosedModal);
       });
       return unsubscribe;
     }
@@ -83,7 +85,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
   useEffect(() => {
     if (!game) return;
-    if (editorEnabled || isConsoleOpen) return;
+    if (editorEnabled || isConsoleOpen || isConsoleModal) return;
 
     const timer = window.setTimeout(() => {
       const input = parserInputRef.current;
@@ -94,7 +96,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [game, editorEnabled, isConsoleOpen, previewEntity?.name]);
+  }, [game, editorEnabled, isConsoleOpen, isConsoleModal, previewEntity?.name]);
 
   useEffect(() => {
     if (message) {
@@ -151,9 +153,20 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
             id="parser-input"
             ref={parserInputRef}
             autoComplete="off"
-            autoFocus={!editorEnabled || isConsoleOpen}
-            disabled={editorEnabled && !isConsoleOpen}
+            autoFocus={!isConsoleModal && (!editorEnabled || isConsoleOpen)}
+            disabled={isConsoleModal || (editorEnabled && !isConsoleOpen)}
             onKeyDown={(e) => {
+              if (e.code === 'Backquote' && game?.console.isClosedModal) {
+                e.preventDefault();
+                game.console.toggle();
+                return;
+              }
+
+              if (game?.console.continueClosedModal()) {
+                e.preventDefault();
+                return;
+              }
+
               // Layer 2: React Event Fallback (fires if Global Capture misses or bubbles up)
 
               // F1: Toggle Scene Editor
@@ -172,6 +185,9 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
 
               // Enter: Parse Command
               if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
                 const val = e.currentTarget.value.trim(); // Keep case for now, parser handles upper?
                 // GDD: "Input command... displayed in buffer... then sent to parser"
 

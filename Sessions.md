@@ -1088,3 +1088,147 @@ During the session the following checks were run successfully:
 - Facts should stay concise and factual; atmospheric sarcasm belongs in LLM responses, not TA semantic facts.
 - Empty or missing `childTags` currently means the relation rule applies to any child in that relation.
 - NotebookLM source replacement completed after this entry was written: fresh `Sessions.md`, `GDD.md`, `AgentMemory.md`, `Parser.md`, and `TextAssets.md` sources were uploaded and reached `ready` status in the Scanline Engine notebook.
+## Session Entry - 2026-05-07 18:01 Europe/Warsaw
+
+### Session Goals
+
+- Implement the GDD-described closed-console modal state for parser responses that exceed the two visible closed-console lines.
+- Add word wrapping in the closed low-res console so long lines are not clipped at the right screen edge.
+- Preserve forced line breaks (`\n`, CRLF/CR) from Text Assets and parser responses so TA descriptions can use paragraphs.
+- Iterate on modal-console UX until it matches real gameplay behavior in `test_room`, especially `LOOK CITY`.
+
+### What Was Implemented
+
+- Added closed-console word wrapping and forced-newline preservation in `src/core/Console.ts`.
+  - Closed-console display lines are derived from buffer text by splitting CRLF/CR/`\n` into explicit paragraphs and wrapping words to the low-res console width.
+  - Very long unbroken words are split so they cannot overflow the canvas.
+- Added closed modal state handling.
+  - `Console.isClosedModal` marks the continue-waiting state.
+  - Parser/player output that wraps beyond two closed-console lines enters modal state while the console is closed.
+  - Any normal key press or canvas click dismisses the modal.
+  - Backquote/tilde is an exception: it opens the full high-res console instead of merely dismissing the modal.
+- Added parser-response batching.
+  - `Console.logResponse()` evaluates the modal threshold over the full player-facing parser response batch, not one physical buffer entry at a time.
+  - `Game.logResponse()` funnels real parser responses into that batch path, with a fallback for tests/stubs.
+  - `Parser.parse()` now sends player-facing response output through `game.logResponse(...)` when available.
+- Fixed Enter propagation.
+  - The hidden parser input now stops `Enter` propagation after submitting a command, preventing the same key event from bubbling to global input and instantly dismissing a newly opened modal.
+- Scoped modal rendering to the latest parser response.
+  - `Console` now stores a separate `closedModalDisplayLines` snapshot when a response triggers modal state.
+  - `Game.renderUI()` renders only `getClosedModalDisplayLines()` while modal, rather than expanding the whole closed-console history.
+  - Dismissing modal, opening the full console, clearing, or loading from JSON clears that modal snapshot.
+- Kept technical parser logs out of the closed console.
+  - `ConsoleLine` now supports optional `showInClosed`.
+  - Parser debug/peek messages are written with `{ showInClosed: false }`, so they remain visible in the open console buffer but do not occupy the low-res gameplay screen.
+  - Command confirmations such as `Parser peek enabled.` from `#PEEK-ON` and `LLM prompt/response peek enabled.` from `#PEEKLLM-ON` remain normal visible output.
+- Polished the continue prompt.
+  - `[Continue]` is right-aligned on the modal prompt row.
+  - Its blink cadence now uses the same `cursorBlink / 500` logic as the normal closed-console text cursor.
+
+### Important Architecture / Runtime Decisions
+
+- Closed modal is a transient view over the latest parser response, not a resized history viewer.
+- The full console buffer remains the authoritative history for the open console; the modal snapshot is only for the low-res modal display.
+- Parser/player responses and technical diagnostic logs now have different closed-console visibility semantics:
+  - player-facing parser responses can trigger and populate modal state;
+  - debug/peek logs are retained for the open console but hidden from the closed console.
+- Tilde/backquote has higher priority than generic modal dismissal because it is the user's established gesture for opening the console.
+- Forced text newlines are handled at display wrapping time, so existing JSON string escape behavior (`\n`, CRLF/CR) works without changing Text Asset schemas.
+
+### Parser / Mechanics / Scene / UI Changes
+
+- Parser:
+  - `src/mechanics/Parser.ts` now sends player-facing response arrays through `game.logResponse(...)`.
+  - Parser debug messages are logged with `showInClosed: false`.
+- Console/runtime:
+  - `src/core/Console.ts` gained display-line wrapping, modal state, modal response snapshots, `logResponse`, `getClosedModalDisplayLines`, and `showInClosed` filtering.
+  - `src/core/Game.ts` renders dynamic-height closed modal output, right-aligned blinking `[Continue]`, and `logResponse`.
+  - `src/core/Input.ts` handles Backquote before generic modal dismissal.
+  - `src/core/IGame.ts` exposes optional `logResponse`.
+- React UI:
+  - `src/components/UIOverlay.tsx` disables hidden parser input during modal state, stops submit `Enter` propagation, and mirrors the Backquote modal-open fallback.
+- Tests:
+  - `tests/parser/preprocessor.test.ts` now covers closed-console wrapping, forced newlines, modal dismissal, multi-message parser response modal triggering, Backquote opening the full console, technical log filtering, and latest-response-only modal snapshots.
+
+### Validation / Tests Run
+
+- `codex-doctor -Fast`
+  - Passed: 17 checks, 0 warnings, 0 failures.
+- NotebookLM CLI readiness:
+  - Initial `list` / smoke `ask` failed because auth had expired.
+  - `notebooklm-ready.ps1 -AutoLogin` repaired CLI auth and the project smoke test passed.
+- Focused tests during implementation:
+  - `npm test -- tests/parser/preprocessor.test.ts`
+  - `npm test -- tests/parser/preprocessor.test.ts tests/parser/commands.test.ts tests/integration/parser-game.test.ts`
+  - `npm test -- tests/parser/preprocessor.test.ts tests/parser/llm-parser.test.ts`
+  - All passed after fixes.
+- Typecheck:
+  - `npm run typecheck`
+  - Passed.
+- Full suite:
+  - `npm test`
+  - Passed: 23 files, 268 tests.
+- Whitespace:
+  - `git diff --check`
+  - Passed. Git reported expected LF-to-CRLF working-copy warnings only.
+- Browser smoke checks with Playwright:
+  - `LOOK CITY` in `test_room` enters closed modal, disables input, preserves forced CR/newline, wraps text, and dismisses to the last two wrapped lines.
+  - Backquote from modal opens the full high-res console overlay.
+  - `#PEEK-ON` followed by `LOOK CITY` keeps `--- CONTEXT ---` in the full buffer but hides it from closed display, while `Parser peek enabled.` remains visible.
+  - Repeating `LOOK CITY` leaves history in the full buffer but modal renders only the latest response snapshot.
+
+### Commits Created During This Session
+
+- No git commit was created during this session.
+- Latest commit at wrap-up time:
+  - `2fcb17e Fix spatial relation type narrowing`
+
+### Kairo / Memory Updates
+
+- Kairo task updated and closed:
+  - `aaaaaaabtybovqouo5bfcrh3gru6asfb`
+  - `[Quest] Implement closed-console modal multiline output`
+- Durable `agent_memory` entries stored for:
+  - closed console modal multiline output implementation;
+  - parser response batching and Enter propagation fix;
+  - Backquote opening the full console from modal state;
+  - right-aligned `[Continue]` prompt and blink cadence;
+  - technical parser logs hidden from closed console;
+  - latest-response-only modal snapshot behavior.
+
+### Current State
+
+- Branch: `scene-refact3`.
+- Worktree has uncommitted changes from this session in:
+  - `src/components/UIOverlay.tsx`
+  - `src/core/Console.ts`
+  - `src/core/Game.ts`
+  - `src/core/IGame.ts`
+  - `src/core/Input.ts`
+  - `src/mechanics/Parser.ts`
+  - `tests/parser/preprocessor.test.ts`
+- There is also a pre-existing/user-owned dirty file not edited as part of this implementation:
+  - `public/scenes/test_room.json`
+- `Sessions.md` is updated by this wrap-up entry.
+
+### Remaining Work / Next Recommended Steps
+
+- Commit the feature after user acceptance, including the source/test changes and this `Sessions.md` entry if desired.
+- Consider adding a higher-level integration/UI test for closed-modal rendering if the project later gains browser-driven test infrastructure.
+- Consider documenting the closed-console modal contract in `GDD.md` or a console/UI architecture doc if this behavior becomes a stable public editing/design rule.
+
+### Risks / Caveats / Open Questions
+
+- Closed modal currently caps visible modal output to available low-res screen height. Extremely long responses still show the tail of that response rather than true pagination.
+- Technical logs are hidden only when logged with `showInClosed: false`; future debug producers should use the same flag if they should stay out of the closed console.
+- The modal snapshot is intentionally transient and is not serialized into save/load state.
+- The dirty `public/scenes/test_room.json` was left untouched because it appears unrelated/user-owned.
+
+### NotebookLM / RAG Refresh
+
+- NotebookLM source replacement completed after this entry was appended:
+  - `Sessions.md`
+  - `GDD.md`
+  - generated `AgentMemory.md`
+- The local memory mirror was refreshed and the NotebookLM memory dump was regenerated as part of this wrap-up workflow.
+- Fresh NotebookLM sources reached `ready` status in the Scanline Engine notebook.

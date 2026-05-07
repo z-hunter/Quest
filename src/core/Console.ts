@@ -7,6 +7,16 @@ export interface ConsoleLine {
   text: string;
   type: ConsoleLineType;
   timestamp: number;
+  showInClosed?: boolean;
+}
+
+export interface ConsoleDisplayLine {
+  text: string;
+  type: ConsoleLineType;
+}
+
+export interface ConsoleLogOptions {
+  showInClosed?: boolean;
 }
 
 export interface ConsoleState {
@@ -25,10 +35,14 @@ export class Console {
   parserStage2Enabled: boolean = true;
   parserLlmEnabled: boolean = false;
   parserCascade1ForceLlm: boolean = false;
+  isClosedModal: boolean = false;
+  private closedModalDisplayLines: ConsoleDisplayLine[] = [];
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
   readonly MAX_HISTORY = 50;
+  readonly CLOSED_CONSOLE_VISIBLE_LINES = 2;
+  readonly CLOSED_CONSOLE_WRAP_COLUMNS = 68;
 
   // Command Registry
   private commands: Map<string, (args: string[]) => void> = new Map();
@@ -61,6 +75,10 @@ export class Console {
   }
 
   preprocessGameplayInput(input: string): string {
+    if (this.isClosedModal) {
+      return '';
+    }
+
     const trimmed = input.trim();
     if (!trimmed) return trimmed;
 
@@ -84,6 +102,8 @@ export class Console {
   }
 
   processCommand(input: string): void {
+    if (this.isClosedModal) return;
+
     const trimmed = input.trim();
     if (!trimmed) return;
 
@@ -245,6 +265,14 @@ export class Console {
   }
 
   toggle(): void {
+    if (this.isClosedModal) {
+      this.isClosedModal = false;
+      this.closedModalDisplayLines = [];
+      this.isOpen = true;
+      this.notifyListeners();
+      return;
+    }
+
     this.isOpen = !this.isOpen;
     this.notifyListeners();
   }
@@ -254,11 +282,12 @@ export class Console {
     this.notifyListeners();
   }
 
-  log(text: string, type: ConsoleLineType = 'output'): number {
+  log(text: string, type: ConsoleLineType = 'output', options: ConsoleLogOptions = {}): number {
     const line: ConsoleLine = {
       text,
       type,
       timestamp: Date.now(),
+      showInClosed: options.showInClosed,
     };
 
     this.buffer.push(line);
@@ -268,8 +297,61 @@ export class Console {
       this.buffer.shift();
     }
 
+    if (
+      this.lineShowsInClosed(line) &&
+      !this.isOpen &&
+      type === 'output' &&
+      this.getWrappedLineCount(text) > 2
+    ) {
+      this.isClosedModal = true;
+      this.closedModalDisplayLines = this.buildDisplayLines([{ text, type }]);
+    }
+
     this.notifyListeners();
     return this.buffer.length - 1;
+  }
+
+  logResponse(
+    messages: string[],
+    type: ConsoleLineType = 'output',
+    options: ConsoleLogOptions = {}
+  ): number[] {
+    const lineIndexes: number[] = [];
+    const timestamp = Date.now();
+
+    for (const message of messages) {
+      const line: ConsoleLine = {
+        text: message,
+        type,
+        timestamp,
+        showInClosed: options.showInClosed,
+      };
+
+      this.buffer.push(line);
+      lineIndexes.push(this.buffer.length - 1);
+
+      if (this.buffer.length > this.MAX_BUFFER_LINES) {
+        this.buffer.shift();
+        for (let index = 0; index < lineIndexes.length; index += 1) {
+          lineIndexes[index] -= 1;
+        }
+      }
+    }
+
+    if (
+      options.showInClosed !== false &&
+      !this.isOpen &&
+      type === 'output' &&
+      this.getWrappedLineCount(messages) > 2
+    ) {
+      this.isClosedModal = true;
+      this.closedModalDisplayLines = this.buildDisplayLines(
+        messages.map((message) => ({ text: message, type }))
+      );
+    }
+
+    this.notifyListeners();
+    return lineIndexes;
   }
 
   updateLine(index: number, text: string, type?: ConsoleLineType): void {
@@ -299,9 +381,94 @@ export class Console {
 
   clear(): void {
     this.buffer = [];
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
     this.log('Console cleared', 'info');
     // log already notifies, but if we clear buffer directly first, we might want to ensure update.
     // actually log() calls notify, so we are good.
+  }
+
+  continueClosedModal(): boolean {
+    if (!this.isClosedModal) return false;
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
+    this.notifyListeners();
+    return true;
+  }
+
+  getClosedModalDisplayLines(): ConsoleDisplayLine[] {
+    return this.closedModalDisplayLines;
+  }
+
+  getClosedDisplayLines(): ConsoleDisplayLine[] {
+    return this.buildDisplayLines(
+      this.buffer
+        .filter((line) => this.lineShowsInClosed(line))
+        .map((line) => ({ text: line.text, type: line.type }))
+    );
+  }
+
+  private lineShowsInClosed(line: ConsoleLine): boolean {
+    return line.showInClosed !== false;
+  }
+
+  private getWrappedLineCount(text: string | string[]): number {
+    const messages = Array.isArray(text) ? text : [text];
+    return messages.reduce((count, message) => count + this.wrapConsoleText(message).length, 0);
+  }
+
+  private buildDisplayLines(
+    lines: Array<{ text: string; type: ConsoleLineType }>
+  ): ConsoleDisplayLine[] {
+    return lines.flatMap((line) =>
+      this.wrapConsoleText(line.text).map((text) => ({ text, type: line.type }))
+    );
+  }
+
+  private wrapConsoleText(text: string): string[] {
+    const paragraphs = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const lines: string[] = [];
+
+    for (const paragraph of paragraphs) {
+      if (paragraph.length === 0) {
+        lines.push('');
+        continue;
+      }
+
+      lines.push(...this.wrapParagraph(paragraph));
+    }
+
+    return lines.length > 0 ? lines : [''];
+  }
+
+  private wrapParagraph(text: string): string[] {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let current = '';
+
+    for (const word of words) {
+      if (word.length > this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+        if (current) {
+          lines.push(current);
+          current = '';
+        }
+        for (let index = 0; index < word.length; index += this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+          lines.push(word.slice(index, index + this.CLOSED_CONSOLE_WRAP_COLUMNS));
+        }
+        continue;
+      }
+
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+        if (current) lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+
+    if (current) lines.push(current);
+    return lines.length > 0 ? lines : [''];
   }
 
   // Serialization for Save/Load
@@ -317,5 +484,7 @@ export class Console {
     if (state.buffer) this.buffer = state.buffer;
     if (state.history) this.history = state.history;
     if (state.isOpen !== undefined) this.isOpen = state.isOpen;
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
   }
 }

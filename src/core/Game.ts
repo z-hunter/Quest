@@ -441,7 +441,17 @@ export class Game implements IGame {
     const w = this.bufferCanvas.width;
     const h = this.bufferCanvas.height;
     const lineHeight = 10;
-    const consoleHeight = lineHeight * 3 + 4;
+    const isClosedModal = this.console.isClosedModal;
+    const closedDisplayLines = isClosedModal
+      ? this.console.getClosedModalDisplayLines()
+      : this.console.getClosedDisplayLines();
+    const maxModalLines = Math.max(1, Math.floor((h - 4) / lineHeight) - 1);
+    const outputLineCount = isClosedModal
+      ? Math.min(Math.max(closedDisplayLines.length, 1), maxModalLines)
+      : this.console.CLOSED_CONSOLE_VISIBLE_LINES;
+    const continueLineCount = isClosedModal ? 1 : 0;
+    const inputLineCount = isClosedModal ? 0 : 1;
+    const consoleHeight = lineHeight * (outputLineCount + continueLineCount + inputLineCount) + 4;
 
     ctx.font = '10px monospace';
     ctx.textBaseline = 'top';
@@ -451,18 +461,22 @@ export class Game implements IGame {
     ctx.fillRect(0, consoleY, w, consoleHeight);
 
     ctx.fillStyle = '#fff';
-    const buffer = this.console.buffer;
-    const lastIndex = buffer.length - 1;
+    const visibleOutput = closedDisplayLines.slice(-outputLineCount);
 
-    if (lastIndex >= 1) {
-      const line = buffer[lastIndex - 1];
+    for (let index = 0; index < visibleOutput.length; index += 1) {
+      const line = visibleOutput[index];
       ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
-      ctx.fillText(line.text, 2, consoleY + 2);
+      ctx.fillText(line.text, 2, consoleY + 2 + lineHeight * index);
     }
-    if (lastIndex >= 0) {
-      const line = buffer[lastIndex];
-      ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
-      ctx.fillText(line.text, 2, consoleY + 2 + lineHeight);
+
+    if (isClosedModal) {
+      this.cursorBlink += 16;
+      const cursorVisible = Math.floor(this.cursorBlink / 500) % 2 === 0;
+      const continueText = '[Continue]';
+      const continueX = Math.max(2, w - ctx.measureText(continueText).width - 2);
+      ctx.fillStyle = cursorVisible ? '#fff' : '#777';
+      ctx.fillText(continueText, continueX, consoleY + 2 + lineHeight * outputLineCount);
+      return;
     }
 
     const inputText = this.consoleInput ? this.consoleInput.value : '';
@@ -477,7 +491,7 @@ export class Game implements IGame {
     }
 
     ctx.fillStyle = '#fff';
-    ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + lineHeight * 2);
+    ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + lineHeight * outputLineCount);
   }
 
   disableCRT(): void {
@@ -485,6 +499,10 @@ export class Game implements IGame {
   }
 
   onMouseClick(x: number, y: number): void {
+    if (this.console.continueClosedModal()) {
+      return;
+    }
+
     if (!this.editor.enabled) {
       this.focusCommandInput();
     }
@@ -500,6 +518,20 @@ export class Game implements IGame {
   log(text: string): void {
     console.log(`[GAME LOG] ${text}`);
     this.console.log(text);
+  }
+
+  logResponse(messages: string[]): void {
+    if (typeof this.console?.logResponse !== 'function') {
+      for (const message of messages) {
+        this.log(message);
+      }
+      return;
+    }
+
+    for (const message of messages) {
+      console.log(`[GAME LOG] ${message}`);
+    }
+    this.console.logResponse(messages);
   }
 
   text(key: string, params?: Record<string, string | number>): string {

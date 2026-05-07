@@ -167,19 +167,26 @@ export class Parser {
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
-          this.game.console?.log(message, 'info');
+          this.game.console?.log(message, 'info', { showInClosed: false });
         }
       }
 
       this.pendingState =
         response.nextPendingState === undefined ? this.pendingState : response.nextPendingState;
 
-      if (response.playerMessages?.length) {
-        for (const message of response.playerMessages) {
-          this.game.log(message);
+      const playerMessages = response.playerMessages?.length
+        ? response.playerMessages
+        : response.playerMessage
+          ? [response.playerMessage]
+          : [];
+      if (playerMessages.length) {
+        if (typeof this.game.logResponse === 'function') {
+          this.game.logResponse(playerMessages);
+        } else {
+          for (const message of playerMessages) {
+            this.game.log(message);
+          }
         }
-      } else if (response.playerMessage) {
-        this.game.log(response.playerMessage);
       }
     } catch (error) {
       this.pendingState = null;

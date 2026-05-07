@@ -26,6 +26,7 @@ export interface IGame {
   isEntityInInventory(entity: Entity): boolean;
   showMessage(text: string): void;
   log(text: string): void;
+  logResponse?(messages: string[]): void;
   text(key: string, params?: Record<string, string | number>): string;
   getSeeMessage(target: SceneObject): string | null;
   getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null;

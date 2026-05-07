@@ -36,15 +36,21 @@ export class Input {
     };
 
     this.onKeyDown = (e: KeyboardEvent) => {
-      this.keys[e.key] = true;
-
       // Toggle console by physical backquote key, independent of keyboard layout.
       if (e.code === 'Backquote') {
         e.preventDefault();
         if (this.game.console) {
           this.game.console.toggle();
         }
+        return;
       }
+
+      if (this.game.console?.continueClosedModal()) {
+        e.preventDefault();
+        return;
+      }
+
+      this.keys[e.key] = true;
     };
 
     this.onKeyUp = (e: KeyboardEvent) => {
