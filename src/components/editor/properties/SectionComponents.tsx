@@ -138,7 +138,7 @@ export const SectionComponents: React.FC = () => {
                   ]
                 : []),
               ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
-            ]}
+            ].map((opt) => ({ ...opt, icon: getIconUrl(opt.value) }))}
             placeholder="+ Add Component"
             onChange={(value) => {
               const type = value;
