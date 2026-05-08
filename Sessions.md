@@ -1335,3 +1335,167 @@ During the session the following checks were run successfully:
 - `UIOverlay.tsx` behavior depends on `console.continueClosedModal()` returning `true` only when the console is actually in modal `[Continue]` state.
 - The current dirty worktree includes user/session changes outside the final inventory preview fix; future agents should inspect diffs carefully before committing.
 - The latest commit message contains a typo: `Imrovement`.
+
+## Session Entry - 2026-05-08 01:18 +02:00
+
+### Session Goals
+
+- Record only the work completed after the previous wrap-up.
+- Commit the accepted inventory-preview focused-target parser behavior.
+- Refresh durable memory and NotebookLM sources after the commit.
+
+### What Was Implemented
+
+- Inventory preview overlay now keeps the command input focused:
+  - `UIOverlay` prevents overlay mouse-down from blurring the hidden parser input;
+  - the player can continue typing commands while inspecting the item image.
+- The currently previewed held inventory item is now the default parser target/item for commands that omit an explicit object:
+  - `LOOK` with no noun becomes `LOOK <preview item>`;
+  - `EXAMINE`, `TAKE`, `OPEN`, `CLOSE`, and `GO TO` with a missing target use the preview item;
+  - `DROP`/`PUT` with a missing item use the preview item;
+  - custom commands fill the first missing entity argument from the preview item.
+- The parser world model now exposes `context.focusedTarget` for the LLM cascade:
+  - includes preview item id, title, source, description/details, and synonyms when available;
+  - only appears when the previewed entity is still held in player inventory.
+- LLM prompt assets now instruct the model to use `focusedTarget.title` as the default target/item when the player omitted an explicit object.
+- Parser tests were updated so the fixture matches the current inventory `LOOK` contract (`description`, not `details`).
+
+### Important Decisions
+
+- The inventory preview item is a parser focus, not just a UI state.
+- Focused-target defaulting is applied after stage 1, NLP, and LLM envelopes are produced, before core parser execution.
+- Overlay remains image-only; all textual output remains in the console.
+
+### Tests Run
+
+- `npx vitest run tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts`
+  - Passed: 10 files, 219 tests.
+- `npm run typecheck`
+  - Passed.
+- Pre-commit hook ran on staged files:
+  - `prettier --write`
+  - `eslint --max-warnings=0 --fix`
+
+### Commits Created During This Session
+
+- `3689cda Make inventory preview item parser default target`
+  - Adds focused-target defaulting for parser plans.
+  - Adds `focusedTarget` to LLM context and prompt guidance.
+  - Keeps command input focused while inventory overlay is open.
+  - Adds parser/world-model regression tests.
+
+### Durable Memory Updates
+
+- Stored decision before commit:
+  - `b475a7c9-c4fa-4f67-a26e-36af2ee3a720`
+  - `Inventory preview focused target defaults parser command targets`
+- Stored commit-context decision after commit:
+  - `64808676-4d76-4aec-8609-eae6f0c73fb6`
+  - `Commit 3689cda focused inventory preview parser default target`
+
+### Current State
+
+- Worktree is clean after commit.
+- Latest commit: `3689cda`.
+
+### Remaining Work / Next Recommended Steps
+
+- Push or continue from `3689cda` as the clean checkpoint.
+- Consider documenting the focused-target command rule in `GDD.md` / parser docs if this becomes a public design contract.
+
+### Risks / Caveats
+
+- Custom command defaulting currently fills the first missing entity argument only. Multi-argument commands still ask for later missing arguments.
+- `LOOK` with no noun becomes focused-item `LOOK` only when a held inventory preview is open; otherwise existing scene-look behavior is preserved.
+
+## Session Entry - 2026-05-08 01:19 +02:00
+
+### Session Goals
+
+- Final wrap-up and durable handoff after the hidden-object discovery fixes, LLM prompt clarification, and focused inventory-preview parser work.
+- Refresh project memory / NotebookLM sources so future agents see the current contracts.
+
+### What Was Implemented
+
+- Hidden semantic object discovery was tightened and committed in `e8aa71a`.
+  - Direct `LOOK <hidden title>` no longer reveals or describes hidden objects.
+  - Direct `EXAMINE <hidden title>` also behaves as not found until the object is discovered.
+  - Relation `LOOK` reveals `hidden: "lookable"` descendants, for example `LOOK BEHIND BOOMBOX` revealing `audio_cables`.
+  - `EXAMINE <visible anchor>` reveals `hidden: "examinable"` descendants around that anchor, for example `EXAMINE BOOMBOX` revealing examinable `audio_cables` behind it.
+  - `test_room` now includes `audio_cables` behind the boombox with object text assets.
+- The parser LLM prompt now treats hidden facts as real engine/world facts but not player-visible targets.
+  - Hidden objects from `hiddenKnown`, `worldKnown`, or world facts cannot be used as action targets/items/anchors.
+  - The LLM may use hidden facts only for indirect non-revealing sensory hints such as smell, rattling, vague shape, weight, or suspicious gaps.
+- Focused inventory-preview parser behavior was committed in `3689cda`.
+  - An open held-item preview becomes the default parser target/item when the player omits an explicit object.
+  - LLM context now exposes `focusedTarget`.
+  - The inventory overlay preserves parser input focus.
+
+### Important Decisions
+
+- Hidden discovery state is runtime progress, not scene authoring data.
+  - `Scene.revealedHiddenEntities` should later be saved with game-state save/load, not in scene JSON.
+- The player cannot directly name or examine an unknown hidden object.
+  - Discovery happens through contextual investigation of visible anchors/relations.
+- LLM hidden knowledge is authorial context for atmosphere, not permission to reveal objects or route actions to them.
+
+### Parser / Mechanics / Runtime Changes
+
+- `Parser` no longer has direct semantic-hidden target resolution for `LOOK` or `EXAMINE`.
+- `GameSemanticAPI.examineEntity()` no longer reveals the target before access checks.
+- `GameSemanticAPI.examineEntity()` does reveal examinable hidden descendants after a visible anchor passes access checks.
+- Parser test fixtures were updated to mirror the production semantic API reveal behavior.
+- Parser world model / LLM context now supports inventory preview `focusedTarget`.
+
+### Tests Run And Outcomes
+
+- Hidden-object / LLM prompt focused validation:
+  - `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`
+  - Passed: 3 files, 157 tests.
+  - `npm test -- tests/parser/llm-parser.test.ts tests/parser/llm-cascade.test.ts tests/parser/world-model-context.test.ts tests/core/text-asset-manager.test.ts`
+  - Passed: 4 files, 39 tests.
+- Broader validation:
+  - `npm run typecheck` passed.
+  - `npm test -- tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts` passed: 10 files, 215 tests.
+  - Full `npm test` passed: 24 files, 277 tests.
+  - `git diff --check` passed, with only expected Windows LF-to-CRLF warnings.
+- Focused-target commit validation:
+  - `npx vitest run tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts` passed: 10 files, 219 tests.
+  - `npm run typecheck` passed.
+
+### Commits Created During This Session
+
+- `e8aa71a Fixed Hidden Items mechanic and imroved LLM prompt about it`
+  - Fixes hidden `lookable` / `examinable` discovery contracts.
+  - Adds `audio_cables` test-room content.
+  - Updates parser LLM hidden-fact prompt rules.
+- `3689cda Make inventory preview item parser default target`
+  - Adds focused inventory-preview default targets and LLM `focusedTarget` context.
+
+### Durable Memory Updates
+
+- Stored and/or updated durable memory for:
+  - hidden object direct `LOOK` leak incident;
+  - future game-state save/load preserving `revealedHiddenEntities`;
+  - direct `EXAMINE` not revealing hidden semantic targets;
+  - LLM hidden facts being usable only for non-revealing sensory hints;
+  - inventory preview focused target defaulting.
+
+### Current State
+
+- Branch: `scene-refact3`.
+- Branch is ahead of `origin/scene-refact3` by 1 according to the latest `git status`.
+- Working tree has only `Sessions.md` modified for wrap-up source updates.
+- Latest commit: `3689cda`.
+
+### Remaining Work / Next Recommended Steps
+
+- Commit the updated `Sessions.md` after NotebookLM source refresh if desired.
+- Push `scene-refact3` when ready.
+- Later game save/load work should include per-scene runtime state such as `revealedHiddenEntities`.
+- Consider documenting the final hidden-object and focused-target contracts in `GDD.md` or parser docs if they become player-facing design rules.
+
+### Risks / Caveats
+
+- Commit messages contain typos: `imroved` / `Imrovement`.
+- NotebookLM and local RAG sources can lag behind live `agent_memory`; this wrap-up refresh should reduce that gap.

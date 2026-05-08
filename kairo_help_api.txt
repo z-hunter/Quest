@@ -1,0 +1,7 @@
+﻿Headless API for external automation.
+
+Usage:
+  kairo api [action] [flags]
+
+Actions:
+  create, list, update, delete, delete all, get, list-tags, cleanup
