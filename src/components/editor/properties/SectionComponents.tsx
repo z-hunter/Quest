@@ -6,6 +6,14 @@ import { SceneObject } from '../../../entities/SceneObject';
 import { Actor } from '../../../entities/Actor';
 import { Entity } from '../../../entities/Entity';
 
+const iconModules = import.meta.glob('../../../assets/components-icon/*.svg', { eager: true });
+function getIconUrl(type: string): string | undefined {
+  const mod = (iconModules as Record<string, any>)[
+    `../../../assets/components-icon/${type.toLowerCase()}.svg`
+  ];
+  return mod?.default;
+}
+
 export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
     usePropertiesContext<SceneObject>();
@@ -263,9 +271,24 @@ export const SectionComponents: React.FC = () => {
                 marginBottom: '5px',
               }}
             >
-              <span className="ui-font-bold" style={{ color: '#fb8' }}>
-                {comp.type}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', color: '#fb8' }}>
+                {getIconUrl(comp.type) && (
+                  <div
+                    style={{
+                      width: '1em',
+                      height: '1em',
+                      marginRight: '6px',
+                      backgroundColor: 'currentColor',
+                      maskImage: `url("${getIconUrl(comp.type)}")`,
+                      WebkitMaskImage: `url("${getIconUrl(comp.type)}")`,
+                      maskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                    }}
+                  />
+                )}
+                <span className="ui-font-bold">{comp.type}</span>
+              </div>
               <button
                 className="e-btn e-btn-red"
                 style={{ padding: '0 5px' }}
