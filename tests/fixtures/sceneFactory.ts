@@ -9,6 +9,7 @@ import { createTestGame, type TestGameHarness } from './gameFactory';
 type EntityOptions = {
   title?: string | null;
   description?: string;
+  lore?: string | string[];
   takeFailure?: string;
   disabled?: boolean;
   groupID?: string | null;
@@ -22,6 +23,7 @@ type TriggerboxOptions = {
   title?: string | null;
   description?: string;
   details?: string;
+  lore?: string | string[];
   disabled?: boolean;
   groupID?: string | null;
   components?: any[];
@@ -96,6 +98,7 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
           ? {}
           : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
+        lore: options.lore,
         takeFailure: options.takeFailure,
         semanticTags: options.semanticTags,
         relationFacts: options.relationFacts as any,
@@ -136,6 +139,7 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
           : { title: options.title !== undefined ? options.title : name }),
         description: options.description || `${name} triggerbox`,
         details: options.details,
+        lore: options.lore,
       });
       return triggerbox;
     },

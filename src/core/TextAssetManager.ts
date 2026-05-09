@@ -27,11 +27,13 @@ type TextAssetTextValue = string | string[];
 export type SceneTextAssetData = TextAssetData & {
   title?: TextAssetTextValue;
   description?: TextAssetTextValue;
+  lore?: TextAssetTextValue;
 };
 export type ObjectTextAssetData = TextAssetData & {
   title?: TextAssetTextValue;
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
+  lore?: TextAssetTextValue;
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -437,6 +439,7 @@ export class TextAssetManager {
       title: scene.name || scene.id || 'Untitled Scene',
       description:
         scene.description || `You are in ${scene.name || scene.id || 'an unnamed scene'}.`,
+      lore: '',
     };
   }
 
@@ -462,6 +465,7 @@ export class TextAssetManager {
       title: fallbackTitle,
       description: fallbackDescription,
       details: '',
+      lore: '',
       takeFailure: '',
       synonyms: [],
     };
@@ -825,6 +829,8 @@ export class TextAssetManager {
     }
     if (this.resolveTextValue(asset.description) !== null)
       normalized.description = asset.description as TextAssetTextValue;
+    if (this.resolveTextValue(asset.lore) !== null)
+      normalized.lore = asset.lore as TextAssetTextValue;
     return normalized;
   }
 
@@ -838,6 +844,8 @@ export class TextAssetManager {
       normalized.description = asset.description as TextAssetTextValue;
     if (this.resolveTextValue(asset.details) !== null)
       normalized.details = asset.details as TextAssetTextValue;
+    if (this.resolveTextValue(asset.lore) !== null)
+      normalized.lore = asset.lore as TextAssetTextValue;
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');

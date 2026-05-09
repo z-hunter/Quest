@@ -661,6 +661,7 @@ Parser:
 - `title`
 - `description`
 - `details`
+- `lore`
 - `takeFailure`
 
 Также важны опциональные поля:
@@ -693,7 +694,14 @@ Parser:
 - используется действием `EXAMINE`;
 - тоже входит в стандартный шаблон нового object TA.
 
-Player-facing текстовые поля object/scene TA можно задавать строкой или массивом строк. Массив
+Поле `lore`:
+
+- является стандартным скрытым полем scene/object TA для Stage 2 LLM context;
+- не выводится игроку действиями `LOOK`, `EXAMINE` или runtime UI;
+- используется для истории места, визуальной компоновки сцены, описания персонажей и другого
+  контекста, который помогает LLM писать ответы в духе того, что игрок видит на экране.
+
+Текстовые поля object/scene TA можно задавать строкой или массивом строк. Массив
 склеивается через `\n`, пустая строка внутри массива даёт пустую строку в выводе:
 
 ```json
@@ -780,6 +788,7 @@ Supported placeholders in `fact`:
   "title": "Object",
   "description": "You see nothing special.",
   "details": "",
+  "lore": "",
   "takeFailure": "",
   "synonyms": [],
   "semanticTags": [],

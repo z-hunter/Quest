@@ -27,12 +27,14 @@ Scene asset:
 
 - `title`
 - `description`
+- `lore`
 
 Object asset:
 
 - `title`
 - `description`
 - `details`
+- `lore`
 - `takeFailure`
 - `synonyms`
 - `semanticTags`
@@ -95,6 +97,9 @@ Scripts do not generate text themselves. They only change which named text field
 - `title` maps to the user-facing object or scene name.
 - `description` maps to the basic text used by parser/runtime for `look` or `look around`.
 - `details` maps to the richer text used by parser/runtime for `examine`.
+- `lore` is hidden authoring text for the Stage 2 LLM cascade. It is included in
+  parser/world context so the LLM can understand history, visual staging, character
+  identity, or other context that should not be printed directly to the player.
 - `takeFailure` overrides the generic `parser.take_cannot` response when the player tries
   to `TAKE` this object and standard runtime logic determines that it is not takeable.
   Authored `takeFailure` responses are terminal: they are shown directly and do not trigger

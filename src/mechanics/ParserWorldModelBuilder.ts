@@ -98,6 +98,7 @@ export class ParserWorldModelBuilder {
       synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
       description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
       details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+      lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
     });
   }
 
@@ -106,6 +107,7 @@ export class ParserWorldModelBuilder {
       id: scene.id,
       title: this.game.textAssets.getResolvedSceneField(scene, 'title') || undefined,
       description: this.game.textAssets.getResolvedSceneField(scene, 'description') || undefined,
+      lore: this.game.textAssets.getResolvedSceneField(scene, 'lore') || undefined,
       activeSubscene: scene.activeSubscene || undefined,
     });
   }
@@ -153,6 +155,8 @@ export class ParserWorldModelBuilder {
             undefined,
           details:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
+          lore:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
           interactions,
         });
       })
@@ -201,6 +205,8 @@ export class ParserWorldModelBuilder {
             undefined,
           details:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
+          lore:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
           interactions: Object.keys(sceneObject.interactions || {}),
         });
       })
@@ -219,6 +225,7 @@ export class ParserWorldModelBuilder {
           description:
             this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
           details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+          lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
         });
       })
       .filter((entity): entity is ParserInventoryItemContext => !!entity);

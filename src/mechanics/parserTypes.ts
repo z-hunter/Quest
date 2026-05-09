@@ -30,6 +30,7 @@ export type ParserEntityContext = {
   semanticTags?: string[];
   description?: string;
   details?: string;
+  lore?: string;
   interactions?: string[];
 };
 
@@ -39,6 +40,7 @@ export type ParserInventoryItemContext = {
   synonyms?: string[];
   description?: string;
   details?: string;
+  lore?: string;
 };
 
 export type ParserSpatialNodeContext = {
@@ -151,6 +153,7 @@ export type ParserContext = {
     id: string;
     title?: string;
     description?: string;
+    lore?: string;
     activeSubscene?: string;
   };
   entities?: ParserEntityContext[];

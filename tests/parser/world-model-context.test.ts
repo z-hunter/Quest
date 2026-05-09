@@ -32,6 +32,40 @@ describe('Parser world model context', () => {
     });
   });
 
+  it('includes scene and object lore in LLM context without replacing player-facing text', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.textAssets.setScene(fixture.scene.id, {
+      title: 'Test Scene',
+      description: 'A room with a humming light.',
+      lore: ['This was once a copy shop.', 'All visible props lean toward the back wall.'],
+    });
+    fixture.addEntity('clerk', {
+      title: 'Clerk',
+      description: 'A tired clerk watches the counter.',
+      lore: 'The clerk is Miles, an underpaid night-shift worker in a borrowed jacket.',
+    });
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('talk to clerk', null);
+    const clerk = model.context.entities?.find((entity) => entity.id === 'clerk');
+
+    expect(model.context.scene).toEqual(
+      expect.objectContaining({
+        title: 'Test Scene',
+        description: 'A room with a humming light.',
+        lore: 'This was once a copy shop.\nAll visible props lean toward the back wall.',
+      })
+    );
+    expect(clerk).toEqual(
+      expect.objectContaining({
+        title: 'Clerk',
+        description: 'A tired clerk watches the counter.',
+        lore: 'The clerk is Miles, an underpaid night-shift worker in a borrowed jacket.',
+      })
+    );
+  });
+
   it('omits technical scene object type and includes item flag only when Item component exists', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 12, 34);
