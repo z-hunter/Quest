@@ -99,6 +99,14 @@ export class ParserWorldModelBuilder {
       description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
       details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
       lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
+      parserNote:
+        this.getEntityParserNote(this.game.sceneManager.currentScene, entity.name) || undefined,
+      parserNoteNeedsCheck: this.getEntityParserNoteNeedsCheck(
+        this.game.sceneManager.currentScene,
+        entity.name
+      )
+        ? true
+        : undefined,
     });
   }
 
@@ -108,6 +116,8 @@ export class ParserWorldModelBuilder {
       title: this.game.textAssets.getResolvedSceneField(scene, 'title') || undefined,
       description: this.game.textAssets.getResolvedSceneField(scene, 'description') || undefined,
       lore: this.game.textAssets.getResolvedSceneField(scene, 'lore') || undefined,
+      parserNote: this.getSceneParserNote(scene) || undefined,
+      parserNoteNeedsCheck: this.getSceneParserNoteNeedsCheck(scene) ? true : undefined,
       activeSubscene: scene.activeSubscene || undefined,
     });
   }
@@ -157,6 +167,10 @@ export class ParserWorldModelBuilder {
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           lore:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
+          parserNote: this.getEntityParserNote(scene, sceneObject.name) || undefined,
+          parserNoteNeedsCheck: this.getEntityParserNoteNeedsCheck(scene, sceneObject.name)
+            ? true
+            : undefined,
           interactions,
         });
       })
@@ -207,6 +221,10 @@ export class ParserWorldModelBuilder {
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           lore:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
+          parserNote: this.getEntityParserNote(scene, sceneObject.name) || undefined,
+          parserNoteNeedsCheck: this.getEntityParserNoteNeedsCheck(scene, sceneObject.name)
+            ? true
+            : undefined,
           interactions: Object.keys(sceneObject.interactions || {}),
         });
       })
@@ -226,9 +244,54 @@ export class ParserWorldModelBuilder {
             this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
           details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
           lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
+          parserNote:
+            this.getEntityParserNote(this.game.sceneManager.currentScene, entity.name) || undefined,
+          parserNoteNeedsCheck: this.getEntityParserNoteNeedsCheck(
+            this.game.sceneManager.currentScene,
+            entity.name
+          )
+            ? true
+            : undefined,
         });
       })
       .filter((entity): entity is ParserInventoryItemContext => !!entity);
+  }
+
+  private getSceneParserNote(scene: Scene | null | undefined): string {
+    if (!scene) return '';
+    const note =
+      typeof (scene as any).getParserNote === 'function'
+        ? (scene as any).getParserNote()
+        : (scene as any).parserNote;
+    return typeof note === 'string' ? note.trim() : '';
+  }
+
+  private getSceneParserNoteNeedsCheck(scene: Scene | null | undefined): boolean {
+    if (!scene || !this.getSceneParserNote(scene)) return false;
+    if (typeof (scene as any).getParserNoteNeedsCheck === 'function') {
+      return !!(scene as any).getParserNoteNeedsCheck();
+    }
+    return !!(scene as any).parserNoteNeedsCheck;
+  }
+
+  private getEntityParserNote(scene: Scene | null | undefined, entityId: string): string {
+    if (!scene) return '';
+    const note =
+      typeof (scene as any).getEntityParserNote === 'function'
+        ? (scene as any).getEntityParserNote(entityId)
+        : (scene as any).entityParserNotes?.[entityId];
+    return typeof note === 'string' ? note.trim() : '';
+  }
+
+  private getEntityParserNoteNeedsCheck(
+    scene: Scene | null | undefined,
+    entityId: string
+  ): boolean {
+    if (!scene || !this.getEntityParserNote(scene, entityId)) return false;
+    if (typeof (scene as any).getEntityParserNoteNeedsCheck === 'function') {
+      return !!(scene as any).getEntityParserNoteNeedsCheck(entityId);
+    }
+    return !!(scene as any).entityParserNoteNeedsCheck?.[entityId];
   }
 
   private buildEntityLocationContext(

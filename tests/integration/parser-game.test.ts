@@ -16,6 +16,7 @@ async function runSemanticParser(
     parserStage1Enabled: true,
     parserStage2Enabled: false,
     parserPeekEnabled: false,
+    parserPeekPnEnabled: false,
     log() {},
   } as any;
   const parser = new Parser(fixture.game);

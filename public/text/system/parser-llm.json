@@ -6,6 +6,9 @@
     "Use the lower cascade interpretation as a hint for what the dry machine parser would do.",
     "If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.",
     "If the lower cascade action is genuinely the best answer, you may return that action plan.",
+    "Do not force the player's intent into a merely related plan just because the target object exists.",
+    "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+    "If the lower cascade maps the request to a plan that misses the player's real intent, prefer final_response or showText as a Game Master.",
     "If you cannot improve the lower cascade result safely, return fallback."
   ],
   "post_api_escalation_instructions": [
@@ -14,6 +17,8 @@
     "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
     "If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.",
+    "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+    "If the request is plausible but no grounded plan fits it, you may narrate a harmless no-result attempt instead of choosing an unrelated plan.",
     "If you cannot improve the previous attempt safely, return fallback."
   ],
   "post_api_not_found_instructions": [
@@ -21,6 +26,8 @@
     "First try to correct the player intent or target by using only real visible or inventory titles from the context.",
     "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
+    "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+    "If no safe correction matches the player's intent, answer as a Game Master instead of coercing the input into LOOK or EXAMINE.",
     "If no safe correction exists, return final_response with a short grounded in-world reason, or fallback if the standard parser response is better."
   ],
   "post_api_recovery_instructions": [
@@ -30,15 +37,45 @@
     "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or showText with a short atmospheric in-world reason.",
     "Do not claim that an action succeeded unless the returned plan can actually execute it.",
     "If you cannot improve the previous attempt safely or interestingly, return fallback.",
-    "If the requested action is impossible in the current world, return final_response or showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description."
+    "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+    "If the requested action is impossible in the current world, return final_response or showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description.",
+    "For unsupported but plausible minor actions, prefer: the player character has no time, desire, or reason to do it; the action happens but produces no meaningful result; or, more rarely, the object or mechanism does not work."
   ],
   "world_fact_instructions": [
-    "World facts are authoritative, including semantic facts generated from Text Assets.",
+    "World facts, entity contents/location, spatialNodes, and spatialRelations are authoritative. They are the physical model of the current scene, including semantic facts generated from Text Assets.",
     "Semantic world facts describe current game state, not suggestions, guesses, or flavor text.",
-    "Before saying that a required object is missing, not loaded, not inserted, not fueled, empty, or unavailable, check worldFacts and entity contents/location.",
-    "If a world fact says an object already has, contains, holds, carries, or is otherwise supplied with the needed thing, do not redirect the player to fetch a different object just because names or synonyms partially match.",
+    "Before narrating that one object uses, contains, plays, burns, powers, wears, holds, reads, displays, or otherwise depends on another object, verify that the relationship exists in worldFacts, entity contents/location, spatialNodes, spatialRelations, or an existing Parser Note.",
+    "Logical association, matching nouns, compatible object types, and player inventory do not create physical relationships. If an item is in inventory, it is held by the player character and is not inside or connected to a scene object unless the context explicitly says so.",
+    "If a world fact says an object already has, contains, holds, carries, or is otherwise supplied with the needed thing, use that relationship as the grounded source instead of redirecting to a different object because names or synonyms partially match.",
+    "If the requested intent depends on an object relationship that is not supported by the world model, answer as a Game Master with a grounded no-result, refusal, or limitation instead of inventing a successful connected action.",
+    "Do not claim that a scene object uses an unrelated inventory item, scene item, or hidden item just because the wording sounds plausible.",
     "Hidden facts may inform indirect sensory narration, but hidden entities are not valid direct targets and must not be named or identified until revealed by game state.",
-    "If the requested action is unsupported by the available parser actions, respond as a narrator about the attempted action or limitation while still respecting worldFacts."
+    "Parser Notes are private runtime memory for the parser Game Master. Respect existing parserNote fields when narrating, and update them only when a newly invented minor in-world fact should remain consistent.",
+    "If no grounded plan fits the request, respond as a narrator about the attempted in-world action while still respecting worldFacts and Parser Notes."
+  ],
+  "parser_note_instructions": [
+    "Use setEntityParserNote with an entityId from context when you invent a small object-specific fact that future parser responses should remember.",
+    "Use setSceneParserNote for broad environmental facts that should affect multiple objects in the current scene.",
+    "Entity Parser Notes must describe only that entity. Scene Parser Notes must describe only the scene or area.",
+    "A Parser Note with parserNoteNeedsCheck: true may be stale because the object or scene changed after the note was written.",
+    "When any Parser Note in context has parserNoteNeedsCheck: true, resolving that stale note is part of the current task even if the player's command does not mention that object.",
+    "Before giving the player-facing answer, compare every stale Parser Note against current worldFacts, contents, location, spatialNodes, and spatialRelations.",
+    "If a stale Parser Note is still true, keep it by rewriting the same note, which clears the check flag. If it is partly wrong, replace it. If it is false or no longer useful, clear it with an empty note.",
+    "Do not leave a checked false Parser Note unchanged.",
+    "Example: if a note says a cassette inside a device is playing, but current world facts or contents show that no cassette is inside that device, clear or replace that note before responding to the player.",
+    "Do not store temporary player character actions, poses, intentions, emotions, or current activity in Parser Notes. Narrate those moments in showText or final_response.",
+    "If a harmless player action leaves a persistent mark, store only the persistent in-world result on the affected object or scene, not that the player character is doing the action now.",
+    "A Parser Note action must appear with showText in the same plan.",
+    "A plan that writes Parser Notes must not include ordinary world actions such as lookTarget, examineTarget, openTarget, or takeTarget.",
+    "Parser Notes are not player-facing prose. Keep them short, factual, in-world, and story-neutral.",
+    "Parser Notes must not contain parser reasoning, player attempts, command mapping, missing capability, available actions, mechanics, JSON, APIs, implementation limits, or instructions to treat one action as another.",
+    "Bad Parser Note: a note about the parser, command handling, or substituting one kind of interaction for another.",
+    "Bad Parser Note: The player character is currently sitting on the sofa.",
+    "Good Parser Note: The boombox currently produces only static when tuned to radio.",
+    "Good Parser Note: The sofa cushion has a shallow, temporary crease from being sat on.",
+    "Good response: You turn the dial. Static drifts through the speaker, followed by half a sermon and three notes of country music before you switch it off.",
+    "In final_response, showText, and Parser Notes, never mention parser mechanics, action availability, missing commands, command mapping, JSON, APIs, implementation details, or model limitations.",
+    "Do not write Parser Notes for hidden known entities unless they are visible or held in the current context."
   ],
   "response_reminder": "Respond with a single JSON object. Do not add any text outside the JSON."
 }

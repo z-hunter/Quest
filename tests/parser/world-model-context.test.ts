@@ -66,6 +66,66 @@ describe('Parser world model context', () => {
     );
   });
 
+  it('includes runtime Parser Notes for scene, visible entities, and inventory items', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const radio = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+    const badge = fixture.addEntity('badge', {
+      title: 'Badge',
+      description: 'A laminated badge.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(badge);
+    fixture.game.inventory.push(badge);
+
+    fixture.scene.setParserNote('The room power is unreliable.');
+    fixture.scene.setEntityParserNote(radio.name, 'The radio currently receives only static.');
+    fixture.scene.setEntityParserNote(badge.name, 'The badge clip is bent.');
+    fixture.scene.markParserNoteNeedsCheck();
+    fixture.scene.markEntityParserNoteNeedsCheck(radio.name);
+    fixture.scene.markEntityParserNoteNeedsCheck(badge.name);
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('listen radio', null);
+
+    expect(model.context.scene?.parserNote).toBe('The room power is unreliable.');
+    expect(model.context.scene?.parserNoteNeedsCheck).toBe(true);
+    expect(model.context.entities?.find((entity) => entity.id === 'boombox')?.parserNote).toBe(
+      'The radio currently receives only static.'
+    );
+    expect(
+      model.context.entities?.find((entity) => entity.id === 'boombox')?.parserNoteNeedsCheck
+    ).toBe(true);
+    expect(model.context.inventory?.find((entity) => entity.id === 'badge')?.parserNote).toBe(
+      'The badge clip is bent.'
+    );
+    expect(
+      model.context.inventory?.find((entity) => entity.id === 'badge')?.parserNoteNeedsCheck
+    ).toBe(true);
+  });
+
+  it('omits empty Parser Notes from LLM context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+    fixture.scene.setParserNote('   ');
+    fixture.scene.setEntityParserNote('boombox', '');
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('listen radio', null);
+
+    expect(model.context.scene && 'parserNote' in model.context.scene).toBe(false);
+    const radio = model.context.entities?.find((entity) => entity.id === 'boombox');
+    expect(radio && 'parserNote' in radio).toBe(false);
+    expect(radio && 'parserNoteNeedsCheck' in radio).toBe(false);
+  });
+
   it('omits technical scene object type and includes item flag only when Item component exists', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 12, 34);

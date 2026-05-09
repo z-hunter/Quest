@@ -31,6 +31,8 @@ export type ParserEntityContext = {
   description?: string;
   details?: string;
   lore?: string;
+  parserNote?: string;
+  parserNoteNeedsCheck?: true;
   interactions?: string[];
 };
 
@@ -41,6 +43,8 @@ export type ParserInventoryItemContext = {
   description?: string;
   details?: string;
   lore?: string;
+  parserNote?: string;
+  parserNoteNeedsCheck?: true;
 };
 
 export type ParserSpatialNodeContext = {
@@ -154,6 +158,8 @@ export type ParserContext = {
     title?: string;
     description?: string;
     lore?: string;
+    parserNote?: string;
+    parserNoteNeedsCheck?: true;
     activeSubscene?: string;
   };
   entities?: ParserEntityContext[];
@@ -234,6 +240,15 @@ export type ParserToolAction =
     }
   | {
       type: 'showInventory';
+    }
+  | {
+      type: 'setSceneParserNote';
+      note: string;
+    }
+  | {
+      type: 'setEntityParserNote';
+      entityId: string;
+      note: string;
     }
   | {
       type: 'goToTarget';

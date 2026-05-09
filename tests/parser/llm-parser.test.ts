@@ -43,6 +43,26 @@ describe('Parser LLM Integration', () => {
     expect(console.parserPeekLlmEnabled).toBe(false);
   });
 
+  it('#PEEKPN-ON/#PEEKPN-OFF toggle parserPeekPnEnabled on a real Console instance', () => {
+    const game = {
+      log: vi.fn(),
+      textAssets: {
+        getParserCommands: () => ({}),
+        getParserLexicon: () => ({}),
+      },
+      sceneManager: { currentScene: null },
+    };
+    const console = new Console(game);
+
+    expect(console.parserPeekPnEnabled).toBe(false);
+
+    console.processCommand('#peekpn-on');
+    expect(console.parserPeekPnEnabled).toBe(true);
+
+    console.processCommand('#peekpn-off');
+    expect(console.parserPeekPnEnabled).toBe(false);
+  });
+
   it('#C1-OFF/#C1-ON toggle forced LLM handoff mode', () => {
     const game = {
       log: vi.fn(),
@@ -266,5 +286,225 @@ describe('Parser LLM Integration', () => {
     expect(previousAttempt?.kind).toBe('post_api_recovery');
     expect(previousAttempt?.result?.outcomes?.[0]?.code).toBe('not_takeable');
     expect(fixture.messages).toContain(fixture.game.text('parser.take_cannot'));
+  });
+
+  it('executes Parser Note actions and includes notes in later LLM context', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+
+    const mockLlmParse = vi
+      .fn()
+      .mockResolvedValueOnce({
+        stage: 'llm-v3',
+        output: {
+          kind: 'plan',
+          actions: [
+            {
+              type: 'setEntityParserNote',
+              entityId: 'boombox',
+              note: 'Radio reception currently produces only static.',
+            },
+            {
+              type: 'showText',
+              message: 'You turn the dial. Static takes every station personally.',
+            },
+          ],
+        },
+        debug: { rawInput: 'listen radio', normalizedInput: 'LISTEN RADIO', verb: 'LLM', noun: '' },
+      })
+      .mockResolvedValueOnce({
+        stage: 'llm-v3',
+        output: {
+          kind: 'plan',
+          actions: [{ type: 'showText', message: 'The static is still there.' }],
+        },
+        debug: {
+          rawInput: 'listen radio again',
+          normalizedInput: 'LISTEN RADIO AGAIN',
+          verb: 'LLM',
+          noun: '',
+        },
+      });
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('listen radio');
+    await fixture.parser.parse('listen radio again');
+
+    expect(fixture.scene.getEntityParserNote('boombox')).toBe(
+      'Radio reception currently produces only static.'
+    );
+    expect(fixture.messages).toContain('You turn the dial. Static takes every station personally.');
+    const secondContext = mockLlmParse.mock.calls[1]?.[1];
+    expect(secondContext.entities?.find((entity: any) => entity.id === 'boombox')?.parserNote).toBe(
+      'Radio reception currently produces only static.'
+    );
+  });
+
+  it('preserves implementation-detail Parser Notes for debugging visibility', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'setEntityParserNote',
+            entityId: 'boombox',
+            note: 'Player attempted to listen to radio. No active mechanic exists. Treat as examine for now.',
+          },
+          {
+            type: 'showText',
+            message: 'You turn the dial. Static answers with professional indifference.',
+          },
+        ],
+      },
+      debug: { rawInput: 'listen radio', normalizedInput: 'LISTEN RADIO', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('listen radio');
+
+    expect(fixture.scene.getEntityParserNote('boombox')).toBe(
+      'Player attempted to listen to radio. No active mechanic exists. Treat as examine for now.'
+    );
+    expect(fixture.messages).toContain(
+      'You turn the dial. Static answers with professional indifference.'
+    );
+  });
+
+  it('shows structured Parser Note effects in #PEEK-ON debug output', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.game.console.parserPeekEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+    const debugLogs: string[] = [];
+    fixture.game.console.log = (text: string) => {
+      debugLogs.push(text);
+    };
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'setEntityParserNote',
+            entityId: 'boombox',
+            note: 'Radio reception currently produces only static.',
+          },
+          { type: 'showText', message: 'Only static comes back.' },
+        ],
+      },
+      debug: { rawInput: 'listen radio', normalizedInput: 'LISTEN RADIO', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('listen radio');
+
+    expect(debugLogs.join('\n')).toContain('"operation": "created"');
+    expect(debugLogs.join('\n')).toContain('"id": "boombox"');
+    expect(debugLogs.join('\n')).toContain(
+      '"note": "Radio reception currently produces only static."'
+    );
+  });
+
+  it('shows only Parser Note context and mutations when #PEEKPN-ON is enabled', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.game.console.parserPeekPnEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+    fixture.scene.setEntityParserNote('boombox', 'Radio reception is already only static.');
+    const debugLogs: string[] = [];
+    fixture.game.console.log = (text: string) => {
+      debugLogs.push(text);
+    };
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'setEntityParserNote',
+            entityId: 'boombox',
+            note: 'Radio reception now includes a weak sermon under the static.',
+          },
+          { type: 'showText', message: 'A sermon limps through the static.' },
+        ],
+      },
+      debug: { rawInput: 'listen radio', normalizedInput: 'LISTEN RADIO', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('listen radio');
+
+    const output = debugLogs.join('\n');
+    expect(output).toContain('--- PARSER NOTES CONTEXT ---');
+    expect(output).toContain('"operation": "context"');
+    expect(output).toContain('"id": "boombox"');
+    expect(output).toContain('"note": "Radio reception is already only static."');
+    expect(output).toContain('--- PARSER NOTES MUTATIONS ---');
+    expect(output).toContain('"operation": "updated"');
+    expect(output).toContain(
+      '"note": "Radio reception now includes a weak sermon under the static."'
+    );
+    expect(output).not.toContain('--- CONTEXT ---');
+    expect(output).not.toContain('--- RESULT ---');
+  });
+
+  it('marks touched object Parser Notes as needing check after standard parser mutations', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserPeekPnEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+      components: [{ type: 'Inventory', relation: 'in' }],
+    });
+    fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      synonyms: ['cassete'],
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'boombox', relation: 'in' },
+    });
+    fixture.game.addInventoryEntity(
+      fixture.scene.getObjectByName('boombox') as any,
+      fixture.scene.getObjectByName('cassette') as any
+    );
+    fixture.scene.setEntityParserNote('boombox', 'The cassette inside has been stopped.');
+    const debugLogs: string[] = [];
+    fixture.game.console.log = (text: string) => {
+      debugLogs.push(text);
+    };
+
+    await fixture.parser.parse('take cassette from boombox');
+
+    expect(fixture.scene.getEntityParserNote('boombox')).toBe(
+      'The cassette inside has been stopped.'
+    );
+    expect(fixture.scene.getEntityParserNoteNeedsCheck('boombox')).toBe(true);
+    const output = debugLogs.join('\n');
+    expect(output).toContain('--- PARSER NOTES MUTATIONS ---');
+    expect(output).toContain('"operation": "needsCheck"');
+    expect(output).toContain('"id": "boombox"');
+    expect(output).toContain('"needsCheck": true');
   });
 });

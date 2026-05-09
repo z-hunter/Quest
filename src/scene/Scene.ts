@@ -128,6 +128,10 @@ export class Scene {
   private _activeSubscene: string | null = null;
   public subsceneEntities: Set<SceneObject> = new Set();
   public revealedHiddenEntities: Set<string> = new Set();
+  public parserNote: string = '';
+  public entityParserNotes: Record<string, string> = {};
+  public parserNoteNeedsCheck: boolean = false;
+  public entityParserNoteNeedsCheck: Record<string, boolean> = {};
 
   get activeSubscene(): string | null {
     return this._activeSubscene;
@@ -299,6 +303,57 @@ export class Scene {
     if (this.revealedHiddenEntities.has(object.name)) return false;
     this.revealedHiddenEntities.add(object.name);
     return true;
+  }
+
+  getParserNote(): string {
+    return this.parserNote;
+  }
+
+  setParserNote(note: string): void {
+    this.parserNote = note;
+    this.parserNoteNeedsCheck = false;
+  }
+
+  getParserNoteNeedsCheck(): boolean {
+    return !!this.parserNote && !!this.parserNoteNeedsCheck;
+  }
+
+  markParserNoteNeedsCheck(): boolean {
+    if (!this.parserNote.trim()) return false;
+    const changed = !this.parserNoteNeedsCheck;
+    this.parserNoteNeedsCheck = true;
+    return changed;
+  }
+
+  getEntityParserNote(entityId: string): string {
+    return this.entityParserNotes[String(entityId || '').trim()] || '';
+  }
+
+  getEntityParserNoteNeedsCheck(entityId: string): boolean {
+    const normalizedId = String(entityId || '').trim();
+    return (
+      !!this.entityParserNotes[normalizedId] && !!this.entityParserNoteNeedsCheck[normalizedId]
+    );
+  }
+
+  setEntityParserNote(entityId: string, note: string): void {
+    const normalizedId = String(entityId || '').trim();
+    if (!normalizedId) return;
+    if (note) {
+      this.entityParserNotes[normalizedId] = note;
+      delete this.entityParserNoteNeedsCheck[normalizedId];
+    } else {
+      delete this.entityParserNotes[normalizedId];
+      delete this.entityParserNoteNeedsCheck[normalizedId];
+    }
+  }
+
+  markEntityParserNoteNeedsCheck(entityId: string): boolean {
+    const normalizedId = String(entityId || '').trim();
+    if (!normalizedId || !this.entityParserNotes[normalizedId]?.trim()) return false;
+    const changed = !this.entityParserNoteNeedsCheck[normalizedId];
+    this.entityParserNoteNeedsCheck[normalizedId] = true;
+    return changed;
   }
 
   getSpatialDescendantObjects(nodeId: string): SceneObject[] {

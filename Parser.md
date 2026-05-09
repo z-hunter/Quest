@@ -492,6 +492,21 @@ Parser сначала проверяет:
 - `context`
 - `scope`
 
+В `context` также попадают runtime-only Parser Notes:
+
+- `context.scene.parserNote`
+- `context.scene.parserNoteNeedsCheck`
+- `context.entities[].parserNote`
+- `context.entities[].parserNoteNeedsCheck`
+- `context.knownEntities[].parserNote`
+- `context.knownEntities[].parserNoteNeedsCheck`
+- `context.inventory[].parserNote`
+- `context.inventory[].parserNoteNeedsCheck`
+
+Parser Notes — это приватная память LLM/GM-каскада, а не player-facing текст. Они используются для мелких придуманных фактов, которые должны оставаться консистентными между командами, например состояние радиоприёма или след от действия игрока на объекте.
+
+`parserNoteNeedsCheck: true` означает, что после записи PN объект или сцена были реально затронуты обычной runtime-операцией (`TAKE`, `PUT`, `OPEN`, `CLOSE`, удаление из inventory и т.п.). Parser не удаляет заметку автоматически: он оставляет её в контексте, но просит LLM сверить её с текущими `worldFacts`, `contents`, `location`, `spatialNodes` и `spatialRelations`. Если заметка устарела, LLM должна заменить её или очистить пустой PN-записью.
+
 ### Step 4. Stage 1 runs sequentially
 
 - сначала `Stage 1.1`;
@@ -1083,6 +1098,8 @@ type ParserPlannedAction =
   | { type: 'ensureHeldEntity'; ref: string; noEffectMessage?: string }
   | { type: 'goToSceneById'; sceneId: string }
   | { type: 'removeInventoryEntity'; ref: string }
+  | { type: 'setSceneParserNote'; note: string }
+  | { type: 'setEntityParserNote'; entityId: string; note: string }
   | {
       type: 'showText';
       message?: string;
@@ -1098,6 +1115,10 @@ type ParserPlannedAction =
 - двухаргументных custom commands вроде `USE X ON Y`;
 - generic clarification и validation на уровне `Parser Core`;
 - подстановки resolved entity titles в финальные сообщения через `paramsFromRefs`.
+
+`setSceneParserNote` и `setEntityParserNote` пишут runtime-only Parser Notes. Они не выводят текст игроку, но возвращают `effects`, которые видны при `#PEEK-ON`. `setEntityParserNote` принимает `entityId` из текущего parser context; скрытые known entities не являются допустимой прямой целью, пока объект не видим или не находится в инвентаре. Пустая заметка очищает запись, непустая заменяет её целиком и ограничивается 600 символами.
+
+Запись PN через эти actions сбрасывает `parserNoteNeedsCheck`, потому что LLM только что переоценила заметку. Обычные действия, реально затрагивающие объект или его содержимое, наоборот помечают существующую PN как `needsCheck`, не меняя её текста.
 
 ### Почему DSL должен быть ограниченным
 
@@ -1157,6 +1178,8 @@ sequenceDiagram
 
 - `#PEEK-ON`
 - `#PEEK-OFF`
+- `#PEEKPN-ON`
+- `#PEEKPN-OFF`
 - `#STAGE1-ON`
 - `#STAGE1-OFF`
 - `#STAGE2-ON`
@@ -1186,6 +1209,27 @@ sequenceDiagram
 - решение `Core`;
 - итоговые outcomes.
 - raw LLM response, extracted JSON, accepted/filtered actions, provider/model, duration, token count and error reason.
+
+### PEEKPN
+
+`#PEEKPN-ON` включает узкий debug-режим только для Parser Notes. Он не выводит общий `context/scope/envelope/result` дамп.
+
+После каждой команды parser выводит:
+
+- `--- PARSER NOTES CONTEXT ---`, если в полученном parser context уже есть PN;
+- `--- PARSER NOTES MUTATIONS ---`, если команда создала, изменила, очистила PN или пометила существующую PN как `needsCheck`.
+
+Каждая запись содержит полный текст note без compact-обрезки:
+
+```json
+{
+  "operation": "context | created | updated | cleared | needsCheck",
+  "targetType": "scene | entity | inventory | focusedTarget",
+  "id": "object_or_scene_id",
+  "note": "full Parser Note text",
+  "needsCheck": true
+}
+```
 
 ### Stage toggles
 

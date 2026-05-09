@@ -9,7 +9,7 @@ Text assets are stored separately from scene and prefab JSON files:
 - `public/text/scenes/<scene-id>.json`
 - `public/text/objects/<object-id>.json`
 
-System-level text assets live under `public/text/system/`. The current parser/GM LLM system prompt is stored as markdown in `public/text/system/parser-llm-system.md` so it can be edited without changing TypeScript code.
+System-level text assets live under `public/text/system/`. The current parser/GM LLM system prompt is stored as markdown in `public/text/system/parser-llm-system.md` so it can be edited without changing TypeScript code. LLM prompt assets must be written in English and use story-neutral wording such as "player character" instead of specific protagonist names.
 
 Since scene/object IDs according to GDD can contain paths like "building\room", which means that the 'room.json scene' is located in the 'building' folder, there may be subfolders inside these folders.
 
@@ -20,6 +20,8 @@ Since scene/object IDs according to GDD can contain paths like "building\room", 
 - Missing text asset files are not errors; runtime falls back to existing built-in fields.
 - Text assets contain only data, not code.
 - Dynamic text changes are controlled by scripts through runtime properties of scenes and objects.
+- Parser Notes are not text assets. They are runtime-only parser memory stored on the active scene and included in LLM context when present.
+- Parser Notes may be marked `parserNoteNeedsCheck: true` after runtime world mutations. This flag is runtime parser state, not an authored Text Asset field.
 
 ## Minimal fields
 

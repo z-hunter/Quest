@@ -29,6 +29,8 @@ const ALLOWED_ACTION_TYPES = new Set([
   'openTarget',
   'closeTarget',
   'showInventory',
+  'setSceneParserNote',
+  'setEntityParserNote',
   'goToTarget',
   'showText',
 ]);
@@ -93,6 +95,7 @@ export class LlmCascade {
       'Game world context:',
       JSON.stringify(context, null, 2),
       ...this.promptList(promptAssets, 'world_fact_instructions'),
+      ...this.promptList(promptAssets, 'parser_note_instructions'),
       ...(previousAttempt
         ? [
             '',
@@ -333,7 +336,49 @@ export class LlmCascade {
       }
     }
 
+    const parserNotePlan = actions.some((action) => this.isParserNoteAction(action));
+    if (parserNotePlan) {
+      const hasShowText = actions.some((action) => action.type === 'showText');
+      if (!hasShowText) {
+        return {
+          actions: [],
+          filteredActions: [
+            ...filteredActions,
+            {
+              reason: 'parser_note_plan_requires_showText',
+              actions,
+            },
+          ],
+          fallback: false,
+        };
+      }
+
+      const parserNoteSafeActions = actions.filter(
+        (action) => this.isParserNoteAction(action) || action.type === 'showText'
+      );
+      const unsafeActions = actions.filter(
+        (action) => !this.isParserNoteAction(action) && action.type !== 'showText'
+      );
+      return {
+        actions: parserNoteSafeActions,
+        filteredActions: unsafeActions.length
+          ? [
+              ...filteredActions,
+              {
+                reason: 'parser_note_plan_omits_world_actions',
+                actions: unsafeActions,
+              },
+            ]
+          : filteredActions,
+        fallback: false,
+      };
+    }
+
     return { actions, filteredActions, fallback: false };
+  }
+
+  private isParserNoteAction(action: ParserToolAction): boolean {
+    return action.type === 'setSceneParserNote' || action.type === 'setEntityParserNote';
   }
 
   private validateAction(action: unknown): ParserToolAction | null {
@@ -345,6 +390,15 @@ export class LlmCascade {
         return { type: 'lookScene' };
       case 'showInventory':
         return { type: 'showInventory' };
+      case 'setSceneParserNote': {
+        const note = this.asNoteString(action.note);
+        return note !== null ? { type: 'setSceneParserNote', note } : null;
+      }
+      case 'setEntityParserNote': {
+        const entityId = this.asString(action.entityId);
+        const note = this.asNoteString(action.note);
+        return entityId && note !== null ? { type: 'setEntityParserNote', entityId, note } : null;
+      }
       case 'lookTarget': {
         const target = this.asString(action.target);
         return target ? { type: 'lookTarget', target } : null;
@@ -416,6 +470,10 @@ export class LlmCascade {
 
   private asString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  private asNoteString(value: unknown): string | null {
+    return typeof value === 'string' ? value.trim() : null;
   }
 
   private asNullableString(value: unknown): string | null {

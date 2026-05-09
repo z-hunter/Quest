@@ -110,6 +110,7 @@ export function createParserFixture(): ParserFixture {
     parserStage2Enabled: false,
     parserPeekEnabled: false,
     parserPeekLlmEnabled: false,
+    parserPeekPnEnabled: false,
     log() {},
   };
 
@@ -192,7 +193,13 @@ export function createParserFixture(): ParserFixture {
       };
     }
     switchComponent.state = 2;
-    return okOutcome('switch_opened', fixture.game.text('parser.open_success', { target: title }));
+    return {
+      ...okOutcome('switch_opened', fixture.game.text('parser.open_success', { target: title }), {
+        entityId: entity.name,
+        state: 2,
+      }),
+      effects: ['switch_opened'],
+    };
   };
 
   fixture.game.closeEntity = (entity: Entity) => {
@@ -214,7 +221,13 @@ export function createParserFixture(): ParserFixture {
       };
     }
     switchComponent.state = 1;
-    return okOutcome('switch_closed', fixture.game.text('parser.close_success', { target: title }));
+    return {
+      ...okOutcome('switch_closed', fixture.game.text('parser.close_success', { target: title }), {
+        entityId: entity.name,
+        state: 1,
+      }),
+      effects: ['switch_closed'],
+    };
   };
 
   fixture.game.takeEntity = (entity: Entity) => {
@@ -262,13 +275,12 @@ export function createParserFixture(): ParserFixture {
     fixture.scene.subsceneEntities.delete(entity);
     fixture.game.inventory.push(entity);
     const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
-    return okOutcome(
-      'item_taken',
-      fixture.game.text('parser.take_pickup_success', { item: title }),
-      {
+    return {
+      ...okOutcome('item_taken', fixture.game.text('parser.take_pickup_success', { item: title }), {
         entityId: entity.name,
-      }
-    );
+      }),
+      effects: ['moved_to_inventory'],
+    };
   };
 
   const normalizeInventoryRelation = (component: any): 'in' | 'on' | 'under' | 'behind' =>
@@ -769,15 +781,21 @@ export function createParserFixture(): ParserFixture {
         );
         if (outcome.status !== 'ok') return outcome;
         const textTarget = getPlacementTextTarget(nestedInventory, target, inventoryRelation);
-        return okOutcome(
-          'item_put_into_inventory',
-          textTarget
-            ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
-            : fixture.game.text('parser.put_success_inventory', {
-                item: entity.name,
-                target: nestedInventory.name,
-              })
-        );
+        return {
+          ...okOutcome(
+            'item_put_into_inventory',
+            textTarget
+              ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
+              : fixture.game.text('parser.put_success_inventory', {
+                  item: entity.name,
+                  target: nestedInventory.name,
+                }),
+            { entityId: entity.name, ownerId: nestedInventory.name }
+          ),
+          effects: isHeld
+            ? ['removed_from_inventory', 'moved_to_inventory']
+            : ['moved_between_containers'],
+        };
       }
     }
 
@@ -837,7 +855,15 @@ export function createParserFixture(): ParserFixture {
     const message = textTarget
       ? formatPutSuccess(entity.name, textTarget.title, textTarget.relation)
       : fixture.game.text('parser.drop_success', { item: entity.name });
-    return okOutcome('item_put_on_surface', message);
+    return {
+      ...okOutcome('item_put_on_surface', message, {
+        entityId: entity.name,
+        targetId: surface.name,
+      }),
+      effects: isHeld
+        ? ['removed_from_inventory', 'placed_on_surface']
+        : ['moved_between_scene_targets'],
+    };
   };
 
   fixture.game.removeInventoryEntity = (entity: Entity) => {
@@ -846,7 +872,10 @@ export function createParserFixture(): ParserFixture {
       return { status: 'failed', code: 'inventory_item_not_found', recoverable: true };
     }
     fixture.game.inventory.splice(index, 1);
-    return okOutcome('inventory_item_removed', undefined, { entityId: entity.name });
+    return {
+      ...okOutcome('inventory_item_removed', undefined, { entityId: entity.name }),
+      effects: ['removed_from_inventory'],
+    };
   };
 
   fixture.game.showInventory = () => {

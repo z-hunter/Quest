@@ -42,6 +42,14 @@ import type {
   ParserWorldModel,
 } from './parserTypes';
 
+type ParserNoteDebugEntry = {
+  operation: 'context' | 'created' | 'updated' | 'cleared' | 'needsCheck';
+  targetType: 'scene' | 'entity' | 'inventory' | 'focusedTarget';
+  id: string;
+  note: string;
+  needsCheck?: boolean;
+};
+
 export class Parser {
   game: any;
   inputField: HTMLInputElement | null;
@@ -1478,6 +1486,7 @@ export class Parser {
     for (const action of actions) {
       const outcome = this.executeParserAction(action, planState);
       executedActions.push(this.getExecutedActionName(action));
+      this.markTouchedParserNotesNeedCheck(action, outcome);
       outcomes.push(outcome);
 
       if (outcome.status !== 'ok') {
@@ -1526,6 +1535,10 @@ export class Parser {
         return this.game.closeFocusedView();
       case 'showInventory':
         return this.game.showInventory();
+      case 'setSceneParserNote':
+        return this.executeSetSceneParserNote(action.note);
+      case 'setEntityParserNote':
+        return this.executeSetEntityParserNote(action.entityId, action.note);
       case 'goToTarget':
         return this.resolveGoToTarget(action.target);
       case 'resolveArgumentEntity':
@@ -1588,6 +1601,10 @@ export class Parser {
         return 'quit';
       case 'showInventory':
         return 'showInventory';
+      case 'setSceneParserNote':
+        return 'setSceneParserNote';
+      case 'setEntityParserNote':
+        return 'setEntityParserNote';
       case 'goToTarget':
         return 'goTo';
       case 'resolveArgumentEntity':
@@ -1608,6 +1625,253 @@ export class Parser {
   private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
     const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
+  }
+
+  private executeSetSceneParserNote(note: string): GameActionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'parser_note_scene_missing',
+        recoverable: false,
+      };
+    }
+
+    const previousNote = this.getCurrentSceneParserNote(scene);
+    const sanitizedNote = this.sanitizeParserNote(note);
+    const operation = this.getParserNoteMutationOperation(previousNote, sanitizedNote);
+    if (typeof scene.setParserNote === 'function') {
+      scene.setParserNote(sanitizedNote);
+    } else {
+      scene.parserNote = sanitizedNote;
+      scene.parserNoteNeedsCheck = false;
+    }
+
+    return {
+      status: 'ok',
+      code: sanitizedNote ? 'parser_note_scene_updated' : 'parser_note_scene_cleared',
+      effects: [this.formatParserNoteEffect(operation, 'scene', scene.id, sanitizedNote)],
+      data: {
+        targetType: 'scene',
+        sceneId: scene.id,
+        parserNote: sanitizedNote,
+        parserNoteNeedsCheck: false,
+        parserNoteOperation: operation,
+      },
+    };
+  }
+
+  private executeSetEntityParserNote(entityId: string, note: string): GameActionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'parser_note_scene_missing',
+        recoverable: false,
+      };
+    }
+
+    const normalizedEntityId = String(entityId || '').trim();
+    if (!this.isAllowedParserNoteEntityId(normalizedEntityId)) {
+      return {
+        status: 'failed',
+        code: 'parser_note_entity_not_allowed',
+        recoverable: false,
+      };
+    }
+
+    const previousNote = this.getCurrentEntityParserNote(scene, normalizedEntityId);
+    const sanitizedNote = this.sanitizeParserNote(note);
+    const operation = this.getParserNoteMutationOperation(previousNote, sanitizedNote);
+    if (typeof scene.setEntityParserNote === 'function') {
+      scene.setEntityParserNote(normalizedEntityId, sanitizedNote);
+    } else {
+      scene.entityParserNotes = scene.entityParserNotes || {};
+      if (sanitizedNote) {
+        scene.entityParserNotes[normalizedEntityId] = sanitizedNote;
+      } else {
+        delete scene.entityParserNotes[normalizedEntityId];
+      }
+      if (scene.entityParserNoteNeedsCheck) {
+        delete scene.entityParserNoteNeedsCheck[normalizedEntityId];
+      }
+    }
+
+    return {
+      status: 'ok',
+      code: sanitizedNote ? 'parser_note_entity_updated' : 'parser_note_entity_cleared',
+      effects: [
+        this.formatParserNoteEffect(operation, 'entity', normalizedEntityId, sanitizedNote),
+      ],
+      data: {
+        targetType: 'entity',
+        entityId: normalizedEntityId,
+        parserNote: sanitizedNote,
+        parserNoteNeedsCheck: false,
+        parserNoteOperation: operation,
+      },
+    };
+  }
+
+  private markTouchedParserNotesNeedCheck(
+    action: ParserToolAction,
+    outcome: GameActionOutcome
+  ): void {
+    if (outcome.status !== 'ok') return;
+    if (action.type === 'setSceneParserNote' || action.type === 'setEntityParserNote') return;
+
+    const touchedEntityIds = this.getParserNoteTouchedEntityIds(action, outcome);
+    if (!touchedEntityIds.size) return;
+
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return;
+
+    const effects = outcome.effects || [];
+    for (const entityId of touchedEntityIds) {
+      if (!this.markEntityParserNoteNeedsCheck(scene, entityId)) continue;
+      effects.push(
+        this.formatParserNoteEffect(
+          'needsCheck',
+          'entity',
+          entityId,
+          this.getCurrentEntityParserNote(scene, entityId),
+          true
+        )
+      );
+    }
+    if (effects.length) {
+      outcome.effects = effects;
+    }
+  }
+
+  private getParserNoteTouchedEntityIds(
+    action: ParserToolAction,
+    outcome: GameActionOutcome
+  ): Set<string> {
+    const ids = new Set<string>();
+    const add = (value: unknown) => {
+      const id = typeof value === 'string' ? value.trim() : '';
+      if (id) ids.add(id);
+    };
+
+    const data = (outcome.data || {}) as Record<string, unknown>;
+
+    if (
+      action.type === 'takeTarget' &&
+      outcome.effects?.includes('moved_to_inventory') &&
+      typeof data.entityId === 'string'
+    ) {
+      add(data.entityId);
+      const previousContext = this.findContextEntityById(data.entityId);
+      add(previousContext?.location?.parentId);
+    }
+
+    if (
+      action.type === 'putTarget' &&
+      (outcome.effects?.includes('moved_to_inventory') ||
+        outcome.effects?.includes('placed_on_surface') ||
+        outcome.effects?.includes('moved_between_containers') ||
+        outcome.effects?.includes('moved_between_scene_targets'))
+    ) {
+      add(data.entityId);
+      add(data.ownerId);
+      add(data.targetId);
+    }
+
+    if (
+      (action.type === 'openTarget' || action.type === 'closeTarget') &&
+      (outcome.effects?.includes('switch_opened') || outcome.effects?.includes('switch_closed'))
+    ) {
+      add(data.entityId);
+    }
+
+    if (
+      action.type === 'removeInventoryEntity' &&
+      outcome.effects?.includes('removed_from_inventory')
+    ) {
+      add(data.entityId);
+    }
+
+    return ids;
+  }
+
+  private findContextEntityById(entityId: string): any | null {
+    const context = this.activeWorldModel?.context;
+    if (!context) return null;
+    return (
+      context.entities?.find((entity) => entity.id === entityId) ||
+      context.knownEntities?.find((entity) => entity.id === entityId) ||
+      context.inventory?.find((entity) => entity.id === entityId) ||
+      null
+    );
+  }
+
+  private markEntityParserNoteNeedsCheck(scene: any, entityId: string): boolean {
+    const normalizedId = String(entityId || '').trim();
+    if (!normalizedId || !this.getCurrentEntityParserNote(scene, normalizedId)) return false;
+    if (typeof scene.markEntityParserNoteNeedsCheck === 'function') {
+      return !!scene.markEntityParserNoteNeedsCheck(normalizedId);
+    }
+    scene.entityParserNoteNeedsCheck = scene.entityParserNoteNeedsCheck || {};
+    const changed = !scene.entityParserNoteNeedsCheck[normalizedId];
+    scene.entityParserNoteNeedsCheck[normalizedId] = true;
+    return changed;
+  }
+
+  private sanitizeParserNote(note: string): string {
+    return String(note || '')
+      .trim()
+      .slice(0, 600);
+  }
+
+  private isAllowedParserNoteEntityId(entityId: string): boolean {
+    if (!entityId) return false;
+    const context = this.activeWorldModel?.context;
+    if (!context) return false;
+
+    const visibleIds = new Set((context.entities || []).map((entity) => entity.id));
+    const inventoryIds = new Set((context.inventory || []).map((entity) => entity.id));
+    const focusedId = context.focusedTarget?.id;
+
+    return visibleIds.has(entityId) || inventoryIds.has(entityId) || focusedId === entityId;
+  }
+
+  private getCurrentSceneParserNote(scene: any): string {
+    const note =
+      typeof scene?.getParserNote === 'function' ? scene.getParserNote() : scene?.parserNote;
+    return typeof note === 'string' ? note.trim() : '';
+  }
+
+  private getCurrentEntityParserNote(scene: any, entityId: string): string {
+    const note =
+      typeof scene?.getEntityParserNote === 'function'
+        ? scene.getEntityParserNote(entityId)
+        : scene?.entityParserNotes?.[entityId];
+    return typeof note === 'string' ? note.trim() : '';
+  }
+
+  private getParserNoteMutationOperation(
+    previousNote: string,
+    nextNote: string
+  ): ParserNoteDebugEntry['operation'] {
+    if (!nextNote) return 'cleared';
+    return previousNote ? 'updated' : 'created';
+  }
+
+  private formatParserNoteEffect(
+    operation: ParserNoteDebugEntry['operation'],
+    targetType: ParserNoteDebugEntry['targetType'],
+    id: string,
+    note: string,
+    needsCheck?: boolean
+  ): string {
+    return JSON.stringify({
+      operation,
+      targetType,
+      id,
+      note,
+      ...(needsCheck ? { needsCheck: true } : {}),
+    } satisfies ParserNoteDebugEntry);
   }
 
   private getObjectLookupTokens(sceneObject: SceneObject): string[] {
@@ -3584,6 +3848,17 @@ export class Parser {
       return `--- ${title.toUpperCase()} ---\n${body}`;
     };
 
+    const parserNoteEffects = result.outcomes
+      .flatMap((outcome) => outcome.effects || [])
+      .filter((effect) => this.isParserNoteEffect(effect));
+    const parserNoteMutations = parserNoteEffects
+      .map((effect) => this.parseParserNoteEffect(effect))
+      .filter((entry): entry is ParserNoteDebugEntry => !!entry);
+    const parserNoteContextEntries = this.collectParserNoteContextEntries(contextJson);
+
+    const formatParserNoteSection = (title: string, entries: ParserNoteDebugEntry[]) =>
+      formatFullSection(title, entries);
+
     const peekMessages = this.game.console?.parserPeekEnabled
       ? [
           formatSection('context', contextJson),
@@ -3591,6 +3866,9 @@ export class Parser {
           formatSection('envelope', envelopeJson),
           ...(coreDecision ? [formatSection('core', coreDecision)] : []),
           formatSection('result', resultJson),
+          ...(parserNoteMutations.length
+            ? [formatParserNoteSection('parser notes', parserNoteMutations)]
+            : []),
           ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
           ...(llmDebug ? [formatSection('llm', llmDebug)] : []),
         ]
@@ -3612,9 +3890,20 @@ export class Parser {
           ]
         : undefined;
 
+    const peekPnMessages = this.game.console?.parserPeekPnEnabled
+      ? [
+          ...(parserNoteContextEntries.length
+            ? [formatParserNoteSection('parser notes context', parserNoteContextEntries)]
+            : []),
+          ...(parserNoteMutations.length
+            ? [formatParserNoteSection('parser notes mutations', parserNoteMutations)]
+            : []),
+        ]
+      : undefined;
+
     const debugMessages =
-      peekMessages || peekLlmMessages
-        ? [...(peekMessages || []), ...(peekLlmMessages || [])]
+      peekMessages || peekLlmMessages || peekPnMessages
+        ? [...(peekMessages || []), ...(peekLlmMessages || []), ...(peekPnMessages || [])]
         : undefined;
 
     if (result.type === 'handoff') {
@@ -3716,6 +4005,81 @@ export class Parser {
       nextPendingState: null,
       debugMessages,
     };
+  }
+
+  private isParserNoteEffect(effect: string): boolean {
+    return !!this.parseParserNoteEffect(effect);
+  }
+
+  private parseParserNoteEffect(effect: string): ParserNoteDebugEntry | null {
+    try {
+      const parsed = JSON.parse(effect) as Partial<ParserNoteDebugEntry>;
+      if (
+        (parsed.operation === 'created' ||
+          parsed.operation === 'updated' ||
+          parsed.operation === 'cleared' ||
+          parsed.operation === 'needsCheck') &&
+        (parsed.targetType === 'scene' || parsed.targetType === 'entity') &&
+        typeof parsed.id === 'string' &&
+        typeof parsed.note === 'string'
+      ) {
+        return {
+          operation: parsed.operation,
+          targetType: parsed.targetType,
+          id: parsed.id,
+          note: parsed.note,
+          ...(parsed.needsCheck ? { needsCheck: true } : {}),
+        };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  private collectParserNoteContextEntries(contextJson: string): ParserNoteDebugEntry[] {
+    const context = this.safeParseJson(contextJson) as any;
+    const entries: ParserNoteDebugEntry[] = [];
+
+    const addEntry = (
+      targetType: ParserNoteDebugEntry['targetType'],
+      id: unknown,
+      note: unknown,
+      needsCheck: unknown
+    ) => {
+      if (typeof id !== 'string' || typeof note !== 'string' || !note.trim()) return;
+      entries.push({
+        operation: 'context',
+        targetType,
+        id,
+        note,
+        ...(needsCheck === true ? { needsCheck: true } : {}),
+      });
+    };
+
+    addEntry(
+      'scene',
+      context?.scene?.id,
+      context?.scene?.parserNote,
+      context?.scene?.parserNoteNeedsCheck
+    );
+    for (const entity of context?.entities || []) {
+      addEntry('entity', entity?.id, entity?.parserNote, entity?.parserNoteNeedsCheck);
+    }
+    for (const entity of context?.knownEntities || []) {
+      addEntry('entity', entity?.id, entity?.parserNote, entity?.parserNoteNeedsCheck);
+    }
+    for (const entity of context?.inventory || []) {
+      addEntry('inventory', entity?.id, entity?.parserNote, entity?.parserNoteNeedsCheck);
+    }
+    addEntry(
+      'focusedTarget',
+      context?.focusedTarget?.id,
+      context?.focusedTarget?.parserNote,
+      context?.focusedTarget?.parserNoteNeedsCheck
+    );
+
+    return entries;
   }
 
   private extractRawInput(actionJson: string): string {
