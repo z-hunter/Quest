@@ -609,20 +609,20 @@ During the session the following checks were run successfully:
 - Autotests & CI Consistency: Updated test fixtures and ensured the entire suite (202 tests) passes, confirming no regressions
      in parser or runtime logic.
 
-2. Current state
+1. Current state
 
 - The core architecture is now modular and more scalable.
 - The IGame interface is fully updated to reflect the new delegation pattern.
 - The workspace is clean, and changes are committed to the scene-refact2 branch.
 - Browser runtime errors (SyntaxErrors due to improper type imports) have been fully resolved and verified.
 
-3. Next steps
+1. Next steps
 
 - Feature Sprint: Resume development of gameplay features as defined in GDD.md.
 - Cleanup: Conduct a final audit of any remaining any casts in ComponentSystem.ts that can now be replaced with AnyComponent.
 - Tauri Prep: Proceed with the explicit workspace model for the desktop build as outlined in Tauri.md.
 
-4. Risks & Caveats
+1. Risks & Caveats
 
 - Import Precision: Developers must use import type when bringing in IGame or GameActionOutcome in new files to avoid Vite build
      failures.
@@ -1088,6 +1088,7 @@ During the session the following checks were run successfully:
 - Facts should stay concise and factual; atmospheric sarcasm belongs in LLM responses, not TA semantic facts.
 - Empty or missing `childTags` currently means the relation rule applies to any child in that relation.
 - NotebookLM source replacement completed after this entry was written: fresh `Sessions.md`, `GDD.md`, `AgentMemory.md`, `Parser.md`, and `TextAssets.md` sources were uploaded and reached `ready` status in the Scanline Engine notebook.
+
 ## Session Entry - 2026-05-07 18:01 Europe/Warsaw
 
 ### Session Goals
@@ -1232,6 +1233,7 @@ During the session the following checks were run successfully:
   - generated `AgentMemory.md`
 - The local memory mirror was refreshed and the NotebookLM memory dump was regenerated as part of this wrap-up workflow.
 - Fresh NotebookLM sources reached `ready` status in the Scanline Engine notebook.
+
 ## Session Entry - 2026-05-08 00:40 +02:00
 
 ### Session Goals
@@ -1499,3 +1501,62 @@ During the session the following checks were run successfully:
 
 - Commit messages contain typos: `imroved` / `Imrovement`.
 - NotebookLM and local RAG sources can lag behind live `agent_memory`; this wrap-up refresh should reduce that gap.
+
+## Session Entry - 2026-05-09 01:16 +02:00
+
+# Session Summary
+
+## Session Goal
+
+- Modernize project documentation (tech-spec.md).
+- Decouple and expand the Scripting System documentation.
+- Improve the Scene Editor's UX by implementing SVG component iconography in the properties panel and custom Select dropdown.
+
+## What Was Implemented
+
+### 1. Documentation Modernization (tech-spec.md)
+
+- Completely rewrote the specification to reflect the post-refactoring architecture (Game monolith decomposition, GameSemanticAPI, LLM Parser, A* Navigation).
+- Added a comprehensive **Codebase Map** mapping subsystems to src/ directories.
+- Integrated the **Tauri Native Build** documentation, including path resolution logic (std::env::current_exe()), Windows bundling specifics, and workspace requirements.
+
+### 2. Scripting System Documentation
+
+- Extracted the technical scripting API into a new, beginner-friendly standalone guide: ScriptSys.md.
+- Added a "Chapter 1: How to Create Your First Script" tutorial with practical examples on registering a script and attaching it to a TriggerBox.
+- tech-spec.md now references ScriptSys.md as the primary source for scripting.
+
+### 3. Component UI Updates
+
+- Implemented dynamic SVG icon rendering in the SectionComponents.tsx properties panel header using import.meta.glob and CSS mask-image.
+- Fixed a typo in the icon filename (invetory.svg -> inventory.svg) to correctly match component names.
+- Updated the custom <Select> dropdown (src/components/common/Select.tsx) to support displaying icons within the dropdown options and the selected trigger.
+- Wired up the component addition dropdown to automatically load and render component icons.
+- Ensured icons dynamically inherit text color via #fb8 (header) and currentColor (dropdown).
+
+## Important Architecture / Runtime Decisions
+
+- **Documentation Strategy:** Use tech-spec.md as the high-level entry point, with deep-dive guides for specific complex systems (like scripting) separated into modular .md files.
+- **Component Icons:** Icons must be placed in src/assets/components-icon/ and match the component's name. They will be picked up automatically with no code changes needed.
+
+## Tests Run
+
+- No functional behavior changed. UI rendering changes were performed on the Editor side.
+
+## Commits Created During the Session
+
+- No commits were created in this session by the agent.
+
+## Current State
+
+- The project documentation is fully aligned with the current codebase structure. The environment is optimized for development of new gameplay systems.
+- The UI in the Editor has been successfully enriched with component icons.
+
+## Remaining Work / Next Recommended Steps
+
+- Proceed with prioritized Kairo tasks (e.g., "Darkness" system for LOOK, "NPC AI System").
+
+## Risks / Caveats
+
+- Not all components have associated SVG icons yet; the UI implementation handles missing icons gracefully by simply rendering the text.
+- Static hosting of the game will break Editor features; testing via the native Tauri build or the development environment is recommended.
