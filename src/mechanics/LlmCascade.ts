@@ -580,14 +580,24 @@ export class LlmCascade {
     }
 
     if (parsed.kind === 'final_response') {
-      const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+      let message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+      if (message)
+        message = message
+          .split('—')
+          .map((s) => s.trim())
+          .join('\u202F—\u202F');
       return message
         ? { actions: [{ type: 'showText', message }], filteredActions: [], fallback: false }
         : { actions: [], filteredActions: [parsed], fallback: false };
     }
 
     if (parsed.kind === 'clarification') {
-      const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+      let question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+      if (question)
+        question = question
+          .split('—')
+          .map((s) => s.trim())
+          .join('\u202F—\u202F');
       return question
         ? {
             actions: [{ type: 'showText', message: question }],
@@ -733,7 +743,12 @@ export class LlmCascade {
           target: this.asNullableString(action.target),
         };
       case 'showText': {
-        const message = this.asString(action.message);
+        let message = this.asString(action.message);
+        if (message)
+          message = message
+            .split('—')
+            .map((s) => s.trim())
+            .join('\u202F—\u202F');
         return message ? { type: 'showText', message } : null;
       }
       default:
