@@ -1475,6 +1475,38 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
+  it('ignores walkbox pseudo-floor targets for LOOK when a real Floor object exists', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+    fixture.addEntity('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+    });
+
+    const result = await fixture.run('look floor');
+
+    expect(result.messages.at(-1)).toBe('A real floor object.');
+  });
+
+  it('does not resolve LOOK floor to the walkbox pseudo-floor target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+
+    const result = await fixture.run('look floor');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.look_not_found', { target: 'floor' })
+    );
+  });
+
   it('prefers the walkbox floor for DROP when a separate surface is nearby', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

@@ -2026,6 +2026,12 @@ export class Parser {
     return Array.from(new Set(candidates));
   }
 
+  private getLookTargetCandidates(): SceneObject[] {
+    return this.getScopeCandidates(['visible', 'held']).filter(
+      (sceneObject) => sceneObject.type !== 'Walkbox'
+    );
+  }
+
   private getContextEntityById(id: string): { title: string; synonyms?: string[] } | null {
     const entities = this.activeWorldModel?.context.entities || [];
     return entities.find((entity) => entity.id === id) || null;
@@ -2332,7 +2338,7 @@ export class Parser {
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['visible', 'held']),
+      this.getLookTargetCandidates(),
       'parser.look_which_one'
     );
     if (resolved.status === 'escalate') {
