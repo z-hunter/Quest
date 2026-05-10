@@ -1,6 +1,8 @@
 import type {
   ILlmProvider,
+  LlmProviderContent,
   LlmProviderMessage,
+  LlmProviderTextBlock,
   LlmProviderResponse,
   LlmStreamDeltaCallback,
 } from './ILlmProvider';
@@ -40,12 +42,15 @@ export class AnthropicProvider implements ILlmProvider {
     this.fetchImpl = options.fetchImpl || fetch.bind(globalThis);
   }
 
-  sendMessage(system: string, messages: LlmProviderMessage[]): Promise<LlmProviderResponse> {
+  sendMessage(
+    system: LlmProviderContent,
+    messages: LlmProviderMessage[]
+  ): Promise<LlmProviderResponse> {
     return this.sendMessageStream(system, messages, () => {});
   }
 
   async sendMessageStream(
-    system: string,
+    system: LlmProviderContent,
     messages: LlmProviderMessage[],
     onDelta: LlmStreamDeltaCallback
   ): Promise<LlmProviderResponse> {
@@ -62,8 +67,11 @@ export class AnthropicProvider implements ILlmProvider {
         body: JSON.stringify({
           model: this.model,
           max_tokens: this.maxTokens,
-          system,
-          messages,
+          system: this.toAnthropicContent(system),
+          messages: messages.map((message) => ({
+            role: message.role,
+            content: this.toAnthropicContent(message.content),
+          })),
           stream: true,
         }),
         signal: controller.signal,
@@ -101,6 +109,9 @@ export class AnthropicProvider implements ILlmProvider {
           reason: 'api_error',
           durationMs: this.nowMs() - startedAt,
           tokensGenerated: streamResult.tokensGenerated,
+          inputTokens: streamResult.inputTokens,
+          cacheCreationInputTokens: streamResult.cacheCreationInputTokens,
+          cacheReadInputTokens: streamResult.cacheReadInputTokens,
         };
       }
 
@@ -110,6 +121,9 @@ export class AnthropicProvider implements ILlmProvider {
         model: this.model,
         durationMs: this.nowMs() - startedAt,
         tokensGenerated: streamResult.tokensGenerated,
+        inputTokens: streamResult.inputTokens,
+        cacheCreationInputTokens: streamResult.cacheCreationInputTokens,
+        cacheReadInputTokens: streamResult.cacheReadInputTokens,
       };
     } catch (error) {
       const errorName = error instanceof Error ? error.name : '';
@@ -139,10 +153,36 @@ export class AnthropicProvider implements ILlmProvider {
     return this.model;
   }
 
+  private toAnthropicContent(content: LlmProviderContent): string | any[] {
+    if (typeof content === 'string') return content;
+    return content.map((block) => this.toAnthropicBlock(block));
+  }
+
+  private toAnthropicBlock(block: LlmProviderTextBlock): Record<string, unknown> {
+    const result: Record<string, unknown> = {
+      type: 'text',
+      text: block.text,
+    };
+    if (block.cacheControl) {
+      result.cache_control = {
+        type: block.cacheControl.type,
+        ...(block.cacheControl.ttl ? { ttl: block.cacheControl.ttl } : {}),
+      };
+    }
+    return result;
+  }
+
   private async readSseStream(
     body: ReadableStream<Uint8Array>,
     onDelta: LlmStreamDeltaCallback
-  ): Promise<{ text: string; error?: string; tokensGenerated?: number }> {
+  ): Promise<{
+    text: string;
+    error?: string;
+    tokensGenerated?: number;
+    inputTokens?: number;
+    cacheCreationInputTokens?: number;
+    cacheReadInputTokens?: number;
+  }> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let lineBuffer = '';
@@ -151,10 +191,39 @@ export class AnthropicProvider implements ILlmProvider {
     let accumulated = '';
     let error: string | undefined;
     let tokensGenerated: number | undefined;
+    let inputTokens: number | undefined;
+    let cacheCreationInputTokens: number | undefined;
+    let cacheReadInputTokens: number | undefined;
+
+    const captureUsage = (usage: any) => {
+      if (!usage || typeof usage !== 'object') return;
+      if (typeof usage.input_tokens === 'number') inputTokens = usage.input_tokens;
+      if (typeof usage.output_tokens === 'number') tokensGenerated = usage.output_tokens;
+      if (typeof usage.cache_read_input_tokens === 'number') {
+        cacheReadInputTokens = usage.cache_read_input_tokens;
+      }
+      if (typeof usage.cache_creation_input_tokens === 'number') {
+        cacheCreationInputTokens = usage.cache_creation_input_tokens;
+      }
+      const cacheCreation = usage.cache_creation;
+      if (cacheCreation && typeof cacheCreation === 'object') {
+        const fiveMinute = cacheCreation.ephemeral_5m_input_tokens;
+        const oneHour = cacheCreation.ephemeral_1h_input_tokens;
+        const total =
+          (typeof fiveMinute === 'number' ? fiveMinute : 0) +
+          (typeof oneHour === 'number' ? oneHour : 0);
+        if (total > 0) cacheCreationInputTokens = total;
+      }
+    };
 
     const dispatch = (event: SseEvent) => {
       const parsed = this.parseEventData(event.data);
       if (!parsed) return;
+
+      if (event.event === 'message_start') {
+        captureUsage(parsed.message?.usage || parsed.usage);
+        return;
+      }
 
       if (event.event === 'content_block_delta') {
         const delta = parsed.delta;
@@ -167,10 +236,7 @@ export class AnthropicProvider implements ILlmProvider {
       }
 
       if (event.event === 'message_delta') {
-        const outputTokens = parsed.usage?.output_tokens;
-        if (typeof outputTokens === 'number') {
-          tokensGenerated = outputTokens;
-        }
+        captureUsage(parsed.usage);
         return;
       }
 
@@ -227,7 +293,14 @@ export class AnthropicProvider implements ILlmProvider {
     if (lineBuffer) processLine(lineBuffer);
     flushEvent();
 
-    return { text: accumulated, error, tokensGenerated };
+    return {
+      text: accumulated,
+      error,
+      tokensGenerated,
+      inputTokens,
+      cacheCreationInputTokens,
+      cacheReadInputTokens,
+    };
   }
 
   private parseEventData(data: string): any | null {

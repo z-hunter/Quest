@@ -1,5 +1,5 @@
 import type { TextAssetManager } from '../core/TextAssetManager';
-import type { ILlmProvider } from './llm/ILlmProvider';
+import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
 import type {
   LlmCascadeDebugInfo,
   ParserCascadeEnvelope,
@@ -10,6 +10,7 @@ import type {
 
 const SYSTEM_PROMPT_URL = '/text/system/parser-llm-system.md';
 const PROMPT_ASSET_DOMAIN = 'parser-llm';
+const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 
 const FALLBACK_SYSTEM_PROMPT = [
   'You are a command-line parser and Game Master for a retro adventure game.',
@@ -41,6 +42,26 @@ type ConsoleLike = {
   log: (text: string, type?: any) => void;
 };
 
+type StaticPromptInfo = {
+  sceneId?: string;
+  hash: string;
+  tokenEstimate: number;
+  minCacheTokens: number;
+  cacheEligibleEstimate: boolean;
+  cacheIneligibleReason?: string;
+};
+
+type PromptParts = {
+  system: LlmProviderContent;
+  messages: LlmProviderMessage[];
+  staticPrompt: StaticPromptInfo;
+};
+
+type PreparedStaticPrompt = {
+  system: LlmProviderContent;
+  staticPrompt: StaticPromptInfo;
+};
+
 export type LlmCascadePreviousAttempt = {
   kind?:
     | 'post_api_escalation'
@@ -57,6 +78,7 @@ export class LlmCascade {
   private getConsole: () => ConsoleLike | undefined;
   private lastDebugInfo: LlmCascadeDebugInfo | null = null;
   private systemPromptCache: string | null = null;
+  private preparedStaticPrompt: PreparedStaticPrompt | null = null;
 
   constructor(
     provider: ILlmProvider,
@@ -89,48 +111,22 @@ export class LlmCascade {
       this.loadSystemPrompt(),
       this.loadPromptAssets(),
     ]);
-    const userMessage = [
-      `Player command: "${input}"`,
-      '',
-      'Game world context:',
-      JSON.stringify(context, null, 2),
-      ...this.promptList(promptAssets, 'world_fact_instructions'),
-      ...this.promptList(promptAssets, 'parser_note_instructions'),
-      ...(previousAttempt
-        ? [
-            '',
-            this.promptText(
-              promptAssets,
-              previousAttempt.kind === 'forced_cascade_handoff'
-                ? 'forced_handoff_label'
-                : 'previous_attempt_label'
-            ),
-            JSON.stringify(previousAttempt, null, 2),
-            '',
-            ...(previousAttempt.kind === 'forced_cascade_handoff'
-              ? this.promptList(promptAssets, 'forced_handoff_instructions')
-              : this.promptList(
-                  promptAssets,
-                  previousAttempt.kind === 'post_api_not_found'
-                    ? 'post_api_not_found_instructions'
-                    : previousAttempt.kind === 'post_api_recovery'
-                      ? 'post_api_recovery_instructions'
-                      : 'post_api_escalation_instructions'
-                )),
-          ]
-        : []),
-      '',
-      this.promptText(promptAssets, 'response_reminder'),
-    ].join('\n');
-
-    const messages = [{ role: 'user' as const, content: userMessage }];
+    const promptParts = this.buildPromptParts(
+      input,
+      context,
+      systemPrompt,
+      promptAssets,
+      previousAttempt
+    );
+    const { system, messages, staticPrompt } = promptParts;
     const prompt = {
-      system: systemPrompt,
+      system,
       messages,
+      staticPrompt,
     };
 
     const response = await this.provider.sendMessageStream(
-      systemPrompt,
+      system,
       messages,
       (delta, accumulated) => {
         onThinkingDelta?.(delta, accumulated);
@@ -143,6 +139,9 @@ export class LlmCascade {
         prompt,
         durationMs: response.durationMs,
         tokensGenerated: response.tokensGenerated,
+        inputTokens: response.inputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheReadInputTokens: response.cacheReadInputTokens,
         rawResponse: response.text,
         error: response.error,
         reason: response.reason || 'api_error',
@@ -159,6 +158,9 @@ export class LlmCascade {
         prompt,
         durationMs: response.durationMs,
         tokensGenerated: response.tokensGenerated,
+        inputTokens: response.inputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheReadInputTokens: response.cacheReadInputTokens,
         rawResponse,
         extractedJson,
         error: 'LLM response is not valid JSON',
@@ -174,6 +176,9 @@ export class LlmCascade {
       matched: normalized.actions.length > 0,
       durationMs: response.durationMs,
       tokensGenerated: response.tokensGenerated,
+      inputTokens: response.inputTokens,
+      cacheCreationInputTokens: response.cacheCreationInputTokens,
+      cacheReadInputTokens: response.cacheReadInputTokens,
       rawResponse,
       extractedJson,
       acceptedActions: normalized.actions,
@@ -216,6 +221,14 @@ export class LlmCascade {
 
   clearLastDebugInfo(): void {
     this.lastDebugInfo = null;
+  }
+
+  async prepareStaticPrompt(context: ParserContext): Promise<void> {
+    const [systemPrompt, promptAssets] = await Promise.all([
+      this.loadSystemPrompt(),
+      this.loadPromptAssets(),
+    ]);
+    this.preparedStaticPrompt = this.buildStaticPromptParts(context, systemPrompt, promptAssets);
   }
 
   private createBaseDebug(input: string, normalizedInput: string): LlmCascadeDebugInfo {
@@ -261,6 +274,238 @@ export class LlmCascade {
     }
   }
 
+  private buildPromptParts(
+    input: string,
+    context: ParserContext,
+    systemPrompt: string,
+    promptAssets: Record<string, unknown>,
+    previousAttempt?: LlmCascadePreviousAttempt
+  ): PromptParts {
+    const freshStaticPrompt = this.buildStaticPromptParts(context, systemPrompt, promptAssets);
+    const preparedStaticPrompt =
+      this.preparedStaticPrompt?.staticPrompt.hash === freshStaticPrompt.staticPrompt.hash
+        ? this.preparedStaticPrompt
+        : freshStaticPrompt;
+    this.preparedStaticPrompt = preparedStaticPrompt;
+
+    const messages: LlmProviderMessage[] = [
+      {
+        role: 'user',
+        content: this.buildDynamicUserMessage(input, context, promptAssets, previousAttempt),
+      },
+    ];
+
+    return {
+      system: preparedStaticPrompt.system,
+      messages,
+      staticPrompt: preparedStaticPrompt.staticPrompt,
+    };
+  }
+
+  private buildStaticPromptParts(
+    context: ParserContext,
+    systemPrompt: string,
+    promptAssets: Record<string, unknown>
+  ): PreparedStaticPrompt {
+    const staticContext = this.buildStaticContext(context);
+    const staticInstructions = this.buildStaticInstructions(promptAssets);
+    const staticSceneBlock = [
+      '## Scene-Static Context',
+      'This block is stable for the current scene-static prompt cache key.',
+      'The per-call dynamic context may override it when game state, Parser Notes, text redirects, spatial relations, scope, inventory, or recent turns have changed.',
+      JSON.stringify(staticContext, null, 2),
+    ].join('\n');
+    const staticPromptText = [systemPrompt, staticInstructions, staticSceneBlock].join('\n\n');
+    const staticPrompt = this.describeStaticPrompt(
+      this.getStaticSceneId(staticContext),
+      staticPromptText
+    );
+
+    return {
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+        },
+        {
+          type: 'text',
+          text: staticInstructions,
+        },
+        {
+          type: 'text',
+          text: staticSceneBlock,
+          cacheControl: {
+            type: 'ephemeral',
+            ttl: '5m',
+          },
+        },
+      ],
+      staticPrompt,
+    };
+  }
+
+  private buildStaticInstructions(promptAssets: Record<string, unknown>): string {
+    return [
+      '## Static Prompt Asset Instructions',
+      ...this.sectionFromList(
+        'World Model Discipline Addendum',
+        this.promptList(promptAssets, 'world_fact_instructions')
+      ),
+      ...this.sectionFromList(
+        'Parser Notes Addendum',
+        this.promptList(promptAssets, 'parser_note_instructions')
+      ),
+      ...this.sectionFromList(
+        'Forced Cascade Handoff Instructions',
+        this.promptList(promptAssets, 'forced_handoff_instructions')
+      ),
+      ...this.sectionFromList(
+        'Post-API Escalation Instructions',
+        this.promptList(promptAssets, 'post_api_escalation_instructions')
+      ),
+      ...this.sectionFromList(
+        'Post-API Not-Found Instructions',
+        this.promptList(promptAssets, 'post_api_not_found_instructions')
+      ),
+      ...this.sectionFromList(
+        'Post-API Recovery Instructions',
+        this.promptList(promptAssets, 'post_api_recovery_instructions')
+      ),
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private sectionFromList(title: string, lines: string[]): string[] {
+    if (!lines.length) return [];
+    return ['', `### ${title}`, ...lines.map((line) => `- ${line}`)];
+  }
+
+  private buildDynamicUserMessage(
+    input: string,
+    context: ParserContext,
+    promptAssets: Record<string, unknown>,
+    previousAttempt?: LlmCascadePreviousAttempt
+  ): string {
+    return [
+      `Player command: "${input}"`,
+      '',
+      'Per-call dynamic game world context:',
+      JSON.stringify(this.buildDynamicContext(context), null, 2),
+      ...(previousAttempt
+        ? [
+            '',
+            this.promptText(
+              promptAssets,
+              previousAttempt.kind === 'forced_cascade_handoff'
+                ? 'forced_handoff_label'
+                : 'previous_attempt_label'
+            ),
+            JSON.stringify(previousAttempt, null, 2),
+          ]
+        : []),
+      '',
+      this.promptText(promptAssets, 'response_reminder'),
+    ].join('\n');
+  }
+
+  private buildStaticContext(context: ParserContext): Record<string, unknown> {
+    return this.compactRecord({
+      scene: context.scene
+        ? {
+            id: context.scene.id,
+            title: context.scene.title,
+            description: context.scene.description,
+            lore: context.scene.lore,
+          }
+        : undefined,
+      focusedTarget: this.staticEntityContext(context.focusedTarget),
+      entities: (context.entities || []).map((entity) => this.staticEntityContext(entity)),
+      knownEntities: (context.knownEntities || []).map((entity) =>
+        this.staticEntityContext(entity)
+      ),
+      inventory: (context.inventory || []).map((entity) => this.staticEntityContext(entity)),
+    });
+  }
+
+  private staticEntityContext(entity: any): Record<string, unknown> | undefined {
+    if (!entity) return undefined;
+    return this.compactRecord({
+      id: entity.id,
+      title: entity.title,
+      item: entity.item,
+      source: entity.source,
+      visibility: entity.visibility,
+      hiddenReason: entity.hiddenReason,
+      synonyms: entity.synonyms,
+      semanticTags: entity.semanticTags,
+      description: entity.description,
+      details: entity.details,
+      lore: entity.lore,
+      interactions: entity.interactions,
+    });
+  }
+
+  private buildDynamicContext(context: ParserContext): ParserContext {
+    return this.compactRecord({
+      rawInput: context.rawInput,
+      normalizedInput: context.normalizedInput,
+      focusedTarget: context.focusedTarget,
+      player: context.player,
+      scene: context.scene
+        ? {
+            id: context.scene.id,
+            parserNote: context.scene.parserNote,
+            parserNoteNeedsCheck: context.scene.parserNoteNeedsCheck,
+            activeSubscene: context.scene.activeSubscene,
+            recentTurns: context.scene.recentTurns,
+          }
+        : undefined,
+      entities: context.entities,
+      knownEntities: context.knownEntities,
+      inventory: context.inventory,
+      worldFacts: context.worldFacts,
+      spatialNodes: context.spatialNodes,
+      spatialRelations: context.spatialRelations,
+      pending: context.pending,
+    }) as ParserContext;
+  }
+
+  private describeStaticPrompt(sceneId: string | undefined, text: string): StaticPromptInfo {
+    const tokenEstimate = this.estimateTokens(text);
+    const cacheEligibleEstimate = tokenEstimate >= ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS;
+    return {
+      sceneId,
+      hash: this.hashText(text),
+      tokenEstimate,
+      minCacheTokens: ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS,
+      cacheEligibleEstimate,
+      cacheIneligibleReason: cacheEligibleEstimate
+        ? undefined
+        : `estimated static prompt is below ${ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS} tokens; Anthropic may ignore cache_control and run uncached`,
+    };
+  }
+
+  private getStaticSceneId(staticContext: Record<string, unknown>): string | undefined {
+    const scene = staticContext.scene;
+    if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return undefined;
+    const id = (scene as Record<string, unknown>).id;
+    return typeof id === 'string' ? id : undefined;
+  }
+
+  private estimateTokens(text: string): number {
+    return Math.ceil(String(text || '').length / 4);
+  }
+
+  private hashText(text: string): string {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
   private promptText(assets: Record<string, unknown>, key: string): string {
     const value = assets[key];
     return typeof value === 'string' ? value : '';
@@ -271,6 +516,38 @@ export class LlmCascade {
     if (Array.isArray(value)) return value.filter((item) => typeof item === 'string');
     if (typeof value === 'string') return [value];
     return [];
+  }
+
+  private compactRecord<T extends Record<string, unknown>>(value: T): T {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === null || entry === undefined) continue;
+      if (Array.isArray(entry)) {
+        const compacted = entry
+          .map((item) =>
+            item && typeof item === 'object' && !Array.isArray(item)
+              ? this.compactRecord(item as Record<string, unknown>)
+              : item
+          )
+          .filter((item) => {
+            if (item === null || item === undefined) return false;
+            if (Array.isArray(item)) return item.length > 0;
+            if (typeof item === 'object') return Object.keys(item).length > 0;
+            return true;
+          });
+        if (!compacted.length) continue;
+        result[key] = compacted;
+        continue;
+      }
+      if (typeof entry === 'object') {
+        const nested = this.compactRecord(entry as Record<string, unknown>);
+        if (!Object.keys(nested).length) continue;
+        result[key] = nested;
+        continue;
+      }
+      result[key] = entry;
+    }
+    return result as T;
   }
 
   private extractJson(text: string): string {

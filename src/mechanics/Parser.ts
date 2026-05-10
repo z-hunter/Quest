@@ -81,6 +81,15 @@ export class Parser {
     this.pendingClarificationRetryMessage = null;
   }
 
+  prepareLlmStaticPromptForCurrentScene(): void {
+    try {
+      const worldModel = this.worldModelBuilder.build('', this.pendingState);
+      void this.llmCascade.prepareStaticPrompt(worldModel.context);
+    } catch (error) {
+      this.game.console?.log?.(`[LLM static prompt prepare skipped] ${String(error)}`, 'info');
+    }
+  }
+
   async parse(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -4040,7 +4049,11 @@ export class Parser {
               provider: llmDebug.provider,
               model: llmDebug.model,
               durationMs: llmDebug.durationMs,
+              inputTokens: llmDebug.inputTokens,
               tokensGenerated: llmDebug.tokensGenerated,
+              cacheCreationInputTokens: llmDebug.cacheCreationInputTokens,
+              cacheReadInputTokens: llmDebug.cacheReadInputTokens,
+              staticPrompt: llmDebug.prompt?.staticPrompt,
             }),
           ]
         : undefined;

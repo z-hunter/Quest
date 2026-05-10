@@ -74,7 +74,7 @@ Parser обрабатывает пользовательский ввод кас
 
 **Каскад 2**: Средняя (или малая) языковая модель (LM), работающая локально или через API. (очень медленно и "дорого").
 
-Текущая техническая реализация Каскада 2 уже подключена как opt-in слой: `#LLM-ON` включает LLM cascade, `#LLM-OFF` выключает его. Временный provider — Claude Haiku через Anthropic Messages API и dev-server proxy `/api/llm`; в будущем этот provider должен быть заменяем на локальную малую LM без переписывания parser-а.
+Текущая техническая реализация Каскада 2 уже подключена как opt-in слой: `#LLM-ON` включает LLM cascade, `#LLM-OFF` выключает его. Временный provider — Claude Haiku через Anthropic Messages API и dev-server proxy `/api/llm`; в будущем этот provider должен быть заменяем на локальную малую LM без переписывания parser-а. Prompt Каскада 2 разделён на provider-agnostic scene-static prefix и per-call dynamic suffix; Anthropic cache-control является деталью текущего provider-коннектора, а не parser mechanics.
 
 Каскад 1 обрабатывает почти весь нормальный пользовательский ввод, а LLM/SLM подключается только если ввод не распознан нижними каскадами, если стандартная команда дошла до `Game API` и получила `status = escalate`, либо если специально включён тестовый режим `#C1-OFF`. LLM может вернуть безопасный DSL-plan, который исполняет `Parser Core`, или короткий player-facing Game Master текст.
 В текущем v1 это не полноценный бесконечный agent loop: после post-API escalation допускается один дополнительный LLM-вызов, а затем parser завершает обработку обычным путём.

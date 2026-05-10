@@ -198,6 +198,7 @@ export class SceneManager {
     this.pinCurrentScene();
     this.syncAssetCacheState();
     this.game.inventoryManager?.handleSceneChange?.();
+    (this.game as any).parser?.prepareLlmStaticPromptForCurrentScene?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {
       this.game.onSceneChange(scene.name);

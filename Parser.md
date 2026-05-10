@@ -381,6 +381,8 @@ flowchart TD
 - временная модель по умолчанию — `claude-haiku-4-5-20251001`;
 - ключ берётся только из `process.env.ANTHROPIC_API_KEY` на dev-server side;
 - prompt хранится в `public/text/system/parser-llm-system.md`;
+- prompt собирается как provider-agnostic split: scene-static system prefix с базовыми инструкциями и scene/object/inventory text snapshot, плюс per-call dynamic user suffix с вводом, recentTurns, Parser Notes, worldFacts, spatial model, pending state, focused target и previousAttempt;
+- scene-static prefix подготавливается при переключении сцены; Anthropic cache entry создаётся лениво первым реальным LLM-вызовом;
 - ответ модели нормализуется в существующий `ParserCascadeEnvelope`;
 - `plan` исполняется обычным `Parser Core`;
 - `final_response` и `clarification` в v1 конвертируются в `showText`;
@@ -725,11 +727,7 @@ Parser:
 
 ```json
 {
-  "details": [
-    "First paragraph.",
-    "",
-    "Second paragraph."
-  ]
+  "details": ["First paragraph.", "", "Second paragraph."]
 }
 ```
 
@@ -1425,22 +1423,25 @@ already execute against real runtime spatial data. `near` remains parser-recogni
 
 - `src/mechanics/LlmCascade.ts`
   - Stage 2 (`llm-v3`)
-  - builds the LLM request from `ParserContext`, `ParserScope`, and optional lower-cascade hints
+  - builds a scene-static prompt prefix and per-call dynamic prompt suffix from `ParserContext` and optional lower-cascade hints
   - loads and caches `public/text/system/parser-llm-system.md`
   - calls the configured `ILlmProvider`
   - extracts fenced or unfenced JSON from model output
   - normalizes `plan`, `final_response`, and `clarification` into parser envelopes
-  - records `LlmCascadeDebugInfo` for `#PEEK`
+  - records `LlmCascadeDebugInfo`, static prompt hash/cache eligibility, and provider cache usage for `#PEEK` / `#PEEKLLM`
 
 - `src/mechanics/llm/ILlmProvider.ts`
   - provider-agnostic LLM interface
-  - request/response/message types
+  - request/response/message/content-block types
+  - optional cache metadata on text blocks; unsupported providers may flatten or ignore it
   - streaming delta callback type
   - debug fields shared by current and future providers
 
 - `src/mechanics/llm/AnthropicProvider.ts`
   - temporary Anthropic Claude Haiku provider
   - posts Anthropic Messages payloads to the local `/api/llm` proxy
+  - maps provider-agnostic cache metadata to Anthropic `cache_control`
+  - parses streamed cache creation/read token usage when Anthropic reports it
   - parses streamed SSE chunks
   - supports injected `fetchImpl` for deterministic tests
 

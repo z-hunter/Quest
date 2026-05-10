@@ -255,7 +255,7 @@ export default defineConfig({
               const payload = JSON.parse(body) as {
                 model?: string;
                 max_tokens?: number;
-                system?: string;
+                system?: unknown;
                 messages?: unknown[];
                 stream?: boolean;
               };

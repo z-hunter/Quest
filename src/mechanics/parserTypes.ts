@@ -366,14 +366,43 @@ export type LlmCascadeDebugInfo = {
   provider: string;
   model?: string;
   prompt?: {
-    system: string;
+    system:
+      | string
+      | Array<{
+          type: 'text';
+          text: string;
+          cacheControl?: {
+            type: 'ephemeral';
+            ttl?: '5m' | '1h';
+          };
+        }>;
     messages: Array<{
       role: 'user' | 'assistant';
-      content: string;
+      content:
+        | string
+        | Array<{
+            type: 'text';
+            text: string;
+            cacheControl?: {
+              type: 'ephemeral';
+              ttl?: '5m' | '1h';
+            };
+          }>;
     }>;
+    staticPrompt?: {
+      sceneId?: string;
+      hash: string;
+      tokenEstimate: number;
+      minCacheTokens: number;
+      cacheEligibleEstimate: boolean;
+      cacheIneligibleReason?: string;
+    };
   };
   durationMs?: number;
   tokensGenerated?: number;
+  inputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
   rawResponse?: string;
   extractedJson?: string;
   acceptedActions?: ParserToolAction[];

@@ -5,6 +5,7 @@ import { LlmCascade } from '../../src/mechanics/LlmCascade';
 import { AnthropicProvider } from '../../src/mechanics/llm/AnthropicProvider';
 import type {
   ILlmProvider,
+  LlmProviderContent,
   LlmProviderMessage,
   LlmProviderResponse,
   LlmStreamDeltaCallback,
@@ -14,6 +15,7 @@ import type { ParserContext } from '../../src/mechanics/parserTypes';
 class MockProvider implements ILlmProvider {
   response: LlmProviderResponse = { ok: true, text: '', model: 'mock', durationMs: 10 };
   messages: LlmProviderMessage[] = [];
+  system: LlmProviderContent = '';
 
   isAvailable() {
     return true;
@@ -25,16 +27,21 @@ class MockProvider implements ILlmProvider {
     return 'mock-model';
   }
 
-  async sendMessage(_system: string, messages: LlmProviderMessage[]): Promise<LlmProviderResponse> {
+  async sendMessage(
+    system: LlmProviderContent,
+    messages: LlmProviderMessage[]
+  ): Promise<LlmProviderResponse> {
+    this.system = system;
     this.messages = messages;
     return this.response;
   }
 
   async sendMessageStream(
-    _system: string,
+    system: LlmProviderContent,
     messages: LlmProviderMessage[],
     onDelta: LlmStreamDeltaCallback
   ): Promise<LlmProviderResponse> {
+    this.system = system;
     this.messages = messages;
     if (this.response.ok && this.response.text) {
       onDelta(this.response.text, this.response.text);
@@ -261,20 +268,68 @@ describe('LlmCascade', () => {
     await cascade.parse('speak to the terminal', mockContext);
 
     const debug = cascade.getLastDebugInfo();
-    expect(debug?.prompt?.system).toContain('Respond with exactly one JSON object');
+    expect(JSON.stringify(debug?.prompt?.system)).toContain('Respond with exactly one JSON object');
     expect(debug?.prompt?.messages[0]?.role).toBe('user');
-    expect(debug?.prompt?.messages[0]?.content).toContain(
+    expect(String(debug?.prompt?.messages[0]?.content)).toContain(
       'Player command: "speak to the terminal"'
     );
-    expect(debug?.prompt?.messages[0]?.content).toContain('World facts are authoritative');
-    expect(debug?.prompt?.messages[0]?.content).toContain(
+    expect(JSON.stringify(debug?.prompt?.system)).toContain('World facts are authoritative');
+    expect(JSON.stringify(debug?.prompt?.system)).toContain(
       'If an item is in inventory, it is held by the player character'
     );
-    expect(debug?.prompt?.messages[0]?.content).toContain(
+    expect(JSON.stringify(debug?.prompt?.system)).toContain(
       'Parser Notes are private runtime memory'
     );
-    expect(debug?.prompt?.messages[0]?.content).toContain('context.scene.recentTurns');
+    expect(String(debug?.prompt?.messages[0]?.content)).toContain(
+      'Per-call dynamic game world context'
+    );
+    expect(debug?.prompt?.staticPrompt?.cacheEligibleEstimate).toBe(false);
+    expect(debug?.prompt?.staticPrompt?.cacheIneligibleReason).toContain('below 4096 tokens');
     expect(debug?.rawResponse).toBe(provider.response.text);
+  });
+
+  it('splits static scene prompt into cacheable system blocks and dynamic user context', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'final_response',
+      message: 'Split response.',
+    });
+    const context: ParserContext = {
+      rawInput: 'listen radio',
+      normalizedInput: 'LISTEN RADIO',
+      scene: {
+        id: 'test_room',
+        title: 'Test Room',
+        description: 'A humming room.',
+        recentTurns: [{ command: 'look radio', response: 'The radio hisses.' }],
+      },
+      entities: [
+        {
+          id: 'boombox',
+          title: 'Boombox',
+          description: 'A radio and cassette recorder.',
+          parserNote: 'Reception is static.',
+          parserNoteNeedsCheck: true,
+        },
+      ],
+      worldFacts: ['Boombox contains Compact cassette.'],
+      spatialNodes: [],
+      inventory: [],
+    };
+
+    await cascade.parse('listen radio', context);
+
+    expect(Array.isArray(provider.system)).toBe(true);
+    const systemBlocks = provider.system as Exclude<LlmProviderContent, string>;
+    expect(systemBlocks.at(-1)?.cacheControl).toEqual({ type: 'ephemeral', ttl: '5m' });
+    expect(systemBlocks.at(-1)?.text).toContain('Scene-Static Context');
+    expect(systemBlocks.at(-1)?.text).toContain('A radio and cassette recorder.');
+    expect(systemBlocks.at(-1)?.text).not.toContain('Reception is static.');
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain('Per-call dynamic game world context');
+    expect(userMessage).toContain('The radio hisses.');
+    expect(userMessage).toContain('Reception is static.');
+    expect(userMessage).toContain('Boombox contains Compact cassette.');
   });
 
   it('converts final_response to a showText action', async () => {
@@ -513,10 +568,11 @@ describe('LlmCascade', () => {
       },
     });
 
-    const userMessage = provider.messages[0]?.content || '';
+    const userMessage = String(provider.messages[0]?.content || '');
+    const systemPrompt = JSON.stringify(provider.system);
     expect(userMessage).toContain('Previous parser attempt');
     expect(userMessage).toContain('target_is_not_switch');
-    expect(userMessage).toContain('Do not repeat the same failing action');
+    expect(systemPrompt).toContain('Do not repeat the same failing action');
   });
 
   it('includes lower cascade interpretation in forced C1 handoff mode', async () => {
@@ -546,12 +602,13 @@ describe('LlmCascade', () => {
       },
     });
 
-    const userMessage = provider.messages[0]?.content || '';
+    const userMessage = String(provider.messages[0]?.content || '');
+    const systemPrompt = JSON.stringify(provider.system);
     expect(userMessage).toContain('Lower cascade interpretation');
     expect(userMessage).toContain('lookRelationTarget');
-    expect(userMessage).toContain('Cascade 1 test mode asks you to handle this command yourself');
-    expect(userMessage).toContain('richer, more atmospheric');
-    expect(userMessage).toContain('you may return that action plan');
+    expect(systemPrompt).toContain('Cascade 1 test mode asks you to handle this command yourself');
+    expect(systemPrompt).toContain('richer, more atmospheric');
+    expect(systemPrompt).toContain('you may return that action plan');
   });
 
   it('includes recovery instructions for recoverable failed parser attempts', async () => {
@@ -580,11 +637,12 @@ describe('LlmCascade', () => {
       },
     });
 
-    const userMessage = provider.messages[0]?.content || '';
+    const userMessage = String(provider.messages[0]?.content || '');
+    const systemPrompt = JSON.stringify(provider.system);
     expect(userMessage).toContain('Previous parser attempt');
     expect(userMessage).toContain('cannot_take');
-    expect(userMessage).toContain('recoverable failed outcome');
-    expect(userMessage).toContain('return fallback');
+    expect(systemPrompt).toContain('recoverable failed outcome');
+    expect(systemPrompt).toContain('return fallback');
   });
 });
 
@@ -599,6 +657,16 @@ describe('AnthropicProvider', () => {
             controller.enqueue(encoder.encode(`event: ${event}\n`));
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           };
+          emit('message_start', {
+            type: 'message_start',
+            message: {
+              usage: {
+                input_tokens: 100,
+                cache_creation_input_tokens: 80,
+                cache_read_input_tokens: 20,
+              },
+            },
+          });
           emit('content_block_delta', {
             type: 'content_block_delta',
             index: 0,
@@ -631,5 +699,55 @@ describe('AnthropicProvider', () => {
     expect(response.text).toBe('{"kind": "plan"}');
     expect(deltas).toEqual(['{"kind":', ' "plan"}']);
     expect(response.tokensGenerated).toBe(15);
+    expect(response.inputTokens).toBe(100);
+    expect(response.cacheCreationInputTokens).toBe(80);
+    expect(response.cacheReadInputTokens).toBe(20);
+  });
+
+  it('sends cache_control on structured system blocks through the proxy payload', async () => {
+    let parsedBody: any = null;
+    const mockFetch = vi.fn().mockImplementation(async (_url, init) => {
+      parsedBody = JSON.parse(String(init?.body || '{}'));
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(
+              encoder.encode(
+                `event: content_block_delta\ndata: ${JSON.stringify({
+                  delta: { text: '{"kind":"fallback"}' },
+                })}\n\n`
+              )
+            );
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const provider = new AnthropicProvider({ fetchImpl: mockFetch });
+    await provider.sendMessageStream(
+      [
+        { type: 'text', text: 'static rules' },
+        {
+          type: 'text',
+          text: 'static scene',
+          cacheControl: { type: 'ephemeral', ttl: '5m' },
+        },
+      ],
+      [{ role: 'user', content: 'dynamic turn' }],
+      () => {}
+    );
+
+    expect(parsedBody.system).toEqual([
+      { type: 'text', text: 'static rules' },
+      {
+        type: 'text',
+        text: 'static scene',
+        cache_control: { type: 'ephemeral', ttl: '5m' },
+      },
+    ]);
+    expect(parsedBody.messages).toEqual([{ role: 'user', content: 'dynamic turn' }]);
   });
 });
