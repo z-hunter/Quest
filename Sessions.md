@@ -1696,3 +1696,151 @@ Files intentionally left out of that commit as unrelated existing work:
   - multi-selection Quad fill UI;
   - QuadObject retro-grid/blend behavior;
   - QuadObject test file.
+
+## Session Entry - 2026-05-10 17:01 +02:00
+
+### 1. Session Goals
+
+- Optimize Stage 2 LLM parser token usage by splitting the prompt into:
+  - a scene-static part suitable for provider prompt caching;
+  - a per-call dynamic part that changes with input, world state, parser notes, and recent turns.
+- Implement Anthropic prompt caching without coupling parser mechanics to Anthropic-specific APIs.
+- Keep future provider switching modular: a new provider connector should not need to rewrite prompt splitting.
+- Add debug/log visibility for cache eligibility and real cache usage, especially under `#PEEKLLM-ON`.
+- Commit the finished feature and leave durable handoff context.
+
+### 2. What Was Implemented
+
+- `LlmCascade` now builds a provider-agnostic prompt split:
+  - scene-static system blocks contain the core LLM system prompt, prompt asset instructions, and a static scene/object/inventory text snapshot;
+  - per-call user content contains the current command, dynamic parser context, recent scene turns, Parser Notes, world facts, spatial nodes/relations, pending state, focused target, and any previous parser attempt.
+- Scene-static prompt preparation is triggered when `SceneManager.switchTo(...)` completes:
+  - `SceneManager` calls `Parser.prepareLlmStaticPromptForCurrentScene()`;
+  - `Parser` builds current parser context and asks `LlmCascade` to prepare the static prompt;
+  - this does not perform a network request and does not warm Anthropic cache by itself.
+- Anthropic cache fill remains lazy:
+  - the first real LLM call for a static prompt writes the cache;
+  - later calls with the same static prefix can read from the cache.
+- `ILlmProvider` now accepts provider-agnostic structured text blocks with optional cache metadata.
+- `AnthropicProvider` maps provider-neutral `cacheControl` to Anthropic `cache_control` and keeps this as connector-specific behavior.
+- Anthropic streaming usage parsing now captures:
+  - `inputTokens`;
+  - `tokensGenerated`;
+  - `cacheCreationInputTokens`;
+  - `cacheReadInputTokens`.
+- `#PEEKLLM-ON` now reports:
+  - full split prompt debug;
+  - `staticPrompt.sceneId`;
+  - static prompt hash;
+  - static prompt token estimate;
+  - minimum cache token threshold;
+  - cache eligibility estimate;
+  - cache-ineligible reason when static prompt is below the Anthropic minimum;
+  - Anthropic cache creation/read token usage when reported by provider.
+- The Vite `/api/llm` proxy now accepts structured `system` payloads instead of assuming `system` is always a string.
+
+### 3. Important Decisions
+
+- Prompt splitting belongs above providers in `LlmCascade`, not inside `AnthropicProvider`.
+- Provider connectors may flatten or ignore cache metadata if they do not support caching.
+- Anthropic cache TTL defaults to `5m`.
+- Cache population is lazy on first real LLM call; no warmup call is made on scene load.
+- Static prompts below the estimated 4096-token Haiku 4.5 threshold are not padded. They are allowed to run uncached and are logged/debugged as cache-ineligible.
+- `cacheCreationInputTokens > 0` means Anthropic wrote or refreshed cache. `cacheReadInputTokens > 0` means a real cache hit.
+- Runtime Parser Notes, recent turns, spatial model, world facts, and previous-attempt context remain dynamic and authoritative over the static snapshot.
+
+### 4. Parser / Mechanics Changes
+
+- `src/mechanics/LlmCascade.ts`
+  - owns the static/dynamic split;
+  - prepares and reuses a static prompt snapshot by hash;
+  - builds dynamic per-call user messages;
+  - computes static prompt token estimates and cache eligibility debug.
+- `src/mechanics/llm/ILlmProvider.ts`
+  - introduces structured prompt content blocks and optional cache metadata.
+- `src/mechanics/llm/AnthropicProvider.ts`
+  - translates provider-agnostic cache metadata to Anthropic `cache_control`;
+  - parses cache usage from Anthropic SSE events.
+- `src/mechanics/Parser.ts`
+  - adds `prepareLlmStaticPromptForCurrentScene()`;
+  - includes cache usage and static prompt metadata in `#PEEKLLM` response debug.
+- `src/scene/SceneManager.ts`
+  - prepares the scene-static LLM prompt after scene switch.
+- `src/mechanics/parserTypes.ts`
+  - extends LLM debug info to represent structured prompt content and cache usage fields.
+- `vite.config.ts`
+  - allows structured Anthropic `system` blocks through the proxy.
+
+### 5. Live Cache Verification
+
+The user tested live Anthropic output with `#PEEKLLM-ON`:
+
+- First observed call:
+  - `cacheCreationInputTokens: 9205`
+  - `cacheReadInputTokens: 0`
+  - static prompt hash `f20f77aa`
+  - interpretation: Anthropic accepted the cache breakpoint and created/refreshed cache.
+- Later observed call in the same scene:
+  - `cacheCreationInputTokens: 0`
+  - `cacheReadInputTokens: 9205`
+  - same static prompt hash `f20f77aa`
+  - interpretation: real cache hit; the dynamic prompt still had ordinary input tokens.
+
+### 6. Tests And Validation
+
+Validation run before commit:
+
+- `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts tests/parser/world-model-context.test.ts`
+  - 3 files, 62 tests passed.
+- `npm run typecheck`
+  - passed.
+- `npm test -- tests/parser tests/integration/parser-game.test.ts`
+  - 9 files, 172 tests passed.
+- Full `npm test`
+  - 27 files, 319 tests passed.
+- `git diff --check`
+  - passed, with only expected Git line-ending warnings on Windows.
+- `codex-doctor -Fast`
+  - 17 pass, 0 warn, 0 fail.
+
+Commit hook validation:
+
+- Husky/lint-staged ran `prettier --write` and `eslint --max-warnings=0 --fix` on staged TS/JS files.
+- Working tree was clean after commit.
+
+### 7. Commit Created
+
+- `f38dcbe Add LLM prompt cache split`
+
+Commit scope:
+
+- provider-agnostic LLM prompt content blocks;
+- scene-static / dynamic prompt split;
+- scene-switch static prompt preparation;
+- Anthropic `cache_control` mapping;
+- Anthropic SSE cache usage parsing;
+- `#PEEKLLM` cache debug fields;
+- parser/LLM tests;
+- `Parser.md` and `GDD.md` documentation.
+
+### 8. Durable Memory / Task State
+
+- Stored semantic memory: `LLM parser prompt split and Anthropic cache contract`.
+- Stored episodic commit memory: `Commit f38dcbe: Add LLM prompt cache split`.
+- Kairo task `[Quest] Implement LLM static prompt split and Anthropic cache debug` was updated to `done` with validation and commit context.
+
+### 9. Remaining Work / Next Recommended Steps
+
+- Keep an eye on live `#PEEKLLM` usage values:
+  - `cacheCreationInputTokens > 0` on the first call or after TTL/hash changes is expected;
+  - `cacheReadInputTokens > 0` confirms a cache hit.
+- If a future provider is added, implement only a new connector that consumes the existing `ILlmProvider` content blocks; do not move prompt splitting into the provider.
+- Consider adding richer dynamic text override detection later if scripts redirect Text Assets after the static snapshot and the exact changed fields need to be minimized separately.
+- If cache hit rates are lower than expected in real play, inspect static prompt hashes in `#PEEKLLM` to see whether static content is changing too often.
+
+### 10. Risks / Caveats
+
+- The local token estimate is approximate; Anthropic usage fields are the source of truth.
+- Static prompts below the Anthropic minimum will run normally but uncached.
+- Cache TTL is 5 minutes, so long pauses in a scene may cause the next request to recreate cache.
+- Dynamic context still carries ordinary input tokens; prompt caching reduces repeated static prefix cost, not the whole request.
