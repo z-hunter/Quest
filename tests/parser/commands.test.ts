@@ -137,6 +137,144 @@ describe('Parser custom commands', () => {
     expect(examine.messages.at(-1)).toBe('Someone has underlined every pessimistic sentence.');
   });
 
+  it('appends fresh Parser Notes to object LOOK and EXAMINE responses', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('sofa', {
+      title: 'Sofa',
+      description: 'An old sofa.',
+      details: 'The sofa has seen better nights.',
+    });
+    fixture.textAssets.setObject('sofa', {
+      title: 'Sofa',
+      description: 'An old sofa.',
+      details: 'The sofa has seen better nights.',
+    });
+    fixture.scene.setEntityParserNote('sofa', 'One cushion has a shallow crease.');
+
+    const look = await fixture.run('look sofa');
+    const examine = await fixture.run('examine sofa');
+
+    expect(look.messages.at(-1)).toBe('An old sofa.\nOne cushion has a shallow crease.');
+    expect(examine.messages.at(-1)).toBe(
+      'The sofa has seen better nights.\nOne cushion has a shallow crease.'
+    );
+  });
+
+  it('does not append stale Parser Notes to object LOOK and EXAMINE responses', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+      details: 'The controls are worn smooth.',
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+      details: 'The controls are worn smooth.',
+    });
+    fixture.scene.setEntityParserNote('boombox', 'The cassette inside is playing.');
+    fixture.scene.markEntityParserNoteNeedsCheck('boombox');
+
+    const look = await fixture.run('look boombox');
+    const examine = await fixture.run('examine boombox');
+
+    expect(look.messages.at(-1)).toBe('A radio and cassette recorder.');
+    expect(examine.messages.at(-1)).toBe('The controls are worn smooth.');
+  });
+
+  it('appends visible inventory contents to object LOOK and EXAMINE responses', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+    });
+    fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A tape.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'recorder', relation: 'in' },
+    });
+
+    const look = await fixture.run('look recorder');
+    const examine = await fixture.run('examine recorder');
+
+    expect(look.messages.at(-1)).toBe('A recorder.\nIn the Recorder you see: Cassette.');
+    expect(examine.messages.at(-1)).toBe(
+      'The recorder has a hungry little tape door.\nIn the Recorder you see: Cassette.'
+    );
+  });
+
+  it('appends inventory contents before Parser Notes for object LOOK and EXAMINE responses', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+    });
+    fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A tape.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'recorder', relation: 'in' },
+    });
+    fixture.scene.setEntityParserNote('recorder', 'The speaker smells faintly of warm dust.');
+
+    const look = await fixture.run('look recorder');
+    const examine = await fixture.run('examine recorder');
+
+    expect(look.messages.at(-1)).toBe(
+      'A recorder.\nIn the Recorder you see: Cassette.\nThe speaker smells faintly of warm dust.'
+    );
+    expect(examine.messages.at(-1)).toBe(
+      'The recorder has a hungry little tape door.\nIn the Recorder you see: Cassette.\nThe speaker smells faintly of warm dust.'
+    );
+  });
+
+  it('does not append empty inventory contents to object LOOK and EXAMINE responses', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+    fixture.textAssets.setObject('recorder', {
+      title: 'Recorder',
+      description: 'A recorder.',
+      details: 'The recorder has a hungry little tape door.',
+    });
+
+    const look = await fixture.run('look recorder');
+    const examine = await fixture.run('examine recorder');
+
+    expect(look.messages.at(-1)).toBe('A recorder.');
+    expect(examine.messages.at(-1)).toBe('The recorder has a hungry little tape door.');
+  });
+
   it('drops the previewed inventory item when DROP has no explicit item', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

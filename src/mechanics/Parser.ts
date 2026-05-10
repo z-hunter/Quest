@@ -2329,7 +2329,10 @@ export class Parser {
     if (resolved.status === 'not_found') {
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.game.lookEntity(inactiveSwitchResolved.entity as any);
+        return this.withEntityLookExtras(
+          this.game.lookEntity(inactiveSwitchResolved.entity as any),
+          inactiveSwitchResolved.entity
+        );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
         return {
@@ -2374,7 +2377,7 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.lookEntity(resolved.entity as any);
+    return this.withEntityLookExtras(this.game.lookEntity(resolved.entity as any), resolved.entity);
   }
 
   private resolveExamineTarget(rawTarget: string | null): GameActionOutcome {
@@ -2424,11 +2427,17 @@ export class Parser {
         };
       }
       if (broadResolved?.status === 'found') {
-        return this.game.examineEntity(broadResolved.entity as any);
+        return this.withEntityLookExtras(
+          this.game.examineEntity(broadResolved.entity as any),
+          broadResolved.entity
+        );
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.game.examineEntity(inactiveSwitchResolved.entity as any);
+        return this.withEntityLookExtras(
+          this.game.examineEntity(inactiveSwitchResolved.entity as any),
+          inactiveSwitchResolved.entity
+        );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
         return {
@@ -2451,7 +2460,10 @@ export class Parser {
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
-        return this.game.examineEntity(hiddenGatedResolved.entity as any);
+        return this.withEntityLookExtras(
+          this.game.examineEntity(hiddenGatedResolved.entity as any),
+          hiddenGatedResolved.entity
+        );
       }
       if (hiddenGatedResolved.status === 'ambiguous') {
         return {
@@ -2496,7 +2508,57 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.examineEntity(resolved.entity as any);
+    return this.withEntityLookExtras(
+      this.game.examineEntity(resolved.entity as any),
+      resolved.entity
+    );
+  }
+
+  private withEntityLookExtras(outcome: GameActionOutcome, entity: SceneObject): GameActionOutcome {
+    if (outcome.status !== 'ok' || !outcome.message) return outcome;
+    const extraMessages: string[] = [];
+
+    const contentsMessage = this.getEntityInventoryContentsText(entity);
+    if (contentsMessage) extraMessages.push(contentsMessage);
+
+    const scene = this.game.sceneManager.currentScene;
+    if (scene && entity?.name && !this.getEntityParserNoteNeedsCheck(scene, entity.name)) {
+      const note = this.getCurrentEntityParserNote(scene, entity.name);
+      if (note) extraMessages.push(note);
+    }
+
+    if (!extraMessages.length) return outcome;
+    return {
+      ...outcome,
+      message: [outcome.message, ...extraMessages].join('\n'),
+    };
+  }
+
+  private getEntityInventoryContentsText(entity: SceneObject): string | null {
+    if (!entity?.name || !this.hasEntityInventoryRelation(entity, 'in')) return null;
+    const relationOutcome = this.game.describeSpatialRelation(entity.name, 'in');
+    if (relationOutcome.status !== 'ok' || relationOutcome.code !== 'relation_contents') {
+      return null;
+    }
+    return relationOutcome.message?.trim() || null;
+  }
+
+  private hasEntityInventoryRelation(entity: SceneObject, relation: ParserRelationType): boolean {
+    return (
+      entity.components?.some(
+        (component: any) =>
+          component?.type === 'Inventory' &&
+          (!component.relation || component.relation === relation)
+      ) || false
+    );
+  }
+
+  private getEntityParserNoteNeedsCheck(scene: any, entityId: string): boolean {
+    if (!this.getCurrentEntityParserNote(scene, entityId)) return false;
+    if (typeof scene?.getEntityParserNoteNeedsCheck === 'function') {
+      return !!scene.getEntityParserNoteNeedsCheck(entityId);
+    }
+    return !!scene?.entityParserNoteNeedsCheck?.[entityId];
   }
 
   private resolveRelationTarget(
