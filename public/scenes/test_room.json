@@ -592,6 +592,142 @@
         }
       ],
       "script": ""
+    },
+    {
+      "name": "floor_lamp",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 401,
+          "y": 12
+        },
+        {
+          "x": 414,
+          "y": -35
+        },
+        {
+          "x": 444,
+          "y": -35
+        },
+        {
+          "x": 460,
+          "y": 13
+        },
+        {
+          "x": 438,
+          "y": 17
+        },
+        {
+          "x": 438,
+          "y": 17
+        },
+        {
+          "x": 436,
+          "y": 180
+        },
+        {
+          "x": 446,
+          "y": 191
+        },
+        {
+          "x": 446,
+          "y": 191
+        },
+        {
+          "x": 420,
+          "y": 192
+        },
+        {
+          "x": 424,
+          "y": 181
+        },
+        {
+          "x": 424,
+          "y": 14
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "desk_lamp",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 3,
+          "y": -6
+        },
+        {
+          "x": 10,
+          "y": -20
+        },
+        {
+          "x": 19,
+          "y": -10
+        },
+        {
+          "x": 36,
+          "y": 6
+        },
+        {
+          "x": 11,
+          "y": 20
+        },
+        {
+          "x": 3,
+          "y": 2
+        },
+        {
+          "x": -24,
+          "y": 23
+        },
+        {
+          "x": -7,
+          "y": 73
+        },
+        {
+          "x": -2,
+          "y": 76
+        },
+        {
+          "x": -14,
+          "y": 78
+        },
+        {
+          "x": -31,
+          "y": 29
+        },
+        {
+          "x": -31,
+          "y": 29
+        },
+        {
+          "x": -29,
+          "y": 16
+        }
+      ],
+      "script": ""
     }
   ],
   "scaling": {
@@ -760,16 +896,16 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0296208378383236,
-      "x": 163.3919699340347,
-      "y": 231.22485345522517,
-      "width": 71.03999999999999,
-      "height": 290.08,
-      "baseWidth": 96,
-      "baseHeight": 392,
+      "parallax": 1.0132909473202913,
+      "x": 279.4674800124078,
+      "y": 206.2292920337719,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-right.json",
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
@@ -780,7 +916,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1088,7 +1224,7 @@
           "type": "3d-parallax"
         }
       ],
-      "layer": 0,
+      "layer": -1,
       "visible": true,
       "hidden": false,
       "parallax": 1,
@@ -1318,29 +1454,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 109.41618399672886,
-      "y": 212.15273873249262,
+      "x": 225.88628887061154,
+      "y": 187.17041119102805,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 109.41618399672886,
-          "y": 212.15273873249262,
-          "p": 1.0171798277645203
+          "x": 225.88628887061154,
+          "y": 187.17041119102805,
+          "p": 1.0008713730370948
         },
         {
-          "x": 207.05956729589263,
-          "y": 210.95426605536534,
-          "p": 1.016369708944852
+          "x": 323.59845680806393,
+          "y": 185.97852453146933,
+          "p": 1.000072060870692
         },
         {
-          "x": 142.62362118983768,
-          "y": 246.80969916815255,
-          "p": 1.0398694496627736
+          "x": 257.1807387703121,
+          "y": 221.6471531810109,
+          "p": 1.023352574054912
         },
         {
-          "x": 94.11603663145279,
-          "y": 245.20457777495912,
-          "p": 1.0388246884920151
+          "x": 208.76189561539883,
+          "y": 220.05053605073851,
+          "p": 1.0223219867923892
         }
       ],
       "color": "#2b019d",
@@ -1418,17 +1554,17 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 163.3919699340347,
-      "y": 231.22485345522517,
-      "width": 15.054892217281694,
-      "height": 21.393794203505564,
+      "x": 279.4674800124078,
+      "y": 206.2292920337719,
+      "width": 14.588399338365623,
+      "height": 20.73088327030904,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.7642130190628449,
+      "scale": 0.7405330135056787,
       "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
@@ -1624,6 +1760,38 @@
       "height": 74,
       "baseWidth": 94.5054945054945,
       "baseHeight": 81.31868131868131,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.91,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 0,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "phone_modem",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -41,
+      "y": 91,
+      "width": 28,
+      "height": 40,
+      "baseWidth": 30.769230769230766,
+      "baseHeight": 43.956043956043956,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,

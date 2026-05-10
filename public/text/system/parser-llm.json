@@ -35,11 +35,13 @@
     "First decide whether the lower parser likely misunderstood the player intent, target, relation, or action. If so, return a corrected safe action plan using only real context titles.",
     "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or showText with a short atmospheric in-world reason.",
+    "When rejecting unsupported player intent, prefer the protagonist's judgment, reluctance, dignity, caution, fatigue, disgust, or lack of desire over inventing a physical obstacle.",
     "Do not claim that an action succeeded unless the returned plan can actually execute it.",
     "If you cannot improve the previous attempt safely or interestingly, return fallback.",
     "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
     "If the requested action is impossible in the current world, return final_response or showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description.",
-    "For unsupported but plausible minor actions, prefer: the player character has no time, desire, or reason to do it; the action happens but produces no meaningful result; or, more rarely, the object or mechanism does not work."
+    "For unsupported but plausible minor actions, prefer: the player character has no time, desire, or reason to do it; the action happens but produces no meaningful result; or, more rarely, the object or mechanism does not work.",
+    "Do not say a prop is nailed down, bolted, glued, locked, or too heavy unless current worldFacts, contents/location, spatial relations, or object text support that."
   ],
   "world_fact_instructions": [
     "World facts, entity contents/location, spatialNodes, and spatialRelations are authoritative. They are the physical model of the current scene, including semantic facts generated from Text Assets.",

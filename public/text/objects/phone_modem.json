@@ -1,0 +1,6 @@
+{
+  "title": "Modem and Phone",
+  "description": "A phone line modem with a casual push-button telephone resting on top of it.",
+  "details": "The modem started life as some old Hayes-compatible unit before passing through several owners, improvised repairs, and eventually your soldering iron. You upgraded it to support 2400 baud — fast enough to feel impressive. Error correction never made it into the final surgery.\n\nThe Commodore was never really designed for this kind of setup out of the box, so you built your own RS-232 adapter and hand-soldered most of the cabling yourself. Parts of the whole arrangement are technically held together by electrical tape, optimism, and habits developed at three in the morning.\n\nThe apartment's phone line runs into the modem first, then into the telephone handset sitting on top. A serial cable disappears into the Commodore.\n\nWhen the modem connects, the front panel comes alive with blinking green and orange LEDs. Carrier detect. Data flow. Line activity. Tiny electronic signals crossing unknown distances through old copper buried beneath the city.",
+  "takeFailure": "The modem means too much to you to casually unplug and carry around. Besides, the entire homemade serial setup barely survives sitting still on the desk. One bad movement and you'd probably spend the whole night soldering wires back together."
+}

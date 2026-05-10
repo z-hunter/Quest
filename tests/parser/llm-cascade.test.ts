@@ -231,6 +231,27 @@ describe('LlmCascade', () => {
     expect(combined).toContain('do not let word matches override the world model');
   });
 
+  it('biases unsupported-intent refusals toward protagonist judgment instead of prop obstacles', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`.toLowerCase();
+
+    expect(combined).toContain('unsupported player intent');
+    expect(combined).toContain('protagonist');
+    expect(combined).toContain('choosing not to do it');
+    expect(combined).toContain('lack of desire');
+    expect(combined).toContain('over inventing a physical obstacle');
+    expect(combined).toContain('nail');
+    expect(combined).toContain('bolted');
+    expect(combined).toContain('unless the current world model supports that');
+  });
+
   it('stores the full prompt and raw response in debug info', async () => {
     provider.response.text = JSON.stringify({
       kind: 'final_response',
