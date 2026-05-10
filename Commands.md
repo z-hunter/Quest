@@ -101,6 +101,8 @@ For `PUT`, target resolution has priority:
 - unknown destinations such as `recirder` fail as target-not-found;
 - source items already stored in the selected destination are filtered out before building the batch.
 - relation targets such as `PUT cassette UNDER chair` resolve only to an existing `Inventory`/`Surface` slot for that relation; parser/runtime checks must not auto-create missing containers.
+- `floor`/`ground` can resolve to a Walkbox pseudo-floor target for `PUT`/`DROP`, including `PUT item ON FLOOR` and `PUT item IN FLOOR`.
+- For `LOOK floor` / `EXAMINE floor`, the parser first tries the current Walkbox pseudo-floor under the player, but only if it has the needed text field (`description` for `LOOK`, `details` for `EXAMINE`). Otherwise it falls back to a real visible/held object titled or synonymed `Floor`, then to `parser.look_default_object`.
 - for untitled technical storage nodes, the relation to the player-facing target is the first spatial relation from the nearest titled parent to that technical chain. A Surface inside an untitled `UNDER` child of `Chair` is therefore treated as `UNDER chair`, even if the Surface's internal placement relation is `ON`.
 - visible but currently unusable source items are reserved for diagnostics, not clarification. For example, a far cassette can produce a distance-specific failure, but it must not be offered as a selectable source option when a usable cassette is available.
 

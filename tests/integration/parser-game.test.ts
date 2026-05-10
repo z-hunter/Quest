@@ -1475,9 +1475,29 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
-  it('ignores walkbox pseudo-floor targets for LOOK when a real Floor object exists', async () => {
+  it('describes the current walkbox pseudo-floor before a real Floor object for LOOK', async () => {
     const fixture = createParserFixture();
-    fixture.addPlayer();
+    fixture.addPlayer('Hero', 5, 5);
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+    fixture.textAssets.setObject('FloorZone', {
+      description: 'The floor under your feet is scuffed.',
+    });
+    fixture.addEntity('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+    });
+
+    const result = await fixture.run('look floor');
+
+    expect(result.messages.at(-1)).toBe('The floor under your feet is scuffed.');
+  });
+
+  it('falls back to a real Floor object when the current pseudo-floor has no LOOK description', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 5, 5);
     const floorZone = fixture.addWalkbox('FloorZone');
     floorZone.components = [
       { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
@@ -1492,9 +1512,9 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe('A real floor object.');
   });
 
-  it('does not resolve LOOK floor to the walkbox pseudo-floor target', async () => {
+  it('uses the default floor description when neither pseudo-floor nor real Floor can describe LOOK', async () => {
     const fixture = createParserFixture();
-    fixture.addPlayer();
+    fixture.addPlayer('Hero', 5, 5);
     const floorZone = fixture.addWalkbox('FloorZone');
     floorZone.components = [
       { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
@@ -1503,7 +1523,75 @@ describe('Parser + game integration smoke', () => {
     const result = await fixture.run('look floor');
 
     expect(result.messages.at(-1)).toBe(
-      fixture.game.text('parser.look_not_found', { target: 'floor' })
+      fixture.game.text('parser.look_default_object', {
+        target: fixture.game.text('engine.floor_label'),
+      })
+    );
+  });
+
+  it('describes the current walkbox pseudo-floor details before a real Floor object for EXAMINE', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+    fixture.textAssets.setObject('FloorZone', {
+      details: 'Tiny scratches show where furniture has been dragged around.',
+    });
+    fixture.addEntity('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+    });
+    fixture.textAssets.setObject('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+      details: 'Real floor details.',
+    });
+
+    const result = await fixture.run('examine floor');
+
+    expect(result.messages.at(-1)).toBe(
+      'Tiny scratches show where furniture has been dragged around.'
+    );
+  });
+
+  it('falls back to a real Floor object when the current pseudo-floor has no EXAMINE details', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+    fixture.addEntity('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+    });
+    fixture.textAssets.setObject('real_floor', {
+      title: 'Floor',
+      description: 'A real floor object.',
+      details: 'Real floor details.',
+    });
+
+    const result = await fixture.run('examine floor');
+
+    expect(result.messages.at(-1)).toBe('Real floor details.');
+  });
+
+  it('uses the default floor description when neither pseudo-floor nor real Floor can describe EXAMINE', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const floorZone = fixture.addWalkbox('FloorZone');
+    floorZone.components = [
+      { type: 'Surface', relation: 'in', capacity: 4, groups: [], items: [] },
+    ];
+
+    const result = await fixture.run('examine floor');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.look_default_object', {
+        target: fixture.game.text('engine.floor_label'),
+      })
     );
   });
 

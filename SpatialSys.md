@@ -597,14 +597,19 @@ Relation берётся не из final technical relation item-to-surface, а �
 
 ## Walkbox / Floor
 
-Walkbox может выступать player-facing floor/ground target.
+Walkbox может выступать player-facing pseudo-floor/pseudo-ground target для размещения
+предметов и как локальный floor-text source для `LOOK`/`EXAMINE floor`.
 
 Особенности:
 
-- `floor` и `ground` должны резолвиться как walkbox/floor target;
+- `floor` и `ground` должны резолвиться как walkbox/floor target для `PUT`/`DROP`;
 - auto-drop может использовать walkbox surface;
 - для explicit `PUT item ON FLOOR` или `PUT item IN FLOOR` user-facing сообщение должно нормализоваться к floor placement;
 - walkbox может иметь relation fallback для `on`, чтобы floor command работала естественно.
+- direct `LOOK floor` / `EXAMINE floor` сначала проверяют walkbox pseudo-floor, на котором стоит player. `LOOK` использует его `description`, `EXAMINE` использует его `details`.
+- Если текущий walkbox отсутствует или у него нет нужного поля (`description` для `LOOK`, `details` для `EXAMINE`), parser ищет обычный visible/held titled object с Title/Synonym `Floor`.
+- Если ни current pseudo-floor, ни real `Floor` object не дают текст, parser возвращает стандартное `parser.look_default_object` для floor.
+- Если сцене нужен общий осматриваемый пол, не зависящий от текущего walkbox, его можно моделировать отдельным titled object/entity, например `floor-parallax` с Title `Floor` и `synonyms: ["floor", ...]`.
 
 ## Subscene
 

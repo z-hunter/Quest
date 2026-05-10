@@ -17,6 +17,7 @@ import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { Geometry } from '../utils/Geometry';
 import {
   buildSceneTextLayerSnapshot,
   getInactiveSubsceneAncestors,
@@ -2032,6 +2033,62 @@ export class Parser {
     );
   }
 
+  private isFloorTarget(rawTarget: string | null): boolean {
+    const normalizedTarget = String(rawTarget || '')
+      .trim()
+      .toUpperCase();
+    if (!normalizedTarget) return false;
+    const floorLabel = this.game.textAssets
+      .getServiceText('engine.floor_label')
+      .trim()
+      .toUpperCase();
+    return normalizedTarget === floorLabel || normalizedTarget === 'GROUND';
+  }
+
+  private getCurrentPlayerWalkboxFloor(): SceneObject | null {
+    const scene = this.game.sceneManager.currentScene;
+    const player = scene?.player;
+    if (!scene || !player) return null;
+    const playerPoint = {
+      x: Number((player as any).x) || 0,
+      y: Number((player as any).y) || 0,
+    };
+    const walkboxes = Array.isArray(scene.walkbox) ? scene.walkbox : [];
+    return (
+      walkboxes.find(
+        (walkbox: SceneObject) =>
+          !walkbox.disabled &&
+          Array.isArray((walkbox as any).poly) &&
+          Geometry.isPointInPolygon(playerPoint, (walkbox as any).poly)
+      ) || null
+    );
+  }
+
+  private resolveCurrentFloorText(field: 'description' | 'details'): GameActionOutcome | null {
+    const floor = this.getCurrentPlayerWalkboxFloor();
+    if (!floor) return null;
+    const text = this.game.textAssets.getResolvedObjectField(floor as any, field);
+    if (!text?.trim()) return null;
+    return {
+      status: 'ok',
+      code: field === 'details' ? 'entity_details' : 'entity_description',
+      message: text,
+      data: { targetType: 'entity', entityId: floor.name },
+    };
+  }
+
+  private getFloorDefaultOutcome(rawTarget: string): GameActionOutcome {
+    const target =
+      this.game.textAssets.getServiceText('engine.floor_label').trim() ||
+      String(rawTarget || 'floor');
+    return {
+      status: 'ok',
+      code: 'entity_generic_description',
+      message: this.game.text('parser.look_default_object', { target }),
+      data: { target },
+    };
+  }
+
   private getContextEntityById(id: string): { title: string; synonyms?: string[] } | null {
     const entities = this.activeWorldModel?.context.entities || [];
     return entities.find((entity) => entity.id === id) || null;
@@ -2336,6 +2393,11 @@ export class Parser {
   }
 
   private resolveLookTarget(rawTarget: string): GameActionOutcome {
+    const currentFloorOutcome = this.isFloorTarget(rawTarget)
+      ? this.resolveCurrentFloorText('description')
+      : null;
+    if (currentFloorOutcome) return currentFloorOutcome;
+
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
       this.getLookTargetCandidates(),
@@ -2370,6 +2432,9 @@ export class Parser {
       }
       if (inactiveSwitchResolved.status === 'escalate') {
         return { status: 'escalate', code: inactiveSwitchResolved.code, recoverable: true };
+      }
+      if (this.isFloorTarget(rawTarget)) {
+        return this.getFloorDefaultOutcome(rawTarget);
       }
       return {
         status: 'failed',
@@ -2408,16 +2473,23 @@ export class Parser {
       };
     }
 
+    const currentFloorOutcome = this.isFloorTarget(rawTarget)
+      ? this.resolveCurrentFloorText('details')
+      : null;
+    if (currentFloorOutcome) return currentFloorOutcome;
+
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['examinable']),
+      this.getScopeCandidates(['examinable']).filter(
+        (sceneObject) => sceneObject.type !== 'Walkbox'
+      ),
       'parser.examine_which_one'
     );
     const broadResolved =
       resolved.status === 'not_found'
         ? this.resolveEntityTargetInCandidates(
             rawTarget,
-            this.getScopeCandidates(['visible', 'held']),
+            this.getLookTargetCandidates(),
             'parser.examine_which_one'
           )
         : null;
@@ -2501,6 +2573,9 @@ export class Parser {
       }
       if (hiddenGatedResolved.status === 'escalate') {
         return { status: 'escalate', code: hiddenGatedResolved.code, recoverable: true };
+      }
+      if (this.isFloorTarget(rawTarget)) {
+        return this.getFloorDefaultOutcome(rawTarget);
       }
       return {
         status: 'failed',

@@ -220,6 +220,7 @@ Parser не должен самостоятельно обходить raw `.spa
 Примеры:
 
 - `LOOK` использует видимые объекты сцены и инвентарь;
+- `LOOK floor` / `EXAMINE floor` имеют специальную floor-chain: сначала current walkbox pseudo-floor под player с нужным текстовым полем (`description` для `LOOK`, `details` для `EXAMINE`), затем обычные visible/held targets с настоящим Title/Synonym `Floor`, затем `parser.look_default_object`;
 - `TAKE` использует только берущиеся объекты сцены;
 - `EXAMINE` использует инвентарь, объекты активной subscene и объекты в пределах допустимой дистанции;
 - `GO TO` использует сценовые цели и достижимые сценовые объекты.
