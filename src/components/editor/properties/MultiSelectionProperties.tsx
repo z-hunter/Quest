@@ -81,6 +81,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     (o: any) => o.color || '#ffffff'
   );
   const sharedIsGrid = getSharedBooleanState(quads, (q: any) => !!q.isGrid);
+  const sharedFilled = getSharedBooleanState(quads, (q: any) => q.filled !== false);
   const sharedGridX = getSharedValue(quads, (q: any) => q.gridLinesX ?? 5);
   const sharedGridY = getSharedValue(quads, (q: any) => q.gridLinesY ?? 5);
   const sharedGridWidth = getSharedValue(quads, (q: any) => q.lineWidth ?? 1.0);
@@ -448,6 +449,35 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {quads.length > 0 && (
+              <div className="e-row">
+                <label
+                  className="e-label"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: 0,
+                    color: sharedFilled === 'on' ? '#ffffff' : 'inherit',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={sharedFilled === 'on'}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sharedFilled === 'mixed';
+                    }}
+                    onChange={(e) => {
+                      applyToMulti((o: any) => {
+                        if ((o as any).type === 'Quad') (o as any).filled = e.target.checked;
+                      });
+                    }}
+                  />
+                  Fill
+                </label>
               </div>
             )}
 

@@ -1,0 +1,57 @@
+import { describe, expect, it, vi } from 'vitest';
+import { QuadObject } from '../../src/entities/QuadObject';
+import { createSceneFixture } from '../fixtures/sceneFactory';
+
+function createMockContext() {
+  return {
+    canvas: { width: 800, height: 600 },
+    filter: '',
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+  } as unknown as CanvasRenderingContext2D;
+}
+
+describe('QuadObject', () => {
+  it('draws retro-grid lines with normal composition over blended fill', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = -750;
+    fixture.scene.camera.y = -20;
+    fixture.scene.camera.zoom = 1;
+
+    const quad = new QuadObject(fixture.game, 'q6-1_1');
+    quad.vertices = [
+      { x: -796.8195852460148, y: -65.90341133361912, p: 1 },
+      { x: -714.8525471439664, y: -86.90681780569503, p: 1 },
+      { x: -701.6967016306735, y: 47.52823721138852, p: 1 },
+      { x: -804.5997561709523, y: 21.561006682053637, p: 1 },
+    ];
+    quad.color = '#a01c70';
+    quad.blendMode = 'screen';
+    quad.isGrid = true;
+    quad.gridLinesX = 2;
+    quad.gridLinesY = 2;
+    quad.lineWidth = 4.9;
+    quad.gridColor = '#000000';
+    quad.filled = true;
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.fill).toHaveBeenCalledTimes(1);
+    expect(ctx.stroke).toHaveBeenCalledTimes(2);
+    expect(ctx.globalCompositeOperation).toBe('source-over');
+    expect(ctx.strokeStyle).toBe('#000000');
+  });
+});

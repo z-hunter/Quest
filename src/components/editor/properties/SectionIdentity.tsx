@@ -2,9 +2,8 @@ import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
-import { SceneObject } from '../../../entities/SceneObject';
-import { Triggerbox } from '../../../entities/Triggerbox';
 import { normalizeGroupIdList } from '../../../utils/GroupIds';
+import { findDuplicateSceneObjectName } from './SectionIdentityUtils';
 
 interface SectionIdentityData {
   id?: string;
@@ -56,6 +55,12 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
     incrementHierarchyVersion,
   } = usePropertiesContext<SectionIdentityData>();
   const o = obj;
+  const identityValue = isScene ? o.id || '' : o.name || '';
+  const [identityDraft, setIdentityDraft] = React.useState(identityValue);
+
+  React.useEffect(() => {
+    setIdentityDraft(identityValue);
+  }, [identityValue]);
 
   return (
     <div ref={setSectionRef(0)} className="properties-section-block" data-section={0}>
@@ -65,12 +70,9 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
         <input
           type="text"
           className="e-input"
-          value={isScene ? o.id || '' : o.name || ''}
+          value={identityDraft}
           onChange={(e) => {
-            const val = e.target.value;
-            if (isScene) o.id = val;
-            else o.name = val;
-            incrementObjectVersion();
+            setIdentityDraft(e.target.value);
           }}
           onBlur={(e) => {
             const rawVal = e.target.value;
@@ -81,16 +83,17 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
             const scene = game?.sceneManager?.currentScene;
 
             if (!isScene && scene) {
-              const dupEntity = scene.entities.find(
-                (ent: Entity) => ent.name === finalVal && ent !== game?.editor?.selectedObject
+              const duplicate = findDuplicateSceneObjectName(
+                scene,
+                finalVal,
+                game?.editor?.selectedObject || o
               );
-              const dupTrigger = scene.triggerboxes
-                ? scene.triggerboxes.find(
-                    (tb: Triggerbox) => tb.name === finalVal && tb !== game?.editor?.selectedObject
-                  )
-                : null;
 
-              if (dupEntity || dupTrigger) {
+              if (!finalVal) {
+                console.warn('[PropertiesPanel] Empty Name rejected.');
+                game.showMessage('Name cannot be empty!');
+                isValid = false;
+              } else if (duplicate) {
                 console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
                 game.showMessage(`Name '${finalVal}' already exists!`);
                 isValid = false;
@@ -99,13 +102,10 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
 
             if (isValid) {
               handleChange(field, finalVal);
+              setIdentityDraft(finalVal);
             } else {
-              const realObj = game?.editor?.selectedObject as SceneObject | null | undefined;
-
-              if (!isScene && realObj) {
-                o.name = realObj.name;
-                incrementObjectVersion();
-              }
+              setIdentityDraft(identityValue);
+              incrementObjectVersion();
             }
           }}
         />

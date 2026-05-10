@@ -1560,3 +1560,139 @@ During the session the following checks were run successfully:
 
 - Not all components have associated SVG icons yet; the UI implementation handles missing icons gracefully by simply rendering the text.
 - Static hosting of the game will break Editor features; testing via the native Tauri build or the development environment is recommended.
+## Session Entry - 2026-05-09 19:37 Europe/Warsaw
+
+### 1. Session Goals
+
+- Fix Stage 2 LLM parser behavior so unsupported but plausible player intents are handled as in-world Game Master narration instead of being forced into adjacent standard commands like `EXAMINE`.
+- Add runtime Parser Notes (PN) so the LLM cascade can remember small invented facts about the scene or objects.
+- Add debug visibility for Parser Notes and make them safe to use as evolving GM memory without hiding LLM mistakes.
+- Improve stale-note handling so normal parser/runtime mutations can signal that an existing PN needs to be rechecked by the LLM.
+- Keep all LLM prompt assets in English and story-neutral, using wording such as `player character` instead of protagonist-specific names.
+
+### 2. What Was Implemented
+
+- Added runtime-only Parser Notes for the active scene and individual scene/inventory entities.
+- Added structured LLM actions:
+  - `setSceneParserNote`
+  - `setEntityParserNote`
+- Added PN context projection into the LLM world model:
+  - `context.scene.parserNote`
+  - `context.entities[].parserNote`
+  - `context.knownEntities[].parserNote`
+  - `context.inventory[].parserNote`
+  - focused inventory target PN when present.
+- Added PN stale metadata:
+  - `parserNoteNeedsCheck?: true`
+  - runtime scene/entity storage for needs-check state.
+- Added `#PEEKPN-ON` / `#PEEKPN-OFF` console commands for narrow Parser Notes logging:
+  - PN context entries;
+  - PN creation/update/clear mutations;
+  - PN `needsCheck` mutations.
+- Updated `#PEEK-ON` debug output to include structured PN effects.
+- Added PN validation:
+  - entity PN writes must target a visible, held, or focused context entity;
+  - notes are trimmed and capped at 600 characters;
+  - empty notes clear stored PN.
+- Removed runtime censorship of PN text after user clarified that bad PN content is useful for diagnostics.
+- Added LLM plan normalization rules so PN plans must include player-facing `showText`; PN plans with `showText` drop ordinary world actions like `examineTarget`, preventing PN+EXAMINE fall-through.
+
+### 3. LLM Prompt / Behavior Changes
+
+- Reframed the Stage 2 LLM as a creative Game Master first, not as merely a command parser.
+- Added explicit prompt rules that recognized but unsupported intent should produce short atmospheric in-world narration instead of adjacent standard actions.
+- Strengthened world-model discipline:
+  - `worldFacts`, entity `contents`, entity `location`, `spatialNodes`, and `spatialRelations` are the physical truth of the scene;
+  - matching nouns, compatible object types, and inventory contents do not create physical relationships;
+  - inventory items are held by the player character and are not inside or connected to scene objects unless context explicitly says so.
+- Tightened PN rules:
+  - entity PN must describe only that entity;
+  - scene PN must describe only the scene/area;
+  - temporary player character actions or poses must be narrated, not stored as persistent PN;
+  - persistent object/scene consequences may be stored.
+- Added mandatory stale PN housekeeping:
+  - if any PN has `parserNoteNeedsCheck: true`, resolving that stale note is part of the current LLM task even when the player command concerns something else;
+  - LLM must confirm stale PN by rewriting it, correct it, or clear it with an empty PN before player-facing output.
+
+### 4. Parser / Runtime / Debug Changes
+
+- `Scene` now stores PN text and needs-check metadata for the scene and entities.
+- `ParserWorldModelBuilder` injects PN text and `parserNoteNeedsCheck` into context.
+- `Parser` executes PN writes, emits PN effects, and parses PN debug effects for `#PEEK` / `#PEEKPN`.
+- Standard mutating runtime operations mark existing affected PN as stale instead of deleting or editing them:
+  - `TAKE`;
+  - `PUT`;
+  - `OPEN`;
+  - `CLOSE`;
+  - inventory removal style effects.
+- PN writes from the LLM reset needs-check flags because the note has just been reviewed.
+
+### 5. Tests And Validation
+
+Focused and broad validation were run during the session:
+
+- `npm test -- tests/parser/llm-cascade.test.ts`
+- `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-parser.test.ts tests/parser/llm-cascade.test.ts`
+- `npm test -- tests/parser tests/integration/parser-game.test.ts`
+- `npm run typecheck`
+- `npm test`
+- `git diff --check`
+
+Final full validation before the commit:
+
+- `npm test`: 25 test files, 300 tests passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed, with only line-ending warnings from Git.
+
+### 6. Documentation Updated
+
+- `Parser.md`
+  - PN context fields;
+  - structured PN actions;
+  - validation behavior;
+  - `parserNoteNeedsCheck`;
+  - `#PEEKPN` output.
+- `GDD.md`
+  - PN as runtime GM memory;
+  - needs-check behavior after real world mutations.
+- `TextAssets.md`
+  - PN are runtime parser memory, not authored Text Assets;
+  - prompt assets must remain English/story-neutral.
+
+### 7. Commit Created
+
+- `1ed03e0 Major Feature: add runtime Parser Notes for LLM GM memory`
+
+Commit scope:
+
+- Parser Notes runtime storage and actions.
+- PN context injection and debug output.
+- `parserNoteNeedsCheck` stale-note mechanism.
+- LLM prompt contract updates.
+- Parser/LLM/world-model tests.
+- Parser/GDD/TextAssets documentation.
+
+Files intentionally left out of that commit as unrelated existing work:
+
+- `public/text/scenes/test_room.json`
+- `src/components/editor/properties/MultiSelectionProperties.tsx`
+- `src/entities/QuadObject.ts`
+- `tests/entities/quad-object.test.ts`
+
+### 8. Remaining Work / Next Recommended Steps
+
+- Continue live-testing LLM behavior around stale PN and unsupported actions.
+- If the model still skips stale PN housekeeping, consider a runtime enforcement rule that rejects/reprompts LLM outputs when context had stale PN and the response did not include any PN action for it. This should be a later decision because current prompt-only behavior is now working acceptably.
+- Future save/load work should serialize runtime PN and needs-check metadata with save games, not with scene authoring JSON.
+- Consider exposing explicit affected entity metadata from custom commands/scripts later so PN stale marking can cover more scripted side effects.
+
+### 9. Risks / Caveats
+
+- PN remain internal parser memory and are intentionally allowed to preserve bad LLM notes for debugging.
+- The stale-note mechanism marks notes as suspicious; it does not itself decide semantic truth.
+- LLM prompt behavior is improved but still model-dependent.
+- Dirty worktree remains after the feature commit because unrelated changes were intentionally left untouched:
+  - test-room scene content;
+  - multi-selection Quad fill UI;
+  - QuadObject retro-grid/blend behavior;
+  - QuadObject test file.
