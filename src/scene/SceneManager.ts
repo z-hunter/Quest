@@ -191,6 +191,9 @@ export class SceneManager {
     }
 
     this.currentScene = scene;
+    if (oldScene !== scene) {
+      scene.clearParserRecentTurns();
+    }
     this.touchScene(scene.id);
     this.pinCurrentScene();
     this.syncAssetCacheState();

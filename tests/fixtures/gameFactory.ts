@@ -53,6 +53,9 @@ export function createTestGame(): TestGameHarness {
       }
 
       this.currentScene = targetScene;
+      if (oldScene !== targetScene) {
+        targetScene.clearParserRecentTurns?.();
+      }
 
       if (this.pendingEntryId) {
         const entryObj = targetScene.getObjectByName(this.pendingEntryId);

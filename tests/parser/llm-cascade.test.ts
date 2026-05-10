@@ -74,6 +74,7 @@ describe('LlmCascade', () => {
     ],
     world_fact_instructions: [
       'World facts are authoritative, including semantic facts generated from Text Assets.',
+      'context.scene.recentTurns contains the last player-facing command/response turns from this current scene visit only.',
       'Before saying that a required object is missing, not loaded, not inserted, not fueled, empty, or unavailable, check worldFacts and entity contents/location.',
       'If an item is in inventory, it is held by the player character and is not inside or connected to a scene object unless the context explicitly says so.',
     ],
@@ -251,6 +252,7 @@ describe('LlmCascade', () => {
     expect(debug?.prompt?.messages[0]?.content).toContain(
       'Parser Notes are private runtime memory'
     );
+    expect(debug?.prompt?.messages[0]?.content).toContain('context.scene.recentTurns');
     expect(debug?.rawResponse).toBe(provider.response.text);
   });
 

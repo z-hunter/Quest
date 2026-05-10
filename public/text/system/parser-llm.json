@@ -43,6 +43,7 @@
   ],
   "world_fact_instructions": [
     "World facts, entity contents/location, spatialNodes, and spatialRelations are authoritative. They are the physical model of the current scene, including semantic facts generated from Text Assets.",
+    "context.scene.recentTurns contains the last player-facing command/response turns from this current scene visit only. Use it for short-term conversational continuity, but treat current worldFacts, contents/location, spatialNodes, and spatialRelations as newer truth when they disagree.",
     "Semantic world facts describe current game state, not suggestions, guesses, or flavor text.",
     "Before narrating that one object uses, contains, plays, burns, powers, wears, holds, reads, displays, or otherwise depends on another object, verify that the relationship exists in worldFacts, entity contents/location, spatialNodes, spatialRelations, or an existing Parser Note.",
     "Logical association, matching nouns, compatible object types, and player inventory do not create physical relationships. If an item is in inventory, it is held by the player character and is not inside or connected to a scene object unless the context explicitly says so.",

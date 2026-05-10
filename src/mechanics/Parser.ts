@@ -83,6 +83,7 @@ export class Parser {
   async parse(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed) return;
+    const originScene = this.game.sceneManager.currentScene;
     try {
       this.nlpCascade.clearLastDebugInfo();
       this.llmCascade.clearLastDebugInfo();
@@ -190,6 +191,7 @@ export class Parser {
         : response.playerMessage
           ? [response.playerMessage]
           : [];
+      this.recordSceneParserTurn(originScene, trimmed, playerMessages);
       if (playerMessages.length) {
         if (typeof this.game.logResponse === 'function') {
           this.game.logResponse(playerMessages);
@@ -205,6 +207,16 @@ export class Parser {
       this.activeScope = null;
       this.game.console?.log(`[Parser error] ${String(error)}`, 'error');
       this.game.log(this.game.text('parser.parse_unknown'));
+    }
+  }
+
+  private recordSceneParserTurn(scene: any, command: string, playerMessages: string[]): void {
+    if (!scene || !playerMessages.length) return;
+    if (command.trim().startsWith('#')) return;
+
+    const response = playerMessages.join(' ');
+    if (typeof scene.addParserRecentTurn === 'function') {
+      scene.addParserRecentTurn(command, response);
     }
   }
 

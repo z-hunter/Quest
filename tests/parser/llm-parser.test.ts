@@ -119,6 +119,30 @@ describe('Parser LLM Integration', () => {
     expect(fixture.messages).toContain('LLM Result');
   });
 
+  it('passes prior scene-local parser turns to LLM context', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.scene.addParserRecentTurn('look radio', 'The radio hisses.');
+
+    const mockLlmParse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: { kind: 'plan', actions: [{ type: 'showText', message: 'LLM Result' }] },
+      debug: { rawInput: 'SENSEI', normalizedInput: 'SENSEI', verb: 'LLM', noun: '' },
+    });
+    fixture.parser.llmCascade.parse = mockLlmParse;
+
+    await fixture.parser.parse('SENSEI');
+
+    expect(mockLlmParse.mock.calls[0]?.[1].scene?.recentTurns).toEqual([
+      { command: 'look radio', response: 'The radio hisses.' },
+    ]);
+    expect(fixture.scene.getParserRecentTurns().at(-1)).toEqual({
+      command: 'SENSEI',
+      response: 'LLM Result',
+    });
+  });
+
   it('Parser forces a Stage 1 handled command into LLM when C1 is off', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

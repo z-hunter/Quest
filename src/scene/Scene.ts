@@ -26,6 +26,7 @@ import type {
   SpatialRelationType,
 } from './spatialTypes';
 import type { SubsceneComponent } from '../systems/ComponentSystem';
+import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
 
 interface PickupAnimation {
   entity: Entity;
@@ -45,6 +46,9 @@ interface DropAnimation {
   baseModelScale: number;
   targetOpacity: number;
 }
+
+const PARSER_SCENE_HISTORY_LIMIT = 8;
+const PARSER_SCENE_HISTORY_RESPONSE_LIMIT = 85;
 
 export interface SceneScaling {
   enabled: boolean;
@@ -132,6 +136,7 @@ export class Scene {
   public entityParserNotes: Record<string, string> = {};
   public parserNoteNeedsCheck: boolean = false;
   public entityParserNoteNeedsCheck: Record<string, boolean> = {};
+  private parserRecentTurns: ParserSceneTurnContext[] = [];
 
   get activeSubscene(): string | null {
     return this._activeSubscene;
@@ -354,6 +359,41 @@ export class Scene {
     const changed = !this.entityParserNoteNeedsCheck[normalizedId];
     this.entityParserNoteNeedsCheck[normalizedId] = true;
     return changed;
+  }
+
+  getParserRecentTurns(): ParserSceneTurnContext[] {
+    return this.parserRecentTurns.map((turn) => ({ ...turn }));
+  }
+
+  clearParserRecentTurns(): void {
+    this.parserRecentTurns = [];
+  }
+
+  addParserRecentTurn(command: string, response: string): void {
+    const normalizedCommand = this.normalizeParserTurnText(command);
+    const normalizedResponse = this.truncateParserTurnResponse(
+      this.normalizeParserTurnText(response)
+    );
+    if (!normalizedCommand || !normalizedResponse) return;
+
+    this.parserRecentTurns = [
+      ...this.parserRecentTurns,
+      {
+        command: normalizedCommand,
+        response: normalizedResponse,
+      },
+    ].slice(-PARSER_SCENE_HISTORY_LIMIT);
+  }
+
+  private normalizeParserTurnText(value: string): string {
+    return String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private truncateParserTurnResponse(value: string): string {
+    if (value.length <= PARSER_SCENE_HISTORY_RESPONSE_LIMIT) return value;
+    return value.slice(0, PARSER_SCENE_HISTORY_RESPONSE_LIMIT);
   }
 
   getSpatialDescendantObjects(nodeId: string): SceneObject[] {

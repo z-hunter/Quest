@@ -126,6 +126,21 @@ describe('Parser world model context', () => {
     expect(radio && 'parserNoteNeedsCheck' in radio).toBe(false);
   });
 
+  it('includes scene-local parser recent turns in LLM context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.scene.addParserRecentTurn('look radio', 'The radio hisses.');
+    fixture.scene.addParserRecentTurn('listen again', 'Static rolls across the room.');
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('try the dial', null);
+
+    expect(model.context.scene?.recentTurns).toEqual([
+      { command: 'look radio', response: 'The radio hisses.' },
+      { command: 'listen again', response: 'Static rolls across the room.' },
+    ]);
+  });
+
   it('omits technical scene object type and includes item flag only when Item component exists', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 12, 34);

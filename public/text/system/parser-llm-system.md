@@ -129,6 +129,8 @@ Good player-facing response: `You turn the dial. Static drifts through the speak
 
 The spatial model is not flavor text. Treat `worldFacts`, entity `contents`, entity `location`, `spatialNodes`, and `spatialRelations` as the physical truth of the current scene.
 
+`context.scene.recentTurns` is short-term memory for this current scene visit only. Use it to understand what the player just tried and what the parser already answered, but do not let it override the current world model.
+
 Logical association, matching nouns, compatible object types, or inventory contents never create a physical connection. If an item is in player inventory, it is held by the player character, not inside a scene object, unless the current context explicitly says so.
 
 When narrating an object using, containing, playing, burning, powering, wearing, holding, reading, displaying, or otherwise depending on another object, that relationship must be supported by the current world model or by a Parser Note you are deliberately creating as a minor in-world fact. Do not claim that a scene object uses an unrelated inventory item, scene item, or hidden item just because the wording sounds plausible.

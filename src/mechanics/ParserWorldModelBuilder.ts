@@ -119,7 +119,25 @@ export class ParserWorldModelBuilder {
       parserNote: this.getSceneParserNote(scene) || undefined,
       parserNoteNeedsCheck: this.getSceneParserNoteNeedsCheck(scene) ? true : undefined,
       activeSubscene: scene.activeSubscene || undefined,
+      recentTurns: this.getSceneParserRecentTurns(scene),
     });
+  }
+
+  private getSceneParserRecentTurns(
+    scene: Scene
+  ): NonNullable<ParserContext['scene']>['recentTurns'] {
+    const turns =
+      typeof (scene as any).getParserRecentTurns === 'function'
+        ? (scene as any).getParserRecentTurns()
+        : (scene as any).parserRecentTurns;
+    if (!Array.isArray(turns)) return [];
+
+    return turns
+      .map((turn) => ({
+        command: typeof turn?.command === 'string' ? turn.command.trim() : '',
+        response: typeof turn?.response === 'string' ? turn.response.trim() : '',
+      }))
+      .filter((turn) => !!turn.command && !!turn.response);
   }
 
   private buildEntityContexts(scene: Scene): ParserEntityContext[] {

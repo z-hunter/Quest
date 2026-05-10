@@ -72,6 +72,11 @@ export type ParserPendingState = {
   clarificationAllowsMultiple?: boolean;
 };
 
+export type ParserSceneTurnContext = {
+  command: string;
+  response: string;
+};
+
 export type ParserClarificationScope = 'source' | 'target';
 
 export type ParserClarificationOption = {
@@ -161,6 +166,7 @@ export type ParserContext = {
     parserNote?: string;
     parserNoteNeedsCheck?: true;
     activeSubscene?: string;
+    recentTurns?: ParserSceneTurnContext[];
   };
   entities?: ParserEntityContext[];
   knownEntities?: ParserEntityContext[];
