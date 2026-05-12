@@ -384,7 +384,11 @@ export class Parser {
     const patchSingle = (label: string): ParserToolAction => {
       if (action.type === 'lookTarget') return { ...action, target: label };
       if (action.type === 'examineTarget') return { ...action, target: label };
-      if (action.type === 'takeTarget') return { ...action, target: label };
+      if (action.type === 'takeTarget') {
+        return action.anchor && action.relation && scope === 'target'
+          ? { ...action, anchor: label }
+          : { ...action, target: label };
+      }
       if (action.type === 'putTarget') {
         return scope === 'target' ? { ...action, target: label } : { ...action, item: label };
       }
@@ -1514,9 +1518,18 @@ export class Parser {
       if (outcome.status !== 'ok') {
         break;
       }
+      if (outcome.effects?.length) {
+        this.refreshActiveWorldModel();
+      }
     }
 
     return outcomes;
+  }
+
+  private refreshActiveWorldModel(): void {
+    const worldModel = this.worldModelBuilder.build('', this.pendingState);
+    this.activeWorldModel = worldModel;
+    this.activeScope = worldModel.scope;
   }
 
   private executeParserAction(

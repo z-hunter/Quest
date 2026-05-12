@@ -2198,6 +2198,102 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory.map((entity: any) => entity.name)).not.toContain('pencil_a');
   });
 
+  it('resolves numbered TAKE FROM container clarification without repeating the prompt', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('upper_drawer', {
+      title: 'upper drawer',
+      description: 'The upper drawer.',
+    });
+    fixture.addEntity('middle_drawer', {
+      title: 'middle drawer',
+      description: 'The middle drawer.',
+    });
+    fixture.addEntity('upper_drawer_surface', {
+      title: 'Upper drawer tray',
+      description: 'A tray inside the upper drawer.',
+      spatial: { parentNodeId: 'upper_drawer', relation: 'in' },
+      components: [
+        { type: 'Surface', capacity: 5, groups: [], items: [{ id: 'id_card', x: 0, y: 0 }] },
+      ],
+    });
+    fixture.addEntity('middle_drawer_surface', {
+      title: 'Middle drawer tray',
+      description: 'A tray inside the middle drawer.',
+      spatial: { parentNodeId: 'middle_drawer', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 5, groups: [], items: [] }],
+    });
+    fixture.addEntity('id_card', {
+      title: 'ID card',
+      description: 'A plastic ID card.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'upper_drawer_surface', relation: 'on' },
+    });
+
+    const ambiguous = await fixture.run('take id card from drawer');
+
+    expect(ambiguous.messages.at(-1)).toContain('Which container do you mean: 1: upper drawer');
+    expect(ambiguous.messages.at(-1)).toContain('2: middle drawer');
+    expect(ambiguous.pendingIntent).toBe('take');
+
+    const resolved = await fixture.run('1');
+
+    expect(resolved.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'ID card' })
+    );
+    expect(resolved.pendingIntent).toBeNull();
+    expect(inventoryNames(fixture)).toEqual(['id_card']);
+  });
+
+  it('refreshes scope between LLM plan actions so open drawer then take sees revealed items', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('upper_drawer', {
+      title: 'upper drawer',
+      description: 'The upper drawer.',
+      components: [{ type: 'Switch', state: 1, clearlyOpenable: true }],
+    });
+    fixture.addEntity('id_card', {
+      title: 'ID card',
+      description: 'A plastic ID card.',
+      synonyms: ['id', 'badge'],
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: 'upper_drawer', relation: 'in' },
+    });
+    const parser = fixture.parser as any;
+    const initialWorldModel = parser.worldModelBuilder.build('open drawer and take id', null);
+    parser.activeWorldModel = initialWorldModel;
+    parser.activeScope = initialWorldModel.scope;
+    expect(initialWorldModel.scope.takable.map((entity: any) => entity.name)).not.toContain(
+      'id_card'
+    );
+
+    const result = JSON.parse(
+      parser.runParserCore({
+        stage: 'llm-v3',
+        output: {
+          kind: 'plan',
+          actions: [
+            { type: 'openTarget', target: 'upper drawer' },
+            { type: 'takeTarget', target: 'ID card', anchor: null, relation: null },
+          ],
+        },
+        debug: {
+          rawInput: 'open drawer and take id',
+          normalizedInput: 'OPEN DRAWER AND TAKE ID',
+          verb: 'LLM',
+          noun: '',
+        },
+      })
+    );
+
+    expect(result.outcomes.map((outcome: any) => outcome.code)).toEqual([
+      'switch_opened',
+      'item_taken',
+    ]);
+    expect(inventoryNames(fixture)).toEqual(['id_card']);
+  });
+
   it('takes a nested semantic descendant from an outer anchor-relative container', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
