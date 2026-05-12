@@ -2,13 +2,34 @@ import type { IGame } from './IGame';
 import { QuadObject } from '../entities/QuadObject';
 import { SoundManager, type SoundOptions } from '../systems/SoundManager';
 
+export interface CustomTimer {
+  id: number;
+  handler: (...args: any[]) => void;
+  timeout: number;
+  elapsed: number;
+  isInterval: boolean;
+  args: any[];
+}
+
 export class ScriptAPI {
-  private intervals: number[] = [];
-  private timeouts: number[] = [];
+  public scope: 'scene' | 'global' = 'scene';
+  public boundSceneId: string | null = null;
+
+  private timers: Map<number, CustomTimer> = new Map();
+  private nextTimerId: number = 1;
   private game: IGame;
 
   constructor(game: IGame) {
     this.game = game;
+    this.boundSceneId = this.game.sceneManager.currentScene?.id || null;
+  }
+
+  /**
+   * Declares this script as a global script, which will keep running and ticking
+   * even if the scene it was launched from is unloaded or switched.
+   */
+  makeGlobal() {
+    this.scope = 'global';
   }
 
   log(message: string) {
@@ -19,44 +40,75 @@ export class ScriptAPI {
     return this.game.text(key, params);
   }
 
-  setInterval(handler: TimerHandler, timeout?: number, ...args: any[]): number {
-    const id = setInterval(handler, timeout, ...args);
-    this.intervals.push(id);
+  setInterval(handler: (...args: any[]) => void, timeout: number = 0, ...args: any[]): number {
+    const id = this.nextTimerId++;
+    this.timers.set(id, { id, handler, timeout, elapsed: 0, isInterval: true, args });
     return id;
   }
 
   clearInterval(id: number | undefined): void {
-    if (id === undefined) return;
-    const idx = this.intervals.indexOf(id);
-    if (idx !== -1) {
-      this.intervals.splice(idx, 1);
+    if (id !== undefined) {
+      this.timers.delete(id);
     }
-    clearInterval(id);
   }
 
-  setTimeout(handler: TimerHandler, timeout?: number, ...args: any[]): number {
-    const id = setTimeout(handler, timeout, ...args);
-    this.timeouts.push(id);
+  setTimeout(handler: (...args: any[]) => void, timeout: number = 0, ...args: any[]): number {
+    const id = this.nextTimerId++;
+    this.timers.set(id, { id, handler, timeout, elapsed: 0, isInterval: false, args });
     return id;
   }
 
   clearTimeout(id: number | undefined): void {
-    if (id === undefined) return;
-    const idx = this.timeouts.indexOf(id);
-    if (idx !== -1) {
-      this.timeouts.splice(idx, 1);
+    if (id !== undefined) {
+      this.timers.delete(id);
     }
-    clearTimeout(id);
+  }
+
+  /**
+   * Async helper that resolves after a specified number of milliseconds.
+   * Relies on the engine's tick mechanism, so it naturally pauses when the scene is inactive.
+   * @param ms Milliseconds to wait
+   */
+  wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      this.setTimeout(() => resolve(), ms);
+    });
+  }
+
+  /**
+   * Updates all active timers. Called by ScriptRegistry on active scripts.
+   * @param deltaTime Elapsed time in ms since the last frame
+   */
+  update(deltaTime: number) {
+    for (const timer of this.timers.values()) {
+      timer.elapsed += deltaTime;
+      if (timer.elapsed >= timer.timeout) {
+        timer.handler(...timer.args);
+        if (timer.isInterval) {
+          timer.elapsed = 0; // Reset for next interval
+        } else {
+          this.timers.delete(timer.id);
+        }
+      }
+    }
   }
 
   /**
    * Cleans up all active timers created by this script instance.
    */
   dispose() {
-    this.intervals.forEach((id) => clearInterval(id));
-    this.timeouts.forEach((id) => clearTimeout(id));
-    this.intervals = [];
-    this.timeouts = [];
+    this.timers.clear();
+  }
+
+  /**
+   * Returns runtime state metadata for this script instance.
+   */
+  getRuntimeState() {
+    return {
+      scope: this.scope,
+      boundSceneId: this.boundSceneId,
+      activeTimers: this.timers.size,
+    };
   }
 
   /**

@@ -58,6 +58,8 @@ The `ScriptContext` provides access to the `api` object.
 | Method                 | Description                                             |
 | :--------------------- | :------------------------------------------------------ |
 | `api.log(message)`     | Prints a message to the in-game console.                |
+| `api.wait(ms)`         | Async helper that resolves after `ms` game-time milliseconds. Automatically pauses if scene is inactive. |
+| `api.makeGlobal()`     | Declares the script as global, meaning its timers will continue ticking regardless of the active scene. |
 | `api.getQuad(name)`    | Returns a `QuadObject` by name, or `null`.              |
 | `api.getActor(name)`   | Returns an `Actor` instance by name, or `null`.         |
 | `api.getEntity(name)`  | Returns a generic `Entity` instance by name, or `null`. |
@@ -99,7 +101,50 @@ The `ScriptContext` provides access to the `api` object.
 
 ---
 
-## Chapter 3: Debugging & Undo
+---
+
+## Chapter 3: Lifecycles, Scopes, and Async Timing
+
+Scanline Engine handles scripts securely, binding them to the lifecycle of the active scene.
+
+### 3.1 Pausing and Resuming
+By default, scripts are **Scene-Bound**. When a script calls `api.setInterval`, `api.setTimeout`, or `await api.wait(1000)`, those timers are ticked by the engine's `update(deltaTime)` loop.
+If the player transitions to a different scene, the engine **pauses** the timers for the inactive scene. When the player returns, the timers **resume** perfectly from where they left off.
+
+> **Editor Note:** If you manually reload a scene in the Scene Editor, all scripts bound to that scene are permanently stopped to prevent duplication.
+
+### 3.2 Global Scripts
+If you want a script to continue running in the background across all scenes (e.g., a global clock, or ambient system), declare it as global at the start of your script:
+
+```typescript
+ScriptRegistry.register('my_global_clock', ({ api }) => {
+  api.makeGlobal(); // Now this script ticks regardless of the active scene
+
+  api.setInterval(() => {
+    // This runs every 1000ms, everywhere
+  }, 1000);
+});
+```
+
+### 3.3 Async/Await and Native Promises
+You can use `async/await` in your scripts in combination with `api.wait()`.
+
+```typescript
+ScriptRegistry.register('cutscene', async ({ api }) => {
+  const hero = api.getActor('hero');
+  hero.walkTo(100, 100);
+  await api.wait(2000); // Wait 2 seconds (in game time)
+  hero.playAnimSet('dance');
+});
+```
+
+> [!WARNING]
+> **Native Promise Limitations**
+> The engine can only pause its own timers (`api.wait`, `api.setInterval`). If you use native browser mechanisms like `fetch()` or `Promise.all()` over external events, those operations will continue running in the background even if the scene is inactive. Always try to build logic using the `api` methods to guarantee proper pause/resume behavior.
+
+---
+
+## Chapter 4: Debugging & Undo
 
 - **Hot Reload**: Edits to scripts in `src/scripts/` are applied immediately without reloading the page.
 - **Granular Undo**: Use `api.saveCheckpoint()` before making changes to allow users to `Undo` script actions step-by-step in the Editor.

@@ -9,6 +9,7 @@ import { QuadObject } from '../entities/QuadObject';
 import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
+import { ScriptRegistry } from '../core/ScriptRegistry';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -257,6 +258,12 @@ export class SceneManager {
   async loadSceneData(data: any, filename?: string, explicitPath?: string): Promise<void> {
     try {
       const sceneId = filename || data.id || 'loaded_scene';
+
+      // If we are hot-reloading or entirely replacing this scene, clean up any old scripts bound to it
+      if (this.scenes.has(sceneId)) {
+        ScriptRegistry.stopSceneScripts(sceneId);
+      }
+
       const pathValue = explicitPath || `${sceneId.replace(/\\/g, '/')}.json`;
       const newScene = this.instantiateScene(sceneId, data, pathValue);
 

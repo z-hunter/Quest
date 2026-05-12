@@ -63,6 +63,41 @@ export class ScriptRegistry {
     }
   }
 
+  static stopSceneScripts(sceneId: string): void {
+    for (const [id, instances] of this.activeScripts.entries()) {
+      const remainingInstances = instances.filter((api) => {
+        if (api.scope === 'scene' && api.boundSceneId === sceneId) {
+          api.dispose();
+          return false;
+        }
+        return true;
+      });
+      if (remainingInstances.length === 0) {
+        this.activeScripts.delete(id);
+      } else {
+        this.activeScripts.set(id, remainingInstances);
+      }
+    }
+  }
+
+  static update(deltaTime: number, currentSceneId: string | undefined): void {
+    for (const instances of this.activeScripts.values()) {
+      for (const api of instances) {
+        if (api.scope === 'global' || api.boundSceneId === currentSceneId) {
+          api.update(deltaTime);
+        }
+      }
+    }
+  }
+
+  static getRuntimeState(): Record<string, any[]> {
+    const state: Record<string, any[]> = {};
+    for (const [id, instances] of this.activeScripts.entries()) {
+      state[id] = instances.map((api) => api.getRuntimeState());
+    }
+    return state;
+  }
+
   static has(id: string): boolean {
     return this.scripts.has(id);
   }

@@ -13,6 +13,7 @@ import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
+import { ScriptRegistry } from './ScriptRegistry';
 
 import { Console } from './Console';
 import type { SwitchComponent } from '../systems/ComponentSystem';
@@ -234,6 +235,7 @@ export class Game implements IGame {
         disablePutDebug: () => {
           this.inventoryManager.disablePutDebug();
         },
+        getScriptRuntimeState: () => ScriptRegistry.getRuntimeState(),
       };
     }
     this.editor = new SceneEditor(this);
@@ -304,6 +306,7 @@ export class Game implements IGame {
     if (this.editor.enabled) {
       this.editor.update(deltaTime);
     }
+    ScriptRegistry.update(deltaTime, this.sceneManager.currentScene?.id);
 
     if (this.sceneManager.currentScene) {
       const scene = this.sceneManager.currentScene;
