@@ -192,6 +192,7 @@ export class SceneManager {
     }
 
     this.currentScene = scene;
+    SoundManager.getInstance().setEnvironment(scene.soundEnv);
     if (oldScene !== scene) {
       scene.clearParserRecentTurns();
     }
@@ -533,6 +534,10 @@ export class SceneManager {
     if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
     if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
     if (data.scaling) newScene.scaling = data.scaling;
+
+    if (data.soundEnv) {
+      newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
+    }
 
     if (data.walkbox) {
       (data.walkbox || []).forEach((wb: any) => {

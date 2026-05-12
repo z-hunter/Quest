@@ -31,6 +31,23 @@ From the PannerNode, the signal splits:
 - **Reverb Path:** `-> ConvolverNode -> ReverbWetGain -> MasterGain`
 - **Delay Path:** `-> DelayNode -> DelayWetGain -> MasterGain`
 
+## 3D Sound Environment (3D SOUND ENV.)
+
+The engine provides a dedicated **3D SOUND ENV.** section in the Scene Properties panel to control the acoustic signature of each location.
+
+### Core Parameters
+- **Max Distance**: The threshold beyond which sound volume stops decreasing.
+- **Ref Distance**: The radius around the listener where sound remains at 100% volume.
+- **Rolloff Factor**: The steepness of the volume drop-off curve beyond Ref Distance.
+- **Distance Model**: The attenuation algorithm (`Linear`, `Inverse`, or `Exponential`).
+- **Panning Model**: Spatialization algorithm (`HRTF` recommended for 3D, `Equal Power` for simple stereo).
+- **Default Reverb IR**: A scene-wide impulse response file (`.wav`) automatically applied to all attached sounds using Proximity EQ.
+- **Reverb Min %**: The minimum reverb level (0.0 to 1.0) present even when the source is at zero distance.
+- **Reverb Drown Dist**: The distance at which the dry signal fades to zero and reverb becomes 100%.
+
+### Dynamic Hot-Swapping
+The system supports real-time switching of the **Default Reverb IR**. When changed in the editor, all active sounds using the scene default will immediately update their acoustics by recreating their internal `ConvolverNode`. Clearing the field will smoothly return sounds to a "dry" state.
+
 ## Proximity Effect (EQ & Reverb Scaling)
 
 When `useProximityEQ: true` is enabled, the spatial relationship between the camera and the object drives a dynamic mixer:
@@ -43,11 +60,9 @@ The system applies a +6dB boost at 250Hz, but only when the source is extremely 
 
 ### 2. Reverb & Dry Scaling
 Atmospheric depth is controlled by the **Total 3D Distance** (including Z):
-- **Close Distance:** Reverb is ducked to roughly 20% of its base amount, and the dry signal is kept at 80%. The sound feels "inside your head" with wide stereo.
-- **Far Distance (e.g. Parallax 0):** The dry signal fades out entirely (0%), and the reverb wet multiplier increases to 100%. The sound becomes mono and gets "swallowed" by the room acoustics.
+- **Close Distance:** Reverb is ducked to the **Reverb Min %** level, and the dry signal is prioritized.
+- **Far Distance (at Reverb Drown Dist):** The dry signal fades out entirely (0%), and the reverb wet multiplier reaches 100%. The sound becomes mono and gets "swallowed" by the room acoustics.
 - **Scaling:** Uses an exponential curve (power of 1.5) to keep the sound drier for a wider radius before reverb takes over.
-
----
 
 ## Script API Reference
 
@@ -56,8 +71,8 @@ Atmospheric depth is controlled by the **Total 3D Distance** (including Z):
 // Load a regular audio file
 await api.loadSound('door_creak', '/sounds/door_creak.mp3');
 
-// Load an Impulse Response (IR) file for the Convolution Reverb
-await api.loadReverbIR('/sounds/ir/room_drum.wav');
+// Load an Impulse Response (IR) file manually
+await api.loadReverbIR('/sounds/ir/large_hall.wav');
 ```
 
 ### 2. Playing Sounds
@@ -69,13 +84,14 @@ const handle = api.playSound('ui_click', {
 });
 
 // Play a 3D sound attached to an entity
+// It will automatically inherit the scene's Default Reverb IR if available.
 const handle3D = api.playSoundAttached('door_creak', 'Entity_Door_1', {
     volume: 1.0,
     useProximityEQ: true, // Enables distance-based EQ and reverb scaling
-    reverbAmount: 0.5,    // Base reverb mix (0.0 to 1.0)
-    delayAmount: 0.0      // Echo mix
+    noReverb: false      // Set to true to bypass scene-wide default reverb
 });
 ```
+
 
 ### 3. Managing Playback
 ```typescript

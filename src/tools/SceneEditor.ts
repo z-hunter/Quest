@@ -321,7 +321,7 @@ export class SceneEditor {
     }
 
     // Prevent default for F-keys and Editor keys when editor is open
-    if (this.enabled) {
+    if (this.enabled && e.key) {
       if (
         ['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(
           e.key.toLowerCase()

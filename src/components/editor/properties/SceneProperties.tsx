@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Scene } from '../../../scene/Scene';
+import { SoundManager } from '../../../systems/SoundManager';
 
 export const SceneProperties: React.FC = () => {
   const { game, obj, formatPanelNumber, setSectionRef, incrementObjectVersion, handleChange } =
@@ -332,6 +333,200 @@ export const SceneProperties: React.FC = () => {
               </>
             );
           })()}
+        </div>
+      )}
+
+      {scene.soundEnv && (
+        <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
+          <div className="properties-section-header properties-section-purple">
+            <div className="properties-section-title">
+              <span className="properties-section-number properties-section-purple">3</span>
+              <span className="properties-section-label">3D SOUND ENV.</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+            <div>
+              <label className="e-label">Max Distance</label>
+              <input
+                type="number"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.audioMaxDistance)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.audioMaxDistance = val;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Reverb Drown Dist</label>
+              <input
+                type="number"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.reverbMaxDist)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.reverbMaxDist = val;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Reverb Min %</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                max="1"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.reverbMinPercent)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.reverbMinPercent = Math.max(0, Math.min(1, val));
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Zoom Sensitivity</label>
+              <input
+                type="number"
+                step="0.1"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.zoomSensitivity)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.zoomSensitivity = val;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Ref Distance</label>
+              <input
+                type="number"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.pannerRefDistance)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.pannerRefDistance = val;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Rolloff Factor</label>
+              <input
+                type="number"
+                step="0.1"
+                className="e-input"
+                value={formatPanelNumber(scene.soundEnv.pannerRolloffFactor)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val)) {
+                    scene.soundEnv.pannerRolloffFactor = val;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="e-label">Panning Model</label>
+              <select
+                className="e-input"
+                value={scene.soundEnv.panningModel}
+                onChange={(e) => {
+                  scene.soundEnv.panningModel = e.target.value as PanningModelType;
+                  SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                  incrementObjectVersion();
+                }}
+              >
+                <option value="HRTF">HRTF</option>
+                <option value="equalpower">Equal Power</option>
+              </select>
+            </div>
+            <div>
+              <label className="e-label">Distance Model</label>
+              <select
+                className="e-input"
+                value={scene.soundEnv.distanceModel}
+                onChange={(e) => {
+                  scene.soundEnv.distanceModel = e.target.value as DistanceModelType;
+                  SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                  incrementObjectVersion();
+                }}
+              >
+                <option value="linear">Linear</option>
+                <option value="inverse">Inverse</option>
+                <option value="exponential">Exponential</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="e-row" style={{ marginTop: '5px' }}>
+            <label className="e-label">Default Reverb IR</label>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <input
+                type="text"
+                className="e-input"
+                style={{ flex: 1 }}
+                placeholder="None (Dry)"
+                value={scene.soundEnv.defaultReverbIR || ''}
+                onChange={(e) => {
+                  scene.soundEnv.defaultReverbIR = e.target.value;
+                  SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                  incrementObjectVersion();
+                }}
+              />
+              <button
+                className="e-btn"
+                title="Select IR File"
+                onClick={() => {
+                  game.openFileBrowser('load', 'public/sounds/ir', (file) => {
+                    // Extract relative path from public/sounds/ir/...
+                    // 1. Normalize slashes
+                    const normalized = file.replace(/\\/g, '/');
+                    // 2. Extract path after 'public/' if present
+                    const pubMatch = normalized.match(/\/public\/(.*)$/i);
+                    let relative = pubMatch ? pubMatch[1] : normalized;
+                    // 3. If no 'public/', check for 'sounds/'
+                    if (!pubMatch && relative.includes('sounds/')) {
+                      relative = relative.substring(relative.indexOf('sounds/'));
+                    }
+                    if (!pubMatch && !relative.includes('/')) {
+                      relative = `sounds/ir/${relative}`;
+                    }
+                    // 4. Strip unwanted extensions like .json
+                    relative = relative.replace(/\.json$/i, '');
+                    // 5. Ensure starts with /
+                    if (!relative.startsWith('/')) relative = '/' + relative;
+
+                    scene.soundEnv.defaultReverbIR = relative;
+                    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+                    incrementObjectVersion();
+                  });
+                }}
+              >
+                ...
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

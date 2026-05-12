@@ -77,6 +77,18 @@ The Shadow System manages `Actor` shadows, handling depth scaling and floor slop
 
 - **Shape Caching**: Captures the "Base Visual Shape" when a shadow is assigned, preventing "Parallax Drift" (skewing/leaning) while maintaining user-designed shapes.
 
+### 3.5 3D Audio System
+
+The engine features a robust spatial audio pipeline built on the Web Audio API, mapping 2.5D parallax to a 3D coordinate system.
+
+- **Coordinate Mapping**: `Parallax 1.1` represents Z=0 (listener plane). Higher values move sources behind/above the listener (+Z), while lower values move them toward infinity (-Z).
+- **Proximity EQ**: A dynamic peaking filter (+6dB at 250Hz) applies when sources are within a 100-pixel radius of the camera at parallax 1.1.
+- **Convolution Reverb**:
+  - **Scene Default**: Scenes can specify a global Impulse Response (IR). Attached sounds automatically inherit this acoustics unless bypassed.
+  - **Dynamic Routing**: The graph (`Gain -> Convolver -> WetGain -> Master`) is dynamically rebuilt during IR hot-swaps to bypass Web Audio API's immutable buffer limitation.
+  - **Distance Mix**: Dry/Wet balance is calculated frame-by-frame based on the `Reverb Drown Dist` and `Reverb Min %` settings.
+- **Gain Staging**: Convolution output is trimmed by a constant factor (`REVERB_WET_OUTPUT_GAIN`) and features a brief fade-in (120ms) to avoid clipping and surges during attachment.
+
 ---
 
 ## 4. Gameplay & Semantic Systems
@@ -127,6 +139,15 @@ Objects can attach functional execution components.
 - **Technology**: React + Zustand.
 - **Components**: HierarchyPanel (reactive scene tree), PropertiesPanel (two-way binding), SpriteEditor.
 - **Tools**: Object Locking (`Alt+L`), Snapping (Grid edges, Entity corners).
+
+### 6.2. Dynamic Tooltip System
+
+The Editor's Properties Panel uses a centralized, dynamic tooltip injection system to maintain consistency and allow for easy global updates of field descriptions.
+
+- **Registry**: All tooltips are defined in `src/components/editor/properties/propertiesConstants.ts` within the `PROPERTIES_LABEL_TOOLTIPS` record.
+- **Injection**: The `PropertiesPanel.tsx` component runs a side-effect that scans all `label.e-label` elements. It matches their text content against the registry and injects the corresponding `title` attribute.
+- **Convention**: Developers should **not** manually add `title` attributes to labels in specific property components (like `SceneProperties.tsx`). Instead, the label text must match an entry in the registry to receive a tooltip and the associated `e-tooltip-label` CSS styles (help cursor, hover color).
+- **Normalization**: The system includes a `normalizeTooltipLabelText` helper to handle common variations and prefixes (e.g., stripping "Mode:" or handling "Opacity").
 
 ---
 

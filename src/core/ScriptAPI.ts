@@ -147,17 +147,20 @@ export class ScriptAPI {
    * Plays a sound attached to a 3D scene entity, automatically tracking its position.
    * @param id The ID of the loaded sound.
    * @param entityName The name of the entity to attach the sound to.
-   * @param options Sound options. Includes useProximityEQ.
+   * @param options Sound options. Includes useProximityEQ and noReverb.
    * @returns Playback handle ID.
    */
   playSoundAttached(
     id: string,
     entityName: string,
-    options?: SoundOptions & { useProximityEQ?: boolean }
+    options?: SoundOptions & { useProximityEQ?: boolean; noReverb?: boolean }
   ): number {
     const handle = SoundManager.getInstance().play(id, options);
     if (handle !== -1) {
-      SoundManager.getInstance().attachSound(handle, entityName, !!options?.useProximityEQ);
+      SoundManager.getInstance().attachSound(handle, entityName, {
+        useProximityEQ: !!options?.useProximityEQ,
+        bypassSceneReverb: !!options?.noReverb,
+      });
     }
     return handle;
   }

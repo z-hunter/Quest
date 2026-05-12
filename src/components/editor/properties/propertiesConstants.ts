@@ -107,6 +107,24 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   Max: 'Maximum depth-scaling factor used at the front end of the scene.',
   'Horizon Y': 'Y coordinate treated as the horizon for depth scaling.',
   'Front Y': 'Y coordinate treated as the foreground limit for depth scaling.',
+  'Max Distance':
+    'The maximum distance (in pixels) beyond which the sound volume stops decreasing and remains at its minimum level. Useful for limiting the audible range of local sounds.',
+  'Reverb Drown Dist':
+    'The distance (based on depth/parallax) at which the dry sound is completely replaced by reverb. Higher values keep the sound "clear" further away; lower values make it "washy" and distant quickly.',
+  'Reverb Min %':
+    'The minimum amount of reverb present even when the sound is right next to the listener (at zero distance). 0.0 is completely dry; 1.0 is full reverb.',
+  'Zoom Sensitivity':
+    'Controls how much the camera zoom affects the perceived audio distance. 0 means zoom has no effect; 1.0 means audio distance scales 1:1 with optical zoom.',
+  'Ref Distance':
+    'The "Reference Distance" — the distance from the listener where volume begins to fall off. Below this value, the sound plays at 100% volume. Increase this for larger objects that should sound "close" over a wider area.',
+  'Rolloff Factor':
+    'Determines how quickly the volume decreases as the listener moves away from the source beyond the Reference Distance. Higher values cause a steeper, faster drop in volume.',
+  'Panning Model':
+    'The spatialization algorithm:\n- HRTF: High-quality, simulates human ear filtering (recommended).\n- Equal Power: Simple stereo panning without frequency filtering.',
+  'Distance Model':
+    'The formula used to calculate volume drop-off:\n- Linear: Steady, constant decrease.\n- Inverse: Natural-sounding decrease (logarithmic).\n- Exponential: Very sharp drop-off at a distance.',
+  'Default Reverb IR':
+    'Impulse response file used as the default reverb for all attached sounds in this scene. If empty, attached sounds will be dry by default.',
   'UI Scale': 'Editor interface scale multiplier.',
   'Game Zoom':
     'Scales the game viewport inside the application window. Fit uses the largest size that still stays fully visible.',

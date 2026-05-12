@@ -27,6 +27,7 @@ import type {
 } from './spatialTypes';
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
+import type { SceneSoundEnv } from '../systems/SoundManager';
 
 interface PickupAnimation {
   entity: Entity;
@@ -87,6 +88,7 @@ export interface SceneData {
   camMaxX?: number;
   camMinY?: number;
   camMaxY?: number;
+  soundEnv?: Partial<SceneSoundEnv>;
 }
 
 export class Scene {
@@ -113,6 +115,17 @@ export class Scene {
   cameraSpeed: number;
   camDeadzoneX: number = 50;
   camDeadzoneY: number = 30;
+
+  soundEnv: SceneSoundEnv = {
+    audioMaxDistance: 10000,
+    reverbMaxDist: 1750,
+    reverbMinPercent: 0.2,
+    zoomSensitivity: 0.7,
+    pannerRefDistance: 100,
+    pannerRolloffFactor: 0.7,
+    panningModel: 'HRTF',
+    distanceModel: 'linear',
+  };
 
   // Camera Bounds (undefined = infinite)
   camMinX?: number;
@@ -1021,6 +1034,7 @@ export class Scene {
       camMaxX: this.camMaxX,
       camMinY: this.camMinY,
       camMaxY: this.camMaxY,
+      soundEnv: this.soundEnv,
     };
   }
 }
