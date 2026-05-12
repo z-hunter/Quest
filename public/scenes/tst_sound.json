@@ -27,9 +27,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 0,
-      "x": 2.842170943040401e-14,
-      "y": 1.7763568394002505e-14,
+      "parallax": 1,
+      "x": 1.2628032949009211,
+      "y": 1.3113726523971274,
       "width": 15,
       "height": 15,
       "baseWidth": 30,
@@ -44,7 +44,7 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 8
     }
   ],
   "folders": [],

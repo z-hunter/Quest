@@ -141,10 +141,12 @@ export class SoundManager {
     if (options.position) {
       pannerNode = this.ctx.createPanner();
       pannerNode.panningModel = 'HRTF';
-      pannerNode.distanceModel = 'exponential';
-      pannerNode.refDistance = 1000;
+      pannerNode.distanceModel = 'linear';
+      pannerNode.refDistance = 100;
       pannerNode.maxDistance = AUDIO_MAX_DISTANCE;
-      pannerNode.rolloffFactor = 1.5;
+      // Fade to 30% volume at max distance to keep distant reverb audible
+      // and prevent logarithmic steepness at the tail end.
+      pannerNode.rolloffFactor = 0.7;
 
       pannerNode.positionX.value = options.position[0];
       pannerNode.positionY.value = options.position[1];
@@ -278,26 +280,45 @@ export class SoundManager {
     }
   }
 
-  public setProximityEQ(playbackId: number, distance: number) {
+  public setProximityEQ(
+    playbackId: number,
+    dx: number,
+    dy: number,
+    parallax: number,
+    zoom: number,
+    totalDistance: number
+  ) {
     const active = this.activeNodes.get(playbackId);
     if (!active || !this.ctx || !active.eqNode) return;
 
     const now = this.ctx.currentTime;
-    // Map distance (0 to MAX) to EQ params
-    // Closer (dist -> 0) = louder 250Hz (+6dB), wider stereo (handled by panner distance naturally, but we can tweak)
-    // Less reverb, more pre-delay.
 
-    const normalizedDist = Math.min(distance / AUDIO_MAX_DISTANCE, 1.0); // 0 = exactly at listener, 1 = far
+    // 1. Parallax Multiplier (M_p)
+    // Peak at 1.1, zero at 0.9 and 1.2
+    let mp = 0;
+    if (parallax >= 0.9 && parallax <= 1.1) {
+      mp = (parallax - 0.9) / 0.2; // 0.9 -> 0, 1.1 -> 1
+    } else if (parallax > 1.1 && parallax <= 1.2) {
+      mp = 1.0 - (parallax - 1.1) / 0.1; // 1.1 -> 1, 1.2 -> 0
+    }
+    mp = Math.max(0, mp);
 
-    // 250Hz Boost: +6dB when close, 0dB when far
-    const eqBoost = (1.0 - normalizedDist) * 6.0;
+    // 2. X/Y Screen Distance Multiplier (M_xy)
+    // Peak at 0, zero at 100 pixels.
+    // Screen distance = World Distance * Zoom
+    const dxyWorld = Math.sqrt(dx * dx + dy * dy);
+    const dxyScreen = dxyWorld * zoom;
+    const mxy = Math.max(0, 1.0 - dxyScreen / 100);
+
+    // Final Boost: +6dB when exactly on head, 0dB when out of bounds
+    const eqBoost = mp * mxy * 6.0;
     active.eqNode.gain.setTargetAtTime(eqBoost, now, 0.1);
 
-    // Reverb decrease when close, increase when far
+    // Reverb/Dry scaling still follows the total 3D distance for atmospheric depth
     if (active.reverbWetGain && active.baseReverbAmount !== undefined) {
-      // Far distance = more wet, less dry.
-      // Use an exponential curve (power of 1.5) to keep the sound drier for a wider radius
-      // before the reverb aggressively takes over at great distances.
+      // Drown completely in reverb by distance 1750 (which corresponds exactly to Parallax 0.4)
+      const REVERB_MAX_DIST = 1750;
+      const normalizedDist = Math.min(totalDistance / REVERB_MAX_DIST, 1.0);
       const expDist = Math.pow(normalizedDist, 1.5);
 
       const wetMultiplier = 0.2 + expDist * 0.8;
@@ -351,36 +372,58 @@ export class SoundManager {
           let pzWorld = 0;
           if (parallax === 1.1) {
             pzWorld = 0; // Head level
-          } else if (parallax > 0 && parallax < 1.1) {
-            // Map 1.1 -> 0, 1.0 -> -400, 0 -> -Infinity
-            const f = 4000;
-            pzWorld = -f * (1.1 / parallax - 1);
-          } else if (parallax >= 1.1) {
-            // Moving faster than camera -> goes behind listener (+Z)
-            pzWorld = (parallax - 1.1) * 4000;
-          } else if (parallax <= 0) {
+          } else if (parallax >= 0 && parallax < 1.1) {
+            // Map 1.1 -> 0, 1.0 -> -100, 0 -> -AUDIO_MAX_DISTANCE
             if (parallax === 0) {
-              pzWorld = -AUDIO_MAX_DISTANCE; // Infinity in front
+              pzWorld = -AUDIO_MAX_DISTANCE;
             } else {
-              // Negative parallax: infinity behind listener (+Z)
-              // Map -2 to AUDIO_MAX_DISTANCE
-              pzWorld = Math.abs(parallax) * (AUDIO_MAX_DISTANCE / 2);
+              const f = 1000;
+              pzWorld = -f * (1.1 / parallax - 1);
             }
+          } else if (parallax > 1.1) {
+            // Moving faster than camera -> goes behind listener (+Z)
+            pzWorld = (parallax - 1.1) * 1000;
+          } else {
+            // Negative parallax: behind listener (+Z)
+            // Map -2 to AUDIO_MAX_DISTANCE
+            pzWorld = Math.abs(parallax) * (AUDIO_MAX_DISTANCE / 2);
           }
 
-          const pz = pzWorld / safeZoom;
+          // Clamp world Z to max allowed distance to prevent volume artifacts
+          // when parallax formulas exceed the panner's maxDistance.
+          pzWorld = Math.max(-AUDIO_MAX_DISTANCE, Math.min(AUDIO_MAX_DISTANCE, pzWorld));
 
+          let pz = pzWorld;
+          const ZOOM_SENSITIVITY = 0.7; // Degree of zoom influence on audio distance
+          const effectiveZoom = 1.0 + (safeZoom - 1.0) * Math.abs(parallax);
+
+          if (safeZoom > 1.0) {
+            // Zooming in: Pull objects closer, weighted by sensitivity
+            const approachZoom = 1.0 + (safeZoom - 1.0) * Math.abs(parallax) * ZOOM_SENSITIVITY;
+            pz = pzWorld / Math.max(0.01, approachZoom);
+          } else if (safeZoom < 1.0) {
+            // Zooming out: Push objects away with a steep power curve, weighted by sensitivity
+            const zoomOutAmount = 1.0 - safeZoom;
+            const extraZ = Math.pow(zoomOutAmount, 4.0) * AUDIO_MAX_DISTANCE * ZOOM_SENSITIVITY;
+            if (pzWorld < 0) pz = pzWorld - extraZ;
+            else if (pzWorld > 0) pz = pzWorld + extraZ;
+          }
+
+          // X/Y remain in world space. Zoom optical effect applies ONLY to depth (Z).
+          // As Z gets smaller (zooming in), the panning angle naturally widens
+          // because X/Y remain constant relative to a shrinking Z.
           active.panner.positionX.setTargetAtTime(px, this.ctx!.currentTime, 0.1);
           active.panner.positionY.setTargetAtTime(py, this.ctx!.currentTime, 0.1);
           active.panner.positionZ.setTargetAtTime(pz, this.ctx!.currentTime, 0.1);
 
           if (active.attached.useProximityEQ) {
-            // Calculate 3D distance
+            // Calculate 3D distance and X/Y components using actual audio coordinates
             const dx = px - lx;
             const dy = py - ly;
             const dz = pz - lz;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            this.setProximityEQ(playbackId, dist);
+            const totalDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+            this.setProximityEQ(playbackId, dx, dy, parallax, effectiveZoom, totalDist);
           }
         } else {
           // Object no longer exists, stop the sound

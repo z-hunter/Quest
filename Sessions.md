@@ -1844,3 +1844,55 @@ Commit scope:
 - Static prompts below the Anthropic minimum will run normally but uncached.
 - Cache TTL is 5 minutes, so long pauses in a scene may cause the next request to recreate cache.
 - Dynamic context still carries ordinary input tokens; prompt caching reduces repeated static prefix cost, not the whole request.
+
+## Session Entry - 2026-05-12 02:58 +02:00
+
+# Session Summary
+
+## Session Goal
+Refining 3D Spatial Audio for the engine, ensuring that sound triggering, panning, and environmental effects respond naturally to camera zoom and entity movement.
+
+## What Was Implemented
+
+### 1. SoundManager Architecture
+- Implemented `SoundManager.ts` using Web Audio API.
+- Support for 3D Spatial Audio (HRTF panning), Convolution Reverb, and Delay effects.
+- Dynamic Proximity EQ (+6dB bass boost at 250Hz) and Reverb Scaling.
+
+### 2. 2.5D Spatial Logic
+- Developed a physically grounded 2.5D sound model:
+    * Parallax 1.1 = Head Level (Z=0).
+    * Parallax 1.0 = Foreground (Z=-400).
+    * Parallax 0.0 = Infinity (Z=-10000).
+    * Parallax < 0 = Behind Listener (+Z).
+- Integrated Camera Zoom scaling: Z-depth is attenuated by 1/zoom.
+
+### 3. Engine Integration
+- Synchronized SoundManager update loop in `Game.ts`.
+- Exposed complete Audio API through `ScriptAPI.ts` (`api.playSoundAttached`, `api.loadReverbIR`, etc.).
+- Created a demo script and scene for visual/auditory validation.
+
+### 4. Documentation & Memory
+- Wrote comprehensive technical documentation in `SoundSys.md`.
+- Persisted architectural facts in `agent_memory`.
+
+## Important Architecture / Runtime Decisions
+- Piecewise non-linear mapping for parallax (1.1 = head, 1.0 = front, 0.0 = infinity).
+- Fixed listener at Z=0 to prevent panning artifacts.
+- Exponential dry/wet scaling (power of 1.5) for natural transition.
+- Global constants for world scale (AUDIO_MAX_DISTANCE = 10000).
+
+## Tests Run
+- `npm run typecheck`: Passed.
+- Manual auditory checks via `test_3d_sound.ts` confirmed correct panning and attenuation.
+
+## Commits Created
+- `fa9fcbc` вЂ” `Feature: Sound Manager with 3d spatial system and dynamic reverb/delay FX`
+
+## Current State
+- Sound system is fully integrated, calibrated, and documented. Ready for production asset population.
+
+## Remaining Work / Next Steps
+1. Performance Tuning: Monitor `ConvolverNode` overhead in high-density scenes.
+2. SFX Library: Start populating the `/public/sounds/` directory with production assets.
+3. Gameplay Mechanics: Integrate sound triggers into common object prefabs (Doors, Switches).

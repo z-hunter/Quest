@@ -11,14 +11,15 @@ All audio routing is fully scriptable via the `ScriptAPI`, allowing in-game logi
 Because Scanline is a 2.5D engine, mapping 2D objects to a 3D audio space requires a specialized coordinate system:
 
 1. **The Listener (Camera):** The listener is permanently fixed at `Z = 0`. It looks "into" the screen along the negative Z-axis (`-Z`).
-2. **Object Depth (Z):** An object's Z-depth is mapped non-linearly from its `parallax` property to accurately simulate the game world:
-   - `parallax = 1.1`: The object is located at `Z = 0`. It is mathematically exactly at the listener's head level, resulting in 0 depth distance.
-   - `parallax = 1.0`: The object is located at `Z = -400` (in front of the listener). This represents normal foreground objects.
-   - `parallax = 0.0`: The object is located at `Z = -10000` (infinity in front). It is too far away to have stereo width.
-   - `parallax = -2.0`: The object is located at `Z = 10000` (infinity behind the listener). Negative parallax places the sound source behind the player.
-3. **Camera Zoom:** Zooming out does not physically move objects in the X/Y plane, but scales their perceived Z-distance:
-   - `Z_actual = Z_world / cameraZoom`
-   - This ensures that zooming out pushes normal objects further away (attenuating volume naturally) without breaking edge-of-screen panning.
+2. **Object Depth (Z):** An object's Z-depth is mapped non-linearly from its `parallax` property. We use a very shallow depth scale (factor 1000) to ensure that parallax alone doesn't overwhelm the mix:
+   - `parallax = 1.1`: The object is located at `Z = 0` (Head level).
+   - `parallax = 1.0`: The object is located at `Z = -100`.
+   - `parallax = 0.0`: The object is located at `Z = -10000` (Max infinity).
+   - `parallax = -2.0`: The object is located at `Z = 10000` (Behind).
+3. **Camera Zoom:** Zooming interacts with audio distance differently depending on the direction:
+   - **Zooming In (> 1.0):** Uses a parallax-weighted division (`Z = Z / effectiveZoom`) to pull foreground objects smoothly toward the camera without crossing the lens, naturally widening panning angles.
+   - **Zooming Out (< 1.0):** Uses an additive push to send objects backward. This push follows a steep quartic curve (`extraZ = (1.0 - zoom)^4 * MaxDistance`). This ensures the volume remains completely stable in the primary gameplay zone (zoom 1.0 to 0.5), and only fades significantly when pulling back for a wide overview (zoom < 0.5). Combined with the `linear` distance model, the fade out is gentle and ends at an audible 30% volume.
+   - At `parallax 0` (infinity), zoom has zero effect on the sound's volume or panning, anchoring the background perfectly.
 
 ## Audio Routing Graph
 
@@ -32,9 +33,19 @@ From the PannerNode, the signal splits:
 
 ## Proximity Effect (EQ & Reverb Scaling)
 
-When `useProximityEQ: true` is enabled, the distance between the camera and the object drives a dynamic mixer:
-- **Close Distance (e.g. Parallax 1.1, X/Y aligned):** The sound gets a +6dB bass boost at 250Hz. Reverb is ducked to roughly 20% of its base amount, and the dry signal is kept at 80%. The sound feels like it's "inside your head" with wide stereo.
-- **Far Distance (e.g. Parallax 0):** The bass boost drops to 0dB. The dry signal fades out entirely (0%), and the reverb wet multiplier increases to 100%. The sound becomes mono and gets "swallowed" by the room acoustics.
+When `useProximityEQ: true` is enabled, the spatial relationship between the camera and the object drives a dynamic mixer:
+
+### 1. Bass Boost (Proximity EQ)
+The system applies a +6dB boost at 250Hz, but only when the source is extremely close to the listener's perceived "head":
+- **Parallax Rule:** Peak boost (+6dB) at `parallax 1.1`. The effect fades to 0dB as parallax moves toward `0.9` or `1.2`.
+- **X/Y Distance Rule:** The effect fades to 0dB if the screen distance between the camera and the object exceeds **100 pixels**.
+- **Zoom Influence:** Screen distance is calculated as `World Distance * Camera Zoom`. Zooming in makes the proximity zone tighter in world units, while zooming out makes it larger.
+
+### 2. Reverb & Dry Scaling
+Atmospheric depth is controlled by the **Total 3D Distance** (including Z):
+- **Close Distance:** Reverb is ducked to roughly 20% of its base amount, and the dry signal is kept at 80%. The sound feels "inside your head" with wide stereo.
+- **Far Distance (e.g. Parallax 0):** The dry signal fades out entirely (0%), and the reverb wet multiplier increases to 100%. The sound becomes mono and gets "swallowed" by the room acoustics.
+- **Scaling:** Uses an exponential curve (power of 1.5) to keep the sound drier for a wider radius before reverb takes over.
 
 ---
 
