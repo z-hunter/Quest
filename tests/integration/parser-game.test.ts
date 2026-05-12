@@ -1810,6 +1810,41 @@ describe('Parser + game integration smoke', () => {
     expect((key as any).spatial).toEqual({ parentNodeId: 'drawer_surface', relation: 'on' });
   });
 
+  it('puts a held item onto a far target inside the active subscene', async () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }],
+    });
+    tray.x = 500;
+    tray.y = 500;
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+
+    const messages = await runSemanticParser(fixture, 'put key on tray');
+
+    expect(messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', { item: 'Key', target: 'Tray' })
+    );
+    expect(tray.components?.[0]?.items?.some((item: any) => item.id === key.name)).toBe(true);
+  });
+
   it('takes all matching plural source items without clarification', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

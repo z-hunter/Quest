@@ -1695,6 +1695,38 @@ describe('Game semantic API', () => {
     expect(key.disabled).toBe(false);
   });
 
+  it('putting an item onto a target inside the active subscene ignores world distance', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      description: 'A drawer front.',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      disabled: true,
+      spatial: { parentNodeId: 'DrawerZone', relation: 'in' },
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    tray.x = 500;
+    tray.y = 500;
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(key);
+    fixture.game.inventory.push(key);
+
+    ComponentSystem.handleActivation(drawerZone, fixture.scene);
+    const outcome = fixture.game.putEntity(key, tray, { relation: 'on' });
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.scene.subsceneEntities.has(key)).toBe(true);
+  });
+
   it('item placed into a subscene surface is restored after closing and reopening the subscene', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

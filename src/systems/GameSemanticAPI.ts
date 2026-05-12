@@ -150,6 +150,9 @@ export class GameSemanticAPI {
     if (!scene) return null;
 
     const distanceProbe = anchor || storageObject;
+    if (this.game.inventoryManager.isObjectInsideActiveSubscene(distanceProbe)) return null;
+    if (this.game.inventoryManager.isObjectInsideActiveSubscene(storageObject)) return null;
+
     const distanceError = ComponentSystem.getInteractionDistanceError(
       distanceProbe as any,
       scene.player
