@@ -8,6 +8,7 @@ import type { EntryTrigger } from '../entities/TriggerComponents';
 import { QuadObject } from '../entities/QuadObject';
 import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
+import { SoundManager } from '../systems/SoundManager';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -261,6 +262,7 @@ export class SceneManager {
       this.syncSceneRegistration(newScene, undefined, data);
       this.cacheScene(newScene, false);
       this.switchTo(newScene.id);
+      await this.preloadSwitchSounds(newScene);
       await this.game.textAssets.preloadScene(newScene);
       this.syncSceneRegistration(newScene, undefined, newScene.toJSON());
       await this.refreshSceneFootprint(newScene.id);
@@ -272,6 +274,27 @@ export class SceneManager {
       console.error('Failed to load scene:', e);
       if (this.game.showNotification) this.game.showNotification('Error loading JSON');
     }
+  }
+
+  private async preloadSwitchSounds(scene: Scene): Promise<void> {
+    const promises: Promise<void>[] = [];
+    const allObjects = [...scene.entities, ...scene.triggerboxes];
+    const soundManager = SoundManager.getInstance();
+
+    allObjects.forEach((obj) => {
+      if (obj.components) {
+        obj.components.forEach((comp: any) => {
+          if (comp.type === 'Switch') {
+            if (comp.sound1)
+              promises.push(soundManager.loadSound(comp.sound1, `/sounds/${comp.sound1}`));
+            if (comp.sound2)
+              promises.push(soundManager.loadSound(comp.sound2, `/sounds/${comp.sound2}`));
+          }
+        });
+      }
+    });
+
+    await Promise.all(promises);
   }
 
   syncSceneRegistration(scene: Scene, previousId?: string, sourceData?: any): void {

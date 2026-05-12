@@ -12,6 +12,7 @@ import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
+import { SoundManager } from '../systems/SoundManager';
 
 import { Console } from './Console';
 import type { SwitchComponent } from '../systems/ComponentSystem';
@@ -47,7 +48,7 @@ export class Game implements IGame {
   isRunning: boolean;
 
   playSound(name: string): void {
-    this.semantic.playSound(name);
+    SoundManager.getInstance().play(name);
   }
 
   input: Input;
@@ -302,6 +303,22 @@ export class Game implements IGame {
     this.sceneManager.update(deltaTime);
     if (this.editor.enabled) {
       this.editor.update(deltaTime);
+    }
+
+    if (this.sceneManager.currentScene) {
+      const scene = this.sceneManager.currentScene;
+      SoundManager.getInstance().updateAttachedSounds(
+        scene.camera.x,
+        scene.camera.y,
+        scene.camera.zoom,
+        (id: string) => {
+          const obj = scene.getObjectByName(id) as any;
+          if (obj && obj.x !== undefined && obj.y !== undefined) {
+            return { x: obj.x, y: obj.y, parallax: obj.parallax !== undefined ? obj.parallax : 1 };
+          }
+          return null;
+        }
+      );
     }
 
     // Cursor Logic

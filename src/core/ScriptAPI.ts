@@ -1,5 +1,6 @@
 import type { IGame } from './IGame';
 import { QuadObject } from '../entities/QuadObject';
+import { SoundManager, type SoundOptions } from '../systems/SoundManager';
 
 export class ScriptAPI {
   private intervals: number[] = [];
@@ -111,5 +112,78 @@ export class ScriptAPI {
     if (this.game.editor) {
       this.game.editor.saveUndoState();
     }
+  }
+
+  // --- Audio API ---
+
+  /**
+   * Loads an audio file into the SoundManager cache.
+   * @param id The ID to assign to the sound.
+   * @param url The URL path of the sound (e.g. '/sounds/file.mp3').
+   */
+  async loadSound(id: string, url: string): Promise<void> {
+    await SoundManager.getInstance().loadSound(id, url);
+  }
+
+  /**
+   * Loads an impulse response file for Convolution Reverb.
+   * @param url The URL path of the IR sound file.
+   */
+  async loadReverbIR(url: string): Promise<void> {
+    await SoundManager.getInstance().loadReverbIR(url);
+  }
+
+  /**
+   * Plays a sound without 3D panning.
+   * @param id The ID of the loaded sound.
+   * @param options Sound options including volume, loop, startTime, offset.
+   * @returns Playback handle ID.
+   */
+  playSound(id: string, options?: SoundOptions): number {
+    return SoundManager.getInstance().play(id, options);
+  }
+
+  /**
+   * Plays a sound attached to a 3D scene entity, automatically tracking its position.
+   * @param id The ID of the loaded sound.
+   * @param entityName The name of the entity to attach the sound to.
+   * @param options Sound options. Includes useProximityEQ.
+   * @returns Playback handle ID.
+   */
+  playSoundAttached(
+    id: string,
+    entityName: string,
+    options?: SoundOptions & { useProximityEQ?: boolean }
+  ): number {
+    const handle = SoundManager.getInstance().play(id, options);
+    if (handle !== -1) {
+      SoundManager.getInstance().attachSound(handle, entityName, !!options?.useProximityEQ);
+    }
+    return handle;
+  }
+
+  /**
+   * Dynamically sets effects on an actively playing sound.
+   * @param handle Playback handle ID.
+   * @param effects Effects to apply (reverbAmount, delayAmount, etc).
+   */
+  setSoundEffects(
+    handle: number,
+    effects: {
+      reverbAmount?: number;
+      delayAmount?: number;
+      delayTime?: number;
+      delayFeedback?: number;
+    }
+  ) {
+    SoundManager.getInstance().setEffects(handle, effects);
+  }
+
+  /**
+   * Stops an actively playing sound.
+   * @param handle Playback handle ID.
+   */
+  stopSound(handle: number) {
+    SoundManager.getInstance().stop(handle);
   }
 }
