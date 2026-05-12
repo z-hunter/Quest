@@ -58,6 +58,34 @@ describe('Scene interaction text layer', () => {
     );
   });
 
+  it('hits parallax entities at their rendered screen position', () => {
+    const fixture = createSceneFixture();
+    fixture.game.canvas.width = 800;
+    fixture.game.canvas.height = 600;
+    fixture.scene.camera.x = 200;
+    fixture.scene.camera.y = 100;
+
+    const entity = fixture.addEntity('near_item', {
+      title: 'Near Item',
+      description: 'A parallax item.',
+    });
+    entity.x = 300;
+    entity.y = 180;
+    entity.width = 40;
+    entity.height = 60;
+    entity.parallax = 1.6;
+
+    handleSceneClick(
+      fixture.scene,
+      entity.x - fixture.scene.camera.x * entity.parallax + 400,
+      entity.y - fixture.scene.camera.y * entity.parallax + 300
+    );
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('engine.click_you_see', { title: 'Near Item' })
+    );
+  });
+
   it('ignores interaction-locked top-layer entities so clicks pass through to objects below', () => {
     const fixture = createSceneFixture();
     const back = fixture.addTriggerbox('tb_back', {

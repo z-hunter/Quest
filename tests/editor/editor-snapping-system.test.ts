@@ -125,3 +125,38 @@ describe('Editor quad snapping', () => {
     expect(source.vertices[0].y - fixture.scene.camera.y * (source.vertices[0].p - 1)).toBe(50);
   });
 });
+
+describe('Editor parallax entity hit testing', () => {
+  it('finds entities at their rendered screen position when parallax differs from 1', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 200;
+    fixture.scene.camera.y = 100;
+    fixture.scene.camera.zoom = 1;
+
+    const entity = fixture.addEntity('near_entity');
+    entity.x = 300;
+    entity.y = 180;
+    entity.width = 40;
+    entity.height = 60;
+    entity.parallax = 1.6;
+
+    const editor = { enabled: true, game: fixture.game };
+    const manager = new EditorTransformManager(editor as any);
+    const screenPos = {
+      x: entity.x - fixture.scene.camera.x * entity.parallax + 400,
+      y: entity.y - fixture.scene.camera.y * entity.parallax + 300,
+    };
+
+    const hit = (manager as any).findHitSelectable(
+      screenPos,
+      fixture.scene,
+      fixture.scene.camera.x,
+      fixture.scene.camera.y,
+      fixture.scene.camera.zoom,
+      400,
+      300
+    );
+
+    expect(hit).toBe(entity);
+  });
+});

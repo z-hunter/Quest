@@ -99,11 +99,10 @@ export class EditorTransformManager {
       const entity = entities[i];
       if (entity.disabled || entity.locked) continue;
 
-      const p = entity.parallax !== undefined ? entity.parallax : 1.0;
       const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
       const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-      const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-      const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
+      const worldX = (pos.x - halfW) / zoom + camX - vOx;
+      const worldY = (pos.y - halfH) / zoom + camY - vOy;
 
       if (entity.hitTest(worldX, worldY)) return entity;
     }
@@ -464,16 +463,14 @@ export class EditorTransformManager {
         if (entity.disabled) continue;
         if (entity.locked) continue;
 
-        const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
         // @ts-ignore
         const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
         // @ts-ignore
         const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
 
-        // Mouse World Pos for this entity layer
-        const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-        const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
+        // Entity.hitTest expects visual world coordinates; it applies its own parallax projection.
+        const worldX = (pos.x - halfW) / zoom + camX - vOx;
+        const worldY = (pos.y - halfH) / zoom + camY - vOy;
 
         if (entity.hitTest(worldX, worldY)) {
           this.editor.selectObject(entity);

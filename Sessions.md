@@ -1896,3 +1896,88 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 1. Performance Tuning: Monitor `ConvolverNode` overhead in high-density scenes.
 2. SFX Library: Start populating the `/public/sounds/` directory with production assets.
 3. Gameplay Mechanics: Integrate sound triggers into common object prefabs (Doors, Switches).
+## Session Entry - 2026-05-13 01:02 Europe/Warsaw
+
+### Session Goals
+- Stabilize Scanline Engine's scene-wide Default Reverb IR workflow for live 3D attached sounds.
+- Make `SceneProperties` -> `SoundManager` hot-swapping work without stopping sounds.
+- Restore the documented `SoundSys.md` dry/wet behavior for 3D SOUND ENV.
+- Calibrate reverb gain staging and distance behavior enough for `#run test_3d_sound2` in `test_room` to be usable.
+
+### What Was Implemented
+- Fixed live Default Reverb IR updates for active attached sounds:
+  - Scene-default IR changes now call `setEffects(playbackId, {}, true)` instead of passing scene default IR as a custom `reverbIR`.
+  - This preserves `usingDefaultIR`, so active sounds keep listening to later scene default changes.
+- Rebuilt ConvolverNode handling safely:
+  - `SoundManager` tracks the active `reverbIR`.
+  - Convolver branches are rebuilt when the IR URL changes.
+  - `ConvolverNode.normalize = false` is set before assigning the IR buffer so browser normalization does not overpower the dry signal.
+  - Stale async IR loads are ignored with `reverbRequestId`.
+- Fixed a critical audio-routing bug:
+  - The helper `disconnect(active.gain, active.reverbNode)` previously called `gain.disconnect()` when `active.reverbNode` was undefined.
+  - That severed the dry path `gain -> dryGain -> masterGain`, causing dry signal loss and silence after clearing IR.
+  - `active.gain` is now disconnected from reverb only when a reverb node actually exists.
+- Fixed scene IR path normalization:
+  - Bare file names such as `room_drum_medium.wav` and `/room_drum_medium.wav` normalize to `/sounds/ir/room_drum_medium.wav`.
+  - `SceneProperties` prefixes basename picker results from `public/sounds/ir` with `sounds/ir/`.
+  - `loadReverbIR()` now rejects HTTP/text-html wrong-path responses before `decodeAudioData`.
+- Restored documented `SoundSys.md` dry/wet behavior:
+  - `Reverb Min % = 0` means zero wet at `totalDist = 0`.
+  - `Reverb Min % = 0.2` means 20% wet / 80% dry at `totalDist = 0`.
+  - At `Reverb Drown Dist`, dry reaches 0 and wet mix reaches 100%.
+  - Transition uses `pow(norm, 1.5)` as documented.
+- Added gain staging for convolution reverb:
+  - `REVERB_WET_OUTPUT_GAIN = 0.025` trims the convolver branch without changing the dry/wet physics.
+  - `REVERB_WET_FADE_IN_SECONDS = 0.12` mutes newly connected wet branches and fades them in to avoid short attach surges.
+- Added distance behavior for wet and dry-only modes:
+  - `REVERB_DISTANCE_MIN_LEVEL = 0.3` makes reflected wet output fall with distance while preserving the wet/dry composition.
+  - `DRY_ONLY_DISTANCE_MIN_LEVEL = 0.3` makes attached sounds attenuate with distance even when no scene reverb IR is active.
+
+### Important Architecture / Runtime Decisions
+- Scene-level default reverb and per-sound custom reverb must remain distinct:
+  - Scene default updates must never mark a sound as custom.
+  - Custom `reverbIR` still clears `usingDefaultIR`.
+- `Reverb Min %` and `Reverb Drown Dist` describe dry/wet composition, not raw convolver amplitude.
+- Convolver output needs separate gain staging because IR energy can be much hotter than the dry source.
+- Reverb branch connect/disconnect must never touch the persistent dry path.
+- When no reverb branch exists, proximity update should still attenuate dry-only attached sounds by distance, but not make them silent near the listener.
+
+### Parser / Mechanics / Scene / Inventory Changes
+- No parser, mechanics, inventory, or subscene behavior was changed.
+- Scene/editor/runtime sound environment behavior changed through:
+  - `src/systems/SoundManager.ts`
+  - `src/components/editor/properties/SceneProperties.tsx`
+  - `tests/systems/sound-manager.test.ts`
+- Existing dirty/user work around scene/audio assets was preserved during the investigation; final repo status later showed clean after commit.
+
+### Tests Run And Outcomes
+- `npm test -- tests/systems/sound-manager.test.ts -- --runInBand`
+  - Passed, 8 tests.
+  - Covers default IR hot-swap, basename normalization, late default IR enablement, zero-min-at-listener, SoundSys dry/wet crossfade, clear-to-dry, stale async clear, and dry-only distance attenuation.
+- `npm run typecheck`
+  - Passed.
+- Full `npm test`
+  - Passed, 28 files / 331 tests.
+- `git diff --check -- src/systems/SoundManager.ts src/components/editor/properties/SceneProperties.tsx tests/systems/sound-manager.test.ts`
+  - Passed.
+
+### Commits Created
+- `98a7069` - `feat(audio): implement comprehensive 3D sound environment and scene-wide default reverb`
+
+### Remaining Work / Next Recommended Steps
+- Consider promoting the hardcoded sound calibration constants to scene/editor controls if more scene-specific tuning is needed:
+  - `REVERB_WET_OUTPUT_GAIN`
+  - `REVERB_DISTANCE_MIN_LEVEL`
+  - `DRY_ONLY_DISTANCE_MIN_LEVEL`
+  - `REVERB_WET_FADE_IN_SECONDS`
+- Consider adding a browser-level/manual sound QA checklist for:
+  - `#run test_3d_sound2` in `test_room`
+  - `Reverb Min % = 0`, source at listener
+  - clearing Default Reverb IR after a live sound starts
+  - switching between multiple IR files while sound is playing
+- If authored scene defaults should persist in `test_room`, verify `public/scenes/test_room.json` after manual editor saves.
+
+### Risks / Caveats / Open Questions
+- Convolution reverb loudness remains inherently IR-dependent; the current output trim is calibrated empirically for the tested IRs.
+- `Reverb Min % = 0` only guarantees no wet at true zero total distance. `test_3d_sound2` often still has nonzero X/Z distance, so some reverb can remain by design.
+- NotebookLM source upload for this wrap-up required CLI re-auth because `python -m notebooklm source list` reported expired authentication.

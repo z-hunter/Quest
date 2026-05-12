@@ -60,11 +60,10 @@ function isHitAtScreenPoint(
 
   if ('x' in obj && 'y' in obj) {
     const entity = obj as any;
-    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
     const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
     const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-    const worldX = (screenX - halfW) / zoom + camX * p - vOx;
-    const worldY = (screenY - halfH) / zoom + camY * p - vOy;
+    const worldX = (screenX - halfW) / zoom + camX - vOx;
+    const worldY = (screenY - halfH) / zoom + camY - vOy;
     return obj.hitTest(worldX, worldY);
   }
 
@@ -94,11 +93,10 @@ function containsScreenPoint(
 
   if ('x' in obj && 'y' in obj) {
     const entity = obj as any;
-    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
     const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
     const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-    const worldX = (screenX - halfW) / zoom + camX * p - vOx;
-    const worldY = (screenY - halfH) / zoom + camY * p - vOy;
+    const worldX = (screenX - halfW) / zoom + camX - vOx;
+    const worldY = (screenY - halfH) / zoom + camY - vOy;
     return obj.containsPoint(worldX, worldY);
   }
 
