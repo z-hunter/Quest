@@ -8,4 +8,3 @@ export interface GameActionOutcome {
   effects?: string[];
   recoverable?: boolean;
 }
-

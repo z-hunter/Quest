@@ -53,9 +53,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
       .catch((err) => {
         const raw = String(err);
         if (raw.includes('Failed to fetch')) {
-          setError(
-            `File API is unavailable. Start the Vite dev server or run the desktop shell.`
-          );
+          setError(`File API is unavailable. Start the Vite dev server or run the desktop shell.`);
         } else {
           setError(raw);
         }
@@ -339,7 +337,11 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
             <button onClick={onCancel} className="e-btn" style={{ padding: '5px 15px' }}>
               Cancel
             </button>
-            <button onClick={handleConfirm} className="e-btn e-btn-enter" style={{ padding: '5px 15px' }}>
+            <button
+              onClick={handleConfirm}
+              className="e-btn e-btn-enter"
+              style={{ padding: '5px 15px' }}
+            >
               {mode === 'save' ? 'Save' : 'Load'}
             </button>
           </div>

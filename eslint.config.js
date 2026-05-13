@@ -34,6 +34,19 @@ export default defineConfig([
     },
   },
 
+  // CommonJS files (root-level *.cjs utilities)
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+
   // Project-specific tweaks (applied to TS/TSX files)
   {
     files: ['**/*.{ts,tsx}'],
