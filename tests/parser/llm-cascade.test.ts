@@ -377,6 +377,40 @@ describe('LlmCascade', () => {
     ]);
   });
 
+  it('accepts fenced Parser Note plans from provider responses', async () => {
+    provider.response.text = `\`\`\`json
+{
+  "kind": "plan",
+  "actions": [
+    {
+      "type": "showText",
+      "message": "You reach over and flip on the boombox. The dial catches a station mid-song."
+    },
+    {
+      "type": "setEntityParserNote",
+      "entityId": "boombox",
+      "note": "Radio is currently on, tuned to a station playing 80s pop and new wave music."
+    }
+  ]
+}
+\`\`\``;
+
+    const result = await cascade.parse('listen radio', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'showText',
+        message: 'You reach over and flip on the boombox. The dial catches a station mid-song.',
+      },
+      {
+        type: 'setEntityParserNote',
+        entityId: 'boombox',
+        note: 'Radio is currently on, tuned to a station playing 80s pop and new wave music.',
+      },
+    ]);
+    expect(cascade.getLastDebugInfo()?.extractedJson).toContain('"kind": "plan"');
+  });
+
   it('filters invalid Parser Note actions', async () => {
     provider.response.text = JSON.stringify({
       kind: 'plan',

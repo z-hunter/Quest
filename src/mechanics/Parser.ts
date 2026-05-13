@@ -4057,6 +4057,10 @@ export class Parser {
             formatFullSection('llm prompt', llmDebug.prompt || null),
             formatFullSection('llm response', {
               rawResponse: llmDebug.rawResponse || '',
+              extractedJson: llmDebug.extractedJson,
+              acceptedActions: llmDebug.acceptedActions,
+              filteredActions: llmDebug.filteredActions,
+              parserNoteMutations,
               error: llmDebug.error,
               reason: llmDebug.reason,
               provider: llmDebug.provider,

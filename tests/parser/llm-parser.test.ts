@@ -369,6 +369,69 @@ describe('Parser LLM Integration', () => {
     );
   });
 
+  it('executes fenced provider Parser Note plans and exposes the note on the next LLM call', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      synonyms: ['radio'],
+      description: 'A radio and cassette recorder.',
+    });
+
+    const provider = {
+      response: { ok: true, text: '', model: 'mock', durationMs: 10 },
+      messages: [] as any[],
+      system: '' as any,
+      isAvailable: () => true,
+      getProviderName: () => 'Mock',
+      getModelName: () => 'mock-model',
+      sendMessageStream: async (system: any, messages: any[]) => {
+        provider.system = system;
+        provider.messages = messages;
+        return provider.response;
+      },
+    };
+    (fixture.parser.llmCascade as any).provider = provider;
+    provider.response.text = `\`\`\`json
+{
+  "kind": "plan",
+  "actions": [
+    {
+      "type": "showText",
+      "message": "You reach over and flip on the boombox. The dial catches a station mid-song."
+    },
+    {
+      "type": "setEntityParserNote",
+      "entityId": "boombox",
+      "note": "Radio is currently on, tuned to a station playing 80s pop and new wave music."
+    }
+  ]
+}
+\`\`\``;
+
+    await fixture.parser.parse('listen radio');
+
+    expect(fixture.messages).toContain(
+      'You reach over and flip on the boombox. The dial catches a station mid-song.'
+    );
+    expect(fixture.scene.getEntityParserNote('boombox')).toBe(
+      'Radio is currently on, tuned to a station playing 80s pop and new wave music.'
+    );
+
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'showText', message: 'The same station keeps breathing.' }],
+    });
+
+    await fixture.parser.parse('listen radio');
+
+    const promptContent = String(provider.messages[0]?.content || '');
+    expect(promptContent).toContain(
+      'Radio is currently on, tuned to a station playing 80s pop and new wave music.'
+    );
+  });
+
   it('preserves implementation-detail Parser Notes for debugging visibility', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
@@ -444,6 +507,63 @@ describe('Parser LLM Integration', () => {
     expect(debugLogs.join('\n')).toContain(
       '"note": "Radio reception currently produces only static."'
     );
+  });
+
+  it('shows accepted Parser Note actions and mutations in #PEEKLLM debug output', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.game.console.parserPeekLlmEnabled = true;
+    fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A radio and cassette recorder.',
+    });
+    const debugLogs: string[] = [];
+    fixture.game.console.log = (text: string) => {
+      debugLogs.push(text);
+    };
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'setEntityParserNote',
+            entityId: 'boombox',
+            note: 'Radio reception currently produces only static.',
+          },
+          { type: 'showText', message: 'Only static comes back.' },
+        ],
+      },
+      debug: { rawInput: 'listen radio', normalizedInput: 'LISTEN RADIO', verb: 'LLM', noun: '' },
+    });
+    fixture.parser.llmCascade.getLastDebugInfo = vi.fn().mockReturnValue({
+      provider: 'Mock',
+      model: 'mock-model',
+      rawResponse:
+        '```json\n{"kind":"plan","actions":[{"type":"setEntityParserNote","entityId":"boombox","note":"Radio reception currently produces only static."},{"type":"showText","message":"Only static comes back."}]}\n```',
+      extractedJson:
+        '{"kind":"plan","actions":[{"type":"setEntityParserNote","entityId":"boombox","note":"Radio reception currently produces only static."},{"type":"showText","message":"Only static comes back."}]}',
+      acceptedActions: [
+        {
+          type: 'setEntityParserNote',
+          entityId: 'boombox',
+          note: 'Radio reception currently produces only static.',
+        },
+        { type: 'showText', message: 'Only static comes back.' },
+      ],
+      filteredActions: [],
+    });
+
+    await fixture.parser.parse('listen radio');
+
+    const output = debugLogs.join('\n');
+    expect(output).toContain('"acceptedActions"');
+    expect(output).toContain('"setEntityParserNote"');
+    expect(output).toContain('"parserNoteMutations"');
+    expect(output).toContain('"operation": "created"');
+    expect(output).toContain('"note": "Radio reception currently produces only static."');
   });
 
   it('shows only Parser Note context and mutations when #PEEKPN-ON is enabled', async () => {
