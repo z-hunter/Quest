@@ -49,6 +49,171 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
+  it('includes visible spatial contents for all relations on direct LOOK target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('Chair', {
+      title: 'Chair',
+      description: 'A wooden chair.',
+    });
+    fixture.addEntity('note', {
+      title: 'Piece of paper',
+      description: 'A folded note.',
+      spatial: { parentNodeId: 'Chair', relation: 'under' },
+    });
+    fixture.addEntity('hat', {
+      title: 'Hat',
+      description: 'A hat.',
+      spatial: { parentNodeId: 'Chair', relation: 'on' },
+    });
+    fixture.addEntity('remote', {
+      title: 'Remote control',
+      description: 'A remote.',
+      spatial: { parentNodeId: 'Chair', relation: 'behind' },
+    });
+    fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'A coin.',
+      spatial: { parentNodeId: 'Chair', relation: 'in' },
+    });
+
+    const result = await fixture.run('look chair');
+
+    expect(result.messages.at(-1)).toBe(
+      [
+        'A wooden chair.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'In',
+          target: 'Chair',
+          items: 'Coin',
+        }),
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'On',
+          target: 'Chair',
+          items: 'Hat',
+        }),
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'Under',
+          target: 'Chair',
+          items: 'Piece of paper',
+        }),
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'Behind',
+          target: 'Chair',
+          items: 'Remote control',
+        }),
+      ].join('\n')
+    );
+  });
+
+  it('discovers hidden lookable spatial contents on direct LOOK target only once', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('Chair', {
+      title: 'Chair',
+      description: 'A wooden chair.',
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A hidden key.',
+      spatial: { parentNodeId: 'Chair', relation: 'under' },
+    });
+    key.hidden = 'lookable';
+
+    const firstLook = await fixture.run('look chair');
+    expect(firstLook.messages.at(-1)).toBe(
+      [
+        'A wooden chair.',
+        fixture.game.text('parser.relation_discovered_contents', {
+          Relation: 'Under',
+          target: 'Chair',
+          items: 'Key',
+        }),
+      ].join('\n')
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
+
+    const secondLook = await fixture.run('look chair');
+    expect(secondLook.messages.at(-1)).toBe(
+      [
+        'A wooden chair.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'Under',
+          target: 'Chair',
+          items: 'Key',
+        }),
+      ].join('\n')
+    );
+  });
+
+  it('includes visible spatial contents after EXAMINE description', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      details: 'A walnut writing desk.',
+    });
+    fixture.textAssets.setObject('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      details: 'A walnut writing desk.',
+    });
+    fixture.addEntity('letter', {
+      title: 'Letter',
+      description: 'A folded letter.',
+      spatial: { parentNodeId: 'desk', relation: 'on' },
+    });
+
+    const result = await fixture.run('examine desk');
+
+    expect(result.messages.at(-1)).toBe(
+      [
+        'A walnut writing desk.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'On',
+          target: 'Desk',
+          items: 'Letter',
+        }),
+      ].join('\n')
+    );
+  });
+
+  it('discovers hidden lookable spatial contents through EXAMINE target', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      details: 'A walnut writing desk.',
+    });
+    fixture.textAssets.setObject('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      details: 'A walnut writing desk.',
+    });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A hidden key.',
+      spatial: { parentNodeId: 'desk', relation: 'under' },
+    });
+    key.hidden = 'lookable';
+
+    const result = await fixture.run('examine desk');
+
+    expect(result.messages.at(-1)).toBe(
+      [
+        'A walnut writing desk.',
+        fixture.game.text('parser.relation_discovered_contents', {
+          Relation: 'Under',
+          target: 'Desk',
+          items: 'Key',
+        }),
+      ].join('\n')
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
+  });
+
   it('surfaces the distance error for a far but visible EXAMINE target', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -274,7 +439,7 @@ describe('Parser + game integration smoke', () => {
 
     const relationResult = await fixture.run('look under chair');
     expect(relationResult.messages.at(-1)).toBe(
-      fixture.game.text('parser.relation_contents', {
+      fixture.game.text('parser.relation_discovered_contents', {
         Relation: 'Under',
         target: 'Chair',
         items: 'Key',
@@ -306,7 +471,7 @@ describe('Parser + game integration smoke', () => {
 
     const relationResult = await fixture.run('look behind boombox');
     expect(relationResult.messages.at(-1)).toBe(
-      fixture.game.text('parser.relation_contents', {
+      fixture.game.text('parser.relation_discovered_contents', {
         Relation: 'Behind',
         target: 'Boombox',
         items: 'audio cables',
@@ -366,7 +531,16 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(false);
 
     const examineAnchorResult = await fixture.run('examine boombox');
-    expect(examineAnchorResult.messages.at(-1)).toBe('A dusty cassette recorder.');
+    expect(examineAnchorResult.messages.at(-1)).toBe(
+      [
+        'A dusty cassette recorder.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'Behind',
+          target: 'Boombox',
+          items: 'audio cables',
+        }),
+      ].join('\n')
+    );
     expect(fixture.scene.isHiddenEntityRevealed(cables)).toBe(true);
 
     const revealedResult = await fixture.run('look cables');

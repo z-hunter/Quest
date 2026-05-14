@@ -198,7 +198,7 @@ describe('Game navigation and spatial API', () => {
 
     expect(populated.status).toBe('ok');
     expect(populated.message).toBe(
-      fixture.game.text('parser.relation_contents', {
+      fixture.game.text('parser.relation_discovered_contents', {
         Relation: 'In',
         target: 'Cabinet',
         items: 'Book A and Book B',

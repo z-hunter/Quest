@@ -924,6 +924,7 @@ export class GameSemanticAPI {
           includeHidden: true,
         }).filter((accessState) => accessState.hiddenReason === 'lookable')
       : [];
+    const discoveredLookables = revealableLookables.length > 0;
     if (effectiveRelation && revealableLookables.length) {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
       const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this.game);
@@ -951,12 +952,15 @@ export class GameSemanticAPI {
     return {
       status: 'ok',
       code: 'relation_contents',
-      message: this.game.text('parser.relation_contents', {
-        Relation: this.capitalize(this.getRelationDisplayText(relation)),
-        relation: this.getRelationDisplayText(relation),
-        target: anchorTitle,
-        items: this.formatTitleList(childTitles),
-      }),
+      message: this.game.text(
+        discoveredLookables ? 'parser.relation_discovered_contents' : 'parser.relation_contents',
+        {
+          Relation: this.capitalize(this.getRelationDisplayText(relation)),
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+          items: this.formatTitleList(childTitles),
+        }
+      ),
       data: {
         relation,
         anchorNodeId,

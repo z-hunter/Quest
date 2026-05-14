@@ -961,6 +961,7 @@ export function createParserFixture(): ParserFixture {
       effectiveRelation,
       { includeHidden: true }
     ).filter((accessState) => accessState.hiddenReason === 'lookable');
+    const discoveredLookables = revealableLookables.length > 0;
     if (revealableLookables.length) {
       revealableLookables.forEach((accessState) =>
         fixture.scene.revealHiddenEntity(accessState.object)
@@ -982,12 +983,15 @@ export function createParserFixture(): ParserFixture {
     }
     return okOutcome(
       'relation_contents',
-      fixture.game.text('parser.relation_contents', {
-        Relation: relation.charAt(0).toUpperCase() + relation.slice(1),
-        relation,
-        target: anchorTitle,
-        items: formatTitleList(childTitles),
-      })
+      fixture.game.text(
+        discoveredLookables ? 'parser.relation_discovered_contents' : 'parser.relation_contents',
+        {
+          Relation: relation.charAt(0).toUpperCase() + relation.slice(1),
+          relation,
+          target: anchorTitle,
+          items: formatTitleList(childTitles),
+        }
+      )
     );
   };
 
