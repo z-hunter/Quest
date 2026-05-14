@@ -128,6 +128,8 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'UI Scale': 'Editor interface scale multiplier.',
   'Game Zoom':
     'Scales the game viewport inside the application window. Fit uses the largest size that still stays fully visible.',
+  'Attached Volume':
+    'Global volume correction applied only to sounds attached to scene objects. 1.0 keeps authored sound volume unchanged; higher values boost attached 3D sounds, lower values reduce them.',
   Curvature: 'Strength of the CRT screen curvature effect.',
   Vignette: 'Darkening applied toward the screen edges.',
   'Scanline Count': 'Number of scanlines used by the CRT filter.',

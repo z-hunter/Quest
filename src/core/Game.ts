@@ -112,6 +112,9 @@ export class Game implements IGame {
       uiScale: number;
       viewportZoom: EditorViewportZoom;
     };
+    audio: {
+      attachedVolume: number;
+    };
   };
 
   openFileBrowser(
@@ -184,6 +187,9 @@ export class Game implements IGame {
       editor: {
         uiScale: 1.0,
         viewportZoom: 'fit',
+      },
+      audio: {
+        attachedVolume: 1.0,
       },
     };
 
@@ -869,21 +875,22 @@ export class Game implements IGame {
   loadSettings(): void {
     try {
       const json = localStorage.getItem('quest_settings');
+      const coerceNumber = (value: unknown, fallback: number) => {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+          const n = Number.parseFloat(value);
+          return Number.isFinite(n) ? n : fallback;
+        }
+        return fallback;
+      };
+
       if (json) {
         const loaded = JSON.parse(json);
         const loadedCrt = loaded?.crt ?? loaded?.settings?.crt ?? loaded?.graphics?.crt;
         const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
+        const loadedAudio = loaded?.audio ?? loaded?.settings?.audio;
 
         if (loadedCrt) {
-          const coerceNumber = (value: unknown, fallback: number) => {
-            if (typeof value === 'number' && Number.isFinite(value)) return value;
-            if (typeof value === 'string') {
-              const n = Number.parseFloat(value);
-              return Number.isFinite(n) ? n : fallback;
-            }
-            return fallback;
-          };
-
           this.settings.crt = {
             ...this.settings.crt,
             ...loadedCrt,
@@ -911,9 +918,23 @@ export class Game implements IGame {
         if (loadedEditor) {
           this.settings.editor = { ...this.settings.editor, ...loadedEditor };
         }
+
+        if (loadedAudio) {
+          this.settings.audio = {
+            ...this.settings.audio,
+            attachedVolume: Math.max(
+              0,
+              Math.min(
+                10,
+                coerceNumber(loadedAudio.attachedVolume, this.settings.audio.attachedVolume)
+              )
+            ),
+          };
+        }
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
+    SoundManager.getInstance().setAttachedVolume(this.settings.audio.attachedVolume);
   }
 }

@@ -48,6 +48,9 @@ The engine provides a dedicated **3D SOUND ENV.** section in the Scene Propertie
 ### Dynamic Hot-Swapping
 The system supports real-time switching of the **Default Reverb IR**. When changed in the editor, all active sounds using the scene default will immediately update their acoustics by recreating their internal `ConvolverNode`. Clearing the field will smoothly return sounds to a "dry" state.
 
+### Global Attached Volume
+The F9 Settings panel exposes **Attached Volume**, a global correction applied only to sounds attached to scene objects. `1.0` preserves authored playback volume, values above `1.0` boost attached 3D sounds, and lower values reduce them. It is applied before the dry/reverb split, so scene acoustics and dry/wet ratios remain unchanged.
+
 ## Proximity Effect (EQ & Reverb Scaling)
 
 When `useProximityEQ: true` is enabled, the spatial relationship between the camera and the object drives a dynamic mixer:

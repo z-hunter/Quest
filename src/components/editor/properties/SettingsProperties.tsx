@@ -3,11 +3,15 @@ import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { isTauriRuntime } from '../../../platform/fileApi';
 import { useEditorStore } from '../../../store/editorStore';
+import { SoundManager } from '../../../systems/SoundManager';
 
 interface GameSettings {
   editor?: {
     uiScale?: number;
     viewportZoom?: 'fit' | '1' | '1.5' | '2';
+  };
+  audio?: {
+    attachedVolume?: number;
   };
   crt?: {
     enabled: boolean;
@@ -81,6 +85,38 @@ export const SettingsProperties: React.FC = () => {
           />
         </div>
       )}
+
+      <div className="e-row" style={{ marginTop: '10px' }}>
+        <label
+          className="e-label ui-text-accent-green ui-font-bold"
+          style={{ marginBottom: '10px' }}
+        >
+          AUDIO SETTINGS
+        </label>
+      </div>
+
+      <div className="e-row">
+        <label className="e-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          Attached Volume <span>{formatPanelNumber(settings.audio?.attachedVolume ?? 1.0)}x</span>
+        </label>
+        <input
+          type="number"
+          className="e-input"
+          min="0"
+          max="10"
+          step="0.05"
+          value={formatPanelNumber(settings.audio?.attachedVolume ?? 1.0)}
+          onChange={(e) => {
+            if (!settings.audio) settings.audio = { attachedVolume: 1.0 };
+            const val = parseFloat(e.target.value);
+            if (Number.isFinite(val)) {
+              settings.audio.attachedVolume = Math.max(0, Math.min(10, val));
+              SoundManager.getInstance().setAttachedVolume(settings.audio.attachedVolume);
+              incrementObjectVersion();
+            }
+          }}
+        />
+      </div>
 
       <div className="e-row" style={{ marginTop: '10px' }}>
         <label
