@@ -1981,3 +1981,88 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Convolution reverb loudness remains inherently IR-dependent; the current output trim is calibrated empirically for the tested IRs.
 - `Reverb Min % = 0` only guarantees no wet at true zero total distance. `test_3d_sound2` often still has nonzero X/Z distance, so some reverb can remain by design.
 - NotebookLM source upload for this wrap-up required CLI re-auth because `python -m notebooklm source list` reported expired authentication.
+
+## Session Entry - 2026-05-15 12:33 +02:00
+
+### Session Goals
+- Diagnose corrupted `test_room` scene/inventory state where a held cassette had lost its usable connection to the scene object.
+- Fix editor/runtime cleanup so deleted scene entities cannot remain as phantom Inventory/Surface entries.
+- Correct parser/runtime visibility behavior around `LOOK` / `EXAMINE` nested spatial contents.
+- Commit the complete current working tree as a single `Fixes` commit and leave a durable handoff.
+
+### What Was Implemented
+- Fixed the broken cassette state in `public/scenes/test_room.json`:
+  - The held `Compact cassette` now points at the real scene entity `test`.
+  - The stale phantom `test_` entry was removed from the player inventory data.
+- Fixed editor deletion cleanup in `src/scene/Scene.ts`:
+  - `Scene.removeEntity()` now removes the entity from the active inventory/storage manager before deleting it from the scene graph.
+  - This prevents the editor from leaving inventory references to non-existing entities.
+- Preserved the important runtime distinction between inventory ownership and generic spatial containment:
+  - Objects should be hidden from scene rendering when they are actually stored in Inventory.
+  - Objects with spatial relation `in` are not automatically inventory items; this avoids hiding legitimate world-contained objects such as `CityView` inside `Window`.
+- Added direct semantic scene-text helpers in `src/scene/SceneTextLayer.ts`:
+  - Direct semantic descendants are immediate titled children after collapsing untitled technical intermediates.
+  - Traversal stops at titled children, so grandchildren under another titled object are not reported as direct contents.
+- Updated `LOOK` / `EXAMINE` handling:
+  - `src/systems/GameSemanticAPI.ts` now reveals and describes only first-level titled semantic children for examine/look relation descriptions.
+  - `src/mechanics/Parser.ts` now uses the same first-level direct semantics for entity content text.
+  - Hidden `lookable` / `examinable` descendants are revealed only when they are first-level children of the inspected target.
+- Preserved recursive relation behavior for mechanics that intentionally need it:
+  - `TAKE ... FROM ...` and related relation-scoped candidate discovery still use recursive descendant search.
+  - This keeps nested container interactions working while narrowing only the descriptive/reveal behavior.
+- Included the current workspace's scene, prompt, LLM cascade, and kitchen asset changes in the all-in `Fixes` commit as requested.
+
+### Important Architecture / Runtime Decisions
+- Inventory state must be derived from Inventory/Surface component storage, not from spatial `relation: "in"`.
+- Spatial `IN` means world containment; it does not imply the object is carried by the player.
+- `LOOK` and `EXAMINE` are descriptive/reveal commands and should expose only the first semantic level below the target.
+- First semantic level means titled children directly below the target, with untitled technical nodes collapsed.
+- Hidden objects under a titled child remain hidden until that titled child is inspected.
+- Recursive spatial traversal remains valid for targeted gameplay mechanics where the command explicitly scopes through a container.
+
+### Parser / Mechanics / Scene / Inventory Changes
+- `Scene.removeEntity()` now clears current inventory/storage ownership before scene deletion.
+- `SceneTextLayer` now exposes direct relation helpers alongside existing recursive helpers.
+- `GameSemanticAPI` uses direct helpers for `describeSpatialRelation()` and hidden descendant reveal during examine/look flows.
+- `Parser.getEntitySpatialContentsText()` uses direct helpers so `LOOK SOFA` reports pillows but not a remote hidden under a pillow.
+- Parser fixture semantic API mirrors the runtime helper split.
+- Tests now cover:
+  - editor deletion of held entities clearing inventory storage;
+  - `LOOK` / `EXAMINE` first-level-only reporting;
+  - hidden lookable grandchildren staying hidden from ancestor inspection;
+  - nested `TAKE FROM` still reaching deeper candidates where intended.
+
+### Tests Run And Outcomes
+- `npm test -- tests/game/semantic-api.test.ts -- --runInBand`
+  - Passed.
+- `npm test -- tests/integration/parser-game.test.ts -- --runInBand`
+  - Passed, 77 tests.
+- `npm run typecheck`
+  - Passed.
+- `npm test -- tests/game/navigation-and-spatial.test.ts tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts -- --runInBand`
+  - Passed, 172 tests.
+- Full `npm test`
+  - Passed, 28 files / 344 tests.
+- `codex-doctor -Fast`
+  - Passed, 17/17.
+- Pre-commit hook during commit:
+  - Ran prettier and eslint through lint-staged.
+  - First attempt caught one unused fixture import; it was removed and the second commit attempt passed.
+
+### Commits Created
+- `6102beb` - `Fixes`
+  - Includes inventory/entity deletion cleanup, `LOOK` / `EXAMINE` direct semantic reveal behavior, parser/game regression tests, current scene/prompt/LLM-cascade updates, and kitchen assets.
+
+### Remaining Work / Next Recommended Steps
+- Manually verify in the running editor/game that:
+  - `LOOK SOFA` reports only the sofa's first-level pillows.
+  - `LOOK RIGHT PILLOW` reveals the `TV remote`.
+  - `take rc` remains unavailable until the remote is revealed.
+  - Deleting a held item in the editor removes it cleanly from inventory.
+- If scene data continues to drift through manual editor saves, consider a small scene-integrity diagnostic that reports inventory references to missing entity IDs.
+- If UX needs it, add an editor validation warning for Inventory/Surface references that point to deleted scene entities.
+
+### Risks / Caveats / Open Questions
+- The `Fixes` commit intentionally includes all current workspace changes, including scene data, prompt/LLM cascade files, and kitchen assets, per user request.
+- The parser's lower regex cascade correctly does not resolve `rc` while `tv_rc` is hidden and unrevealed; this was confirmed as intended behavior during the session.
+- Direct semantic content behavior is now narrower by design; any previous tests expecting recursive `LOOK` disclosure were updated to the new contract.
