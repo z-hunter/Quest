@@ -127,7 +127,7 @@ describe('Game navigation and spatial API', () => {
       fixture.game.text('parser.relation_contents', {
         Relation: 'In',
         target: 'Cabinet',
-        items: 'Book A and Book B',
+        items: 'Book A',
       })
     );
     expect(bookStack.status).toBe('ok');
@@ -176,7 +176,7 @@ describe('Game navigation and spatial API', () => {
     );
   });
 
-  it('describeSpatialRelation reveals hidden lookable descendants through anchor-relative relations', () => {
+  it('describeSpatialRelation reveals only first-level hidden lookable children', () => {
     const fixture = createGameSemanticFixture();
     fixture.addEntity('Cabinet', {
       title: 'Cabinet',
@@ -198,10 +198,21 @@ describe('Game navigation and spatial API', () => {
 
     expect(populated.status).toBe('ok');
     expect(populated.message).toBe(
-      fixture.game.text('parser.relation_discovered_contents', {
+      fixture.game.text('parser.relation_contents', {
         Relation: 'In',
         target: 'Cabinet',
-        items: 'Book A and Book B',
+        items: 'Book A',
+      })
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(bookB)).toBe(false);
+
+    const bookContents = fixture.game.describeSpatialRelation('BookA', 'on');
+    expect(bookContents.status).toBe('ok');
+    expect(bookContents.message).toBe(
+      fixture.game.text('parser.relation_discovered_contents', {
+        Relation: 'On',
+        target: 'Book A',
+        items: 'Book B',
       })
     );
     expect(fixture.scene.isHiddenEntityRevealed(bookB)).toBe(true);

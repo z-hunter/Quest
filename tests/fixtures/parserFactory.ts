@@ -5,8 +5,9 @@ import {
   getSceneTextLayerAccessState,
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
+  getSceneTextRelationDirectDescendants,
+  getSceneTextRelationDirectAccessStates,
   getSceneTextRelationDescendants,
-  getSceneTextRelationAccessStates,
   getSceneTextTargetDescriptor,
 } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
@@ -46,7 +47,7 @@ export function createParserFixture(): ParserFixture {
 
   const revealHiddenDescendantsForExamine = (anchor: Entity): void => {
     for (const relation of ['in', 'on', 'under', 'behind'] as const) {
-      const revealableDescendants = getSceneTextRelationAccessStates(
+      const revealableDescendants = getSceneTextRelationDirectAccessStates(
         fixture.scene,
         fixture.game,
         anchor.name,
@@ -951,10 +952,14 @@ export function createParserFixture(): ParserFixture {
       }
     }
     const effectiveRelation = relation as 'in' | 'on' | 'under' | 'behind';
-    let childTitles = getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
+    let childTitles = getSceneTextRelationDirectDescendants(
+      textLayer,
+      anchorNodeId,
+      effectiveRelation
+    )
       .map((entry) => entry.title)
       .filter((title): title is string => !!title);
-    const revealableLookables = getSceneTextRelationAccessStates(
+    const revealableLookables = getSceneTextRelationDirectAccessStates(
       fixture.scene,
       fixture.game,
       anchorNodeId,
@@ -967,7 +972,7 @@ export function createParserFixture(): ParserFixture {
         fixture.scene.revealHiddenEntity(accessState.object)
       );
       const revealedTextLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
-      childTitles = getSceneTextRelationDescendants(
+      childTitles = getSceneTextRelationDirectDescendants(
         revealedTextLayer,
         anchorNodeId,
         effectiveRelation

@@ -93,12 +93,12 @@
           "y": 211
         },
         {
-          "x": 680,
-          "y": 211
+          "x": 1341,
+          "y": 210
         },
         {
-          "x": 680,
-          "y": 297
+          "x": 1409,
+          "y": 264
         },
         {
           "x": -234,
@@ -403,11 +403,17 @@
           "type": "Surface",
           "capacity": 8,
           "groups": [],
-          "items": [],
+          "items": [
+            {
+              "id": "miles_id",
+              "x": -62,
+              "y": -114
+            }
+          ],
           "relation": "on"
         }
       ],
-      "layer": 5,
+      "layer": 6,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -728,6 +734,23 @@
         }
       ],
       "script": ""
+    },
+    {
+      "name": "Trig_450",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
+      "script": ""
     }
   ],
   "scaling": {
@@ -741,7 +764,7 @@
     {
       "name": "CityView",
       "type": "Entity",
-      "locked": true,
+      "locked": false,
       "disabled": false,
       "groupID": null,
       "customName": "",
@@ -765,12 +788,12 @@
         "relation": "in"
       },
       "parallax": 0.4,
-      "x": 119.67896209456934,
-      "y": 234,
-      "width": 821.6,
-      "height": 551.2,
-      "baseWidth": 1264,
-      "baseHeight": 848,
+      "x": 103,
+      "y": 284,
+      "width": 1064,
+      "height": 657,
+      "baseWidth": 1636.923076923077,
+      "baseHeight": 1010.7692307692307,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "window-view.json",
@@ -882,7 +905,7 @@
           "shadowQuadId": "shadow",
           "offsetX": -70,
           "offsetY": -25,
-          "triggerId": "room"
+          "triggerId": "#f"
         },
         {
           "type": "Inventory",
@@ -896,16 +919,16 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0725898005405994,
-      "x": 481.4899054934267,
-      "y": 297.0623948271169,
-      "width": 119.88,
-      "height": 289.34,
-      "baseWidth": 162,
-      "baseHeight": 391,
+      "parallax": 1.046752389449175,
+      "x": 695.8518058413392,
+      "y": 256.9986797517294,
+      "width": 71.03999999999999,
+      "height": 290.08,
+      "baseWidth": 96,
+      "baseHeight": 392,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-down.json",
+      "spriteName": "miles_ds-idle-right.json",
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
@@ -916,7 +939,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "down",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1143,7 +1166,7 @@
           "items": []
         }
       ],
-      "layer": 6,
+      "layer": 8,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -1215,7 +1238,7 @@
       "type": "Quad",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "#f",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1238,12 +1261,12 @@
           "p": 1
         },
         {
-          "x": 708,
-          "y": 186,
+          "x": 1335,
+          "y": 185,
           "p": 1
         },
         {
-          "x": 766,
+          "x": 1579,
           "y": 339,
           "p": 1.1
         },
@@ -1257,7 +1280,7 @@
       "sortMode": "ignore",
       "opacity": 0,
       "blendMode": "source-over",
-      "isGrid": false,
+      "isGrid": true,
       "gridLinesX": 5,
       "gridLinesY": 5,
       "lineWidth": 1,
@@ -1290,9 +1313,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0790382036293829,
-      "x": 222.90433731748317,
-      "y": 306.9284515529555,
+      "parallax": 1.0791811402100033,
+      "x": 223.04286339314416,
+      "y": 306.93895592340505,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1440,43 +1463,34 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
-        }
-      ],
+      "components": [],
       "layer": 0,
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 423.6850395279638,
-      "y": 277.99893183392504,
+      "x": 635.3881436782156,
+      "y": 237.93687267431534,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 423.6850395279638,
-          "y": 277.99893183392504,
-          "p": 1.0600684006918912
+          "x": 635.3881436782156,
+          "y": 237.93687267431534,
+          "p": 1.034267787728862
         },
         {
-          "x": 520.9607083111985,
-          "y": 276.87049653225665,
-          "p": 1.0593849706853598
+          "x": 731.9395356596424,
+          "y": 236.8348645153454,
+          "p": 1.0335771392877866
         },
         {
-          "x": 468.4002991603883,
-          "y": 310.79626413563625,
-          "p": 1.0816105786197596
+          "x": 701.3276175901929,
+          "y": 269.90081894693293,
+          "p": 1.055033511957423
         },
         {
-          "x": 419.3511951417471,
-          "y": 309.2754848170328,
-          "p": 1.0806116894915525
+          "x": 651.3585768914384,
+          "y": 268.4218575844561,
+          "p": 1.0541524632725996
         }
       ],
       "color": "#2b019d",
@@ -1506,16 +1520,16 @@
           "ignoreDistance": true
         }
       ],
-      "layer": 5,
+      "layer": 6,
       "visible": true,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Drawer1",
-        "relation": "in"
+        "parentNodeId": "d1_surface",
+        "relation": "on"
       },
       "parallax": 1,
-      "x": 82,
-      "y": -2,
+      "x": -62,
+      "y": -114,
       "width": 19.55767142352019,
       "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
@@ -1526,46 +1540,6 @@
       "color": "#AAAAAA",
       "scale": 0.1183,
       "modelScale": 0.13,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 481.4899054934267,
-      "y": 297.0623948271169,
-      "width": 15.759890859481585,
-      "height": 22.395634379263303,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.8,
-      "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1596,14 +1570,14 @@
       "parallax": 1,
       "x": 555,
       "y": 214,
-      "width": 14.73342428376535,
-      "height": 20.936971350613916,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
+      "width": 19.632236842105264,
+      "height": 14.023026315789474,
+      "baseWidth": 26.25,
+      "baseHeight": 18.75,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
-      "color": "#86cece",
+      "color": "#5e184f",
       "scale": 0.7478947368421053,
       "modelScale": 0.8,
       "ignoreScaling": false,
@@ -1913,7 +1887,7 @@
       "type": "Entity",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1930,8 +1904,8 @@
         "relation": "under"
       },
       "parallax": 1,
-      "x": 546,
-      "y": 337,
+      "x": 544,
+      "y": 345,
       "width": 25.999999999999996,
       "height": 38.35,
       "baseWidth": 199.99999999999997,
@@ -1942,6 +1916,110 @@
       "color": "#AAAAAA",
       "scale": 0.13,
       "modelScale": 0.13,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "room_k",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1028,
+      "y": 304,
+      "width": 788,
+      "height": 554,
+      "baseWidth": 788,
+      "baseHeight": 554,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "kitchen",
+      "color": "#AAAAAA",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "Static_81",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1.1,
+      "x": 1052.1313725490197,
+      "y": 355.2450980392157,
+      "width": 466.4373193890188,
+      "height": 210.21054080088066,
+      "baseWidth": 466.4373193890188,
+      "baseHeight": 210.21054080088066,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "kitchen_table",
+      "color": "#AAAAAA",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Hero_1",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 695.8518058413392,
+      "y": 256.9986797517294,
+      "width": 15.535909875857653,
+      "height": 22.077345613060874,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.788630328185849,
+      "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,

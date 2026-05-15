@@ -524,6 +524,28 @@ describe('Game semantic API', () => {
     expect(book.visible).toBe(true);
   });
 
+  it('removing a held scene entity cleans the inventory store so editor delete cannot leave a phantom item', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('test', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    expect(fixture.game.addInventoryEntity(player, cassette).status).toBe('ok');
+    expect(fixture.game.inventory).toContain(cassette);
+
+    fixture.scene.removeEntity(cassette);
+
+    expect(fixture.scene.entities).not.toContain(cassette);
+    expect(fixture.game.inventory).not.toContain(cassette);
+    expect(fixture.game.getInventoryEntities(player)).toEqual([]);
+    expect(
+      player.components.find((candidate: any) => candidate?.type === 'Inventory')?.items
+    ).toEqual([]);
+  });
+
   it('examining an inventory item opens hi-res inventory preview state', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);

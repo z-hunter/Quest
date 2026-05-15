@@ -197,6 +197,30 @@ describe('LlmCascade', () => {
     );
   });
 
+  it('keeps prompt assets explicit that persistent narrated changes require Parser Notes', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`;
+
+    expect(combined).toContain(
+      'If your response invents or changes a persistent small in-world fact'
+    );
+    expect(combined).toContain('such as a radio being left on');
+    expect(combined).toContain(
+      'return a `plan` with `showText` plus the appropriate Parser Note action'
+    );
+    expect(combined).toContain('Do not return that kind of persistent change as `final_response`');
+    expect(combined).toContain(
+      'when no safe action fits and you are not creating or updating a persistent Parser Note'
+    );
+  });
+
   it('keeps prompt assets explicit that stale Parser Notes must be checked', () => {
     const systemPrompt = readFileSync(
       join(process.cwd(), 'public/text/system/parser-llm-system.md'),

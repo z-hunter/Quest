@@ -12,7 +12,8 @@ import {
   getActiveBlockingComponentState,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
-  getSceneTextRelationAccessStates,
+  getSceneTextRelationDirectAccessStates,
+  getSceneTextRelationDirectDescendants,
   getSceneTextRelationDescendants,
   getSceneTextTargetDescriptor,
 } from '../scene/SceneTextLayer';
@@ -405,7 +406,7 @@ export class GameSemanticAPI {
     if (!scene) return;
 
     for (const relation of ['in', 'on', 'under', 'behind'] as const) {
-      const revealableDescendants = getSceneTextRelationAccessStates(
+      const revealableDescendants = getSceneTextRelationDirectAccessStates(
         scene,
         this.game,
         anchor.name,
@@ -914,13 +915,13 @@ export class GameSemanticAPI {
     }
 
     let childTitles = effectiveRelation
-      ? getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
+      ? getSceneTextRelationDirectDescendants(textLayer, anchorNodeId, effectiveRelation)
           ?.map((entry) => entry.title)
           .filter((title): title is string => !!title) || []
       : [];
 
     const revealableLookables = effectiveRelation
-      ? getSceneTextRelationAccessStates(scene, this.game, anchorNodeId, effectiveRelation, {
+      ? getSceneTextRelationDirectAccessStates(scene, this.game, anchorNodeId, effectiveRelation, {
           includeHidden: true,
         }).filter((accessState) => accessState.hiddenReason === 'lookable')
       : [];
@@ -929,7 +930,7 @@ export class GameSemanticAPI {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
       const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this.game);
       childTitles =
-        getSceneTextRelationDescendants(revealedTextLayer, anchorNodeId, effectiveRelation)
+        getSceneTextRelationDirectDescendants(revealedTextLayer, anchorNodeId, effectiveRelation)
           ?.map((entry) => entry.title)
           .filter((title): title is string => !!title) || [];
     }

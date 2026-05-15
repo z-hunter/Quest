@@ -22,7 +22,8 @@ import {
   buildSceneTextLayerSnapshot,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
-  getSceneTextRelationAccessStates,
+  getSceneTextRelationDirectAccessStates,
+  getSceneTextRelationDirectDescendants,
   getSceneTextRelationDescendants,
 } from '../scene/SceneTextLayer';
 import type {
@@ -2674,7 +2675,7 @@ export class Parser {
       .map((relation) => {
         let discovered = false;
         if (options.revealLookable) {
-          const revealableLookables = getSceneTextRelationAccessStates(
+          const revealableLookables = getSceneTextRelationDirectAccessStates(
             scene,
             this.game,
             entity.name,
@@ -2691,7 +2692,7 @@ export class Parser {
           }
         }
 
-        const childTitles = getSceneTextRelationDescendants(textLayer, entity.name, relation)
+        const childTitles = getSceneTextRelationDirectDescendants(textLayer, entity.name, relation)
           .map((entry) => entry.title)
           .filter((title): title is string => !!title);
 

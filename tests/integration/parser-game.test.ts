@@ -483,6 +483,84 @@ describe('Parser + game integration smoke', () => {
     expect(revealedResult.messages.at(-1)).toBe('Two standard tape recorder cables.');
   });
 
+  it('limits LOOK and EXAMINE contents to first-level titled spatial children', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('sofa', {
+      title: 'Sofa',
+      description: 'A tired sofa.',
+      details: 'A tired sofa with suspiciously arranged pillows.',
+    });
+    fixture.textAssets.setObject('sofa', {
+      title: 'Sofa',
+      description: 'A tired sofa.',
+      details: 'A tired sofa with suspiciously arranged pillows.',
+    });
+    fixture.addEntity('right_pillow', {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+      details: 'The right pillow is lumpy.',
+      spatial: { parentNodeId: 'sofa', relation: 'on' },
+    });
+    fixture.textAssets.setObject('right_pillow', {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+      details: 'The right pillow is lumpy.',
+      synonyms: ['right pillow', 'pillow'],
+    });
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular Sony remote control.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'right_pillow', relation: 'under' },
+    });
+    fixture.textAssets.setObject('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular Sony remote control.',
+      synonyms: ['remote', 'rc'],
+    });
+    remote.hidden = 'lookable';
+
+    const lookSofa = await fixture.run('look sofa');
+    expect(lookSofa.messages.at(-1)).toBe(
+      [
+        'A tired sofa.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'On',
+          target: 'Sofa',
+          items: 'right pillow',
+        }),
+      ].join('\n')
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(false);
+
+    const examineSofa = await fixture.run('examine sofa');
+    expect(examineSofa.messages.at(-1)).toBe(
+      [
+        'A tired sofa with suspiciously arranged pillows.',
+        fixture.game.text('parser.relation_contents', {
+          Relation: 'On',
+          target: 'Sofa',
+          items: 'right pillow',
+        }),
+      ].join('\n')
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(false);
+
+    const lookPillow = await fixture.run('look right pillow');
+    expect(lookPillow.messages.at(-1)).toBe(
+      [
+        'A sofa pillow.',
+        fixture.game.text('parser.relation_discovered_contents', {
+          Relation: 'Under',
+          target: 'right pillow',
+          items: 'TV remote',
+        }),
+      ].join('\n')
+    );
+    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(true);
+  });
+
   it('does not reveal a direct hidden examinable target through LOOK or EXAMINE', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -2493,7 +2571,7 @@ describe('Parser + game integration smoke', () => {
       fixture.game.text('parser.relation_contents', {
         Relation: 'In',
         target: 'Cabinet',
-        items: 'Book A and Book B',
+        items: 'Book A',
       })
     );
 

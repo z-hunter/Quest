@@ -1,0 +1,9 @@
+{
+  "id": "kitchen_table",
+  "imageFile": "public/assets/kitchen_table.png",
+  "x": 0,
+  "y": 0,
+  "width": 285,
+  "height": 136,
+  "frames": 1
+}

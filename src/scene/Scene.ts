@@ -481,6 +481,7 @@ export class Scene {
   }
 
   removeEntity(entity: Entity): void {
+    this.game.inventoryManager?.removeEntityFromCurrentStorage?.(entity);
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);

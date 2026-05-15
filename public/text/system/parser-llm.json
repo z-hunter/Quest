@@ -4,11 +4,11 @@
   "forced_handoff_instructions": [
     "Cascade 1 test mode asks you to handle this command yourself.",
     "Use the lower cascade interpretation as a hint for what the dry machine parser would do.",
-    "If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.",
+    "If you can give a richer, more atmospheric, and still grounded response, prefer final_response or a plan with showText.",
     "If the lower cascade action is genuinely the best answer, you may return that action plan.",
     "Do not force the player's intent into a merely related plan just because the target object exists.",
     "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
-    "If the lower cascade maps the request to a plan that misses the player's real intent, prefer final_response or showText as a Game Master.",
+    "If the lower cascade maps the request to a plan that misses the player's real intent, prefer final_response or a plan with showText as a Game Master.",
     "If you cannot improve the lower cascade result safely, return fallback."
   ],
   "post_api_escalation_instructions": [
@@ -16,7 +16,7 @@
     "First try to correct the player intent, target, relation, or action plan if the lower parser likely misunderstood the command.",
     "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
     "Do not repeat the same failing action unless you intentionally corrected the target, relation, or intent.",
-    "If the requested action is impossible in the current world, return final_response or a showText action with a short in-world reason.",
+    "If the requested action is impossible in the current world, return final_response or a plan containing showText with a short in-world reason.",
     "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
     "If the request is plausible but no grounded plan fits it, you may narrate a harmless no-result attempt instead of choosing an unrelated plan.",
     "If you cannot improve the previous attempt safely, return fallback."
@@ -34,12 +34,12 @@
     "The previous parser/game attempt recognized a command but ended in a recoverable failed outcome.",
     "First decide whether the lower parser likely misunderstood the player intent, target, relation, or action. If so, return a corrected safe action plan using only real context titles.",
     "If context.focusedTarget is present and the player omitted an explicit object, use focusedTarget.title as the default target or item.",
-    "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or showText with a short atmospheric in-world reason.",
+    "If the intent and target are correct but the game outcome says the action is impossible, do not override game state. Return final_response or a plan containing showText with a short atmospheric in-world reason.",
     "When rejecting unsupported player intent, prefer the protagonist's judgment, reluctance, dignity, caution, fatigue, disgust, or lack of desire over inventing a physical obstacle.",
     "Do not claim that an action succeeded unless the returned plan can actually execute it.",
     "If you cannot improve the previous attempt safely or interestingly, return fallback.",
     "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
-    "If the requested action is impossible in the current world, return final_response or showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description.",
+    "If the requested action is impossible in the current world, return final_response or a plan containing showText with a short noir narrator response that explains the failure through tone, implication, sarcasm, or cynical observation rather than plain technical description.",
     "For unsupported but plausible minor actions, prefer: the player character has no time, desire, or reason to do it; the action happens but produces no meaningful result; or, more rarely, the object or mechanism does not work.",
     "Do not say a prop is nailed down, bolted, glued, locked, or too heavy unless current worldFacts, contents/location, spatial relations, or object text support that."
   ],
@@ -68,6 +68,7 @@
     "Example: if a note says a cassette inside a device is playing, but current world facts or contents show that no cassette is inside that device, clear or replace that note before responding to the player.",
     "Do not store temporary player character actions, poses, intentions, emotions, or current activity in Parser Notes. Narrate those moments in showText or final_response.",
     "If a harmless player action leaves a persistent mark, store only the persistent in-world result on the affected object or scene, not that the player character is doing the action now.",
+    "If your response invents or changes a persistent small in-world fact about an object or scene, such as a radio being left on, a device producing static, a cushion staying creased, or a room now smelling faintly of smoke, return a plan with showText plus the appropriate Parser Note action. Do not return that kind of persistent change as final_response, because final_response cannot carry Parser Notes.",
     "A Parser Note action must appear with showText in the same plan.",
     "A plan that writes Parser Notes must not include ordinary world actions such as lookTarget, examineTarget, openTarget, or takeTarget.",
     "Parser Notes are not player-facing prose. Keep them short, factual, in-world, and story-neutral.",
