@@ -1196,7 +1196,7 @@ export class GameSemanticAPI {
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (isItem || entity.isTakeable) {
       const player = scene.player instanceof Entity ? scene.player : null;
-      if (!this.game.inventoryManager.hasMainInventory(player)) {
+      if (!player || !this.game.inventoryManager.hasMainInventory(player)) {
         return {
           status: 'failed',
           code: 'player_inventory_missing',
@@ -1210,24 +1210,42 @@ export class GameSemanticAPI {
       const takeSourceTitle = this.getTakeSourceTitle(entity);
       const containingSubsceneRootIds =
         this.game.inventoryManager.getContainingSubsceneRootIds(entity);
-
-      if (inventoryOwner) {
-        this.game.removeEntityFromInventory(inventoryOwner, entity);
-      }
-
-      this.game.inventoryManager.removeEntityFromCurrentStorage(entity);
+      const pickupAnimationState = {
+        x: entity.x,
+        y: entity.y,
+        spatial: entity.spatial ? { ...entity.spatial } : entity.spatial,
+        visible: entity.visible,
+        subsceneItemScale: entity.subsceneItemScale || 1,
+      };
 
       this.game.inventoryManager.clearInheritedSurfaceSwitchGroups(entity);
       this.game.inventoryManager.clearActiveContainerSwitchGroups(
         entity,
         this.getSwitchComponent.bind(this)
       );
-      scene.playPickupAnimation(entity);
-      scene.subsceneEntities.delete(entity);
-      this.game.inventoryManager.markEntityDetachedFromSubscenes(entity, containingSubsceneRootIds);
       entity.subsceneItemScale = 1;
-      this.game.inventory.push(entity);
-      this.game.inventoryManager.syncPlayerInventoryComponent();
+      const moveOutcome = this.game.inventoryManager.addInventoryEntity(player, entity, 'in');
+      if (moveOutcome.status !== 'ok') {
+        return moveOutcome;
+      }
+      const heldState = {
+        spatial: entity.spatial ? { ...entity.spatial } : entity.spatial,
+        visible: entity.visible,
+        inventoryPositionOwner: entity.getInventoryPositionOwner(),
+        subsceneItemScale: entity.subsceneItemScale || 1,
+      };
+      entity.setInventoryPositionOwner(null);
+      entity.x = pickupAnimationState.x;
+      entity.y = pickupAnimationState.y;
+      entity.spatial = pickupAnimationState.spatial;
+      entity.visible = pickupAnimationState.visible;
+      entity.subsceneItemScale = pickupAnimationState.subsceneItemScale;
+      scene.playPickupAnimation(entity);
+      entity.spatial = heldState.spatial;
+      entity.visible = heldState.visible;
+      entity.setInventoryPositionOwner(heldState.inventoryPositionOwner);
+      entity.subsceneItemScale = heldState.subsceneItemScale;
+      this.game.inventoryManager.markEntityDetachedFromSubscenes(entity, containingSubsceneRootIds);
       entity.update(0);
       this.game.inventoryManager.notifyInventoryUiChange();
       const itemTitle = this.getPlayerFacingObjectTitle(entity);

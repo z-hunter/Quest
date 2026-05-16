@@ -51,7 +51,7 @@
       "components": [
         {
           "type": "Surface",
-          "relation": "in",
+          "relation": "on",
           "capacity": 8,
           "groups": [],
           "items": [
@@ -919,16 +919,16 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.046752389449175,
-      "x": 695.8518058413392,
-      "y": 256.9986797517294,
-      "width": 71.03999999999999,
-      "height": 290.08,
-      "baseWidth": 96,
-      "baseHeight": 392,
+      "parallax": 1.040913443385125,
+      "x": 653.2461823654976,
+      "y": 248.03136198471262,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-right.json",
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
@@ -939,7 +939,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "right",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1468,34 +1468,34 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 635.3881436782156,
-      "y": 237.93687267431534,
+      "x": 593.3665671534666,
+      "y": 228.971161028654,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 635.3881436782156,
-          "y": 237.93687267431534,
-          "p": 1.034267787728862
+          "x": 593.3665671534666,
+          "y": 228.971161028654,
+          "p": 1.0284645332504887
         },
         {
-          "x": 731.9395356596424,
-          "y": 236.8348645153454,
-          "p": 1.0335771392877866
+          "x": 689.0344129140659,
+          "y": 227.87982710014185,
+          "p": 1.0277805283906434
         },
         {
-          "x": 701.3276175901929,
-          "y": 269.90081894693293,
-          "p": 1.055033511957423
+          "x": 685.9675651803209,
+          "y": 260.61715801207976,
+          "p": 1.0491020506571946
         },
         {
-          "x": 651.3585768914384,
-          "y": 268.4218575844561,
-          "p": 1.0541524632725996
+          "x": 634.7460785491462,
+          "y": 259.1487861956485,
+          "p": 1.048148562464707
         }
       ],
       "color": "#2b019d",
       "sortMode": "ignore",
-      "opacity": 0.6,
+      "opacity": 1,
       "blendMode": "multiply",
       "isGrid": false,
       "gridLinesX": 5,
@@ -1520,7 +1520,7 @@
           "ignoreDistance": true
         }
       ],
-      "layer": 6,
+      "layer": 5,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -1528,8 +1528,8 @@
         "relation": "on"
       },
       "parallax": 1,
-      "x": -62,
-      "y": -114,
+      "x": 79,
+      "y": -34,
       "width": 19.55767142352019,
       "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
@@ -1565,7 +1565,7 @@
       "hidden": false,
       "spatial": {
         "parentNodeId": "Walk_main",
-        "relation": "in"
+        "relation": "on"
       },
       "parallax": 1,
       "x": 555,
@@ -2008,17 +2008,17 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 695.8518058413392,
-      "y": 256.9986797517294,
-      "width": 15.535909875857653,
-      "height": 22.077345613060874,
+      "x": 653.2461823654976,
+      "y": 248.03136198471262,
+      "width": 15.36855256746367,
+      "height": 21.839522069553635,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.788630328185849,
+      "scale": 0.780134974511833,
       "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,

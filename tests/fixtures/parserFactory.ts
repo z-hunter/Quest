@@ -271,10 +271,21 @@ export function createParserFixture(): ParserFixture {
         recoverable: authoredTakeFailure ? false : true,
       };
     }
-    fixture.scene.removeEntity(entity);
-    (entity as any).spatial = null;
-    fixture.scene.subsceneEntities.delete(entity);
-    fixture.game.inventory.push(entity);
+    const player = fixture.scene.player instanceof Entity ? fixture.scene.player : null;
+    if (!player) {
+      return {
+        status: 'failed',
+        code: 'player_inventory_missing',
+        message: fixture.game.text('parser.inventory_missing'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+    (fixture.game.inventoryManager as any).removeEntityFromCurrentStorage?.(entity);
+    const moveOutcome = fixture.game.addInventoryEntity(player, entity, 'in');
+    if (moveOutcome.status !== 'ok') {
+      return moveOutcome;
+    }
     const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
     return {
       ...okOutcome('item_taken', fixture.game.text('parser.take_pickup_success', { item: title }), {

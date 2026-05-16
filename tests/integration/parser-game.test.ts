@@ -255,6 +255,26 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.inventory).not.toContain(cassette);
   });
 
+  it('moves a taken item into player inventory without removing the scene entity', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    const result = await fixture.run('take cassette');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
+    );
+    expect(fixture.game.inventory).toContain(cassette);
+    expect(fixture.scene.entities).toContain(cassette);
+    expect(cassette.visible).toBe(false);
+    expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+  });
+
   it('takes an item from a reachable container even when the stored item has stale far coordinates', async () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
