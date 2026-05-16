@@ -24,7 +24,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   H: 'Visible height of the object rectangle.',
   W: 'Visible width of the object rectangle.',
   Scale:
-    'Overall size multiplier. For polygon objects it scales the current shape around its center; for sprite objects it changes their model scale.',
+    'Reference size multiplier for sprite objects and prefabs. Scene Correctional Scale changes existing scene objects as an editor operation, but objects entering the scene keep this Scale unchanged. For polygon objects this field scales the current shape around its center.',
   Layer: 'Render and interaction layer. Higher layers are treated as being in front of lower ones.',
   Parallax:
     'Camera parallax factor. Values around 1 move with the scene, while lower or higher values create foreground or background depth drift.',
@@ -125,6 +125,8 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
     'The formula used to calculate volume drop-off:\n- Linear: Steady, constant decrease.\n- Inverse: Natural-sounding decrease (logarithmic).\n- Exponential: Very sharp drop-off at a distance.',
   'Default Reverb IR':
     'Impulse response file used as the default reverb for all attached sounds in this scene. If empty, attached sounds will be dry by default.',
+  'Correctional Scale':
+    'Scene-wide scale correction applied on top of object Scale. Changing it scales all scene objects, including locked ones, and their absolute coordinates around the shared scene center, so neighboring objects remain neighboring.',
   'UI Scale': 'Editor interface scale multiplier.',
   'Game Zoom':
     'Scales the game viewport inside the application window. Fit uses the largest size that still stays fully visible.',

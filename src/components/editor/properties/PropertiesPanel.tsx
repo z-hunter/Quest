@@ -558,6 +558,9 @@ export const PropertiesPanel: React.FC = () => {
       if (field === 'spriteName') {
         if (obj.setSprite) obj.setSprite(finalVal);
       }
+      if (field === 'refScale') {
+        obj.applySceneCorrectionalScale?.(game?.sceneManager?.currentScene);
+      }
       if (field === 'ignoreScaling') {
         const isIgnored = finalVal;
         const scene = game?.sceneManager?.currentScene;

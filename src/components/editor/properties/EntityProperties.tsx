@@ -8,6 +8,7 @@ interface EntityObject {
   y: number;
   width: number;
   height: number;
+  refScale: number;
   modelScale: number;
   layer: number;
   parallax: number;
@@ -85,8 +86,8 @@ export const EntityProperties: React.FC = () => {
                 type="number"
                 step="0.1"
                 className="e-input"
-                value={formatPanelNumber(entity.modelScale || 1)}
-                onChange={(e) => handleChange('modelScale', e.target.value, true)}
+                value={formatPanelNumber(entity.refScale || entity.modelScale || 1)}
+                onChange={(e) => handleChange('refScale', e.target.value, true)}
               />
             </div>
             <div>

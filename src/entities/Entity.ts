@@ -19,6 +19,7 @@ export interface EntityData {
   spriteName: string | null;
   color: string;
   scale: number;
+  refScale?: number;
   modelScale?: number; // User defined scale
   layer: number;
   parallax?: number;
@@ -95,6 +96,7 @@ export class Entity extends SceneObject {
   spriteName: string | null;
   image: HTMLImageElement | null;
   scale: number;
+  refScale: number;
   modelScale: number;
   // layer: number; // Inherited
   baseWidth: number;
@@ -192,6 +194,7 @@ export class Entity extends SceneObject {
     'spriteName',
     'color',
     'scale',
+    'refScale',
     'modelScale',
     'parallax',
     'ignoreScaling',
@@ -216,6 +219,7 @@ export class Entity extends SceneObject {
 
     // Initialize defaults BEFORE setting width/height (which now rely on scale)
     this.scale = 1.0;
+    this.refScale = 1.0;
     this.baseWidth = width;
     this.baseHeight = height;
 
@@ -247,6 +251,20 @@ export class Entity extends SceneObject {
     this.flipX = false;
     this.scene = null;
     this.loadingRefCount = 0;
+  }
+
+  applySceneCorrectionalScale(_scene: any = this.scene): void {
+    const ref =
+      typeof this.refScale === 'number' && Number.isFinite(this.refScale) && this.refScale > 0
+        ? this.refScale
+        : typeof this.modelScale === 'number' &&
+            Number.isFinite(this.modelScale) &&
+            this.modelScale > 0
+          ? this.modelScale
+          : 1;
+    this.refScale = ref;
+    this.modelScale = ref;
+    this.update(0);
   }
 
   setSprite(filename: string, keepSize: boolean = false): void {
@@ -485,6 +503,8 @@ export class Entity extends SceneObject {
   load(data: any): void {
     this.startLoading();
     try {
+      const hasAuthoredRefScale =
+        typeof data.refScale === 'number' && Number.isFinite(data.refScale) && data.refScale > 0;
       // Special handling for missing baseWidth/baseHeight in old JSONs
       if (data.baseWidth === undefined && data.width !== undefined) {
         const scale = data.scale || 1.0;
@@ -496,6 +516,25 @@ export class Entity extends SceneObject {
       }
 
       super.load(data);
+
+      if (!hasAuthoredRefScale) {
+        const fallback =
+          typeof data.modelScale === 'number' &&
+          Number.isFinite(data.modelScale) &&
+          data.modelScale > 0
+            ? data.modelScale
+            : typeof data.scale === 'number' && Number.isFinite(data.scale) && data.scale > 0
+              ? data.scale
+              : 1;
+        this.refScale = fallback;
+      }
+      if (
+        typeof this.modelScale !== 'number' ||
+        !Number.isFinite(this.modelScale) ||
+        this.modelScale <= 0
+      ) {
+        this.modelScale = this.refScale;
+      }
 
       if (data.spriteName) {
         this.setSprite(data.spriteName, true);

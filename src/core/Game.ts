@@ -7,6 +7,7 @@ import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
+import { Actor } from '../entities/Actor';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
@@ -817,7 +818,13 @@ export class Game implements IGame {
       };
     }
 
-    this.sceneManager.switchTo(sceneId);
+    const player =
+      currentScene?.player ||
+      (currentScene?.entities.find((entity) => entity instanceof Actor && entity.isPlayer) as
+        | Actor
+        | undefined);
+
+    this.sceneManager.switchTo(sceneId, player || undefined);
     const switchedScene = this.sceneManager.currentScene;
     return {
       status: 'ok',

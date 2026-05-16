@@ -267,6 +267,9 @@ export const SceneProperties: React.FC = () => {
             return (
               <>
                 <div className="e-row">
+                  <div className="e-label ui-text-accent-blue">Depth Scaling</div>
+                </div>
+                <div className="e-row">
                   <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                     <input
                       type="checkbox"
@@ -334,6 +337,24 @@ export const SceneProperties: React.FC = () => {
                     </div>
                   </div>
                 )}
+                <div className="e-row" style={{ marginTop: '8px' }}>
+                  <div className="e-label ui-text-accent-blue">Correction</div>
+                </div>
+                <div className="e-row">
+                  <label className="e-label">Correctional Scale</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0.01"
+                    className="e-input"
+                    value={formatPanelNumber(s.correctionalScale ?? 1)}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      scene.applyCorrectionalScaleChange(Number.isFinite(val) && val > 0 ? val : 1);
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
               </>
             );
           })()}

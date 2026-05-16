@@ -39,38 +39,158 @@ export function createTestGame(): TestGameHarness {
     scenes: new Map(),
     sceneRegistry: new Map(),
     pendingEntryId: null,
+    getInventoryRelations(entity: Actor) {
+      return Array.from(
+        new Set(
+          (entity.components || [])
+            .filter((component: any) => component?.type === 'Inventory')
+            .map((component: any) =>
+              component?.relation === 'on' ||
+              component?.relation === 'under' ||
+              component?.relation === 'behind' ||
+              component?.relation === 'in'
+                ? component.relation
+                : 'in'
+            )
+        )
+      );
+    },
+    collectActorTransferEntities(actor: Actor, sourceScene: Scene | null) {
+      const collected = new Set<any>([actor]);
+      const queue: any[] = [actor];
+      const enqueue = (entity: any) => {
+        if (!entity || collected.has(entity)) return;
+        collected.add(entity);
+        queue.push(entity);
+      };
+
+      for (const relation of this.getInventoryRelations(actor)) {
+        for (const entity of game.inventoryManager?.getInventoryEntities?.(
+          actor as any,
+          relation as any
+        ) || []) {
+          enqueue(entity);
+        }
+      }
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || !sourceScene) continue;
+        for (const candidate of sourceScene.entities) {
+          const parentId =
+            typeof (candidate as any).spatial?.parentNodeId === 'string'
+              ? (candidate as any).spatial.parentNodeId.trim()
+              : '';
+          if (parentId === current.name) {
+            enqueue(candidate);
+          }
+        }
+      }
+
+      return Array.from(collected);
+    },
+    transferActorToScene(actor: Actor, sceneId: string, options: any = {}) {
+      const targetScene = this.scenes.get(sceneId);
+      if (!targetScene) return null;
+
+      const oldScene = this.currentScene;
+      const removeExistingPlayer = options.removeExistingPlayer ?? !!actor.isPlayer;
+      const setAsScenePlayer = options.setAsScenePlayer ?? !!actor.isPlayer;
+      const activateScene = options.activateScene ?? setAsScenePlayer;
+      const entities =
+        options.preserveSpatialChildren === false
+          ? [actor]
+          : this.collectActorTransferEntities(actor, oldScene);
+
+      if (removeExistingPlayer) {
+        const existingPlayer = targetScene.entities.find(
+          (entity: any) => entity.isPlayer && entity !== actor
+        );
+        if (existingPlayer) {
+          targetScene.removeEntity(existingPlayer);
+        }
+      }
+
+      if (oldScene && oldScene !== targetScene) {
+        for (const entity of entities) {
+          const index = oldScene.entities.indexOf(entity);
+          if (index >= 0) oldScene.entities.splice(index, 1);
+          oldScene.subsceneEntities.delete(entity);
+          if (oldScene.player === entity) oldScene.player = null;
+        }
+        for (const entity of entities) {
+          if (!targetScene.entities.includes(entity)) targetScene.entities.push(entity);
+          (entity as any).scene = targetScene;
+          entity.applySceneCorrectionalScale?.(targetScene);
+        }
+      } else if (!targetScene.entities.includes(actor)) {
+        targetScene.entities.push(actor);
+        (actor as any).scene = targetScene;
+      }
+
+      if (setAsScenePlayer) {
+        targetScene.player = actor;
+      }
+
+      const targetEntryId =
+        options.targetEntryId ??
+        (oldScene !== targetScene
+          ? targetScene
+              .getAllSceneObjects()
+              .find((object: any) =>
+                object.components?.some((component: any) => component.type === 'Entry')
+              )?.name || null
+          : null);
+      if (targetEntryId) {
+        const entryObj = targetScene.getObjectByName(targetEntryId);
+        const entryComp = entryObj?.components?.find(
+          (component: any) => component.type === 'Entry'
+        );
+        const poly = (entryObj as any)?.poly as { x: number; y: number }[] | undefined;
+        if (entryComp && Array.isArray(poly) && poly.length > 0) {
+          actor.x = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
+          actor.y = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
+        } else if (entryComp && entryObj && 'x' in entryObj && 'y' in entryObj) {
+          actor.x = (entryObj as any).x;
+          actor.y = (entryObj as any).y;
+        }
+        if (entryComp) {
+          actor.layer = entryObj.layer;
+          actor.parallax = entryObj.parallax;
+          if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
+            (actor as any).setDirection(entryComp.direction);
+          }
+          actor.update?.(0);
+        }
+      }
+      if (setAsScenePlayer && oldScene !== targetScene && targetScene.defaultCamera) {
+        targetScene.camera.zoom = targetScene.defaultCamera.zoom;
+      }
+      if (activateScene) {
+        this.currentScene = targetScene;
+        if (oldScene !== targetScene) {
+          targetScene.clearParserRecentTurns?.();
+        }
+        game.inventoryManager?.handleSceneChange?.();
+      }
+      return targetScene;
+    },
     switchTo(sceneId: string, activator?: Actor) {
       const targetScene = this.scenes.get(sceneId);
       if (!targetScene) return;
 
       const oldScene = this.currentScene;
-      if (activator && oldScene && oldScene !== targetScene) {
-        oldScene.removeEntity(activator);
-        targetScene.addEntity(activator);
-        if (activator.isPlayer) {
-          targetScene.player = activator;
-        }
+      if (activator) {
+        this.transferActorToScene(activator, sceneId, {
+          targetEntryId: this.pendingEntryId,
+          activateScene: false,
+        });
       }
+      this.pendingEntryId = null;
 
       this.currentScene = targetScene;
       if (oldScene !== targetScene) {
         targetScene.clearParserRecentTurns?.();
-      }
-
-      if (this.pendingEntryId) {
-        const entryObj = targetScene.getObjectByName(this.pendingEntryId);
-        const entryComp = entryObj?.components?.find(
-          (component: any) => component.type === 'Entry'
-        );
-        const poly = (entryObj as any)?.poly as { x: number; y: number }[] | undefined;
-        if (activator && entryComp && Array.isArray(poly) && poly.length > 0) {
-          activator.x = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
-          activator.y = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
-          if (entryComp.direction && typeof (activator as any).setDirection === 'function') {
-            (activator as any).setDirection(entryComp.direction);
-          }
-        }
-        this.pendingEntryId = null;
       }
 
       game.inventoryManager?.handleSceneChange?.();
@@ -224,7 +344,7 @@ export function createTestGame(): TestGameHarness {
       return notImplementedOutcome('not_implemented_go_to_scene_target');
     },
     goToScene(sceneId: string) {
-      this.sceneManager.switchTo(sceneId);
+      this.sceneManager.switchTo(sceneId, this.sceneManager.currentScene?.player);
       return {
         status: 'ok',
         code: 'scene_changed',

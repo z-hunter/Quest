@@ -316,8 +316,15 @@ export class ComponentSystem {
     const targetSceneId = exit.targetSceneId?.trim() || scene.id;
     if (!sceneManager || !targetSceneId) return false;
 
-    sceneManager.pendingEntryId = exit.targetEntryId?.trim() || null;
-    sceneManager.switchTo(targetSceneId, activator);
+    if (activator) {
+      sceneManager.transferActorToScene(activator, targetSceneId, {
+        targetEntryId: exit.targetEntryId?.trim() || null,
+        activateScene: true,
+      });
+      return true;
+    }
+
+    sceneManager.switchTo(targetSceneId);
     return true;
   }
 

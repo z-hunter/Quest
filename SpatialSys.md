@@ -477,6 +477,28 @@ Parser не должен вручную обходить storage через raw 
 - сначала резолвит currently takable candidates;
 - если nothing found, fallback-ит в broader visible scope для diagnostics;
 - если visible candidate найден, вызывает runtime `takeEntity`, чтобы получить честную причину failure.
+- при успешном взятии переносит **тот же scene entity** в main actor inventory; `TAKE` не создаёт inventory-копию и не удаляет original object из сцены. Inventory ownership прячет этот entity из render layer и задаёт raw placement `in` относительно inventory owner.
+
+### Actor Scene Transfer
+
+Перенос `Actor` между сценами должен идти через централизованный runtime API `SceneManager.transferActorToScene(actor, targetSceneId, options?)`.
+
+Этот путь используется для `Exit`/`Entry`, console/game teleport-команд и script API. Он переносит live object instances без clone/copy:
+
+- самого `Actor`;
+- все `Entity`, spatial ancestry которых указывает на этого `Actor`;
+- предметы из `Inventory` компонентов Actor-а;
+- nested spatial descendants этих предметов.
+
+Для таких переносов нельзя напрямую делать пару `oldScene.removeEntity(actor)` / `targetScene.addEntity(actor)`: обычное удаление entity из сцены также чистит storage ownership и может разрушить inventory state. Transfer API сначала собирает замыкание владения, затем снимает entities из source scene и добавляет их в target scene как те же самые объекты.
+
+`Entry` placement применяется только к Actor-у. Предметы в inventory остаются hidden, spatially `in` владельце inventory и не получают координаты Entry напрямую. При same-scene teleport тот же API только применяет `Entry` placement к Actor-у и не detach-ит inventory children.
+
+Если перенос идёт в другую сцену и `targetEntryId` не задан, transfer API использует первый `Entry` target scene. При входе через `Entry` Actor получает координаты/направление Entry, а также его `Layer` и `Parallax`. При переносе player Actor-а camera zoom target scene устанавливается в `defaultCamera.zoom` перед camera snap.
+
+У `Entity` обычное editor-facing поле `Scale` хранится как reference size (`refScale`) - prefab/object size, не зависящий от сцены. При переносе live Entity в другую сцену runtime сохраняет этот размер и не умножает его на target scene `Correctional Scale`. Финальный runtime `scale` дальше может учитывать Depth Scaling и временные множители вроде `Subscene.itemScale`. `Correctional Scale` является editor-level инструментом: при его изменении редактор масштабирует все scene objects, включая locked objects, и их абсолютные координаты вокруг общего центра, чтобы соседние объекты оставались соседними.
+
+Если переносится player Actor, target scene получает именно этот live Actor как `scene.player`, а pre-authored placeholder player в target scene удаляется. После финального состояния сцены один раз запускается `InventoryManager.handleSceneChange()`, затем обычные scene-change hooks/parser exposure.
 
 Пример:
 
