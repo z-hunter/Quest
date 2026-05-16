@@ -411,6 +411,8 @@ Distance - runtime actionability check, а не visibility check.
 
 Для предметов на `Surface` distance считается по actual surface placement coordinates из `Surface.items`, если они есть. Нельзя полагаться только на `entity.x/y`, потому что item position может быть stored в surface placement.
 
+Для polygon-объектов distance нельзя считать до среднего центра вершин. Большие или асимметричные полигоны, особенно `Walkbox`/floor surfaces, могут иметь centroid далеко от текущей позиции игрока, хотя игрок стоит внутри того же walkbox. Runtime должен считать distance до polygon как `0`, если player point внутри polygon, иначе как расстояние до ближайшего ребра polygon.
+
 ## ParserWorldModel
 
 `ParserWorldModelBuilder` строит context/scope для parser-а. Public JSON shape сохраняется стабильным.
@@ -606,6 +608,7 @@ Walkbox может выступать player-facing pseudo-floor/pseudo-ground t
 - auto-drop может использовать walkbox surface;
 - для explicit `PUT item ON FLOOR` или `PUT item IN FLOOR` user-facing сообщение должно нормализоваться к floor placement;
 - walkbox может иметь relation fallback для `on`, чтобы floor command работала естественно.
+- distance до walkbox floor при `PUT`/`DROP` считается по polygon containment / nearest-edge distance, а не до центра walkbox; игрок, стоящий в любой части текущего walkbox, не должен получать ложное `too far from the floor`.
 - direct `LOOK floor` / `EXAMINE floor` сначала проверяют walkbox pseudo-floor, на котором стоит player. `LOOK` использует его `description`, `EXAMINE` использует его `details`.
 - Если текущий walkbox отсутствует или у него нет нужного поля (`description` для `LOOK`, `details` для `EXAMINE`), parser ищет обычный visible/held titled object с Title/Synonym `Floor`.
 - Если ни current pseudo-floor, ни real `Floor` object не дают текст, parser возвращает стандартное `parser.look_default_object` для floor.

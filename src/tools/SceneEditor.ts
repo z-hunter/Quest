@@ -57,7 +57,7 @@ export class SceneEditor {
 
     this.selectionManager.selectedObject = null;
     this.lastMousePos = { x: 0, y: 0 };
-    this.lastClientMousePos = { x: 0, y: 0 };
+    this.lastClientMousePos = { x: Number.NaN, y: Number.NaN };
 
     // Bind handlers once for cleanup
 
@@ -136,7 +136,12 @@ export class SceneEditor {
   handleGlobalKey(e: KeyboardEvent): void {
     const isTypingInField =
       document.activeElement instanceof HTMLInputElement ||
-      document.activeElement instanceof HTMLTextAreaElement;
+      document.activeElement instanceof HTMLTextAreaElement ||
+      document.activeElement instanceof HTMLSelectElement;
+
+    if (this.enabled && !isTypingInField && this.isArrowKey(e.key) && this.isMouseOverCanvas()) {
+      e.preventDefault();
+    }
 
     if (
       this.enabled &&
@@ -467,6 +472,18 @@ export class SceneEditor {
       }
     }
     return null;
+  }
+
+  private isArrowKey(key: string): boolean {
+    return key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight';
+  }
+
+  private isMouseOverCanvas(): boolean {
+    const { x, y } = this.lastClientMousePos;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+    const rect = this.game.canvas.getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
   convertScreenToWorld(screenX: number, screenY: number): { x: number; y: number } {
