@@ -367,6 +367,7 @@ export function createTestGame(): TestGameHarness {
       return null;
     },
     focusCommandInput() {},
+    revealCommandCursor() {},
     input: {
       mouse: { x: 0, y: 0, clicked: false },
       isDown: () => false,

@@ -105,6 +105,7 @@ export interface IGame {
   setCommandInput(input: HTMLInputElement | null): void;
   getCommandInput(): HTMLInputElement | null;
   focusCommandInput(): void;
+  revealCommandCursor(): void;
 
   // Core property access needed by entities/systems
   input: any;

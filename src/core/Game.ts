@@ -464,6 +464,10 @@ export class Game implements IGame {
     this.consoleInput?.focus();
   }
 
+  revealCommandCursor(): void {
+    this.cursorBlink = 0;
+  }
+
   renderUI(ctx: CanvasRenderingContext2D): void {
     const w = this.bufferCanvas.width;
     const h = this.bufferCanvas.height;
@@ -508,17 +512,35 @@ export class Game implements IGame {
 
     const inputText = this.consoleInput ? this.consoleInput.value : '';
     const isFocused = document.activeElement === this.consoleInput;
+    const caretIndex =
+      this.consoleInput && typeof this.consoleInput.selectionStart === 'number'
+        ? Math.max(
+            0,
+            Math.min(this.consoleInput.selectionStart ?? inputText.length, inputText.length)
+          )
+        : inputText.length;
 
-    let cursor = '';
+    let cursorVisible = false;
     if (isFocused) {
       this.cursorBlink += 16;
-      if (Math.floor(this.cursorBlink / 500) % 2 === 0) {
-        cursor = '_';
-      }
+      cursorVisible = Math.floor(this.cursorBlink / 500) % 2 === 0;
     }
 
+    const inputX = 2;
+    const inputY = consoleY + 2 + lineHeight * outputLineCount;
+    const promptText = `> ${inputText}`;
     ctx.fillStyle = '#fff';
-    ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + lineHeight * outputLineCount);
+    ctx.fillText(promptText, inputX, inputY);
+
+    if (cursorVisible) {
+      const beforeCaretText = `> ${inputText.slice(0, caretIndex)}`;
+      const cursorChar = inputText[caretIndex] || ' ';
+      const cursorX = inputX + ctx.measureText(beforeCaretText).width;
+      const cursorWidth = Math.max(1, ctx.measureText(cursorChar).width);
+      ctx.fillRect(cursorX, inputY, cursorWidth, lineHeight);
+      ctx.fillStyle = '#000';
+      ctx.fillText(cursorChar, cursorX, inputY);
+    }
   }
 
   disableCRT(): void {

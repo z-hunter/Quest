@@ -148,6 +148,17 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     return game?.console.continueClosedModal() || false;
   }, [game]);
 
+  const moveCommandInputCaret = React.useCallback(
+    (input: HTMLInputElement, delta: -1 | 1) => {
+      const caret = input.selectionStart ?? input.value.length;
+      const nextCaret = Math.max(0, Math.min(input.value.length, caret + delta));
+      input.setSelectionRange(nextCaret, nextCaret);
+      game?.revealCommandCursor();
+      setHistoryIndex(-1);
+    },
+    [game]
+  );
+
   const keepCommandInputFocused = React.useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -226,12 +237,26 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 }
               }
 
+              if (!(e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                e.preventDefault();
+                return;
+              }
+
+              if (e.key === 'Home' || e.key === 'End') {
+                game?.revealCommandCursor();
+              }
+
               // History Navigation: Ctrl + Up/Down
               if (game && (e.ctrlKey || e.metaKey)) {
-                const history = game.console.history;
-                if (history.length === 0) return;
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  moveCommandInputCaret(e.currentTarget, e.key === 'ArrowLeft' ? -1 : 1);
+                  return;
+                }
 
                 if (e.key === 'ArrowUp') {
+                  const history = game.console.history;
+                  if (history.length === 0) return;
                   e.preventDefault();
                   // Go back/older
                   // If we are at -1 (new/empty), go to last item (length-1)
@@ -246,9 +271,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                   }
                   setHistoryIndex(newIndex);
                   e.currentTarget.value = history[newIndex];
+                  e.currentTarget.setSelectionRange(
+                    history[newIndex].length,
+                    history[newIndex].length
+                  );
+                  game.revealCommandCursor();
                 }
 
                 if (e.key === 'ArrowDown') {
+                  const history = game.console.history;
+                  if (history.length === 0) return;
                   e.preventDefault();
                   // Go forward/newer
                   // If we are at length-1 (newest), go to -1 (empty)
@@ -260,10 +292,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     if (newIndex === history.length - 1) {
                       newIndex = -1;
                       e.currentTarget.value = '';
+                      e.currentTarget.setSelectionRange(0, 0);
                     } else {
                       newIndex = Math.min(history.length - 1, newIndex + 1);
                       e.currentTarget.value = history[newIndex];
+                      e.currentTarget.setSelectionRange(
+                        history[newIndex].length,
+                        history[newIndex].length
+                      );
                     }
+                    game.revealCommandCursor();
                   }
                   setHistoryIndex(newIndex);
                 }
