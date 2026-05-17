@@ -99,6 +99,45 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   }, [game, editorEnabled, isConsoleOpen, isConsoleModal, previewEntity?.name]);
 
   useEffect(() => {
+    if (!game) return;
+    const input = parserInputRef.current;
+    if (!input) return;
+
+    const shouldLockCommandFocus = () => {
+      return (
+        !input.disabled &&
+        !fileBrowser &&
+        !choiceDialog &&
+        !isConsoleModal &&
+        (!editorEnabled || isConsoleOpen)
+      );
+    };
+
+    const restoreCommandFocus = () => {
+      if (!shouldLockCommandFocus()) return;
+      const caret = input.selectionStart ?? input.value.length;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(caret, caret);
+    };
+
+    const scheduleRestoreCommandFocus = () => {
+      window.setTimeout(restoreCommandFocus, 0);
+    };
+
+    window.addEventListener('pointerdown', scheduleRestoreCommandFocus, true);
+    window.addEventListener('focusin', scheduleRestoreCommandFocus, true);
+    input.addEventListener('blur', scheduleRestoreCommandFocus);
+
+    restoreCommandFocus();
+
+    return () => {
+      window.removeEventListener('pointerdown', scheduleRestoreCommandFocus, true);
+      window.removeEventListener('focusin', scheduleRestoreCommandFocus, true);
+      input.removeEventListener('blur', scheduleRestoreCommandFocus);
+    };
+  }, [game, editorEnabled, isConsoleOpen, isConsoleModal, fileBrowser, choiceDialog]);
+
+  useEffect(() => {
     if (message) {
       const timer = setTimeout(() => {
         setMessage(null);
