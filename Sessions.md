@@ -2066,3 +2066,134 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The `Fixes` commit intentionally includes all current workspace changes, including scene data, prompt/LLM cascade files, and kitchen assets, per user request.
 - The parser's lower regex cascade correctly does not resolve `rc` while `tv_rc` is hidden and unrevealed; this was confirmed as intended behavior during the session.
 - Direct semantic content behavior is now narrower by design; any previous tests expecting recursive `LOOK` disclosure were updated to the new contract.
+
+## Session Entry - 2026-05-17 21:09 +02:00
+
+### Session Goals
+- Continue from the previous wrap-up without repeating the `Fixes` work.
+- Introduce a centralized Actor scene-transfer path that moves a live Actor together with inventory/spatial-owned entities.
+- Fix scene travel through `GO`, `Exit`/`Entry`, and script API so player/NPC transfers preserve live objects and inventory state.
+- Add controlled Entry placement behavior: default Entry fallback, target camera zoom reset, Entry layer/parallax application.
+- Rework scene/object scaling so `Correctional Scale` is an editor scene-normalization tool, while object `Scale` remains portable across scenes.
+- Improve text-console cursor/focus behavior in game mode.
+
+### What Was Implemented
+- Added `SceneManager.transferActorToScene(actor, targetSceneId, options?)` as the central transfer API.
+  - Collects the Actor itself.
+  - Collects Entity descendants spatially owned by the Actor.
+  - Collects items stored in the Actor's Inventory components.
+  - Recursively collects nested descendants of those carried items.
+  - Moves live object instances between scenes without cloning and without using normal `removeEntity()` cleanup that would clear inventory storage.
+- Updated `SceneManager.switchTo(sceneId, activator?)` to delegate Actor movement to the transfer API when an activator is supplied.
+- Updated `ComponentSystem.handleExit()` to call `transferActorToScene()` directly with `targetEntryId`.
+- Added `ScriptAPI.transferActor(actorName, targetSceneId, targetEntryId?)` for script-side actor movement.
+- Fixed semantic `GO <scene>` travel:
+  - `Game.goToScene()` now passes the current player Actor into `switchTo()`.
+  - If `currentScene.player` is missing, it falls back to a player Actor in the current scene entities.
+  - Parser/game integration remains routed through this semantic path.
+- Added Entry fallback for scene transfer:
+  - If cross-scene transfer has no explicit `targetEntryId`, the first `Entry` object in the target scene is used.
+  - The lookup uses `scene.getAllSceneObjects()`, so it sees `Triggerbox` Entries such as the one in `quad4`.
+- Entry placement now applies only to the Actor:
+  - Actor coordinates/direction are set from Entry.
+  - Actor `layer` and `parallax` are copied from the Entry.
+  - Carried inventory items keep inventory ownership and do not receive Entry coordinates/layer/parallax directly.
+- Player cross-scene transfer now resets `targetScene.camera.zoom` to `targetScene.defaultCamera.zoom` before camera snap.
+- Target-scene pre-authored player placeholders are removed/replaced by the live transferred player Actor.
+- NPC Actor transfers move the NPC and its inventory contents without making the NPC `scene.player`.
+- Same-scene teleport uses the same transfer API but skips detach/add and only applies Entry placement.
+
+### Scaling And Editor Changes
+- Added `Scene.scaling.correctionalScale` with default `1`.
+- Added internal `Entity.refScale` serialization as the stored reference/prefab scale.
+  - The editor-facing field remains the normal `Scale` field.
+  - Legacy objects without `refScale` recover it from `modelScale` or `scale`.
+- Rejected the intermediate idea of applying target-scene `Correctional Scale` to incoming Actors/items.
+  - Incoming objects now keep their portable object `Scale`.
+  - `Correctional Scale` is editor-only scene normalization, not transfer-time object scaling.
+- Added `Scene.applyCorrectionalScaleChange(nextScale)`:
+  - Computes a correction ratio from old to new scale.
+  - Scales all scene objects around a shared scene center.
+  - Updates absolute coordinates for entities.
+  - Updates polygons for Walkboxes/Triggerboxes.
+  - Updates Quad vertices.
+  - Updates existing Entity stored scale values so the authored scene itself is normalized.
+  - Explicitly includes locked objects; locked entities/triggers must not remain behind when the scene is normalized.
+- Updated Scene Properties UI:
+  - Section `2. Scaling` is split into `Depth Scaling` and `Correction`.
+  - Added `Correctional Scale` field under `Correction`.
+  - Tooltip explains that it scales all scene objects, including locked ones, around the shared scene center.
+- Updated Entity Properties UI:
+  - Returned to one editor-visible `Scale` field.
+  - The field edits `refScale` internally while preserving the old UI concept.
+
+### Text Console / Input Changes
+- Improved text console cursor behavior.
+- Added Ctrl+Left / Ctrl+Right command-line navigation.
+- Added protection against losing command-line focus in game mode.
+- The latest related commits are separate from the scene-transfer commit.
+
+### Important Architecture / Runtime Decisions
+- Actor scene movement must use `SceneManager.transferActorToScene()` rather than raw `oldScene.removeEntity(actor)` / `targetScene.addEntity(actor)`.
+- Direct scene removal is unsafe for carried objects because normal entity removal clears inventory/storage ownership.
+- Inventory contents are live scene entities and should travel with their owning Actor.
+- Entry is the authoritative authored portal for Actor coordinates, direction, layer, and parallax.
+- Target-scene camera zoom should come from target scene defaults when the player enters a different scene.
+- `Correctional Scale` is not a runtime per-object multiplier for incoming objects.
+- Object `Scale` remains portable; scene normalization should mutate the authored scene layout, not objects entering that scene.
+
+### Parser / Mechanics / Scene / Inventory Changes
+- Parser `GO` scene changes now preserve the live player Actor and its inventory.
+- `Exit`/`Entry`, semantic `GO`, and script transfer all share the same central Actor-transfer path.
+- Inventory-owned items remain hidden and spatially owned by the Actor after transfer.
+- Nested carried descendants transfer with their carried parent.
+- `InventoryManager.handleSceneChange()` runs after final scene state is established.
+- Parser static prompt preparation, scene exposure, and scene-change hooks remain part of scene activation.
+
+### Tests Run And Outcomes
+- Focused scene transfer and scale tests:
+  - `npm test -- tests/entities/entity-ref-scale.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-transition.test.ts -- --runInBand`
+  - Passed.
+- Parser/game integration checks:
+  - `npm test -- tests/integration/parser-game.test.ts -- --runInBand`
+  - Passed.
+- Semantic API checks:
+  - `npm test -- tests/game/semantic-api.test.ts -- --runInBand`
+  - Passed.
+- Combined focused suites after scale/correction work:
+  - `npm test -- tests/scene/scene-correctional-scale.test.ts tests/entities/entity-ref-scale.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-transition.test.ts tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts -- --runInBand`
+  - Passed, 188 tests.
+- Full suite:
+  - `npm test`
+  - Passed, 29 files / 354 tests.
+- TypeScript:
+  - `npm run typecheck`
+  - Passed.
+- Whitespace/diff check:
+  - `git diff --check`
+  - Passed with only CRLF warnings.
+
+### Commits Created
+- `758e5ce` - `Feature: Centralized Actor Scene Transfer API`
+  - Central Actor transfer API, GO/Exit/script transfer integration, Entry fallback, camera zoom reset, Entry parallax/layer, Scale/Correctional Scale model, scene correction tests, docs, and scene/text additions including `quad5`.
+- `0e546e5` - `Fixed and improved cursor in text console. Added Ctrl+ left/right arrows for navigation`
+  - Console cursor improvements, Ctrl+arrow movement, related game/UI plumbing.
+- `1443b87` - `Protection against losing command line focus in Game Mode`
+  - Focus protection around game canvas/UI overlay so the command line does not lose focus unexpectedly.
+
+### Remaining Work / Next Recommended Steps
+- Manually verify in the editor:
+  - `GO quad4` places the transferred player on the target `Triggerbox` Entry.
+  - The transferred player keeps inventory contents.
+  - The transferred player inherits Entry `Layer` and `Parallax`.
+  - Target scene zoom resets to the default camera zoom.
+  - Changing `Correctional Scale` moves locked and unlocked entities/triggers together.
+  - Existing neighboring objects remain adjacent after scene correction.
+- If scene scaling normalization is used heavily, consider adding an editor command name/history label for correction-scale changes so undo history reads more clearly.
+- Consider a small UI hint that `Correctional Scale` is a destructive authored-layout normalization, not a temporary runtime multiplier.
+
+### Risks / Caveats / Open Questions
+- The current working tree is clean at wrap-up time.
+- The previous memory decision that described transfer-time object correction was superseded by the later decision: `Correctional Scale` is editor-only scene normalization.
+- Scene correction intentionally affects locked objects. This differs from normal transform editing, where locked objects are protected from accidental manual manipulation.
+- `Correctional Scale` mutates authored object positions/polygons and stored scale values; use editor undo or source control when experimenting.

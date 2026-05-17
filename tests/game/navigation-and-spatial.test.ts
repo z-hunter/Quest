@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
+import { Triggerbox } from '../../src/entities/Triggerbox';
+import { Walkbox } from '../../src/entities/Walkbox';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Game navigation and spatial API', () => {
@@ -406,6 +408,55 @@ describe('Game navigation and spatial API', () => {
     expect(cassette.visible).toBe(false);
     expect((cassette as any).spatial).toEqual({ parentNodeId: 'Hero', relation: 'in' });
     expect((label as any).spatial).toEqual({ parentNodeId: 'cassette', relation: 'on' });
+  });
+
+  it('resets target camera zoom when transferring the current scene player actor', () => {
+    const fixture = createGameSemanticFixture('start');
+    const player = new Actor(fixture.game as any, 0, 0, 10, 10, 'Hero');
+    fixture.scene.addEntity(player);
+    fixture.scene.player = player;
+    const target = fixture.addScene('zoom_target', 'Zoom Target', 'A room.');
+    target.defaultCamera = { x: 10, y: 20, zoom: 0.55 };
+    target.camera = { x: 99, y: 88, zoom: 2.5 };
+
+    fixture.game.sceneManager.transferActorToScene(player, target.id);
+
+    expect(target.camera.zoom).toBe(0.55);
+  });
+
+  it('nudges Entry placement to the nearest walkable actor-collider position', () => {
+    const fixture = createGameSemanticFixture('start');
+    const player = fixture.addPlayer('Hero', 0, 0);
+    player.colliderWidth = 88;
+    player.colliderHeight = 4;
+    const target = fixture.addScene('edge_entry_target', 'Edge Entry Target', 'A room.');
+    const walkbox = new Walkbox(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ],
+      'Walk_main'
+    );
+    walkbox.mode = 'Add';
+    target.addWalkbox(walkbox);
+    const entry = new Triggerbox(
+      [
+        { x: 90, y: 50 },
+        { x: 96, y: 54 },
+        { x: 96, y: 46 },
+      ],
+      'Entry',
+      ''
+    );
+    entry.components = [{ type: 'Entry', direction: 'left' }];
+    target.addTriggerbox(entry);
+
+    fixture.game.sceneManager.transferActorToScene(player, target.id);
+
+    expect(player.x).toBeLessThan(90);
+    expect(target.isWalkable(player.x, player.y, player)).toBe(true);
   });
 
   it('same-scene actor transfer applies Entry placement without detaching inventory children', () => {

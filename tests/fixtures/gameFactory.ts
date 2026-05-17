@@ -96,6 +96,8 @@ export function createTestGame(): TestGameHarness {
       const oldScene = this.currentScene;
       const removeExistingPlayer = options.removeExistingPlayer ?? !!actor.isPlayer;
       const setAsScenePlayer = options.setAsScenePlayer ?? !!actor.isPlayer;
+      const transfersPlayerActor =
+        setAsScenePlayer || !!actor.isPlayer || oldScene?.player === actor;
       const activateScene = options.activateScene ?? setAsScenePlayer;
       const entities =
         options.preserveSpatialChildren === false
@@ -157,13 +159,35 @@ export function createTestGame(): TestGameHarness {
         if (entryComp) {
           actor.layer = entryObj.layer;
           actor.parallax = entryObj.parallax;
+          if (!targetScene.isWalkable(actor.x, actor.y, actor)) {
+            const startX = actor.x;
+            const startY = actor.y;
+            const step = 4;
+            const maxRadius = Math.max(128, actor.colliderWidth * 2, actor.colliderHeight * 8);
+            let placed = false;
+            for (let radius = step; radius <= maxRadius && !placed; radius += step) {
+              for (let dx = -radius; dx <= radius && !placed; dx += step) {
+                for (let dy = -radius; dy <= radius; dy += step) {
+                  if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+                  const x = startX + dx;
+                  const y = startY + dy;
+                  if (targetScene.isWalkable(x, y, actor)) {
+                    actor.x = x;
+                    actor.y = y;
+                    placed = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
           if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
             (actor as any).setDirection(entryComp.direction);
           }
           actor.update?.(0);
         }
       }
-      if (setAsScenePlayer && oldScene !== targetScene && targetScene.defaultCamera) {
+      if (transfersPlayerActor && oldScene !== targetScene && targetScene.defaultCamera) {
         targetScene.camera.zoom = targetScene.defaultCamera.zoom;
       }
       if (activateScene) {

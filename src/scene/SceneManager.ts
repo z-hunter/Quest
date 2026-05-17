@@ -229,15 +229,55 @@ export class SceneManager {
     }
 
     if (targetX === null || targetY === null) return entryObj;
-    actor.x = targetX;
-    actor.y = targetY;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
+    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    actor.x = walkableTarget.x;
+    actor.y = walkableTarget.y;
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
       (actor as any).setDirection(entryComp.direction);
     }
     actor.update(0);
     return entryObj;
+  }
+
+  private findNearestWalkableEntryPosition(
+    scene: Scene,
+    actor: Actor,
+    targetX: number,
+    targetY: number
+  ): { x: number; y: number } {
+    if (scene.isWalkable(targetX, targetY, actor)) {
+      return { x: targetX, y: targetY };
+    }
+
+    const step = 4;
+    const maxRadius = Math.max(128, actor.colliderWidth * 2, actor.colliderHeight * 8);
+    let best: { x: number; y: number; distanceSq: number } | null = null;
+
+    for (let radius = step; radius <= maxRadius; radius += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
+        for (let dy = -radius; dy <= radius; dy += step) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const x = targetX + dx;
+          const y = targetY + dy;
+          if (!scene.isWalkable(x, y, actor)) continue;
+          const distanceSq = dx * dx + dy * dy;
+          if (!best || distanceSq < best.distanceSq) {
+            best = { x, y, distanceSq };
+          }
+        }
+      }
+      const nearest = best;
+      if (nearest !== null) {
+        return { x: nearest.x, y: nearest.y };
+      }
+    }
+
+    console.warn(
+      `[SceneManager] Entry placement for ${actor.name} at ${targetX},${targetY} is not walkable.`
+    );
+    return { x: targetX, y: targetY };
   }
 
   private finalizeSceneActivation(oldScene: Scene | null, scene: Scene): void {
@@ -272,6 +312,8 @@ export class SceneManager {
 
     const removeExistingPlayer = options.removeExistingPlayer ?? !!(actor as any).isPlayer;
     const setAsScenePlayer = options.setAsScenePlayer ?? !!(actor as any).isPlayer;
+    const transfersPlayerActor =
+      setAsScenePlayer || !!(actor as any).isPlayer || sourceScene?.player === actor;
     const preserveSpatialChildren = options.preserveSpatialChildren ?? true;
     const activateScene = options.activateScene ?? setAsScenePlayer;
     const transferEntities = preserveSpatialChildren
@@ -304,7 +346,7 @@ export class SceneManager {
       options.targetEntryId ??
       (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
     this.applyEntryPlacement(targetScene, actor, targetEntryId);
-    if (setAsScenePlayer && sourceScene !== targetScene && targetScene.defaultCamera) {
+    if (transfersPlayerActor && sourceScene !== targetScene && targetScene.defaultCamera) {
       targetScene.camera.zoom = targetScene.defaultCamera.zoom;
     }
     if (setAsScenePlayer && targetScene.autoCenter) {
