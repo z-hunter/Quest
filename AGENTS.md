@@ -228,6 +228,7 @@ Gemini rules:
 - Keep edits scoped to the requested behavior and related contracts.
 - Update `GDD.md` if gameplay/design behavior changes.
 - Use structured APIs/parsers where available instead of ad hoc string manipulation.
+- For parser command/debugging issues, use the running app when practical: enable `#PEEK-ON`, reproduce the command, and inspect `CONTEXT`, `SCOPE`, `ENVELOPE`, `CORE`, and `RESULT` before guessing.
 - For runtime/scene/gameplay bugs, prefer diagnostic helpers or temporary probes that explain engine decisions, such as why `isWalkable` returned false, which object blocked a path, or which semantic rule selected a parser target.
 - Do not revert user changes. Work with dirty files unless the user explicitly asks to revert them.
 

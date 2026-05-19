@@ -151,7 +151,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
           noEffect: "That doesn't work.",
         },
         validation: {
-          allowedTitles: ['your ID card'],
+          allowedEntityIds: ['miles_id'],
         },
       },
     ],
