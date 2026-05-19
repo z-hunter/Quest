@@ -100,12 +100,24 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
         boxSizing: 'border-box',
         overflow: 'hidden',
         pointerEvents: 'auto', // Allow scrolling
+        userSelect: 'text',
+        WebkitUserSelect: 'text',
       }}
     >
       <div
         ref={scrollRef}
-        style={{ flex: 1, overflowY: 'auto', paddingBottom: '10px' }}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          paddingBottom: '10px',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          cursor: 'text',
+        }}
         className="console-scroll"
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
       >
         {lines.map((line, i) => (
           <div
@@ -115,6 +127,8 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
               color: line.type === 'command' ? '#aaa' : line.type === 'error' ? '#f55' : '#fff',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
             }}
           >
             {line.text}

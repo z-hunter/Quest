@@ -30,6 +30,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   // Console History State
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [, forceInventoryRefresh] = useState(0);
+  const suppressCommandFocusUntilRef = React.useRef(0);
 
   // Editor Store State
   const { enabled: editorEnabled } = useEditorStore();
@@ -113,14 +114,23 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
       );
     };
 
+    const isConsoleLogSelectionTarget = (target: EventTarget | null) => {
+      return target instanceof Element && !!target.closest('.console-scroll');
+    };
+
     const restoreCommandFocus = () => {
+      if (Date.now() < suppressCommandFocusUntilRef.current) return;
       if (!shouldLockCommandFocus()) return;
       const caret = input.selectionStart ?? input.value.length;
       input.focus({ preventScroll: true });
       input.setSelectionRange(caret, caret);
     };
 
-    const scheduleRestoreCommandFocus = () => {
+    const scheduleRestoreCommandFocus = (event?: Event) => {
+      if (isConsoleLogSelectionTarget(event?.target || null)) {
+        suppressCommandFocusUntilRef.current = Date.now() + 1000;
+        return;
+      }
       window.setTimeout(restoreCommandFocus, 0);
     };
 
