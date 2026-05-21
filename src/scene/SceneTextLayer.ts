@@ -362,6 +362,44 @@ export function getSceneTextRelationDescendants(
   return results;
 }
 
+export function getSceneTextRelationDirectDescendants(
+  snapshot: SceneTextLayerSnapshot,
+  anchorNodeId: string,
+  relation: EffectiveRelation
+): SceneTextLayerEntry[] {
+  return snapshot.entries.filter(
+    (entry) =>
+      entry.effectiveParentId === anchorNodeId &&
+      entry.effectiveRelation === relation &&
+      !hasTitledIntermediate(entry.object, anchorNodeId, snapshot.objectById, snapshot.titleById)
+  );
+}
+
+function hasTitledIntermediate(
+  object: SceneObject,
+  anchorNodeId: string,
+  objectById: Map<string, SceneObject>,
+  titleById: Map<string, string | null>
+): boolean {
+  let parentId =
+    typeof (object as any).spatial?.parentNodeId === 'string'
+      ? (object as any).spatial.parentNodeId.trim()
+      : '';
+  const visited = new Set<string>();
+
+  while (parentId && parentId !== anchorNodeId && !visited.has(parentId)) {
+    visited.add(parentId);
+    if (titleById.get(parentId)) return true;
+    const parent = objectById.get(parentId);
+    parentId =
+      typeof (parent as any)?.spatial?.parentNodeId === 'string'
+        ? (parent as any).spatial.parentNodeId.trim()
+        : '';
+  }
+
+  return false;
+}
+
 export function getSceneTextRelationAccessStates(
   scene: Scene,
   game: IGame,
@@ -422,6 +460,35 @@ export function getSceneTextRelationAccessStates(
   }
 
   return results;
+}
+
+export function getSceneTextRelationDirectAccessStates(
+  scene: Scene,
+  game: IGame,
+  anchorNodeId: string,
+  relation: EffectiveRelation,
+  options: { includeHidden?: boolean } = {}
+): SceneTextRelationAccessState[] {
+  const allObjects = scene.getAllSceneObjects();
+  const objectById = new Map(allObjects.map((object) => [object.name, object] as const));
+  const titleById = new Map(
+    allObjects.map((object) => [object.name, getSceneObjectTitle(game, object)] as const)
+  );
+  const includeHidden = !!options.includeHidden;
+
+  return allObjects
+    .map((object) => {
+      const accessState = getSceneTextLayerAccessState(scene, game, object, objectById, titleById);
+      if (!accessState.title) return null;
+      if (accessState.effectiveParentId !== anchorNodeId) return null;
+      if (accessState.effectiveRelation !== relation) return null;
+      if (hasTitledIntermediate(object, anchorNodeId, objectById, titleById)) return null;
+      const inventorySlot = getInventorySlotProjection(game, object);
+      if (inventorySlot?.playerOwned || inventorySlot?.protected) return null;
+      if (accessState.hidden && !includeHidden) return null;
+      return accessState as SceneTextRelationAccessState;
+    })
+    .filter((state): state is SceneTextRelationAccessState => !!state);
 }
 
 export function getSceneTextTargetDescriptor(

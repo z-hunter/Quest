@@ -156,6 +156,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         const active = document.activeElement as HTMLElement;
         if (
           active &&
+          active.id !== 'parser-input' &&
           (active.tagName === 'INPUT' ||
             active.tagName === 'TEXTAREA' ||
             active.tagName === 'SELECT')

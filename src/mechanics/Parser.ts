@@ -22,6 +22,8 @@ import {
   buildSceneTextLayerSnapshot,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
+  getSceneTextRelationDirectAccessStates,
+  getSceneTextRelationDirectDescendants,
   getSceneTextRelationDescendants,
 } from '../scene/SceneTextLayer';
 import type {
@@ -2633,8 +2635,14 @@ export class Parser {
     if (outcome.status !== 'ok' || !outcome.message) return outcome;
     const extraMessages: string[] = [];
 
-    const contentsMessage = this.getEntityInventoryContentsText(entity);
-    if (contentsMessage) extraMessages.push(contentsMessage);
+    if (
+      outcome.code === 'entity_description' ||
+      outcome.code === 'entity_generic_description' ||
+      outcome.code === 'entity_details' ||
+      outcome.code === 'entity_description_fallback'
+    ) {
+      extraMessages.push(...this.getEntitySpatialContentsText(entity, { revealLookable: true }));
+    }
 
     const scene = this.game.sceneManager.currentScene;
     if (scene && entity?.name && !this.getEntityParserNoteNeedsCheck(scene, entity.name)) {
@@ -2649,23 +2657,68 @@ export class Parser {
     };
   }
 
-  private getEntityInventoryContentsText(entity: SceneObject): string | null {
-    if (!entity?.name || !this.hasEntityInventoryRelation(entity, 'in')) return null;
-    const relationOutcome = this.game.describeSpatialRelation(entity.name, 'in');
-    if (relationOutcome.status !== 'ok' || relationOutcome.code !== 'relation_contents') {
-      return null;
-    }
-    return relationOutcome.message?.trim() || null;
+  private getEntitySpatialContentsText(
+    entity: SceneObject,
+    options: { revealLookable?: boolean } = {}
+  ): string[] {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene || !entity?.name) return [];
+
+    let textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+    const anchorTitle =
+      textLayer.entryById.get(entity.name)?.title?.trim() ||
+      this.getPlayerFacingObjectTitle(entity)?.trim() ||
+      null;
+    if (!anchorTitle) return [];
+
+    return (['in', 'on', 'under', 'behind'] as const)
+      .map((relation) => {
+        let discovered = false;
+        if (options.revealLookable) {
+          const revealableLookables = getSceneTextRelationDirectAccessStates(
+            scene,
+            this.game,
+            entity.name,
+            relation,
+            { includeHidden: true }
+          ).filter((accessState) => accessState.hiddenReason === 'lookable');
+
+          if (revealableLookables.length) {
+            revealableLookables.forEach((accessState) =>
+              scene.revealHiddenEntity(accessState.object)
+            );
+            textLayer = buildSceneTextLayerSnapshot(scene, this.game);
+            discovered = true;
+          }
+        }
+
+        const childTitles = getSceneTextRelationDirectDescendants(textLayer, entity.name, relation)
+          .map((entry) => entry.title)
+          .filter((title): title is string => !!title);
+
+        if (!childTitles.length) return null;
+
+        return this.game.text(
+          discovered ? 'parser.relation_discovered_contents' : 'parser.relation_contents',
+          {
+            Relation: this.capitalize(this.getRelationDisplayText(relation)),
+            relation: this.getRelationDisplayText(relation),
+            target: anchorTitle,
+            items: this.formatTitleList(childTitles),
+          }
+        );
+      })
+      .filter((message): message is string => !!message?.trim());
   }
 
-  private hasEntityInventoryRelation(entity: SceneObject, relation: ParserRelationType): boolean {
-    return (
-      entity.components?.some(
-        (component: any) =>
-          component?.type === 'Inventory' &&
-          (!component.relation || component.relation === relation)
-      ) || false
-    );
+  private capitalize(value: string): string {
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  private formatTitleList(items: string[]): string {
+    if (items.length <= 1) return items[0] || '';
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
   }
 
   private getEntityParserNoteNeedsCheck(scene: any, entityId: string): boolean {

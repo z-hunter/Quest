@@ -20,6 +20,7 @@ type EntityOptions = {
 };
 
 type TriggerboxOptions = {
+  scene?: Scene;
   title?: string | null;
   description?: string;
   details?: string;
@@ -125,7 +126,7 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       return player;
     },
     addTriggerbox(name, options = {}) {
-      const targetScene = harness.game.sceneManager.currentScene || scene;
+      const targetScene = options.scene || harness.game.sceneManager.currentScene || scene;
       const triggerbox = new Triggerbox(DEFAULT_POLY, name, '');
       triggerbox.disabled = options.disabled ?? false;
       triggerbox.groupID = options.groupID ?? null;

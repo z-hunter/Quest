@@ -70,6 +70,7 @@ function resetSoundManager() {
     masterGain: FakeGainNode | null;
     activeNodes: Map<number, unknown>;
     env: typeof DEFAULT_SOUND_ENV;
+    attachedVolume: number;
     loadReverbIR: (url: string) => Promise<unknown>;
   };
 
@@ -77,6 +78,7 @@ function resetSoundManager() {
   manager.masterGain = new FakeGainNode();
   manager.activeNodes = new Map();
   manager.env = { ...DEFAULT_SOUND_ENV };
+  manager.attachedVolume = 1;
   manager.loadReverbIR = vi.fn(async (url: string) => ({ url }));
 
   return manager;
@@ -91,6 +93,7 @@ function createDefaultIRSound(manager: ReturnType<typeof resetSoundManager>) {
     gain,
     dryGain,
     eqNode: new FakeBiquadFilterNode(),
+    baseVolume: 1,
     baseReverbAmount: 1,
     usingDefaultIR: true,
     reverbRequestId: 0,
@@ -217,6 +220,29 @@ describe('SoundManager default scene reverb IR', () => {
 
     SoundManager.getInstance().setProximityEQ(1, 0, 0, 1.1, 1, 1000);
     expect(active.dryGain.gain.value).toBeCloseTo(DRY_ONLY_DISTANCE_MIN_LEVEL);
+  });
+
+  it('applies global attached volume only to attached sounds', async () => {
+    const manager = resetSoundManager();
+    const active = createDefaultIRSound(manager);
+    active.baseVolume = 0.5;
+    active.attached = { entityId: 'sound_test', useProximityEQ: true };
+    const plain = {
+      source: new FakeAudioNode(),
+      gain: new FakeGainNode(),
+      dryGain: new FakeGainNode(),
+      eqNode: new FakeBiquadFilterNode(),
+      baseVolume: 0.5,
+      baseReverbAmount: 0,
+      usingDefaultIR: false,
+      reverbRequestId: 0,
+    };
+    manager.activeNodes.set(2, plain);
+
+    SoundManager.getInstance().setAttachedVolume(2);
+
+    expect(active.gain.gain.value).toBeCloseTo(1);
+    expect(plain.gain.gain.value).toBeCloseTo(0.5);
   });
 
   it('ignores stale IR loads after the scene default IR is cleared', async () => {

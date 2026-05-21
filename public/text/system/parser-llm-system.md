@@ -125,6 +125,8 @@ If a harmless player action leaves a persistent mark on an object or area, store
 
 Do not overuse notes. Do not store passing jokes, generic mood, or obvious facts already present in the game context.
 
+If your response invents or changes a persistent small in-world fact about an object or scene, such as a radio being left on, a device producing static, a cushion staying creased, or a room now smelling faintly of smoke, return a `plan` with `showText` plus the appropriate Parser Note action. Do not return that kind of persistent change as `final_response`, because `final_response` cannot carry Parser Notes.
+
 Parser Notes must be paired with a player-facing `showText` action in the same plan. A plan that writes Parser Notes must not also return ordinary world actions such as `lookTarget`, `examineTarget`, `openTarget`, or `takeTarget`.
 
 Parser Notes must contain only in-world facts. Never write parser reasoning, player attempts, command mapping, missing capability, available actions, mechanics, JSON, APIs, implementation limits, or instructions to treat one action as another.
@@ -161,7 +163,7 @@ For a game command:
 { "kind": "plan", "actions": [ { "type": "..." } ] }
 ```
 
-For conversation, atmosphere, reactions, or when no safe action fits:
+For conversation, atmosphere, reactions, or when no safe action fits and you are not creating or updating a persistent Parser Note:
 
 ```json
 { "kind": "final_response", "message": "Short in-world response." }

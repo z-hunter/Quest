@@ -316,8 +316,15 @@ export class ComponentSystem {
     const targetSceneId = exit.targetSceneId?.trim() || scene.id;
     if (!sceneManager || !targetSceneId) return false;
 
-    sceneManager.pendingEntryId = exit.targetEntryId?.trim() || null;
-    sceneManager.switchTo(targetSceneId, activator);
+    if (activator) {
+      sceneManager.transferActorToScene(activator, targetSceneId, {
+        targetEntryId: exit.targetEntryId?.trim() || null,
+        activateScene: true,
+      });
+      return true;
+    }
+
+    sceneManager.switchTo(targetSceneId);
     return true;
   }
 
@@ -444,6 +451,34 @@ export class ComponentSystem {
     ];
   }
 
+  private static getPointToSegmentDistance(
+    point: { x: number; y: number },
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): number {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq <= 0) return Math.hypot(point.x - start.x, point.y - start.y);
+
+    const t = Math.max(
+      0,
+      Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq)
+    );
+    return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+  }
+
+  private static getPointToPolygonDistance(
+    point: { x: number; y: number },
+    polygon: Array<{ x: number; y: number }>
+  ): number {
+    if (Geometry.isPointInPolygon(point, polygon)) return 0;
+    return polygon.reduce((closest, start, index) => {
+      const end = polygon[(index + 1) % polygon.length];
+      return Math.min(closest, this.getPointToSegmentDistance(point, start, end));
+    }, Number.POSITIVE_INFINITY);
+  }
+
   // Called when trying to TAKE an item
   // Returns string (error message) or null (success)
   static getInteractionDistanceError(
@@ -456,6 +491,7 @@ export class ComponentSystem {
 
     let targetX = 0;
     let targetY = 0;
+    let dist: number | null = null;
     const surfacePlacement = this.getSurfacePlacementReferencePoint(entity);
 
     if (surfacePlacement) {
@@ -463,6 +499,7 @@ export class ComponentSystem {
       targetY = surfacePlacement.y;
     } else if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
       const poly = (entity as any).poly as Array<{ x: number; y: number }>;
+      dist = this.getPointToPolygonDistance({ x: player.x || 0, y: player.y || 0 }, poly);
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
     } else {
@@ -471,7 +508,7 @@ export class ComponentSystem {
       targetY = e.y || 0;
     }
 
-    const dist = Math.hypot(player.x - targetX, player.y - targetY);
+    dist ??= Math.hypot(player.x - targetX, player.y - targetY);
     const allowedDist = (player.width || 30) * 3.3;
 
     if (dist > allowedDist) {

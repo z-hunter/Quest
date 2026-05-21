@@ -36,6 +36,32 @@ describe('Parser custom commands', () => {
     expect(fixture.game.inventory).not.toContain(yourId);
   });
 
+  it('validates TELEPORT by stable item id instead of display title', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const idCard = fixture.addEntity('miles_id', {
+      title: 'ID card',
+      description: 'Your card.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(idCard);
+    fixture.game.inventory.push(idCard);
+    fixture.game.sceneManager.scenes.set('test1', fixture.scene);
+    fixture.game.sceneManager.sceneRegistry.set('test1', {
+      id: 'test1',
+      path: 'test1.json',
+      name: 'Test Destination',
+      title: 'Test Destination',
+      sourceData: null,
+      lastIndexed: Date.now(),
+    });
+
+    const result = await fixture.run('teleport with id card');
+
+    expect(result.messages.at(-1)).toBe('You vanish in a flash and arrive somewhere else.');
+    expect(fixture.game.inventory).not.toContain(idCard);
+  });
+
   it('rejects TELEPORT with the wrong matching item', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

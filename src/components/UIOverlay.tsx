@@ -30,6 +30,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   // Console History State
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [, forceInventoryRefresh] = useState(0);
+  const suppressCommandFocusUntilRef = React.useRef(0);
 
   // Editor Store State
   const { enabled: editorEnabled } = useEditorStore();
@@ -99,6 +100,54 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   }, [game, editorEnabled, isConsoleOpen, isConsoleModal, previewEntity?.name]);
 
   useEffect(() => {
+    if (!game) return;
+    const input = parserInputRef.current;
+    if (!input) return;
+
+    const shouldLockCommandFocus = () => {
+      return (
+        !input.disabled &&
+        !fileBrowser &&
+        !choiceDialog &&
+        !isConsoleModal &&
+        (!editorEnabled || isConsoleOpen)
+      );
+    };
+
+    const isConsoleLogSelectionTarget = (target: EventTarget | null) => {
+      return target instanceof Element && !!target.closest('.console-scroll');
+    };
+
+    const restoreCommandFocus = () => {
+      if (Date.now() < suppressCommandFocusUntilRef.current) return;
+      if (!shouldLockCommandFocus()) return;
+      const caret = input.selectionStart ?? input.value.length;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(caret, caret);
+    };
+
+    const scheduleRestoreCommandFocus = (event?: Event) => {
+      if (isConsoleLogSelectionTarget(event?.target || null)) {
+        suppressCommandFocusUntilRef.current = Date.now() + 1000;
+        return;
+      }
+      window.setTimeout(restoreCommandFocus, 0);
+    };
+
+    window.addEventListener('pointerdown', scheduleRestoreCommandFocus, true);
+    window.addEventListener('focusin', scheduleRestoreCommandFocus, true);
+    input.addEventListener('blur', scheduleRestoreCommandFocus);
+
+    restoreCommandFocus();
+
+    return () => {
+      window.removeEventListener('pointerdown', scheduleRestoreCommandFocus, true);
+      window.removeEventListener('focusin', scheduleRestoreCommandFocus, true);
+      input.removeEventListener('blur', scheduleRestoreCommandFocus);
+    };
+  }, [game, editorEnabled, isConsoleOpen, isConsoleModal, fileBrowser, choiceDialog]);
+
+  useEffect(() => {
     if (message) {
       const timer = setTimeout(() => {
         setMessage(null);
@@ -147,6 +196,17 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   const continueConsoleModalFirst = React.useCallback(() => {
     return game?.console.continueClosedModal() || false;
   }, [game]);
+
+  const moveCommandInputCaret = React.useCallback(
+    (input: HTMLInputElement, delta: -1 | 1) => {
+      const caret = input.selectionStart ?? input.value.length;
+      const nextCaret = Math.max(0, Math.min(input.value.length, caret + delta));
+      input.setSelectionRange(nextCaret, nextCaret);
+      game?.revealCommandCursor();
+      setHistoryIndex(-1);
+    },
+    [game]
+  );
 
   const keepCommandInputFocused = React.useCallback(
     (e: React.MouseEvent) => {
@@ -226,12 +286,26 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 }
               }
 
+              if (!(e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                e.preventDefault();
+                return;
+              }
+
+              if (e.key === 'Home' || e.key === 'End') {
+                game?.revealCommandCursor();
+              }
+
               // History Navigation: Ctrl + Up/Down
               if (game && (e.ctrlKey || e.metaKey)) {
-                const history = game.console.history;
-                if (history.length === 0) return;
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  moveCommandInputCaret(e.currentTarget, e.key === 'ArrowLeft' ? -1 : 1);
+                  return;
+                }
 
                 if (e.key === 'ArrowUp') {
+                  const history = game.console.history;
+                  if (history.length === 0) return;
                   e.preventDefault();
                   // Go back/older
                   // If we are at -1 (new/empty), go to last item (length-1)
@@ -246,9 +320,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                   }
                   setHistoryIndex(newIndex);
                   e.currentTarget.value = history[newIndex];
+                  e.currentTarget.setSelectionRange(
+                    history[newIndex].length,
+                    history[newIndex].length
+                  );
+                  game.revealCommandCursor();
                 }
 
                 if (e.key === 'ArrowDown') {
+                  const history = game.console.history;
+                  if (history.length === 0) return;
                   e.preventDefault();
                   // Go forward/newer
                   // If we are at length-1 (newest), go to -1 (empty)
@@ -260,10 +341,16 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                     if (newIndex === history.length - 1) {
                       newIndex = -1;
                       e.currentTarget.value = '';
+                      e.currentTarget.setSelectionRange(0, 0);
                     } else {
                       newIndex = Math.min(history.length - 1, newIndex + 1);
                       e.currentTarget.value = history[newIndex];
+                      e.currentTarget.setSelectionRange(
+                        history[newIndex].length,
+                        history[newIndex].length
+                      );
                     }
+                    game.revealCommandCursor();
                   }
                   setHistoryIndex(newIndex);
                 }

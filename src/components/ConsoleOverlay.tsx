@@ -100,12 +100,24 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
         boxSizing: 'border-box',
         overflow: 'hidden',
         pointerEvents: 'auto', // Allow scrolling
+        userSelect: 'text',
+        WebkitUserSelect: 'text',
       }}
     >
       <div
         ref={scrollRef}
-        style={{ flex: 1, overflowY: 'auto', paddingBottom: '10px' }}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          paddingBottom: '10px',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          cursor: 'text',
+        }}
         className="console-scroll"
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
       >
         {lines.map((line, i) => (
           <div
@@ -115,6 +127,8 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
               color: line.type === 'command' ? '#aaa' : line.type === 'error' ? '#f55' : '#fff',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
             }}
           >
             {line.text}
@@ -131,25 +145,56 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
 };
 
 const InputMirror: React.FC<{ game: Game }> = ({ game }) => {
-  const [val, setVal] = useState('');
+  const [inputState, setInputState] = useState({ value: '', caret: 0, cursorVisible: false });
 
   useEffect(() => {
     const input = game.getCommandInput();
     if (!input) return;
 
+    let frame = 0;
     const update = () => {
-      if (input && input.value !== val) {
-        setVal(input.value);
-      }
-      requestAnimationFrame(update);
+      const value = input.value;
+      const caret = Math.max(0, Math.min(input.selectionStart ?? value.length, value.length));
+      const cursorVisible =
+        document.activeElement === input && Math.floor(game.cursorBlink / 500) % 2 === 0;
+
+      setInputState((current) => {
+        if (
+          current.value === value &&
+          current.caret === caret &&
+          current.cursorVisible === cursorVisible
+        ) {
+          return current;
+        }
+        return { value, caret, cursorVisible };
+      });
+      frame = requestAnimationFrame(update);
     };
 
-    const rAF = requestAnimationFrame(update);
+    frame = requestAnimationFrame(update);
 
     return () => {
-      cancelAnimationFrame(rAF);
+      cancelAnimationFrame(frame);
     };
-  }, [game, val]);
+  }, [game]);
 
-  return <span>{`> ${val}_`}</span>;
+  const { value, caret, cursorVisible } = inputState;
+  const beforeCaret = value.slice(0, caret);
+  const cursorChar = value[caret] || '\u00a0';
+  const afterCaret = value.slice(caret + (value[caret] ? 1 : 0));
+
+  if (!cursorVisible) {
+    return <span>{`> ${value}`}</span>;
+  }
+
+  return (
+    <span>
+      {'> '}
+      {beforeCaret}
+      <span style={{ display: 'inline-block', minWidth: '1ch', background: '#fff', color: '#000' }}>
+        {cursorChar}
+      </span>
+      {afterCaret}
+    </span>
+  );
 };

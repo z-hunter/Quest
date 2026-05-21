@@ -7,6 +7,7 @@ import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
+import { Actor } from '../entities/Actor';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
@@ -112,6 +113,9 @@ export class Game implements IGame {
       uiScale: number;
       viewportZoom: EditorViewportZoom;
     };
+    audio: {
+      attachedVolume: number;
+    };
   };
 
   openFileBrowser(
@@ -184,6 +188,9 @@ export class Game implements IGame {
       editor: {
         uiScale: 1.0,
         viewportZoom: 'fit',
+      },
+      audio: {
+        attachedVolume: 1.0,
       },
     };
 
@@ -457,6 +464,10 @@ export class Game implements IGame {
     this.consoleInput?.focus();
   }
 
+  revealCommandCursor(): void {
+    this.cursorBlink = 0;
+  }
+
   renderUI(ctx: CanvasRenderingContext2D): void {
     const w = this.bufferCanvas.width;
     const h = this.bufferCanvas.height;
@@ -501,17 +512,35 @@ export class Game implements IGame {
 
     const inputText = this.consoleInput ? this.consoleInput.value : '';
     const isFocused = document.activeElement === this.consoleInput;
+    const caretIndex =
+      this.consoleInput && typeof this.consoleInput.selectionStart === 'number'
+        ? Math.max(
+            0,
+            Math.min(this.consoleInput.selectionStart ?? inputText.length, inputText.length)
+          )
+        : inputText.length;
 
-    let cursor = '';
+    let cursorVisible = false;
     if (isFocused) {
       this.cursorBlink += 16;
-      if (Math.floor(this.cursorBlink / 500) % 2 === 0) {
-        cursor = '_';
-      }
+      cursorVisible = Math.floor(this.cursorBlink / 500) % 2 === 0;
     }
 
+    const inputX = 2;
+    const inputY = consoleY + 2 + lineHeight * outputLineCount;
+    const promptText = `> ${inputText}`;
     ctx.fillStyle = '#fff';
-    ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + lineHeight * outputLineCount);
+    ctx.fillText(promptText, inputX, inputY);
+
+    if (cursorVisible) {
+      const beforeCaretText = `> ${inputText.slice(0, caretIndex)}`;
+      const cursorChar = inputText[caretIndex] || ' ';
+      const cursorX = inputX + ctx.measureText(beforeCaretText).width;
+      const cursorWidth = Math.max(1, ctx.measureText(cursorChar).width);
+      ctx.fillRect(cursorX, inputY, cursorWidth, lineHeight);
+      ctx.fillStyle = '#000';
+      ctx.fillText(cursorChar, cursorX, inputY);
+    }
   }
 
   disableCRT(): void {
@@ -811,7 +840,13 @@ export class Game implements IGame {
       };
     }
 
-    this.sceneManager.switchTo(sceneId);
+    const player =
+      currentScene?.player ||
+      (currentScene?.entities.find((entity) => entity instanceof Actor && entity.isPlayer) as
+        | Actor
+        | undefined);
+
+    this.sceneManager.switchTo(sceneId, player || undefined);
     const switchedScene = this.sceneManager.currentScene;
     return {
       status: 'ok',
@@ -869,21 +904,22 @@ export class Game implements IGame {
   loadSettings(): void {
     try {
       const json = localStorage.getItem('quest_settings');
+      const coerceNumber = (value: unknown, fallback: number) => {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+          const n = Number.parseFloat(value);
+          return Number.isFinite(n) ? n : fallback;
+        }
+        return fallback;
+      };
+
       if (json) {
         const loaded = JSON.parse(json);
         const loadedCrt = loaded?.crt ?? loaded?.settings?.crt ?? loaded?.graphics?.crt;
         const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
+        const loadedAudio = loaded?.audio ?? loaded?.settings?.audio;
 
         if (loadedCrt) {
-          const coerceNumber = (value: unknown, fallback: number) => {
-            if (typeof value === 'number' && Number.isFinite(value)) return value;
-            if (typeof value === 'string') {
-              const n = Number.parseFloat(value);
-              return Number.isFinite(n) ? n : fallback;
-            }
-            return fallback;
-          };
-
           this.settings.crt = {
             ...this.settings.crt,
             ...loadedCrt,
@@ -911,9 +947,23 @@ export class Game implements IGame {
         if (loadedEditor) {
           this.settings.editor = { ...this.settings.editor, ...loadedEditor };
         }
+
+        if (loadedAudio) {
+          this.settings.audio = {
+            ...this.settings.audio,
+            attachedVolume: Math.max(
+              0,
+              Math.min(
+                10,
+                coerceNumber(loadedAudio.attachedVolume, this.settings.audio.attachedVolume)
+              )
+            ),
+          };
+        }
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
+    SoundManager.getInstance().setAttachedVolume(this.settings.audio.attachedVolume);
   }
 }

@@ -59,11 +59,6 @@
               "id": "test_1",
               "x": 555,
               "y": 214
-            },
-            {
-              "id": "test",
-              "x": 244,
-              "y": 255
             }
           ]
         }
@@ -98,12 +93,12 @@
           "y": 211
         },
         {
-          "x": 680,
-          "y": 211
+          "x": 1341,
+          "y": 210
         },
         {
-          "x": 680,
-          "y": 297
+          "x": 1409,
+          "y": 264
         },
         {
           "x": -234,
@@ -139,7 +134,7 @@
         {
           "type": "Subscene",
           "targetGroupId": "#D",
-          "itemScale": 8
+          "itemScale": 7
         }
       ],
       "layer": 0,
@@ -408,11 +403,17 @@
           "type": "Surface",
           "capacity": 8,
           "groups": [],
-          "items": [],
+          "items": [
+            {
+              "id": "miles_id",
+              "x": -62,
+              "y": -114
+            }
+          ],
           "relation": "on"
         }
       ],
-      "layer": 5,
+      "layer": 6,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -570,7 +571,7 @@
           "items": []
         }
       ],
-      "layer": 4,
+      "layer": 3,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -597,6 +598,159 @@
         }
       ],
       "script": ""
+    },
+    {
+      "name": "floor_lamp",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 401,
+          "y": 12
+        },
+        {
+          "x": 414,
+          "y": -35
+        },
+        {
+          "x": 444,
+          "y": -35
+        },
+        {
+          "x": 460,
+          "y": 13
+        },
+        {
+          "x": 438,
+          "y": 17
+        },
+        {
+          "x": 438,
+          "y": 17
+        },
+        {
+          "x": 436,
+          "y": 180
+        },
+        {
+          "x": 446,
+          "y": 191
+        },
+        {
+          "x": 446,
+          "y": 191
+        },
+        {
+          "x": 420,
+          "y": 192
+        },
+        {
+          "x": 424,
+          "y": 181
+        },
+        {
+          "x": 424,
+          "y": 14
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "desk_lamp",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 3,
+          "y": -6
+        },
+        {
+          "x": 10,
+          "y": -20
+        },
+        {
+          "x": 19,
+          "y": -10
+        },
+        {
+          "x": 36,
+          "y": 6
+        },
+        {
+          "x": 11,
+          "y": 20
+        },
+        {
+          "x": 3,
+          "y": 2
+        },
+        {
+          "x": -24,
+          "y": 23
+        },
+        {
+          "x": -7,
+          "y": 73
+        },
+        {
+          "x": -2,
+          "y": 76
+        },
+        {
+          "x": -14,
+          "y": 78
+        },
+        {
+          "x": -31,
+          "y": 29
+        },
+        {
+          "x": -31,
+          "y": 29
+        },
+        {
+          "x": -29,
+          "y": 16
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "Trig_450",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
+      "script": ""
     }
   ],
   "scaling": {
@@ -610,7 +764,7 @@
     {
       "name": "CityView",
       "type": "Entity",
-      "locked": true,
+      "locked": false,
       "disabled": false,
       "groupID": null,
       "customName": "",
@@ -634,12 +788,12 @@
         "relation": "in"
       },
       "parallax": 0.4,
-      "x": 119.67896209456934,
-      "y": 234,
-      "width": 821.6,
-      "height": 551.2,
-      "baseWidth": 1264,
-      "baseHeight": 848,
+      "x": 103,
+      "y": 284,
+      "width": 1064,
+      "height": 657,
+      "baseWidth": 1636.923076923077,
+      "baseHeight": 1010.7692307692307,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "window-view.json",
@@ -751,30 +905,30 @@
           "shadowQuadId": "shadow",
           "offsetX": -70,
           "offsetY": -25,
-          "triggerId": "room"
+          "triggerId": "#f"
         },
         {
           "type": "Inventory",
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": ["miles_id"],
+          "items": [],
           "relation": "in"
         }
       ],
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.041603758200544,
-      "x": 199.4899156537383,
-      "y": 249.6082973905191,
-      "width": 71.03999999999999,
-      "height": 290.08,
-      "baseWidth": 96,
-      "baseHeight": 392,
+      "parallax": 1.0600999917398644,
+      "x": 653.9435807732922,
+      "y": 277.55398727939104,
+      "width": 119.88,
+      "height": 289.34,
+      "baseWidth": 162,
+      "baseHeight": 391,
       "colliderWidth": 88,
       "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-right.json",
+      "spriteName": "miles_ds-idle-down.json",
       "color": "#00ffff",
       "scale": 0.74,
       "modelScale": 0.74,
@@ -785,7 +939,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -895,7 +1049,7 @@
           "target": "Drawer2"
         }
       ],
-      "layer": 3,
+      "layer": 2,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -931,7 +1085,7 @@
       "textRedirects": {},
       "interactions": {},
       "components": [],
-      "layer": 5,
+      "layer": 4,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -1012,7 +1166,7 @@
           "items": []
         }
       ],
-      "layer": 6,
+      "layer": 8,
       "visible": true,
       "hidden": false,
       "spatial": {
@@ -1084,7 +1238,7 @@
       "type": "Quad",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "#f",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1093,7 +1247,7 @@
           "type": "3d-parallax"
         }
       ],
-      "layer": 0,
+      "layer": -1,
       "visible": true,
       "hidden": false,
       "parallax": 1,
@@ -1107,12 +1261,12 @@
           "p": 1
         },
         {
-          "x": 708,
-          "y": 186,
+          "x": 1335,
+          "y": 185,
           "p": 1
         },
         {
-          "x": 766,
+          "x": 1579,
           "y": 339,
           "p": 1.1
         },
@@ -1126,7 +1280,7 @@
       "sortMode": "ignore",
       "opacity": 0,
       "blendMode": "source-over",
-      "isGrid": false,
+      "isGrid": true,
       "gridLinesX": 5,
       "gridLinesY": 5,
       "lineWidth": 1,
@@ -1159,9 +1313,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0790382036293829,
-      "x": 222.90433731747987,
-      "y": 306.9284515529557,
+      "parallax": 1.0791811402100033,
+      "x": 223.04286339314416,
+      "y": 306.93895592340505,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1197,7 +1351,7 @@
           "capacity": 1,
           "groups": ["#compact_cassete"],
           "protected": false,
-          "items": [],
+          "items": ["test"],
           "relation": "in"
         }
       ],
@@ -1309,48 +1463,39 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
-        }
-      ],
+      "components": [],
       "layer": 0,
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 145.18694662091718,
-      "y": 230.54902619661678,
+      "x": 595.3371473161715,
+      "y": 258.497010067161,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 145.18694662091718,
-          "y": 230.54902619661678,
-          "p": 1.0291755094471586
+          "x": 595.3371473161715,
+          "y": 258.497010067161,
+          "p": 1.0477227203569743
         },
         {
-          "x": 242.85278512344576,
-          "y": 229.35714201277415,
-          "p": 1.0283762522966693
+          "x": 691.9753666746899,
+          "y": 257.3939667925368,
+          "p": 1.0470090693458032
         },
         {
-          "x": 177.78444354447626,
-          "y": 265.0256985553919,
-          "p": 1.051655163104805
+          "x": 658.2815148069235,
+          "y": 290.460617761526,
+          "p": 1.0684809206243675
         },
         {
-          "x": 129.3058658734136,
-          "y": 263.4290846171659,
-          "p": 1.0506246467766456
+          "x": 608.3944452508779,
+          "y": 288.9779797519234,
+          "p": 1.0675181686700803
         }
       ],
       "color": "#2b019d",
       "sortMode": "ignore",
-      "opacity": 0.6,
+      "opacity": 1,
       "blendMode": "multiply",
       "isGrid": false,
       "gridLinesX": 5,
@@ -1364,8 +1509,8 @@
       "name": "miles_id",
       "type": "Entity",
       "locked": false,
-      "disabled": false,
-      "groupID": null,
+      "disabled": true,
+      "groupID": "#D1",
       "customName": "your ID card",
       "textRedirects": {},
       "interactions": {},
@@ -1375,66 +1520,26 @@
           "ignoreDistance": true
         }
       ],
-      "layer": 5,
-      "visible": false,
+      "layer": 6,
+      "visible": true,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
+        "parentNodeId": "d1_surface",
+        "relation": "on"
       },
       "parallax": 1,
-      "x": 199.4899156537383,
-      "y": 249.6082973905191,
-      "width": 20.998408601351045,
-      "height": 13.013327735918267,
+      "x": -62,
+      "y": -114,
+      "width": 19.55767142352019,
+      "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
       "baseHeight": 102.45528980823099,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
-      "scale": 0.12701469841406676,
+      "scale": 0.1183,
       "modelScale": 0.13,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Walk_main",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 244,
-      "y": 255,
-      "width": 15.49860845839018,
-      "height": 22.024338335607094,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.7867368421052632,
-      "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
@@ -1465,14 +1570,14 @@
       "parallax": 1,
       "x": 555,
       "y": 214,
-      "width": 14.73342428376535,
-      "height": 20.936971350613916,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
+      "width": 19.632236842105264,
+      "height": 14.023026315789474,
+      "baseWidth": 26.25,
+      "baseHeight": 18.75,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
-      "color": "#86cece",
+      "color": "#5e184f",
       "scale": 0.7478947368421053,
       "modelScale": 0.8,
       "ignoreScaling": false,
@@ -1640,6 +1745,286 @@
       "opacity": 0,
       "blendMode": "source-over",
       "blur": 0
+    },
+    {
+      "name": "phone_modem",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -41,
+      "y": 91,
+      "width": 28,
+      "height": 40,
+      "baseWidth": 30.769230769230766,
+      "baseHeight": 43.956043956043956,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.91,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 0,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "sound_test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -2,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -106,
+      "y": -40,
+      "width": 37,
+      "height": 26,
+      "baseWidth": 40.65934065934066,
+      "baseHeight": 28.57142857142857,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.91,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "sofa_pillow1",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Sofa",
+        "relation": "on"
+      },
+      "parallax": 1,
+      "x": 277,
+      "y": 357,
+      "width": 141,
+      "height": 56,
+      "baseWidth": 141,
+      "baseHeight": 56,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#4c2e94",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "sofa_pillow2",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Sofa",
+        "relation": "on"
+      },
+      "parallax": 1,
+      "x": 461,
+      "y": 357,
+      "width": 141,
+      "height": 56,
+      "baseWidth": 141,
+      "baseHeight": 56,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#4c2e94",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "tv_rc",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": "lookable",
+      "spatial": {
+        "parentNodeId": "sofa_pillow2",
+        "relation": "under"
+      },
+      "parallax": 1,
+      "x": 544,
+      "y": 345,
+      "width": 25.999999999999996,
+      "height": 38.35,
+      "baseWidth": 199.99999999999997,
+      "baseHeight": 295,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "tv_rc",
+      "color": "#AAAAAA",
+      "scale": 0.13,
+      "modelScale": 0.13,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "room_k",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1028,
+      "y": 304,
+      "width": 788,
+      "height": 554,
+      "baseWidth": 788,
+      "baseHeight": 554,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "kitchen",
+      "color": "#AAAAAA",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "Static_81",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1.1,
+      "x": 1052.1313725490197,
+      "y": 355.2450980392157,
+      "width": 466.4373193890188,
+      "height": 210.21054080088066,
+      "baseWidth": 466.4373193890188,
+      "baseHeight": 210.21054080088066,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "kitchen_table",
+      "color": "#AAAAAA",
+      "scale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "boombox",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": -152,
+      "y": -11,
+      "width": 14.341500682128244,
+      "height": 20.380027285129607,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.7280000000000001,
+      "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     }
   ],
   "folders": [],
@@ -1653,5 +2038,16 @@
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,
   "camMinX": 143,
-  "camMaxY": 45
+  "camMaxY": 45,
+  "soundEnv": {
+    "audioMaxDistance": 10000,
+    "reverbMaxDist": 6000,
+    "reverbMinPercent": 0.1,
+    "zoomSensitivity": 0.7,
+    "pannerRefDistance": 100,
+    "pannerRolloffFactor": 0.7,
+    "panningModel": "HRTF",
+    "distanceModel": "linear",
+    "defaultReverbIR": "/sounds/ir/room_drum_medium.wav"
+  }
 }

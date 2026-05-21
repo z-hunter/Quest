@@ -111,6 +111,13 @@ Scripts do not generate text themselves. They only change which named text field
 - Parser and UI should read only the resolved standard fields, not custom variant names directly.
 - The LLM parser cascade receives resolved parser/world context plus the system prompt asset; it should not read arbitrary scene files directly.
 
+Parser service text also owns relation-summary phrasing:
+
+- `parser.relation_contents` is used when `LOOK <target>`, `EXAMINE <target>`, or relation LOOK reports already visible spatial contents.
+- `parser.relation_discovered_contents` is used only on the first reveal of `hidden: lookable` spatial contents; the default wording changes `you see` to `you discover`.
+
+After discovery, the object is no longer hidden for the current runtime scene session, so later summaries return to `parser.relation_contents`.
+
 ## Object semantic fields for LLM context
 
 Object Text Assets can describe lightweight semantic knowledge for the Stage 2 LLM cascade.

@@ -1,5 +1,6 @@
 import type { IGame } from './IGame';
 import { QuadObject } from '../entities/QuadObject';
+import { Actor } from '../entities/Actor';
 import { SoundManager, type SoundOptions } from '../systems/SoundManager';
 
 export interface CustomTimer {
@@ -154,6 +155,14 @@ export class ScriptAPI {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
     return scene.findEntity(name) as any;
+  }
+
+  transferActor(actorName: string, targetSceneId: string, targetEntryId?: string | null): boolean {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return false;
+    const actor = scene.findEntity(actorName);
+    if (!(actor instanceof Actor)) return false;
+    return !!this.game.sceneManager.transferActorToScene(actor, targetSceneId, { targetEntryId });
   }
 
   /**

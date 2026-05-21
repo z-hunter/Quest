@@ -57,6 +57,7 @@ export interface SceneScaling {
   max: number;
   horizon: number;
   front: number;
+  correctionalScale?: number;
 }
 
 export interface SceneData {
@@ -434,6 +435,7 @@ export class Scene {
       max: 1.0,
       horizon: 150, // Y coordinate for min scale
       front: 300, // Y coordinate for max scale
+      correctionalScale: 1,
     };
     this.player = null;
     this.camera = { x: 0, y: 0, zoom: 1.0 };
@@ -483,6 +485,7 @@ export class Scene {
   }
 
   removeEntity(entity: Entity): void {
+    this.game.inventoryManager?.removeEntityFromCurrentStorage?.(entity);
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
@@ -642,6 +645,106 @@ export class Scene {
 
     // Lerp scale
     return this.scaling.min + t * (this.scaling.max - this.scaling.min);
+  }
+
+  getCorrectionalScale(): number {
+    const value = this.scaling?.correctionalScale;
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  applyCorrectionalScaleChange(nextScale: number): void {
+    const oldScale = this.getCorrectionalScale();
+    const safeNext = Number.isFinite(nextScale) && nextScale > 0 ? nextScale : 1;
+    const factor = oldScale > 0 ? safeNext / oldScale : safeNext;
+    this.scaling.correctionalScale = safeNext;
+
+    const objects = this.getAllSceneObjects();
+    if (!Number.isFinite(factor) || Math.abs(factor - 1) < 0.000001 || objects.length === 0) {
+      this.entities.forEach((entity) => entity.applySceneCorrectionalScale(this));
+      return;
+    }
+
+    const centers: Array<{ x: number; y: number }> = [];
+    for (const object of objects) {
+      const vertices = (object as any).vertices as Array<{ x: number; y: number }> | undefined;
+      if (Array.isArray(vertices) && vertices.length > 0) {
+        centers.push({
+          x: vertices.reduce((sum, point) => sum + point.x, 0) / vertices.length,
+          y: vertices.reduce((sum, point) => sum + point.y, 0) / vertices.length,
+        });
+        continue;
+      }
+
+      const poly = (object as any).poly as Array<{ x: number; y: number }> | undefined;
+      if (Array.isArray(poly) && poly.length > 0) {
+        centers.push({
+          x: poly.reduce((sum, point) => sum + point.x, 0) / poly.length,
+          y: poly.reduce((sum, point) => sum + point.y, 0) / poly.length,
+        });
+        continue;
+      }
+
+      if ('x' in object && 'y' in object) {
+        centers.push({ x: (object as any).x, y: (object as any).y });
+      }
+    }
+
+    if (centers.length === 0) {
+      this.entities.forEach((entity) => entity.applySceneCorrectionalScale(this));
+      return;
+    }
+
+    const originX = centers.reduce((sum, point) => sum + point.x, 0) / centers.length;
+    const originY = centers.reduce((sum, point) => sum + point.y, 0) / centers.length;
+    const scalePoint = (point: { x: number; y: number }) => ({
+      x: Math.round(originX + (point.x - originX) * factor),
+      y: Math.round(originY + (point.y - originY) * factor),
+    });
+
+    for (const object of objects) {
+      const vertices = (object as any).vertices as
+        | Array<{ x: number; y: number; p?: number }>
+        | undefined;
+      if (Array.isArray(vertices) && vertices.length > 0) {
+        (object as any).vertices = vertices.map((vertex) => ({
+          ...vertex,
+          ...scalePoint(vertex),
+        }));
+        const scaledVertices = (object as any).vertices as Array<{ x: number; y: number }>;
+        (object as any).x =
+          scaledVertices.reduce((sum, vertex) => sum + vertex.x, 0) / scaledVertices.length;
+        (object as any).y =
+          scaledVertices.reduce((sum, vertex) => sum + vertex.y, 0) / scaledVertices.length;
+        continue;
+      }
+
+      const poly = (object as any).poly as Array<{ x: number; y: number }> | undefined;
+      if (Array.isArray(poly) && poly.length > 0) {
+        (object as any).poly = poly.map(scalePoint);
+        continue;
+      }
+
+      if ('x' in object && 'y' in object) {
+        const scaled = scalePoint({ x: (object as any).x, y: (object as any).y });
+        (object as any).x = scaled.x;
+        (object as any).y = scaled.y;
+      }
+    }
+
+    this.entities.forEach((entity) => {
+      const ref =
+        typeof entity.refScale === 'number' &&
+        Number.isFinite(entity.refScale) &&
+        entity.refScale > 0
+          ? entity.refScale
+          : typeof entity.modelScale === 'number' &&
+              Number.isFinite(entity.modelScale) &&
+              entity.modelScale > 0
+            ? entity.modelScale
+            : 1;
+      entity.refScale = ref * factor;
+      entity.applySceneCorrectionalScale(this);
+    });
   }
 
   isWalkable(x: number, y: number, sourceEntity?: Entity): boolean {

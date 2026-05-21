@@ -2,6 +2,7 @@ import { Scene } from './Scene';
 import type { IGame } from '../core/IGame';
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
+import type { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import type { EntryTrigger } from '../entities/TriggerComponents';
@@ -74,6 +75,14 @@ type CachedSceneEntry = {
   pinned: boolean;
 };
 
+export type ActorSceneTransferOptions = {
+  targetEntryId?: string | null;
+  removeExistingPlayer?: boolean;
+  setAsScenePlayer?: boolean;
+  preserveSpatialChildren?: boolean;
+  activateScene?: boolean;
+};
+
 export class SceneManager {
   game: IGame;
   currentScene: Scene | null;
@@ -110,88 +119,168 @@ export class SceneManager {
     this.cacheScene(scene, false);
   }
 
-  switchTo(sceneId: string, activator?: Actor): void {
-    const oldScene = this.currentScene;
-    const scene = this.ensureSceneLoaded(sceneId);
-    if (!scene) {
-      console.error(`Scene ${sceneId} not found!`);
-      return;
+  private getInventoryRelations(entity: Entity): Array<'in' | 'on' | 'under' | 'behind'> {
+    const relations = (entity.components || [])
+      .filter((component: any) => component?.type === 'Inventory')
+      .map((component: any) =>
+        component?.relation === 'on' ||
+        component?.relation === 'under' ||
+        component?.relation === 'behind' ||
+        component?.relation === 'in'
+          ? component.relation
+          : 'in'
+      );
+    return Array.from(new Set(relations));
+  }
+
+  private collectActorTransferEntities(actor: Actor, sourceScene: Scene | null): Entity[] {
+    const collected = new Set<Entity>([actor]);
+    const queue: Entity[] = [actor];
+
+    const enqueue = (entity: Entity | null | undefined) => {
+      if (!entity || collected.has(entity)) return;
+      collected.add(entity);
+      queue.push(entity);
+    };
+
+    for (const relation of this.getInventoryRelations(actor)) {
+      for (const entity of this.game.inventoryManager?.getInventoryEntities?.(actor, relation) ||
+        []) {
+        enqueue(entity);
+      }
     }
 
-    // --- PLAYER TRANSFER PRIORITY ---
-    // If the activator is a player, we must ensure they are the ONLY player in the target scene.
-    if (activator && (activator as any).isPlayer) {
-      // 1. Remove ANY existing player instance from the target scene's entities (except the activator itself)
-      const existingPlayer = scene.entities.find((e) => (e as any).isPlayer && e !== activator);
-      if (existingPlayer) {
-        scene.removeEntity(existingPlayer);
-      }
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || !sourceScene) continue;
 
-      // 2. Transfer the live player
-      if (oldScene && oldScene !== scene) {
-        oldScene.removeEntity(activator as Entity);
-        scene.addEntity(activator as Entity);
+      for (const candidate of sourceScene.entities) {
+        if (!(candidate instanceof Entity)) continue;
+        const parentId =
+          typeof (candidate as any).spatial?.parentNodeId === 'string'
+            ? (candidate as any).spatial.parentNodeId.trim()
+            : '';
+        if (parentId === current.name) {
+          enqueue(candidate);
+        }
       }
-
-      // 3. FORCE the scene's player reference to our live activator
-      scene.player = activator;
-    } else if (activator && oldScene && oldScene !== scene) {
-      // Handle NPC transfer
-      oldScene.removeEntity(activator as Entity);
-      scene.addEntity(activator as Entity);
     }
 
-    // Handle Entry point placement (works for both scene switch and same-scene teleport)
-    if (this.pendingEntryId) {
-      const entryObj = scene.getObjectByName(this.pendingEntryId);
-      if (entryObj) {
-        const entryComp = entryObj.components?.find((c) => c.type === 'Entry') as
-          | EntryTrigger
-          | undefined;
-        if (entryComp) {
-          // Calculate center of object
-          let targetX: number | null = null;
-          let targetY: number | null = null;
+    return Array.from(collected);
+  }
 
-          if (entryObj.type === 'Triggerbox' || (entryObj as any).poly) {
-            const poly = (entryObj as any).poly as { x: number; y: number }[];
-            if (poly && poly.length > 0) {
-              let cx = 0,
-                cy = 0;
-              poly.forEach((p) => {
-                cx += p.x;
-                cy += p.y;
-              });
-              targetX = cx / poly.length;
-              targetY = cy / poly.length;
-            }
-          } else if ('x' in entryObj && 'y' in entryObj) {
-            // It's an Entity or Quad
-            targetX = (entryObj as any).x;
-            targetY = (entryObj as any).y;
-          }
+  private detachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
+    const index = scene.entities.indexOf(entity);
+    if (index === -1) return;
+    scene.entities.splice(index, 1);
+    scene.revealedHiddenEntities.delete(entity.name);
+    scene.subsceneEntities.delete(entity);
+    if (scene.player === entity) {
+      scene.player = null;
+    }
+  }
 
-          if (activator && targetX !== null && targetY !== null) {
-            activator.x = targetX;
-            activator.y = targetY;
-            if (entryComp.direction && typeof (activator as any).setDirection === 'function') {
-              (activator as any).setDirection(entryComp.direction);
-            }
-            activator.update(0);
+  private attachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
+    if (!scene.entities.includes(entity)) {
+      scene.entities.push(entity);
+    }
+    // @ts-ignore
+    entity.scene = scene;
+  }
 
-            // Ensure player reference is set before snapping
-            if ((activator as any).isPlayer) {
-              scene.player = activator;
-              if (scene.autoCenter) {
-                scene.snapCameraToPlayer();
-              }
-            }
+  private findFirstEntryId(scene: Scene): string | null {
+    const entry = scene
+      .getAllSceneObjects()
+      .find((object) => object.components?.some((component) => component.type === 'Entry'));
+    return entry?.name || null;
+  }
+
+  private applyEntryPlacement(
+    scene: Scene,
+    actor: Actor,
+    entryId: string | null
+  ): SceneObject | null {
+    if (!entryId) return null;
+    const entryObj = scene.getObjectByName(entryId);
+    if (!entryObj) return null;
+    const entryComp = entryObj.components?.find((c) => c.type === 'Entry') as
+      | EntryTrigger
+      | undefined;
+    if (!entryComp) return null;
+
+    let targetX: number | null = null;
+    let targetY: number | null = null;
+
+    if (entryObj.type === 'Triggerbox' || (entryObj as any).poly) {
+      const poly = (entryObj as any).poly as { x: number; y: number }[];
+      if (poly && poly.length > 0) {
+        let cx = 0;
+        let cy = 0;
+        poly.forEach((p) => {
+          cx += p.x;
+          cy += p.y;
+        });
+        targetX = cx / poly.length;
+        targetY = cy / poly.length;
+      }
+    } else if ('x' in entryObj && 'y' in entryObj) {
+      targetX = (entryObj as any).x;
+      targetY = (entryObj as any).y;
+    }
+
+    if (targetX === null || targetY === null) return entryObj;
+    actor.layer = entryObj.layer;
+    actor.parallax = entryObj.parallax;
+    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    actor.x = walkableTarget.x;
+    actor.y = walkableTarget.y;
+    if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
+      (actor as any).setDirection(entryComp.direction);
+    }
+    actor.update(0);
+    return entryObj;
+  }
+
+  private findNearestWalkableEntryPosition(
+    scene: Scene,
+    actor: Actor,
+    targetX: number,
+    targetY: number
+  ): { x: number; y: number } {
+    if (scene.isWalkable(targetX, targetY, actor)) {
+      return { x: targetX, y: targetY };
+    }
+
+    const step = 4;
+    const maxRadius = Math.max(128, actor.colliderWidth * 2, actor.colliderHeight * 8);
+    let best: { x: number; y: number; distanceSq: number } | null = null;
+
+    for (let radius = step; radius <= maxRadius; radius += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
+        for (let dy = -radius; dy <= radius; dy += step) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const x = targetX + dx;
+          const y = targetY + dy;
+          if (!scene.isWalkable(x, y, actor)) continue;
+          const distanceSq = dx * dx + dy * dy;
+          if (!best || distanceSq < best.distanceSq) {
+            best = { x, y, distanceSq };
           }
         }
       }
-      this.pendingEntryId = null;
+      const nearest = best;
+      if (nearest !== null) {
+        return { x: nearest.x, y: nearest.y };
+      }
     }
 
+    console.warn(
+      `[SceneManager] Entry placement for ${actor.name} at ${targetX},${targetY} is not walkable.`
+    );
+    return { x: targetX, y: targetY };
+  }
+
+  private finalizeSceneActivation(oldScene: Scene | null, scene: Scene): void {
     this.currentScene = scene;
     SoundManager.getInstance().setEnvironment(scene.soundEnv);
     if (oldScene !== scene) {
@@ -207,6 +296,87 @@ export class SceneManager {
       this.game.onSceneChange(scene.name);
     }
     this.evictScenesIfNeeded();
+  }
+
+  transferActorToScene(
+    actor: Actor,
+    targetSceneId: string,
+    options: ActorSceneTransferOptions = {}
+  ): Scene | null {
+    const sourceScene = this.currentScene;
+    const targetScene = this.ensureSceneLoaded(targetSceneId);
+    if (!targetScene) {
+      console.error(`Scene ${targetSceneId} not found!`);
+      return null;
+    }
+
+    const removeExistingPlayer = options.removeExistingPlayer ?? !!(actor as any).isPlayer;
+    const setAsScenePlayer = options.setAsScenePlayer ?? !!(actor as any).isPlayer;
+    const transfersPlayerActor =
+      setAsScenePlayer || !!(actor as any).isPlayer || sourceScene?.player === actor;
+    const preserveSpatialChildren = options.preserveSpatialChildren ?? true;
+    const activateScene = options.activateScene ?? setAsScenePlayer;
+    const transferEntities = preserveSpatialChildren
+      ? this.collectActorTransferEntities(actor, sourceScene)
+      : [actor];
+
+    if (removeExistingPlayer) {
+      const existingPlayer = targetScene.entities.find((e) => (e as any).isPlayer && e !== actor);
+      if (existingPlayer) {
+        targetScene.removeEntity(existingPlayer);
+      }
+    }
+
+    if (sourceScene && sourceScene !== targetScene) {
+      for (const entity of transferEntities) {
+        this.detachEntityForSceneTransfer(sourceScene, entity);
+      }
+      for (const entity of transferEntities) {
+        this.attachEntityForSceneTransfer(targetScene, entity);
+        entity.applySceneCorrectionalScale?.(targetScene);
+      }
+    } else if (!targetScene.entities.includes(actor)) {
+      this.attachEntityForSceneTransfer(targetScene, actor);
+    }
+
+    if (setAsScenePlayer) {
+      targetScene.player = actor;
+    }
+    const targetEntryId =
+      options.targetEntryId ??
+      (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
+    this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    if (transfersPlayerActor && sourceScene !== targetScene && targetScene.defaultCamera) {
+      targetScene.camera.zoom = targetScene.defaultCamera.zoom;
+    }
+    if (setAsScenePlayer && targetScene.autoCenter) {
+      targetScene.snapCameraToPlayer();
+    }
+    if (activateScene) {
+      this.finalizeSceneActivation(sourceScene, targetScene);
+    }
+
+    return targetScene;
+  }
+
+  switchTo(sceneId: string, activator?: Actor): void {
+    const oldScene = this.currentScene;
+    const scene = this.ensureSceneLoaded(sceneId);
+    if (!scene) {
+      console.error(`Scene ${sceneId} not found!`);
+      return;
+    }
+
+    if (activator) {
+      this.transferActorToScene(activator, sceneId, {
+        targetEntryId: this.pendingEntryId,
+        activateScene: false,
+      });
+    } else {
+      this.pendingEntryId = null;
+    }
+    this.pendingEntryId = null;
+    this.finalizeSceneActivation(oldScene, scene);
   }
 
   exposeEntitiesToWindow(): void {
@@ -540,7 +710,7 @@ export class SceneManager {
     if (data.camMaxX !== undefined) newScene.camMaxX = data.camMaxX;
     if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
     if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
-    if (data.scaling) newScene.scaling = data.scaling;
+    if (data.scaling) newScene.scaling = { ...newScene.scaling, ...data.scaling };
 
     if (data.soundEnv) {
       newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };

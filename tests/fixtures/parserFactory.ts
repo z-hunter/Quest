@@ -5,8 +5,9 @@ import {
   getSceneTextLayerAccessState,
   buildSceneTextLayerSnapshot,
   getActiveBlockingComponentState,
+  getSceneTextRelationDirectDescendants,
+  getSceneTextRelationDirectAccessStates,
   getSceneTextRelationDescendants,
-  getSceneTextRelationAccessStates,
   getSceneTextTargetDescriptor,
 } from '../../src/scene/SceneTextLayer';
 import { createSceneFixture, type SceneFixture } from './sceneFactory';
@@ -46,7 +47,7 @@ export function createParserFixture(): ParserFixture {
 
   const revealHiddenDescendantsForExamine = (anchor: Entity): void => {
     for (const relation of ['in', 'on', 'under', 'behind'] as const) {
-      const revealableDescendants = getSceneTextRelationAccessStates(
+      const revealableDescendants = getSceneTextRelationDirectAccessStates(
         fixture.scene,
         fixture.game,
         anchor.name,
@@ -270,10 +271,21 @@ export function createParserFixture(): ParserFixture {
         recoverable: authoredTakeFailure ? false : true,
       };
     }
-    fixture.scene.removeEntity(entity);
-    (entity as any).spatial = null;
-    fixture.scene.subsceneEntities.delete(entity);
-    fixture.game.inventory.push(entity);
+    const player = fixture.scene.player instanceof Entity ? fixture.scene.player : null;
+    if (!player) {
+      return {
+        status: 'failed',
+        code: 'player_inventory_missing',
+        message: fixture.game.text('parser.inventory_missing'),
+        data: { entityId: entity.name },
+        recoverable: true,
+      };
+    }
+    (fixture.game.inventoryManager as any).removeEntityFromCurrentStorage?.(entity);
+    const moveOutcome = fixture.game.addInventoryEntity(player, entity, 'in');
+    if (moveOutcome.status !== 'ok') {
+      return moveOutcome;
+    }
     const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
     return {
       ...okOutcome('item_taken', fixture.game.text('parser.take_pickup_success', { item: title }), {
@@ -951,22 +963,27 @@ export function createParserFixture(): ParserFixture {
       }
     }
     const effectiveRelation = relation as 'in' | 'on' | 'under' | 'behind';
-    let childTitles = getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
+    let childTitles = getSceneTextRelationDirectDescendants(
+      textLayer,
+      anchorNodeId,
+      effectiveRelation
+    )
       .map((entry) => entry.title)
       .filter((title): title is string => !!title);
-    const revealableLookables = getSceneTextRelationAccessStates(
+    const revealableLookables = getSceneTextRelationDirectAccessStates(
       fixture.scene,
       fixture.game,
       anchorNodeId,
       effectiveRelation,
       { includeHidden: true }
     ).filter((accessState) => accessState.hiddenReason === 'lookable');
+    const discoveredLookables = revealableLookables.length > 0;
     if (revealableLookables.length) {
       revealableLookables.forEach((accessState) =>
         fixture.scene.revealHiddenEntity(accessState.object)
       );
       const revealedTextLayer = buildSceneTextLayerSnapshot(fixture.scene, fixture.game);
-      childTitles = getSceneTextRelationDescendants(
+      childTitles = getSceneTextRelationDirectDescendants(
         revealedTextLayer,
         anchorNodeId,
         effectiveRelation
@@ -982,12 +999,15 @@ export function createParserFixture(): ParserFixture {
     }
     return okOutcome(
       'relation_contents',
-      fixture.game.text('parser.relation_contents', {
-        Relation: relation.charAt(0).toUpperCase() + relation.slice(1),
-        relation,
-        target: anchorTitle,
-        items: formatTitleList(childTitles),
-      })
+      fixture.game.text(
+        discoveredLookables ? 'parser.relation_discovered_contents' : 'parser.relation_contents',
+        {
+          Relation: relation.charAt(0).toUpperCase() + relation.slice(1),
+          relation,
+          target: anchorTitle,
+          items: formatTitleList(childTitles),
+        }
+      )
     );
   };
 

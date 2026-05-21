@@ -84,6 +84,7 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.parse_unknown': "I don't understand.",
   'parser.relation_empty': 'You see nothing {relation} the {target}.',
   'parser.relation_contents': '{Relation} the {target} you see: {items}.',
+  'parser.relation_discovered_contents': '{Relation} the {target} you discover: {items}.',
 };
 
 const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
@@ -150,7 +151,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
           noEffect: "That doesn't work.",
         },
         validation: {
-          allowedTitles: ['your ID card'],
+          allowedEntityIds: ['miles_id'],
         },
       },
     ],

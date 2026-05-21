@@ -65,6 +65,7 @@ interface ActiveSoundNode {
   delayFeedback?: GainNode;
   delayWetGain?: GainNode; // Branch gain for delay signal
   attached?: AttachedSound;
+  baseVolume: number;
   baseReverbAmount: number; // Configured wet level (0..1)
   usingDefaultIR: boolean; // True if using scene-wide default
   reverbIR?: string;
@@ -83,6 +84,7 @@ export class SoundManager {
   private nextPlaybackId = 1;
   private activeNodes: Map<number, ActiveSoundNode> = new Map();
   private env: SceneSoundEnv = { ...DEFAULT_SOUND_ENV };
+  private attachedVolume = 1;
 
   private constructor() {}
 
@@ -121,6 +123,8 @@ export class SoundManager {
           node.panner.maxDistance = this.env.audioMaxDistance;
           node.panner.rolloffFactor = this.env.pannerRolloffFactor;
         }
+
+        this.applyAttachedVolume(node);
 
         if (irChanged && node.usingDefaultIR) {
           updates.push(this.setEffects(playbackId, {}, true));
@@ -214,8 +218,9 @@ export class SoundManager {
     eqNode.frequency.value = 250;
     eqNode.gain.value = 0;
 
+    const baseVolume = options.volume ?? 1;
     const gainNode = this.ctx.createGain();
-    gainNode.gain.value = options.volume ?? 1;
+    gainNode.gain.value = baseVolume;
 
     const dryGain = this.ctx.createGain();
     dryGain.gain.value = 1.0;
@@ -248,6 +253,7 @@ export class SoundManager {
       panner,
       eqNode,
       dryGain,
+      baseVolume,
       baseReverbAmount: options.reverbAmount ?? 0,
       usingDefaultIR: false,
       reverbRequestId: 0,
@@ -295,6 +301,8 @@ export class SoundManager {
       active.eqNode!.connect(active.panner);
       active.panner.connect(active.gain);
     }
+
+    this.applyAttachedVolume(active);
 
     if (options.useProximityEQ && !options.bypassSceneReverb) {
       active.usingDefaultIR = true;
@@ -491,6 +499,12 @@ export class SoundManager {
     }
   }
 
+  private applyAttachedVolume(active: ActiveSoundNode) {
+    if (!this.ctx) return;
+    const volume = active.attached ? this.attachedVolume : 1;
+    active.gain.gain.setTargetAtTime(active.baseVolume * volume, this.ctx.currentTime, 0.05);
+  }
+
   public updateAttachedSounds(
     cameraX: number,
     cameraY: number,
@@ -575,7 +589,17 @@ export class SoundManager {
 
   public setVolume(playbackId: number, v: number) {
     const a = this.activeNodes.get(playbackId);
-    if (a && this.ctx) a.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+    if (a && this.ctx) {
+      a.baseVolume = v;
+      this.applyAttachedVolume(a);
+    }
+  }
+
+  public setAttachedVolume(v: number) {
+    this.attachedVolume =
+      typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 1;
+    if (!this.ctx) return;
+    this.activeNodes.forEach((active) => this.applyAttachedVolume(active));
   }
 
   public setMasterVolume(v: number) {

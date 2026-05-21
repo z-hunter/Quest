@@ -225,6 +225,8 @@ Parser не должен самостоятельно обходить raw `.spa
 - `EXAMINE` использует инвентарь, объекты активной subscene и объекты в пределах допустимой дистанции;
 - `GO TO` использует сценовые цели и достижимые сценовые объекты.
 
+Для direct `LOOK <target>` и `EXAMINE <target>` parser после основного описания добавляет spatial-summary видимых titled-потомков target по relations `in`, `on`, `under`, `behind`. Сводка строится через runtime text layer, поэтому безымянные технические узлы схлопываются, hidden unrevealed объекты не попадают в обычную видимость, а relation определяется относительно выбранного semantic anchor.
+
 Текущая модель scope:
 
 ```ts
@@ -873,6 +875,8 @@ Plural matching в v1 намеренно простой:
 
 - `LOOK` использует обычное краткое описание (`description`);
 - `EXAMINE` использует расширенное описание (`details`).
+- После основного описания `EXAMINE <target>` добавляет ту же spatial-summary видимых дочерних объектов, что и `LOOK <target>`.
+- `hidden: lookable` spatial-дочерние объекты могут быть раскрыты через `EXAMINE <target>` так же, как через `LOOK <target>` или relation LOOK.
 
 Если `details` отсутствует:
 
@@ -889,6 +893,15 @@ Plural matching в v1 намеренно простой:
 - находится достаточно близко, по той же дистанции, что и `TAKE`.
 
 Это правило относится к игровому миру, а не к языку, поэтому применяется на стороне `Game.examineEntity()`.
+
+### Spatial discovery text
+
+Relation-aware visibility messages use two service text keys:
+
+- `parser.relation_contents`: ordinary visible contents, default `"{Relation} the {target} you see: {items}."`;
+- `parser.relation_discovered_contents`: first-time discovery of `hidden: lookable` contents, default `"{Relation} the {target} you discover: {items}."`.
+
+The discovery text is used only when the command actually reveals at least one previously hidden lookable object. After reveal, the same object is part of normal semantic visibility for the current scene runtime session, so later `LOOK` / `EXAMINE` output uses `parser.relation_contents`.
 
 ---
 

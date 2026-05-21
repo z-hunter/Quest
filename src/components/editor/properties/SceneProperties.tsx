@@ -1,7 +1,68 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Scene } from '../../../scene/Scene';
-import { SoundManager } from '../../../systems/SoundManager';
+import {
+  SoundManager,
+  type DistanceModelType,
+  type PanningModelType,
+} from '../../../systems/SoundManager';
+
+type NumberDraftInputProps = {
+  value: number;
+  step?: string;
+  min?: string;
+  max?: string;
+  className?: string;
+  formatPanelNumber: (value: unknown) => number | string;
+  onCommit: (value: number) => void;
+};
+
+const NumberDraftInput: React.FC<NumberDraftInputProps> = ({
+  value,
+  step,
+  min,
+  max,
+  className,
+  formatPanelNumber,
+  onCommit,
+}) => {
+  const [draft, setDraft] = React.useState(String(formatPanelNumber(value)));
+  const [focused, setFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!focused) {
+      setDraft(String(formatPanelNumber(value)));
+    }
+  }, [focused, formatPanelNumber, value]);
+
+  return (
+    <input
+      type="number"
+      step={step}
+      min={min}
+      max={max}
+      className={className}
+      value={focused ? draft : formatPanelNumber(value)}
+      onFocus={() => {
+        setFocused(true);
+        setDraft(String(formatPanelNumber(value)));
+      }}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return;
+        const next = Number(raw);
+        if (Number.isFinite(next)) {
+          onCommit(next);
+        }
+      }}
+      onBlur={() => {
+        setFocused(false);
+        setDraft(String(formatPanelNumber(value)));
+      }}
+    />
+  );
+};
 
 export const SceneProperties: React.FC = () => {
   const { game, obj, formatPanelNumber, setSectionRef, incrementObjectVersion, handleChange } =
@@ -217,13 +278,13 @@ export const SceneProperties: React.FC = () => {
                 </div>
                 <div>
                   <label className="e-label">Def Zoom</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <NumberDraftInput
+                    step="0.01"
                     className="e-input"
-                    value={formatPanelNumber(scene.defaultCamera.zoom)}
-                    onChange={(e) => {
-                      scene.defaultCamera.zoom = parseFloat(e.target.value);
+                    value={scene.defaultCamera.zoom}
+                    formatPanelNumber={formatPanelNumber}
+                    onCommit={(value) => {
+                      scene.defaultCamera.zoom = value;
                       incrementObjectVersion();
                     }}
                   />
@@ -262,6 +323,9 @@ export const SceneProperties: React.FC = () => {
             const s = game.sceneManager.currentScene.scaling;
             return (
               <>
+                <div className="e-row">
+                  <div className="e-label ui-text-accent-blue">Depth Scaling</div>
+                </div>
                 <div className="e-row">
                   <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
                     <input
@@ -330,6 +394,24 @@ export const SceneProperties: React.FC = () => {
                     </div>
                   </div>
                 )}
+                <div className="e-row" style={{ marginTop: '8px' }}>
+                  <div className="e-label ui-text-accent-blue">Correction</div>
+                </div>
+                <div className="e-row">
+                  <label className="e-label">Correctional Scale</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0.01"
+                    className="e-input"
+                    value={formatPanelNumber(s.correctionalScale ?? 1)}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      scene.applyCorrectionalScaleChange(Number.isFinite(val) && val > 0 ? val : 1);
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
               </>
             );
           })()}

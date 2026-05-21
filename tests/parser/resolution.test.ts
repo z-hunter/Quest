@@ -199,7 +199,7 @@ describe('Parser resolution', () => {
 
     const taken = fixture.game.takeEntity(note);
     expect(taken.status).toBe('ok');
-    expect((note as any).spatial).toBeNull();
+    expect((note as any).spatial).toEqual({ parentNodeId: 'Hero', relation: 'in' });
 
     (
       drawer.components?.find((component: any) => component?.type === 'Switch') as {

@@ -12,7 +12,8 @@ import {
   getActiveBlockingComponentState,
   getInactiveSubsceneAncestors,
   getSceneTextLayerAccessState,
-  getSceneTextRelationAccessStates,
+  getSceneTextRelationDirectAccessStates,
+  getSceneTextRelationDirectDescendants,
   getSceneTextRelationDescendants,
   getSceneTextTargetDescriptor,
 } from '../scene/SceneTextLayer';
@@ -405,7 +406,7 @@ export class GameSemanticAPI {
     if (!scene) return;
 
     for (const relation of ['in', 'on', 'under', 'behind'] as const) {
-      const revealableDescendants = getSceneTextRelationAccessStates(
+      const revealableDescendants = getSceneTextRelationDirectAccessStates(
         scene,
         this.game,
         anchor.name,
@@ -914,21 +915,22 @@ export class GameSemanticAPI {
     }
 
     let childTitles = effectiveRelation
-      ? getSceneTextRelationDescendants(textLayer, anchorNodeId, effectiveRelation)
+      ? getSceneTextRelationDirectDescendants(textLayer, anchorNodeId, effectiveRelation)
           ?.map((entry) => entry.title)
           .filter((title): title is string => !!title) || []
       : [];
 
     const revealableLookables = effectiveRelation
-      ? getSceneTextRelationAccessStates(scene, this.game, anchorNodeId, effectiveRelation, {
+      ? getSceneTextRelationDirectAccessStates(scene, this.game, anchorNodeId, effectiveRelation, {
           includeHidden: true,
         }).filter((accessState) => accessState.hiddenReason === 'lookable')
       : [];
+    const discoveredLookables = revealableLookables.length > 0;
     if (effectiveRelation && revealableLookables.length) {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
       const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this.game);
       childTitles =
-        getSceneTextRelationDescendants(revealedTextLayer, anchorNodeId, effectiveRelation)
+        getSceneTextRelationDirectDescendants(revealedTextLayer, anchorNodeId, effectiveRelation)
           ?.map((entry) => entry.title)
           .filter((title): title is string => !!title) || [];
     }
@@ -951,12 +953,15 @@ export class GameSemanticAPI {
     return {
       status: 'ok',
       code: 'relation_contents',
-      message: this.game.text('parser.relation_contents', {
-        Relation: this.capitalize(this.getRelationDisplayText(relation)),
-        relation: this.getRelationDisplayText(relation),
-        target: anchorTitle,
-        items: this.formatTitleList(childTitles),
-      }),
+      message: this.game.text(
+        discoveredLookables ? 'parser.relation_discovered_contents' : 'parser.relation_contents',
+        {
+          Relation: this.capitalize(this.getRelationDisplayText(relation)),
+          relation: this.getRelationDisplayText(relation),
+          target: anchorTitle,
+          items: this.formatTitleList(childTitles),
+        }
+      ),
       data: {
         relation,
         anchorNodeId,
@@ -1191,7 +1196,7 @@ export class GameSemanticAPI {
     const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
     if (isItem || entity.isTakeable) {
       const player = scene.player instanceof Entity ? scene.player : null;
-      if (!this.game.inventoryManager.hasMainInventory(player)) {
+      if (!player || !this.game.inventoryManager.hasMainInventory(player)) {
         return {
           status: 'failed',
           code: 'player_inventory_missing',
@@ -1205,24 +1210,42 @@ export class GameSemanticAPI {
       const takeSourceTitle = this.getTakeSourceTitle(entity);
       const containingSubsceneRootIds =
         this.game.inventoryManager.getContainingSubsceneRootIds(entity);
-
-      if (inventoryOwner) {
-        this.game.removeEntityFromInventory(inventoryOwner, entity);
-      }
-
-      this.game.inventoryManager.removeEntityFromCurrentStorage(entity);
+      const pickupAnimationState = {
+        x: entity.x,
+        y: entity.y,
+        spatial: entity.spatial ? { ...entity.spatial } : entity.spatial,
+        visible: entity.visible,
+        subsceneItemScale: entity.subsceneItemScale || 1,
+      };
 
       this.game.inventoryManager.clearInheritedSurfaceSwitchGroups(entity);
       this.game.inventoryManager.clearActiveContainerSwitchGroups(
         entity,
         this.getSwitchComponent.bind(this)
       );
-      scene.playPickupAnimation(entity);
-      scene.subsceneEntities.delete(entity);
-      this.game.inventoryManager.markEntityDetachedFromSubscenes(entity, containingSubsceneRootIds);
       entity.subsceneItemScale = 1;
-      this.game.inventory.push(entity);
-      this.game.inventoryManager.syncPlayerInventoryComponent();
+      const moveOutcome = this.game.inventoryManager.addInventoryEntity(player, entity, 'in');
+      if (moveOutcome.status !== 'ok') {
+        return moveOutcome;
+      }
+      const heldState = {
+        spatial: entity.spatial ? { ...entity.spatial } : entity.spatial,
+        visible: entity.visible,
+        inventoryPositionOwner: entity.getInventoryPositionOwner(),
+        subsceneItemScale: entity.subsceneItemScale || 1,
+      };
+      entity.setInventoryPositionOwner(null);
+      entity.x = pickupAnimationState.x;
+      entity.y = pickupAnimationState.y;
+      entity.spatial = pickupAnimationState.spatial;
+      entity.visible = pickupAnimationState.visible;
+      entity.subsceneItemScale = pickupAnimationState.subsceneItemScale;
+      scene.playPickupAnimation(entity);
+      entity.spatial = heldState.spatial;
+      entity.visible = heldState.visible;
+      entity.setInventoryPositionOwner(heldState.inventoryPositionOwner);
+      entity.subsceneItemScale = heldState.subsceneItemScale;
+      this.game.inventoryManager.markEntityDetachedFromSubscenes(entity, containingSubsceneRootIds);
       entity.update(0);
       this.game.inventoryManager.notifyInventoryUiChange();
       const itemTitle = this.getPlayerFacingObjectTitle(entity);

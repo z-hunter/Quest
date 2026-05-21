@@ -524,6 +524,28 @@ describe('Game semantic API', () => {
     expect(book.visible).toBe(true);
   });
 
+  it('removing a held scene entity cleans the inventory store so editor delete cannot leave a phantom item', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('test', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+
+    expect(fixture.game.addInventoryEntity(player, cassette).status).toBe('ok');
+    expect(fixture.game.inventory).toContain(cassette);
+
+    fixture.scene.removeEntity(cassette);
+
+    expect(fixture.scene.entities).not.toContain(cassette);
+    expect(fixture.game.inventory).not.toContain(cassette);
+    expect(fixture.game.getInventoryEntities(player)).toEqual([]);
+    expect(
+      player.components.find((candidate: any) => candidate?.type === 'Inventory')?.items
+    ).toEqual([]);
+  });
+
   it('examining an inventory item opens hi-res inventory preview state', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
@@ -1470,6 +1492,39 @@ describe('Game semantic API', () => {
     expect(fixture.game.inventory).not.toContain(key);
   });
 
+  it('allows dropping onto the current long walkbox floor from either end of the polygon', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 20, 20);
+    const leftKey = fixture.addEntity('left_key', {
+      title: 'Left key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    const rightKey = fixture.addEntity('right_key', {
+      title: 'Right key',
+      description: 'A key.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.scene.removeEntity(leftKey);
+    fixture.scene.removeEntity(rightKey);
+    fixture.game.inventory.push(leftKey, rightKey);
+    const floor = fixture.addWalkbox('Walk_main');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 1000, y: 0 },
+      { x: 1000, y: 80 },
+      { x: 0, y: 80 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'on', capacity: 4, groups: [], items: [] }];
+
+    expect(fixture.game.putEntity(leftKey, floor, { relation: 'on' }).status).toBe('ok');
+
+    player.x = 980;
+    player.y = 20;
+
+    expect(fixture.game.putEntity(rightKey, floor, { relation: 'on' }).status).toBe('ok');
+  });
+
   it('surface placement keeps randomness by choosing among valid samples', () => {
     const runPlacement = (randomValue: number) => {
       const fixture = createGameSemanticFixture();
@@ -2195,6 +2250,28 @@ describe('Game semantic API', () => {
     expect(item.scale).toBe(1.25);
     expect(fixture.scene.pickupAnimations).toHaveLength(1);
     expect(fixture.scene.pickupAnimations[0].entity.subsceneItemScale).toBe(2);
+  });
+
+  it('plays pickup animation from the item position after moving it into inventory', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const item = fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'A small coin.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    item.x = 120;
+    item.y = 80;
+    item.update(0);
+
+    const outcome = fixture.game.takeEntity(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(item.x).toBe(0);
+    expect(item.y).toBe(0);
+    expect(fixture.scene.pickupAnimations).toHaveLength(1);
+    expect(fixture.scene.pickupAnimations[0].entity.x).toBe(120);
+    expect(fixture.scene.pickupAnimations[0].entity.y).toBe(80);
   });
 
   it('taking an item from an active subscene ignores world distance even without ignoreDistance flag', () => {

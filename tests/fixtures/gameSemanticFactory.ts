@@ -41,14 +41,12 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     delete (fixture.game as Record<string, unknown>)[methodName];
   }
 
-  fixture.game.sceneManager.switchTo = (id: string) => {
-    const scene = fixture.game.sceneManager.scenes.get(id);
-    if (scene) {
-      fixture.game.sceneManager.currentScene = scene;
-      fixture.game.inventoryManager.handleSceneChange();
-      if (fixture.game.onSceneChange) {
-        fixture.game.onSceneChange(scene.name);
-      }
+  const switchTo = fixture.game.sceneManager.switchTo.bind(fixture.game.sceneManager);
+  fixture.game.sceneManager.switchTo = (id: string, activator?: any) => {
+    switchTo(id, activator);
+    const scene = fixture.game.sceneManager.currentScene;
+    if (scene && fixture.game.onSceneChange) {
+      fixture.game.onSceneChange(scene.name);
     }
   };
 

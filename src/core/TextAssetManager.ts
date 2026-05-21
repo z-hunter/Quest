@@ -53,6 +53,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     examine_relation_prompt: 'Examine what area?',
     relation_empty: 'You see nothing {relation} the {target}.',
     relation_contents: '{Relation} the {target} you see: {items}.',
+    relation_discovered_contents: '{Relation} the {target} you discover: {items}.',
     relation_location: 'It is {relation} the {target}.',
     relation_not_supported: "You can't determine what is {relation} the {target} from here.",
     take_prompt: 'Take what?',
@@ -314,7 +315,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
           noEffect: "That doesn't work.",
         },
         validation: {
-          allowedTitles: ['your ID card'],
+          allowedEntityIds: ['miles_id'],
         },
       },
     ],
