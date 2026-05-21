@@ -79,6 +79,7 @@ export interface SceneData {
   scaling: SceneScaling;
   entities: EntityData[];
   folders?: any[];
+  displayOrder?: string[];
   camera?: { x: number; y: number; zoom: number };
   autoCenter?: boolean;
   cameraSpeed?: number;
@@ -102,6 +103,7 @@ export class Scene {
   background: HTMLImageElement | null;
   entities: Entity[];
   folders: Folder[] = [];
+  displayOrder: string[] = [];
   pickupAnimations: PickupAnimation[] = [];
   dropAnimations: DropAnimation[] = [];
   walkbox: Walkbox[];
@@ -1025,6 +1027,7 @@ export class Scene {
       scaling: this.scaling,
       entities: savedEntities,
       folders: savedFolders,
+      displayOrder: this.displayOrder.length > 0 ? [...this.displayOrder] : undefined,
       camera: this.defaultCamera, // Save the DEFAULT settings, not the current runtime state
       autoCenter: this.autoCenter,
       cameraSpeed: this.cameraSpeed,

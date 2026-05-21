@@ -3,12 +3,13 @@ import { useEditorStore } from '../../store/editorStore';
 import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { EditorToolbar } from './EditorToolbar';
+import { Entity } from '../../entities/Entity';
 
 export const HierarchyPanel: React.FC = () => {
   const game = useGame();
   const { hierarchyVersion, selectedObjectId, selectedObjectKeys } = useEditorStore();
   const [filterText, setFilterText] = React.useState('');
-  const [collapsedFolders, setCollapsedFolders] = React.useState<Set<string>>(new Set());
+  const [collapsedNodes, setCollapsedNodes] = React.useState<Set<string>>(new Set());
   const filterInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Drag-and-drop state
@@ -73,122 +74,226 @@ export const HierarchyPanel: React.FC = () => {
   const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
     matchesFilter(item)
   );
-  const filteredObjects = React.useMemo(
-    () => [...filteredEntities, ...filteredWalkboxes, ...filteredTriggers],
-    [filteredEntities, filteredWalkboxes, filteredTriggers]
-  );
+  const filteredObjects = React.useMemo(() => {
+    const all = [...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
+    const order = scene?.displayOrder || [];
+    if (order.length === 0) return all;
+    const orderIndex = new Map(order.map((n, i) => [n, i]));
+    return [...all].sort((a: any, b: any) => {
+      const ai = orderIndex.get(a.name) ?? Number.MAX_SAFE_INTEGER;
+      const bi = orderIndex.get(b.name) ?? Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+  }, [filteredEntities, filteredWalkboxes, filteredTriggers, scene?.displayOrder]);
   const filteredObjectOrder = React.useMemo(
     () => new Map(filteredObjects.map((item: any, index: number) => [item.name, index])),
     [filteredObjects]
   );
-  const hierarchicalObjects = React.useMemo(() => {
-    const objectByName = new Map(filteredObjects.map((item: any) => [item.name, item]));
-    const folderIdToName = new Map<string, string>();
-    filteredObjects.forEach((item: any) => {
-      if (item.type === 'Folder' && item.folderId) {
-        folderIdToName.set(item.folderId, item.name);
+  const { hierarchicalObjects, parentByName, hasChildrenByName, descendantCountByName } =
+    React.useMemo(() => {
+      const objectByName = new Map(filteredObjects.map((item: any) => [item.name, item]));
+      const folderIdToName = new Map<string, string>();
+      filteredObjects.forEach((item: any) => {
+        if (item.type === 'Folder' && item.folderId) {
+          folderIdToName.set(item.folderId, item.name);
+        }
+      });
+
+      const childrenByParent = new Map<string, any[]>();
+      const roots: any[] = [];
+
+      const pushChild = (parentName: string, item: any) => {
+        const children = childrenByParent.get(parentName) || [];
+        children.push(item);
+        childrenByParent.set(parentName, children);
+      };
+
+      filteredObjects.forEach((item: any) => {
+        const fid = typeof item?.folder === 'string' ? item.folder : '';
+        const folderParentName = fid ? folderIdToName.get(fid) || '' : '';
+        if (
+          folderParentName &&
+          folderParentName !== item.name &&
+          objectByName.has(folderParentName)
+        ) {
+          pushChild(folderParentName, item);
+          return;
+        }
+        const parentId =
+          typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+        if (parentId && parentId !== item.name && objectByName.has(parentId)) {
+          pushChild(parentId, item);
+        } else {
+          roots.push(item);
+        }
+      });
+
+      const sortBySceneOrder = (items: any[]) =>
+        [...items].sort(
+          (left, right) =>
+            (filteredObjectOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) -
+            (filteredObjectOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER)
+        );
+
+      const ordered: Array<{ item: any; depth: number }> = [];
+      const visited = new Set<string>();
+      const parentByName = new Map<string, string>();
+
+      const walk = (item: any, depth: number, parent: string | null) => {
+        if (!item || visited.has(item.name)) return;
+        visited.add(item.name);
+        if (parent) parentByName.set(item.name, parent);
+        ordered.push({ item, depth });
+        const children = sortBySceneOrder(childrenByParent.get(item.name) || []);
+        children.forEach((child) => walk(child, depth + 1, item.name));
+      };
+
+      sortBySceneOrder(roots).forEach((item) => walk(item, 0, null));
+
+      sortBySceneOrder(filteredObjects)
+        .filter((item) => !visited.has(item.name))
+        .forEach((item) => walk(item, 0, null));
+
+      const hasChildrenByName = new Set<string>();
+      childrenByParent.forEach((kids, parentName) => {
+        if (kids.length > 0) hasChildrenByName.add(parentName);
+      });
+
+      const descendantCountByName = new Map<string, number>();
+      const countDescendants = (name: string, seen: Set<string>): number => {
+        if (seen.has(name)) return 0;
+        seen.add(name);
+        if (descendantCountByName.has(name)) return descendantCountByName.get(name)!;
+        const kids = childrenByParent.get(name) || [];
+        let total = kids.length;
+        for (const child of kids) {
+          total += countDescendants(child.name, seen);
+        }
+        descendantCountByName.set(name, total);
+        return total;
+      };
+      childrenByParent.forEach((_, parentName) => countDescendants(parentName, new Set()));
+
+      return {
+        hierarchicalObjects: ordered,
+        parentByName,
+        hasChildrenByName,
+        descendantCountByName,
+      };
+    }, [filteredObjects, filteredObjectOrder]);
+
+  const seenParents = React.useRef<Set<string>>(new Set());
+  const lastSceneIdRef = React.useRef<string | null>(null);
+  const sceneId = scene?.id ?? null;
+  const collapseStorageKey = sceneId ? `hierarchyCollapsed:${sceneId}` : null;
+
+  React.useEffect(() => {
+    if (lastSceneIdRef.current !== sceneId) {
+      lastSceneIdRef.current = sceneId;
+      let restoredCollapsed = new Set<string>();
+      let restoredSeen = new Set<string>();
+      if (collapseStorageKey) {
+        try {
+          const raw = localStorage.getItem(collapseStorageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              restoredCollapsed = new Set(parsed.filter((s: any) => typeof s === 'string'));
+              restoredSeen = new Set(restoredCollapsed);
+            } else if (parsed && typeof parsed === 'object') {
+              if (Array.isArray(parsed.collapsed)) {
+                restoredCollapsed = new Set(
+                  parsed.collapsed.filter((s: any) => typeof s === 'string')
+                );
+              }
+              if (Array.isArray(parsed.seen)) {
+                restoredSeen = new Set(parsed.seen.filter((s: any) => typeof s === 'string'));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[HierarchyPanel] failed to restore collapse state:', err);
+        }
+      }
+      const initialCollapsed = new Set(restoredCollapsed);
+      hasChildrenByName.forEach((name) => {
+        if (!restoredSeen.has(name)) {
+          initialCollapsed.add(name);
+          restoredSeen.add(name);
+        }
+      });
+      seenParents.current = restoredSeen;
+      setCollapsedNodes(initialCollapsed);
+      return;
+    }
+    const newParents: string[] = [];
+    hasChildrenByName.forEach((name) => {
+      if (!seenParents.current.has(name)) {
+        seenParents.current.add(name);
+        newParents.push(name);
       }
     });
+    if (newParents.length > 0) {
+      setCollapsedNodes((prev) => {
+        const next = new Set(prev);
+        newParents.forEach((n) => next.add(n));
+        return next;
+      });
+    }
+  }, [hasChildrenByName, sceneId, collapseStorageKey]);
 
-    const childrenByParent = new Map<string, any[]>();
-    const roots: any[] = [];
-
-    const pushChild = (parentName: string, item: any) => {
-      const children = childrenByParent.get(parentName) || [];
-      children.push(item);
-      childrenByParent.set(parentName, children);
-    };
-
-    filteredObjects.forEach((item: any) => {
-      const fid = typeof item?.folder === 'string' ? item.folder : '';
-      const folderParentName = fid ? folderIdToName.get(fid) || '' : '';
-      if (
-        folderParentName &&
-        folderParentName !== item.name &&
-        objectByName.has(folderParentName)
-      ) {
-        pushChild(folderParentName, item);
-        return;
-      }
-      const parentId =
-        typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
-      if (parentId && parentId !== item.name && objectByName.has(parentId)) {
-        pushChild(parentId, item);
-      } else {
-        roots.push(item);
-      }
-    });
-
-    const sortBySceneOrder = (items: any[]) =>
-      [...items].sort(
-        (left, right) =>
-          (filteredObjectOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) -
-          (filteredObjectOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER)
+  React.useEffect(() => {
+    if (!collapseStorageKey) return;
+    try {
+      localStorage.setItem(
+        collapseStorageKey,
+        JSON.stringify({
+          collapsed: Array.from(collapsedNodes),
+          seen: Array.from(seenParents.current),
+        })
       );
+    } catch (err) {
+      console.warn('[HierarchyPanel] failed to persist collapse state:', err);
+    }
+  }, [collapsedNodes, collapseStorageKey]);
 
-    const ordered: Array<{ item: any; depth: number }> = [];
-    const visited = new Set<string>();
-
-    const walk = (item: any, depth: number) => {
-      if (!item || visited.has(item.name)) return;
-      visited.add(item.name);
-      ordered.push({ item, depth });
-      const children = sortBySceneOrder(childrenByParent.get(item.name) || []);
-      children.forEach((child) => walk(child, depth + 1));
-    };
-
-    sortBySceneOrder(roots).forEach((item) => walk(item, 0));
-
-    sortBySceneOrder(filteredObjects)
-      .filter((item) => !visited.has(item.name))
-      .forEach((item) => walk(item, 0));
-
-    return ordered;
-  }, [filteredObjects, filteredObjectOrder]);
-
-  const toggleFolderCollapse = React.useCallback((folderName: string) => {
-    setCollapsedFolders((prev) => {
+  const toggleNodeCollapse = React.useCallback((nodeName: string) => {
+    setCollapsedNodes((prev) => {
       const next = new Set(prev);
-      if (next.has(folderName)) next.delete(folderName);
-      else next.add(folderName);
+      if (next.has(nodeName)) next.delete(nodeName);
+      else next.add(nodeName);
       return next;
     });
   }, []);
 
+  const expandAll = React.useCallback(() => setCollapsedNodes(new Set()), []);
+  const collapseAll = React.useCallback(
+    () => setCollapsedNodes(new Set(hasChildrenByName)),
+    [hasChildrenByName]
+  );
+
   const visibleObjects = React.useMemo(() => {
-    const collapsedFolderIds = new Set<string>();
-    for (const { item } of hierarchicalObjects) {
-      if (item.type === 'Folder' && collapsedFolders.has(item.name)) {
-        collapsedFolderIds.add(item.folderId);
-      }
-    }
-    const isFolderCollapsed = (folderId: string): boolean => {
-      if (!folderId) return false;
-      if (collapsedFolderIds.has(folderId)) return true;
-      const folderItem = hierarchicalObjects.find(
-        (e) => e.item.type === 'Folder' && e.item.folderId === folderId
-      );
-      if (folderItem?.item?.folder) {
-        return isFolderCollapsed(folderItem.item.folder);
+    if (filterNeedle) return hierarchicalObjects;
+    const isAnyAncestorCollapsed = (name: string): boolean => {
+      const seen = new Set<string>();
+      let cur = parentByName.get(name);
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        if (collapsedNodes.has(cur)) return true;
+        cur = parentByName.get(cur);
       }
       return false;
     };
-    return hierarchicalObjects.filter(({ item }) => {
-      const fid = typeof item?.folder === 'string' ? item.folder : '';
-      if (!fid) return true;
-      return !isFolderCollapsed(fid);
-    });
-  }, [hierarchicalObjects, collapsedFolders]);
+    return hierarchicalObjects.filter(({ item }) => !isAnyAncestorCollapsed(item.name));
+  }, [hierarchicalObjects, parentByName, collapsedNodes, filterNeedle]);
 
   const selectFolderContents = React.useCallback(
     (folderName: string) => {
       const scene = game?.sceneManager?.currentScene;
       if (!scene) return;
-      const folder = (scene.folders || []).find(
-        (e: any) => e.type === 'Folder' && e.name === folderName
-      );
+      const folder = (scene.folders || []).find((f) => f.name === folderName);
       if (!folder) return;
-      const fid = (folder as any).folderId;
+      const fid = folder.folderId;
       const children = hierarchicalObjects
         .filter(({ item }) => item.folder === fid)
         .map(({ item }) => item);
@@ -235,7 +340,7 @@ export const HierarchyPanel: React.FC = () => {
         return;
       }
 
-      const allItems = ['SCENE', ...hierarchicalObjects.map((entry) => entry.item)];
+      const allItems = ['SCENE', ...visibleObjects.map((entry) => entry.item)];
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -276,7 +381,7 @@ export const HierarchyPanel: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hierarchicalObjects, hierarchyVersion, selectedObjectId, game.editor]);
+  }, [visibleObjects, hierarchyVersion, selectedObjectId, game.editor]);
 
   const centerCameraOn = (item: any) => {
     const scene = game?.sceneManager?.currentScene;
@@ -385,14 +490,128 @@ export const HierarchyPanel: React.FC = () => {
       game.editor.saveUndoState();
 
       if (dropTarget.type === 'into') {
-        const targetFolder = (scene.folders || []).find(
-          (e: any) => e.type === 'Folder' && e.name === dropTarget.targetName
-        );
-        const targetFolderId = (targetFolder as any)?.folderId || null;
-        for (const entry of visibleObjects) {
-          if (draggedNames.has(entry.item.name)) {
-            if (entry.item.type === 'Folder') continue;
-            entry.item.folder = targetFolderId;
+        const targetName = dropTarget.targetName;
+        if (targetName !== '__SCENE__') {
+          seenParents.current.add(targetName);
+        }
+        setCollapsedNodes((prev) => {
+          if (!prev.has(targetName)) return prev;
+          const next = new Set(prev);
+          next.delete(targetName);
+          return next;
+        });
+
+        if (targetName === '__SCENE__') {
+          for (const entry of visibleObjects) {
+            if (!draggedNames.has(entry.item.name)) continue;
+            const obj = entry.item;
+            if (obj.folder !== null && obj.inheritedProps instanceof Set) {
+              obj.inheritedProps.clear();
+            }
+            obj.folder = null;
+            if (obj.spatial?.parentNodeId) {
+              obj.spatial = {
+                ...(obj.spatial || {}),
+                parentNodeId: null,
+                relation: null,
+              };
+              if (obj instanceof Entity && obj.type !== 'Folder') {
+                game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(obj);
+              }
+            }
+          }
+          useEditorStore.getState().incrementHierarchyVersion();
+          useEditorStore.getState().incrementObjectVersion();
+          return;
+        }
+
+        const targetFolder = (scene.folders || []).find((f) => f.name === targetName);
+
+        if (targetFolder) {
+          const targetFolderId = targetFolder.folderId || null;
+
+          let ancestor: any = targetFolder;
+          const ancestorSeen = new Set<string>();
+          while (ancestor && ancestor.type === 'Folder') {
+            if (ancestorSeen.has(ancestor.name)) {
+              ancestor = null;
+              break;
+            }
+            ancestorSeen.add(ancestor.name);
+            if (ancestor.folder) {
+              const next = scene.folders.find((f: any) => f.folderId === ancestor.folder);
+              if (next) {
+                ancestor = next;
+                continue;
+              }
+            }
+            const spatialParent = ancestor.spatial?.parentNodeId;
+            if (spatialParent) {
+              const next = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes].find(
+                (o: any) => o.name === spatialParent
+              );
+              if (next) {
+                ancestor = next;
+                break;
+              }
+            }
+            ancestor = null;
+            break;
+          }
+          const ancestorName: string | null =
+            ancestor && ancestor.type !== 'Folder' ? ancestor.name : null;
+
+          for (const entry of visibleObjects) {
+            if (!draggedNames.has(entry.item.name)) continue;
+            const obj = entry.item;
+            if (obj.type === 'Folder' && obj.folderId === targetFolderId) continue;
+            if (obj.folder !== targetFolderId && obj.inheritedProps instanceof Set) {
+              obj.inheritedProps.clear();
+            }
+            obj.folder = targetFolderId;
+            if (obj.type === 'Folder') {
+              if (obj.spatial?.parentNodeId) {
+                obj.spatial = {
+                  ...(obj.spatial || {}),
+                  parentNodeId: null,
+                  relation: null,
+                };
+              }
+            } else {
+              const currentParent = obj.spatial?.parentNodeId ?? null;
+              if (currentParent !== ancestorName) {
+                obj.spatial = {
+                  ...(obj.spatial || {}),
+                  parentNodeId: ancestorName,
+                  relation: ancestorName ? 'in' : null,
+                };
+                if (obj instanceof Entity) {
+                  game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(obj);
+                }
+              }
+            }
+          }
+        } else {
+          const targetObj = [...scene.entities, ...scene.walkbox, ...scene.triggerboxes].find(
+            (o: any) => o.name === targetName
+          );
+          if (targetObj) {
+            for (const entry of visibleObjects) {
+              if (!draggedNames.has(entry.item.name)) continue;
+              const obj = entry.item;
+              if (obj.folder !== null && obj.inheritedProps instanceof Set) {
+                obj.inheritedProps.clear();
+              }
+              obj.folder = null;
+              obj.spatial = {
+                ...(obj.spatial || {}),
+                parentNodeId: targetName,
+                relation: 'in',
+              };
+              if (obj instanceof Entity && obj.type !== 'Folder') {
+                game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(obj);
+              }
+            }
           }
         }
       } else {
@@ -448,15 +667,27 @@ export const HierarchyPanel: React.FC = () => {
             ...scene.triggerboxes,
           ].find((o: any) => o.name === targetName);
           if (targetObj) {
-            newFolder = (targetObj as any).folder || null;
+            newFolder = (targetObj as { folder?: string | null }).folder ?? null;
           }
         }
 
-        for (const obj of [...draggedEntities, ...draggedWalkboxes, ...draggedTriggers]) {
+        for (const obj of [
+          ...draggedEntities,
+          ...draggedFolders,
+          ...draggedWalkboxes,
+          ...draggedTriggers,
+        ]) {
           if (obj.folder && obj.folder !== newFolder && obj.inheritedProps instanceof Set) {
             obj.inheritedProps.clear();
           }
           obj.folder = newFolder;
+          if (obj.type === 'Folder' && obj.spatial?.parentNodeId) {
+            obj.spatial = {
+              ...(obj.spatial || {}),
+              parentNodeId: null,
+              relation: null,
+            };
+          }
         }
 
         if (targetName === '__end__') {
@@ -465,10 +696,23 @@ export const HierarchyPanel: React.FC = () => {
           scene.walkbox.push(...draggedWalkboxes);
           scene.triggerboxes.push(...draggedTriggers);
         } else {
+          const targetVisualIdx = filteredObjectOrder.get(targetName);
           const insertAt = (arr: any[], items: any[]) => {
             if (items.length === 0) return;
             const idx = arr.findIndex((o: any) => o.name === targetName);
-            if (idx >= 0) arr.splice(idx, 0, ...items);
+            if (idx >= 0) {
+              arr.splice(idx, 0, ...items);
+              return;
+            }
+            if (targetVisualIdx === undefined) {
+              arr.push(...items);
+              return;
+            }
+            const fallbackIdx = arr.findIndex((o: any) => {
+              const objIdx = filteredObjectOrder.get(o.name);
+              return objIdx !== undefined && objIdx >= targetVisualIdx;
+            });
+            if (fallbackIdx >= 0) arr.splice(fallbackIdx, 0, ...items);
             else arr.push(...items);
           };
           insertAt(scene.entities, draggedEntities);
@@ -476,13 +720,59 @@ export const HierarchyPanel: React.FC = () => {
           insertAt(scene.walkbox, draggedWalkboxes);
           insertAt(scene.triggerboxes, draggedTriggers);
         }
+
+        const allCurrent = [
+          ...scene.entities,
+          ...scene.folders,
+          ...scene.walkbox,
+          ...scene.triggerboxes,
+        ];
+        const oldOrder =
+          scene.displayOrder && scene.displayOrder.length > 0
+            ? scene.displayOrder
+            : allCurrent.map((o: any) => o.name);
+        const oldOrderIdx = new Map(oldOrder.map((n, i) => [n, i]));
+        const sortedNames = [...allCurrent]
+          .sort((a: any, b: any) => {
+            const ai = oldOrderIdx.get(a.name) ?? Number.MAX_SAFE_INTEGER;
+            const bi = oldOrderIdx.get(b.name) ?? Number.MAX_SAFE_INTEGER;
+            return ai - bi;
+          })
+          .map((o: any) => o.name);
+        const draggedInOrder = sortedNames.filter((n) => draggedNames.has(n));
+        const newOrder = sortedNames.filter((n) => !draggedNames.has(n));
+        if (targetName === '__end__') {
+          newOrder.push(...draggedInOrder);
+        } else {
+          const idx = newOrder.indexOf(targetName);
+          if (idx >= 0) newOrder.splice(idx, 0, ...draggedInOrder);
+          else newOrder.push(...draggedInOrder);
+        }
+        scene.displayOrder = newOrder;
       }
 
       useEditorStore.getState().incrementHierarchyVersion();
       useEditorStore.getState().incrementObjectVersion();
     },
-    [game, visibleObjects]
+    [game, visibleObjects, filteredObjectOrder]
   );
+
+  React.useEffect(() => {
+    if (!dragState.dragging) return;
+    if (dragState.dropTarget?.type !== 'into') return;
+    const targetName = dragState.dropTarget.targetName;
+    if (targetName === '__SCENE__') return;
+    if (!collapsedNodes.has(targetName)) return;
+    const timer = window.setTimeout(() => {
+      setCollapsedNodes((prev) => {
+        if (!prev.has(targetName)) return prev;
+        const next = new Set(prev);
+        next.delete(targetName);
+        return next;
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [dragState.dragging, dragState.dropTarget, collapsedNodes]);
 
   React.useEffect(() => {
     if (!dragState.dragging) return;
@@ -504,9 +794,18 @@ export const HierarchyPanel: React.FC = () => {
 
       const rows = panel.querySelectorAll('[data-hierarchy-name]');
       let newTarget: DragState['dropTarget'] = null;
-      const draggingFolders = visibleObjects.some(
-        ({ item }) => dragState.draggedNames.has(item.name) && item.type === 'Folder'
-      );
+
+      const isDescendantOfDragged = (targetName: string): boolean => {
+        if (dragState.draggedNames.has(targetName)) return true;
+        const seen = new Set<string>();
+        let cur = parentByName.get(targetName);
+        while (cur && !seen.has(cur)) {
+          seen.add(cur);
+          if (dragState.draggedNames.has(cur)) return true;
+          cur = parentByName.get(cur);
+        }
+        return false;
+      };
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] as HTMLElement;
@@ -518,11 +817,12 @@ export const HierarchyPanel: React.FC = () => {
 
         if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
           const midY = rect.top + rect.height / 2;
+          const intoEligible = !isDescendantOfDragged(name);
           if (
-            type === 'Folder' &&
-            !draggingFolders &&
-            e.clientY > rect.top + rect.height * 0.25 &&
-            e.clientY < rect.top + rect.height * 0.75
+            intoEligible &&
+            (type === 'Scene' ||
+              (e.clientY > rect.top + rect.height * 0.35 &&
+                e.clientY < rect.top + rect.height * 0.65))
           ) {
             newTarget = { type: 'into', targetName: name };
           } else if (e.clientY < midY) {
@@ -561,7 +861,7 @@ export const HierarchyPanel: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState.dragging, dragState.draggedNames, dragState.dropTarget, applyDrop, visibleObjects]);
+  }, [dragState.dragging, dragState.draggedNames, dragState.dropTarget, applyDrop, parentByName]);
 
   const uiScale = game?.settings?.editor?.uiScale || 1.0;
 
@@ -611,9 +911,42 @@ export const HierarchyPanel: React.FC = () => {
             gap: '8px',
           }}
         >
-          <div>OBJECTS</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>OBJECTS</span>
+            <button
+              type="button"
+              className="toolbar-icon-btn"
+              title="Collapse all"
+              onClick={collapseAll}
+              style={{
+                width: '20px',
+                height: '20px',
+                padding: 0,
+                fontSize: '10px',
+                lineHeight: 1,
+              }}
+            >
+              ▶
+            </button>
+            <button
+              type="button"
+              className="toolbar-icon-btn"
+              title="Expand all"
+              onClick={expandAll}
+              style={{
+                width: '20px',
+                height: '20px',
+                padding: 0,
+                fontSize: '10px',
+                lineHeight: 1,
+              }}
+            >
+              ▼
+            </button>
+          </div>
           <Select
             options={[
+              { value: 'Folder', label: 'Folder (F)' },
               { value: 'Static', label: 'Static (S)' },
               { value: 'Actor', label: 'Actor (A)' },
               { value: 'Quad', label: 'Quad (Q)' },
@@ -632,22 +965,6 @@ export const HierarchyPanel: React.FC = () => {
         </div>
         <div style={{ marginBottom: 0 }}>
           <EditorToolbar />
-
-          <div style={{ marginTop: '5px' }}>
-            <Select
-              options={[
-                { value: 'Folder', label: 'Folder (F)' },
-                { value: 'Static', label: 'Static (S)' },
-                { value: 'Actor', label: 'Actor (A)' },
-                { value: 'Quad', label: 'Quad (Q)' },
-                { value: 'Walkbox', label: 'Walkbox (W)' },
-                { value: 'Triggerbox', label: 'Triggerbox (T)' },
-              ]}
-              placeholder="+ Add Object"
-              onChange={(value) => handleAdd(value)}
-              style={{ width: '100%', fontSize: '12px' }}
-            />
-          </div>
 
           <div style={{ marginTop: '5px', position: 'relative' }}>
             <input
@@ -692,17 +1009,26 @@ export const HierarchyPanel: React.FC = () => {
       <div className="editor-content">
         {/* Scene Node */}
         <div
-          className="e-list-item"
+          className="e-list-item hierarchy-row"
+          data-hierarchy-name="__SCENE__"
+          data-hierarchy-type="Scene"
           style={{
             padding: '4px',
             paddingLeft: '2px',
             marginBottom: '2px',
             cursor: 'pointer',
             borderRadius: '4px',
-            background: isItemSelected('SCENE') ? 'var(--ui-selection-bg)' : 'transparent',
+            background:
+              dragState.dropTarget?.type === 'into' &&
+              dragState.dropTarget.targetName === '__SCENE__'
+                ? 'rgba(100, 160, 255, 0.25)'
+                : isItemSelected('SCENE')
+                  ? 'var(--ui-selection-bg)'
+                  : 'transparent',
             color: isItemSelected('SCENE') ? 'var(--ui-selection-text)' : '#aaa',
           }}
           onClick={(e) => {
+            if (dragState.dragging) return;
             if (e.ctrlKey) return;
             game.editor.selectObject('SCENE');
           }}
@@ -734,10 +1060,16 @@ export const HierarchyPanel: React.FC = () => {
           const isDragged = dragState.dragging && dragState.draggedNames.has(item.name);
           const isDropInto =
             dragState.dropTarget?.type === 'into' && dragState.dropTarget.targetName === item.name;
+          const dropIntoColor = isDropInto
+            ? item.type === 'Folder'
+              ? 'rgba(100, 160, 255, 0.25)'
+              : 'rgba(170, 120, 255, 0.28)'
+            : null;
           const isDropBefore =
             dragState.dropTarget?.type === 'before' &&
             dragState.dropTarget.targetName === item.name;
-          const isCollapsed = isFolder && collapsedFolders.has(item.name);
+          const isCollapsed = collapsedNodes.has(item.name);
+          const hasChildren = hasChildrenByName.has(item.name);
 
           const icon = isFolder
             ? isCollapsed
@@ -758,8 +1090,7 @@ export const HierarchyPanel: React.FC = () => {
               : item.type === 'Triggerbox'
                 ? item.name || `Trigger ${i}`
                 : item.name;
-          // Folders are shifted left (like Finder), regular objects get extra indent inside folders
-          const paddingLeft = isFolder ? `${4 + depth * 14}px` : `${18 + depth * 14}px`;
+          const paddingLeft = `${18 + depth * 14}px`;
           // Shift down: this item and all after the drop-before target
           const shouldShiftDown = !isDragged && dropBeforeIdx >= 0 && i >= dropBeforeIdx;
           return (
@@ -775,8 +1106,8 @@ export const HierarchyPanel: React.FC = () => {
                 marginBottom: '2px',
                 cursor: dragState.dragging ? dragCursor : 'pointer',
                 borderRadius: '4px',
-                background: isDropInto
-                  ? 'rgba(100, 160, 255, 0.25)'
+                background: dropIntoColor
+                  ? dropIntoColor
                   : isSelected
                     ? 'var(--ui-selection-bg)'
                     : 'transparent',
@@ -785,7 +1116,6 @@ export const HierarchyPanel: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 opacity: isDragged ? 0.35 : 1.0,
-                borderTop: isDropBefore ? '2px solid #5599ff' : undefined,
                 transform: shouldShiftDown ? 'translateY(3px)' : undefined,
                 transition: dragState.dragging ? 'transform 0.12s ease' : undefined,
               }}
@@ -800,6 +1130,33 @@ export const HierarchyPanel: React.FC = () => {
                 else centerCameraOn(item);
               }}
             >
+              {Array.from({ length: depth }, (_, n) => (
+                <div
+                  key={`guide-${n}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${10 + n * 14}px`,
+                    top: 0,
+                    bottom: 0,
+                    width: '1px',
+                    background: 'rgba(255,255,255,0.08)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              ))}
+              {isDropBefore && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: paddingLeft,
+                    right: 0,
+                    top: -1,
+                    height: '2px',
+                    background: '#5599ff',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
               <div
                 style={{
                   display: 'flex',
@@ -821,7 +1178,7 @@ export const HierarchyPanel: React.FC = () => {
                   {icon}
                 </span>
                 <span className="hierarchy-id-text">{label}</span>
-                {isFolder && (
+                {hasChildren && (
                   <span
                     style={{
                       marginLeft: '5px',
@@ -832,10 +1189,22 @@ export const HierarchyPanel: React.FC = () => {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleFolderCollapse(item.name);
+                      toggleNodeCollapse(item.name);
                     }}
                   >
                     {isCollapsed ? '▶' : '▼'}
+                  </span>
+                )}
+                {hasChildren && isCollapsed && (
+                  <span
+                    style={{
+                      marginLeft: '4px',
+                      fontSize: '9px',
+                      color: isSelected ? 'var(--ui-selection-text)' : '#666',
+                      userSelect: 'none',
+                    }}
+                  >
+                    ({descendantCountByName.get(item.name) ?? 0})
                   </span>
                 )}
               </div>
@@ -862,6 +1231,18 @@ export const HierarchyPanel: React.FC = () => {
             </div>
           );
         })}
+        {dragState.dragging &&
+          dragState.dropTarget?.type === 'before' &&
+          dragState.dropTarget.targetName === '__end__' && (
+            <div
+              style={{
+                height: 0,
+                borderTop: '2px solid #5599ff',
+                marginTop: '2px',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
       </div>
     </div>
   );

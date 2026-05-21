@@ -599,6 +599,10 @@ export class SceneManager {
       });
     }
 
+    if (Array.isArray(data.displayOrder)) {
+      newScene.displayOrder = data.displayOrder.filter((n: any) => typeof n === 'string');
+    }
+
     return newScene;
   }
 

@@ -394,6 +394,9 @@ export class SceneEditor {
           this.startCreating('Quad', pos?.x, pos?.y);
         }
         break;
+      case 'f':
+        this.startCreating('Folder');
+        break;
 
       // Camera Hotkeys
       case '+':
@@ -993,18 +996,37 @@ export class SceneEditor {
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
-      // If deleting a folder, also remove its contents
       if (this.selectedObject.type === 'Folder') {
-        const folderId = (this.selectedObject as any).folderId;
+        const rootFolderId = (this.selectedObject as any).folderId;
+        const folderIdsToDelete = new Set<string>([rootFolderId]);
+        const subFoldersToDelete: any[] = [];
+
+        const queue: string[] = [rootFolderId];
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          for (const f of scene.folders) {
+            const fid = (f as any).folderId;
+            if ((f as any).folder === current && !folderIdsToDelete.has(fid)) {
+              folderIdsToDelete.add(fid);
+              subFoldersToDelete.push(f);
+              queue.push(fid);
+            }
+          }
+        }
+
         const children = [
-          ...scene.entities.filter((e: any) => e.folder === folderId),
-          ...scene.walkbox.filter((w: any) => w.folder === folderId),
-          ...scene.triggerboxes.filter((t: any) => t.folder === folderId),
+          ...scene.entities.filter((e: any) => folderIdsToDelete.has(e.folder)),
+          ...scene.walkbox.filter((w: any) => folderIdsToDelete.has(w.folder)),
+          ...scene.triggerboxes.filter((t: any) => folderIdsToDelete.has(t.folder)),
         ];
         for (const child of children) {
           if (child instanceof Walkbox) scene.removeWalkbox(child);
           else if (child instanceof Triggerbox) scene.removeTriggerbox(child);
           else if (child instanceof Entity) scene.removeEntity(child);
+        }
+
+        for (const sub of subFoldersToDelete) {
+          scene.removeFolder(sub);
         }
       }
 
