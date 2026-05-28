@@ -450,6 +450,30 @@ export class Scene {
   }
 
   addEntity(entity: Entity): void {
+    if (this.entities.includes(entity)) {
+      // @ts-ignore
+      entity.scene = this;
+      if ((entity as any).isPlayer) {
+        this.player = entity as Actor;
+      }
+      return;
+    }
+
+    const id = String(entity.name || '').trim();
+    if (id) {
+      const staleEntities = this.entities.filter((candidate) => candidate.name === id);
+      if (staleEntities.length > 0) {
+        this.entities = this.entities.filter((candidate) => candidate.name !== id);
+        for (const stale of staleEntities) {
+          this.revealedHiddenEntities.delete(stale.name);
+          this.subsceneEntities.delete(stale);
+          if (this.player === stale) {
+            this.player = null;
+          }
+        }
+      }
+    }
+
     this.entities.push(entity);
     // @ts-ignore
     entity.scene = this;

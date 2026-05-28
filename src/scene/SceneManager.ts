@@ -181,11 +181,7 @@ export class SceneManager {
   }
 
   private attachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
-    if (!scene.entities.includes(entity)) {
-      scene.entities.push(entity);
-    }
-    // @ts-ignore
-    entity.scene = scene;
+    scene.addEntity(entity);
   }
 
   private findFirstEntryId(scene: Scene): string | null {
