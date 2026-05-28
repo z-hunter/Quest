@@ -15,6 +15,7 @@ import type {
   ParserScope,
   ParserSpatialNodeContext,
   ParserSpatialRelationContext,
+  ParserStateContext,
   ParserWorldModel,
 } from './parserTypes';
 
@@ -59,7 +60,7 @@ export class ParserWorldModelBuilder {
     const knownEntities = scene ? this.buildKnownEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
     const focusedTarget = this.buildFocusedTargetContext();
-    const worldFacts = scene ? this.buildWorldFacts(scene, entities, inventory) : [];
+    const worldFacts = scene ? this.buildWorldFacts(scene, entities, knownEntities, inventory) : [];
     const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
     const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
     const pending = pendingState
@@ -107,6 +108,7 @@ export class ParserWorldModelBuilder {
       )
         ? true
         : undefined,
+      states: this.buildStateContexts(entity),
     });
   }
 
@@ -190,6 +192,7 @@ export class ParserWorldModelBuilder {
             ? true
             : undefined,
           interactions,
+          states: this.buildStateContexts(sceneObject),
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -244,6 +247,7 @@ export class ParserWorldModelBuilder {
             ? true
             : undefined,
           interactions: Object.keys(sceneObject.interactions || {}),
+          states: this.buildStateContexts(sceneObject),
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -270,9 +274,18 @@ export class ParserWorldModelBuilder {
           )
             ? true
             : undefined,
+          states: this.buildStateContexts(entity),
         });
       })
       .filter((entity): entity is ParserInventoryItemContext => !!entity);
+  }
+
+  private buildStateContexts(sceneObject: SceneObject): ParserStateContext[] {
+    return ComponentSystem.getStateComponents(sceneObject).map((component) => ({
+      id: component.id,
+      type: component.valueType,
+      value: ComponentSystem.getStateValue(sceneObject, component.id) ?? component.initialValue,
+    }));
   }
 
   private getSceneParserNote(scene: Scene | null | undefined): string {
@@ -358,6 +371,7 @@ export class ParserWorldModelBuilder {
   private buildWorldFacts(
     scene: Scene,
     entities: ParserEntityContext[],
+    knownEntities: ParserEntityContext[],
     inventory: ParserInventoryItemContext[]
   ): string[] {
     const facts: string[] = [];
@@ -371,6 +385,10 @@ export class ParserWorldModelBuilder {
     }
 
     for (const entity of entities) {
+      for (const state of entity.states || []) {
+        facts.push(`${entity.title} state ${state.id} is ${String(state.value)}.`);
+      }
+
       if (entity.location?.parentTitle) {
         facts.push(
           this.formatLocationFact(
@@ -403,6 +421,18 @@ export class ParserWorldModelBuilder {
         )) {
           facts.push(semanticFact);
         }
+      }
+    }
+
+    for (const entity of knownEntities) {
+      for (const state of entity.states || []) {
+        facts.push(`${entity.title} state ${state.id} is ${String(state.value)}.`);
+      }
+    }
+
+    for (const item of inventory) {
+      for (const state of item.states || []) {
+        facts.push(`${item.title} state ${state.id} is ${String(state.value)}.`);
       }
     }
 

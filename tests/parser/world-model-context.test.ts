@@ -678,4 +678,73 @@ describe('Parser world model context', () => {
       ])
     );
   });
+
+  it('includes object State components in parser context and world facts', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      description: 'A metal door.',
+      components: [
+        { type: 'State', id: 'open', valueType: 'boolean', initialValue: false, value: false },
+      ],
+    });
+    const hiddenKey = fixture.addEntity('hidden_key', {
+      title: 'Hidden key',
+      description: 'A concealed key.',
+      components: [
+        { type: 'State', id: 'found', valueType: 'boolean', initialValue: false, value: true },
+      ],
+    });
+    hiddenKey.hidden = 'lookable';
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    let model = builder.build('look door', null);
+
+    expect(model.context.entities?.find((entity) => entity.id === 'door')?.states).toEqual([
+      { id: 'open', type: 'boolean', value: false },
+    ]);
+    expect(
+      model.context.knownEntities?.find((entity) => entity.id === 'hidden_key')?.states
+    ).toEqual([{ id: 'found', type: 'boolean', value: true }]);
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining(['Door state open is false.', 'Hidden key state found is true.'])
+    );
+
+    door.components[0] = { ...door.components[0], value: true } as any;
+    model = builder.build('look door again', null);
+    expect(model.context.entities?.find((entity) => entity.id === 'door')?.states).toEqual([
+      { id: 'open', type: 'boolean', value: true },
+    ]);
+    expect(model.context.worldFacts).toEqual(expect.arrayContaining(['Door state open is true.']));
+  });
+
+  it('includes inventory item State components in parser context and world facts', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const battery = fixture.addEntity('battery', {
+      title: 'Battery',
+      description: 'A small battery.',
+      components: [
+        { type: 'Item' },
+        { type: 'State', id: 'charge', valueType: 'number', initialValue: 0, value: 75 },
+      ],
+    });
+    fixture.scene.removeEntity(battery);
+    fixture.game.inventory.push(battery);
+    fixture.game.openInventoryPreview(battery, null);
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('inspect battery', null);
+
+    expect(model.context.inventory?.find((entity) => entity.id === 'battery')?.states).toEqual([
+      { id: 'charge', type: 'number', value: 75 },
+    ]);
+    expect(model.context.focusedTarget?.states).toEqual([
+      { id: 'charge', type: 'number', value: 75 },
+    ]);
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining(['Battery state charge is 75.'])
+    );
+  });
 });

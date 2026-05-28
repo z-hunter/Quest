@@ -44,6 +44,24 @@ export const SectionComponents: React.FC = () => {
     { value: 'left', label: 'LEFT' },
     { value: 'right', label: 'RIGHT' },
   ];
+  const stateValueTypeOptions = [
+    { value: 'boolean', label: 'Boolean' },
+    { value: 'number', label: 'Number' },
+    { value: 'string', label: 'String' },
+  ];
+  const getDefaultStateValue = (valueType: string): string | number | boolean => {
+    if (valueType === 'string') return '';
+    if (valueType === 'number') return 0;
+    return false;
+  };
+  const normalizeStateValue = (value: unknown, valueType: string): string | number | boolean => {
+    if (valueType === 'string') return typeof value === 'string' ? value : String(value ?? '');
+    if (valueType === 'number') {
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return typeof value === 'boolean' ? value : value === 'true';
+  };
   const normalizeContainerRelation = (comp: any): 'in' | 'on' | 'under' | 'behind' => {
     if (comp?.type === 'Inventory') {
       return comp?.relation === 'on' ||
@@ -119,6 +137,7 @@ export const SectionComponents: React.FC = () => {
           <Select
             options={[
               { value: 'Item', label: 'Item (Pickup)' },
+              { value: 'State', label: 'State' },
               { value: 'Inventory', label: 'Inventory' },
               { value: 'Surface', label: 'Surface' },
               { value: 'Subscene', label: 'Subscene' },
@@ -169,6 +188,14 @@ export const SectionComponents: React.FC = () => {
                 o.components.push({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
                 o.components.push({ type: 'Item' });
+              } else if (type === 'State') {
+                o.components.push({
+                  type: 'State',
+                  id: 'state',
+                  valueType: 'boolean',
+                  initialValue: false,
+                  value: false,
+                });
               } else if (type === 'Inventory') {
                 if (hasTitle && !relation) {
                   game.showNotification?.('This object already has containers for all relations.');
@@ -479,6 +506,129 @@ export const SectionComponents: React.FC = () => {
                     />
                     Ignore Distance (Always Pickup)
                   </label>
+                </div>
+              </>
+            )}
+
+            {comp.type === 'State' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#ccc',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Script-readable object state.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    ID
+                  </label>
+                  <input
+                    type="text"
+                    className="e-input"
+                    value={comp.id || ''}
+                    onChange={(e) => {
+                      comp.id = e.target.value.trim();
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Type
+                  </label>
+                  <Select
+                    value={comp.valueType || 'boolean'}
+                    onChange={(value) => {
+                      comp.valueType = value;
+                      comp.initialValue = getDefaultStateValue(value);
+                      comp.value = comp.initialValue;
+                      incrementObjectVersion();
+                    }}
+                    options={stateValueTypeOptions}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Initial Value
+                  </label>
+                  {comp.valueType === 'boolean' ? (
+                    <Select
+                      value={String(normalizeStateValue(comp.initialValue, 'boolean'))}
+                      onChange={(value) => {
+                        comp.initialValue = value === 'true';
+                        comp.value = comp.initialValue;
+                        incrementObjectVersion();
+                      }}
+                      options={[
+                        { value: 'false', label: 'False' },
+                        { value: 'true', label: 'True' },
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  ) : (
+                    <input
+                      type={comp.valueType === 'number' ? 'number' : 'text'}
+                      className="e-input"
+                      value={String(
+                        normalizeStateValue(comp.initialValue, comp.valueType || 'boolean')
+                      )}
+                      onChange={(e) => {
+                        comp.initialValue = normalizeStateValue(
+                          e.target.value,
+                          comp.valueType || 'boolean'
+                        );
+                        comp.value = comp.initialValue;
+                        incrementObjectVersion();
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Current Value
+                  </label>
+                  {comp.valueType === 'boolean' ? (
+                    <Select
+                      value={String(
+                        normalizeStateValue(
+                          comp.value === undefined ? comp.initialValue : comp.value,
+                          'boolean'
+                        )
+                      )}
+                      onChange={(value) => {
+                        comp.value = value === 'true';
+                        incrementObjectVersion();
+                      }}
+                      options={[
+                        { value: 'false', label: 'False' },
+                        { value: 'true', label: 'True' },
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  ) : (
+                    <input
+                      type={comp.valueType === 'number' ? 'number' : 'text'}
+                      className="e-input"
+                      value={String(
+                        normalizeStateValue(
+                          comp.value === undefined ? comp.initialValue : comp.value,
+                          comp.valueType || 'boolean'
+                        )
+                      )}
+                      onChange={(e) => {
+                        comp.value = normalizeStateValue(
+                          e.target.value,
+                          comp.valueType || 'boolean'
+                        );
+                        incrementObjectVersion();
+                      }}
+                    />
+                  )}
                 </div>
               </>
             )}

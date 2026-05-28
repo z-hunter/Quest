@@ -14,6 +14,12 @@ export type ParserEntityContentContext = {
   title: string;
 };
 
+export type ParserStateContext = {
+  id: string;
+  type: 'string' | 'number' | 'boolean';
+  value: string | number | boolean;
+};
+
 export type ParserEntityContext = {
   id: string;
   title: string;
@@ -34,6 +40,7 @@ export type ParserEntityContext = {
   parserNote?: string;
   parserNoteNeedsCheck?: true;
   interactions?: string[];
+  states?: ParserStateContext[];
 };
 
 export type ParserInventoryItemContext = {
@@ -45,6 +52,7 @@ export type ParserInventoryItemContext = {
   lore?: string;
   parserNote?: string;
   parserNoteNeedsCheck?: true;
+  states?: ParserStateContext[];
 };
 
 export type ParserSpatialNodeContext = {
