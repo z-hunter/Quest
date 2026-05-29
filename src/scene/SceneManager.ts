@@ -11,6 +11,7 @@ import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from '../core/ScriptRegistry';
+import { StateEventSystem } from '../systems/StateEventSystem';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -286,6 +287,7 @@ export class SceneManager {
     this.pinCurrentScene();
     this.syncAssetCacheState();
     this.game.inventoryManager?.handleSceneChange?.();
+    StateEventSystem.dispatchSceneStateEvents(this.game, scene, 'scene-load');
     (this.game as any).parser?.prepareLlmStaticPromptForCurrentScene?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {
@@ -438,6 +440,7 @@ export class SceneManager {
       this.switchTo(newScene.id);
       await this.preloadSwitchSounds(newScene);
       await this.game.textAssets.preloadScene(newScene);
+      StateEventSystem.syncSceneStateParserNotes(this.game, newScene);
       this.syncSceneRegistration(newScene, undefined, newScene.toJSON());
       await this.refreshSceneFootprint(newScene.id);
 
@@ -781,7 +784,9 @@ export class SceneManager {
 
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
     this.cacheScene(scene, false);
-    void this.game.textAssets.preloadScene(scene);
+    void this.game.textAssets
+      .preloadScene(scene)
+      .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
     void this.refreshSceneFootprint(scene.id);
     return scene;
   }

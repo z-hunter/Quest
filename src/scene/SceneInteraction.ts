@@ -188,7 +188,7 @@ function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
 
 function canActivateOnClick(obj: SceneObject): boolean {
   if (obj instanceof Triggerbox && obj.script) return true;
-  if (obj.interactions && Object.keys(obj.interactions).length > 0) return true;
+  if (ComponentSystem.hasClickInteractionKeys(obj)) return true;
   if (!obj.components || obj.components.length === 0) return false;
 
   return obj.components.some((component: any) =>
@@ -282,7 +282,7 @@ function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | 
   }
 
   const isScriptTrigger = obj instanceof Triggerbox && obj.script && obj.script.length > 0;
-  const hasInteractions = !!(obj.interactions && Object.keys(obj.interactions).length > 0);
+  const hasInteractions = ComponentSystem.hasClickInteractionKeys(obj);
   if (isScriptTrigger || hasInteractions) {
     return 'hand';
   }

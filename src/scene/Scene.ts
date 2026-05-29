@@ -995,7 +995,7 @@ export class Scene {
         // Note: Triggerboxes with WalkBox ONLY should now NOT block (Fixed)
         const isScriptTrigger = obj instanceof Triggerbox && obj.script && obj.script.length > 0;
 
-        const hasInteractions = obj.interactions && Object.keys(obj.interactions).length > 0;
+        const hasInteractions = ComponentSystem.hasClickInteractionKeys(obj);
         const isInteractive = isComponentInteractive || isScriptTrigger || hasInteractions;
 
         if (isInteractive) {

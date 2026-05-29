@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Entity } from '../../src/entities/Entity';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../../src/core/Resolution';
 import { handleSceneClick } from '../../src/scene/SceneInteraction';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
@@ -56,6 +57,29 @@ describe('Scene interaction text layer', () => {
     expect(fixture.messages.at(-1)).toBe(
       fixture.game.text('engine.click_you_see', { title: 'Ghost Item' })
     );
+  });
+
+  it('does not show a hand cursor for State-only script events on entities', () => {
+    const fixture = createSceneFixture();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      description: 'A television.',
+      components: [{ type: 'State', id: 'power', valueType: 'string', initialValue: 'off' }],
+    });
+    tv.interactions = { 'state:power': 'tv_power_changed' };
+
+    expect(fixture.scene.checkHover(GAME_DESIGN_WIDTH / 2, GAME_DESIGN_HEIGHT / 2)).toBeNull();
+  });
+
+  it('still shows a hand cursor for click-facing script events on entities', () => {
+    const fixture = createSceneFixture();
+    const button = fixture.addEntity('button', {
+      title: 'Button',
+      description: 'A clickable button.',
+    });
+    button.interactions = { use: 'button_use' };
+
+    expect(fixture.scene.checkHover(GAME_DESIGN_WIDTH / 2, GAME_DESIGN_HEIGHT / 2)).toBe('hand');
   });
 
   it('hits parallax entities at their rendered screen position', () => {

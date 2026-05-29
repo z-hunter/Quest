@@ -37,6 +37,30 @@ describe('ComponentSystem State components', () => {
     expect(ComponentSystem.setStateValue(entity, 'missing', 1)).toBe(false);
   });
 
+  it('normalizes State parser note text asset mappings', () => {
+    const state = ComponentSystem.normalizeStateComponent({
+      type: 'State',
+      id: ' power ',
+      valueType: 'boolean',
+      initialValue: false,
+      value: true,
+      parserNoteTextAssets: {
+        true: ' powerOn ',
+        false: '',
+        ' ': 'ignored',
+      },
+    });
+
+    expect(state).toEqual({
+      type: 'State',
+      id: 'power',
+      valueType: 'boolean',
+      initialValue: false,
+      value: true,
+      parserNoteTextAssets: { true: 'powerOn' },
+    });
+  });
+
   it('normalizes State components when triggerboxes serialize', () => {
     const triggerbox = new Triggerbox(
       [
@@ -47,12 +71,26 @@ describe('ComponentSystem State components', () => {
       'door_trigger'
     );
     triggerbox.components = [
-      { type: 'State', id: 'open', valueType: 'boolean', initialValue: false, value: true },
+      {
+        type: 'State',
+        id: 'open',
+        valueType: 'boolean',
+        initialValue: false,
+        value: true,
+        parserNoteTextAssets: { true: 'openDescription' },
+      },
     ] as any;
 
     const json = triggerbox.toJSON();
     expect(json.components).toEqual([
-      { type: 'State', id: 'open', valueType: 'boolean', initialValue: false, value: true },
+      {
+        type: 'State',
+        id: 'open',
+        valueType: 'boolean',
+        initialValue: false,
+        value: true,
+        parserNoteTextAssets: { true: 'openDescription' },
+      },
     ]);
   });
 });

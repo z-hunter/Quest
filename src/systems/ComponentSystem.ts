@@ -96,6 +96,7 @@ export interface StateComponent {
   valueType: StateValueType;
   initialValue: StateValue;
   value?: StateValue;
+  parserNoteTextAssets?: Record<string, string>;
 }
 
 import { ThreeDParallaxSystem, type ThreeDParallaxComponent } from './ThreeDParallaxSystem';
@@ -147,6 +148,16 @@ export class ComponentSystem {
     return this.isStateValueOfType(value, valueType) ? value : this.getDefaultStateValue(valueType);
   }
 
+  static isStateInteractionKey(key: string): boolean {
+    return /^state:/i.test(String(key || '').trim());
+  }
+
+  static hasClickInteractionKeys(entity: SceneObject | null | undefined): boolean {
+    const interactions = (entity as any)?.interactions;
+    if (!interactions || typeof interactions !== 'object') return false;
+    return Object.keys(interactions).some((key) => !this.isStateInteractionKey(key));
+  }
+
   static normalizeStateComponent(component: any): StateComponent | null {
     if (!component || typeof component !== 'object' || component.type !== 'State') return null;
 
@@ -163,6 +174,22 @@ export class ComponentSystem {
       normalized.value = this.normalizeStateValue(component.value, valueType);
     } else {
       normalized.value = initialValue;
+    }
+
+    const parserNoteTextAssets =
+      component.parserNoteTextAssets && typeof component.parserNoteTextAssets === 'object'
+        ? Object.entries(component.parserNoteTextAssets).reduce<Record<string, string>>(
+            (acc, [rawValue, rawField]) => {
+              const valueKey = String(rawValue || '').trim();
+              const field = typeof rawField === 'string' ? rawField.trim() : '';
+              if (valueKey && field) acc[valueKey] = field;
+              return acc;
+            },
+            {}
+          )
+        : {};
+    if (Object.keys(parserNoteTextAssets).length > 0) {
+      normalized.parserNoteTextAssets = parserNoteTextAssets;
     }
 
     return normalized;
@@ -250,6 +277,11 @@ export class ComponentSystem {
     component.valueType = normalized.valueType;
     component.initialValue = normalized.initialValue;
     component.value = value;
+    if (normalized.parserNoteTextAssets) {
+      component.parserNoteTextAssets = normalized.parserNoteTextAssets;
+    } else {
+      delete component.parserNoteTextAssets;
+    }
     return true;
   }
 

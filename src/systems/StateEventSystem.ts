@@ -1,6 +1,7 @@
 import type { IGame } from '../core/IGame';
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import type { SceneObject } from '../entities/SceneObject';
+import type { Scene } from '../scene/Scene';
 import { ComponentSystem, type StateValue, type StateValueType } from './ComponentSystem';
 
 export type StateChangeSource = 'parser' | 'script-api' | 'llm' | 'custom-command' | string;
@@ -61,6 +62,7 @@ export class StateEventSystem {
       valueType: component.valueType,
       source,
     });
+    this.applyStateParserNoteTextAsset(game, entity, component.id);
 
     return {
       ok: true,
@@ -70,6 +72,72 @@ export class StateEventSystem {
       valueType: component.valueType,
       dispatchedScripts,
     };
+  }
+
+  static syncSceneStateParserNotes(game: IGame, scene: Scene | null | undefined): void {
+    for (const entity of this.getSceneStateObjects(scene)) {
+      for (const component of ComponentSystem.getStateComponents(entity)) {
+        this.applyStateParserNoteTextAsset(game, entity, component.id, scene);
+      }
+    }
+  }
+
+  static dispatchSceneStateEvents(
+    game: IGame,
+    scene: Scene | null | undefined,
+    source: StateChangeSource = 'scene-load'
+  ): string[] {
+    const dispatchedScripts: string[] = [];
+
+    for (const entity of this.getSceneStateObjects(scene)) {
+      for (const component of ComponentSystem.getStateComponents(entity)) {
+        const value = ComponentSystem.getStateValue(entity, component.id) ?? component.initialValue;
+        dispatchedScripts.push(
+          ...this.dispatchStateEvents(game, entity, component.id, {
+            stateId: component.id,
+            previousValue: value,
+            value,
+            valueType: component.valueType,
+            source,
+          })
+        );
+      }
+    }
+
+    return dispatchedScripts;
+  }
+
+  private static getSceneStateObjects(scene: Scene | null | undefined): SceneObject[] {
+    if (!scene) return [];
+    return [
+      ...scene.entities,
+      ...scene.triggerboxes,
+      ...(scene.walkbox as unknown as SceneObject[]),
+    ];
+  }
+
+  private static applyStateParserNoteTextAsset(
+    game: IGame,
+    entity: SceneObject,
+    stateId: string,
+    scene: Scene | null | undefined = game.sceneManager?.currentScene
+  ): void {
+    const component = ComponentSystem.getStateComponent(entity, stateId);
+    if (!component?.parserNoteTextAssets || !scene) return;
+
+    const value = ComponentSystem.getStateValue(entity, stateId) ?? component.initialValue;
+    const textAssetField = component.parserNoteTextAssets[String(value)]?.trim();
+    if (!textAssetField) return;
+
+    const note = game.textAssets.getResolvedObjectField(entity, textAssetField)?.trim();
+    if (!note) {
+      console.warn(
+        `[StateEventSystem] Parser Note Text Asset field '${textAssetField}' for ${entity.name}.${component.id}=${String(value)} was not found or is empty.`
+      );
+      return;
+    }
+
+    scene.setEntityParserNote(entity.name, note);
   }
 
   private static dispatchStateEvents(

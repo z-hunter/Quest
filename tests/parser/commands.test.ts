@@ -6,11 +6,26 @@ import { createParserFixture } from '../fixtures/parserFactory';
 
 const MISSING_REMOTE_MESSAGE = 'Эти современные телевизоры без пульта даже непонятно как включить.';
 
-function addTv(fixture: ReturnType<typeof createParserFixture>, value: 'on' | 'off' = 'off') {
+function addTv(
+  fixture: ReturnType<typeof createParserFixture>,
+  value: 'on' | 'off' = 'off',
+  options: { parserNoteTextAssets?: Record<string, string> } = {}
+) {
   const tv = fixture.addEntity('tv', {
     title: 'TV',
     description: 'A television.',
-    components: [{ type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value }],
+    components: [
+      {
+        type: 'State',
+        id: 'power',
+        valueType: 'string',
+        initialValue: 'off',
+        value,
+        ...(options.parserNoteTextAssets
+          ? { parserNoteTextAssets: options.parserNoteTextAssets }
+          : {}),
+      },
+    ],
   });
   tv.interactions = { 'state:power': 'tv_power_changed' };
   return tv;
@@ -557,6 +572,30 @@ describe('Parser custom commands', () => {
 
     expect(result.messages.at(-1)).toBe('The TV clicks on.');
     expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
+  });
+
+  it('appends State-driven Parser Notes to LOOK after a command changes the State', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    addTv(fixture, 'off', {
+      parserNoteTextAssets: { on: 'power_on', off: 'power_off' },
+    });
+    fixture.textAssets.setObject('tv', {
+      title: 'TV',
+      description: 'A television.',
+      power_on: 'The TV is glowing with late-night static.',
+      power_off: 'The TV screen is dark.',
+    });
+    holdRemote(fixture);
+
+    await fixture.run('turn on tv');
+    const look = await fixture.run('look tv');
+
+    expect(fixture.scene.getEntityParserNote('tv')).toBe(
+      'The TV is glowing with late-night static.'
+    );
+    expect(look.messages.at(-1)).toContain('A television.');
+    expect(look.messages.at(-1)).toContain('The TV is glowing with late-night static.');
   });
 
   it('accepts a reachable visible TV remote without taking it', async () => {
