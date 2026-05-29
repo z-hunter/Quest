@@ -703,10 +703,21 @@ export const SectionComponents: React.FC = () => {
                   </div>
                 </div>
                 <div className="e-row">
-                  <label className="e-label" style={{ fontSize: '10px' }}>
-                    Parser Note TA Fields
-                  </label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1fr) 28px',
+                        gap: '6px',
+                      }}
+                    >
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        State Value
+                      </label>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        TA Field
+                      </label>
+                    </div>
                     {getStateParserNoteRows(comp, idx).map((row) => (
                       <div
                         key={row.id}
