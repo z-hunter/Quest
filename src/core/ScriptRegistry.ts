@@ -98,6 +98,10 @@ export class ScriptRegistry {
     return state;
   }
 
+  static isRunning(id: string): boolean {
+    return (this.activeScripts.get(id)?.length || 0) > 0;
+  }
+
   static has(id: string): boolean {
     return this.scripts.has(id);
   }

@@ -1,7 +1,75 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { ScriptRegistry } from '../../src/core/ScriptRegistry';
+import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { createParserFixture } from '../fixtures/parserFactory';
 
+const MISSING_REMOTE_MESSAGE = 'Эти современные телевизоры без пульта даже непонятно как включить.';
+
+function addTv(fixture: ReturnType<typeof createParserFixture>, value: 'on' | 'off' = 'off') {
+  const tv = fixture.addEntity('tv', {
+    title: 'TV',
+    description: 'A television.',
+    components: [{ type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value }],
+  });
+  tv.interactions = { 'state:power': 'tv_power_changed' };
+  return tv;
+}
+
+function addRemote(fixture: ReturnType<typeof createParserFixture>) {
+  return fixture.addEntity('tv_rc', {
+    title: 'TV remote',
+    description: 'A remote control.',
+    components: [{ type: 'Item', ignoreDistance: true }],
+  });
+}
+
+function holdRemote(fixture: ReturnType<typeof createParserFixture>) {
+  const remote = addRemote(fixture);
+  fixture.scene.removeEntity(remote);
+  fixture.game.inventory.push(remote);
+  return remote;
+}
+
+function setupTvCommandFixture(options: { heldRemote?: boolean; reachableRemote?: boolean } = {}) {
+  const fixture = createParserFixture();
+  fixture.addPlayer();
+  addTv(fixture);
+  if (options.heldRemote) {
+    holdRemote(fixture);
+  } else if (options.reachableRemote) {
+    addRemote(fixture);
+  }
+  return fixture;
+}
+
 describe('Parser custom commands', () => {
+  beforeAll(() => {
+    ScriptRegistry.register('tv_glow', ({ api }) => {
+      api.setInterval(() => {}, 1000);
+    });
+    ScriptRegistry.register('tv_power_changed', ({ game, args }) => {
+      const value = args?.value;
+      const scene = game.sceneManager.currentScene;
+      scene
+        .getAllSceneObjects()
+        .filter((object: any) => object.groupID === '#tv_glow')
+        .forEach((object: any) => {
+          object.disabled = value === 'off';
+        });
+      if (value === 'on') {
+        if (ScriptRegistry.isRunning('tv_glow')) ScriptRegistry.stop('tv_glow');
+        ScriptRegistry.execute('tv_glow', { game });
+      } else if (value === 'off') {
+        ScriptRegistry.stop('tv_glow');
+      }
+    });
+  });
+
+  afterEach(() => {
+    ScriptRegistry.stop('tv_glow');
+  });
+
   it('prompts when TELEPORT is missing its item', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
@@ -440,5 +508,191 @@ describe('Parser custom commands', () => {
     expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
     expect(fixture.scene.activeSubscene).toBe(null);
     expect(fixture.game.inventoryManager.getInventoryPreviewEntity()).toBe(null);
+  });
+
+  it('matches both TURN ON TV phrase variants', async () => {
+    for (const command of ['turn on tv', 'turn tv on']) {
+      const fixture = setupTvCommandFixture({ heldRemote: true });
+
+      const result = await fixture.run(command);
+
+      expect(result.messages.at(-1)).toBe('The TV clicks on.');
+      expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+        'on'
+      );
+    }
+  });
+
+  it('matches both TURN OFF TV phrase variants', async () => {
+    for (const command of ['turn off tv', 'turn tv off']) {
+      const fixture = createParserFixture();
+      fixture.addPlayer();
+      addTv(fixture, 'on');
+      holdRemote(fixture);
+
+      const result = await fixture.run(command);
+
+      expect(result.messages.at(-1)).toBe('The TV clicks off.');
+      expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+        'off'
+      );
+    }
+  });
+
+  it('requires a held or reachable TV remote', async () => {
+    const fixture = setupTvCommandFixture();
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe(MISSING_REMOTE_MESSAGE);
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+  });
+
+  it('accepts a held TV remote', async () => {
+    const fixture = setupTvCommandFixture({ heldRemote: true });
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('The TV clicks on.');
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
+  });
+
+  it('accepts a reachable visible TV remote without taking it', async () => {
+    const fixture = setupTvCommandFixture({ reachableRemote: true });
+    const remote = fixture.scene.getObjectByName('tv_rc')!;
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('The TV clicks on.');
+    expect(fixture.game.inventory).not.toContain(remote);
+    expect(fixture.scene.entities).toContain(remote);
+  });
+
+  it('rejects a visible but unreachable TV remote', async () => {
+    const fixture = setupTvCommandFixture({ reachableRemote: true });
+    const remote = fixture.scene.getObjectByName('tv_rc')!;
+    remote.x = 200;
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe(MISSING_REMOTE_MESSAGE);
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+  });
+
+  it('turning TV on sets state, enables glow objects, and starts one glow script instance', async () => {
+    const fixture = setupTvCommandFixture({ heldRemote: true });
+    const glowEntity = fixture.addEntity('glow_entity', { groupID: '#tv_glow', disabled: true });
+    const glowTrigger = fixture.addTriggerbox('glow_trigger', {
+      groupID: '#tv_glow',
+      disabled: true,
+    });
+    const glowWalkbox = fixture.addWalkbox('glow_walkbox');
+    glowWalkbox.groupID = '#tv_glow';
+    glowWalkbox.disabled = true;
+
+    const first = await fixture.run('turn on tv');
+    const second = await fixture.run('turn tv on');
+
+    expect(first.messages.at(-1)).toBe('The TV clicks on.');
+    expect(second.messages.at(-1)).toBe('The TV clicks on.');
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
+    expect(glowEntity.disabled).toBe(false);
+    expect(glowTrigger.disabled).toBe(false);
+    expect(glowWalkbox.disabled).toBe(false);
+    expect(ScriptRegistry.getRuntimeState().tv_glow).toHaveLength(1);
+  });
+
+  it('turning TV off sets state, disables glow objects, and stops the glow script', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    addTv(fixture, 'on');
+    holdRemote(fixture);
+    const glowEntity = fixture.addEntity('glow_entity', { groupID: '#tv_glow', disabled: false });
+    ScriptRegistry.execute('tv_glow', { game: fixture.game });
+
+    const result = await fixture.run('turn off tv');
+
+    expect(result.messages.at(-1)).toBe('The TV clicks off.');
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+    expect(glowEntity.disabled).toBe(true);
+    expect(ScriptRegistry.isRunning('tv_glow')).toBe(false);
+  });
+
+  it('turns off a reachable TV without the remote and shows the manual-off message', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    addTv(fixture, 'on');
+    const glowEntity = fixture.addEntity('glow_entity', { groupID: '#tv_glow', disabled: false });
+    ScriptRegistry.execute('tv_glow', { game: fixture.game });
+
+    const result = await fixture.run('turn tv off');
+
+    expect(result.messages.at(-1)).toBe(
+      'Fortunately, this thing can be turned off without the remote.'
+    );
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+    expect(glowEntity.disabled).toBe(true);
+    expect(ScriptRegistry.isRunning('tv_glow')).toBe(false);
+  });
+
+  it('still requires the remote when turning off a TV that is visible but not reachable', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = addTv(fixture, 'on');
+    tv.x = 200;
+
+    const result = await fixture.run('turn tv off');
+
+    expect(result.messages.at(-1)).toBe(MISSING_REMOTE_MESSAGE);
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
+  });
+
+  it('fails clearly when tv.power is missing or has the wrong type', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'boolean', initialValue: false, value: false },
+      ],
+    });
+    holdRemote(fixture);
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('The TV refuses to respond.');
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      false
+    );
+    expect(ScriptRegistry.isRunning('tv_glow')).toBe(false);
+  });
+
+  it('parser context reflects TV power after turning it on and off', async () => {
+    const fixture = setupTvCommandFixture({ heldRemote: true });
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+
+    await fixture.run('turn on tv');
+    let model = builder.build('look tv', null);
+
+    expect(model.context.entities?.find((entity) => entity.id === 'tv')?.states).toEqual([
+      { id: 'power', type: 'string', value: 'on' },
+    ]);
+    expect(model.context.worldFacts).toEqual(expect.arrayContaining(['TV state power is on.']));
+
+    await fixture.run('turn off tv');
+    model = builder.build('look tv', null);
+
+    expect(model.context.entities?.find((entity) => entity.id === 'tv')?.states).toEqual([
+      { id: 'power', type: 'string', value: 'off' },
+    ]);
+    expect(model.context.worldFacts).toEqual(expect.arrayContaining(['TV state power is off.']));
   });
 });

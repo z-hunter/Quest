@@ -1,0 +1,36 @@
+{
+  "id": "turn_tv_on",
+  "phrases": ["turn on tv", "turn tv on"],
+  "arguments": [],
+  "plan": [
+    {
+      "type": "requireEntityAvailable",
+      "entityId": "tv",
+      "scopes": ["visible"],
+      "missingMessageId": "missing_tv"
+    },
+    {
+      "type": "requireEntityAvailable",
+      "entityId": "tv_rc",
+      "scopes": ["held", "reachable"],
+      "missingMessageId": "missing_remote"
+    },
+    {
+      "type": "setEntityState",
+      "entityId": "tv",
+      "stateId": "power",
+      "value": "on",
+      "missingMessageId": "missing_power_state"
+    },
+    {
+      "type": "showText",
+      "messageId": "success"
+    }
+  ],
+  "messages": {
+    "missing_tv": "You don't see the TV here.",
+    "missing_remote": "It's not even clear how to turn on these modern TVs without a remote control.",
+    "missing_power_state": "The TV refuses to respond.",
+    "success": "The TV clicks on."
+  }
+}

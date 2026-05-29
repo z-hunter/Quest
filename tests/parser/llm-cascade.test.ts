@@ -130,6 +130,133 @@ describe('LlmCascade', () => {
     expect(debug?.acceptedActions).toHaveLength(1);
   });
 
+  it('exposes authored parser commands to the LLM and accepts runCustomCommand', async () => {
+    cascade = new LlmCascade(
+      provider,
+      () =>
+        ({
+          readServiceAsset: vi.fn().mockResolvedValue(mockPromptAssets),
+          getParserCommands: () => [
+            {
+              id: 'turn_tv_on',
+              phrases: ['turn on tv', 'turn tv on'],
+              arguments: [],
+              plan: [],
+            },
+          ],
+        }) as any,
+      () => undefined
+    );
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'runCustomCommand', commandId: 'turn_tv_on' }],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'runCustomCommand', commandId: 'turn_tv_on', arguments: {} },
+    ]);
+    expect(String(provider.messages[0]?.content)).toContain('Available authored parser commands');
+    expect(String(provider.messages[0]?.content)).toContain('"commandId": "turn_tv_on"');
+  });
+
+  it('filters runCustomCommand for unknown authored command ids', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'runCustomCommand', commandId: 'missing_command' }],
+    });
+
+    const result = await cascade.parse('do missing command', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      { type: 'runCustomCommand', commandId: 'missing_command' },
+    ]);
+  });
+
+  it('accepts direct Game Master world actions from the LLM', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+        { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+        { type: 'runScript', scriptId: 'tv_glow', restart: true },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on', source: 'llm' },
+      { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+      { type: 'runScript', scriptId: 'tv_glow', restart: true },
+      { type: 'showText', message: 'The TV clicks on.' },
+    ]);
+    expect(String(provider.messages[0]?.content)).toContain('Direct Game Master world actions');
+  });
+
+  it('accepts direct Game Master world actions with a fields wrapper for compatibility', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        {
+          type: 'setEntityState',
+          fields: { entityId: 'tv', stateId: 'power', value: 'on' },
+        },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on', source: 'llm' },
+      { type: 'showText', message: 'The TV clicks on.' },
+    ]);
+  });
+
+  it('filters malformed direct Game Master world actions', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } }],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+    ]);
+  });
+
+  it('does not keep showText when a paired direct world action fails validation', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.acceptedActions).toEqual([]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual(
+      expect.arrayContaining([
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+        expect.objectContaining({ reason: 'direct_world_action_failed_validation_omits_showText' }),
+      ])
+    );
+  });
+
   it('keeps prompt assets free of implementation-leaking unsupported-action phrases', () => {
     const systemPrompt = readFileSync(
       join(process.cwd(), 'public/text/system/parser-llm-system.md'),

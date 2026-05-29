@@ -5,6 +5,7 @@ import type {
   ParserCascadeEnvelope,
   ParserContext,
   ParserRelationType,
+  ParserScopeSlice,
   ParserToolAction,
 } from './parserTypes';
 
@@ -34,6 +35,13 @@ const ALLOWED_ACTION_TYPES = new Set([
   'setEntityParserNote',
   'goToTarget',
   'showText',
+  'runCustomCommand',
+  'requireEntityAvailable',
+  'requireAnyEntityAvailable',
+  'setEntityState',
+  'setGroupDisabled',
+  'runScript',
+  'stopScript',
 ]);
 
 const RELATIONS = new Set<ParserRelationType>(['on', 'under', 'in', 'behind', 'near']);
@@ -392,6 +400,12 @@ export class LlmCascade {
       '',
       'Per-call dynamic game world context:',
       JSON.stringify(this.buildDynamicContext(context), null, 2),
+      '',
+      'Direct Game Master world actions:',
+      JSON.stringify(this.buildDirectGameMasterActions(), null, 2),
+      '',
+      'Available authored parser commands:',
+      JSON.stringify(this.buildAvailableCustomCommands(), null, 2),
       ...(previousAttempt
         ? [
             '',
@@ -661,11 +675,41 @@ export class LlmCascade {
       };
     }
 
+    if (
+      filteredActions.some((action) => this.isDirectWorldActionLike(action)) &&
+      actions.length > 0 &&
+      actions.every((action) => action.type === 'showText')
+    ) {
+      return {
+        actions: [],
+        filteredActions: [
+          ...filteredActions,
+          {
+            reason: 'direct_world_action_failed_validation_omits_showText',
+            actions,
+          },
+        ],
+        fallback: false,
+      };
+    }
+
     return { actions, filteredActions, fallback: false };
   }
 
   private isParserNoteAction(action: ParserToolAction): boolean {
     return action.type === 'setSceneParserNote' || action.type === 'setEntityParserNote';
+  }
+
+  private isDirectWorldActionLike(action: unknown): boolean {
+    if (!this.isRecord(action)) return false;
+    return (
+      action.type === 'requireEntityAvailable' ||
+      action.type === 'requireAnyEntityAvailable' ||
+      action.type === 'setEntityState' ||
+      action.type === 'setGroupDisabled' ||
+      action.type === 'runScript' ||
+      action.type === 'stopScript'
+    );
   }
 
   private validateAction(action: unknown): ParserToolAction | null {
@@ -751,9 +795,186 @@ export class LlmCascade {
             .join('\u202F—\u202F');
         return message ? { type: 'showText', message } : null;
       }
+      case 'runCustomCommand': {
+        const commandId = this.asString(action.commandId);
+        if (!commandId || !this.isKnownCustomCommand(commandId)) return null;
+        const args = this.asStringMap(action.arguments);
+        return args === null
+          ? null
+          : {
+              type: 'runCustomCommand',
+              commandId,
+              arguments: args,
+            };
+      }
+      case 'requireEntityAvailable': {
+        const payload = this.getActionPayload(action);
+        const entityId = this.asString(payload.entityId);
+        const scopes = this.asScopeArray(payload.scopes);
+        if (!entityId || !scopes.length) return null;
+        return {
+          type: 'requireEntityAvailable',
+          entityId,
+          scopes,
+          saveAs: this.asNullableString(payload.saveAs) || undefined,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+        };
+      }
+      case 'requireAnyEntityAvailable': {
+        const payload = this.getActionPayload(action);
+        const options = this.asRequireAnyOptions(payload.options);
+        if (!options.length) return null;
+        return {
+          type: 'requireAnyEntityAvailable',
+          options,
+          saveAs: this.asNullableString(payload.saveAs) || undefined,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+        };
+      }
+      case 'setEntityState': {
+        const payload = this.getActionPayload(action);
+        const entityId = this.asString(payload.entityId);
+        const stateId = this.asString(payload.stateId);
+        const value = this.asStateValue(payload.value);
+        if (!entityId || !stateId || value === undefined) return null;
+        return {
+          type: 'setEntityState',
+          entityId,
+          stateId,
+          value,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+          source: 'llm',
+        };
+      }
+      case 'setGroupDisabled': {
+        const payload = this.getActionPayload(action);
+        const groupId = this.asString(payload.groupId);
+        if (!groupId || typeof payload.disabled !== 'boolean') return null;
+        return {
+          type: 'setGroupDisabled',
+          groupId,
+          disabled: payload.disabled,
+        };
+      }
+      case 'runScript': {
+        const payload = this.getActionPayload(action);
+        const scriptId = this.asString(payload.scriptId);
+        if (!scriptId) return null;
+        return {
+          type: 'runScript',
+          scriptId,
+          restart: typeof payload.restart === 'boolean' ? payload.restart : undefined,
+        };
+      }
+      case 'stopScript': {
+        const payload = this.getActionPayload(action);
+        const scriptId = this.asString(payload.scriptId);
+        return scriptId ? { type: 'stopScript', scriptId } : null;
+      }
       default:
         return null;
     }
+  }
+
+  private getActionPayload(action: Record<string, unknown>): Record<string, unknown> {
+    return this.isRecord(action.fields) ? action.fields : action;
+  }
+
+  private buildDirectGameMasterActions(): Array<Record<string, unknown>> {
+    return [
+      {
+        description:
+          'Set an existing authored State value. Matching state:<id> interactions run automatically after the value changes.',
+        action: {
+          type: 'setEntityState',
+          entityId: 'visible scene object id',
+          stateId: 'existing State id',
+          value: 'string | number | boolean matching the authored State type',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+      {
+        description: 'Enable or disable every current scene object with this groupID.',
+        action: {
+          type: 'setGroupDisabled',
+          groupId: '#group_id',
+          disabled: 'boolean',
+        },
+      },
+      {
+        description: 'Start a registered script. Use restart true to avoid duplicate instances.',
+        action: {
+          type: 'runScript',
+          scriptId: 'registered script id',
+          restart: 'optional boolean',
+        },
+      },
+      {
+        description: 'Stop all active instances of a registered script.',
+        action: {
+          type: 'stopScript',
+          scriptId: 'registered script id',
+        },
+      },
+      {
+        description: 'Fail the plan unless an exact object id is available in one of these scopes.',
+        action: {
+          type: 'requireEntityAvailable',
+          entityId: 'exact object id',
+          scopes: ['visible', 'held', 'reachable'],
+          saveAs: 'optional plan variable',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+      {
+        description: 'Fail the plan unless at least one exact object id option is available.',
+        action: {
+          type: 'requireAnyEntityAvailable',
+          options: [
+            {
+              entityId: 'exact object id',
+              scopes: ['visible', 'held', 'reachable'],
+              saveAsValue: 'optional saved marker',
+            },
+          ],
+          saveAs: 'optional plan variable',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+    ];
+  }
+
+  private buildAvailableCustomCommands(): Array<Record<string, unknown>> {
+    const commands = this.getTextAssets()?.getParserCommands?.() || [];
+    return commands
+      .filter((command) => command.id && Array.isArray(command.phrases))
+      .map((command) =>
+        this.compactRecord({
+          id: command.id,
+          phrases: command.phrases,
+          arguments: (command.arguments || []).map((arg) =>
+            this.compactRecord({
+              name: arg.name,
+              required: arg.required,
+              scopes: arg.scopes,
+              separatorsBefore: arg.separatorsBefore,
+            })
+          ),
+          action: {
+            type: 'runCustomCommand',
+            commandId: command.id,
+            arguments: Object.fromEntries(
+              (command.arguments || []).map((arg) => [arg.name, `<${arg.name}>`])
+            ),
+          },
+        })
+      );
+  }
+
+  private isKnownCustomCommand(commandId: string): boolean {
+    return (this.getTextAssets()?.getParserCommands?.() || []).some(
+      (command) => command.id === commandId
+    );
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -771,6 +992,65 @@ export class LlmCascade {
   private asNullableString(value: unknown): string | null {
     if (value === null || value === undefined) return null;
     return this.asString(value);
+  }
+
+  private asStringMap(value: unknown): Record<string, string | null> | null {
+    if (value === undefined) return {};
+    if (!this.isRecord(value)) return null;
+    const result: Record<string, string | null> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (!key.trim()) return null;
+      if (entry === null || entry === undefined) {
+        result[key] = null;
+      } else if (typeof entry === 'string') {
+        result[key] = entry.trim() || null;
+      } else {
+        return null;
+      }
+    }
+    return result;
+  }
+
+  private asStateValue(value: unknown): string | number | boolean | undefined {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? value
+      : undefined;
+  }
+
+  private asScopeArray(value: unknown): ParserScopeSlice[] {
+    if (!Array.isArray(value)) return [];
+    const allowed = new Set<ParserScopeSlice>([
+      'visible',
+      'held',
+      'takable',
+      'putSource',
+      'reachable',
+      'examinable',
+      'subscene',
+      'worldKnown',
+      'hiddenKnown',
+    ]);
+    return value.filter((item): item is ParserScopeSlice => allowed.has(item as ParserScopeSlice));
+  }
+
+  private asRequireAnyOptions(
+    value: unknown
+  ): Array<{ entityId: string; scopes: ParserScopeSlice[]; saveAsValue?: string }> {
+    if (!Array.isArray(value)) return [];
+    const options: Array<{ entityId: string; scopes: ParserScopeSlice[]; saveAsValue?: string }> =
+      [];
+    for (const item of value) {
+      if (!this.isRecord(item)) continue;
+      const entityId = this.asString(item.entityId);
+      const scopes = this.asScopeArray(item.scopes);
+      if (!entityId || !scopes.length) continue;
+      options.push({
+        entityId,
+        scopes,
+        saveAsValue: this.asNullableString(item.saveAsValue) || undefined,
+      });
+    }
+    return options;
   }
 
   private asRelation(value: unknown): ParserRelationType | null {

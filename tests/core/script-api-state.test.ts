@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ScriptRegistry } from '../../src/core/ScriptRegistry';
 import { ScriptAPI } from '../../src/core/ScriptAPI';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('ScriptAPI State access', () => {
   afterEach(() => {
+    ScriptRegistry.stop('test.script-api-state');
     vi.restoreAllMocks();
   });
 
@@ -58,5 +60,34 @@ describe('ScriptAPI State access', () => {
     expect(api.setState('lamp', 'missing', true)).toBe(false);
     expect(api.getState('lamp', 'missing')).toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispatches State script events when setting through the Script API', () => {
+    const fixture = createSceneFixture();
+    const handler = vi.fn();
+    ScriptRegistry.register('test.script-api-state', handler);
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      components: [
+        { type: 'State', id: 'open', valueType: 'boolean', initialValue: false, value: false },
+      ],
+    });
+    door.interactions = { 'state:open=true': 'test.script-api-state' };
+    const api = new ScriptAPI(fixture.game as any);
+
+    expect(api.setState('door', 'open', true)).toBe(true);
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: door,
+        args: expect.objectContaining({
+          stateId: 'open',
+          previousValue: false,
+          value: true,
+          valueType: 'boolean',
+          source: 'script-api',
+        }),
+      })
+    );
   });
 });

@@ -16,7 +16,9 @@ import {
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
+import { ScriptRegistry } from '../core/ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { StateEventSystem } from '../systems/StateEventSystem';
 import { Geometry } from '../utils/Geometry';
 import {
   buildSceneTextLayerSnapshot,
@@ -1452,7 +1454,7 @@ export class Parser {
     return {
       kind: 'execute_plan',
       envelope,
-      actions: envelope.output.actions,
+      actions: this.expandCustomCommandActions(envelope.output.actions),
     };
   }
 
@@ -1592,16 +1594,27 @@ export class Parser {
           action.paramsFromRefs,
           planState
         );
+        const message = this.resolveShowTextMessage(action, planState);
         return {
           status: 'ok',
           code: 'custom_message',
           message:
-            (action.message
-              ? this.interpolateTemplate(action.message, resolvedParams)
-              : undefined) ||
+            (message ? this.interpolateTemplate(message, resolvedParams) : undefined) ||
             (action.textKey ? this.game.text(action.textKey, resolvedParams) : undefined),
         };
       }
+      case 'requireEntityAvailable':
+        return this.executeRequireEntityAvailable(action, planState);
+      case 'requireAnyEntityAvailable':
+        return this.executeRequireAnyEntityAvailable(action, planState);
+      case 'setEntityState':
+        return this.executeSetEntityState(action);
+      case 'setGroupDisabled':
+        return this.executeSetGroupDisabled(action);
+      case 'runScript':
+        return this.executeRunScript(action);
+      case 'stopScript':
+        return this.executeStopScript(action);
       default:
         return {
           status: 'escalate',
@@ -1654,6 +1667,20 @@ export class Parser {
         return 'removeInventoryEntity';
       case 'showText':
         return 'showText';
+      case 'runCustomCommand':
+        return 'runCustomCommand';
+      case 'requireEntityAvailable':
+        return 'requireEntityAvailable';
+      case 'requireAnyEntityAvailable':
+        return 'requireAnyEntityAvailable';
+      case 'setEntityState':
+        return 'setEntityState';
+      case 'setGroupDisabled':
+        return 'setGroupDisabled';
+      case 'runScript':
+        return 'runScript';
+      case 'stopScript':
+        return 'stopScript';
       default:
         return 'unknown';
     }
@@ -3915,6 +3942,233 @@ export class Parser {
     return this.game.removeInventoryEntity(entity);
   }
 
+  private executeRequireEntityAvailable(
+    action: Extract<ParserToolAction, { type: 'requireEntityAvailable' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    const entity = this.getScopeCandidates(action.scopes).find(
+      (candidate) => candidate.name === action.entityId
+    );
+    if (!entity) {
+      return {
+        status: 'failed',
+        code: 'custom_command_required_entity_missing',
+        message:
+          action.missingMessage ||
+          this.game.text('parser.look_not_found', { target: action.entityId }),
+        data: {
+          commandId: action.commandId,
+          entityId: action.entityId,
+          scopes: action.scopes,
+        },
+        recoverable: true,
+      };
+    }
+
+    if (action.saveAs) {
+      planState[action.saveAs] = entity;
+    }
+
+    return {
+      status: 'ok',
+      code: 'required_entity_available',
+      data: {
+        commandId: action.commandId,
+        entityId: entity.name,
+        scopes: action.scopes,
+      },
+    };
+  }
+
+  private executeRequireAnyEntityAvailable(
+    action: Extract<ParserToolAction, { type: 'requireAnyEntityAvailable' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    for (const option of action.options) {
+      const entity = this.getScopeCandidates(option.scopes).find(
+        (candidate) => candidate.name === option.entityId
+      );
+      if (!entity) continue;
+
+      if (action.saveAs) {
+        planState[action.saveAs] = option.saveAsValue || entity;
+      }
+
+      return {
+        status: 'ok',
+        code: 'required_entity_available',
+        data: {
+          commandId: action.commandId,
+          entityId: entity.name,
+          scopes: option.scopes,
+          matchedValue: option.saveAsValue,
+        },
+      };
+    }
+
+    return {
+      status: 'failed',
+      code: 'custom_command_required_entity_missing',
+      message: action.missingMessage || this.game.text('parser.command_no_effect'),
+      data: {
+        commandId: action.commandId,
+        options: action.options.map((option) => ({
+          entityId: option.entityId,
+          scopes: option.scopes,
+        })),
+      },
+      recoverable: true,
+    };
+  }
+
+  private executeSetEntityState(
+    action: Extract<ParserToolAction, { type: 'setEntityState' }>
+  ): GameActionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    const entity = scene?.getObjectByName(action.entityId);
+    if (!entity) {
+      return {
+        status: 'failed',
+        code: 'state_target_not_found',
+        message:
+          action.missingMessage ||
+          this.game.text('parser.look_not_found', { target: action.entityId }),
+        data: { entityId: action.entityId, stateId: action.stateId },
+        recoverable: true,
+      };
+    }
+
+    const component = ComponentSystem.getStateComponent(entity, action.stateId);
+    if (!component || !ComponentSystem.isStateValueOfType(action.value, component.valueType)) {
+      return {
+        status: 'failed',
+        code: 'state_not_set',
+        message: action.missingMessage || this.game.text('parser.command_no_effect'),
+        data: {
+          entityId: action.entityId,
+          stateId: action.stateId,
+          expectedType: component?.valueType,
+        },
+        recoverable: true,
+      };
+    }
+
+    const result = StateEventSystem.setState(
+      this.game,
+      entity,
+      action.stateId,
+      action.value,
+      action.source || 'parser'
+    );
+    if (!result.ok) {
+      return {
+        status: 'failed',
+        code: 'state_not_set',
+        message: action.missingMessage || this.game.text('parser.command_no_effect'),
+        data: { entityId: action.entityId, stateId: action.stateId },
+        recoverable: true,
+      };
+    }
+
+    return {
+      status: 'ok',
+      code: 'entity_state_set',
+      data: {
+        entityId: action.entityId,
+        stateId: action.stateId,
+        value: action.value,
+        changed: result.changed,
+        dispatchedScripts: result.dispatchedScripts,
+      },
+      effects: ['entity_state_changed'],
+    };
+  }
+
+  private executeSetGroupDisabled(
+    action: Extract<ParserToolAction, { type: 'setGroupDisabled' }>
+  ): GameActionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        recoverable: false,
+      };
+    }
+
+    const normalizedGroupId = this.normalizeGroupId(action.groupId);
+    const targets = this.setSceneGroupDisabled(normalizedGroupId, action.disabled);
+
+    return {
+      status: 'ok',
+      code: action.disabled ? 'group_disabled' : 'group_enabled',
+      data: {
+        groupId: normalizedGroupId,
+        disabled: action.disabled,
+        count: targets.length,
+        entityIds: targets.map((target: SceneObject) => target.name),
+      },
+      effects: ['group_disabled_changed'],
+    };
+  }
+
+  private setSceneGroupDisabled(groupId: string, disabled: boolean): SceneObject[] {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return [];
+
+    const normalizedGroupId = this.normalizeGroupId(groupId);
+    const targets = scene
+      .getAllSceneObjects()
+      .filter((candidate: SceneObject) => this.objectHasGroupId(candidate, normalizedGroupId));
+
+    targets.forEach((target: SceneObject) => {
+      target.disabled = disabled;
+    });
+
+    return targets;
+  }
+
+  private executeRunScript(
+    action: Extract<ParserToolAction, { type: 'runScript' }>
+  ): GameActionOutcome {
+    if (!ScriptRegistry.has(action.scriptId)) {
+      return {
+        status: 'failed',
+        code: 'script_not_found',
+        data: { scriptId: action.scriptId },
+        recoverable: true,
+      };
+    }
+
+    if (action.restart && ScriptRegistry.isRunning(action.scriptId)) {
+      ScriptRegistry.stop(action.scriptId);
+    }
+
+    if (!ScriptRegistry.isRunning(action.scriptId)) {
+      ScriptRegistry.execute(action.scriptId, { game: this.game });
+    }
+
+    return {
+      status: 'ok',
+      code: 'script_started',
+      data: { scriptId: action.scriptId, restart: !!action.restart },
+      effects: ['script_started'],
+    };
+  }
+
+  private executeStopScript(
+    action: Extract<ParserToolAction, { type: 'stopScript' }>
+  ): GameActionOutcome {
+    const wasRunning = ScriptRegistry.isRunning(action.scriptId);
+    ScriptRegistry.stop(action.scriptId);
+    return {
+      status: 'ok',
+      code: 'script_stopped',
+      data: { scriptId: action.scriptId, wasRunning },
+      effects: ['script_stopped'],
+    };
+  }
+
   private buildCustomCommandEnvelope(
     input: string,
     command: ParserCommandSpec,
@@ -3939,6 +4193,31 @@ export class Parser {
           .join(' '),
       },
     };
+  }
+
+  private expandCustomCommandActions(actions: ParserToolAction[]): ParserToolAction[] {
+    return actions.flatMap((action) => {
+      if (action.type !== 'runCustomCommand') return [action];
+      const command = this.game.textAssets
+        .getParserCommands()
+        .find((candidate: ParserCommandSpec) => candidate.id === action.commandId);
+      if (!command) {
+        return [
+          {
+            type: 'parserFailure',
+            code: 'custom_command_not_found',
+            message: this.game.text('parser.command_no_effect'),
+          } satisfies ParserToolAction,
+        ];
+      }
+      const argumentValues = action.arguments || {};
+      const commandSpec = command as ParserCommandSpec;
+      return commandSpec.plan
+        .map((step: ParserCommandActionSpec) =>
+          this.mapCommandPlanStep(commandSpec, step, argumentValues)
+        )
+        .filter((mapped): mapped is ParserToolAction => !!mapped);
+    });
   }
 
   private mapCommandPlanStep(
@@ -3983,8 +4262,71 @@ export class Parser {
         return {
           type: 'showText',
           message: step.messageId ? command.messages?.[step.messageId] : step.text,
+          messageByRef: step.messageIdByRef
+            ? {
+                ref: step.messageIdByRef.ref,
+                values: Object.fromEntries(
+                  Object.entries(step.messageIdByRef.values).map(([value, messageId]) => [
+                    value,
+                    command.messages?.[messageId] || messageId,
+                  ])
+                ),
+                fallback: step.messageIdByRef.fallbackMessageId
+                  ? command.messages?.[step.messageIdByRef.fallbackMessageId]
+                  : undefined,
+              }
+            : undefined,
           params: step.params,
           paramsFromRefs: step.paramsFromRefs,
+        };
+      case 'requireEntityAvailable':
+        return {
+          type: 'requireEntityAvailable',
+          commandId: command.id,
+          entityId: step.entityId,
+          scopes: step.scopes,
+          saveAs: step.saveAs,
+          missingMessage:
+            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
+            step.missingMessage,
+        };
+      case 'requireAnyEntityAvailable':
+        return {
+          type: 'requireAnyEntityAvailable',
+          commandId: command.id,
+          options: step.options,
+          saveAs: step.saveAs,
+          missingMessage:
+            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
+            step.missingMessage,
+        };
+      case 'setEntityState':
+        return {
+          type: 'setEntityState',
+          entityId: step.entityId,
+          stateId: step.stateId,
+          value: step.value,
+          missingMessage:
+            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
+            step.missingMessage,
+          source: 'custom-command',
+        };
+      case 'setGroupDisabled':
+        return {
+          type: 'setGroupDisabled',
+          groupId: step.groupId,
+          disabled: step.disabled,
+        };
+      case 'runScript':
+        return {
+          type: 'runScript',
+          scriptId: step.scriptId,
+          restart: step.restart,
+        };
+      case 'stopScript':
+        return {
+          type: 'stopScript',
+          scriptId: step.scriptId,
         };
       default:
         return null;
@@ -4428,6 +4770,25 @@ export class Parser {
     return Object.keys(resolved).length ? resolved : undefined;
   }
 
+  private resolveShowTextMessage(
+    action: Extract<ParserToolAction, { type: 'showText' }>,
+    planState: ParserPlanState
+  ): string | undefined {
+    if (!action.messageByRef) return action.message;
+
+    const value = planState[action.messageByRef.ref];
+    const key =
+      typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : this.getPlanStateDisplayValue(value);
+
+    return (
+      (key ? action.messageByRef.values[key] : undefined) ||
+      action.messageByRef.fallback ||
+      action.message
+    );
+  }
+
   private getPlanStateDisplayValue(value: unknown): string | null {
     if (value instanceof Entity) {
       return this.getPlayerFacingObjectTitle(value) || null;
@@ -4452,6 +4813,20 @@ export class Parser {
       const value = params[token];
       return value === undefined || value === null ? `{${token}}` : String(value);
     });
+  }
+
+  private normalizeGroupId(groupId: string): string {
+    const trimmed = String(groupId || '').trim();
+    if (!trimmed) return '';
+    return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  }
+
+  private objectHasGroupId(sceneObject: SceneObject, groupId: string): boolean {
+    if (!groupId) return false;
+    return String(sceneObject.groupID || '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .includes(groupId);
   }
 
   private getRelationDisplayText(relation: ParserRelationType): string {

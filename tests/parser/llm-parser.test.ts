@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { Console } from '../../src/core/Console';
+import { ScriptRegistry } from '../../src/core/ScriptRegistry';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Parser LLM Integration', () => {
   it('#LLM-ON/#LLM-OFF toggle parserLlmEnabled on a real Console instance', () => {
@@ -117,6 +119,136 @@ describe('Parser LLM Integration', () => {
     expect(mockLlmParse).toHaveBeenCalled();
     // In createParserFixture, game.log pushes to messages
     expect(fixture.messages).toContain('LLM Result');
+  });
+
+  it('expands LLM runCustomCommand actions through authored command plans', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(remote);
+    fixture.game.inventory.push(remote);
+    fixture.game.console.parserLlmEnabled = true;
+    if (!ScriptRegistry.has('tv_glow')) {
+      ScriptRegistry.register('tv_glow', ({ api }) => {
+        api.setInterval(() => {}, 1000);
+      });
+    }
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: { kind: 'plan', actions: [{ type: 'runCustomCommand', commandId: 'turn_tv_on' }] },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(fixture.messages).toContain('The TV clicks on.');
+    ScriptRegistry.stop('tv_glow');
+  });
+
+  it('executes direct LLM Game Master actions for State, groups, scripts, and text', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    const glow = fixture.addEntity('tv_glow_quad', {
+      groupID: '#tv_glow',
+      disabled: true,
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    if (!ScriptRegistry.has('tv_glow')) {
+      ScriptRegistry.register('tv_glow', ({ api }) => {
+        api.setInterval(() => {}, 1000);
+      });
+    }
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+          { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+          { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+          { type: 'runScript', scriptId: 'tv_glow', restart: true },
+          { type: 'showText', message: 'The TV hums awake.' },
+        ],
+      },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(glow.disabled).toBe(false);
+    expect(ScriptRegistry.isRunning('tv_glow')).toBe(true);
+    expect(fixture.messages).toContain('The TV hums awake.');
+    ScriptRegistry.stop('tv_glow');
+  });
+
+  it('runs State event side effects when LLM returns only setEntityState and text', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.interactions = { 'state:power': 'test.llm.tv-power' };
+    const glow = fixture.addEntity('tv_glow_quad', {
+      groupID: '#tv_glow',
+      disabled: true,
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    ScriptRegistry.register('test.llm.tv-glow', ({ api }) => {
+      api.setInterval(() => {}, 1000);
+    });
+    ScriptRegistry.register('test.llm.tv-power', ({ game, args }) => {
+      if (args?.value !== 'on') return;
+      game.sceneManager.currentScene
+        .getAllSceneObjects()
+        .filter((object: any) => object.groupID === '#tv_glow')
+        .forEach((object: any) => {
+          object.disabled = false;
+        });
+      if (ScriptRegistry.isRunning('test.llm.tv-glow')) {
+        ScriptRegistry.stop('test.llm.tv-glow');
+      }
+      ScriptRegistry.execute('test.llm.tv-glow', { game });
+    });
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+          { type: 'showText', message: 'The TV hums awake.' },
+        ],
+      },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(glow.disabled).toBe(false);
+    expect(ScriptRegistry.isRunning('test.llm.tv-glow')).toBe(true);
+    expect(fixture.messages).toContain('The TV hums awake.');
+    ScriptRegistry.stop('test.llm.tv-glow');
+    ScriptRegistry.stop('test.llm.tv-power');
   });
 
   it('passes prior scene-local parser turns to LLM context', async () => {

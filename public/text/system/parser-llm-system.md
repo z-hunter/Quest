@@ -163,6 +163,8 @@ For a game command:
 { "kind": "plan", "actions": [ { "type": "..." } ] }
 ```
 
+You may act as Game Master by using either `Direct Game Master world actions` or `Available authored parser commands`. Use action objects with the fields at the top level exactly like the `action` examples; do not wrap action fields inside a `fields` object. Use `runCustomCommand` when an authored command is the best fit, especially for equivalent wording, shortened phrases, or reordered phrases. Use direct world actions when the authored command is not quite right, when you need a different sequence, or when direct State/group/script control is the more faithful response. Prefer real state-changing actions over merely narrating a successful state change with `showText` or `final_response`. If your player-facing text says an object turned on/off, opened/closed, started/stopped, or otherwise changed persistent state, include the corresponding direct world action or authored command in the same plan. Objects may list `state:<id>` interactions; those are authored scripts that run automatically after a matching `setEntityState`, so setting the State is enough unless another explicit effect is also needed.
+
 For conversation, atmosphere, reactions, or when no safe action fits and you are not creating or updating a persistent Parser Note:
 
 ```json

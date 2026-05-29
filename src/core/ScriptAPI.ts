@@ -3,6 +3,7 @@ import { QuadObject } from '../entities/QuadObject';
 import { Actor } from '../entities/Actor';
 import { SoundManager, type SoundOptions } from '../systems/SoundManager';
 import { ComponentSystem, type StateValue } from '../systems/ComponentSystem';
+import { StateEventSystem } from '../systems/StateEventSystem';
 import type { SceneObject } from '../entities/SceneObject';
 
 export interface CustomTimer {
@@ -181,13 +182,13 @@ export class ScriptAPI {
       return false;
     }
 
-    const ok = ComponentSystem.setStateValue(target, stateId, value);
-    if (!ok) {
+    const result = StateEventSystem.setState(this.game, target, stateId, value, 'script-api');
+    if (!result.ok) {
       console.warn(
         `[ScriptAPI] State '${stateId}' expects ${component.valueType}, got ${typeof value}.`
       );
     }
-    return ok;
+    return result.ok;
   }
 
   transferActor(actorName: string, targetSceneId: string, targetEntryId?: string | null): boolean {

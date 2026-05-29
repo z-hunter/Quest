@@ -376,6 +376,87 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
     },
   },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
+    },
+  },
 ];
 
 export class TextAssetManager {
