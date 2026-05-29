@@ -2197,3 +2197,61 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The previous memory decision that described transfer-time object correction was superseded by the later decision: `Correctional Scale` is editor-only scene normalization.
 - Scene correction intentionally affects locked objects. This differs from normal transform editing, where locked objects are protected from accidental manual manipulation.
 - `Correctional Scale` mutates authored object positions/polygons and stored scale values; use editor undo or source control when experimenting.
+
+## Session Entry - 2026-05-29 10:23 +02:00
+
+### Session Goals
+- Generalize authored `State` changes into a reusable runtime event path instead of a TV-specific parser hack.
+- Keep `ScriptAPI`, parser commands, and LLM direct actions on the same mutation path.
+- Make Script Events UI represent state-driven interactions in a reusable way for any authored `State`.
+- Finish the wrap-up by recording durable notes, refreshing notebook sources, and preserving the feature in git.
+
+### What Was Implemented
+- Added `StateEventSystem` as the shared runtime helper for authored State mutation side effects.
+- Routed `ScriptAPI.setState` and parser `setEntityState` through the new State event helper so real changes dispatch script events.
+- Removed the parser-specific `tv/power` side effect and moved TV glow behavior into an authored `tv_power_changed` script event.
+- Simplified TV command assets so they only validate prerequisites, change `tv.power`, and show player-facing text.
+- Expanded the editor Script Events section to present a generic `State Changed` add option and a State selector for `state:<id>` interactions.
+- Added helpers and tests for generic state events, legacy state keys, and value-specific `state:<id>=<value>` display behavior.
+- Updated parser/LLM guidance so direct world actions can set State without pretending the runtime has a TV-only path.
+
+### Important Architecture / Runtime Decisions
+- `ComponentSystem.setStateValue` remains a low-level helper without script side effects.
+- Runtime State changes now flow through `StateEventSystem.setState(game, entity, stateId, value, source)`.
+- Matching `interactions` keys are `state:<stateId>` and `state:<stateId>=<value>`.
+- The script context receives `entity` plus `args` containing `stateId`, `previousValue`, `value`, `valueType`, and `source`.
+- TV glow is a normal authored script-driven reaction to `tv.power`, not a hardcoded parser rule.
+- The Script Events editor only creates `State Changed` when the selected object already has authored State components.
+
+### Parser / Mechanics / Editor Changes
+- Parser and LLM direct actions now report State mutations via the same common path, which keeps command, script, and Game Master behavior aligned.
+- The `turn_tv_on` / `turn_tv_off` command assets now focus on state mutation plus text; they no longer own glow toggling.
+- The `tv_power_changed` script handles enabling/disabling `#tv_glow` and starting/stopping `tv_glow`.
+- The Script Events editor now shows readable `STATE` rows, supports State id selection, and preserves legacy state keys.
+
+### Tests Run And Outcomes
+- Focused tests:
+  - `npm test -- tests/systems/state-event-system.test.ts tests/core/script-api-state.test.ts tests/parser/commands.test.ts tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`
+  - Passed.
+- Editor UI contract test:
+  - `npm test -- tests/editor/section-script-events.test.ts`
+  - Passed.
+- TypeScript:
+  - `npm run typecheck`
+  - Passed.
+- Full suite:
+  - `npm test`
+  - Passed, 34 files / 405 tests.
+
+### Commits Created
+- `bb15d13` - `Major Feature: Improved Commands System, integrated with "States" component + expanded Script Events for states changes.`
+  - State runtime event system, TV command rewrite, authored TV glow event, parser/LLM runtime alignment, editor Script Events UX, tests, docs, and related scene/text assets.
+
+### Remaining Work / Next Recommended Steps
+- Manually verify any additional authored objects with multiple State components use the new `State Changed` selector cleanly in the editor.
+- If more gameplay systems need state-driven reactions, add authored `state:<id>` interactions rather than new parser-specific branches.
+
+### Risks / Caveats / Open Questions
+- Value-specific state events are runtime-supported but still hand-authored; the current UI does not create them automatically.
+- The current scene asset for `tv` now relies on `state:power -> tv_power_changed`; if future scenes copy the TV pattern, they must author the interaction explicitly.
+- `StateEventSystem` only dispatches when the value truly changes, which keeps event scripts idempotent but means same-value writes will not retrigger side effects.
