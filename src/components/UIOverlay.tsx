@@ -30,6 +30,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
   // Console History State
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [, forceInventoryRefresh] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
   const suppressCommandFocusUntilRef = React.useRef(0);
 
   // Editor Store State
@@ -216,8 +217,28 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
     [game]
   );
 
+  const handleSave = () => {
+    if (!game || isSaving) return;
+    setIsSaving(true);
+    void game.saveManager.save().finally(() => {
+      setTimeout(() => setIsSaving(false), 600);
+    });
+  };
+
   return (
     <>
+      {game && !editorEnabled && (
+        <button
+          className={`save-btn${isSaving ? ' save-btn--saving' : ''}`}
+          title="Save game"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleSave}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4.5L10.5 1H2zm8.5 0v3.5H13L10.5 1zM4 1.5h5v3H4V1.5zM3 9h10v5H3V9zm2 1v3h2v-3H5zm4 0v3h2v-3H9z" />
+          </svg>
+        </button>
+      )}
       <div id="ui-layer" style={{ pointerEvents: 'none' }}>
         <div id="command-line" style={{ border: 'none', background: 'transparent' }}>
           <input
@@ -266,7 +287,10 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ game }) => {
                 if (val && game) {
                   const firstWord = val.split(/\s+/)[0] || '';
 
-                  if (firstWord.startsWith('#')) {
+                  if (
+                    firstWord.startsWith('#') ||
+                    game.console.hasCommand(firstWord.toUpperCase())
+                  ) {
                     game.console.processCommand(val);
                   } else {
                     const preprocessed = game.console.preprocessGameplayInput(val);

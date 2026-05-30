@@ -88,6 +88,7 @@ export class SceneManager {
   currentScene: Scene | null;
   /** ID of the Entry trigger to use when loading the next scene. */
   pendingEntryId: string | null = null;
+  onAfterSceneActivated: ((scene: Scene) => void) | null = null;
 
   scenes: Map<string, Scene>;
   sceneRegistry: Map<string, SceneDescriptor>;
@@ -290,6 +291,7 @@ export class SceneManager {
     this.pinCurrentScene();
     this.syncAssetCacheState();
     this.game.inventoryManager?.handleSceneChange?.();
+    this.onAfterSceneActivated?.(scene);
     (this.game as any).parser?.prepareLlmStaticPromptForCurrentScene?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {

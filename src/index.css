@@ -810,3 +810,53 @@ input[type='file'] {
   gap: 10px;
   justify-content: flex-end;
 }
+
+/* Save button (floppy disk) */
+.save-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 100;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #444;
+  color: #aaa;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.save-btn:hover {
+  color: #fff;
+  border-color: #888;
+}
+
+.save-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.save-btn--saving {
+  color: #4af;
+  border-color: #4af;
+  animation: save-flash 0.6s ease-out;
+}
+
+@keyframes save-flash {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}

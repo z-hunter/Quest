@@ -17,6 +17,7 @@ import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from './ScriptRegistry';
 
 import { Console } from './Console';
+import { SaveManager } from './SaveManager';
 import type { SwitchComponent } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
@@ -68,6 +69,7 @@ export class Game implements IGame {
   /** Manages all inventory/surface storage state and logic. */
   inventoryManager: InventoryManager;
   semantic: GameSemanticAPI;
+  saveManager: SaveManager;
 
   // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
   get inventory(): Entity[] {
@@ -248,12 +250,17 @@ export class Game implements IGame {
     this.editor = new SceneEditor(this);
     this.spriteEditor = new SpriteEditor(this);
 
-    this.sceneManager.loadScene('test_room.json');
+    this.saveManager = new SaveManager(this);
+    this.sceneManager.onAfterSceneActivated = (scene) => this.saveManager.applySceneState(scene);
+    this.console.registerCommand('SAVE', () => {
+      void this.saveManager.save();
+    });
 
-    // Register default scripts
+    void this.sceneManager.loadScene('test_room.json').then(() => {
+      void this.saveManager.load();
+    });
+
     registerDemoScripts();
-
-    // Register user scripts (from src/scripts/main.ts)
     registerUserScripts();
   }
 
