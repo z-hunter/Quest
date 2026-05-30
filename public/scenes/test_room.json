@@ -97,8 +97,8 @@
           "y": 210
         },
         {
-          "x": 1409,
-          "y": 264
+          "x": 1405,
+          "y": 283
         },
         {
           "x": -234,
@@ -115,6 +115,44 @@
         {
           "x": 77,
           "y": 194
+        }
+      ],
+      "mode": "Add"
+    },
+    {
+      "name": "Walk_22",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 1397,
+          "y": 326
+        },
+        {
+          "x": 1402,
+          "y": 256
+        },
+        {
+          "x": 1135,
+          "y": 261
+        },
+        {
+          "x": 1148,
+          "y": 338
+        },
+        {
+          "x": 1377,
+          "y": 337
         }
       ],
       "mode": "Add"
@@ -975,9 +1013,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.044081239440819,
-      "x": 724.7575529359407,
-      "y": 252.88510873886128,
+      "parallax": 1.0409334104436379,
+      "x": 839.2252670877428,
+      "y": 248.0374520832024,
       "width": 119.88,
       "height": 289.34,
       "baseWidth": 162,
@@ -1536,29 +1574,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 665.5064884954948,
-      "y": 233.82577376777607,
+      "x": 776.9860395378569,
+      "y": 228.97896068838534,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 665.5064884954948,
-          "y": 233.82577376777607,
-          "p": 1.031651573416703
+          "x": 776.9860395378569,
+          "y": 228.97896068838534,
+          "p": 1.0285224905588148
         },
         {
-          "x": 759.9390188803346,
-          "y": 232.76474379226968,
-          "p": 1.0309869597186854
+          "x": 871.0127356977046,
+          "y": 227.92308025108423,
+          "p": 1.0278611077054283
         },
         {
-          "x": 796.3320502970089,
-          "y": 264.54010332929806,
-          "p": 1.0516494177462976
+          "x": 920.0042056975744,
+          "y": 259.5373424015853,
+          "p": 1.0484008716893412
         },
         {
-          "x": 743.3847523308282,
-          "y": 263.1141974215848,
-          "p": 1.050723504819211
+          "x": 866.4916523175558,
+          "y": 258.11861792043845,
+          "p": 1.0474796220262588
         }
       ],
       "color": "#2b019d",
@@ -2120,7 +2158,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.25353089250741057,
+      "opacity": 0.28553271858866913,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2172,7 +2210,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.25353089250741057,
+      "opacity": 0.28553271858866913,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2224,7 +2262,7 @@
       ],
       "color": "#7c62ac",
       "sortMode": "ignore",
-      "opacity": 0.25353089250741057,
+      "opacity": 0.28553271858866913,
       "blendMode": "screen",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2256,17 +2294,17 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 724.7575529359407,
-      "y": 252.88510873886128,
-      "width": 15.459138182193211,
-      "height": 21.968248995748247,
+      "x": 839.2252670877428,
+      "y": 248.0374520832024,
+      "width": 15.368666227146264,
+      "height": 21.839683585944687,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.7847332609105002,
+      "scale": 0.7801407440788234,
       "refScale": 0.8,
       "modelScale": 0.8,
       "ignoreScaling": false,
@@ -2291,23 +2329,23 @@
       ],
       "layer": 0,
       "visible": false,
-      "hidden": "lookable",
+      "hidden": false,
       "spatial": {
         "parentNodeId": "Hero_1",
         "relation": "in"
       },
       "parallax": 1,
-      "x": 724.7575529359407,
-      "y": 252.88510873886128,
-      "width": 25.503830979591253,
-      "height": 37.6181506948971,
+      "x": 839.2252670877428,
+      "y": 248.0374520832024,
+      "width": 25.35457418256176,
+      "height": 37.3979969192786,
       "baseWidth": 199.99999999999997,
       "baseHeight": 295,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "tv_rc",
       "color": "#AAAAAA",
-      "scale": 0.1275191548979563,
+      "scale": 0.1267728709128088,
       "refScale": 0.13,
       "modelScale": 0.13,
       "ignoreScaling": false,
@@ -2315,43 +2353,6 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0
-    },
-    {
-      "name": "tv_anim_1",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#tv_glow",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "tv",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 548,
-      "y": 75,
-      "width": 77,
-      "height": 63.99999999999999,
-      "baseWidth": 84.61538461538461,
-      "baseHeight": 70.32967032967032,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "tv_anim",
-      "color": "#AAAAAA",
-      "scale": 0.91,
-      "refScale": 1,
-      "modelScale": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 0.4,
-      "blendMode": "screen",
-      "blur": 11
     }
   ],
   "folders": [
