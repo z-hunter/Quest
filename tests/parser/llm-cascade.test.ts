@@ -276,7 +276,33 @@ describe('LlmCascade', () => {
     expect(combined).not.toContain('unrelated engine action');
     expect(combined).not.toContain('available engine actions');
     expect(combined).toContain('never mention parser mechanics');
+    expect(combined).toContain('text assets');
+    expect(combined).toContain('descriptions');
+    expect(combined).toContain('source material');
     expect(combined).toContain('the boombox currently produces only static when tuned to radio');
+  });
+
+  it('keeps prompt assets explicit that hidden entities are not player knowledge', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`.toLowerCase();
+
+    expect(combined).toContain('not the player character');
+    expect(combined).toContain('private game master knowledge, not player-character knowledge');
+    expect(combined).toContain('knownentities');
+    expect(combined).toContain('generate indirect sensory evidence');
+    expect(combined).toContain('observable effects, sensations, traces, or environmental changes');
+    expect(combined).toContain('exact nature');
+    expect(combined).toContain('if the player asks for an undiscovered hidden entity by name');
+    expect(combined).toContain('current perception and character knowledge');
+    expect(combined).toContain('without confirming that the hidden entity is present there');
+    expect(combined).toContain('something small and metallic rattles inside a box');
   });
 
   it('frames the LLM as a creative Game Master before action mapping', () => {
@@ -481,6 +507,99 @@ describe('LlmCascade', () => {
     expect(userMessage).toContain('The radio hisses.');
     expect(userMessage).toContain('Reception is static.');
     expect(userMessage).toContain('Boombox contains Compact cassette.');
+  });
+
+  it('adds spoiler protection for hidden known entities and scrubs raw hidden details', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'final_response',
+      message: 'You do not see any cables.',
+    });
+    const context: ParserContext = {
+      rawInput: 'look for audio cables',
+      normalizedInput: 'LOOK FOR AUDIO CABLES',
+      scene: {
+        id: 'test_room',
+        title: "Mile's Home",
+        description: 'A room full of electronics.',
+      },
+      entities: [
+        {
+          id: 'boombox',
+          title: 'Boombox',
+          description: 'A radio and cassette recorder.',
+        },
+      ],
+      knownEntities: [
+        {
+          id: 'audio_cables',
+          title: 'audio cables',
+          location: { relation: 'behind', parentId: 'boombox', parentTitle: 'Boombox' },
+          contents: [{ relation: 'in', id: 'wire_core', title: 'wire core' }],
+          visibility: 'hidden',
+          accessibility: 'inaccessible',
+          hiddenReason: 'examinable',
+          synonyms: ['cables', 'wires'],
+          semanticTags: ['cable'],
+          description: 'Hidden behind the boombox.',
+          details: 'Two standard tape recorder cables.',
+          lore: 'Private cable lore.',
+          interactions: ['state:plugged'],
+          states: [{ id: 'found', type: 'boolean', value: false }],
+        },
+      ],
+      worldFacts: [],
+      spatialNodes: [],
+      inventory: [],
+    };
+
+    await cascade.parse('look for audio cables', context);
+
+    const systemBlocks = provider.system as Exclude<LlmProviderContent, string>;
+    const staticSceneText = systemBlocks.at(-1)?.text || '';
+    const staticContext = JSON.parse(staticSceneText.slice(staticSceneText.indexOf('{')));
+    const staticHidden = staticContext.knownEntities[0];
+    expect(staticHidden).toMatchObject({
+      id: 'audio_cables',
+      title: 'audio cables',
+      visibility: 'hidden',
+      hiddenReason: 'examinable',
+      synonyms: ['cables', 'wires'],
+      semanticTags: ['cable'],
+      states: [{ id: 'found', type: 'boolean', value: false }],
+    });
+    expect(staticHidden).not.toHaveProperty('location');
+    expect(staticHidden).not.toHaveProperty('contents');
+    expect(staticHidden).not.toHaveProperty('description');
+    expect(staticHidden).not.toHaveProperty('details');
+    expect(staticHidden).not.toHaveProperty('lore');
+    expect(staticHidden).not.toHaveProperty('interactions');
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    const dynamicContextText = userMessage
+      .split('Per-call dynamic game world context:\n')[1]
+      .split('\n\nHidden Objects / Spoiler Protection:')[0];
+    const dynamicContext = JSON.parse(dynamicContextText);
+    const dynamicHidden = dynamicContext.knownEntities[0];
+    expect(dynamicHidden).toEqual(staticHidden);
+    expect(JSON.stringify(dynamicContext)).not.toContain('Hidden behind the boombox');
+    expect(dynamicHidden).not.toHaveProperty('location');
+    expect(dynamicHidden).not.toHaveProperty('contents');
+    expect(dynamicHidden).not.toHaveProperty('description');
+    expect(dynamicHidden).not.toHaveProperty('details');
+    expect(dynamicHidden).not.toHaveProperty('lore');
+
+    expect(userMessage).toContain('Hidden Objects / Spoiler Protection:');
+    expect(userMessage).toContain('- audio_cables: "audio cables" (also: "cables", "wires")');
+    expect(userMessage).toContain('This is an adventure game');
+    expect(userMessage).toContain('spoil the game');
+    expect(userMessage).toContain('blind guess');
+    expect(userMessage).toContain('Indirect, non-spoiling hints are allowed');
+    expect(userMessage).toContain(
+      'audio equipment is a reasonable thing to inspect when looking for cables'
+    );
+    expect(userMessage).toContain(
+      'Direct reveals are forbidden, such as saying that the cables are behind the boombox.'
+    );
   });
 
   it('converts final_response to a showText action', async () => {

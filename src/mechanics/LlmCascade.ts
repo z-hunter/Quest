@@ -400,6 +400,7 @@ export class LlmCascade {
       '',
       'Per-call dynamic game world context:',
       JSON.stringify(this.buildDynamicContext(context), null, 2),
+      ...this.buildHiddenObjectsSpoilerSection(context),
       '',
       'Direct Game Master world actions:',
       JSON.stringify(this.buildDirectGameMasterActions(), null, 2),
@@ -436,7 +437,7 @@ export class LlmCascade {
       focusedTarget: this.staticEntityContext(context.focusedTarget),
       entities: (context.entities || []).map((entity) => this.staticEntityContext(entity)),
       knownEntities: (context.knownEntities || []).map((entity) =>
-        this.staticEntityContext(entity)
+        this.llmKnownEntityContext(entity)
       ),
       inventory: (context.inventory || []).map((entity) => this.staticEntityContext(entity)),
     });
@@ -460,6 +461,22 @@ export class LlmCascade {
     });
   }
 
+  private llmKnownEntityContext(entity: any): Record<string, unknown> | undefined {
+    if (entity?.visibility !== 'hidden') return this.staticEntityContext(entity);
+    return this.compactRecord({
+      id: entity.id,
+      title: entity.title,
+      item: entity.item,
+      visibility: entity.visibility,
+      hiddenReason: entity.hiddenReason,
+      synonyms: entity.synonyms,
+      semanticTags: entity.semanticTags,
+      parserNote: entity.parserNote,
+      parserNoteNeedsCheck: entity.parserNoteNeedsCheck,
+      states: entity.states,
+    });
+  }
+
   private buildDynamicContext(context: ParserContext): ParserContext {
     return this.compactRecord({
       rawInput: context.rawInput,
@@ -476,13 +493,48 @@ export class LlmCascade {
           }
         : undefined,
       entities: context.entities,
-      knownEntities: context.knownEntities,
+      knownEntities: (context.knownEntities || []).map((entity) =>
+        this.llmKnownEntityContext(entity)
+      ),
       inventory: context.inventory,
       worldFacts: context.worldFacts,
       spatialNodes: context.spatialNodes,
       spatialRelations: context.spatialRelations,
       pending: context.pending,
     }) as ParserContext;
+  }
+
+  private buildHiddenObjectsSpoilerSection(context: ParserContext): string[] {
+    const hiddenEntities = (context.knownEntities || []).filter(
+      (entity) => entity?.visibility === 'hidden' && entity?.id && entity?.title
+    );
+    if (!hiddenEntities.length) return [];
+
+    const lines = hiddenEntities.map((entity) => {
+      const title = this.quoteSpoilerText(entity.title || '');
+      const synonyms = (entity.synonyms || [])
+        .filter((synonym): synonym is string => typeof synonym === 'string' && !!synonym.trim())
+        .map((synonym) => synonym.trim());
+      const also = synonyms.length
+        ? ` (also: ${synonyms.map((synonym) => this.quoteSpoilerText(synonym)).join(', ')})`
+        : '';
+      return `- ${entity.id}: ${title}${also}`;
+    });
+
+    return [
+      '',
+      'Hidden Objects / Spoiler Protection:',
+      'The following scene objects are hidden from the player character and have not been discovered yet:',
+      ...lines,
+      'This is an adventure game: finding hidden objects is part of the gameplay. Directly revealing these objects, confirming that they exist here, naming their exact location, or saying how to get them would spoil the game and would be unhelpful to the player.',
+      'If the player directly names or searches for one of these hidden objects before discovery, treat it as a blind guess. Answer only from what the character can currently perceive: the character does not see it and does not know where it is.',
+      'Indirect, non-spoiling hints are allowed when they follow from the visible scene or from the player character physically interacting with something. Broad hints are allowed, such as suggesting that audio equipment is a reasonable thing to inspect when looking for cables.',
+      'Direct reveals are forbidden, such as saying that the cables are behind the boombox.',
+    ];
+  }
+
+  private quoteSpoilerText(value: string): string {
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
 
   private describeStaticPrompt(sceneId: string | undefined, text: string): StaticPromptInfo {
