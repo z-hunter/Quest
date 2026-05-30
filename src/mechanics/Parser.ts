@@ -65,6 +65,7 @@ export class Parser {
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
   pendingClarificationRetryMessage: string | null;
+  pendingClarificationCancelMessage: string | null;
 
   constructor(game: any) {
     this.game = game;
@@ -83,6 +84,7 @@ export class Parser {
     this.activeWorldModel = null;
     this.activeScope = null;
     this.pendingClarificationRetryMessage = null;
+    this.pendingClarificationCancelMessage = null;
   }
 
   prepareLlmStaticPromptForCurrentScene(): void {
@@ -96,12 +98,18 @@ export class Parser {
 
   async parse(input: string): Promise<void> {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed && !this.pendingState) return;
     const originScene = this.game.sceneManager.currentScene;
     try {
       this.nlpCascade.clearLastDebugInfo();
       this.llmCascade.clearLastDebugInfo();
       const actionEnvelope = this.resolvePendingAction(trimmed);
+      if (this.pendingClarificationCancelMessage) {
+        const cancelMessage = this.pendingClarificationCancelMessage;
+        this.pendingClarificationCancelMessage = null;
+        this.game.log(cancelMessage);
+        return;
+      }
       if (this.pendingClarificationRetryMessage) {
         const retryMessage = this.pendingClarificationRetryMessage;
         this.pendingClarificationRetryMessage = null;
@@ -291,6 +299,11 @@ export class Parser {
 
   private resolvePendingAction(input: string): ParserCascadeEnvelope | null {
     if (!this.pendingState) return null;
+    if (this.isPendingClarificationCancelReply(input)) {
+      this.pendingState = null;
+      this.pendingClarificationCancelMessage = this.game.text('parser.clarification_cancelled');
+      return null;
+    }
     if (this.looksLikeFreshCommand(input)) {
       this.pendingState = null;
       return null;
@@ -483,6 +496,17 @@ export class Parser {
     }
     if (deduped.length > 1 && !allowsMultiple) return null;
     return deduped;
+  }
+
+  private isPendingClarificationCancelReply(input: string): boolean {
+    if (!this.pendingState) return false;
+    const normalizedInput = input.trim().toUpperCase();
+    if (!normalizedInput) return true;
+
+    const aliases = this.game.textAssets?.getServiceList?.('parser.clarification_cancel_replies');
+    return Array.isArray(aliases)
+      ? aliases.some((alias: string) => alias.trim().toUpperCase() === normalizedInput)
+      : false;
   }
 
   private findClarificationOptionByText(input: string): ParserClarificationOption[] {

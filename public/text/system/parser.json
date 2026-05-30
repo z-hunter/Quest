@@ -55,6 +55,8 @@
   "use_missing_item": "You don't have the {item}.",
   "use_no_effect_pair": "Using the {item} on the {target} does nothing.",
   "use_no_effect_single": "You try to use the {target}, but nothing happens.",
+  "clarification_cancel_replies": ["none", "cancel", "nevermind", "forget it"],
+  "clarification_cancelled": "Command cancelled.",
   "command_no_effect": "That doesn't work.",
   "parse_unknown": "I don't understand."
 }

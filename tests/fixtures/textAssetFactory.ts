@@ -18,6 +18,7 @@ type TextAssetLike = {
   getParserTraining(): ParserTrainingAsset;
   getParserCommands(): ParserCommandSpec[];
   readParserTrainingAsset(): Promise<ParserTrainingAsset>;
+  getServiceList(key: string): string[];
 };
 
 export type TestTextAssets = TextAssetLike & {
@@ -26,7 +27,7 @@ export type TestTextAssets = TextAssetLike & {
   setParserCommands(commands: ParserCommandSpec[]): void;
 };
 
-const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
   'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
@@ -80,6 +81,8 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.go_to_which_one': 'Where exactly do you want to go: {options}?',
   'parser.go_to_not_found': "You can't get to {target} from here.",
   'parser.go_to_success': 'You go to {target}.',
+  'parser.clarification_cancel_replies': ['none', 'cancel'],
+  'parser.clarification_cancelled': 'Command cancelled.',
   'parser.command_no_effect': "That doesn't work.",
   'parser.parse_unknown': "I don't understand.",
   'parser.relation_empty': 'You see nothing {relation} the {target}.',
@@ -386,7 +389,13 @@ export function createTestTextAssets(): TestTextAssets {
       parserCommands = structuredClone(commands);
     },
     getServiceText(key, params) {
-      return interpolate(DEFAULT_SERVICE_TEXT[key] || key, params);
+      const text = resolveTextValue(DEFAULT_SERVICE_TEXT[key]);
+      return interpolate(text || key, params);
+    },
+    getServiceList(key) {
+      const value = DEFAULT_SERVICE_TEXT[key];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => String(item).trim()).filter(Boolean);
     },
   };
 }

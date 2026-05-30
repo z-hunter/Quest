@@ -97,6 +97,8 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     use_missing_item: "You don't have the {item}.",
     use_no_effect_pair: 'Using the {item} on the {target} does nothing.',
     use_no_effect_single: 'You try to use the {target}, but nothing happens.',
+    clarification_cancel_replies: ['none', 'cancel'],
+    clarification_cancelled: 'Command cancelled.',
     command_no_effect: "That doesn't work.",
     parse_unknown: "I don't understand.",
   },
@@ -825,6 +827,31 @@ export class TextAssetManager {
     }
 
     return this.interpolate(text, params);
+  }
+
+  getServiceList(key: string): string[] {
+    const rawKey = String(key || '').trim();
+    if (!rawKey) return [];
+
+    const dotIndex = rawKey.indexOf('.');
+    if (dotIndex === -1) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    const domain = rawKey.slice(0, dotIndex).toLowerCase();
+    const entryKey = rawKey.slice(dotIndex + 1);
+    if (!entryKey) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    if (!this.serviceCache.has(domain)) {
+      this.serviceCache.set(domain, this.getDefaultServiceDomain(domain));
+      void this.readServiceAsset(domain, true);
+    }
+
+    return this.resolveListField(this.serviceCache.get(domain) || {}, entryKey);
   }
 
   private resolveField(
