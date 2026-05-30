@@ -198,6 +198,92 @@ describe('Parser LLM Integration', () => {
     ScriptRegistry.stop('tv_glow');
   });
 
+  it('lets LLM action plans use the standard numbered clarification session', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.game.console.parserLlmEnabled = true;
+
+    const heldCassette = fixture.addEntity('held_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('held_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'tape'],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'tape', 'music'],
+    });
+    musicCassette.x = 10;
+    musicCassette.y = 0;
+
+    const boombox = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A tape player.',
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A tape player.',
+      synonyms: ['player', 'tape player', 'recorder'],
+    });
+    boombox.x = 20;
+    boombox.y = 0;
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'llmClarification',
+            question: 'Which cassette do you want to load?',
+            pendingActions: [
+              { type: 'putTarget', item: 'cassette', target: 'player', relation: 'in' },
+            ],
+          },
+        ],
+      },
+      debug: {
+        rawInput: 'load cassette into player',
+        normalizedInput: 'LOAD CASSETTE INTO PLAYER',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+
+    await fixture.parser.parse('load cassette into player');
+
+    expect(fixture.messages.at(-1)).toContain('Which item do you want to put down');
+    expect(fixture.messages.at(-1)).toContain('1: Compact cassette');
+    expect(fixture.messages.at(-1)).toContain("2: Cassette 'Music'");
+    expect(fixture.parser.pendingState?.intent).toBe('put');
+
+    await fixture.parser.parse('1');
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'held_cassette',
+        target: 'Boombox',
+      })
+    );
+    expect(fixture.game.inventory).not.toContain(heldCassette);
+    expect(fixture.game.inventory).not.toContain(musicCassette);
+    expect(fixture.parser.pendingState).toBeNull();
+  });
+
   it('runs State event side effects when LLM returns only setEntityState and text', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

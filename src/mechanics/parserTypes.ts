@@ -289,6 +289,11 @@ export type ParserToolAction =
       relation?: ParserRelationType | null;
     }
   | {
+      type: 'llmClarification';
+      question: string;
+      pendingActions: ParserToolAction[];
+    }
+  | {
       type: 'openTarget';
       target: string | null;
     }

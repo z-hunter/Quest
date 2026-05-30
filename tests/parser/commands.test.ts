@@ -222,6 +222,30 @@ describe('Parser custom commands', () => {
     expect(fixture.game.inventory).not.toContain(key);
   });
 
+  it('treats throwing a held item as dropping it onto an available surface', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const paper = fixture.addEntity('orange_paper', {
+      title: 'Orange paper',
+      description: 'An orange sheet of paper.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(paper);
+    fixture.game.inventory.push(paper);
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk.',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+
+    const result = await fixture.run('throw orange paper');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_surface', { item: 'orange_paper', target: 'Desk' })
+    );
+    expect(fixture.game.inventory).not.toContain(paper);
+  });
+
   it('uses the previewed inventory item as default target for LOOK and EXAMINE', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

@@ -1536,28 +1536,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 303.9611568767795,
+      "x": 305.7031813599795,
       "y": 216.7053922268034,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 303.9611568767795,
+          "x": 305.7031813599795,
           "y": 216.7053922268034,
           "p": 1.0203799795020663
         },
         {
-          "x": 398.3019014055447,
-          "y": 215.64951648214821,
+          "x": 399.729901130277,
+          "y": 215.6544963059855,
           "p": 1.0197187009297002
         },
         {
-          "x": 437.57614318647694,
-          "y": 247.26802912019116,
+          "x": 448.742756916485,
+          "y": 247.11835660344371,
           "p": 1.0403529201923212
         },
         {
-          "x": 384.49361290359633,
-          "y": 245.84839983866618,
+          "x": 395.2256511486814,
+          "y": 245.70566378997015,
           "p": 1.0394115638541688
         }
       ],
@@ -1804,7 +1804,7 @@
           "id": "power",
           "valueType": "string",
           "initialValue": "off",
-          "value": "on",
+          "value": "off",
           "parserNoteTextAssets": {
             "off": "power_off",
             "on": "power_on"
@@ -2120,7 +2120,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.3365731279296542,
+      "opacity": 0.2942668559225554,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2172,7 +2172,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.3365731279296542,
+      "opacity": 0.2942668559225554,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2224,7 +2224,7 @@
       ],
       "color": "#7c62ac",
       "sortMode": "ignore",
-      "opacity": 0.3365731279296542,
+      "opacity": 0.2942668559225554,
       "blendMode": "screen",
       "isGrid": false,
       "gridLinesX": 5,

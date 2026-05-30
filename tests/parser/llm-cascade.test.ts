@@ -61,7 +61,9 @@ describe('LlmCascade', () => {
       'Use the lower cascade interpretation as a hint for what the dry machine parser would do.',
       'If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.',
       'If the lower cascade action is genuinely the best answer, you may return that action plan.',
-      "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+      "If the player's intent is recognized but no faithful executable equivalent fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent or unrelated standard action.",
+      'Available actions are Game Master affordances.',
+      'For entity, source, target, container, relation, or authored command argument ambiguity, use structured clarification with pendingAction.',
       'If you cannot improve the lower cascade result safely, return fallback.',
     ],
     post_api_escalation_instructions: [
@@ -128,6 +130,42 @@ describe('LlmCascade', () => {
     const debug = cascade.getLastDebugInfo();
     expect(debug?.matched).toBe(true);
     expect(debug?.acceptedActions).toHaveLength(1);
+  });
+
+  it('accepts putTarget as a faithful executable equivalent for throwing a held item', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'putTarget', item: 'Orange paper', target: 'floor', relation: 'on' },
+        { type: 'showText', message: 'You send the orange paper skidding across the floor.' },
+      ],
+    });
+
+    const result = await cascade.parse('throw orange paper', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'putTarget', item: 'Orange paper', target: 'floor', relation: 'on' },
+      { type: 'showText', message: 'You send the orange paper skidding across the floor.' },
+    ]);
+  });
+
+  it('accepts putTarget as a faithful executable equivalent for loading media into a device', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'putTarget', item: 'Compact cassette', target: 'Boombox', relation: 'in' },
+        { type: 'showText', message: 'You slide the cassette into the boombox.' },
+      ],
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'putTarget', item: 'Compact cassette', target: 'Boombox', relation: 'in' },
+      { type: 'showText', message: 'You slide the cassette into the boombox.' },
+    ]);
   });
 
   it('exposes authored parser commands to the LLM and accepts runCustomCommand', async () => {
@@ -319,12 +357,37 @@ describe('LlmCascade', () => {
     expect(systemPrompt).toContain('You are a creative Game Master');
     expect(systemPrompt).toContain('use every safe opportunity to immerse the player');
     expect(systemPrompt).not.toContain('You are not just a command parser');
+    expect(combined).toContain('faithful executable equivalent');
+    expect(combined).toContain('Available actions are Game Master affordances');
     expect(combined).toContain(
-      "If the player's intent is recognized but no exact standard action fits it"
+      'every successful inventory, containment, device, state, group, script, or persistent world change'
     );
+    expect(combined).toContain('Do not narrate a successful inventory');
+    expect(combined).toContain('merely adjacent or unrelated standard action');
+  });
+
+  it('keeps prompt assets explicit that entity ambiguity must use parser clarification', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`;
+
+    expect(combined).toContain('structured `clarification` with `pendingAction`');
     expect(combined).toContain(
-      'invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action'
+      'return the intended action plan with the ambiguous title or phrase'
     );
+    expect(combined).toContain('standard numbered clarification');
+    expect(combined).toContain('keep the original command pending');
+    expect(combined).toContain(
+      'Do not ask a free-form entity-choice question without pendingAction'
+    );
+    expect(combined).toContain("keep the ambiguous field as the player's ambiguous phrase");
+    expect(combined).toContain('do not preselect one option');
   });
 
   it('keeps prompt assets explicit that Parser Notes are not temporary player state', () => {
@@ -615,7 +678,7 @@ describe('LlmCascade', () => {
     ]);
   });
 
-  it('converts clarification to a showText action', async () => {
+  it('rejects free-form clarification so entity ambiguity uses parser pending flow', async () => {
     provider.response.text = JSON.stringify({
       kind: 'clarification',
       question: 'Which one do you mean?',
@@ -623,8 +686,109 @@ describe('LlmCascade', () => {
 
     const result = await cascade.parse('take it', mockContext);
 
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.matched).toBe(false);
+    expect(cascade.getLastDebugInfo()?.reason).toBe('invalid_response');
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_clarification_must_use_parser_pending_flow',
+        response: {
+          kind: 'clarification',
+          question: 'Which one do you mean?',
+        },
+      },
+    ]);
+  });
+
+  it('uses structured clarification pendingAction for parser numbered clarification', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Load which cassette?',
+      pendingAction: {
+        type: 'putTarget',
+        item: 'cassette',
+        target: 'Boombox',
+        relation: 'in',
+      },
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
     expect(result?.output.actions).toEqual([
-      { type: 'showText', message: 'Which one do you mean?' },
+      {
+        type: 'llmClarification',
+        question: 'Load which cassette?',
+        pendingActions: [
+          { type: 'putTarget', item: 'cassette', target: 'Boombox', relation: 'in' },
+        ],
+      },
+    ]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_structured_clarification_uses_pending_action',
+        response: {
+          kind: 'clarification',
+          question: 'Load which cassette?',
+          pendingAction: {
+            type: 'putTarget',
+            item: 'cassette',
+            target: 'Boombox',
+            relation: 'in',
+          },
+        },
+        normalizedAction: {
+          type: 'putTarget',
+          item: 'cassette',
+          target: 'Boombox',
+          relation: 'in',
+        },
+      },
+    ]);
+  });
+
+  it('normalizes structured load clarification pendingAction back to the ambiguous source phrase', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Load which cassette?',
+      pendingAction: {
+        type: 'putTarget',
+        item: "Cassette 'Music'",
+        target: 'Boombox',
+        relation: 'in',
+      },
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'llmClarification',
+        question: 'Load which cassette?',
+        pendingActions: [
+          { type: 'putTarget', item: 'cassette', target: 'Boombox', relation: 'in' },
+        ],
+      },
+    ]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_structured_clarification_uses_pending_action',
+        response: {
+          kind: 'clarification',
+          question: 'Load which cassette?',
+          pendingAction: {
+            type: 'putTarget',
+            item: "Cassette 'Music'",
+            target: 'Boombox',
+            relation: 'in',
+          },
+        },
+        normalizedAction: {
+          type: 'putTarget',
+          item: 'cassette',
+          target: 'Boombox',
+          relation: 'in',
+        },
+      },
     ]);
   });
 

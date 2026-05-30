@@ -3,7 +3,7 @@
     "look": ["look"],
     "examine": ["examine", "inspect", "check"],
     "take": ["take", "get", "pickup", "pick up"],
-    "put": ["put", "drop", "place"],
+    "put": ["put", "drop", "place", "throw", "toss", "discard"],
     "open": ["open"],
     "close": ["close", "shut"],
     "quit": ["quit", "exit"],
@@ -23,7 +23,17 @@
       "check"
     ],
     "take": ["pick up", "take", "get", "grab"],
-    "put": ["put down", "put", "drop", "place"],
+    "put": [
+      "put down",
+      "throw away",
+      "toss away",
+      "put",
+      "drop",
+      "place",
+      "throw",
+      "toss",
+      "discard"
+    ],
     "open": ["open"],
     "close": ["close", "shut"],
     "quit": ["quit", "exit"],

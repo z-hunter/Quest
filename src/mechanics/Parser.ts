@@ -1564,6 +1564,8 @@ export class Parser {
           message: action.message,
           recoverable: true,
         };
+      case 'llmClarification':
+        return this.executeLlmClarification(action);
       case 'putTarget':
         return this.resolvePutTarget(action.item, action.target, action.relation);
       case 'openTarget':
@@ -1625,6 +1627,129 @@ export class Parser {
     }
   }
 
+  private executeLlmClarification(
+    action: Extract<ParserToolAction, { type: 'llmClarification' }>
+  ): GameActionOutcome {
+    const pendingEnvelope = this.buildLlmClarificationPendingEnvelope(action);
+    const clarification = this.buildLlmClarificationDisplay(action);
+    return {
+      status: 'needs_clarification',
+      code: 'llm_structured_clarification',
+      message: clarification.message,
+      recoverable: true,
+      data: {
+        pendingEnvelopeJson: JSON.stringify(pendingEnvelope),
+        clarificationOptions: clarification.options,
+      },
+    };
+  }
+
+  private buildLlmClarificationPendingEnvelope(
+    action: Extract<ParserToolAction, { type: 'llmClarification' }>
+  ): ParserCascadeEnvelope {
+    const rawInput = this.activeWorldModel?.context.rawInput || '';
+    return {
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: action.pendingActions,
+      },
+      debug: {
+        rawInput,
+        normalizedInput: rawInput.trim().toUpperCase(),
+        verb: 'LLM',
+        noun: '',
+        pendingIntent: this.inferPendingIntentFromActions(action.pendingActions),
+      },
+    };
+  }
+
+  private inferPendingIntentFromActions(actions: ParserToolAction[]): string | undefined {
+    const firstAction = actions[0];
+    if (!firstAction) return undefined;
+    switch (firstAction.type) {
+      case 'lookTarget':
+      case 'lookRelationTarget':
+        return 'look';
+      case 'examineTarget':
+      case 'examineRelationTarget':
+        return 'examine';
+      case 'takeTarget':
+        return 'take';
+      case 'putTarget':
+        return 'put';
+      case 'openTarget':
+        return 'open';
+      case 'closeTarget':
+        return 'close';
+      case 'goToTarget':
+        return 'go';
+      default:
+        return undefined;
+    }
+  }
+
+  private buildLlmClarificationDisplay(
+    action: Extract<ParserToolAction, { type: 'llmClarification' }>
+  ): { message: string; options?: ParserClarificationOption[] } {
+    const firstAction = action.pendingActions[0];
+    if (firstAction?.type === 'putTarget' && firstAction.item) {
+      const options = this.getLlmPutSourceClarificationOptions(firstAction.item);
+      if (options && options.length > 1) {
+        return {
+          message: this.game.text('parser.put_which_item', {
+            options: this.getNumberedClarificationDisplay(options),
+          }),
+          options,
+        };
+      }
+    }
+
+    return { message: action.question || this.game.text('parser.parse_unknown') };
+  }
+
+  private getLlmPutSourceClarificationOptions(
+    rawItem: string
+  ): ParserClarificationOption[] | undefined {
+    const candidates = this.getScopeCandidates(['held', 'putSource', 'visible']);
+    const matches = this.findPluralAwareMatchesInSceneObjects(rawItem, candidates);
+    const distinctMatches = this.dedupeSceneObjects(matches);
+    const options = this.getResolutionClarificationOptions(distinctMatches, 'source');
+    return options && options.length > 1 ? options : undefined;
+  }
+
+  private findPluralAwareMatchesInSceneObjects(
+    query: string,
+    candidates: SceneObject[]
+  ): SceneObject[] {
+    const normalizedQuery = this.normalizeSimplePluralText(query);
+    if (!normalizedQuery) return [];
+
+    const exactMatches = candidates.filter((candidate) =>
+      this.getObjectLookupTokens(candidate).some(
+        (token) => this.normalizeSimplePluralText(token) === normalizedQuery
+      )
+    );
+    if (exactMatches.length) return exactMatches;
+
+    return candidates.filter((candidate) =>
+      this.getObjectLookupTokens(candidate).some((token) =>
+        this.normalizeSimplePluralText(token).includes(normalizedQuery)
+      )
+    );
+  }
+
+  private dedupeSceneObjects(sceneObjects: SceneObject[]): SceneObject[] {
+    const seen = new Set<string>();
+    const deduped: SceneObject[] = [];
+    for (const sceneObject of sceneObjects) {
+      if (seen.has(sceneObject.name)) continue;
+      seen.add(sceneObject.name);
+      deduped.push(sceneObject);
+    }
+    return deduped;
+  }
+
   private getExecutedActionName(action: ParserToolAction): string {
     switch (action.type) {
       case 'lookScene':
@@ -1641,6 +1766,8 @@ export class Parser {
         return 'take';
       case 'parserFailure':
         return 'parserFailure';
+      case 'llmClarification':
+        return 'llmClarification';
       case 'putTarget':
         return 'put';
       case 'openTarget':
@@ -4505,12 +4632,14 @@ export class Parser {
     );
     if (clarification) {
       const clarificationData = (clarification.data || {}) as Record<string, unknown>;
+      const pendingEnvelopeJson =
+        typeof clarificationData.pendingEnvelopeJson === 'string'
+          ? clarificationData.pendingEnvelopeJson
+          : envelopeJson;
       const pendingArg =
         typeof clarificationData.pendingArg === 'string' ? clarificationData.pendingArg : undefined;
       const commandId =
         typeof clarificationData.commandId === 'string' ? clarificationData.commandId : undefined;
-      const relation =
-        typeof clarificationData.relation === 'string' ? clarificationData.relation : undefined;
       const clarificationOptions = this.parseClarificationOptionsFromData(clarificationData);
       const clarificationAllowsMultiple = this.isMultiSourceClarification(clarification.code);
       const nextPendingState =
@@ -4518,30 +4647,21 @@ export class Parser {
           ? {
               intent: 'custom' as const,
               question: clarification.message || this.game.text('parser.parse_unknown'),
-              originalInput: this.extractRawInput(envelopeJson),
-              pendingEnvelopeJson: envelopeJson,
+              originalInput: this.extractRawInput(pendingEnvelopeJson),
+              pendingEnvelopeJson,
               pendingArg,
               commandId,
               clarificationOptions,
               clarificationAllowsMultiple,
             }
-          : relation
-            ? {
-                intent: this.extractPendingIntent(envelopeJson),
-                question: clarification.message || this.game.text('parser.parse_unknown'),
-                originalInput: this.extractRawInput(envelopeJson),
-                pendingEnvelopeJson: envelopeJson,
-                clarificationOptions,
-                clarificationAllowsMultiple,
-              }
-            : {
-                intent: this.extractPendingIntent(envelopeJson),
-                question: clarification.message || this.game.text('parser.parse_unknown'),
-                originalInput: this.extractRawInput(envelopeJson),
-                pendingEnvelopeJson: envelopeJson,
-                clarificationOptions,
-                clarificationAllowsMultiple,
-              };
+          : {
+              intent: this.extractPendingIntent(pendingEnvelopeJson),
+              question: clarification.message || this.game.text('parser.parse_unknown'),
+              originalInput: this.extractRawInput(pendingEnvelopeJson),
+              pendingEnvelopeJson,
+              clarificationOptions,
+              clarificationAllowsMultiple,
+            };
       return {
         playerMessage: clarification.message || this.game.text('parser.parse_unknown'),
         nextPendingState,

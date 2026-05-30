@@ -16,7 +16,7 @@ const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 const FALLBACK_SYSTEM_PROMPT = [
   'You are a command-line parser and Game Master for a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
-  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"..."}, or {"kind":"fallback"}.',
+  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"...","pendingAction":{...}}, or {"kind":"fallback"}.',
   'Use only real titles from the provided context and only safe parser action types.',
 ].join('\n');
 
@@ -177,7 +177,7 @@ export class LlmCascade {
       return null;
     }
 
-    const normalized = this.normalizeResponse(parsed);
+    const normalized = this.normalizeResponse(parsed, input);
     this.lastDebugInfo = {
       ...baseDebug,
       prompt,
@@ -632,7 +632,10 @@ export class LlmCascade {
     }
   }
 
-  private normalizeResponse(parsed: unknown): {
+  private normalizeResponse(
+    parsed: unknown,
+    input: string = ''
+  ): {
     actions: ParserToolAction[];
     filteredActions: unknown[];
     fallback: boolean;
@@ -658,19 +661,46 @@ export class LlmCascade {
     }
 
     if (parsed.kind === 'clarification') {
-      let question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
-      if (question)
-        question = question
-          .split('—')
-          .map((s) => s.trim())
-          .join('\u202F—\u202F');
-      return question
-        ? {
-            actions: [{ type: 'showText', message: question }],
-            filteredActions: [],
-            fallback: false,
-          }
-        : { actions: [], filteredActions: [parsed], fallback: false };
+      const pendingAction = this.isRecord(parsed.pendingAction)
+        ? this.validateAction(parsed.pendingAction)
+        : null;
+      if (pendingAction) {
+        const normalizedPendingAction = this.normalizeClarificationPendingAction(
+          pendingAction,
+          input
+        );
+        const question =
+          typeof parsed.question === 'string' && parsed.question.trim()
+            ? parsed.question.trim()
+            : 'Which one do you mean?';
+        return {
+          actions: [
+            {
+              type: 'llmClarification',
+              question,
+              pendingActions: [normalizedPendingAction],
+            },
+          ],
+          filteredActions: [
+            {
+              reason: 'llm_structured_clarification_uses_pending_action',
+              response: parsed,
+              normalizedAction: normalizedPendingAction,
+            },
+          ],
+          fallback: false,
+        };
+      }
+      return {
+        actions: [],
+        filteredActions: [
+          {
+            reason: 'llm_clarification_must_use_parser_pending_flow',
+            response: parsed,
+          },
+        ],
+        fallback: false,
+      };
     }
 
     if (parsed.kind !== 'plan' || !Array.isArray(parsed.actions)) {
@@ -746,6 +776,33 @@ export class LlmCascade {
     }
 
     return { actions, filteredActions, fallback: false };
+  }
+
+  private normalizeClarificationPendingAction(
+    action: ParserToolAction,
+    input: string
+  ): ParserToolAction {
+    if (action.type !== 'putTarget') return action;
+    const loadItem = this.extractLoadLikeItem(input);
+    if (!loadItem) return action;
+    return {
+      ...action,
+      item: loadItem,
+    };
+  }
+
+  private extractLoadLikeItem(input: string): string | null {
+    let value = String(input || '')
+      .replace(/[?.!,]+$/g, '')
+      .trim();
+    const match = /^(load|insert)\s+(.+)$/i.exec(value);
+    if (!match) return null;
+
+    value = match[2].trim();
+    const relationMatch = /\s+(?:into|inside|in)\s+/i.exec(value);
+    const rawItem = relationMatch ? value.slice(0, relationMatch.index).trim() : value;
+    const item = rawItem.replace(/^(the|a|an|my)\s+/i, '').trim();
+    return item || null;
   }
 
   private isParserNoteAction(action: ParserToolAction): boolean {
