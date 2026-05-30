@@ -2255,3 +2255,101 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Value-specific state events are runtime-supported but still hand-authored; the current UI does not create them automatically.
 - The current scene asset for `tv` now relies on `state:power -> tv_power_changed`; if future scenes copy the TV pattern, they must author the interaction explicitly.
 - `StateEventSystem` only dispatches when the value truly changes, which keeps event scripts idempotent but means same-value writes will not retrigger side effects.
+
+## Session Entry - 2026-05-30 01:58 +02:00
+
+### Session Goals
+- Wrap up the state/parser-notes work with a durable handoff in repo and NotebookLM.
+- Keep the authored `State` UI refinements, runtime state hydration fixes, and hover/cursor contract changes documented for the next session.
+- Preserve the latest session context in `Sessions.md` and refresh the curated `AgentMemory.md` export used by NotebookLM.
+
+### What Was Implemented
+- Added optional `parserNoteTextAssets` support to authored `State` components so a state value can point at a Text Asset field whose content becomes the object's Parser Note.
+- Kept the authored `State` UI compact and editable:
+  - `ID / Type` share one row.
+  - `Initial` / `Current` share one row.
+  - parser-note mappings are added as blank rows instead of a modal pop-up.
+  - each mapping row can be removed with a compact `X` button.
+- Added hover tooltips for the State editor labels using the project's custom tooltip manager, then removed the redundant `Parser Note TA Fields` heading and folded that explanation into the row tooltips.
+- Fixed the `tv` text asset JSON issue so state-linked parser notes resolve correctly.
+- Fixed the runtime hover/cursor contract so `state:*` interactions do not imply click/trigger behavior.
+- Fixed scene-load hydration so authored State side effects and parser-note sync run when a scene opens, not only when a state changes during gameplay.
+- Involved content changes in `public/scenes/test_room.json` and related object text assets so the `tv` example exercises the new path end to end.
+
+### Important Architecture / Runtime Decisions
+- `state:*` bindings are script/state events only, not click/hover interactions.
+- Parser-note text is sourced from authored object Text Assets at runtime and overwrites existing Parser Notes when a matching state is active.
+- Scene activation now replays authored State side effects so load-time state matches in-game state mutation behavior.
+- The editor stores only complete parser-note mapping rows; blank rows are treated as in-progress authored input rather than serialized data.
+- User-authored content changes in `test_room` were intentionally included in the feature commit because they are part of the example and regression surface.
+
+### Parser / Mechanics / Scene / Editor Changes
+- Parser `LOOK` now includes Parser Notes produced from state-linked Text Asset fields.
+- Scene activation dispatches authored State events so objects like the TV can start their state-driven scripts when the level loads.
+- Hover handling no longer turns pure `state:*` bindings into a hand cursor.
+- State editor layout is denser and easier to scan during authoring.
+
+### Tests Run And Outcomes
+- Focused regression checks around state events, parser context, command handling, and scene interaction passed during implementation.
+- TypeScript checks passed with `npm run typecheck`.
+- Earlier state/parser/scenario test runs also passed during the feature work, including the `tv` load-time regression path.
+
+### Commits Created
+- `d3acf1e` - `Add State-driven parser notes and scene-load state hydration`
+  - Core runtime, parser-note, scene-load hydration, `tv` fix, and content updates.
+- `4b26284` - `Added UI tips for previously commited State component`
+  - Tooltip polish for the State editor labels and row fields.
+
+### Remaining Work / Next Recommended Steps
+- Keep an eye on future authored `State` components that use parser-note mappings; the authoring pattern is now simple, but it still depends on the object text asset being valid.
+- If more authored state-driven objects appear, reuse the same `state:<id> -> script event` model instead of adding special-case parser behavior.
+
+### Risks / Caveats / Open Questions
+- The current worktree was clean before this wrap-up entry was written.
+- The NotebookLM notebook already contained older `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources, so the wrap-up process needs to replace those rather than add duplicates.
+- `tv` remains the canonical regression example for state-driven parser notes and scene-load hydration.
+
+## Session Entry - 2026-05-30 16:28 +02:00
+
+### Session Goals
+- Stop LLM hidden-object leakage in the Game Master path without turning hidden items into ordinary world facts.
+- Keep hidden diagnostics for the parser/engine intact while giving the LLM a spoiler-aware prompt surface.
+- Preserve indirect clueing so the model can still act like a good GM when the player physically explores the scene.
+
+### What Was Implemented
+- Added a plain-text `Hidden Objects / Spoiler Protection` section to the LLM prompt assembly.
+- Listed hidden scene objects by `id`, player-facing title, and synonyms only.
+- Scrubbed hidden `knownEntities` so the LLM no longer receives raw `location`, `contents`, `description`, `details`, `lore`, or `interactions` for hidden entities.
+- Added regression tests for the `look for audio cables` leak path and for the hidden LLM projection shape.
+- Kept the parser diagnostics contract untouched for hidden entity awareness.
+
+### Important Architecture / Runtime Decisions
+- `knownEntities` continues to mean diagnostics data for the parser/engine, not player-visible facts.
+- LLM-facing hidden data is now a safe projection, not the raw diagnostics record.
+- Hidden objects are treated as spoiler-protected gameplay content whose direct reveal would spoil discovery.
+- Indirect sensory or environmental hints remain allowed when they follow from visible scene logic or physically plausible player actions.
+
+### Parser / Mechanics / Scene / Editor Changes
+- `LlmCascade` now appends the spoiler section to the dynamic user prompt.
+- Hidden `knownEntities` now lose raw location/details fields before reaching the LLM.
+- No scene or parser discovery behavior was changed; the fix is prompt/context shaping only.
+
+### Tests Run And Outcomes
+- `npm test -- tests/parser/llm-cascade.test.ts`
+- `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`
+- `npm run typecheck`
+- `git diff --check`
+- All passed.
+
+### Commits Created
+- `c67d83f` - `Harden hidden-object spoiler protection for LLM GM`
+  - Added spoiler-protection prompt text, hidden entity scrubbing for the LLM projection, and regression coverage.
+
+### Remaining Work / Next Recommended Steps
+- Keep an eye out for any future prompt regressions that reintroduce raw hidden locations into the LLM context.
+- If new hidden-object patterns appear, extend the spoiler section with more safe clue examples rather than exposing hidden facts.
+
+### Risks, Caveats, Open Questions
+- `Sessions.md` already had unrelated pre-existing content before this entry.
+- `public/scenes/home/room.json` also has unrelated pre-existing edits and was intentionally left out of the commit.
+- The fix is ingress-based; if prompt regressions continue, a second output-repair guard may still be worth considering later.
