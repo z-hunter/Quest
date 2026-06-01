@@ -124,7 +124,14 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
             key={i}
             style={{
               marginBottom: '4px',
-              color: line.type === 'command' ? '#aaa' : line.type === 'error' ? '#f55' : '#fff',
+              color:
+                line.type === 'command'
+                  ? '#aaa'
+                  : line.type === 'error'
+                    ? '#f55'
+                    : line.type === 'dialogue'
+                      ? '#7dd3fc'
+                      : '#fff',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
               userSelect: 'text',

@@ -6,6 +6,7 @@ import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
 type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
+  hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
@@ -350,6 +351,11 @@ export function createTestTextAssets(): TestTextAssets {
         return (obj as { description?: string }).description || null;
       }
       return null;
+    },
+    hasAuthoredObjectTitle(obj) {
+      const asset = objectAssets.get(obj.name);
+      const text = resolveTextValue(asset?.title);
+      return !!text?.trim();
     },
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);

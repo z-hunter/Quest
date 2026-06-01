@@ -28,6 +28,7 @@ import type {
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
 import type { SceneSoundEnv } from '../systems/SoundManager';
+import { SceneLog, type SceneLogData } from './SceneLog';
 
 interface PickupAnimation {
   entity: Entity;
@@ -91,6 +92,7 @@ export interface SceneData {
   camMinY?: number;
   camMaxY?: number;
   soundEnv?: Partial<SceneSoundEnv>;
+  sceneLog?: SceneLogData;
 }
 
 export class Scene {
@@ -152,6 +154,7 @@ export class Scene {
   public entityParserNotes: Record<string, string> = {};
   public parserNoteNeedsCheck: boolean = false;
   public entityParserNoteNeedsCheck: Record<string, boolean> = {};
+  public sceneLog: SceneLog = new SceneLog();
   private parserRecentTurns: ParserSceneTurnContext[] = [];
 
   get activeSubscene(): string | null {
@@ -1165,6 +1168,7 @@ export class Scene {
       camMinY: this.camMinY,
       camMaxY: this.camMaxY,
       soundEnv: this.soundEnv,
+      sceneLog: this.sceneLog.toJSON(),
     };
   }
 }

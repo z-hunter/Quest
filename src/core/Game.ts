@@ -15,6 +15,9 @@ import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from './ScriptRegistry';
+import { AnthropicProvider } from '../mechanics/llm/AnthropicProvider';
+import { NpcPuppetMaster } from '../mechanics/NpcPuppetMaster';
+import { NpcWorldModelBuilder } from '../mechanics/NpcWorldModelBuilder';
 
 import { Console } from './Console';
 import type { SwitchComponent } from '../systems/ComponentSystem';
@@ -55,6 +58,8 @@ export class Game implements IGame {
 
   input: Input;
   parser: Parser;
+  npcPuppetMaster: NpcPuppetMaster;
+  npcWorldModelBuilder: NpcWorldModelBuilder;
   sceneManager: SceneManager;
   assets: AssetLoader;
   audio: AudioManager;
@@ -212,6 +217,8 @@ export class Game implements IGame {
     this.loadSettings();
 
     this.parser = new Parser(this);
+    this.npcWorldModelBuilder = new NpcWorldModelBuilder(this);
+    this.npcPuppetMaster = new NpcPuppetMaster(this, new AnthropicProvider());
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
@@ -496,7 +503,8 @@ export class Game implements IGame {
 
     for (let index = 0; index < visibleOutput.length; index += 1) {
       const line = visibleOutput[index];
-      ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
+      ctx.fillStyle =
+        line.type === 'command' ? '#aaa' : line.type === 'dialogue' ? '#7dd3fc' : '#fff';
       ctx.fillText(line.text, 2, consoleY + 2 + lineHeight * index);
     }
 
@@ -581,6 +589,73 @@ export class Game implements IGame {
       console.log(`[GAME LOG] ${message}`);
     }
     this.console.logResponse(messages);
+  }
+
+  async submitGameplayInput(input: string): Promise<void> {
+    const preprocessed = this.console.preprocessGameplayInput(input);
+    if (!preprocessed) return;
+
+    if (this.isSayInput(preprocessed)) {
+      this.console.addHistory(preprocessed);
+      await this.sayAsPlayer(this.extractSayText(preprocessed));
+      return;
+    }
+
+    this.console.log(preprocessed, 'command');
+    this.console.addHistory(preprocessed);
+    await this.parser.parse(preprocessed);
+  }
+
+  async sayAsPlayer(text: string): Promise<void> {
+    const scene = this.sceneManager.currentScene;
+    const player = scene?.player;
+    if (!scene || !player) return;
+    const speech = text.trim();
+    if (!speech) return;
+
+    const actorTitle = this.getActorDialogueName(player);
+    const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, player.name);
+    this.console.log(`You: ${speech}`, 'dialogue');
+    if (knownByNpcIds.length) {
+      scene.sceneLog.appendSpeech({
+        actorId: player.name,
+        displayName: actorTitle,
+        text: speech,
+        knownByNpcIds,
+      });
+      await this.npcPuppetMaster.processScene(scene);
+    }
+  }
+
+  sayAsActor(actor: Actor, text: string, options: { triggerPuppetMaster?: boolean } = {}): void {
+    const scene = this.sceneManager.currentScene;
+    const speech = text.trim();
+    if (!scene || !speech) return;
+    const displayName = this.getActorDialogueName(actor);
+    const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, actor.name);
+    this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    scene.sceneLog.appendSpeech({
+      actorId: actor.name,
+      displayName,
+      text: speech,
+      knownByNpcIds,
+    });
+    if (options.triggerPuppetMaster && knownByNpcIds.length) {
+      void this.npcPuppetMaster.processScene(scene);
+    }
+  }
+
+  private isSayInput(input: string): boolean {
+    return /^\s*-\s*\S/.test(input) || /^\s*SAY(?:\s+|$)/i.test(input);
+  }
+
+  private extractSayText(input: string): string {
+    if (/^\s*-/.test(input)) return input.replace(/^\s*-\s*/, '').trim();
+    return input.replace(/^\s*SAY\s*/i, '').trim();
+  }
+
+  private getActorDialogueName(actor: Actor): string {
+    return this.textAssets.getResolvedObjectField(actor, 'title')?.trim() || actor.name;
   }
 
   text(key: string, params?: Record<string, string | number>): string {

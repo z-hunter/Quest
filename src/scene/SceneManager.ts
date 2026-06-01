@@ -715,6 +715,10 @@ export class SceneManager {
       newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
     }
 
+    if (data.sceneLog) {
+      newScene.sceneLog.load(data.sceneLog);
+    }
+
     if (data.walkbox) {
       (data.walkbox || []).forEach((wb: any) => {
         const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));

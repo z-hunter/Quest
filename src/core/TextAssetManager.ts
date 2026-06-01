@@ -34,6 +34,7 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
   lore?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue[];
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -560,6 +561,7 @@ export class TextAssetManager {
       description: fallbackDescription,
       details: '',
       lore: '',
+      objectives: [],
       takeFailure: '',
       synonyms: [],
     };
@@ -778,6 +780,13 @@ export class TextAssetManager {
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
   }
 
+  hasAuthoredObjectTitle(obj: SceneObject): boolean {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
+    return !!title?.trim();
+  }
+
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
@@ -965,6 +974,8 @@ export class TextAssetManager {
       normalized.details = asset.details as TextAssetTextValue;
     if (this.resolveTextValue(asset.lore) !== null)
       normalized.lore = asset.lore as TextAssetTextValue;
+    if (Array.isArray(asset.objectives))
+      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');

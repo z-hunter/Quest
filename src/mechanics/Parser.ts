@@ -99,6 +99,14 @@ export class Parser {
   async parse(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed && !this.pendingState) return;
+    if (
+      !this.pendingState &&
+      this.isSayInput(trimmed) &&
+      typeof this.game.sayAsPlayer === 'function'
+    ) {
+      await this.game.sayAsPlayer(this.extractSayText(trimmed));
+      return;
+    }
     const originScene = this.game.sceneManager.currentScene;
     try {
       this.nlpCascade.clearLastDebugInfo();
@@ -230,6 +238,15 @@ export class Parser {
       this.game.console?.log(`[Parser error] ${String(error)}`, 'error');
       this.game.log(this.game.text('parser.parse_unknown'));
     }
+  }
+
+  private isSayInput(input: string): boolean {
+    return /^\s*-\s*\S/.test(input) || /^\s*SAY(?:\s+|$)/i.test(input);
+  }
+
+  private extractSayText(input: string): string {
+    if (/^\s*-/.test(input)) return input.replace(/^\s*-\s*/, '').trim();
+    return input.replace(/^\s*SAY\s*/i, '').trim();
   }
 
   private recordSceneParserTurn(scene: any, command: string, playerMessages: string[]): void {
