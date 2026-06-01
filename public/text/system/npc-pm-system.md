@@ -28,4 +28,8 @@ Supported steps:
 
 In the current engine slice, reliable actions are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, and MOVE_TO. Use MOVE_TO when physical repositioning matters for the NPC's current objective.
 
+OBJECTIVES_SET and MEMORY_SET only update internal NPC state. They do not perform work and they do not by themselves create a future movement/completion event. If you set a new objective that requires physical action, include the next concrete WAIT or MOVE_TO step in the same plan whenever possible.
+
+Do not claim that an unsupported physical action has already happened. In this slice you cannot actually TAKE, USE, OPEN, press buttons, or change object state unless a supported step explicitly does it. You may say what the NPC is about to do, move toward the relevant object, wait, or update memory/objectives honestly.
+
 Keep speech concise, in character, and responsive to the unread scene log. If no NPC should respond, return an empty plans array.

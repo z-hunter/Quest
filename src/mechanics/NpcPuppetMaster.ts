@@ -19,6 +19,8 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, and MOVE_TO.',
+  'OBJECTIVES_SET and MEMORY_SET only update internal NPC state; include WAIT or MOVE_TO when the NPC should keep acting.',
+  'Do not claim unsupported TAKE, USE, OPEN, button press, or state-change actions have already happened.',
 ].join('\n');
 
 type NpcIndividualTrigger =
@@ -29,6 +31,10 @@ type NpcIndividualTrigger =
   | {
       type: 'manual';
       reason?: string;
+    }
+  | {
+      type: 'plan_continued';
+      reason: string;
     }
   | {
       type: 'move_completed';
@@ -184,10 +190,39 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
+    let hasScheduledStep = false;
     for (const plan of normalized.plans) {
-      this.executor.executePlan(plan);
+      const outcomes = this.executor.executePlan(plan);
+      if (outcomes.some((outcome) => outcome.status === 'scheduled')) {
+        hasScheduledStep = true;
+      }
     }
+    this.maybeScheduleContinuation(normalized.plans, trigger, hasScheduledStep);
     return normalized.plans;
+  }
+
+  private maybeScheduleContinuation(
+    plans: NpcPlan[],
+    trigger: NpcIndividualTrigger | undefined,
+    hasScheduledStep: boolean
+  ): void {
+    if (hasScheduledStep || trigger?.type !== 'move_completed') return;
+
+    for (const plan of plans) {
+      const shouldContinue =
+        typeof plan.memory === 'string' ||
+        plan.steps.some((step) => step.type === 'MEMORY_SET' || step.type === 'OBJECTIVES_SET');
+      if (!shouldContinue) continue;
+
+      globalThis.setTimeout(() => {
+        const scene = this.game.sceneManager.currentScene;
+        if (!scene) return;
+        void this.processNpc(scene, plan.npcId, {
+          type: 'plan_continued',
+          reason: 'previous_plan_updated_memory_or_objectives_without_scheduling_action',
+        });
+      }, 0);
+    }
   }
 
   private async buildSystemPrompt(worldModel: NpcWorldModel): Promise<LlmProviderContent> {

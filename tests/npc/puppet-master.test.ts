@@ -473,6 +473,74 @@ describe('NpcPuppetMaster', () => {
     expect(component.objectives).toEqual(['Reached the marked spot']);
   });
 
+  it('continues once after move completion when PM updates objectives without scheduling action', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const tv = fixture.addEntity('tv', { title: 'TV' });
+    tv.x = 80;
+    tv.y = 20;
+    npc.x = 20;
+    npc.y = 20;
+    npc.speed = 1;
+    npc.colliderWidth = 4;
+    npc.colliderHeight = 4;
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Get the remote, then turn on the TV.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'MOVE_TO', x: 60, y: 20 }] }],
+      }),
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: 'guard',
+            steps: [
+              { type: 'SAY', text: 'I have the remote. I need to turn on the TV next.' },
+              { type: 'OBJECTIVES_SET', objectives: ['Turn on the TV'] },
+            ],
+            memory: 'I reached the remote and need to continue to the TV.',
+          },
+        ],
+      }),
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'MOVE_TO', targetId: 'tv' }] }],
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+
+    fixture.scene.update(100);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('move_completed');
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(provider.calls).toHaveLength(3);
+    expect(JSON.stringify(provider.calls[2].messages)).toContain('plan_continued');
+    expect(npc.getMoveResult().status).toBe('started');
+    expect(npc.getMoveResult().target).toEqual({ x: tv.x, y: tv.y });
+  });
+
   it('moves NPCs to visible target ids', async () => {
     const fixture = createSceneFixture();
     const floor = fixture.addWalkbox('Floor');
