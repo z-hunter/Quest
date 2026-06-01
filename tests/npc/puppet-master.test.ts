@@ -541,6 +541,64 @@ describe('NpcPuppetMaster', () => {
     expect(npc.getMoveResult().target).toEqual({ x: tv.x, y: tv.y });
   });
 
+  it('executes TAKE into the NPC inventory and wakes with an action_completed trigger', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    remote.x = 22;
+    remote.y = 20;
+    npc.x = 20;
+    npc.y = 20;
+    npc.colliderWidth = 4;
+    npc.colliderHeight = 4;
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Take the remote.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'TAKE', targetId: 'tv_rc' }] }],
+      }),
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          { npcId: 'guard', steps: [{ type: 'OBJECTIVES_SET', objectives: ['Hold remote'] }] },
+        ],
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processScene(fixture.scene);
+
+    expect(plans[0].steps).toEqual([{ type: 'TAKE', targetId: 'tv_rc' }]);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
+    expect(remote.visible).toBe(false);
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('action_completed');
+    expect(String(provider.calls[1].messages[0].content)).toContain('"code": "item_taken"');
+  });
+
   it('moves NPCs to visible target ids', async () => {
     const fixture = createSceneFixture();
     const floor = fixture.addWalkbox('Floor');

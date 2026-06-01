@@ -6,6 +6,7 @@ import type { Scene } from '../scene/Scene';
 import type { ActorMoveResult } from '../entities/Actor';
 import type {
   NpcPlan,
+  NpcPlanExecutionOutcome,
   NpcPlanStep,
   NpcPuppetMasterDebugInfo,
   NpcPuppetMasterResponse,
@@ -18,9 +19,9 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, and MOVE_TO.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, and TAKE.',
   'OBJECTIVES_SET and MEMORY_SET only update internal NPC state; include WAIT or MOVE_TO when the NPC should keep acting.',
-  'Do not claim unsupported TAKE, USE, OPEN, button press, or state-change actions have already happened.',
+  'Do not claim unsupported USE, OPEN, button press, or state-change actions have already happened.',
 ].join('\n');
 
 type NpcIndividualTrigger =
@@ -39,6 +40,10 @@ type NpcIndividualTrigger =
   | {
       type: 'move_completed';
       result: ActorMoveResult;
+    }
+  | {
+      type: 'action_completed';
+      result: NpcPlanExecutionOutcome;
     };
 
 export class NpcPuppetMaster {
@@ -68,6 +73,12 @@ export class NpcPuppetMaster {
         const scene = game.sceneManager.currentScene;
         if (scene) {
           void this.processNpc(scene, npcId, { type: 'move_completed', result });
+        }
+      },
+      (npcId, result) => {
+        const scene = game.sceneManager.currentScene;
+        if (scene) {
+          void this.processNpc(scene, npcId, { type: 'action_completed', result });
         }
       }
     );
@@ -417,6 +428,10 @@ export class NpcPuppetMaster {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : undefined;
       if (x !== undefined && y !== undefined) return { type: 'MOVE_TO', x, y };
       return targetId ? { type: 'MOVE_TO', targetId } : null;
+    }
+    if (record.type === 'TAKE') {
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return targetId ? { type: 'TAKE', targetId } : null;
     }
     if (record.type === 'WAIT') {
       const ms = typeof record.ms === 'number' && Number.isFinite(record.ms) ? record.ms : 0;

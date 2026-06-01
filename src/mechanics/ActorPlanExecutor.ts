@@ -1,4 +1,5 @@
 import { Actor } from '../entities/Actor';
+import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
@@ -7,21 +8,25 @@ import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
 export type NpcMoveCompletionScheduler = (npcId: string, result: ActorMoveResult) => void;
+export type NpcActionCompletionScheduler = (npcId: string, result: NpcPlanExecutionOutcome) => void;
 
 export class ActorPlanExecutor {
   private readonly game: IGame;
   private readonly waitScheduler?: NpcWaitScheduler;
   private readonly moveCompletionScheduler?: NpcMoveCompletionScheduler;
+  private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
   private moveWatchTokens = new Map<string, number>();
 
   constructor(
     game: IGame,
     waitScheduler?: NpcWaitScheduler,
-    moveCompletionScheduler?: NpcMoveCompletionScheduler
+    moveCompletionScheduler?: NpcMoveCompletionScheduler,
+    actionCompletionScheduler?: NpcActionCompletionScheduler
   ) {
     this.game = game;
     this.waitScheduler = waitScheduler;
     this.moveCompletionScheduler = moveCompletionScheduler;
+    this.actionCompletionScheduler = actionCompletionScheduler;
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
@@ -93,6 +98,10 @@ export class ActorPlanExecutor {
 
     if (step.type === 'MOVE_TO') {
       return this.moveActor(actor, step);
+    }
+
+    if (step.type === 'TAKE') {
+      return this.takeEntity(actor, step.targetId);
     }
 
     return {
@@ -244,5 +253,94 @@ export class ActorPlanExecutor {
   private scheduleMoveCompletion(npcId: string, result: ActorMoveResult, delayMs: number): void {
     if (!this.moveCompletionScheduler) return;
     globalThis.setTimeout(() => this.moveCompletionScheduler?.(npcId, result), delayMs);
+  }
+
+  private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
+    const normalizedTargetId = String(targetId || '').trim();
+    const scene = this.game.sceneManager.currentScene;
+    const target = scene?.getObjectByName(normalizedTargetId);
+    if (!(target instanceof Entity)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'take_target_not_found',
+        npcId: actor.name,
+        targetId: normalizedTargetId,
+      });
+    }
+
+    if (target === actor) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'take_self',
+        npcId: actor.name,
+        targetId: target.name,
+      });
+    }
+
+    if (this.game.inventoryManager.hasInventoryEntity(actor, target, 'in')) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'take_already_held',
+        npcId: actor.name,
+        targetId: target.name,
+      });
+    }
+
+    const isItem =
+      target.isTakeable || target.components?.some((component: any) => component?.type === 'Item');
+    if (!isItem) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'take_not_takeable',
+        npcId: actor.name,
+        targetId: target.name,
+      });
+    }
+
+    const distanceError = ComponentSystem.canTakeItem(target, actor);
+    if (distanceError) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'take_unreachable',
+        npcId: actor.name,
+        targetId: target.name,
+        message: distanceError,
+      });
+    }
+
+    scene?.finishDropAnimation(target);
+    this.game.inventoryManager.ensureInventoryComponent(actor, 'in');
+    this.game.inventoryManager.clearInheritedSurfaceSwitchGroups(target);
+    this.game.inventoryManager.clearActiveContainerSwitchGroups(
+      target,
+      this.game.getSwitchComponent.bind(this.game)
+    );
+    const outcome = this.game.inventoryManager.addInventoryEntity(actor, target, 'in');
+    if (outcome.status !== 'ok') {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: outcome.code,
+        npcId: actor.name,
+        targetId: target.name,
+        message: outcome.message,
+      });
+    }
+
+    target.subsceneItemScale = 1;
+    target.update(0);
+    this.game.inventoryManager.notifyInventoryUiChange();
+    return this.completeAction(actor.name, {
+      status: 'ok',
+      code: 'item_taken',
+      npcId: actor.name,
+      targetId: target.name,
+      message: outcome.message,
+    });
+  }
+
+  private completeAction(npcId: string, outcome: NpcPlanExecutionOutcome): NpcPlanExecutionOutcome {
+    if (!this.actionCompletionScheduler) return outcome;
+    globalThis.setTimeout(() => this.actionCompletionScheduler?.(npcId, outcome), 0);
+    return { ...outcome, status: 'scheduled' };
   }
 }

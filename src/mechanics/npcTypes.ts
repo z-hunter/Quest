@@ -13,6 +13,10 @@ export type NpcPlanStep =
       targetId?: string;
     }
   | {
+      type: 'TAKE';
+      targetId: string;
+    }
+  | {
       type: 'WAIT';
       ms: number;
     }
@@ -96,4 +100,5 @@ export type NpcPlanExecutionOutcome = {
   code: string;
   npcId: string;
   message?: string;
+  targetId?: string;
 };
