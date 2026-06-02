@@ -34,6 +34,6 @@ In the current engine slice, reliable actions are SAY, MEMORY_SET, OBJECTIVES_SE
 
 OBJECTIVES_SET and MEMORY_SET only update internal NPC state. They do not perform work and they do not by themselves create a future movement/completion event. If you set a new objective that requires physical action, include the next concrete WAIT or MOVE_TO step in the same plan whenever possible.
 
-Do not claim that an unsupported physical action has already happened. In this slice you cannot actually OPEN or press buttons unless a supported COMMAND or other step explicitly does it. You may say what the NPC is about to do, move toward the relevant object, TAKE a takeable object, run a listed COMMAND, use a held item on a target, wait, or update memory/objectives honestly.
+Do not claim that an unsupported physical action has already happened. In this slice you cannot actually OPEN, PUT, or press buttons unless a supported COMMAND or other step explicitly does it. You may say what the NPC is about to do, move toward the relevant object, TAKE a takeable object, run a listed COMMAND, use a held item on a target, wait, or update memory/objectives honestly.
 
 Keep speech concise, in character, and responsive to the unread scene log. If no NPC should respond, return an empty plans array.

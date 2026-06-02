@@ -2353,3 +2353,57 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - `Sessions.md` already had unrelated pre-existing content before this entry.
 - `public/scenes/home/room.json` also has unrelated pre-existing edits and was intentionally left out of the commit.
 - The fix is ingress-based; if prompt regressions continue, a second output-repair guard may still be worth considering later.
+
+---
+
+## Session Entry - 2026-06-02 11:39 +02:00
+
+### Session Goals
+- Audit the documentation for the new actor-aware command architecture introduced in the actor actions slice.
+- Remove stale player-centric wording where authored commands, `COMMAND`, `USE`, and semantic runtime execution were still described as parser-exclusive.
+- Produce a durable wrap-up for NotebookLM and local memory so the next session can resume from the updated architectural contract.
+
+### What Was Updated
+- Reworked `Commands.md` so authored commands are described as shared runtime content rather than parser-only assets.
+- Updated `Parser.md` to clarify that `Game API` has additional actor-aware clients, including Puppet Master-style runtime execution.
+- Updated `tech-spec.md` so `GameSemanticAPI` is framed as actor-aware semantic execution instead of only parser command resolution.
+- Updated `GDD.md` to explain that semantic command execution now lives in a shared actor-aware runtime layer, not only in the player parser path.
+- Updated `NPCsys.md` to state that NPC plans may use `MOVE_TO`, `TAKE`, `COMMAND`, and fallback `USE`, and that `PUT` is still the next missing step.
+- Updated `public/text/system/parser-llm-system.md` to keep the player GM prompt aligned with the shared authored-command runtime model.
+- Updated `public/text/system/npc-pm-system.md` to explicitly mention that `PUT` is not supported yet and should not be simulated as if it already happened.
+- Removed the redundant local `dist/text/system/parser-llm-system.md` copy so `public/text/system/parser-llm-system.md` remains the single source of truth.
+
+### Architecture / Runtime Decisions
+- Confirmed that authored command execution is now shared actor-aware runtime behavior, not a parser-only concern.
+- Confirmed that `COMMAND` is the preferred action when an object exposes a matching authored command affordance.
+- Kept `USE` as the generic fallback action for item-on-target interactions.
+- Kept `PUT` out of the current slice and documented it as the next obvious capability gap.
+- Clarified that the player parser is one client of `Game API`, not the only owner of semantic world actions.
+
+### Documentation / Session-Handoff Work
+- Ran a Gemini-assisted audit to find documentation locations that still needed architectural updates.
+- Verified the repo’s real canonical text assets and only changed the files that are actually used as source:
+  - `public/text/system/parser-llm-system.md`
+  - `public/text/system/npc-pm-system.md`
+  - root docs like `GDD.md`, `Commands.md`, `Parser.md`, `NPCsys.md`, and `tech-spec.md`
+- Synced the shared memory mirror and regenerated a curated `AgentMemory.md` dump for NotebookLM.
+- Replaced stale NotebookLM sources with the refreshed `Sessions.md`, `GDD.md`, and `AgentMemory.md` set.
+
+### Tests / Validation
+- Ran `git diff --check` on the documentation edits.
+- Confirmed `dist/text/system/parser-llm-system.md` is not a tracked source and should not be maintained as a second manual copy.
+- No code-path tests were needed for this wrap-up because the work was documentation and handoff only.
+
+### Commits
+- No new commit was created during the wrap-up step itself.
+- The latest code commit before this documentation pass remains the actor-actions feature slice already in the branch history.
+
+### Remaining Work / Next Steps
+- Create the final commit for the documentation refresh if we want to preserve this state immediately.
+- If `PUT` is implemented later, update the PM prompt and GDD together so NPCs can place items rather than only take and use them.
+- Continue watching for any other canonical docs that still phrase semantic execution as strictly parser-centric.
+
+### Risks / Caveats
+- `Sessions.md` already contained older session history, so this entry was appended rather than replacing prior content.
+- The repository still contains unrelated user edits in the documentation branch, which were intentionally left alone.
+- `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a build artifact only.

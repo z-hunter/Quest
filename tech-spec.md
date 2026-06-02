@@ -102,12 +102,12 @@ The game features a hybrid parser system:
 
 ### 4.2 Spatial Model & Semantic API
 
-- **`GameSemanticAPI`**: Extracted from the `Game` monolith, this system handles the gameplay outcome of parser commands. It manages access states, reveal mechanics (e.g., examining a desk reveals hidden items inside), and item manipulation.
+- **`GameSemanticAPI`**: Extracted from the `Game` monolith, this system handles the gameplay outcome of actor-aware semantic actions. Parser commands are one source of these actions, but the same runtime layer is also used by other actors and orchestration layers. It manages access states, reveal mechanics (e.g., examining a desk reveals hidden items inside), and item manipulation.
 - **Spatial Relations**: Objects have distinct spatial relations (`in`, `on`, `under`, `behind`). The `SceneSpatialValidator` strictly enforces topology (e.g., no recursive containment, rejecting invalid `near` relations in storage configurations).
 
 ### 4.3 Text Assets (TA-Driven Model)
 
-Descriptions, synonyms, and failure messages (e.g., `takeFailure`) are loaded from external JSON files via `TextAssetManager`. This removes hardcoded text from the engine and allows the LLM and the Parser to build a robust contextual world model dynamically.
+Descriptions, synonyms, and failure messages (e.g., `takeFailure`) are loaded from external JSON files via `TextAssetManager`. This removes hardcoded text from the engine and allows the LLM, the Parser, and other actor-aware planners to build a robust contextual world model dynamically.
 
 ---
 
