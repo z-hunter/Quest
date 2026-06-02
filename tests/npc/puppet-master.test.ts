@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Actor } from '../../src/entities/Actor';
 import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 import { NpcPuppetMaster } from '../../src/mechanics/NpcPuppetMaster';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import type {
   ILlmProvider,
   LlmProviderContent,
@@ -597,6 +598,161 @@ describe('NpcPuppetMaster', () => {
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('action_completed');
     expect(String(provider.calls[1].messages[0].content)).toContain('"code": "item_taken"');
+  });
+
+  it('adds authored command affordances to matching visible entities only', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    addNpc(fixture, 'guard');
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.x = 20;
+    tv.y = 20;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    remote.x = 22;
+    remote.y = 20;
+    const sofa = fixture.addEntity('sofa', { title: 'Sofa' });
+    sofa.x = 40;
+    sofa.y = 20;
+
+    const model = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    const npcContext = model.npcs.find((npc) => npc.id === 'guard');
+    const tvContext = npcContext?.visibleEntities.find((entity) => entity.id === 'tv');
+    const sofaContext = npcContext?.visibleEntities.find((entity) => entity.id === 'sofa');
+    const remoteContext = npcContext?.visibleEntities.find((entity) => entity.id === 'tv_rc');
+
+    expect(tvContext?.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'turn_tv_on',
+          label: 'turn on tv',
+          requires: expect.arrayContaining([
+            expect.objectContaining({ entityId: 'tv_rc', scope: 'held_or_reachable' }),
+          ]),
+          effects: expect.arrayContaining([
+            expect.objectContaining({ type: 'setEntityState', stateId: 'power', value: 'on' }),
+          ]),
+        }),
+      ])
+    );
+    expect(tvContext?.commands?.some((command) => command.id === 'use_on')).toBe(false);
+    expect(remoteContext?.commands?.some((command) => command.id === 'turn_tv_on') || false).toBe(
+      false
+    );
+    expect(sofaContext?.commands || []).toHaveLength(0);
+  });
+
+  it('executes authored COMMAND steps for NPCs and wakes with an action_completed trigger', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 20;
+    npc.y = 20;
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.x = 22;
+    tv.y = 20;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in');
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Turn on the TV.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'COMMAND', commandId: 'turn_tv_on' }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processScene(fixture.scene);
+
+    expect(plans[0].steps).toEqual([{ type: 'COMMAND', commandId: 'turn_tv_on' }]);
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('action_completed');
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "actor_command_executed"'
+    );
+  });
+
+  it('reports COMMAND prerequisite failures relative to the NPC actor', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.x = 20;
+    tv.y = 20;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    remote.x = 500;
+    remote.y = 500;
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Turn on the TV.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'COMMAND', commandId: 'turn_tv_on' }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
+    expect(provider.calls).toHaveLength(2);
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "custom_command_required_entity_missing"'
+    );
   });
 
   it('moves NPCs to visible target ids', async () => {

@@ -19,9 +19,10 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, and TAKE.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, TAKE, COMMAND, and USE.',
+  'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
   'OBJECTIVES_SET and MEMORY_SET only update internal NPC state; include WAIT or MOVE_TO when the NPC should keep acting.',
-  'Do not claim unsupported USE, OPEN, button press, or state-change actions have already happened.',
+  'Do not claim unsupported OPEN, button press, or state-change actions have already happened.',
 ].join('\n');
 
 type NpcIndividualTrigger =
@@ -432,6 +433,26 @@ export class NpcPuppetMaster {
     if (record.type === 'TAKE') {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
       return targetId ? { type: 'TAKE', targetId } : null;
+    }
+    if (record.type === 'COMMAND') {
+      const commandId = typeof record.commandId === 'string' ? record.commandId.trim() : '';
+      if (!commandId) return null;
+      const rawArgs =
+        record.arguments && typeof record.arguments === 'object' && !Array.isArray(record.arguments)
+          ? (record.arguments as Record<string, unknown>)
+          : {};
+      const args: Record<string, string | null> = {};
+      for (const [key, value] of Object.entries(rawArgs)) {
+        args[key] = typeof value === 'string' ? value.trim() || null : value === null ? null : null;
+      }
+      return Object.keys(args).length
+        ? { type: 'COMMAND', commandId, arguments: args }
+        : { type: 'COMMAND', commandId };
+    }
+    if (record.type === 'USE') {
+      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return itemId && targetId ? { type: 'USE', itemId, targetId } : null;
     }
     if (record.type === 'WAIT') {
       const ms = typeof record.ms === 'number' && Number.isFinite(record.ms) ? record.ms : 0;

@@ -17,6 +17,16 @@ export type NpcPlanStep =
       targetId: string;
     }
   | {
+      type: 'COMMAND';
+      commandId: string;
+      arguments?: Record<string, string | null>;
+    }
+  | {
+      type: 'USE';
+      itemId: string;
+      targetId: string;
+    }
+  | {
       type: 'WAIT';
       ms: number;
     }
@@ -60,6 +70,12 @@ export type NpcActorContext = {
       targetTitle?: string;
     };
     states?: Array<{ id: string; value: string | number | boolean }>;
+    commands?: Array<{
+      id: string;
+      label: string;
+      requires?: Array<{ entityId: string; scope: string }>;
+      effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
+    }>;
   }>;
 };
 
@@ -101,4 +117,6 @@ export type NpcPlanExecutionOutcome = {
   npcId: string;
   message?: string;
   targetId?: string;
+  itemId?: string;
+  commandId?: string;
 };

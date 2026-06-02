@@ -3,6 +3,7 @@ import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { ActorCommandExecutor } from './ActorCommandExecutor';
 import type { NpcActorContext, NpcWorldModel } from './npcTypes';
 
 function compactRecord<T extends Record<string, unknown>>(value: T): T {
@@ -27,9 +28,11 @@ function compactRecord<T extends Record<string, unknown>>(value: T): T {
 
 export class NpcWorldModelBuilder {
   private readonly game: IGame;
+  private readonly commandExecutor: ActorCommandExecutor;
 
   constructor(game: IGame) {
     this.game = game;
+    this.commandExecutor = new ActorCommandExecutor(game);
   }
 
   build(scene: Scene): NpcWorldModel {
@@ -104,6 +107,7 @@ export class NpcWorldModelBuilder {
             id: component.id,
             value: ComponentSystem.getStateValue(object, component.id) ?? component.initialValue,
           })),
+          commands: this.commandExecutor.getAffordancesForEntity(object),
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);

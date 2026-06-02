@@ -14,7 +14,9 @@ import {
   normalizeTargetForIntent,
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
+import { ActorCommandExecutor } from './ActorCommandExecutor';
 import { Entity } from '../entities/Entity';
+import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import { ComponentSystem } from '../systems/ComponentSystem';
@@ -62,6 +64,7 @@ export class Parser {
   nlpCascade: NlpCascade;
   llmCascade: LlmCascade;
   worldModelBuilder: ParserWorldModelBuilder;
+  actorCommandExecutor: ActorCommandExecutor;
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
   pendingClarificationRetryMessage: string | null;
@@ -81,6 +84,7 @@ export class Parser {
       () => this.game.console
     );
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
+    this.actorCommandExecutor = new ActorCommandExecutor(this.game);
     this.activeWorldModel = null;
     this.activeScope = null;
     this.pendingClarificationRetryMessage = null;
@@ -1631,6 +1635,8 @@ export class Parser {
         return this.game.goToScene(action.sceneId);
       case 'removeInventoryEntity':
         return this.executeRemoveInventoryEntity(action, planState);
+      case 'actorUseOn':
+        return this.executeActorUseOn(action, planState);
       case 'showText': {
         const resolvedParams = this.resolveShowTextParams(
           action.params,
@@ -1833,6 +1839,8 @@ export class Parser {
         return 'goToSceneById';
       case 'removeInventoryEntity':
         return 'removeInventoryEntity';
+      case 'actorUseOn':
+        return 'actorUseOn';
       case 'showText':
         return 'showText';
       case 'runCustomCommand':
@@ -4110,6 +4118,43 @@ export class Parser {
     return this.game.removeInventoryEntity(entity);
   }
 
+  private executeActorUseOn(
+    action: Extract<ParserToolAction, { type: 'actorUseOn' }>,
+    planState: ParserPlanState
+  ): GameActionOutcome {
+    const item = planState[action.itemRef];
+    const target = planState[action.targetRef];
+    const player = this.game.sceneManager.currentScene?.player;
+    if (!(item instanceof Entity) || !(target instanceof Entity) || !(player instanceof Actor)) {
+      return {
+        status: 'failed',
+        code: 'missing_plan_entity_ref',
+        message: this.game.text('parser.command_no_effect'),
+        recoverable: true,
+      };
+    }
+
+    const outcome = this.actorCommandExecutor.useItemOn(player, item.name, target.name);
+    if (outcome.status === 'ok') return outcome;
+
+    const message = action.noEffectMessage
+      ? action.noEffectMessage
+          .replace(
+            /\{item\}/g,
+            this.game.textAssets.getResolvedObjectField(item, 'title') || item.name
+          )
+          .replace(
+            /\{target\}/g,
+            this.game.textAssets.getResolvedObjectField(target, 'title') || target.name
+          )
+      : outcome.message;
+    return {
+      status: 'ok',
+      code: 'custom_message',
+      message,
+    };
+  }
+
   private executeRequireEntityAvailable(
     action: Extract<ParserToolAction, { type: 'requireEntityAvailable' }>,
     planState: ParserPlanState
@@ -4425,6 +4470,15 @@ export class Parser {
         return {
           type: 'removeInventoryEntity',
           ref: step.ref,
+        };
+      case 'actorUseOn':
+        return {
+          type: 'actorUseOn',
+          itemRef: step.itemRef,
+          targetRef: step.targetRef,
+          noEffectMessage:
+            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
+            step.noEffectMessage,
         };
       case 'showText':
         return {

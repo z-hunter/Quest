@@ -4,6 +4,7 @@ import type { ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { ActorCommandExecutor } from './ActorCommandExecutor';
 import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
@@ -15,6 +16,7 @@ export class ActorPlanExecutor {
   private readonly waitScheduler?: NpcWaitScheduler;
   private readonly moveCompletionScheduler?: NpcMoveCompletionScheduler;
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
+  private readonly commandExecutor: ActorCommandExecutor;
   private moveWatchTokens = new Map<string, number>();
 
   constructor(
@@ -27,6 +29,7 @@ export class ActorPlanExecutor {
     this.waitScheduler = waitScheduler;
     this.moveCompletionScheduler = moveCompletionScheduler;
     this.actionCompletionScheduler = actionCompletionScheduler;
+    this.commandExecutor = new ActorCommandExecutor(game);
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
@@ -102,6 +105,14 @@ export class ActorPlanExecutor {
 
     if (step.type === 'TAKE') {
       return this.takeEntity(actor, step.targetId);
+    }
+
+    if (step.type === 'COMMAND') {
+      return this.executeCommand(actor, step.commandId, step.arguments);
+    }
+
+    if (step.type === 'USE') {
+      return this.useItemOn(actor, step.itemId, step.targetId);
     }
 
     return {
@@ -334,6 +345,33 @@ export class ActorPlanExecutor {
       code: 'item_taken',
       npcId: actor.name,
       targetId: target.name,
+      message: outcome.message,
+    });
+  }
+
+  private executeCommand(
+    actor: Actor,
+    commandId: string,
+    argumentsByName: Record<string, string | null> = {}
+  ): NpcPlanExecutionOutcome {
+    const outcome = this.commandExecutor.executeCommand(actor, commandId, argumentsByName);
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      commandId,
+      message: outcome.message || outcome.displayMessages?.join('\n'),
+    });
+  }
+
+  private useItemOn(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
+    const outcome = this.commandExecutor.useItemOn(actor, itemId, targetId);
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      itemId,
+      targetId,
       message: outcome.message,
     });
   }

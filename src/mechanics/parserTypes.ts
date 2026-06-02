@@ -142,6 +142,13 @@ export type ParserCommandActionSpec =
       ref: string;
     }
   | {
+      type: 'actorUseOn';
+      itemRef: string;
+      targetRef: string;
+      noEffectMessageId?: string;
+      noEffectMessage?: string;
+    }
+  | {
       type: 'showText';
       messageId?: string;
       text?: string;
@@ -342,6 +349,12 @@ export type ParserToolAction =
   | {
       type: 'removeInventoryEntity';
       ref: string;
+    }
+  | {
+      type: 'actorUseOn';
+      itemRef: string;
+      targetRef: string;
+      noEffectMessage?: string;
     }
   | {
       type: 'showText';
