@@ -782,7 +782,7 @@ export class Game implements IGame {
     surface: SceneObject,
     entity: Entity,
     relation: Exclude<SpatialRelationType, 'near'> = 'on',
-    options: { preferPlayerPoint?: boolean } = {}
+    options: { preferPlayerPoint?: boolean; preferredPoint?: { x: number; y: number } } = {}
   ): GameActionOutcome {
     return this.inventoryManager.addEntityToSurface(
       surface,
@@ -861,6 +861,15 @@ export class Game implements IGame {
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome {
     return this.semantic.putEntity(entity, target, options);
+  }
+
+  putEntityForActor(
+    actor: import('../entities/Actor').Actor | null,
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome {
+    return this.semantic.putEntityForActor(actor, entity, target, options);
   }
 
   removeInventoryEntity(entity: Entity): GameActionOutcome {

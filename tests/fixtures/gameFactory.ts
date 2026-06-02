@@ -337,26 +337,45 @@ export function createTestGame(): TestGameHarness {
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
     },
-    putEntity(_entity: Entity, _target?: SceneObject | null) {
-      return notImplementedOutcome('not_implemented_put_entity');
+    putEntity(entity: Entity, target?: SceneObject | null, options?: any) {
+      return (this as any).semantic.putEntity(entity, target, options);
     },
-    addInventoryEntity(_owner: Entity, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_add_inventory_entity');
+    putEntityForActor(
+      actor: Actor | null,
+      entity: Entity,
+      target?: SceneObject | null,
+      options?: any
+    ) {
+      return (this as any).semantic.putEntityForActor(actor, entity, target, options);
     },
-    removeEntityFromInventory(_owner: Entity, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_remove_entity_from_inventory');
+    addInventoryEntity(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.addInventoryEntity(owner, entity, relation);
     },
-    hasInventoryEntity(_owner: Entity, _entity: Entity) {
-      return false;
+    removeEntityFromInventory(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.removeEntityFromInventory(owner, entity, relation);
     },
-    getInventoryEntities(_owner: Entity) {
-      return [];
+    hasInventoryEntity(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.hasInventoryEntity(owner, entity, relation);
     },
-    addEntityToSurface(_surface: SceneObject, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_add_entity_to_surface');
+    getInventoryEntities(owner: Entity, relation: any = 'in') {
+      return this.inventoryManager.getInventoryEntities(owner, relation);
     },
-    removeEntityFromSurface(_surface: SceneObject, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_remove_entity_from_surface');
+    addEntityToSurface(
+      surface: SceneObject,
+      entity: Entity,
+      relation: any = 'on',
+      options: any = {}
+    ) {
+      return this.inventoryManager.addEntityToSurface(
+        surface,
+        entity,
+        relation,
+        this.getSwitchComponent.bind(this),
+        options
+      );
+    },
+    removeEntityFromSurface(surface: SceneObject, entity: Entity, relation: any = 'on') {
+      return this.inventoryManager.removeEntityFromSurface(surface, entity, relation);
     },
     removeInventoryEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_remove_inventory_entity');

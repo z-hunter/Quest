@@ -3,6 +3,7 @@ import { AudioManager } from './AudioManager';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
+import type { Actor } from '../entities/Actor';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import type { Scene } from '../scene/Scene';
@@ -58,6 +59,12 @@ export interface IGame {
     target?: SceneObject | null,
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome;
+  putEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
   addInventoryEntity(
     owner: Entity,
     entity: Entity,
@@ -78,7 +85,7 @@ export interface IGame {
     surface: SceneObject,
     entity: Entity,
     relation?: Exclude<SpatialRelationType, 'near'>,
-    options?: { preferPlayerPoint?: boolean }
+    options?: { preferPlayerPoint?: boolean; preferredPoint?: { x: number; y: number } }
   ): GameActionOutcome;
   getSwitchComponent(entity: SceneObject): any;
   removeEntityFromSurface(

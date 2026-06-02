@@ -600,6 +600,169 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[1].messages[0].content)).toContain('"code": "item_taken"');
   });
 
+  it('executes PUT from NPC inventory onto a target surface and wakes with action_completed', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 20;
+    npc.y = 20;
+    const desk = fixture.addEntity('Desk', {
+      title: 'Desk',
+      components: [{ type: 'Surface', capacity: 2, groups: [], items: [] }],
+    });
+    desk.x = 22;
+    desk.y = 20;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in');
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Put the remote on the desk.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: 'guard',
+            steps: [{ type: 'PUT', itemId: 'tv_rc', targetId: 'Desk', relation: 'on' }],
+          },
+        ],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processScene(fixture.scene);
+
+    expect(plans[0].steps).toEqual([
+      { type: 'PUT', itemId: 'tv_rc', targetId: 'Desk', relation: 'on' },
+    ]);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(false);
+    expect((desk.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'tv_rc' })])
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(provider.calls).toHaveLength(2);
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "item_put_on_surface"'
+    );
+  });
+
+  it('drops a held NPC item onto the floor near that NPC, not near the player', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 120, y: 0 },
+      { x: 120, y: 120 },
+      { x: 0, y: 120 },
+    ];
+    floor.components = [{ type: 'Surface', capacity: 4, groups: [], items: [] }];
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 80;
+    npc.y = 80;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in');
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Drop the remote.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'PUT', itemId: 'tv_rc', targetId: null }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(false);
+    const distanceToNpc = Math.hypot(remote.x - npc.x, remote.y - npc.y);
+    const distanceToPlayer = Math.hypot(remote.x - player.x, remote.y - player.y);
+    expect(distanceToNpc).toBeLessThan(distanceToPlayer);
+    expect((floor.components?.[0] as { items: Array<{ id: string }> }).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'tv_rc' })])
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "item_put_on_surface"'
+    );
+  });
+
+  it('reports PUT target failures as controlled action_completed results', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in');
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Put the remote on the desk.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: 'guard',
+            steps: [{ type: 'PUT', itemId: 'tv_rc', targetId: 'missing_desk', relation: 'on' }],
+          },
+        ],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "put_target_not_found"'
+    );
+  });
+
   it('adds authored command affordances to matching visible entities only', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 5, 5);

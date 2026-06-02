@@ -2359,51 +2359,81 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-02 11:39 +02:00
 
 ### Session Goals
-- Audit the documentation for the new actor-aware command architecture introduced in the actor actions slice.
-- Remove stale player-centric wording where authored commands, `COMMAND`, `USE`, and semantic runtime execution were still described as parser-exclusive.
-- Produce a durable wrap-up for NotebookLM and local memory so the next session can resume from the updated architectural contract.
+- Implement the major Puppet Master / Actor Actions feature slice so NPCs can do real world actions instead of only narrating intent.
+- Make NPC movement respect the same walkability/collider constraints as the player while still allowing zero-collider objects to remain nonblocking.
+- Let NPCs approach reachable positions near target objects instead of trying to walk onto object centers outside walkboxes.
+- Reduce Puppet Master context noise by exposing only semantically meaningful scene objects plus special technical floor fallback objects.
+- Add actor-aware command execution so authored commands can be executed by any Actor without routing NPCs through the text parser or LLM parser cascade.
+- Update the documentation and durable knowledge sources after the architecture changed.
 
-### What Was Updated
-- Reworked `Commands.md` so authored commands are described as shared runtime content rather than parser-only assets.
-- Updated `Parser.md` to clarify that `Game API` has additional actor-aware clients, including Puppet Master-style runtime execution.
-- Updated `tech-spec.md` so `GameSemanticAPI` is framed as actor-aware semantic execution instead of only parser command resolution.
-- Updated `GDD.md` to explain that semantic command execution now lives in a shared actor-aware runtime layer, not only in the player parser path.
-- Updated `NPCsys.md` to state that NPC plans may use `MOVE_TO`, `TAKE`, `COMMAND`, and fallback `USE`, and that `PUT` is still the next missing step.
-- Updated `public/text/system/parser-llm-system.md` to keep the player GM prompt aligned with the shared authored-command runtime model.
-- Updated `public/text/system/npc-pm-system.md` to explicitly mention that `PUT` is not supported yet and should not be simulated as if it already happened.
-- Removed the redundant local `dist/text/system/parser-llm-system.md` copy so `public/text/system/parser-llm-system.md` remains the single source of truth.
+### What Was Implemented
+- Added real Puppet Master action execution for NPC plans beyond speech/objective updates, including movement completion and action completion loops.
+- Added `TAKE` support for NPCs so they can actually pick up takeable visible entities into their own inventory.
+- Added `COMMAND` support for PM plans, allowing NPCs to execute authored command plans by `commandId`.
+- Added fallback `USE itemId ON targetId` support for actor plans while preserving existing player `USE` no-effect fallback behavior.
+- Added shared actor-aware command execution through the new actor command/runtime path so player parser and PM can converge on the same underlying world actions.
+- Added per-object command affordances to NPC world context: objects such as `tv` can list theoretically applicable authored commands like `turn_tv_on` and `turn_tv_off`, including compact prerequisites and state effects.
+- Updated the PM prompt so authored `COMMAND` is preferred when listed on an object, while generic `USE` remains fallback.
+- Added guardrails to prevent PM from claiming unsupported physical/state changes as already done.
+- Added the continuation trigger for PM plans that update memory/objectives without scheduling follow-up action, preventing NPCs from getting stuck after setting a goal.
+- Reduced NPC context noise by filtering visible entities to titled semantic objects, with an exception for technical `floor` fallback objects that correspond to walkable floor/storage placement.
+- Kept zero-collider objects intentionally nonblocking, while nonzero colliders block NPC movement the same way they block the player.
 
-### Architecture / Runtime Decisions
-- Confirmed that authored command execution is now shared actor-aware runtime behavior, not a parser-only concern.
-- Confirmed that `COMMAND` is the preferred action when an object exposes a matching authored command affordance.
-- Kept `USE` as the generic fallback action for item-on-target interactions.
-- Kept `PUT` out of the current slice and documented it as the next obvious capability gap.
-- Clarified that the player parser is one client of `Game API`, not the only owner of semantic world actions.
+### Important Architecture / Runtime Decisions
+- Authored command execution is now shared actor-aware runtime behavior, not a parser-only concern.
+- NPCs must not send natural-language `RUN_COMMAND` text into the real parser pipeline. PM emits structured DSL steps such as `COMMAND` and `USE`; the engine executes already-authored command plans as data.
+- `COMMAND` is preferred when a visible entity exposes a suitable authored command affordance because it can perform real state changes and side effects.
+- `USE` is a generic fallback action and should not guess complex authored intent when a matching `COMMAND` exists.
+- `held`, `reachable`, `visible`, and command prerequisites are evaluated relative to the acting Actor, not implicitly relative to the player.
+- PM world context should list commands on the specific objects they can target rather than as a global loose command list.
+- "Theoretically executable" command affordance means the command can target the entity by authored command structure, even if prerequisites are not currently satisfied.
+- Actor-aware `PUT` was identified as the next required PM action after the test NPC tried to place the TV remote on the desk but could only narrate intent or mistakenly retry `TAKE`.
+
+### Parser / Mechanics / Scene / NPC Changes
+- `ActorCommandExecutor` / actor-facing command runtime became the shared place for authored command execution and fallback use behavior.
+- `ActorPlanExecutor` was extended to handle PM `COMMAND` and `USE` action steps.
+- `NpcWorldModelBuilder` now exposes compact command affordances on visible semantic entities.
+- `NpcPuppetMaster` prompt and validation now understand `COMMAND` and `USE`.
+- Player `USE X ON Y` was kept stable while being moved through the shared actor-facing path.
+- PM context now includes item locations such as `TV remote` being `in NPC` or `on floor`, letting the model reason about possession and placement requests.
+- The TV test path became the canonical validation scenario: Linda can take the remote, turn the TV on, turn it off, and understand command affordances on `tv`.
 
 ### Documentation / Session-Handoff Work
-- Ran a Gemini-assisted audit to find documentation locations that still needed architectural updates.
-- Verified the repo’s real canonical text assets and only changed the files that are actually used as source:
-  - `public/text/system/parser-llm-system.md`
-  - `public/text/system/npc-pm-system.md`
-  - root docs like `GDD.md`, `Commands.md`, `Parser.md`, `NPCsys.md`, and `tech-spec.md`
-- Synced the shared memory mirror and regenerated a curated `AgentMemory.md` dump for NotebookLM.
-- Replaced stale NotebookLM sources with the refreshed `Sessions.md`, `GDD.md`, and `AgentMemory.md` set.
+- Ran a Gemini-assisted audit to find documentation that still described authored commands and semantic execution as player/parser-only.
+- Updated `Commands.md` so authored commands are described as shared runtime content rather than parser-only assets.
+- Updated `Parser.md` to clarify that `Game API` has actor-aware clients, including Puppet Master-style runtime execution.
+- Updated `tech-spec.md` so `GameSemanticAPI` is framed as actor-aware semantic execution instead of only parser command resolution.
+- Updated `GDD.md` to explain that semantic command execution now lives in a shared actor-aware runtime layer.
+- Updated `NPCsys.md` to document PM `MOVE_TO`, `TAKE`, `COMMAND`, fallback `USE`, and the current `PUT` gap.
+- Updated `public/text/system/parser-llm-system.md` to keep the player GM prompt aligned with the shared authored-command runtime model.
+- Updated `public/text/system/npc-pm-system.md` first to document the `PUT` limitation, then implemented actor-aware `PUT` and updated the prompt again so NPCs can place/drop items for real.
+- Removed the redundant local `dist/text/system/parser-llm-system.md` copy so `public/text/system/parser-llm-system.md` remains the single source of truth.
+- Synced the shared memory mirror, regenerated curated `AgentMemory.md`, and replaced stale NotebookLM `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources.
 
 ### Tests / Validation
-- Ran `git diff --check` on the documentation edits.
-- Confirmed `dist/text/system/parser-llm-system.md` is not a tracked source and should not be maintained as a second manual copy.
-- No code-path tests were needed for this wrap-up because the work was documentation and handoff only.
+- Focused NPC Puppet Master and parser command tests passed during the actor actions implementation.
+- Full test suite passed after the actor-actions code slice: `37 files`, `450 tests passed`.
+- TypeScript validation passed with `npm run typecheck`.
+- `git diff --check` passed on the documentation/wrap-up edits.
+- Manual PM log testing confirmed:
+  - NPC movement no longer walks onto the TV/outside walkbox when nonzero colliders and reachability are respected.
+  - Linda can take the TV remote, execute `turn_tv_on`, execute `turn_tv_off`, and update objectives/memory in response.
+  - The missing `PUT` action is now visible as a real capability gap rather than a command-execution failure.
 
 ### Commits
-- No new commit was created during the wrap-up step itself.
-- The latest code commit before this documentation pass remains the actor-actions feature slice already in the branch history.
+- `b584cda` - `feat: let NPCs run authored actor commands`
+  - Added shared actor-aware command execution, PM `COMMAND`/`USE`, per-object command affordances, player `USE` regression preservation, and tests.
+- No new commit was created during the final documentation/wrap-up step; the documentation refresh is still in the working tree.
 
 ### Remaining Work / Next Steps
-- Create the final commit for the documentation refresh if we want to preserve this state immediately.
-- If `PUT` is implemented later, update the PM prompt and GDD together so NPCs can place items rather than only take and use them.
-- Continue watching for any other canonical docs that still phrase semantic execution as strictly parser-centric.
+- Commit the documentation refresh and updated session entry as part of the actor actions feature handoff.
+- Implement actor-aware `PUT` so NPCs can place/drop/give items instead of only taking and using them.
+- Update PM prompt and tests once `PUT` lands so NPCs do not overpromise item placement.
+- Consider adding `currentlyUseful` / state-match hints to command affordances so objects like `tv` can expose both `turn_tv_on` and `turn_tv_off` while still helping the model choose the state-relevant one.
+- Continue broadening actor parity so player and NPC actions converge on the same semantic runtime contracts.
 
 ### Risks / Caveats
-- `Sessions.md` already contained older session history, so this entry was appended rather than replacing prior content.
-- The repository still contains unrelated user edits in the documentation branch, which were intentionally left alone.
-- `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a build artifact only.
+- Actor-aware `PUT` is now implemented for PM plans; future placement work should build on this shared semantic runtime path.
+- The documentation refresh is not yet committed, so the working tree contains expected modified docs and the updated `Sessions.md`.
+- `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a generated build artifact only.
+- The actor command architecture intentionally avoids feeding NPC natural-language commands into the player parser to prevent extra LLM calls, player-centric context, console noise, and recursion.

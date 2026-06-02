@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import type { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
@@ -145,7 +146,8 @@ export class GameSemanticAPI {
 
   private getPutDistanceFailure(
     storageObject: SceneObject,
-    anchor?: SceneObject | null
+    anchor?: SceneObject | null,
+    actor?: Actor | null
   ): GameActionOutcome | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
@@ -156,7 +158,7 @@ export class GameSemanticAPI {
 
     const distanceError = ComponentSystem.getInteractionDistanceError(
       distanceProbe as any,
-      scene.player
+      actor || scene.player
     );
     if (!distanceError) return null;
 
@@ -174,7 +176,8 @@ export class GameSemanticAPI {
 
   private getPutAccessibilityFailure(
     storageObject: SceneObject,
-    anchor?: SceneObject | null
+    anchor?: SceneObject | null,
+    actor?: Actor | null
   ): GameActionOutcome | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
@@ -182,7 +185,7 @@ export class GameSemanticAPI {
     const blockedOutcome = this.getBlockedAccessOutcome(storageObject);
     if (blockedOutcome) return blockedOutcome;
 
-    const distanceFailure = this.getPutDistanceFailure(storageObject, anchor);
+    const distanceFailure = this.getPutDistanceFailure(storageObject, anchor, actor);
     if (distanceFailure) return distanceFailure;
 
     return null;
@@ -213,11 +216,16 @@ export class GameSemanticAPI {
 
   private getInventoryTakeAccessFailure(
     entity: Entity,
-    slot: InventorySlotRef
+    slot: InventorySlotRef,
+    actor?: Actor | null
   ): GameActionOutcome | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
-    if (this.game.inventoryManager.isPlayerInventoryOwner(slot.owner)) return null;
+    if (
+      actor ? slot.owner === actor : this.game.inventoryManager.isPlayerInventoryOwner(slot.owner)
+    ) {
+      return null;
+    }
 
     if (slot.owner.disabled || !slot.component || slot.component.protected) {
       return {
@@ -239,7 +247,7 @@ export class GameSemanticAPI {
     const accessProbe = this.getStorageAccessProbe(slot.owner);
     const distanceError = ComponentSystem.getInteractionDistanceError(
       accessProbe as any,
-      scene.player
+      actor || scene.player
     );
     if (!distanceError) return null;
 
@@ -252,7 +260,7 @@ export class GameSemanticAPI {
     };
   }
 
-  private getAutoDropUnavailableFailure(): GameActionOutcome | null {
+  private getAutoDropUnavailableFailure(actor?: Actor | null): GameActionOutcome | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
 
@@ -262,14 +270,15 @@ export class GameSemanticAPI {
       .sort((left, right) => {
         const a = this.game.inventoryManager.getSceneObjectReferencePoint(left);
         const b = this.game.inventoryManager.getSceneObjectReferencePoint(right);
-        const player = scene.player;
-        const aDistance = player ? Math.hypot(player.x - a.x, player.y - a.y) : 0;
-        const bDistance = player ? Math.hypot(player.x - b.x, player.y - b.y) : 0;
+        const dropActor = actor || scene.player;
+        const aDistance = dropActor ? Math.hypot(dropActor.x - a.x, dropActor.y - a.y) : 0;
+        const bDistance = dropActor ? Math.hypot(dropActor.x - b.x, dropActor.y - b.y) : 0;
         if (aDistance !== bDistance) return aDistance - bDistance;
         return left.name.localeCompare(right.name);
       });
 
-    const playerPoint = scene.player ? { x: scene.player.x || 0, y: scene.player.y || 0 } : null;
+    const dropActor = actor || scene.player;
+    const actorPoint = dropActor ? { x: dropActor.x || 0, y: dropActor.y || 0 } : null;
     const subsceneContained = scene.activeSubscene
       ? surfaces.filter(
           (surface) =>
@@ -285,12 +294,12 @@ export class GameSemanticAPI {
         )
       : [];
     const containingWalkboxes =
-      playerPoint && scene.activeSubscene
+      actorPoint && scene.activeSubscene
         ? surfaces.filter(
             (surface) =>
               surface.type === 'Walkbox' &&
               Array.isArray((surface as any).poly) &&
-              Geometry.isPointInPolygon(playerPoint, (surface as any).poly)
+              Geometry.isPointInPolygon(actorPoint, (surface as any).poly)
           )
         : [];
     const orderedSurfaces = subsceneContained.length
@@ -305,7 +314,7 @@ export class GameSemanticAPI {
       const blockedOutcome = this.getBlockedAccessOutcome(surface);
       if (blockedOutcome) continue;
 
-      const distanceFailure = this.getPutDistanceFailure(surface);
+      const distanceFailure = this.getPutDistanceFailure(surface, null, actor);
       if (distanceFailure) return distanceFailure;
     }
 
@@ -639,7 +648,7 @@ export class GameSemanticAPI {
     };
   }
 
-  private getPuttableSourceFailure(entity: Entity): GameActionOutcome | null {
+  private getPuttableSourceFailure(entity: Entity, actor?: Actor | null): GameActionOutcome | null {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) {
       return {
@@ -655,16 +664,23 @@ export class GameSemanticAPI {
 
     const inventorySlot = this.game.inventoryManager.getInventorySlotForEntity(entity);
     const inventoryOwner = inventorySlot?.owner || null;
-    if (inventorySlot && !this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
-      const inventoryAccessFailure = this.getInventoryTakeAccessFailure(entity, inventorySlot);
+    if (inventorySlot && (!actor || inventoryOwner !== actor)) {
+      const inventoryAccessFailure = this.getInventoryTakeAccessFailure(
+        entity,
+        inventorySlot,
+        actor
+      );
       if (inventoryAccessFailure) return inventoryAccessFailure;
     } else {
       const blockedOutcome = this.getBlockedAccessOutcome(entity);
       if (blockedOutcome) return blockedOutcome;
     }
 
-    if (!inventorySlot || this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner)) {
-      const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
+    if (
+      !inventorySlot ||
+      (!actor && this.game.inventoryManager.isPlayerInventoryOwner(inventoryOwner))
+    ) {
+      const errorMsg = ComponentSystem.canTakeItem(entity, actor || scene.player);
       if (errorMsg) {
         return {
           status: 'failed',
@@ -1400,6 +1416,16 @@ export class GameSemanticAPI {
     target?: SceneObject | null,
     options?: { relation?: SpatialRelationType | null }
   ): GameActionOutcome {
+    const actor = this.game.sceneManager.currentScene?.player || null;
+    return this.putEntityForActor(actor, entity, target, options);
+  }
+
+  putEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome {
     if (target === entity) {
       return {
         status: 'failed',
@@ -1408,7 +1434,9 @@ export class GameSemanticAPI {
         recoverable: true,
       };
     }
-    const sourceInInventory = this.game.inventoryManager.isEntityInInventory(entity);
+    const sourceInInventory = actor
+      ? this.game.inventoryManager.hasInventoryEntity(actor, entity, 'in')
+      : this.game.inventoryManager.isEntityInInventory(entity);
     if (!sourceInInventory && !target) {
       return {
         status: 'failed',
@@ -1420,7 +1448,7 @@ export class GameSemanticAPI {
       };
     }
     if (!sourceInInventory) {
-      const sourceFailure = this.getPuttableSourceFailure(entity);
+      const sourceFailure = this.getPuttableSourceFailure(entity, actor);
       if (sourceFailure) return sourceFailure;
     }
 
@@ -1436,7 +1464,8 @@ export class GameSemanticAPI {
 
     if (!target) {
       const autoDropSurface = this.game.inventoryManager.getAutoDropSurface(
-        this.getBlockedAccessOutcome.bind(this)
+        this.getBlockedAccessOutcome.bind(this),
+        actor
       );
       destinationSurface = autoDropSurface
         ? {
@@ -1445,7 +1474,7 @@ export class GameSemanticAPI {
           }
         : null;
       if (!destinationSurface) {
-        const autoDropFailure = this.getAutoDropUnavailableFailure();
+        const autoDropFailure = this.getAutoDropUnavailableFailure(actor);
         if (autoDropFailure) return autoDropFailure;
       }
     } else if (
@@ -1499,7 +1528,7 @@ export class GameSemanticAPI {
     }
 
     if (target && (destinationInventory || destinationSurface)) {
-      const targetDistanceFailure = this.getPutDistanceFailure(target, target);
+      const targetDistanceFailure = this.getPutDistanceFailure(target, target, actor);
       if (targetDistanceFailure) return targetDistanceFailure;
     }
 
@@ -1511,15 +1540,21 @@ export class GameSemanticAPI {
               target,
               this.getBlockedAccessOutcome.bind(this),
               this.getPlayerFacingObjectTitle.bind(this),
-              destinationInventory.relation
+              destinationInventory.relation,
+              actor
             )
           : this.game.inventoryManager.isInventoryAccessible(
               destinationInventory.owner,
               this.getBlockedAccessOutcome.bind(this),
-              destinationInventory.relation
+              destinationInventory.relation,
+              actor
             );
       if (!inventoryAccessible) {
-        const accessFailure = this.getPutAccessibilityFailure(destinationInventory.owner, target);
+        const accessFailure = this.getPutAccessibilityFailure(
+          destinationInventory.owner,
+          target,
+          actor
+        );
         return {
           ...(accessFailure || {
             status: 'failed',
@@ -1576,14 +1611,20 @@ export class GameSemanticAPI {
               destinationSurface.surface,
               target,
               this.getBlockedAccessOutcome.bind(this),
-              this.getPlayerFacingObjectTitle.bind(this)
+              this.getPlayerFacingObjectTitle.bind(this),
+              actor
             )
           : this.game.inventoryManager.isSurfaceAccessible(
               destinationSurface.surface,
-              this.getBlockedAccessOutcome.bind(this)
+              this.getBlockedAccessOutcome.bind(this),
+              actor
             );
       if (!surfaceAccessible) {
-        const accessFailure = this.getPutAccessibilityFailure(destinationSurface.surface, target);
+        const accessFailure = this.getPutAccessibilityFailure(
+          destinationSurface.surface,
+          target,
+          actor
+        );
         return {
           ...(accessFailure || {
             status: 'failed',
@@ -1599,6 +1640,10 @@ export class GameSemanticAPI {
         destinationSurface.relation,
         {
           preferPlayerPoint: !target && destinationSurface.surface.type === 'Walkbox',
+          preferredPoint:
+            actor && !target && destinationSurface.surface.type === 'Walkbox'
+              ? { x: actor.x || 0, y: actor.y || 0 }
+              : undefined,
         }
       );
       if (moveOutcome.status !== 'ok') {

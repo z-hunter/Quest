@@ -17,6 +17,12 @@ export type NpcPlanStep =
       targetId: string;
     }
   | {
+      type: 'PUT';
+      itemId: string;
+      targetId?: string | null;
+      relation?: 'in' | 'on' | 'under' | 'behind' | null;
+    }
+  | {
       type: 'COMMAND';
       commandId: string;
       arguments?: Record<string, string | null>;

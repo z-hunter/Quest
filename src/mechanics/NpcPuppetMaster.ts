@@ -19,7 +19,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, TAKE, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, TAKE, PUT, COMMAND, and USE.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
   'OBJECTIVES_SET and MEMORY_SET only update internal NPC state; include WAIT or MOVE_TO when the NPC should keep acting.',
   'Do not claim unsupported OPEN, button press, or state-change actions have already happened.',
@@ -433,6 +433,24 @@ export class NpcPuppetMaster {
     if (record.type === 'TAKE') {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
       return targetId ? { type: 'TAKE', targetId } : null;
+    }
+    if (record.type === 'PUT') {
+      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
+      const targetId =
+        typeof record.targetId === 'string'
+          ? record.targetId.trim()
+          : record.targetId === null
+            ? null
+            : undefined;
+      const rawRelation = typeof record.relation === 'string' ? record.relation.trim() : null;
+      const relation =
+        rawRelation === 'in' ||
+        rawRelation === 'on' ||
+        rawRelation === 'under' ||
+        rawRelation === 'behind'
+          ? rawRelation
+          : null;
+      return itemId ? { type: 'PUT', itemId, targetId, relation } : null;
     }
     if (record.type === 'COMMAND') {
       const commandId = typeof record.commandId === 'string' ? record.commandId.trim() : '';

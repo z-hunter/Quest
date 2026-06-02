@@ -107,6 +107,10 @@ export class ActorPlanExecutor {
       return this.takeEntity(actor, step.targetId);
     }
 
+    if (step.type === 'PUT') {
+      return this.putEntity(actor, step.itemId, step.targetId, step.relation);
+    }
+
     if (step.type === 'COMMAND') {
       return this.executeCommand(actor, step.commandId, step.arguments);
     }
@@ -361,6 +365,61 @@ export class ActorPlanExecutor {
       npcId: actor.name,
       commandId,
       message: outcome.message || outcome.displayMessages?.join('\n'),
+    });
+  }
+
+  private putEntity(
+    actor: Actor,
+    itemId: string,
+    targetId?: string | null,
+    relation?: 'in' | 'on' | 'under' | 'behind' | null
+  ): NpcPlanExecutionOutcome {
+    const normalizedItemId = String(itemId || '').trim();
+    const scene = this.game.sceneManager.currentScene;
+    const item = scene?.getObjectByName(normalizedItemId);
+    if (!(item instanceof Entity)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'put_item_not_found',
+        npcId: actor.name,
+        itemId: normalizedItemId,
+        targetId: targetId || undefined,
+      });
+    }
+
+    const normalizedTargetId =
+      typeof targetId === 'string' && targetId.trim() ? targetId.trim() : null;
+    const target = normalizedTargetId ? scene?.getObjectByName(normalizedTargetId) || null : null;
+    if (normalizedTargetId && !target) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'put_target_not_found',
+        npcId: actor.name,
+        itemId: item.name,
+        targetId: normalizedTargetId,
+      });
+    }
+
+    if (target === item) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'put_target_is_source',
+        npcId: actor.name,
+        itemId: item.name,
+        targetId: target.name,
+      });
+    }
+
+    const outcome = this.game.putEntityForActor(actor, item, target, {
+      relation: relation || null,
+    });
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      itemId: item.name,
+      targetId: target?.name,
+      message: outcome.message,
     });
   }
 
