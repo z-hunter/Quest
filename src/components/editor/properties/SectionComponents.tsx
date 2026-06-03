@@ -18,6 +18,9 @@ export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
     usePropertiesContext<SceneObject>();
   const o = obj;
+  const [stateParserNoteRows, setStateParserNoteRows] = React.useState<
+    Record<string, Array<{ id: string; value: string; field: string }>>
+  >({});
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
   const hasActorComponent = (o.components || []).some((comp: any) => comp?.type === 'Actor');
@@ -44,6 +47,83 @@ export const SectionComponents: React.FC = () => {
     { value: 'left', label: 'LEFT' },
     { value: 'right', label: 'RIGHT' },
   ];
+  const stateValueTypeOptions = [
+    { value: 'boolean', label: 'Boolean' },
+    { value: 'number', label: 'Number' },
+    { value: 'string', label: 'String' },
+  ];
+  const getDefaultStateValue = (valueType: string): string | number | boolean => {
+    if (valueType === 'string') return '';
+    if (valueType === 'number') return 0;
+    return false;
+  };
+  const normalizeStateValue = (value: unknown, valueType: string): string | number | boolean => {
+    if (valueType === 'string') return typeof value === 'string' ? value : String(value ?? '');
+    if (valueType === 'number') {
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return typeof value === 'boolean' ? value : value === 'true';
+  };
+  const getStateParserNoteRowsKey = (idx: number): string => `${o.name || 'object'}:${idx}`;
+  const getStateParserNoteRows = (comp: any, idx: number) => {
+    const key = getStateParserNoteRowsKey(idx);
+    const draft = stateParserNoteRows[key];
+    if (draft) return draft;
+    return Object.entries(comp.parserNoteTextAssets || {}).map(([value, field]) => ({
+      id: `saved:${value}`,
+      value,
+      field: typeof field === 'string' ? field : String(field ?? ''),
+    }));
+  };
+  const commitStateParserNoteRows = (
+    comp: any,
+    idx: number,
+    rows: Array<{ id: string; value: string; field: string }>
+  ) => {
+    const key = getStateParserNoteRowsKey(idx);
+    setStateParserNoteRows((current) => ({ ...current, [key]: rows }));
+
+    const next = rows.reduce<Record<string, string>>((acc, row) => {
+      const value = row.value.trim();
+      const field = row.field.trim();
+      if (value && field) acc[value] = field;
+      return acc;
+    }, {});
+
+    if (Object.keys(next).length > 0) {
+      comp.parserNoteTextAssets = next;
+    } else {
+      delete comp.parserNoteTextAssets;
+    }
+
+    incrementObjectVersion();
+  };
+  const updateStateParserNoteRow = (
+    comp: any,
+    idx: number,
+    rowId: string,
+    patch: Partial<{ value: string; field: string }>
+  ) => {
+    const rows = getStateParserNoteRows(comp, idx).map((row) =>
+      row.id === rowId ? { ...row, ...patch } : row
+    );
+    commitStateParserNoteRows(comp, idx, rows);
+  };
+  const addStateParserNoteRow = (comp: any, idx: number) => {
+    const rows = [
+      ...getStateParserNoteRows(comp, idx),
+      { id: `new:${Date.now()}:${Math.random()}`, value: '', field: '' },
+    ];
+    setStateParserNoteRows((current) => ({
+      ...current,
+      [getStateParserNoteRowsKey(idx)]: rows,
+    }));
+  };
+  const removeStateParserNoteRow = (comp: any, idx: number, rowId: string) => {
+    const rows = getStateParserNoteRows(comp, idx).filter((row) => row.id !== rowId);
+    commitStateParserNoteRows(comp, idx, rows);
+  };
   const normalizeContainerRelation = (comp: any): 'in' | 'on' | 'under' | 'behind' => {
     if (comp?.type === 'Inventory') {
       return comp?.relation === 'on' ||
@@ -119,6 +199,7 @@ export const SectionComponents: React.FC = () => {
           <Select
             options={[
               { value: 'Item', label: 'Item (Pickup)' },
+              { value: 'State', label: 'State' },
               { value: 'Inventory', label: 'Inventory' },
               { value: 'Surface', label: 'Surface' },
               { value: 'Subscene', label: 'Subscene' },
@@ -169,6 +250,14 @@ export const SectionComponents: React.FC = () => {
                 o.components.push({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
                 o.components.push({ type: 'Item' });
+              } else if (type === 'State') {
+                o.components.push({
+                  type: 'State',
+                  id: 'state',
+                  valueType: 'boolean',
+                  initialValue: false,
+                  value: false,
+                });
               } else if (type === 'Inventory') {
                 if (hasTitle && !relation) {
                   game.showNotification?.('This object already has containers for all relations.');
@@ -479,6 +568,209 @@ export const SectionComponents: React.FC = () => {
                     />
                     Ignore Distance (Always Pickup)
                   </label>
+                </div>
+              </>
+            )}
+
+            {comp.type === 'State' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#ccc',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Script-readable object state.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    ID / Type
+                  </label>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) 104px',
+                      gap: '6px',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="e-input"
+                      value={comp.id || ''}
+                      onChange={(e) => {
+                        comp.id = e.target.value.trim();
+                        incrementObjectVersion();
+                      }}
+                    />
+                    <Select
+                      value={comp.valueType || 'boolean'}
+                      onChange={(value) => {
+                        comp.valueType = value;
+                        comp.initialValue = getDefaultStateValue(value);
+                        comp.value = comp.initialValue;
+                        incrementObjectVersion();
+                      }}
+                      options={stateValueTypeOptions}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Values
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        Initial
+                      </label>
+                      {comp.valueType === 'boolean' ? (
+                        <Select
+                          value={String(normalizeStateValue(comp.initialValue, 'boolean'))}
+                          onChange={(value) => {
+                            comp.initialValue = value === 'true';
+                            comp.value = comp.initialValue;
+                            incrementObjectVersion();
+                          }}
+                          options={[
+                            { value: 'false', label: 'False' },
+                            { value: 'true', label: 'True' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <input
+                          type={comp.valueType === 'number' ? 'number' : 'text'}
+                          className="e-input"
+                          value={String(
+                            normalizeStateValue(comp.initialValue, comp.valueType || 'boolean')
+                          )}
+                          onChange={(e) => {
+                            comp.initialValue = normalizeStateValue(
+                              e.target.value,
+                              comp.valueType || 'boolean'
+                            );
+                            comp.value = comp.initialValue;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        Current
+                      </label>
+                      {comp.valueType === 'boolean' ? (
+                        <Select
+                          value={String(
+                            normalizeStateValue(
+                              comp.value === undefined ? comp.initialValue : comp.value,
+                              'boolean'
+                            )
+                          )}
+                          onChange={(value) => {
+                            comp.value = value === 'true';
+                            incrementObjectVersion();
+                          }}
+                          options={[
+                            { value: 'false', label: 'False' },
+                            { value: 'true', label: 'True' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <input
+                          type={comp.valueType === 'number' ? 'number' : 'text'}
+                          className="e-input"
+                          value={String(
+                            normalizeStateValue(
+                              comp.value === undefined ? comp.initialValue : comp.value,
+                              comp.valueType || 'boolean'
+                            )
+                          )}
+                          onChange={(e) => {
+                            comp.value = normalizeStateValue(
+                              e.target.value,
+                              comp.valueType || 'boolean'
+                            );
+                            incrementObjectVersion();
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="e-row">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1fr) 28px',
+                        gap: '6px',
+                      }}
+                    >
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        State Value
+                      </label>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        TA Field
+                      </label>
+                    </div>
+                    {getStateParserNoteRows(comp, idx).map((row) => (
+                      <div
+                        key={row.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1fr) 28px',
+                          gap: '6px',
+                        }}
+                      >
+                        <input
+                          className="e-input"
+                          placeholder="state value"
+                          value={row.value}
+                          onChange={(e) =>
+                            updateStateParserNoteRow(comp, idx, row.id, { value: e.target.value })
+                          }
+                        />
+                        <input
+                          type="text"
+                          className="e-input"
+                          placeholder="object TA field"
+                          value={row.field}
+                          onChange={(e) =>
+                            updateStateParserNoteRow(comp, idx, row.id, { field: e.target.value })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="e-button"
+                          title="Remove"
+                          onClick={() => removeStateParserNoteRow(comp, idx, row.id)}
+                          style={{
+                            alignSelf: 'center',
+                            width: '20px',
+                            height: '20px',
+                            minWidth: 0,
+                            padding: 0,
+                            lineHeight: '18px',
+                            fontSize: '10px',
+                          }}
+                        >
+                          X
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="e-button"
+                      onClick={() => addStateParserNoteRow(comp, idx)}
+                    >
+                      Add State Value
+                    </button>
+                  </div>
                 </div>
               </>
             )}

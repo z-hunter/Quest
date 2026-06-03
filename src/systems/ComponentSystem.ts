@@ -87,6 +87,18 @@ export interface SurfaceComponent {
   items?: SurfaceItemPlacement[];
 }
 
+export type StateValueType = 'string' | 'number' | 'boolean';
+export type StateValue = string | number | boolean;
+
+export interface StateComponent {
+  type: 'State';
+  id: string;
+  valueType: StateValueType;
+  initialValue: StateValue;
+  value?: StateValue;
+  parserNoteTextAssets?: Record<string, string>;
+}
+
 import { ThreeDParallaxSystem, type ThreeDParallaxComponent } from './ThreeDParallaxSystem';
 import type { ActivationSceneContext } from './types';
 
@@ -106,6 +118,7 @@ export type AnyComponent = (
   | ActorComponent
   | InventoryComponent
   | SurfaceComponent
+  | StateComponent
   | WalkBoxComponent
   | ShadowComponent
   | BackfaceComponent
@@ -115,6 +128,73 @@ export type AnyComponent = (
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  static isStateValueType(value: unknown): value is StateValueType {
+    return value === 'string' || value === 'number' || value === 'boolean';
+  }
+
+  static isStateValueOfType(value: unknown, valueType: StateValueType): value is StateValue {
+    if (valueType === 'string') return typeof value === 'string';
+    if (valueType === 'number') return typeof value === 'number' && Number.isFinite(value);
+    return typeof value === 'boolean';
+  }
+
+  static getDefaultStateValue(valueType: StateValueType): StateValue {
+    if (valueType === 'string') return '';
+    if (valueType === 'number') return 0;
+    return false;
+  }
+
+  static normalizeStateValue(value: unknown, valueType: StateValueType): StateValue {
+    return this.isStateValueOfType(value, valueType) ? value : this.getDefaultStateValue(valueType);
+  }
+
+  static isStateInteractionKey(key: string): boolean {
+    return /^state:/i.test(String(key || '').trim());
+  }
+
+  static hasClickInteractionKeys(entity: SceneObject | null | undefined): boolean {
+    const interactions = (entity as any)?.interactions;
+    if (!interactions || typeof interactions !== 'object') return false;
+    return Object.keys(interactions).some((key) => !this.isStateInteractionKey(key));
+  }
+
+  static normalizeStateComponent(component: any): StateComponent | null {
+    if (!component || typeof component !== 'object' || component.type !== 'State') return null;
+
+    const valueType = this.isStateValueType(component.valueType) ? component.valueType : 'boolean';
+    const initialValue = this.normalizeStateValue(component.initialValue, valueType);
+    const normalized: StateComponent = {
+      type: 'State',
+      id: typeof component.id === 'string' ? component.id.trim() : '',
+      valueType,
+      initialValue,
+    };
+
+    if (component.value !== undefined) {
+      normalized.value = this.normalizeStateValue(component.value, valueType);
+    } else {
+      normalized.value = initialValue;
+    }
+
+    const parserNoteTextAssets =
+      component.parserNoteTextAssets && typeof component.parserNoteTextAssets === 'object'
+        ? Object.entries(component.parserNoteTextAssets).reduce<Record<string, string>>(
+            (acc, [rawValue, rawField]) => {
+              const valueKey = String(rawValue || '').trim();
+              const field = typeof rawField === 'string' ? rawField.trim() : '';
+              if (valueKey && field) acc[valueKey] = field;
+              return acc;
+            },
+            {}
+          )
+        : {};
+    if (Object.keys(parserNoteTextAssets).length > 0) {
+      normalized.parserNoteTextAssets = parserNoteTextAssets;
+    }
+
+    return normalized;
+  }
+
   static normalizeInventoryRelation(
     component: InventoryComponent | null | undefined
   ): Exclude<SpatialRelationType, 'near'> {
@@ -145,6 +225,64 @@ export class ComponentSystem {
     return entity.components.filter(
       (component: any): component is SurfaceComponent => component?.type === 'Surface'
     );
+  }
+
+  static getStateComponents(entity: SceneObject | null | undefined): StateComponent[] {
+    if (!entity?.components) return [];
+    return entity.components
+      .filter((component: any): component is StateComponent => component?.type === 'State')
+      .map((component) => this.normalizeStateComponent(component))
+      .filter((component): component is StateComponent => !!component && !!component.id);
+  }
+
+  static getStateComponent(
+    entity: SceneObject | null | undefined,
+    stateId: string
+  ): StateComponent | null {
+    const normalizedId = String(stateId || '').trim();
+    if (!normalizedId) return null;
+    const component = entity?.components?.find(
+      (candidate: any) =>
+        candidate?.type === 'State' && String(candidate?.id || '').trim() === normalizedId
+    );
+    return this.normalizeStateComponent(component);
+  }
+
+  static getStateValue(
+    entity: SceneObject | null | undefined,
+    stateId: string
+  ): StateValue | undefined {
+    const component = this.getStateComponent(entity, stateId);
+    if (!component) return undefined;
+    return component.value !== undefined ? component.value : component.initialValue;
+  }
+
+  static setStateValue(
+    entity: SceneObject | null | undefined,
+    stateId: string,
+    value: unknown
+  ): boolean {
+    const normalizedId = String(stateId || '').trim();
+    if (!normalizedId || !entity?.components) return false;
+    const component = entity.components.find(
+      (candidate: any) =>
+        candidate?.type === 'State' && String(candidate?.id || '').trim() === normalizedId
+    ) as StateComponent | undefined;
+    if (!component) return false;
+
+    const normalized = this.normalizeStateComponent(component);
+    if (!normalized || !this.isStateValueOfType(value, normalized.valueType)) return false;
+
+    component.id = normalized.id;
+    component.valueType = normalized.valueType;
+    component.initialValue = normalized.initialValue;
+    component.value = value;
+    if (normalized.parserNoteTextAssets) {
+      component.parserNoteTextAssets = normalized.parserNoteTextAssets;
+    } else {
+      delete component.parserNoteTextAssets;
+    }
+    return true;
   }
 
   private static getDirectSpatialChildren(

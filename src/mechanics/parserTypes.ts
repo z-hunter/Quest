@@ -1,6 +1,7 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
+import type { StateValue } from '../systems/ComponentSystem';
 
 export type ParserEntityLocationContext = {
   relation: Exclude<ParserRelationType, 'near'>;
@@ -12,6 +13,12 @@ export type ParserEntityContentContext = {
   relation: Exclude<ParserRelationType, 'near'>;
   id: string;
   title: string;
+};
+
+export type ParserStateContext = {
+  id: string;
+  type: 'string' | 'number' | 'boolean';
+  value: string | number | boolean;
 };
 
 export type ParserEntityContext = {
@@ -34,6 +41,7 @@ export type ParserEntityContext = {
   parserNote?: string;
   parserNoteNeedsCheck?: true;
   interactions?: string[];
+  states?: ParserStateContext[];
 };
 
 export type ParserInventoryItemContext = {
@@ -45,6 +53,7 @@ export type ParserInventoryItemContext = {
   lore?: string;
   parserNote?: string;
   parserNoteNeedsCheck?: true;
+  states?: ParserStateContext[];
 };
 
 export type ParserSpatialNodeContext = {
@@ -136,8 +145,54 @@ export type ParserCommandActionSpec =
       type: 'showText';
       messageId?: string;
       text?: string;
+      messageIdByRef?: {
+        ref: string;
+        values: Record<string, string>;
+        fallbackMessageId?: string;
+      };
       params?: Record<string, string>;
       paramsFromRefs?: Record<string, string>;
+    }
+  | {
+      type: 'requireEntityAvailable';
+      entityId: string;
+      scopes: ParserScopeSlice[];
+      saveAs?: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireAnyEntityAvailable';
+      options: Array<{
+        entityId: string;
+        scopes: ParserScopeSlice[];
+        saveAsValue?: string;
+      }>;
+      saveAs?: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setEntityState';
+      entityId: string;
+      stateId: string;
+      value: StateValue;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setGroupDisabled';
+      groupId: string;
+      disabled: boolean;
+    }
+  | {
+      type: 'runScript';
+      scriptId: string;
+      restart?: boolean;
+    }
+  | {
+      type: 'stopScript';
+      scriptId: string;
     };
 
 export type ParserCommandSpec = {
@@ -234,6 +289,11 @@ export type ParserToolAction =
       relation?: ParserRelationType | null;
     }
   | {
+      type: 'llmClarification';
+      question: string;
+      pendingActions: ParserToolAction[];
+    }
+  | {
       type: 'openTarget';
       target: string | null;
     }
@@ -287,8 +347,59 @@ export type ParserToolAction =
       type: 'showText';
       message?: string;
       textKey?: string;
+      messageByRef?: {
+        ref: string;
+        values: Record<string, string>;
+        fallback?: string;
+      };
       params?: Record<string, string>;
       paramsFromRefs?: Record<string, string>;
+    }
+  | {
+      type: 'runCustomCommand';
+      commandId: string;
+      arguments?: Record<string, string | null>;
+    }
+  | {
+      type: 'requireEntityAvailable';
+      commandId?: string;
+      entityId: string;
+      scopes: ParserScopeSlice[];
+      saveAs?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireAnyEntityAvailable';
+      commandId?: string;
+      options: Array<{
+        entityId: string;
+        scopes: ParserScopeSlice[];
+        saveAsValue?: string;
+      }>;
+      saveAs?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setEntityState';
+      entityId: string;
+      stateId: string;
+      value: StateValue;
+      missingMessage?: string;
+      source?: 'parser' | 'llm' | 'custom-command' | string;
+    }
+  | {
+      type: 'setGroupDisabled';
+      groupId: string;
+      disabled: boolean;
+    }
+  | {
+      type: 'runScript';
+      scriptId: string;
+      restart?: boolean;
+    }
+  | {
+      type: 'stopScript';
+      scriptId: string;
     };
 
 export type ParserCascadeEnvelope = {

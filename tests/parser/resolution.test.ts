@@ -131,6 +131,51 @@ describe('Parser resolution', () => {
     expect(resolved.pendingIntent).toBeNull();
   });
 
+  it('cancels pending clarification with an empty reply', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    await fixture.run('look cassette');
+    const cancelled = await fixture.run('');
+
+    expect(cancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(cancelled.pendingIntent).toBeNull();
+
+    const next = await fixture.run('2');
+    expect(next.messages.at(-1)).toBe("I don't understand.");
+  });
+
+  it('cancels pending clarification with text asset aliases', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    await fixture.run('look cassette');
+    const noneCancelled = await fixture.run('none');
+    expect(noneCancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(noneCancelled.pendingIntent).toBeNull();
+
+    await fixture.run('look cassette');
+    const cancelCancelled = await fixture.run('cancel');
+    expect(cancelCancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(cancelCancelled.pendingIntent).toBeNull();
+  });
+
   it('rejects BOTH when clarification has more than two options', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

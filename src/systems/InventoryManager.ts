@@ -285,13 +285,73 @@ export class InventoryManager {
   ): Entity[] {
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return [];
-    const scene = this.sceneManager.currentScene;
     return (component.items || [])
       .map((id) => {
-        const candidate = scene?.getObjectByName(id);
-        return candidate instanceof Entity ? candidate : null;
+        return this.findInventoryEntityCandidate(owner, String(id || '').trim(), relation);
       })
       .filter((entity): entity is Entity => !!entity);
+  }
+
+  private findInventoryEntityCandidate(
+    owner: Entity,
+    id: string,
+    relation: ContainerRelation
+  ): Entity | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || !id) return null;
+
+    const matches = scene.entities.filter(
+      (candidate): candidate is Entity => candidate instanceof Entity && candidate.name === id
+    );
+    if (!matches.length) return null;
+
+    const spatialMatches = matches.filter(
+      (candidate) =>
+        candidate.spatial?.parentNodeId === owner.name && candidate.spatial?.relation === 'in'
+    );
+    const relationMatches = spatialMatches.filter(
+      (candidate) => (candidate as any).__inventoryRelation === relation
+    );
+
+    return (
+      relationMatches[relationMatches.length - 1] ||
+      spatialMatches[spatialMatches.length - 1] ||
+      matches[matches.length - 1] ||
+      null
+    );
+  }
+
+  private findSurfaceEntityCandidate(surface: SceneObject, id: string): Entity | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || !id) return null;
+
+    const matches = scene.entities.filter(
+      (candidate): candidate is Entity => candidate instanceof Entity && candidate.name === id
+    );
+    if (!matches.length) return null;
+
+    const spatialMatches = matches.filter(
+      (candidate) => candidate.spatial?.parentNodeId === surface.name
+    );
+
+    return spatialMatches[spatialMatches.length - 1] || matches[matches.length - 1] || null;
+  }
+
+  private removeDuplicateSceneEntityRefs(entity: Entity): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+
+    const duplicateRefs = scene.entities.filter(
+      (candidate) => candidate !== entity && candidate.name === entity.name
+    );
+    if (!duplicateRefs.length) return;
+
+    scene.entities = scene.entities.filter(
+      (candidate) => candidate === entity || candidate.name !== entity.name
+    );
+    for (const duplicate of duplicateRefs) {
+      scene.subsceneEntities.delete(duplicate);
+    }
   }
 
   private getPreferredInventoryRelationForEntity(
@@ -321,9 +381,11 @@ export class InventoryManager {
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
+    this.removeDuplicateSceneEntityRefs(entity);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
+    this.removeDuplicateSceneEntityRefs(entity);
     (entity as any).__inventoryRelation = relation;
     entity.setInventoryPositionOwner(owner);
     entity.visible = false;
@@ -349,9 +411,11 @@ export class InventoryManager {
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
+    this.removeDuplicateSceneEntityRefs(entity);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
+    this.removeDuplicateSceneEntityRefs(entity);
 
     delete (entity as any).__inventoryRelation;
     entity.setInventoryPositionOwner(null);
@@ -430,7 +494,7 @@ export class InventoryManager {
 
         component.items = component.items.filter((placement) => {
           const entityId = typeof placement?.id === 'string' ? placement.id.trim() : '';
-          const entity = entityId ? scene.getObjectByName(entityId) : null;
+          const entity = entityId ? this.findSurfaceEntityCandidate(surface, entityId) : null;
           if (
             !(entity instanceof Entity) ||
             !Number.isFinite(placement?.x) ||
@@ -1723,7 +1787,7 @@ export class InventoryManager {
     const collected = new Set<Entity>();
     const surfaceComponent = ComponentSystem.getSurfaceComponent(surface, relation);
     for (const candidate of (surfaceComponent?.items || [])
-      .map((item) => scene.getObjectByName(item.id))
+      .map((item) => this.findSurfaceEntityCandidate(surface, String(item.id || '').trim()))
       .filter(
         (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
       )) {

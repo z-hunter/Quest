@@ -1,9 +1,9 @@
 {
-  "id": "home\\room",
+  "id": "test_room1 (2)",
   "name": "Test Room",
   "description": "You are in Test Room.",
   "textRedirects": {},
-  "filename": "home/room",
+  "filename": "test_room1 (2)",
   "walkbox": [
     {
       "name": "Walk_997",
@@ -803,40 +803,6 @@
       "parallax": 1,
       "poly": [],
       "script": ""
-    },
-    {
-      "name": "Trig_104",
-      "type": "Triggerbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "poly": [],
-      "script": ""
-    },
-    {
-      "name": "Trig_410",
-      "type": "Triggerbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "poly": [],
-      "script": ""
     }
   ],
   "scaling": {
@@ -1002,16 +968,16 @@
           "capacity": 9007199254740991,
           "groups": [],
           "protected": false,
-          "items": ["test"],
+          "items": ["test", "tv_rc"],
           "relation": "in"
         }
       ],
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0629516159709662,
-      "x": 251.15966464420342,
-      "y": 281.9989546246994,
+      "parallax": 1.0277583479722812,
+      "x": 336.7815391252187,
+      "y": 228.0031535737765,
       "width": 119.88,
       "height": 289.34,
       "baseWidth": 162,
@@ -1523,17 +1489,26 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [],
+      "components": [
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 9007199254740991,
+          "groups": [],
+          "protected": false,
+          "items": []
+        }
+      ],
       "layer": -2,
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 221,
-      "y": 55,
-      "width": 348,
-      "height": 193,
-      "baseWidth": 382.4175824175824,
-      "baseHeight": 212.0879120879121,
+      "x": 56,
+      "y": -192,
+      "width": 27.3,
+      "height": 27.3,
+      "baseWidth": 30,
+      "baseHeight": 30,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
@@ -1561,29 +1536,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 194.5901716487241,
-      "y": 262.9387852462662,
+      "x": 280.90250906315794,
+      "y": 208.94299349375518,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 194.5901716487241,
-          "y": 262.9387852462662,
-          "p": 1.0505034075613393
+          "x": 280.90250906315794,
+          "y": 208.94299349375518,
+          "p": 1.01531034619403
         },
         {
-          "x": 288.5144801591627,
-          "y": 261.8880342984771,
-          "p": 1.049845350611835
+          "x": 375.9193845690851,
+          "y": 207.86240854104244,
+          "p": 1.014548131463076
         },
         {
-          "x": 340.7136100639754,
-          "y": 293.34627657889,
-          "p": 1.0703547250512273
+          "x": 393.2610018254605,
+          "y": 240.1327754109337,
+          "p": 1.0356967912616688
         },
         {
-          "x": 287.0584421706859,
-          "y": 291.9346973558028,
-          "p": 1.0694381151661059
+          "x": 341.20185317009197,
+          "y": 238.68753003705902,
+          "p": 1.0348207291993425
         }
       ],
       "color": "#2b019d",
@@ -1829,11 +1804,7 @@
           "id": "power",
           "valueType": "string",
           "initialValue": "off",
-          "value": "off",
-          "parserNoteTextAssets": {
-            "off": "power_off",
-            "on": "power_on"
-          }
+          "value": "off"
         }
       ],
       "folder": "f_mppw14fo_1",
@@ -2145,7 +2116,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.2942668559225554,
+      "opacity": 0.3094839278188627,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2197,7 +2168,7 @@
       ],
       "color": "#52779aff",
       "sortMode": "ignore",
-      "opacity": 0.2942668559225554,
+      "opacity": 0.3094839278188627,
       "blendMode": "lighter",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2249,7 +2220,7 @@
       ],
       "color": "#7c62ac",
       "sortMode": "ignore",
-      "opacity": 0.2942668559225554,
+      "opacity": 0.3094839278188627,
       "blendMode": "screen",
       "isGrid": false,
       "gridLinesX": 5,
@@ -2281,17 +2252,17 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 251.15966464420342,
-      "y": 281.9989546246994,
-      "width": 15.759890859481585,
-      "height": 22.395634379263303,
+      "x": 336.7815391252187,
+      "y": 228.0031535737765,
+      "width": 14.994765540094495,
+      "height": 21.308351030660596,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.8,
+      "scale": 0.7611608823330515,
       "refScale": 0.8,
       "modelScale": 0.8,
       "ignoreScaling": false,
@@ -2315,24 +2286,24 @@
         }
       ],
       "layer": 0,
-      "visible": true,
-      "hidden": "lookable",
+      "visible": false,
+      "hidden": false,
       "spatial": {
-        "parentNodeId": "sofa_pillow2",
-        "relation": "under"
+        "parentNodeId": "Hero_1",
+        "relation": "in"
       },
       "parallax": 1,
-      "x": 685,
-      "y": 335,
-      "width": 25.999999999999996,
-      "height": 38.35,
+      "x": 336.7815391252187,
+      "y": 228.0031535737765,
+      "width": 24.73772867582417,
+      "height": 36.48814979684065,
       "baseWidth": 199.99999999999997,
       "baseHeight": 295,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "tv_rc",
       "color": "#AAAAAA",
-      "scale": 0.13,
+      "scale": 0.12368864337912086,
       "refScale": 0.13,
       "modelScale": 0.13,
       "ignoreScaling": false,
@@ -2340,43 +2311,6 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0
-    },
-    {
-      "name": "tv_anim_1",
-      "type": "Entity",
-      "locked": false,
-      "disabled": true,
-      "groupID": "#tv_glow",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "tv",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 548,
-      "y": 75,
-      "width": 77,
-      "height": 63.99999999999999,
-      "baseWidth": 84.61538461538461,
-      "baseHeight": 70.32967032967032,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "tv_anim",
-      "color": "#AAAAAA",
-      "scale": 0.91,
-      "refScale": 1,
-      "modelScale": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 0.4,
-      "blendMode": "screen",
-      "blur": 11
     }
   ],
   "folders": [

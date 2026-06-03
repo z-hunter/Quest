@@ -5,6 +5,7 @@ import type {
   ParserCascadeEnvelope,
   ParserContext,
   ParserRelationType,
+  ParserScopeSlice,
   ParserToolAction,
 } from './parserTypes';
 
@@ -15,7 +16,7 @@ const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 const FALLBACK_SYSTEM_PROMPT = [
   'You are a command-line parser and Game Master for a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
-  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"..."}, or {"kind":"fallback"}.',
+  'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"...","pendingAction":{...}}, or {"kind":"fallback"}.',
   'Use only real titles from the provided context and only safe parser action types.',
 ].join('\n');
 
@@ -34,6 +35,13 @@ const ALLOWED_ACTION_TYPES = new Set([
   'setEntityParserNote',
   'goToTarget',
   'showText',
+  'runCustomCommand',
+  'requireEntityAvailable',
+  'requireAnyEntityAvailable',
+  'setEntityState',
+  'setGroupDisabled',
+  'runScript',
+  'stopScript',
 ]);
 
 const RELATIONS = new Set<ParserRelationType>(['on', 'under', 'in', 'behind', 'near']);
@@ -169,7 +177,7 @@ export class LlmCascade {
       return null;
     }
 
-    const normalized = this.normalizeResponse(parsed);
+    const normalized = this.normalizeResponse(parsed, input);
     this.lastDebugInfo = {
       ...baseDebug,
       prompt,
@@ -392,6 +400,13 @@ export class LlmCascade {
       '',
       'Per-call dynamic game world context:',
       JSON.stringify(this.buildDynamicContext(context), null, 2),
+      ...this.buildHiddenObjectsSpoilerSection(context),
+      '',
+      'Direct Game Master world actions:',
+      JSON.stringify(this.buildDirectGameMasterActions(), null, 2),
+      '',
+      'Available authored parser commands:',
+      JSON.stringify(this.buildAvailableCustomCommands(), null, 2),
       ...(previousAttempt
         ? [
             '',
@@ -422,7 +437,7 @@ export class LlmCascade {
       focusedTarget: this.staticEntityContext(context.focusedTarget),
       entities: (context.entities || []).map((entity) => this.staticEntityContext(entity)),
       knownEntities: (context.knownEntities || []).map((entity) =>
-        this.staticEntityContext(entity)
+        this.llmKnownEntityContext(entity)
       ),
       inventory: (context.inventory || []).map((entity) => this.staticEntityContext(entity)),
     });
@@ -446,6 +461,22 @@ export class LlmCascade {
     });
   }
 
+  private llmKnownEntityContext(entity: any): Record<string, unknown> | undefined {
+    if (entity?.visibility !== 'hidden') return this.staticEntityContext(entity);
+    return this.compactRecord({
+      id: entity.id,
+      title: entity.title,
+      item: entity.item,
+      visibility: entity.visibility,
+      hiddenReason: entity.hiddenReason,
+      synonyms: entity.synonyms,
+      semanticTags: entity.semanticTags,
+      parserNote: entity.parserNote,
+      parserNoteNeedsCheck: entity.parserNoteNeedsCheck,
+      states: entity.states,
+    });
+  }
+
   private buildDynamicContext(context: ParserContext): ParserContext {
     return this.compactRecord({
       rawInput: context.rawInput,
@@ -462,13 +493,48 @@ export class LlmCascade {
           }
         : undefined,
       entities: context.entities,
-      knownEntities: context.knownEntities,
+      knownEntities: (context.knownEntities || []).map((entity) =>
+        this.llmKnownEntityContext(entity)
+      ),
       inventory: context.inventory,
       worldFacts: context.worldFacts,
       spatialNodes: context.spatialNodes,
       spatialRelations: context.spatialRelations,
       pending: context.pending,
     }) as ParserContext;
+  }
+
+  private buildHiddenObjectsSpoilerSection(context: ParserContext): string[] {
+    const hiddenEntities = (context.knownEntities || []).filter(
+      (entity) => entity?.visibility === 'hidden' && entity?.id && entity?.title
+    );
+    if (!hiddenEntities.length) return [];
+
+    const lines = hiddenEntities.map((entity) => {
+      const title = this.quoteSpoilerText(entity.title || '');
+      const synonyms = (entity.synonyms || [])
+        .filter((synonym): synonym is string => typeof synonym === 'string' && !!synonym.trim())
+        .map((synonym) => synonym.trim());
+      const also = synonyms.length
+        ? ` (also: ${synonyms.map((synonym) => this.quoteSpoilerText(synonym)).join(', ')})`
+        : '';
+      return `- ${entity.id}: ${title}${also}`;
+    });
+
+    return [
+      '',
+      'Hidden Objects / Spoiler Protection:',
+      'The following scene objects are hidden from the player character and have not been discovered yet:',
+      ...lines,
+      'This is an adventure game: finding hidden objects is part of the gameplay. Directly revealing these objects, confirming that they exist here, naming their exact location, or saying how to get them would spoil the game and would be unhelpful to the player.',
+      'If the player directly names or searches for one of these hidden objects before discovery, treat it as a blind guess. Answer only from what the character can currently perceive: the character does not see it and does not know where it is.',
+      'Indirect, non-spoiling hints are allowed when they follow from the visible scene or from the player character physically interacting with something. Broad hints are allowed, such as suggesting that audio equipment is a reasonable thing to inspect when looking for cables.',
+      'Direct reveals are forbidden, such as saying that the cables are behind the boombox.',
+    ];
+  }
+
+  private quoteSpoilerText(value: string): string {
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
 
   private describeStaticPrompt(sceneId: string | undefined, text: string): StaticPromptInfo {
@@ -566,7 +632,10 @@ export class LlmCascade {
     }
   }
 
-  private normalizeResponse(parsed: unknown): {
+  private normalizeResponse(
+    parsed: unknown,
+    input: string = ''
+  ): {
     actions: ParserToolAction[];
     filteredActions: unknown[];
     fallback: boolean;
@@ -592,19 +661,46 @@ export class LlmCascade {
     }
 
     if (parsed.kind === 'clarification') {
-      let question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
-      if (question)
-        question = question
-          .split('—')
-          .map((s) => s.trim())
-          .join('\u202F—\u202F');
-      return question
-        ? {
-            actions: [{ type: 'showText', message: question }],
-            filteredActions: [],
-            fallback: false,
-          }
-        : { actions: [], filteredActions: [parsed], fallback: false };
+      const pendingAction = this.isRecord(parsed.pendingAction)
+        ? this.validateAction(parsed.pendingAction)
+        : null;
+      if (pendingAction) {
+        const normalizedPendingAction = this.normalizeClarificationPendingAction(
+          pendingAction,
+          input
+        );
+        const question =
+          typeof parsed.question === 'string' && parsed.question.trim()
+            ? parsed.question.trim()
+            : 'Which one do you mean?';
+        return {
+          actions: [
+            {
+              type: 'llmClarification',
+              question,
+              pendingActions: [normalizedPendingAction],
+            },
+          ],
+          filteredActions: [
+            {
+              reason: 'llm_structured_clarification_uses_pending_action',
+              response: parsed,
+              normalizedAction: normalizedPendingAction,
+            },
+          ],
+          fallback: false,
+        };
+      }
+      return {
+        actions: [],
+        filteredActions: [
+          {
+            reason: 'llm_clarification_must_use_parser_pending_flow',
+            response: parsed,
+          },
+        ],
+        fallback: false,
+      };
     }
 
     if (parsed.kind !== 'plan' || !Array.isArray(parsed.actions)) {
@@ -661,11 +757,68 @@ export class LlmCascade {
       };
     }
 
+    if (
+      filteredActions.some((action) => this.isDirectWorldActionLike(action)) &&
+      actions.length > 0 &&
+      actions.every((action) => action.type === 'showText')
+    ) {
+      return {
+        actions: [],
+        filteredActions: [
+          ...filteredActions,
+          {
+            reason: 'direct_world_action_failed_validation_omits_showText',
+            actions,
+          },
+        ],
+        fallback: false,
+      };
+    }
+
     return { actions, filteredActions, fallback: false };
+  }
+
+  private normalizeClarificationPendingAction(
+    action: ParserToolAction,
+    input: string
+  ): ParserToolAction {
+    if (action.type !== 'putTarget') return action;
+    const loadItem = this.extractLoadLikeItem(input);
+    if (!loadItem) return action;
+    return {
+      ...action,
+      item: loadItem,
+    };
+  }
+
+  private extractLoadLikeItem(input: string): string | null {
+    let value = String(input || '')
+      .replace(/[?.!,]+$/g, '')
+      .trim();
+    const match = /^(load|insert)\s+(.+)$/i.exec(value);
+    if (!match) return null;
+
+    value = match[2].trim();
+    const relationMatch = /\s+(?:into|inside|in)\s+/i.exec(value);
+    const rawItem = relationMatch ? value.slice(0, relationMatch.index).trim() : value;
+    const item = rawItem.replace(/^(the|a|an|my)\s+/i, '').trim();
+    return item || null;
   }
 
   private isParserNoteAction(action: ParserToolAction): boolean {
     return action.type === 'setSceneParserNote' || action.type === 'setEntityParserNote';
+  }
+
+  private isDirectWorldActionLike(action: unknown): boolean {
+    if (!this.isRecord(action)) return false;
+    return (
+      action.type === 'requireEntityAvailable' ||
+      action.type === 'requireAnyEntityAvailable' ||
+      action.type === 'setEntityState' ||
+      action.type === 'setGroupDisabled' ||
+      action.type === 'runScript' ||
+      action.type === 'stopScript'
+    );
   }
 
   private validateAction(action: unknown): ParserToolAction | null {
@@ -751,9 +904,186 @@ export class LlmCascade {
             .join('\u202F—\u202F');
         return message ? { type: 'showText', message } : null;
       }
+      case 'runCustomCommand': {
+        const commandId = this.asString(action.commandId);
+        if (!commandId || !this.isKnownCustomCommand(commandId)) return null;
+        const args = this.asStringMap(action.arguments);
+        return args === null
+          ? null
+          : {
+              type: 'runCustomCommand',
+              commandId,
+              arguments: args,
+            };
+      }
+      case 'requireEntityAvailable': {
+        const payload = this.getActionPayload(action);
+        const entityId = this.asString(payload.entityId);
+        const scopes = this.asScopeArray(payload.scopes);
+        if (!entityId || !scopes.length) return null;
+        return {
+          type: 'requireEntityAvailable',
+          entityId,
+          scopes,
+          saveAs: this.asNullableString(payload.saveAs) || undefined,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+        };
+      }
+      case 'requireAnyEntityAvailable': {
+        const payload = this.getActionPayload(action);
+        const options = this.asRequireAnyOptions(payload.options);
+        if (!options.length) return null;
+        return {
+          type: 'requireAnyEntityAvailable',
+          options,
+          saveAs: this.asNullableString(payload.saveAs) || undefined,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+        };
+      }
+      case 'setEntityState': {
+        const payload = this.getActionPayload(action);
+        const entityId = this.asString(payload.entityId);
+        const stateId = this.asString(payload.stateId);
+        const value = this.asStateValue(payload.value);
+        if (!entityId || !stateId || value === undefined) return null;
+        return {
+          type: 'setEntityState',
+          entityId,
+          stateId,
+          value,
+          missingMessage: this.asNullableString(payload.missingMessage) || undefined,
+          source: 'llm',
+        };
+      }
+      case 'setGroupDisabled': {
+        const payload = this.getActionPayload(action);
+        const groupId = this.asString(payload.groupId);
+        if (!groupId || typeof payload.disabled !== 'boolean') return null;
+        return {
+          type: 'setGroupDisabled',
+          groupId,
+          disabled: payload.disabled,
+        };
+      }
+      case 'runScript': {
+        const payload = this.getActionPayload(action);
+        const scriptId = this.asString(payload.scriptId);
+        if (!scriptId) return null;
+        return {
+          type: 'runScript',
+          scriptId,
+          restart: typeof payload.restart === 'boolean' ? payload.restart : undefined,
+        };
+      }
+      case 'stopScript': {
+        const payload = this.getActionPayload(action);
+        const scriptId = this.asString(payload.scriptId);
+        return scriptId ? { type: 'stopScript', scriptId } : null;
+      }
       default:
         return null;
     }
+  }
+
+  private getActionPayload(action: Record<string, unknown>): Record<string, unknown> {
+    return this.isRecord(action.fields) ? action.fields : action;
+  }
+
+  private buildDirectGameMasterActions(): Array<Record<string, unknown>> {
+    return [
+      {
+        description:
+          'Set an existing authored State value. Matching state:<id> interactions run automatically after the value changes.',
+        action: {
+          type: 'setEntityState',
+          entityId: 'visible scene object id',
+          stateId: 'existing State id',
+          value: 'string | number | boolean matching the authored State type',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+      {
+        description: 'Enable or disable every current scene object with this groupID.',
+        action: {
+          type: 'setGroupDisabled',
+          groupId: '#group_id',
+          disabled: 'boolean',
+        },
+      },
+      {
+        description: 'Start a registered script. Use restart true to avoid duplicate instances.',
+        action: {
+          type: 'runScript',
+          scriptId: 'registered script id',
+          restart: 'optional boolean',
+        },
+      },
+      {
+        description: 'Stop all active instances of a registered script.',
+        action: {
+          type: 'stopScript',
+          scriptId: 'registered script id',
+        },
+      },
+      {
+        description: 'Fail the plan unless an exact object id is available in one of these scopes.',
+        action: {
+          type: 'requireEntityAvailable',
+          entityId: 'exact object id',
+          scopes: ['visible', 'held', 'reachable'],
+          saveAs: 'optional plan variable',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+      {
+        description: 'Fail the plan unless at least one exact object id option is available.',
+        action: {
+          type: 'requireAnyEntityAvailable',
+          options: [
+            {
+              entityId: 'exact object id',
+              scopes: ['visible', 'held', 'reachable'],
+              saveAsValue: 'optional saved marker',
+            },
+          ],
+          saveAs: 'optional plan variable',
+          missingMessage: 'optional player-facing failure text',
+        },
+      },
+    ];
+  }
+
+  private buildAvailableCustomCommands(): Array<Record<string, unknown>> {
+    const commands = this.getTextAssets()?.getParserCommands?.() || [];
+    return commands
+      .filter((command) => command.id && Array.isArray(command.phrases))
+      .map((command) =>
+        this.compactRecord({
+          id: command.id,
+          phrases: command.phrases,
+          arguments: (command.arguments || []).map((arg) =>
+            this.compactRecord({
+              name: arg.name,
+              required: arg.required,
+              scopes: arg.scopes,
+              separatorsBefore: arg.separatorsBefore,
+            })
+          ),
+          action: {
+            type: 'runCustomCommand',
+            commandId: command.id,
+            arguments: Object.fromEntries(
+              (command.arguments || []).map((arg) => [arg.name, `<${arg.name}>`])
+            ),
+          },
+        })
+      );
+  }
+
+  private isKnownCustomCommand(commandId: string): boolean {
+    return (this.getTextAssets()?.getParserCommands?.() || []).some(
+      (command) => command.id === commandId
+    );
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -771,6 +1101,65 @@ export class LlmCascade {
   private asNullableString(value: unknown): string | null {
     if (value === null || value === undefined) return null;
     return this.asString(value);
+  }
+
+  private asStringMap(value: unknown): Record<string, string | null> | null {
+    if (value === undefined) return {};
+    if (!this.isRecord(value)) return null;
+    const result: Record<string, string | null> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (!key.trim()) return null;
+      if (entry === null || entry === undefined) {
+        result[key] = null;
+      } else if (typeof entry === 'string') {
+        result[key] = entry.trim() || null;
+      } else {
+        return null;
+      }
+    }
+    return result;
+  }
+
+  private asStateValue(value: unknown): string | number | boolean | undefined {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? value
+      : undefined;
+  }
+
+  private asScopeArray(value: unknown): ParserScopeSlice[] {
+    if (!Array.isArray(value)) return [];
+    const allowed = new Set<ParserScopeSlice>([
+      'visible',
+      'held',
+      'takable',
+      'putSource',
+      'reachable',
+      'examinable',
+      'subscene',
+      'worldKnown',
+      'hiddenKnown',
+    ]);
+    return value.filter((item): item is ParserScopeSlice => allowed.has(item as ParserScopeSlice));
+  }
+
+  private asRequireAnyOptions(
+    value: unknown
+  ): Array<{ entityId: string; scopes: ParserScopeSlice[]; saveAsValue?: string }> {
+    if (!Array.isArray(value)) return [];
+    const options: Array<{ entityId: string; scopes: ParserScopeSlice[]; saveAsValue?: string }> =
+      [];
+    for (const item of value) {
+      if (!this.isRecord(item)) continue;
+      const entityId = this.asString(item.entityId);
+      const scopes = this.asScopeArray(item.scopes);
+      if (!entityId || !scopes.length) continue;
+      options.push({
+        entityId,
+        scopes,
+        saveAsValue: this.asNullableString(item.saveAsValue) || undefined,
+      });
+    }
+    return options;
   }
 
   private asRelation(value: unknown): ParserRelationType | null {

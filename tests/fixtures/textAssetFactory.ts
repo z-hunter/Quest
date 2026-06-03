@@ -18,6 +18,7 @@ type TextAssetLike = {
   getParserTraining(): ParserTrainingAsset;
   getParserCommands(): ParserCommandSpec[];
   readParserTrainingAsset(): Promise<ParserTrainingAsset>;
+  getServiceList(key: string): string[];
 };
 
 export type TestTextAssets = TextAssetLike & {
@@ -26,7 +27,7 @@ export type TestTextAssets = TextAssetLike & {
   setParserCommands(commands: ParserCommandSpec[]): void;
 };
 
-const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
   'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
@@ -80,6 +81,8 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.go_to_which_one': 'Where exactly do you want to go: {options}?',
   'parser.go_to_not_found': "You can't get to {target} from here.",
   'parser.go_to_success': 'You go to {target}.',
+  'parser.clarification_cancel_replies': ['none', 'cancel'],
+  'parser.clarification_cancelled': 'Command cancelled.',
   'parser.command_no_effect': "That doesn't work.",
   'parser.parse_unknown': "I don't understand.",
   'parser.relation_empty': 'You see nothing {relation} the {target}.',
@@ -92,7 +95,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check', 'x'],
     take: ['take', 'get', 'pickup', 'pick up'],
-    put: ['put', 'drop', 'place'],
+    put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -103,7 +106,17 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
     examine: ['look closely at', 'take a closer look at', 'examine', 'inspect', 'check'],
     take: ['pick up', 'take', 'get', 'grab'],
-    put: ['put down', 'put', 'drop', 'place'],
+    put: [
+      'put down',
+      'throw away',
+      'toss away',
+      'put',
+      'drop',
+      'place',
+      'throw',
+      'toss',
+      'discard',
+    ],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -126,7 +139,7 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   look: ['look chair', 'look at the chair', 'describe the chair'],
   examine: ['examine chair', 'inspect the chair', 'check the card'],
   take: ['take key', 'pick up key', 'take key from drawer'],
-  put: ['put key', 'drop key', 'put key on desk', 'put cassette into recorder'],
+  put: ['put key', 'drop key', 'throw key', 'put key on desk', 'put cassette into recorder'],
   open: ['open drawer', 'open cabinet'],
   close: ['close drawer', 'shut cabinet'],
   quit: ['quit', 'exit'],
@@ -212,6 +225,87 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
     },
   },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
+    },
+  },
 ];
 
 function interpolate(template: string, params?: Record<string, string | number>): string {
@@ -295,7 +389,13 @@ export function createTestTextAssets(): TestTextAssets {
       parserCommands = structuredClone(commands);
     },
     getServiceText(key, params) {
-      return interpolate(DEFAULT_SERVICE_TEXT[key] || key, params);
+      const text = resolveTextValue(DEFAULT_SERVICE_TEXT[key]);
+      return interpolate(text || key, params);
+    },
+    getServiceList(key) {
+      const value = DEFAULT_SERVICE_TEXT[key];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => String(item).trim()).filter(Boolean);
     },
   };
 }

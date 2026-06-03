@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Game } from '../../src/core/Game';
+import { Entity } from '../../src/entities/Entity';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
+import { SceneSpatialValidator } from '../../src/scene/SceneSpatialValidator';
 
 describe('Game semantic API', () => {
   it('lookScene returns the scene description', () => {
@@ -232,6 +234,124 @@ describe('Game semantic API', () => {
     expect(fixture.game.showInventory().message).toBe(
       fixture.game.text('parser.inventory_items', { items: 'your ID card' })
     );
+  });
+
+  it('removes stale duplicate scene refs when syncing player inventory state', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const staleIdCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Old duplicate.',
+      components: [{ type: 'Item' }],
+    });
+    const heldIdCard = new Entity(fixture.game as any, 0, 0, 10, 10, 'miles_id');
+    heldIdCard.description = 'Current held item.';
+    heldIdCard.components = [{ type: 'Item' }];
+    fixture.scene.entities.push(heldIdCard);
+
+    fixture.game.inventoryManager.inventory = [heldIdCard];
+    expect(fixture.scene.entities).toContain(staleIdCard);
+    expect(fixture.scene.entities).toContain(heldIdCard);
+
+    fixture.game.inventoryManager.syncPlayerInventoryComponent();
+
+    expect(fixture.scene.entities.filter((entity) => entity.name === 'miles_id')).toEqual([
+      heldIdCard,
+    ]);
+    expect(fixture.game.inventory).toEqual([heldIdCard]);
+    expect((heldIdCard as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
+    expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
+  });
+
+  it('replaces same-id entity refs at the scene boundary', () => {
+    const fixture = createGameSemanticFixture();
+    const staleIdCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Old duplicate.',
+      components: [{ type: 'Item' }],
+    });
+    const nextIdCard = new Entity(fixture.game as any, 0, 0, 10, 10, 'miles_id');
+    nextIdCard.description = 'Current item.';
+    nextIdCard.components = [{ type: 'Item' }];
+
+    fixture.scene.addEntity(nextIdCard);
+
+    expect(fixture.scene.entities).not.toContain(staleIdCard);
+    expect(fixture.scene.entities.filter((entity) => entity.name === 'miles_id')).toEqual([
+      nextIdCard,
+    ]);
+    expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
+  });
+
+  it('chooses the latest inventory-shaped duplicate during scene inventory hydration', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const staleIdCard = fixture.addEntity('miles_id', {
+      title: 'your ID card',
+      description: 'Old duplicate.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: player.name, relation: 'in' },
+    });
+    const heldIdCard = new Entity(fixture.game as any, 0, 0, 10, 10, 'miles_id');
+    heldIdCard.description = 'Current held item.';
+    heldIdCard.components = [{ type: 'Item' }];
+    heldIdCard.spatial = { parentNodeId: player.name, relation: 'in' };
+    fixture.scene.entities.push(heldIdCard);
+    player.components = [
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: 4,
+        groups: [],
+        protected: false,
+        items: ['miles_id'],
+      },
+    ];
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(fixture.game.inventory).toEqual([heldIdCard]);
+    expect(fixture.scene.entities).not.toContain(staleIdCard);
+    expect(fixture.scene.entities.filter((entity) => entity.name === 'miles_id')).toEqual([
+      heldIdCard,
+    ]);
+    expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
+  });
+
+  it('chooses the latest surface-shaped duplicate during scene surface hydration', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const tray = fixture.addEntity('tray', {
+      title: 'Tray',
+      description: 'A tray.',
+      components: [{ type: 'Surface', relation: 'on', capacity: 4, groups: [], items: [] }],
+    });
+    const staleCoin = fixture.addEntity('coin', {
+      title: 'Coin',
+      description: 'Old duplicate.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: tray.name, relation: 'on' },
+    });
+    const surfaceCoin = new Entity(fixture.game as any, 0, 0, 10, 10, 'coin');
+    surfaceCoin.description = 'Current surface item.';
+    surfaceCoin.components = [{ type: 'Item' }];
+    surfaceCoin.spatial = { parentNodeId: tray.name, relation: 'on' };
+    fixture.scene.entities.push(surfaceCoin);
+    const surfaceComponent = ComponentSystem.getSurfaceComponent(tray, 'on');
+    expect(surfaceComponent).not.toBeNull();
+    surfaceComponent!.items = [{ id: 'coin', x: 12, y: 34 }];
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(fixture.scene.entities).not.toContain(staleCoin);
+    expect(fixture.scene.entities.filter((entity) => entity.name === 'coin')).toEqual([
+      surfaceCoin,
+    ]);
+    expect(surfaceCoin.visible).toBe(true);
+    expect(surfaceCoin.x).toBe(12);
+    expect(surfaceCoin.y).toBe(34);
+    expect((surfaceCoin as any).spatial).toEqual({ parentNodeId: tray.name, relation: 'on' });
+    expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
   });
 
   it('treats only the player Inventory with relation IN as held inventory', () => {
