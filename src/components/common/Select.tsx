@@ -174,7 +174,7 @@ export const Select: React.FC<SelectProps> = ({
             {displayLabel}
           </span>
         </div>
-        <span style={{ fontSize: '10px', marginLeft: '5px' }}>▼</span>
+        <span className="custom-select-caret" aria-hidden="true" />
       </div>
 
       {isOpen && (

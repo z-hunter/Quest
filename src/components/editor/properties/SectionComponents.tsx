@@ -28,6 +28,8 @@ export const SectionComponents: React.FC = () => {
     selectedObjectType === 'Actor' && !hasActorComponent
       ? [{ type: 'Actor', __virtualActorComponent: true }, ...(o.components || [])]
       : o.components || [];
+  const hasRenderedComponents = renderedComponents.length > 0;
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
   const relationOptions = [
     { value: 'in', label: 'IN' },
     { value: 'on', label: 'ON' },
@@ -188,8 +190,21 @@ export const SectionComponents: React.FC = () => {
     </div>
   );
 
+  React.useEffect(() => {
+    if (hasRenderedComponents) {
+      sectionRef.current?.classList.remove('collapsed');
+    }
+  }, [hasRenderedComponents]);
+
   return (
-    <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
+    <div
+      ref={(node) => {
+        sectionRef.current = node;
+        setSectionRef(3)(node);
+      }}
+      className={`properties-section-block ${hasRenderedComponents ? '' : 'properties-section-empty'}`}
+      data-section={3}
+    >
       <div className="properties-section-header properties-section-red">
         <div className="properties-section-title">
           <span className="properties-section-number properties-section-red">3</span>
@@ -197,6 +212,7 @@ export const SectionComponents: React.FC = () => {
         </div>
         <div className="properties-section-actions">
           <Select
+            className="compact-action-select header-dropdown"
             options={[
               { value: 'Item', label: 'Item (Pickup)' },
               { value: 'State', label: 'State' },
@@ -225,7 +241,7 @@ export const SectionComponents: React.FC = () => {
                   ]
                 : []),
             ].map((opt) => ({ ...opt, icon: getIconUrl(opt.value) }))}
-            placeholder="+ Add Component"
+            placeholder="+ ADD"
             onChange={(value) => {
               const type = value;
               if (!type) return;
@@ -348,7 +364,7 @@ export const SectionComponents: React.FC = () => {
               }
               incrementObjectVersion();
             }}
-            style={{ width: '100%' }}
+            style={{ width: '8em' }}
             value=""
           />
         </div>
@@ -362,22 +378,20 @@ export const SectionComponents: React.FC = () => {
         return (
           <div
             key={isVirtualActorComponent ? 'actor-component' : idx}
+            className="component-block"
             style={{
-              background: '#332',
-              padding: '5px',
               marginBottom: '5px',
-              borderRadius: '4px',
-              border: '1px solid #553',
             }}
           >
             <div
+              className="component-header"
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 marginBottom: '5px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', color: '#fb8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', color: 'var(--ui-main-color)' }}>
                 {getIconUrl(comp.type) && (
                   <div
                     style={{
@@ -396,8 +410,7 @@ export const SectionComponents: React.FC = () => {
                 <span className="ui-font-bold">{comp.type}</span>
               </div>
               <button
-                className="e-btn e-btn-red"
-                style={{ padding: '0 5px' }}
+                className="e-btn e-btn-red e-action-delete-btn"
                 onClick={async () => {
                   if (comp.type === 'Actor') {
                     if (game.editor.selectedObject instanceof Actor) {
@@ -432,7 +445,7 @@ export const SectionComponents: React.FC = () => {
               <div
                 style={{
                   fontSize: '10px',
-                  color: '#ccc',
+                  color: 'var(--ui-label-color)',
                   fontStyle: 'italic',
                   marginBottom: '4px',
                 }}
@@ -446,7 +459,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -511,7 +524,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '0.8em',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -627,7 +640,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -635,10 +648,7 @@ export const SectionComponents: React.FC = () => {
                   Can be picked up by player.
                 </div>
                 <div className="e-row">
-                  <label
-                    className="e-label ui-text-accent-blue ui-inline-flex-center"
-                    style={{ fontSize: '10px' }}
-                  >
+                  <label className="e-label ui-inline-flex-center" style={{ fontSize: '10px' }}>
                     <input
                       type="checkbox"
                       style={{ marginRight: '5px' }}
@@ -659,7 +669,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -862,7 +872,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -903,10 +913,7 @@ export const SectionComponents: React.FC = () => {
                   />
                 </div>
                 <div className="e-row">
-                  <label
-                    className="e-label ui-text-accent-blue ui-inline-flex-center"
-                    style={{ fontSize: '10px' }}
-                  >
+                  <label className="e-label ui-inline-flex-center" style={{ fontSize: '10px' }}>
                     <input
                       type="checkbox"
                       style={{ marginRight: '5px' }}
@@ -944,7 +951,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -1086,7 +1093,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -1115,7 +1122,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -1158,7 +1165,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -1184,7 +1191,13 @@ export const SectionComponents: React.FC = () => {
             {comp.type === '3d-parallax' && (
               <>
                 <div className="e-row">
-                  <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--ui-label-color)',
+                      fontStyle: 'italic',
+                    }}
+                  >
                     Interpolates Actor Parallax based on Quad's vertexes P.
                   </div>
                 </div>
@@ -1197,7 +1210,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '5px',
                     }}
@@ -1427,7 +1440,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -1470,7 +1483,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}

@@ -196,6 +196,7 @@ export const PropertiesPanel: React.FC = () => {
   const openSection = React.useCallback((section: number) => {
     const node = sectionRefs.current[section];
     if (!node) return;
+    if (node.classList.contains('properties-section-empty')) return;
     node.classList.remove('collapsed');
     const header = node.querySelector<HTMLElement>('.properties-section-header');
     header?.classList.remove('properties-section-flash');
@@ -238,6 +239,7 @@ export const PropertiesPanel: React.FC = () => {
       if (!header || !panel.contains(header)) return;
       if (target?.closest('button, input, select, textarea, .custom-select-container')) return;
       const section = header.closest('.properties-section-block');
+      if (section?.classList.contains('properties-section-empty')) return;
       section?.classList.toggle('collapsed');
     };
 
@@ -251,7 +253,11 @@ export const PropertiesPanel: React.FC = () => {
     const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
     sections.forEach((section) => {
       const id = Number(section.dataset.section);
-      section.classList.toggle('collapsed', id !== 0 && id !== 1);
+      const hasHeader = !!section.querySelector(':scope > .properties-section-header');
+      section.classList.toggle(
+        'collapsed',
+        hasHeader && !section.classList.contains('properties-section-empty') && id !== 0 && id !== 1
+      );
     });
   }, [selectedObjectId, selectedObjectType]);
 

@@ -17,6 +17,9 @@ export const SectionScriptEvents: React.FC = () => {
   const o = obj as any;
   const stateIds = ComponentSystem.getStateComponents(o).map((state) => state.id);
   const addOptions = buildScriptEventAddOptions(stateIds);
+  const interactionKeys = Object.keys(o.interactions || {});
+  const hasInteractions = interactionKeys.length > 0;
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
 
   const selectedObject = game.editor.selectedObject as any;
 
@@ -54,8 +57,21 @@ export const SectionScriptEvents: React.FC = () => {
     incrementObjectVersion();
   };
 
+  React.useEffect(() => {
+    if (hasInteractions) {
+      sectionRef.current?.classList.remove('collapsed');
+    }
+  }, [hasInteractions]);
+
   return (
-    <div ref={setSectionRef(5)} className="properties-section-block" data-section={5}>
+    <div
+      ref={(node) => {
+        sectionRef.current = node;
+        setSectionRef(5)(node);
+      }}
+      className={`properties-section-block ${hasInteractions ? '' : 'properties-section-empty'}`}
+      data-section={5}
+    >
       <div className="properties-section-header properties-section-purple">
         <div className="properties-section-title">
           <span className="properties-section-number properties-section-purple">5</span>
@@ -64,7 +80,7 @@ export const SectionScriptEvents: React.FC = () => {
         <div className="properties-section-actions">
           <Select
             value=""
-            className="compact-action-select"
+            className="compact-action-select header-dropdown"
             placeholder="+ ADD"
             onChange={(value) => {
               const key = getInteractionKeyForAddValue(value, stateIds);
@@ -80,51 +96,50 @@ export const SectionScriptEvents: React.FC = () => {
         </div>
       </div>
 
-      {o.interactions &&
-        Object.keys(o.interactions).map((verb) => {
-          const stateEvent = parseStateEventKey(verb);
-          const stateSelectOptions = getStateEventSelectOptions(stateIds, stateEvent.stateId);
+      {interactionKeys.map((verb) => {
+        const stateEvent = parseStateEventKey(verb);
+        const stateSelectOptions = getStateEventSelectOptions(stateIds, stateEvent.stateId);
 
-          return (
-            <div key={verb} style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}>
-              <div
-                className="ui-text-light"
-                style={{ width: stateEvent.isState ? '44px' : '50px', fontSize: '0.85em' }}
-              >
-                {formatInteractionLabel(verb)}
-              </div>
-              {stateEvent.isState && !stateEvent.isValueSpecific && (
-                <Select
-                  value={stateEvent.stateId}
-                  className="compact-action-select"
-                  onChange={(stateId) => renameInteraction(verb, `state:${stateId}`)}
-                  options={stateSelectOptions}
-                  style={{ width: '6.25em', marginRight: '4px', flexShrink: 0 }}
-                />
-              )}
-              <input
-                type="text"
-                className="e-input"
-                style={{ flex: '1 1 120px', minWidth: '90px', fontSize: '0.85em' }}
-                placeholder="Script ID"
-                value={o.interactions[verb]}
-                onChange={(e) => {
-                  setInteractionScript(verb, e.target.value);
-                }}
-              />
-              <button
-                className="e-btn e-btn-red"
-                style={{ marginLeft: '2px', padding: '0 4px', fontSize: '0.85em' }}
-                aria-label={`Delete interaction ${verb}`}
-                onClick={() => {
-                  deleteInteraction(verb);
-                }}
-              >
-                x
-              </button>
+        return (
+          <div key={verb} style={{ display: 'flex', alignItems: 'center', marginTop: '2px' }}>
+            <div
+              className="ui-text-light"
+              style={{ width: stateEvent.isState ? '44px' : '50px', fontSize: '0.85em' }}
+            >
+              {formatInteractionLabel(verb)}
             </div>
-          );
-        })}
+            {stateEvent.isState && !stateEvent.isValueSpecific && (
+              <Select
+                value={stateEvent.stateId}
+                className="compact-action-select"
+                onChange={(stateId) => renameInteraction(verb, `state:${stateId}`)}
+                options={stateSelectOptions}
+                style={{ width: '6.25em', marginRight: '4px', flexShrink: 0 }}
+              />
+            )}
+            <input
+              type="text"
+              className="e-input"
+              style={{ flex: '1 1 120px', minWidth: '90px', fontSize: '0.85em' }}
+              placeholder="Script ID"
+              value={o.interactions[verb]}
+              onChange={(e) => {
+                setInteractionScript(verb, e.target.value);
+              }}
+            />
+            <button
+              className="e-btn e-btn-red e-action-delete-btn"
+              style={{ marginLeft: '2px' }}
+              aria-label={`Delete interaction ${verb}`}
+              onClick={() => {
+                deleteInteraction(verb);
+              }}
+            >
+              x
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 };

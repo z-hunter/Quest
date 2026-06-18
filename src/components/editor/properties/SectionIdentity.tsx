@@ -146,7 +146,9 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                     </button>
                   )}
                 </div>
-                <div className="e-label ui-text-muted ui-text-small">{textAssetPath}</div>
+                <div className="e-label ui-text-muted ui-text-small properties-ta-path">
+                  {textAssetPath}
+                </div>
               </>
             )}
           </div>

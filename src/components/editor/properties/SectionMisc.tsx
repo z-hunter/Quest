@@ -19,7 +19,11 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
   const hasTitle = !!game.textAssets.getResolvedObjectField(o as any, 'title')?.trim();
 
   return (
-    <div ref={setSectionRef(6)} className="properties-section-block" data-section={6}>
+    <div
+      ref={setSectionRef(6)}
+      className="properties-section-block properties-section-headless"
+      data-section={6}
+    >
       {isTriggerbox && (
         <>
           <button
