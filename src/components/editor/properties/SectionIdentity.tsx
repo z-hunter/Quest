@@ -64,151 +64,136 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
 
   return (
     <div ref={setSectionRef(0)} className="properties-section-block" data-section={0}>
-      {/* ID / ID/File */}
-      <div className="e-row">
-        <label className="e-label">{isScene ? 'ID/File' : 'ID'}</label>
-        <input
-          type="text"
-          className="e-input"
-          value={identityDraft}
-          onChange={(e) => {
-            setIdentityDraft(e.target.value);
-          }}
-          onBlur={(e) => {
-            const rawVal = e.target.value;
-            const finalVal = rawVal.trim();
-            const field = isScene ? 'id' : 'name';
-
-            let isValid = true;
-            const scene = game?.sceneManager?.currentScene;
-
-            if (!isScene && scene) {
-              const duplicate = findDuplicateSceneObjectName(
-                scene,
-                finalVal,
-                game?.editor?.selectedObject || o
-              );
-
-              if (!finalVal) {
-                console.warn('[PropertiesPanel] Empty Name rejected.');
-                game.showMessage('Name cannot be empty!');
-                isValid = false;
-              } else if (duplicate) {
-                console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
-                game.showMessage(`Name '${finalVal}' already exists!`);
-                isValid = false;
-              }
-            }
-
-            if (isValid) {
-              handleChange(field, finalVal);
-              setIdentityDraft(finalVal);
-            } else {
-              setIdentityDraft(identityValue);
-              incrementObjectVersion();
-            }
-          }}
-        />
-      </div>
-
-      {/* Title / Text Asset */}
-      {supportsTextAsset && (
-        <div className="e-row">
-          <label className="e-label">Title</label>
-          <input
-            type="text"
-            className="e-input"
-            value={resolvedTitle}
-            readOnly
-            tabIndex={-1}
-            onFocus={(e) => e.currentTarget.blur()}
-            style={{ pointerEvents: 'none' }}
-          />
-          {textAssetPath && (
-            <>
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                <button className="e-btn" onClick={onOpenTA}>
-                  {hasTextAsset ? 'Open TA' : 'Create TA'}
-                </button>
-                <button className="e-btn" onClick={onReadTA} disabled={isReadingTA}>
-                  {isReadingTA ? 'Syncing...' : 'Sync TA'}
-                </button>
-                {hasTextAsset && (
-                  <button className="e-btn" onClick={onDeleteTA}>
-                    Delete TA
-                  </button>
-                )}
-              </div>
-              <div className="e-label ui-text-muted ui-text-small">{textAssetPath}</div>
-            </>
-          )}
+      <div className="properties-section-header properties-section-sky">
+        <div className="properties-section-title">
+          <span className="properties-section-number properties-section-sky">0</span>
+          <span className="properties-section-label">Identity</span>
         </div>
-      )}
-
-      {/* Group #ID */}
-      {!isScene && !isSettings && (
+      </div>
+      <div className="properties-section-body">
+        {/* ID / ID/File */}
         <div className="e-row">
-          <label className="e-label">Group #ID</label>
+          <label className="e-label">{isScene ? 'ID/File' : 'ID'}</label>
           <input
             type="text"
             className="e-input"
-            value={o.groupID || ''}
+            value={identityDraft}
             onChange={(e) => {
-              handleChange(
-                'groupID',
-                normalizeGroupIdList(e.target.value, { preserveEmptyTokens: true })
-              );
+              setIdentityDraft(e.target.value);
             }}
             onBlur={(e) => {
-              handleChange('groupID', normalizeGroupIdList(e.target.value));
+              const rawVal = e.target.value;
+              const finalVal = rawVal.trim();
+              const field = isScene ? 'id' : 'name';
+
+              let isValid = true;
+              const scene = game?.sceneManager?.currentScene;
+
+              if (!isScene && scene) {
+                const duplicate = findDuplicateSceneObjectName(
+                  scene,
+                  finalVal,
+                  game?.editor?.selectedObject || o
+                );
+
+                if (!finalVal) {
+                  console.warn('[PropertiesPanel] Empty Name rejected.');
+                  game.showMessage('Name cannot be empty!');
+                  isValid = false;
+                } else if (duplicate) {
+                  console.warn(`[PropertiesPanel] Duplicate Name '${finalVal}' rejected.`);
+                  game.showMessage(`Name '${finalVal}' already exists!`);
+                  isValid = false;
+                }
+              }
+
+              if (isValid) {
+                handleChange(field, finalVal);
+                setIdentityDraft(finalVal);
+              } else {
+                setIdentityDraft(identityValue);
+                incrementObjectVersion();
+              }
             }}
           />
         </div>
-      )}
 
-      {/* Parent / Relation */}
-      {!isScene && !isSettings && !isWalkbox && (
-        <div
-          className="e-row"
-          style={{
-            display: o.spatial?.parentNodeId ? 'grid' : 'block',
-            gridTemplateColumns: o.spatial?.parentNodeId ? '1fr 1fr' : undefined,
-            gap: o.spatial?.parentNodeId ? '5px' : undefined,
-          }}
-        >
-          <div>
-            <label className="e-label">Parent</label>
-            <Select
-              className="parent-id-select"
-              value={o.spatial?.parentNodeId || ''}
-              onChange={(value) => {
-                game.editor.saveUndoState();
-                o.spatial = {
-                  ...(o.spatial || {}),
-                  parentNodeId: value || null,
-                  relation: value ? o.spatial?.relation || 'in' : null,
-                };
-                if (o instanceof Entity) {
-                  game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
-                }
-                incrementObjectVersion();
-                incrementHierarchyVersion();
+        {/* Title / Text Asset */}
+        {supportsTextAsset && (
+          <div className="e-row">
+            <label className="e-label">Title</label>
+            <input
+              type="text"
+              className="e-input"
+              value={resolvedTitle}
+              readOnly
+              tabIndex={-1}
+              onFocus={(e) => e.currentTarget.blur()}
+              style={{ pointerEvents: 'none' }}
+            />
+            {textAssetPath && (
+              <>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <button className="e-btn" onClick={onOpenTA}>
+                    {hasTextAsset ? 'Open TA' : 'Create TA'}
+                  </button>
+                  <button className="e-btn" onClick={onReadTA} disabled={isReadingTA}>
+                    {isReadingTA ? 'Syncing...' : 'Sync TA'}
+                  </button>
+                  {hasTextAsset && (
+                    <button className="e-btn" onClick={onDeleteTA}>
+                      Delete TA
+                    </button>
+                  )}
+                </div>
+                <div className="e-label ui-text-muted ui-text-small">{textAssetPath}</div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Group #ID */}
+        {!isScene && !isSettings && (
+          <div className="e-row">
+            <label className="e-label">Group #ID</label>
+            <input
+              type="text"
+              className="e-input"
+              value={o.groupID || ''}
+              onChange={(e) => {
+                handleChange(
+                  'groupID',
+                  normalizeGroupIdList(e.target.value, { preserveEmptyTokens: true })
+                );
               }}
-              options={getSceneSpatialParentOptions()}
-              style={{ width: '100%' }}
+              onBlur={(e) => {
+                handleChange('groupID', normalizeGroupIdList(e.target.value));
+              }}
             />
           </div>
-          {o.spatial?.parentNodeId && (
+        )}
+
+        {/* Parent / Relation */}
+        {!isScene && !isSettings && !isWalkbox && (
+          <div
+            className="e-row"
+            style={{
+              display: o.spatial?.parentNodeId ? 'grid' : 'block',
+              gridTemplateColumns: o.spatial?.parentNodeId ? '1fr 1fr' : undefined,
+              gap: o.spatial?.parentNodeId ? '5px' : undefined,
+            }}
+          >
             <div>
-              <label className="e-label">Relation</label>
+              <label className="e-label">Parent</label>
               <Select
-                value={o.spatial?.relation || 'in'}
+                className="parent-id-select"
+                value={o.spatial?.parentNodeId || ''}
                 onChange={(value) => {
                   game.editor.saveUndoState();
                   o.spatial = {
                     ...(o.spatial || {}),
-                    parentNodeId: o.spatial?.parentNodeId || null,
-                    relation: value || (o.spatial?.parentNodeId ? 'in' : null),
+                    parentNodeId: value || null,
+                    relation: value ? o.spatial?.relation || 'in' : null,
                   };
                   if (o instanceof Entity) {
                     game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
@@ -216,13 +201,36 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                   incrementObjectVersion();
                   incrementHierarchyVersion();
                 }}
-                options={getSpatialRelationOptions(true)}
+                options={getSceneSpatialParentOptions()}
                 style={{ width: '100%' }}
               />
             </div>
-          )}
-        </div>
-      )}
+            {o.spatial?.parentNodeId && (
+              <div>
+                <label className="e-label">Relation</label>
+                <Select
+                  value={o.spatial?.relation || 'in'}
+                  onChange={(value) => {
+                    game.editor.saveUndoState();
+                    o.spatial = {
+                      ...(o.spatial || {}),
+                      parentNodeId: o.spatial?.parentNodeId || null,
+                      relation: value || (o.spatial?.parentNodeId ? 'in' : null),
+                    };
+                    if (o instanceof Entity) {
+                      game.inventoryManager?.syncEntityStorageFromSpatialPlacement?.(o);
+                    }
+                    incrementObjectVersion();
+                    incrementHierarchyVersion();
+                  }}
+                  options={getSpatialRelationOptions(true)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

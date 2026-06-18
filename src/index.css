@@ -40,10 +40,11 @@ body {
 :root {
   /* Main UI Color (Frames, Headers, Labels) */
   --ui-main-color: #4aa07f;
-  --ui-bg-color: #000000;
-  --ui-panel-header-bg: #222222;
+  --ui-bg-color: #050a07;
+  --ui-panel-header-bg: #111a14;
   --ui-label-color: #888888;
   --ui-display-font: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --ui-mono-font: 'Courier New', Courier, monospace;
 
   /* Selection & Active States */
   --ui-selection-bg: #4ca149;
@@ -53,11 +54,11 @@ body {
   /* Input Fields */
   --ui-input-bg: #000000;
   --ui-input-text: #79efa4;
-  --ui-input-border: #444444;
+  --ui-input-border: #2a523d;
   --ui-input-focus-border: #79efa4;
 
   /* Dropdowns */
-  --ui-dropdown-bg: #000000;
+  --ui-dropdown-bg: #050a07;
   --ui-dropdown-text: #79efa4;
   --ui-dropdown-selection-bg: #204638;
   /* Optional specific */
@@ -70,6 +71,14 @@ body {
   /* F-Keys */
   --ui-fkey-text: #79efa4;
   --ui-fkey-hotkey: #468a5f;
+
+  --sec-color-0: #7dd3fc;
+  --sec-color-1: #3b82f6;
+  --sec-color-2: #fde047;
+  --sec-color-3: #fca5a5;
+  --sec-color-4: #60a5fa;
+  --sec-color-5: #c4b5fd;
+  --sec-color-6: #9ca3af;
 }
 
 #root {
@@ -371,6 +380,7 @@ select {
   color: var(--ui-input-text);
   box-sizing: border-box;
   color-scheme: dark;
+  font-family: var(--ui-mono-font);
 }
 
 input:focus,
@@ -389,6 +399,7 @@ select,
 textarea,
 .e-input {
   font-size: inherit !important;
+  font-family: var(--ui-mono-font);
 }
 
 /* Custom Select Styles */
