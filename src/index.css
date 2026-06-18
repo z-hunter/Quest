@@ -200,8 +200,8 @@ canvas {
 
 /* Left Panel - Hierarchy */
 #hierarchy-panel {
-  width: 17em;
-  /* approx 200px at 12px font */
+  width: calc(17em + 10px);
+  /* approx 210px at 12px font */
   background: var(--ui-dropdown-bg);
   border: 2px solid var(--ui-dropdown-bg);
   color: var(--ui-main-color);

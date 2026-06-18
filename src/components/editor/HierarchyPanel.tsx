@@ -956,10 +956,11 @@ export const HierarchyPanel: React.FC = () => {
             placeholder="+ADD"
             onChange={(value) => handleAdd(value)}
             style={{
-              width: '7.25em',
-              minWidth: '7.25em',
+              width: '6.5em',
+              minWidth: '6.5em',
               fontSize: '12px',
               flexShrink: 0,
+              marginRight: '6px',
             }}
           />
         </div>
