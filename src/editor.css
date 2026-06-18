@@ -1035,6 +1035,7 @@ input[type='range']:focus::-webkit-slider-runnable-track {
 .e-label:has(input[type='checkbox']) {
   color: var(--ui-label-color);
   cursor: pointer;
+  text-transform: none;
 }
 
 .e-label:has(input[type='checkbox']):hover {
