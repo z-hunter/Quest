@@ -245,7 +245,7 @@ export const PropertiesPanel: React.FC = () => {
 
     panel.addEventListener('click', handleClick);
     return () => panel.removeEventListener('click', handleClick);
-  }, []);
+  });
 
   React.useEffect(() => {
     const panel = panelRef.current;
@@ -311,7 +311,7 @@ export const PropertiesPanel: React.FC = () => {
 
     panel.addEventListener('mousedown', handleMouseDown);
     return () => panel.removeEventListener('mousedown', handleMouseDown);
-  }, []);
+  });
 
   // ─── Tooltip injection ─────────────────────────────────────────────────────
   React.useEffect(() => {

@@ -104,7 +104,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                 value={quad.sortMode || 'ignore'}
                 onChange={(value) => handleChange('sortMode', value)}
                 options={[
-                  { value: 'ignore', label: 'Ignore Y (Manual Layer)' },
+                  { value: 'ignore', label: 'Ignore Y (Manual)' },
                   { value: 'v0', label: 'By Vertex 0 (TL)' },
                   { value: 'v1', label: 'By Vertex 1 (TR)' },
                   { value: 'v2', label: 'By Vertex 2 (BR)' },

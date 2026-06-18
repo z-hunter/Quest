@@ -202,8 +202,8 @@ canvas {
 #hierarchy-panel {
   width: 17em;
   /* approx 200px at 12px font */
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid rgba(0, 0, 0, 0.8);
+  background: var(--ui-dropdown-bg);
+  border: 2px solid var(--ui-dropdown-bg);
   color: var(--ui-main-color);
   display: flex;
   flex-direction: column;
@@ -301,7 +301,7 @@ canvas {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--ui-main-color);
-  margin-bottom: 10px;
+  margin-bottom: 0;
   font-family: var(--ui-display-font);
   font-weight: 600;
   text-transform: uppercase;

@@ -281,7 +281,7 @@
 }
 
 .properties-section-block {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   scroll-margin-top: 10px;
   border: 1px solid var(--ui-input-border);
   background: #080f0a;

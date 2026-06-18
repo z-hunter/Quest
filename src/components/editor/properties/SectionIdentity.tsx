@@ -122,15 +122,16 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
         {supportsTextAsset && (
           <div className="e-row">
             <label className="e-label">Title</label>
-            <input
-              type="text"
-              className="e-input"
-              value={resolvedTitle}
-              readOnly
-              tabIndex={-1}
-              onFocus={(e) => e.currentTarget.blur()}
-              style={{ pointerEvents: 'none' }}
-            />
+            <div
+              style={{
+                color: 'var(--ui-input-text)',
+                padding: '2px 0',
+                wordBreak: 'break-word',
+                fontFamily: 'var(--ui-mono-font)',
+              }}
+            >
+              {resolvedTitle || <span className="ui-text-muted italic">No title</span>}
+            </div>
             {textAssetPath && (
               <>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
@@ -142,7 +143,7 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                   </button>
                   {hasTextAsset && (
                     <button className="e-btn" onClick={onDeleteTA}>
-                      Delete TA
+                      DEL. TA
                     </button>
                   )}
                 </div>
