@@ -214,6 +214,11 @@ export class Actor extends Entity {
     return this.lastMoveResult;
   }
 
+  previewRouteTo(x: number, y: number): { x: number; y: number }[] | null {
+    const route = this.planRouteTo({ x, y });
+    return route ? route.map((point) => ({ ...point })) : null;
+  }
+
   setState(state: ActorState) {
     if (this.state === state) return;
     this.state = state;

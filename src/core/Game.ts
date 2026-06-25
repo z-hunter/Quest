@@ -28,6 +28,9 @@ import { GameSemanticAPI } from '../systems/GameSemanticAPI';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
+import { ActorNavigationService } from '../systems/ActorNavigationService';
+import { ActorWorldQuery } from '../systems/ActorWorldQuery';
+import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -73,6 +76,9 @@ export class Game implements IGame {
   /** Manages all inventory/surface storage state and logic. */
   inventoryManager: InventoryManager;
   semantic: GameSemanticAPI;
+  actorNavigation: ActorNavigationService;
+  actorWorld: ActorWorldQuery;
+  actorCommands: ActorCommandExecutor;
 
   // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
   get inventory(): Entity[] {
@@ -232,6 +238,9 @@ export class Game implements IGame {
       this.textAssets,
       this.text.bind(this)
     );
+    this.actorNavigation = new ActorNavigationService(this);
+    this.actorWorld = new ActorWorldQuery(this);
+    this.actorCommands = new ActorCommandExecutor(this);
     this.semantic = new GameSemanticAPI(this);
 
     if (typeof window !== 'undefined') {
@@ -616,15 +625,36 @@ export class Game implements IGame {
     const actorTitle = this.getActorDialogueName(player);
     const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, player.name);
     this.console.log(`You: ${speech}`, 'dialogue');
+    this.npcPuppetMaster.traceWake('player_speech_received', {
+      sceneId: scene.id,
+      actorId: player.name,
+      listenerNpcIds: knownByNpcIds,
+      speech,
+    });
     if (knownByNpcIds.length) {
-      scene.sceneLog.appendSpeech({
+      const entry = scene.sceneLog.appendSpeech({
         actorId: player.name,
         displayName: actorTitle,
         text: speech,
         knownByNpcIds,
       });
-      await this.npcPuppetMaster.processScene(scene);
+      this.npcPuppetMaster.traceWake('player_speech_logged', {
+        entryId: entry?.id,
+        timestamp: entry?.timestamp,
+        knownByNpcIds: entry?.knownByNpcIds,
+        cursors: Object.fromEntries(
+          knownByNpcIds.map((npcId) => [
+            npcId,
+            scene.sceneLog.lastPmProcessedAtByNpc[npcId] ?? scene.sceneLog.lastPmProcessedAt,
+          ])
+        ),
+      });
+      await this.npcPuppetMaster.scheduleScene(scene);
+      return;
     }
+    this.npcPuppetMaster.traceWake('player_speech_stopped', {
+      reason: 'no_npc_listener',
+    });
   }
 
   sayAsActor(actor: Actor, text: string, options: { triggerPuppetMaster?: boolean } = {}): void {
@@ -641,7 +671,42 @@ export class Game implements IGame {
       knownByNpcIds,
     });
     if (options.triggerPuppetMaster && knownByNpcIds.length) {
-      void this.npcPuppetMaster.processScene(scene);
+      this.npcPuppetMaster.scheduleScene(scene);
+    }
+  }
+
+  emitActorAction(
+    actor: Actor,
+    action: string,
+    subject?: SceneObject | null,
+    payload: Record<string, unknown> = {}
+  ): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+    const observers = this.actorWorld.getActionObservers(actor, subject);
+    if (!observers.length) return;
+    const subjectTitle = subject
+      ? this.textAssets.getResolvedObjectField(subject as any, 'title')?.trim() || subject.name
+      : '';
+    const displayName = this.getActorDialogueName(actor);
+    scene.sceneLog.appendAction({
+      actorId: actor.name,
+      displayName,
+      text: subjectTitle
+        ? `${displayName} ${action} ${subjectTitle}.`
+        : `${displayName} ${action}.`,
+      knownByNpcIds: observers.map((npc) => npc.name),
+      payload: {
+        action,
+        ...(subject ? { subjectId: subject.name } : {}),
+        ...payload,
+      },
+    });
+    for (const observer of observers) {
+      this.npcPuppetMaster.scheduleNpc(scene, observer.name, {
+        type: 'manual',
+        reason: 'observed_actor_action',
+      });
     }
   }
 
@@ -820,8 +885,16 @@ export class Game implements IGame {
     return this.semantic.lookEntity(entity);
   }
 
+  lookEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    return this.semantic.lookEntityForActor(actor, entity);
+  }
+
   examineEntity(entity: SceneObject): GameActionOutcome {
     return this.semantic.examineEntity(entity);
+  }
+
+  examineEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    return this.semantic.examineEntityForActor(actor, entity);
   }
 
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {
@@ -845,6 +918,13 @@ export class Game implements IGame {
 
   takeEntity(entity: Entity): GameActionOutcome {
     return this.semantic.takeEntity(entity);
+  }
+
+  takeEntityForActor(
+    actor: import('../entities/Actor').Actor | null,
+    entity: Entity
+  ): GameActionOutcome {
+    return this.semantic.takeEntityForActor(actor, entity);
   }
 
   canTakeEntity(entity: Entity): GameActionOutcome | null {
@@ -962,8 +1042,16 @@ export class Game implements IGame {
     return this.semantic.openEntity(entity);
   }
 
+  openEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    return this.semantic.openEntityForActor(actor, entity);
+  }
+
   closeEntity(entity: SceneObject): GameActionOutcome {
     return this.semantic.closeEntity(entity);
+  }
+
+  closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    return this.semantic.closeEntityForActor(actor, entity);
   }
 
   bindUI(): void {

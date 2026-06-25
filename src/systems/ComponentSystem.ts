@@ -70,6 +70,7 @@ export interface NpcComponent {
   memory?: string;
   objectives?: string[];
   objectivesInitializedFromTA?: boolean;
+  perceptionRadius?: number;
 }
 
 export interface InventoryComponent {
@@ -258,7 +259,21 @@ export class ComponentSystem {
         ? component.objectives.filter((item): item is string => typeof item === 'string')
         : undefined,
       objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
+      perceptionRadius:
+        typeof component.perceptionRadius === 'number' &&
+        Number.isFinite(component.perceptionRadius) &&
+        component.perceptionRadius >= 0
+          ? component.perceptionRadius
+          : 600,
     };
+  }
+
+  static getSwitchComponent(entity: SceneObject | null | undefined): SwitchComponent | null {
+    if (!entity?.components) return null;
+    const component = entity.components.find(
+      (candidate: any): candidate is SwitchComponent => candidate?.type === 'Switch'
+    );
+    return component || null;
   }
 
   static isNpc(entity: SceneObject | null | undefined): boolean {
@@ -465,11 +480,11 @@ export class ComponentSystem {
       if (comp.type === 'Exit') {
         return this.handleExit(comp as ExitComponent, scene, activator);
       } else if (comp.type === 'Subtrigger') {
-        return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene, depth);
+        return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene, depth, activator);
       } else if (comp.type === 'Subscene') {
-        return this.handleSubscene(entity, comp as SubsceneComponent, scene);
+        return this.handleSubscene(entity, comp as SubsceneComponent, scene, activator);
       } else if (comp.type === 'Switch') {
-        return this.handleSwitch(entity, comp as SwitchComponent, scene);
+        return this.handleSwitch(entity, comp as SwitchComponent, scene, activator);
       }
     }
     return false;
@@ -677,7 +692,10 @@ export class ComponentSystem {
     }
 
     dist ??= Math.hypot(player.x - targetX, player.y - targetY);
-    const allowedDist = (player.width || 30) * 3.3;
+    // A zero collider disables collision, but must not grant interaction range
+    // based on an arbitrarily large visual sprite.
+    const interactionWidth = player.colliderWidth === 0 ? 30 : player.width || 30;
+    const allowedDist = interactionWidth * 3.3;
 
     if (dist > allowedDist) {
       const title = this.getPlayerFacingTitle(game, entity);
@@ -796,7 +814,8 @@ export class ComponentSystem {
     entity: SceneObject,
     sub: SubtriggerComponent,
     scene: ActivationSceneContext,
-    depth: number
+    depth: number,
+    activator?: Actor
   ): boolean {
     const targetName = sub.target;
     if (!targetName) {
@@ -809,7 +828,7 @@ export class ComponentSystem {
       scene.entities.find((e) => e.name === targetName);
 
     if (targetObj) {
-      scene.activateObject(targetObj, depth + 1);
+      scene.activateObject(targetObj, depth + 1, activator);
     } else {
       console.warn(`[Subtrigger] Target '${targetName}' not found.`);
     }
@@ -819,14 +838,15 @@ export class ComponentSystem {
   private static handleSubscene(
     entity: SceneObject,
     sub: SubsceneComponent,
-    scene: ActivationSceneContext
+    scene: ActivationSceneContext,
+    activator?: Actor
   ): boolean {
     const targetStr = sub.targetGroupId ? sub.targetGroupId.trim() : '';
     if (!targetStr && !entity.name) return false;
 
     // Proximity Check (if player exists)
-    const player = scene.player;
-    if (player) {
+    const actor = activator || scene.player;
+    if (actor) {
       let cx = 0,
         cy = 0;
       if (entity.type === 'Triggerbox') {
@@ -845,8 +865,8 @@ export class ComponentSystem {
         cy = (e.y || 0) - (e.height || 0) / 2;
       }
 
-      const dist = Math.hypot(player.x - cx, player.y - cy);
-      const allowedDist = (player.width || 30) * 4.5;
+      const dist = Math.hypot(actor.x - cx, actor.y - cy);
+      const allowedDist = (actor.width || 30) * 4.5;
 
       if (dist > allowedDist) {
         const game = scene.game as unknown as IGame;
@@ -884,9 +904,10 @@ export class ComponentSystem {
   private static handleSwitch(
     entity: SceneObject,
     sw: SwitchComponent,
-    scene: ActivationSceneContext
+    scene: ActivationSceneContext,
+    activator?: Actor
   ): boolean {
-    const blocked = this.getSwitchLockError(entity, sw, scene);
+    const blocked = this.getSwitchLockError(entity, sw, scene, activator);
     if (blocked) {
       (scene.game as unknown as IGame).showMessage(blocked.message);
       return true;
@@ -901,27 +922,28 @@ export class ComponentSystem {
   static getSwitchLockError(
     _entity: SceneObject,
     sw: SwitchComponent,
-    scene: ActivationSceneContext
+    scene: ActivationSceneContext,
+    actor?: Actor | null
   ): { code: 'switch_locked'; message: string } | null {
-    if (!sw.idKey) return null;
+    const requiredKeyId = String(sw.idKey || sw.keyId || '').trim();
+    if (!requiredKeyId) return null;
 
     const game = scene.game as unknown as IGame;
-    if (!game?.inventory) return null;
-
-    const hasKey = game.inventory.some(
-      (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-    );
+    const activeActor = actor || scene.player || null;
+    if (!game?.inventoryManager || !(activeActor instanceof Entity)) return null;
+    const hasKey = game.inventoryManager
+      .getInventoryEntities(activeActor, 'in')
+      .some(
+        (i) => i.name === requiredKeyId || (i as unknown as { id?: string }).id === requiredKeyId
+      );
     if (hasKey) return null;
 
     const keyEntity =
-      game.inventory.find(
-        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
-      ) ||
       scene.entities.find(
-        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+        (i) => i.name === requiredKeyId || (i as unknown as { id?: string }).id === requiredKeyId
       ) ||
       scene.triggerboxes.find(
-        (i) => i.name === sw.idKey || (i as unknown as { id?: string }).id === sw.idKey
+        (i) => i.name === requiredKeyId || (i as unknown as { id?: string }).id === requiredKeyId
       );
     const keyTitle = keyEntity ? this.getPlayerFacingTitle(game, keyEntity as SceneObject) : null;
 
@@ -938,7 +960,7 @@ export class ComponentSystem {
     sw: SwitchComponent,
     scene: ActivationSceneContext,
     nextState: 1 | 2,
-    options?: { playSound?: boolean }
+    options?: { playSound?: boolean; updateVisualTargets?: boolean }
   ): void {
     sw.state = nextState;
 
@@ -951,7 +973,7 @@ export class ComponentSystem {
     const targetStrShow = nextState === 1 ? sw.groupId1 : sw.groupId2;
     const targetStrHide = nextState === 1 ? sw.groupId2 : sw.groupId1;
 
-    if (!scene.resolveTarget) return;
+    if (!scene.resolveTarget || options?.updateVisualTargets === false) return;
 
     const toShow = scene.resolveTarget(targetStrShow || '');
     const toHide = scene.resolveTarget(targetStrHide || '');

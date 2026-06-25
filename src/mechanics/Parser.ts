@@ -14,7 +14,6 @@ import {
   normalizeTargetForIntent,
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
-import { ActorCommandExecutor } from './ActorCommandExecutor';
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
@@ -34,7 +33,6 @@ import type {
   ParserCascadeEnvelope,
   ParserClarificationOption,
   ParserClarificationScope,
-  ParserCommandActionSpec,
   ParserCommandArgumentValidation,
   ParserCommandSpec,
   ParserCoreDecision,
@@ -64,7 +62,6 @@ export class Parser {
   nlpCascade: NlpCascade;
   llmCascade: LlmCascade;
   worldModelBuilder: ParserWorldModelBuilder;
-  actorCommandExecutor: ActorCommandExecutor;
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
   pendingClarificationRetryMessage: string | null;
@@ -84,7 +81,6 @@ export class Parser {
       () => this.game.console
     );
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
-    this.actorCommandExecutor = new ActorCommandExecutor(this.game);
     this.activeWorldModel = null;
     this.activeScope = null;
     this.pendingClarificationRetryMessage = null;
@@ -213,7 +209,11 @@ export class Parser {
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
-          this.game.console?.log(message, 'info', { showInClosed: false });
+          if (typeof this.game.console?.logDebug === 'function') {
+            this.game.console.logDebug(message);
+          } else if (this.game.console?.isOpen !== false) {
+            this.game.console?.log(message, 'info', { showInClosed: false });
+          }
         }
       }
 
@@ -1627,6 +1627,30 @@ export class Parser {
         return this.executeSetEntityParserNote(action.entityId, action.note);
       case 'goToTarget':
         return this.resolveGoToTarget(action.target);
+      case 'runCustomCommand': {
+        const player = this.game.sceneManager.currentScene?.player;
+        if (!player) {
+          return {
+            status: 'failed',
+            code: 'actor_not_found',
+            recoverable: false,
+          };
+        }
+        const argumentsByName = { ...(action.arguments || {}) };
+        for (const [argumentName, ref] of Object.entries(action.argumentRefs || {})) {
+          const value = planState[ref];
+          argumentsByName[argumentName] = value instanceof Entity ? value.name : null;
+        }
+        const outcome = this.game.actorCommands.executeCommand(
+          player,
+          action.commandId,
+          argumentsByName
+        );
+        return {
+          ...outcome,
+          message: outcome.message || outcome.displayMessages?.join('\n'),
+        };
+      }
       case 'resolveArgumentEntity':
         return this.executeResolveArgumentEntity(action, planState);
       case 'ensureHeldEntity':
@@ -4134,7 +4158,7 @@ export class Parser {
       };
     }
 
-    const outcome = this.actorCommandExecutor.useItemOn(player, item.name, target.name);
+    const outcome = this.game.actorCommands.useItemOn(player, item.name, target.name);
     if (outcome.status === 'ok') return outcome;
 
     const message = action.noEffectMessage
@@ -4387,15 +4411,39 @@ export class Parser {
     command: ParserCommandSpec,
     argumentValues: Record<string, string | null>
   ): ParserCascadeEnvelope {
-    const actions = command.plan
-      .map((step) => this.mapCommandPlanStep(command, step, argumentValues))
-      .filter((action): action is ParserToolAction => !!action);
+    const argumentRefs: Record<string, string> = {};
+    const resolutionActions = command.plan.flatMap((step): ParserToolAction[] => {
+      if (step.type !== 'resolveArgumentEntity') return [];
+      const argSpec = command.arguments.find((arg) => arg.name === step.arg);
+      if (!argSpec) return [];
+      argumentRefs[step.arg] = step.saveAs;
+      return [
+        {
+          type: 'resolveArgumentEntity',
+          commandId: command.id,
+          arg: step.arg,
+          query: argumentValues[step.arg] || null,
+          scopes: argSpec.scopes,
+          saveAs: step.saveAs,
+          validation: argSpec.validation,
+          messages: argSpec.messages,
+        },
+      ];
+    });
 
     return {
       stage: 'regex-v1',
       output: {
         kind: 'plan',
-        actions,
+        actions: [
+          ...resolutionActions,
+          {
+            type: 'runCustomCommand',
+            commandId: command.id,
+            arguments: argumentValues,
+            argumentRefs,
+          },
+        ],
       },
       debug: {
         rawInput: input,
@@ -4409,150 +4457,7 @@ export class Parser {
   }
 
   private expandCustomCommandActions(actions: ParserToolAction[]): ParserToolAction[] {
-    return actions.flatMap((action) => {
-      if (action.type !== 'runCustomCommand') return [action];
-      const command = this.game.textAssets
-        .getParserCommands()
-        .find((candidate: ParserCommandSpec) => candidate.id === action.commandId);
-      if (!command) {
-        return [
-          {
-            type: 'parserFailure',
-            code: 'custom_command_not_found',
-            message: this.game.text('parser.command_no_effect'),
-          } satisfies ParserToolAction,
-        ];
-      }
-      const argumentValues = action.arguments || {};
-      const commandSpec = command as ParserCommandSpec;
-      return commandSpec.plan
-        .map((step: ParserCommandActionSpec) =>
-          this.mapCommandPlanStep(commandSpec, step, argumentValues)
-        )
-        .filter((mapped): mapped is ParserToolAction => !!mapped);
-    });
-  }
-
-  private mapCommandPlanStep(
-    command: ParserCommandSpec,
-    step: ParserCommandActionSpec,
-    argumentValues: Record<string, string | null>
-  ): ParserToolAction | null {
-    switch (step.type) {
-      case 'resolveArgumentEntity': {
-        const argSpec = command.arguments.find((arg) => arg.name === step.arg);
-        if (!argSpec) return null;
-        return {
-          type: 'resolveArgumentEntity',
-          commandId: command.id,
-          arg: step.arg,
-          query: argumentValues[step.arg] || null,
-          scopes: argSpec.scopes,
-          saveAs: step.saveAs,
-          validation: argSpec.validation,
-          messages: argSpec.messages,
-        };
-      }
-      case 'ensureHeldEntity':
-        return {
-          type: 'ensureHeldEntity',
-          ref: step.ref,
-          noEffectMessage:
-            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
-            command.arguments[0]?.messages?.noEffect,
-        };
-      case 'goToSceneById':
-        return {
-          type: 'goToSceneById',
-          sceneId: step.sceneId,
-        };
-      case 'removeInventoryEntity':
-        return {
-          type: 'removeInventoryEntity',
-          ref: step.ref,
-        };
-      case 'actorUseOn':
-        return {
-          type: 'actorUseOn',
-          itemRef: step.itemRef,
-          targetRef: step.targetRef,
-          noEffectMessage:
-            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
-            step.noEffectMessage,
-        };
-      case 'showText':
-        return {
-          type: 'showText',
-          message: step.messageId ? command.messages?.[step.messageId] : step.text,
-          messageByRef: step.messageIdByRef
-            ? {
-                ref: step.messageIdByRef.ref,
-                values: Object.fromEntries(
-                  Object.entries(step.messageIdByRef.values).map(([value, messageId]) => [
-                    value,
-                    command.messages?.[messageId] || messageId,
-                  ])
-                ),
-                fallback: step.messageIdByRef.fallbackMessageId
-                  ? command.messages?.[step.messageIdByRef.fallbackMessageId]
-                  : undefined,
-              }
-            : undefined,
-          params: step.params,
-          paramsFromRefs: step.paramsFromRefs,
-        };
-      case 'requireEntityAvailable':
-        return {
-          type: 'requireEntityAvailable',
-          commandId: command.id,
-          entityId: step.entityId,
-          scopes: step.scopes,
-          saveAs: step.saveAs,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-        };
-      case 'requireAnyEntityAvailable':
-        return {
-          type: 'requireAnyEntityAvailable',
-          commandId: command.id,
-          options: step.options,
-          saveAs: step.saveAs,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-        };
-      case 'setEntityState':
-        return {
-          type: 'setEntityState',
-          entityId: step.entityId,
-          stateId: step.stateId,
-          value: step.value,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-          source: 'custom-command',
-        };
-      case 'setGroupDisabled':
-        return {
-          type: 'setGroupDisabled',
-          groupId: step.groupId,
-          disabled: step.disabled,
-        };
-      case 'runScript':
-        return {
-          type: 'runScript',
-          scriptId: step.scriptId,
-          restart: step.restart,
-        };
-      case 'stopScript':
-        return {
-          type: 'stopScript',
-          scriptId: step.scriptId,
-        };
-      default:
-        return null;
-    }
+    return actions;
   }
 
   private parseClarificationOptionsFromData(
@@ -4654,18 +4559,113 @@ export class Parser {
       formatFullSection(title, entries);
 
     const peekMessages = this.game.console?.parserPeekEnabled
-      ? [
-          formatSection('context', contextJson),
-          formatSection('scope', scopeJson),
-          formatSection('envelope', envelopeJson),
-          ...(coreDecision ? [formatSection('core', coreDecision)] : []),
-          formatSection('result', resultJson),
-          ...(parserNoteMutations.length
-            ? [formatParserNoteSection('parser notes', parserNoteMutations)]
-            : []),
-          ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
-          ...(llmDebug ? [formatSection('llm', llmDebug)] : []),
-        ]
+      ? (() => {
+          let rawInput = '';
+          let stage = '';
+          try {
+            const envelope = JSON.parse(envelopeJson);
+            rawInput = envelope.debug?.rawInput || '';
+            stage = envelope.stage || '';
+          } catch (e) {
+            // ignore
+          }
+
+          let sceneId = '';
+          let inventoryItems: string[] = [];
+          try {
+            const context = JSON.parse(contextJson);
+            sceneId = context.scene?.id || '';
+            if (Array.isArray(context.inventory)) {
+              inventoryItems = context.inventory.map((i: any) => i.title || i.id);
+            }
+            if (!rawInput && context.rawInput) {
+              rawInput = context.rawInput;
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          let scopeItems: string[] = [];
+          let heldItems: string[] = [];
+          try {
+            const scope = JSON.parse(scopeJson);
+            if (Array.isArray(scope.visible)) {
+              scopeItems = scope.visible;
+            }
+            if (Array.isArray(scope.held)) {
+              heldItems = scope.held;
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          const peekLines: string[] = ['--- PARSER PEEK ---'];
+          peekLines.push(`Input: "${rawInput}"`);
+
+          const activeStr = `Active: ${sceneId || 'none'}`;
+          const invStr = inventoryItems.length
+            ? ` | Inventory: [${inventoryItems.join(', ')}]`
+            : '';
+          peekLines.push(`${activeStr}${invStr}`);
+
+          const scopeStr = scopeItems.length ? `Scope: [${scopeItems.join(', ')}]` : 'Scope: []';
+          const heldStr = heldItems.length ? ` | Held: [${heldItems.join(', ')}]` : '';
+          peekLines.push(`${scopeStr}${heldStr}`);
+
+          let stageStr = `Stage: ${stage || 'unknown'}`;
+          if (nlpDebug && nlpDebug.matched) {
+            stageStr += ` (NLP Match: ${nlpDebug.rawIntent} | score: ${nlpDebug.score.toFixed(2)})`;
+          }
+          peekLines.push(stageStr);
+
+          if (parserNoteMutations.length > 0) {
+            for (const mut of parserNoteMutations) {
+              peekLines.push(
+                `Parser Note: ${mut.operation} ${mut.targetType} ${mut.id} -> "${mut.note}"`
+              );
+            }
+          }
+
+          try {
+            const res = JSON.parse(resultJson) as ParserResult;
+            if (res.type === 'handoff') {
+              peekLines.push(`Result: Handoff -> ${res.reason || 'unhandled'}`);
+            } else {
+              const outcomesStr = Array.isArray(res.outcomes)
+                ? res.outcomes
+                    .map((o: any) => {
+                      const parts: string[] = [o.code || o.status];
+                      if (o.data) {
+                        const dataKeys = Object.keys(o.data);
+                        if (dataKeys.length > 0) {
+                          parts.push(JSON.stringify(o.data));
+                        }
+                      }
+                      return parts.join(' ');
+                    })
+                    .join(', ')
+                : '';
+              peekLines.push(
+                `Result: ${res.handled ? 'Success' : 'Unhandled'} -> ${outcomesStr || 'no outcomes'}`
+              );
+            }
+          } catch (e) {
+            peekLines.push(`Result: error parsing result`);
+          }
+
+          if (llmDebug) {
+            const durationSec =
+              llmDebug.durationMs !== undefined ? (llmDebug.durationMs / 1000).toFixed(2) : '?';
+            const cacheCreationStr = llmDebug.cacheCreationInputTokens
+              ? `, ${llmDebug.cacheCreationInputTokens} created`
+              : '';
+            peekLines.push(
+              `[${llmDebug.model || 'unknown'} (${llmDebug.provider || 'unknown'}) | ${durationSec}s | Tokens: ${llmDebug.inputTokens ?? '?'} in, ${llmDebug.tokensGenerated ?? '?'} out (Cache: ${llmDebug.cacheReadInputTokens ? llmDebug.cacheReadInputTokens + ' read' : '0 read'}${cacheCreationStr})]`
+            );
+          }
+
+          return [peekLines.join('\n')];
+        })()
       : undefined;
 
     const peekLlmMessages =

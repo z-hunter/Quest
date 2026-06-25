@@ -152,7 +152,8 @@ describe('NpcPuppetMaster', () => {
       'Miles greeted the guard.'
     );
     expect(fixture.scene.sceneLog.getUnreadEntries()).toHaveLength(0);
-    expect(JSON.stringify(provider.lastSystem)).toContain('Check IDs');
+    expect(JSON.stringify(provider.lastSystem)).not.toContain('Check IDs');
+    expect(JSON.stringify(provider.lastMessages)).toContain('Check IDs');
     expect(JSON.stringify(provider.lastMessages)).toContain('Old note.');
   });
 
@@ -198,12 +199,48 @@ describe('NpcPuppetMaster', () => {
     expect(output).toContain('--- PM PROMPT ---');
     expect(output).toContain('--- PM RESPONSE ---');
     expect(output).toContain('Hello, Miles.');
-    expect(output).toContain('acceptedPlans');
-    expect(output).toContain('"durationMs": 123');
-    expect(output).toContain('"inputTokens": 456');
-    expect(output).toContain('"tokensGenerated": 32');
-    expect(output).toContain('"cacheCreationInputTokens": 111');
-    expect(output).toContain('"cacheReadInputTokens": 222');
+    expect(output).toContain('Plan for guard:');
+    expect(output).toContain('mock-npc (mock)');
+    expect(output).toContain('0.12s');
+    expect(output).toContain('Tokens: 456 in, 32 out');
+    expect(output).toContain('Cache: 222 read, 111 created');
+  });
+
+  it('prints PM prompt and response debug when the general #PEEKLLM mode is enabled', async () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const debugLogs: string[] = [];
+    (fixture.game as any).console = {
+      parserPeekLlmEnabled: true,
+      parserPeekPmEnabled: false,
+      isOpen: true,
+      logDebug(text: string) {
+        debugLogs.push(text);
+      },
+    };
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Hello.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const pm = new NpcPuppetMaster(
+      fixture.game,
+      new MockProvider(
+        JSON.stringify({
+          kind: 'pm_response',
+          plans: [{ npcId: 'guard', steps: [{ type: 'SAY', text: 'Hello, Miles.' }] }],
+        })
+      )
+    );
+
+    await pm.processScene(fixture.scene);
+
+    expect(debugLogs.join('\n')).toContain('--- PM LLM PROMPT ---');
+    expect(debugLogs.join('\n')).toContain('--- PM LLM RESPONSE ---');
   });
 
   it('initializes runtime NPC objectives from object text assets', () => {
@@ -338,7 +375,7 @@ describe('NpcPuppetMaster', () => {
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
-    const visible = world.npcs?.[0]?.visibleEntities || [];
+    const visible = world.npcs?.[0]?.entities || [];
     const ids = visible.map((entity) => entity.id);
     expect(ids).toContain(remote.name);
     expect(ids).toContain(authoredFloor.name);
@@ -408,7 +445,7 @@ describe('NpcPuppetMaster', () => {
     expect(pm.getLastDebugInfo()?.acceptedPlans).toHaveLength(1);
     expect(provider.calls).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(700);
 
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
     expect(provider.calls).toHaveLength(2);
@@ -465,7 +502,7 @@ describe('NpcPuppetMaster', () => {
 
     fixture.scene.update(100);
     expect(npc.getMoveResult().status).toBe('arrived');
-    await vi.advanceTimersByTimeAsync(50);
+    await vi.advanceTimersByTimeAsync(250);
 
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
     expect(provider.calls).toHaveLength(2);
@@ -530,11 +567,11 @@ describe('NpcPuppetMaster', () => {
     await pm.processScene(fixture.scene);
 
     fixture.scene.update(100);
-    await vi.advanceTimersByTimeAsync(50);
+    await vi.advanceTimersByTimeAsync(250);
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('move_completed');
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(provider.calls).toHaveLength(3);
     expect(JSON.stringify(provider.calls[2].messages)).toContain('plan_continued');
@@ -564,6 +601,7 @@ describe('NpcPuppetMaster', () => {
     npc.y = 20;
     npc.colliderWidth = 4;
     npc.colliderHeight = 4;
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
     (fixture.game as any).sayAsActor = () => {};
     fixture.scene.sceneLog.appendSpeech({
       actorId: player.name,
@@ -593,11 +631,57 @@ describe('NpcPuppetMaster', () => {
     expect(remote.visible).toBe(false);
     expect(provider.calls).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('action_completed');
     expect(String(provider.calls[1].messages[0].content)).toContain('"code": "item_taken"');
+  });
+
+  it('hides protected foreign inventory contents from NPC context and rejects TAKE', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const playerInventory = fixture.game.inventoryManager.ensureInventoryComponent(player, 'in');
+    playerInventory.protected = true;
+    const npc = addNpc(fixture, 'guard');
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    npc.x = 5;
+    npc.y = 5;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.inventoryManager.addInventoryEntity(player, remote, 'in');
+    (fixture.game as any).sayAsActor = () => {};
+
+    const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    expect(world.npcs[0]?.entities.some((entity) => entity.id === remote.name)).toBe(false);
+
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Take my remote.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'TAKE', targetId: remote.name }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(fixture.game.inventoryManager.hasInventoryEntity(player, remote, 'in')).toBe(true);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(false);
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '"code": "inventory_not_accessible"'
+    );
   });
 
   it('executes PUT from NPC inventory onto a target surface and wakes with action_completed', async () => {
@@ -658,7 +742,7 @@ describe('NpcPuppetMaster', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'tv_rc' })])
     );
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(provider.calls).toHaveLength(2);
     expect(String(provider.calls[1].messages[0].content)).toContain(
@@ -714,7 +798,7 @@ describe('NpcPuppetMaster', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'tv_rc' })])
     );
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(String(provider.calls[1].messages[0].content)).toContain(
       '"code": "item_put_on_surface"'
@@ -755,7 +839,7 @@ describe('NpcPuppetMaster', () => {
     const pm = new NpcPuppetMaster(fixture.game, provider);
 
     await pm.processScene(fixture.scene);
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
     expect(String(provider.calls[1].messages[0].content)).toContain(
@@ -787,9 +871,9 @@ describe('NpcPuppetMaster', () => {
 
     const model = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
     const npcContext = model.npcs.find((npc) => npc.id === 'guard');
-    const tvContext = npcContext?.visibleEntities.find((entity) => entity.id === 'tv');
-    const sofaContext = npcContext?.visibleEntities.find((entity) => entity.id === 'sofa');
-    const remoteContext = npcContext?.visibleEntities.find((entity) => entity.id === 'tv_rc');
+    const tvContext = npcContext?.entities.find((entity) => entity.id === 'tv');
+    const sofaContext = npcContext?.entities.find((entity) => entity.id === 'sofa');
+    const remoteContext = npcContext?.entities.find((entity) => entity.id === 'tv_rc');
 
     expect(tvContext?.commands).toEqual(
       expect.arrayContaining([
@@ -810,6 +894,106 @@ describe('NpcPuppetMaster', () => {
       false
     );
     expect(sofaContext?.commands || []).toHaveLength(0);
+    expect(tvContext?.commands?.find((command) => command.id === 'turn_tv_on')).toEqual(
+      expect.objectContaining({ available: true })
+    );
+  });
+
+  it('uses shared perception for opaque and transparent closed container contents', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 0;
+    npc.y = 0;
+    const opaque = fixture.addEntity('opaque_box', {
+      title: 'Opaque box',
+      components: [{ type: 'Switch', state: 1, blockedRelation: 'in', transparent: false }],
+    });
+    const hiddenItem = fixture.addEntity('hidden_item', {
+      title: 'Hidden item',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: opaque.name, relation: 'in' },
+    });
+    const glass = fixture.addEntity('glass_box', {
+      title: 'Glass box',
+      components: [{ type: 'Switch', state: 1, blockedRelation: 'in', transparent: true }],
+    });
+    const visibleItem = fixture.addEntity('visible_item', {
+      title: 'Visible item',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: glass.name, relation: 'in' },
+    });
+
+    const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    const entities = world.npcs[0].entities;
+
+    expect(entities.some((entity) => entity.id === hiddenItem.name)).toBe(false);
+    expect(entities.find((entity) => entity.id === visibleItem.name)).toEqual(
+      expect.objectContaining({ interaction: 'blocked', approach: 'unreachable' })
+    );
+  });
+
+  it('selects action observers with the authored NPC perception radius', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const nearNpc = addNpc(fixture, 'near_guard');
+    nearNpc.x = 100;
+    const farNpc = addNpc(fixture, 'far_guard');
+    farNpc.x = 700;
+    const nearComponent = nearNpc.components.find(
+      (component: any) => component.type === 'NPC'
+    ) as any;
+    const farComponent = farNpc.components.find(
+      (component: any) => component.type === 'NPC'
+    ) as any;
+    nearComponent.perceptionRadius = 200;
+    farComponent.perceptionRadius = 200;
+
+    expect(fixture.game.actorWorld.getActionObservers(player).map((actor) => actor.name)).toEqual([
+      nearNpc.name,
+    ]);
+  });
+
+  it('executes actor-aware OPEN for a locked Switch using the NPC inventory key', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 0;
+    npc.y = 0;
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    const key = fixture.addEntity('drawer_key', {
+      title: 'Drawer key',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.inventoryManager.addInventoryEntity(npc, key, 'in');
+    const drawer = fixture.addEntity('drawer', {
+      title: 'Drawer',
+      components: [{ type: 'Switch', state: 1, idKey: key.name }],
+    });
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Open the drawer.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'OPEN', targetId: drawer.name }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processScene(fixture.scene);
+    expect(plans[0].steps).toEqual([{ type: 'OPEN', targetId: drawer.name }]);
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(String(provider.calls[1].messages[0].content)).toContain('"code": "switch_opened"');
   });
 
   it('executes authored COMMAND steps for NPCs and wakes with an action_completed trigger', async () => {
@@ -863,7 +1047,7 @@ describe('NpcPuppetMaster', () => {
     expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
     expect(provider.calls).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('action_completed');
@@ -909,13 +1093,143 @@ describe('NpcPuppetMaster', () => {
     const pm = new NpcPuppetMaster(fixture.game, provider);
 
     await pm.processScene(fixture.scene);
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(200);
 
     expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
     expect(provider.calls).toHaveLength(2);
     expect(String(provider.calls[1].messages[0].content)).toContain(
       '"code": "custom_command_required_entity_missing"'
     );
+  });
+
+  it('uses a reachable item inside an inactive Subscene without requiring NPC inventory', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 0;
+    npc.y = 0;
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Desk close-up',
+      components: [{ type: 'Subscene', targetGroupId: '#drawer_zone' }],
+    });
+    const drawer = fixture.addTriggerbox('Drawer', {
+      title: 'Upper drawer',
+      disabled: true,
+      groupID: '#drawer_zone',
+      components: [{ type: 'Switch', state: 2, groupId1: 'nil', groupId2: '#drawer_open' }],
+      spatial: { parentNodeId: drawerZone.name, relation: 'in' },
+    });
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      disabled: true,
+      groupID: '#drawer_open',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: drawer.name, relation: 'in' },
+    });
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.x = 5;
+    tv.y = 5;
+    (fixture.game as any).sayAsActor = () => {};
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Turn on the TV.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'COMMAND', commandId: 'turn_tv_on' }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    const npcContext = world.npcs.find((candidate) => candidate.id === npc.name);
+    const remoteContext = npcContext?.entities.find((entity) => entity.id === remote.name);
+    const tvCommand = npcContext?.entities
+      .find((entity) => entity.id === tv.name)
+      ?.commands?.find((command) => command.id === 'turn_tv_on');
+
+    expect(npcContext?.inventory).toEqual({ available: false });
+    expect(remoteContext).toEqual(
+      expect.objectContaining({ interaction: 'reachable', approach: 'already_reachable' })
+    );
+    expect(tvCommand).toEqual(expect.objectContaining({ available: true }));
+    expect(tvCommand?.requires).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityId: remote.name, satisfied: true, via: 'reachable' }),
+      ])
+    );
+
+    await pm.processScene(fixture.scene);
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+  });
+
+  it('stops a plan after a failed action and does not commit speculative memory', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
+    npcComponent.memory = 'The remote is in the drawer.';
+    npcComponent.objectives = ['Turn on the TV'];
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    (fixture.game as any).sayAsActor = vi.fn();
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Turn on the TV.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'TAKE', targetId: remote.name },
+              { type: 'COMMAND', commandId: 'turn_tv_on' },
+              { type: 'SAY', text: 'The TV is on.' },
+              { type: 'OBJECTIVES_SET', objectives: ['Watch television'] },
+            ],
+            memory: 'I took the remote and turned on the TV.',
+          },
+        ],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
+    expect(npcComponent.memory).toBe('The remote is in the drawer.');
+    expect(npcComponent.objectives).toEqual(['Turn on the TV']);
+    expect((fixture.game as any).sayAsActor).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(provider.calls).toHaveLength(2);
+    expect(String(provider.calls[1].messages[0].content)).toContain('"code": "inventory_missing"');
   });
 
   it('moves NPCs to visible target ids', async () => {
@@ -1031,5 +1345,255 @@ describe('NpcPuppetMaster', () => {
 
     expect(plans).toEqual([]);
     expect(pm.getLastDebugInfo()?.filteredPlans).toHaveLength(1);
+  });
+
+  it('halts NPCs, cancels timeouts, and invalidates in-flight requests when haltAllNpcs is called', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const player = fixture.addPlayer('Hero');
+
+    // Setup puppet master
+    const responseText = JSON.stringify({
+      kind: 'pm_response',
+      plans: [{ npcId: 'guard', steps: [{ type: 'SAY', text: 'Halt!' }] }],
+    });
+    const provider = new MockProvider(responseText);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    fixture.game.npcPuppetMaster = pm;
+
+    // Simulate wait timeout scheduling
+    let _waitFired = false;
+    pm['waitTimeouts'].set(
+      'guard',
+      globalThis.setTimeout(() => {
+        _waitFired = true;
+      }, 10000)
+    );
+
+    // Simulate active movement
+    npc.moveTo(100, 200);
+    expect(npc.state).toBe('walk');
+
+    // Perform halt
+    pm.haltAllNpcs();
+
+    // Verify npc is stopped
+    expect(npc.state).toBe('idle');
+    expect(npc.target).toBeNull();
+
+    // Verify timeout was cancelled
+    expect(pm['waitTimeouts'].has('guard')).toBe(false);
+
+    // Verify in-flight requests are ignored
+    let sendMessageStreamCalled = false;
+    const slowProvider: ILlmProvider = {
+      isAvailable: () => true,
+      getProviderName: () => 'slow',
+      getModelName: () => 'slow-model',
+      sendMessage: async () => ({ ok: true, text: '{}', durationMs: 0 }),
+      sendMessageStream: async () => {
+        sendMessageStreamCalled = true;
+        // halt while the call is "in-flight"
+        pm.haltAllNpcs();
+        return {
+          ok: true,
+          text: JSON.stringify({
+            kind: 'pm_response',
+            plans: [{ npcId: 'guard', steps: [{ type: 'SAY', text: 'Delayed reply' }] }],
+          }),
+          durationMs: 10,
+        };
+      },
+    };
+    pm.setProvider(slowProvider);
+
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: 'Talk to me.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+
+    const plans = await pm.processScene(fixture.scene);
+    expect(sendMessageStreamCalled).toBe(true);
+    // Since pm.haltAllNpcs was called while sendMessageStream was running,
+    // the returned plan should be discarded and processScene should return empty plans array.
+    expect(plans).toEqual([]);
+  });
+
+  it('batches nearby NPC wake-ups into one PM request', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    addNpc(fixture, 'guard');
+    addNpc(fixture, 'clerk');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    pm.scheduleNpc(fixture.scene, 'guard', { type: 'manual', reason: 'first_event' });
+    pm.scheduleNpc(fixture.scene, 'clerk', { type: 'manual', reason: 'second_event' });
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(provider.calls).toHaveLength(1);
+    const prompt = String(provider.calls[0].messages[0].content);
+    expect(prompt).toContain('"guard"');
+    expect(prompt).toContain('"clerk"');
+    expect(prompt).toContain('"type": "batch"');
+  });
+
+  it('flushes player speech through the dispatcher before scheduleScene resolves', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Hello.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const completion = pm.scheduleScene(fixture.scene);
+    expect(provider.calls).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(200);
+    await completion;
+
+    expect(provider.calls).toHaveLength(1);
+    expect(String(provider.calls[0].messages[0].content)).toContain('"text": "Hello."');
+  });
+
+  it('prints PM wake stages before the provider prompt when peek mode is enabled', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const debugLines: string[] = [];
+    (fixture.game as any).console = {
+      parserPeekPmEnabled: true,
+      parserPeekLlmEnabled: false,
+      logDebug: (message: string) => debugLines.push(message),
+    };
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Hello.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+
+    const completion = pm.scheduleScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(200);
+    await completion;
+
+    expect(debugLines.join('\n')).toContain('schedule_scene_scan');
+    expect(debugLines.join('\n')).toContain('batch_enqueued');
+    expect(debugLines.join('\n')).toContain('provider_request_start');
+  });
+
+  it('lets player speech bypass exhausted autonomous PM rate budgets', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const now = Date.now();
+    (pm as any).sceneCallTimes.set(
+      fixture.scene.id,
+      Array.from({ length: 12 }, () => now)
+    );
+    (pm as any).npcCallTimes.set(
+      `${fixture.scene.id}:${npc.name}`,
+      Array.from({ length: 6 }, () => now)
+    );
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Hello after all that searching.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+
+    const completion = pm.scheduleScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(200);
+    await completion;
+
+    expect(provider.calls).toHaveLength(1);
+    expect(String(provider.calls[0].messages[0].content)).toContain(
+      'Hello after all that searching.'
+    );
+  });
+
+  it('stops repeating a successful action that produces no world progress', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    fixture.addEntity('desk', {
+      title: 'Desk',
+      description: 'A desk with misleading prose.',
+    });
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Search the desk.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const repeatedPlan = JSON.stringify({
+      kind: 'pm_response',
+      plans: [{ npcId: npc.name, steps: [{ type: 'EXAMINE', targetId: 'desk' }] }],
+    });
+    const provider = new MockProvider([repeatedPlan, repeatedPlan, repeatedPlan, repeatedPlan]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processScene(fixture.scene);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(provider.calls).toHaveLength(4);
+    expect(String(provider.calls[2].messages[0].content)).toContain('"repeatCount": 2');
+    expect(String(provider.calls[3].messages[0].content)).toContain(
+      '"code": "repeated_without_progress"'
+    );
+  });
+
+  it('delivers the terminal repeated_without_progress outcome before suppressing further repeats', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const baseResult = {
+      status: 'ok' as const,
+      code: 'entity_details',
+      npcId: npc.name,
+      targetId: 'sofa',
+      actionType: 'EXAMINE' as const,
+      worldChanged: false,
+      repeatKey: 'EXAMINE:sofa',
+    };
+
+    for (let index = 0; index < 3; index += 1) {
+      const result = (pm as any).recordActionProgress(fixture.scene, npc.name, baseResult);
+      pm.scheduleNpc(fixture.scene, npc.name, { type: 'action_completed', result });
+      await vi.advanceTimersByTimeAsync(200);
+    }
+
+    expect(provider.calls).toHaveLength(3);
+    const terminalPrompt = String(provider.calls[2].messages[0].content);
+    expect(terminalPrompt).toContain('"code": "repeated_without_progress"');
+    expect(terminalPrompt).toContain('"repeatCount": 3');
+
+    const fourth = (pm as any).recordActionProgress(fixture.scene, npc.name, baseResult);
+    pm.scheduleNpc(fixture.scene, npc.name, { type: 'action_completed', result: fourth });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(provider.calls).toHaveLength(3);
   });
 });

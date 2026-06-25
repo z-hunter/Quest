@@ -8,11 +8,13 @@ export interface SceneLogEntry {
   displayName: string;
   text: string;
   knownByNpcIds: string[];
+  payload?: Record<string, unknown>;
 }
 
 export interface SceneLogData {
   entries?: SceneLogEntry[];
   lastPmProcessedAt?: number;
+  lastPmProcessedAtByNpc?: Record<string, number>;
 }
 
 export const SCENE_LOG_RETENTION_MS = 10 * 60 * 1000;
@@ -40,6 +42,7 @@ function normalizeKnownNpcIds(value: unknown): string[] {
 export class SceneLog {
   entries: SceneLogEntry[] = [];
   lastPmProcessedAt = 0;
+  lastPmProcessedAtByNpc: Record<string, number> = {};
   retentionMs = SCENE_LOG_RETENTION_MS;
 
   appendSpeech(args: {
@@ -65,6 +68,7 @@ export class SceneLog {
     text: string;
     knownByNpcIds?: string[];
     timestamp?: number;
+    payload?: Record<string, unknown>;
   }): SceneLogEntry | null {
     return this.append({
       kind: 'action',
@@ -73,21 +77,42 @@ export class SceneLog {
       text: args.text,
       knownByNpcIds: args.knownByNpcIds || [],
       timestamp: args.timestamp,
+      payload: args.payload,
     });
   }
 
-  getUnreadEntries(): SceneLogEntry[] {
+  getUnreadEntries(npcId?: string | null): SceneLogEntry[] {
+    const normalizedNpcId = String(npcId || '').trim();
+    const cursor = normalizedNpcId
+      ? (this.lastPmProcessedAtByNpc[normalizedNpcId] ?? this.lastPmProcessedAt)
+      : this.lastPmProcessedAt;
     return this.entries.filter(
-      (entry) => entry.timestamp > this.lastPmProcessedAt && entry.knownByNpcIds.length > 0
+      (entry) =>
+        entry.timestamp > cursor &&
+        (normalizedNpcId
+          ? entry.knownByNpcIds.includes(normalizedNpcId)
+          : entry.knownByNpcIds.length > 0)
     );
   }
 
-  markProcessed(timestamp?: number): void {
+  markProcessed(timestamp?: number, npcId?: string | null): void {
+    const normalizedNpcId = String(npcId || '').trim();
+    const currentCursor = normalizedNpcId
+      ? (this.lastPmProcessedAtByNpc[normalizedNpcId] ?? this.lastPmProcessedAt)
+      : this.lastPmProcessedAt;
     const newestEntryTime = this.entries.reduce(
-      (latest, entry) => Math.max(latest, entry.timestamp),
-      this.lastPmProcessedAt
+      (latest, entry) =>
+        !normalizedNpcId || entry.knownByNpcIds.includes(normalizedNpcId)
+          ? Math.max(latest, entry.timestamp)
+          : latest,
+      currentCursor
     );
-    this.lastPmProcessedAt = normalizeTimestamp(timestamp, newestEntryTime);
+    const processedAt = normalizeTimestamp(timestamp, newestEntryTime);
+    if (normalizedNpcId) {
+      this.lastPmProcessedAtByNpc[normalizedNpcId] = processedAt;
+      return;
+    }
+    this.lastPmProcessedAt = processedAt;
   }
 
   prune(now: number = Date.now()): void {
@@ -99,6 +124,7 @@ export class SceneLog {
     return {
       entries: this.entries.map((entry) => ({ ...entry, knownByNpcIds: [...entry.knownByNpcIds] })),
       lastPmProcessedAt: this.lastPmProcessedAt,
+      lastPmProcessedAtByNpc: { ...this.lastPmProcessedAtByNpc },
     };
   }
 
@@ -107,6 +133,16 @@ export class SceneLog {
     const record = data as SceneLogData;
     const now = Date.now();
     this.lastPmProcessedAt = normalizeTimestamp(record.lastPmProcessedAt, 0);
+    this.lastPmProcessedAtByNpc =
+      record.lastPmProcessedAtByNpc &&
+      typeof record.lastPmProcessedAtByNpc === 'object' &&
+      !Array.isArray(record.lastPmProcessedAtByNpc)
+        ? Object.fromEntries(
+            Object.entries(record.lastPmProcessedAtByNpc)
+              .map(([npcId, value]) => [npcId.trim(), normalizeTimestamp(value, 0)] as const)
+              .filter(([npcId]) => !!npcId)
+          )
+        : {};
     this.entries = Array.isArray(record.entries)
       ? record.entries
           .map((entry, index) => this.normalizeEntry(entry, now + index))
@@ -121,12 +157,18 @@ export class SceneLog {
     text: string;
     knownByNpcIds: string[];
     timestamp?: number;
+    payload?: Record<string, unknown>;
   }): SceneLogEntry | null {
     const text = normalizeText(args.text);
     const actorId = normalizeText(args.actorId);
     if (!text || !actorId) return null;
 
-    const timestamp = normalizeTimestamp(args.timestamp, Date.now());
+    const requestedTimestamp = normalizeTimestamp(args.timestamp, Date.now());
+    const previousTimestamp = this.entries.at(-1)?.timestamp ?? 0;
+    const timestamp =
+      typeof args.timestamp === 'number'
+        ? requestedTimestamp
+        : Math.max(requestedTimestamp, previousTimestamp + 1);
     const entry: SceneLogEntry = {
       id: `${timestamp}-${this.entries.length + 1}`,
       kind: args.kind,
@@ -135,6 +177,7 @@ export class SceneLog {
       displayName: normalizeText(args.displayName) || actorId,
       text,
       knownByNpcIds: normalizeKnownNpcIds(args.knownByNpcIds),
+      ...(args.payload ? { payload: { ...args.payload } } : {}),
     };
 
     this.entries.push(entry);
@@ -158,6 +201,9 @@ export class SceneLog {
       displayName: normalizeText(record.displayName) || actorId,
       text,
       knownByNpcIds: normalizeKnownNpcIds(record.knownByNpcIds),
+      ...(record.payload && typeof record.payload === 'object' && !Array.isArray(record.payload)
+        ? { payload: { ...record.payload } }
+        : {}),
     };
   }
 }

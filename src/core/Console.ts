@@ -135,7 +135,53 @@ export class Console {
     this.registerCommand('#CLS', () => this.clear());
     this.registerCommand('#HELP', () => {
       this.log('Available commands:', 'info');
-      this.log(Array.from(this.commands.keys()).join(', '), 'info');
+      this.log('*   #HELP — Displays a list of all available developer console commands.', 'info');
+      this.log('*   #CLS — Clears the text buffer of the in-game console.', 'info');
+      this.log(
+        '*   #RUN <script_id> [args...] — Executes a specified script from the script registry.',
+        'info'
+      );
+      this.log(
+        '*   #HALT [script_id] — Stops all currently running scripts in the scene, or a specific script.',
+        'info'
+      );
+      this.log(
+        '*   #HALTNPC — Halts all NPCs under Puppet Master control, resetting them to idle.',
+        'info'
+      );
+      this.log(
+        '*   #PEEK-ON/OFF — Toggles parser debug mode showing context, scope, action, and result JSONs.',
+        'info'
+      );
+      this.log(
+        '*   #PEEKLLM-ON/OFF — Toggles general LLM debug logging (prompts, responses, and cache metrics).',
+        'info'
+      );
+      this.log(
+        '*   #PEEKPN-ON/OFF — Toggles parser notes debug mode showing creations, updates, clears, and stale markers.',
+        'info'
+      );
+      this.log(
+        '*   #PEEKPM-ON/OFF — Toggles detailed debug logging for the NPC Puppet Master.',
+        'info'
+      );
+      this.log(
+        '*   #STAGE1-ON/OFF — Toggles the Stage 1 Regex processing stage of the text parser.',
+        'info'
+      );
+      this.log(
+        '*   #STAGE2-ON/OFF — Toggles the Stage 2 NLP.js processing stage of the text parser.',
+        'info'
+      );
+      this.log(
+        '*   #LLM-ON/OFF — Toggles the Stage 2 LLM cascade for handling complex or unsupported player commands.',
+        'info'
+      );
+      this.log('*   #C1-ON/OFF — Toggles forced LLM cascade for Stage 1 Regex commands.', 'info');
+      this.log(
+        '*   #VALIDATE-SPATIAL — Runs topological checks on the current scene for cyclic or invalid references.',
+        'info'
+      );
     });
 
     this.registerCommand('#RUN', (args) => {
@@ -158,6 +204,15 @@ export class Console {
         const scriptId = args[0];
         ScriptRegistry.stop(scriptId);
         this.log(`Stopped script '${scriptId}'.`, 'info');
+      }
+    });
+
+    this.registerCommand('#HALTNPC', () => {
+      if (this.game?.npcPuppetMaster) {
+        this.game.npcPuppetMaster.haltAllNpcs();
+        this.log('Halted all NPCs under Puppet Master control.', 'info');
+      } else {
+        this.log('Puppet Master is not initialized.', 'error');
       }
     });
 
@@ -331,6 +386,17 @@ export class Console {
 
     this.notifyListeners();
     return this.buffer.length - 1;
+  }
+
+  logDebug(text: string): number | undefined {
+    const isAnyPeekEnabled =
+      this.parserPeekEnabled ||
+      this.parserPeekLlmEnabled ||
+      this.parserPeekPnEnabled ||
+      this.parserPeekPmEnabled;
+
+    if (!this.isOpen && !isAnyPeekEnabled) return undefined;
+    return this.log(text, 'info', { showInClosed: false });
   }
 
   logResponse(

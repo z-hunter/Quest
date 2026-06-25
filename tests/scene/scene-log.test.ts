@@ -1,8 +1,54 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SceneLog } from '../../src/scene/SceneLog';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('SceneLog', () => {
+  it('assigns monotonically increasing timestamps to same-tick runtime events', () => {
+    const log = new SceneLog();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+
+    const first = log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'First',
+      knownByNpcIds: ['NPC'],
+    });
+    log.markProcessed(undefined, 'NPC');
+    const second = log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'Second',
+      knownByNpcIds: ['NPC'],
+    });
+
+    expect(first?.timestamp).toBe(1000);
+    expect(second?.timestamp).toBe(1001);
+    expect(log.getUnreadEntries('NPC').map((entry) => entry.text)).toEqual(['Second']);
+    now.mockRestore();
+  });
+
+  it('does not advance an NPC cursor over events unknown to that NPC', () => {
+    const log = new SceneLog();
+    log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'For Linda',
+      knownByNpcIds: ['Linda'],
+      timestamp: 1000,
+    });
+    log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'For Bob',
+      knownByNpcIds: ['Bob'],
+      timestamp: 2000,
+    });
+
+    log.markProcessed(undefined, 'Linda');
+
+    expect(log.lastPmProcessedAtByNpc.Linda).toBe(1000);
+  });
+
   it('stores speech entries with listener knowledge and unread cursor filtering', () => {
     const log = new SceneLog();
     const first = log.appendSpeech({

@@ -2492,3 +2492,103 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The work is visually broad, so a later style tweak in one shared class can affect multiple property sections at once.
 - No functional editor logic was changed, so the main risk is only visual regression rather than data loss or runtime breakage.
 - The session left the repository clean at wrap-up time, with no pending local edits beyond the committed UI work.
+
+## Session Entry - 2026-06-25 19:48 +02:00
+
+# Session Summary
+
+## Session Goal
+
+Реализовать единый actor-aware runtime для Puppet Master (PM) и Player. PM-функциональность должна быть реализована исключительно в виде клиентов общих actor-aware API для запросов и действий (видимость, навигация, инвентарь, переключатели и т.д.). Оба компонента (Parser и Puppet Master) должны использовать общий runtime.
+
+## What Was Implemented
+
+### 1. Общие perception-запросы (ActorWorldQuery)
+- Добавлен единый read-only слой восприятия `ActorWorldQuery`.
+- Реализованы общие методы определения видимости, доступности взаимодействия и навигационного подхода (`getObjectPerception`, `getInteractionAccess`, `getApproachAccess` и др.).
+- Удален `NpcWorldModelBuilder.isVisibleToActor` и другие дублирующие PM-эвристики.
+
+### 2. Общие навигационные запросы (ActorNavigationService)
+- Вынесен поиск позиции подхода из `ActorPlanExecutor` в общий `ActorNavigationService` (методы `findInteractionPosition`, `planApproach`, `moveActorToTarget`).
+- Убран дублирующий поиск точек кольцами со стороны PM.
+
+### 3. Общие семантические действия (GameSemanticAPI)
+- LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND и USE переведены на контракт `*ForActor(actor, target)`.
+- Player API и PM адаптеры теперь являются тонкими обертками вокруг этих общих методов.
+
+### 4. Централизация переключателей (Switch) и ключей
+- Проверка ключей вынесена в общий runtime (`getSwitchLockOutcome`). Ключ проверяется только в инвентаре действующего актора.
+
+### 5. Общие authored-команды
+- Выполнение authored plans переведено на единый `ActorCommandExecutor` для Player и NPC. Parser теперь отвечает только за разбор текста и аргументов.
+
+### 6. События восприятия и NPC-курсоры в SceneLog
+- Добавлено свойство `perceptionRadius` для NPC.
+- Семантические действия теперь публикуют структурированные события.
+- Внедрены индивидуальные NPC-курсоры для чтения лога `SceneLog` во избежание проглатывания событий при наличии нескольких наблюдателей.
+
+## Important Architecture / Runtime Decisions
+
+- **Единый Executor**: authored-команды Player и NPC выполняются через один `ActorCommandExecutor`, чтобы исключить рассинхронизацию между планированием и исполнением.
+- **Отказ от локальных эвристик PM**: координаты не передаются в контекст PM; вместо этого используются общие affordances и approach-статусы.
+- **Индивидуальные курсоры логов**: SceneLog поддерживает чтение событий по индивидуальным курсорам для каждого NPC, решая проблему конкурентного доступа.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Созданы новые сервисы: `ActorWorldQuery` и `ActorNavigationService`.
+- Удален класс `NpcWorldModelBuilder` с локальными эвристиками.
+- Обновлены и адаптированы `GameSemanticAPI`, `ActorPlanExecutor`, `NpcPuppetMaster` и `Parser`.
+
+## Documentation Updated
+
+Обновлены следующие файлы:
+- [GDD.md](file:///D:/GAMES/New%20folder/Quest/GDD.md)
+- [NPCsys.md](file:///D:/GAMES/New%20folder/Quest/NPCsys.md)
+- `npc-pm-system.md` (документация по PM-архитектуре)
+
+## Tests Run
+
+- Запущен typecheck (`npm run typecheck`): успешно.
+- Добавлены parity-тесты для сравнения правил Player и NPC.
+- Прогнан полный тестовый набор: **463/463 тестов успешно пройдены**.
+
+## Commits Created During the Session
+
+- *Изменения в рабочей копии на момент завершения сессии не закоммичены*. Всего изменено 24 файла (+1369 строк, -477 строк).
+
+## Remaining Work / Next Recommended Steps
+
+1. Закоммитить текущие изменения из worktree в репозиторий.
+2. Проверить предупреждения и провести рефакторинг неиспользуемого или устаревшего кода в общих путях.
+
+## Risks / Caveats / Open Questions
+
+- Все изменения находятся в незакоммиченном состоянии в рабочем дереве (worktree).
+- Необходимо убедиться, что логика SceneLog не вызывает переполнения при длительных сессиях из-за ведения множественных курсоров.
+
+## Session Entry - 2026-06-25 22:00 +02:00
+
+### 1. Session Goals
+- Fix regression where Puppet Master debug logs (`#PEEKPM-ON`) did not show in the console (closed console state filtering).
+- Optimize the Puppet Master (`#PEEKPM-ON`) and Parser (`#PEEK-ON`) logs by eliminating raw JSON "noise" and replacing them with compact, clean, human-readable summaries.
+- Separate `#PEEKLLM-ON` (for raw LLM prompt/response inspection) and `#PEEKPM-ON` (for compact PM plans/triggers tracking) so they do not duplicate each other.
+- Update autotests to align with the new log formats and ensure full test suite success.
+
+### 2. What Was Implemented
+- **Console Bypass (Closed State)**: Modified `Console.logDebug` to bypass the `!this.isOpen` check, ensuring that peek/debug commands successfully append logs to the buffer with `showInClosed: false`.
+- **Puppet Master Log Optimization**: Refactored PM peek logging to display trigger source, new speech events, active NPCs (including objectives, memory, inventory contents, and perceived actors), target plans, and provider token/time metrics.
+- **Parser Log Optimization**: Replaced the 8 separate JSON-block dumps of `#PEEK-ON` with a single unified `--- PARSER PEEK ---` output listing input command, active scene, inventory, visible/held scope, match stage (regex, NLP, LLM), mutated parser notes, outcomes, and LLM metrics.
+- **PEEKLLM / PEEKPM Separation**: Separated `#PEEKLLM-ON` and `#PEEKPM-ON` for Puppet Master. `#PEEKPM-ON` is now strictly compact, while `#PEEKLLM-ON` outputs the full raw LLM prompt and response.
+- **Test Compliance**: Updated test expectations in `puppet-master.test.ts` and `llm-parser.test.ts` to assert the new formats.
+
+### 3. Important Decisions
+- Keep raw LLM prompts/responses in `#PEEKLLM-ON` completely raw for precision, but keep general peeks (`#PEEK-ON`, `#PEEKPM-ON`) highly readable and noise-free.
+- Include key context facts like inventory and seen actors in the active NPC list to maintain debugging utility.
+
+### 4. Tests Run and Outcomes
+- `npm test`: Passed (464/464 tests).
+- `npm run typecheck`: Passed.
+
+### 5. Remaining Work / Next Recommended Steps
+- Verify the in-game display of the new consolidated parser and PM logs.
+- Explore similar cleanup for other console debug logs.

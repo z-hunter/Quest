@@ -13,6 +13,22 @@ export type NpcPlanStep =
       targetId?: string;
     }
   | {
+      type: 'LOOK';
+      targetId: string;
+    }
+  | {
+      type: 'EXAMINE';
+      targetId: string;
+    }
+  | {
+      type: 'OPEN';
+      targetId: string;
+    }
+  | {
+      type: 'CLOSE';
+      targetId: string;
+    }
+  | {
       type: 'TAKE';
       targetId: string;
     }
@@ -59,27 +75,50 @@ export type NpcPuppetMasterResponse = {
 export type NpcActorContext = {
   id: string;
   title: string;
-  x?: number;
-  y?: number;
   lore?: string;
   objectives?: string[];
   memory?: string;
-  heardEntries: SceneLogEntry[];
-  visibleEntities: Array<{
+  inventory?: {
+    available: boolean;
+    itemIds: string[];
+  };
+  actors: Array<{ id: string; title: string }>;
+  newEvents: SceneLogEntry[];
+  recentEvents: SceneLogEntry[];
+  entities: Array<{
     id: string;
     title: string;
-    x?: number;
-    y?: number;
     location?: {
       relation: string;
       targetId: string;
       targetTitle?: string;
     };
+    interaction: 'held' | 'reachable' | 'blocked';
+    approach: 'already_reachable' | 'route_available' | 'unreachable';
+    inspection?: {
+      look: boolean;
+      examine: boolean;
+      possibleRelations: string[];
+    };
+    switch?: {
+      state: 'open' | 'closed';
+      canOpen: boolean;
+      canClose: boolean;
+      locked: boolean;
+      keyHeld: boolean;
+      requiredKeyId?: string;
+    };
     states?: Array<{ id: string; value: string | number | boolean }>;
     commands?: Array<{
       id: string;
       label: string;
-      requires?: Array<{ entityId: string; scope: string }>;
+      available?: boolean;
+      requires?: Array<{
+        entityId: string;
+        scope: string;
+        satisfied?: boolean;
+        via?: string;
+      }>;
       effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
     }>;
   }>;
@@ -93,8 +132,6 @@ export type NpcWorldModel = {
     lore?: string;
   };
   npcs: NpcActorContext[];
-  recentSceneLog: SceneLogEntry[];
-  unreadSceneLog: SceneLogEntry[];
 };
 
 export type NpcPuppetMasterDebugInfo = {
@@ -125,4 +162,9 @@ export type NpcPlanExecutionOutcome = {
   targetId?: string;
   itemId?: string;
   commandId?: string;
+  actionType?: NpcPlanStep['type'];
+  worldChanged?: boolean;
+  discoveredEntityIds?: string[];
+  repeatKey?: string;
+  repeatCount?: number;
 };

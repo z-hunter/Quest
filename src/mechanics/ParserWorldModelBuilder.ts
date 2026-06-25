@@ -159,14 +159,11 @@ export class ParserWorldModelBuilder {
         const coordinates = isDirectSceneObject
           ? this.getSceneObjectCoordinates(sceneObject)
           : undefined;
+        const perception = scene.player
+          ? this.game.actorWorld.getObjectPerception(scene.player, sceneObject, true)
+          : null;
         const reachable =
-          isDirectSceneObject &&
-          !sceneObject.disabled &&
-          !entry.blocked &&
-          !entry.inInactiveSubscene &&
-          !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
-            ? true
-            : undefined;
+          isDirectSceneObject && perception?.interaction === 'reachable' ? true : undefined;
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title: entry.title,
@@ -210,6 +207,9 @@ export class ParserWorldModelBuilder {
         if ((this.game as any).isEntityInInventory?.(sceneObject)) return null;
 
         const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
+        const perception = scene.player
+          ? this.game.actorWorld.getObjectPerception(scene.player, sceneObject, true)
+          : null;
         const isItem = !!sceneObject.components?.find(
           (component: any) => component?.type === 'Item'
         );
@@ -223,12 +223,18 @@ export class ParserWorldModelBuilder {
             textLayer
           ),
           contents: this.buildEntityContentsContext(sceneObject.name, textLayer),
-          visibility: accessState.hidden ? 'hidden' : 'visible',
-          accessibility: accessState.blocked
-            ? 'blocked'
-            : accessState.hidden || sceneObject.disabled || accessState.inInactiveSubscene
+          visibility:
+            perception?.visibility === 'unknown'
+              ? 'hidden'
+              : perception?.visibility || (accessState.hidden ? 'hidden' : 'visible'),
+          accessibility:
+            perception?.visibility !== 'visible' ||
+            sceneObject.disabled ||
+            accessState.inInactiveSubscene
               ? 'inaccessible'
-              : undefined,
+              : perception?.interaction === 'blocked'
+                ? 'blocked'
+                : undefined,
           hiddenReason: accessState.hiddenReason || undefined,
           synonyms: this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms'),
           semanticTags: this.game.textAssets.getResolvedObjectListField(

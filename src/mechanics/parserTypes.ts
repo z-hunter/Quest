@@ -372,6 +372,7 @@ export type ParserToolAction =
       type: 'runCustomCommand';
       commandId: string;
       arguments?: Record<string, string | null>;
+      argumentRefs?: Record<string, string>;
     }
   | {
       type: 'requireEntityAvailable';

@@ -7,6 +7,31 @@ import { Walkbox } from '../../src/entities/Walkbox';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Game navigation and spatial API', () => {
+  it('does not derive interaction reach from visual width when an Actor collider is disabled', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 50);
+    actor.width = 150;
+    actor.colliderWidth = 0;
+    actor.colliderHeight = 0;
+    const floor = new Walkbox(
+      [
+        { x: -50, y: 0 },
+        { x: 300, y: 0 },
+        { x: 300, y: 100 },
+        { x: -50, y: 100 },
+      ],
+      'Walk_main'
+    );
+    floor.mode = 'Add';
+    fixture.scene.addWalkbox(floor);
+    const target = fixture.addEntity('target', { title: 'Target' });
+    target.x = 200;
+    target.y = 50;
+
+    expect(ComponentSystem.getInteractionDistanceError(target, actor)).not.toBeNull();
+    expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('route_available');
+  });
+
   it('goToSceneTarget resolves scene by id and title', () => {
     const fixture = createGameSemanticFixture('start');
     const target = fixture.addScene('test1', 'New Scene', 'You are in New Scene.');

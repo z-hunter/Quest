@@ -740,10 +740,8 @@ describe('Parser LLM Integration', () => {
 
     await fixture.parser.parse('listen radio');
 
-    expect(debugLogs.join('\n')).toContain('"operation": "created"');
-    expect(debugLogs.join('\n')).toContain('"id": "boombox"');
     expect(debugLogs.join('\n')).toContain(
-      '"note": "Radio reception currently produces only static."'
+      'Parser Note: created entity boombox -> "Radio reception currently produces only static."'
     );
   });
 

@@ -7,6 +7,9 @@ import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { InventoryManager } from '../../src/systems/InventoryManager';
 import { GameSemanticAPI } from '../../src/systems/GameSemanticAPI';
+import { ActorNavigationService } from '../../src/systems/ActorNavigationService';
+import { ActorWorldQuery } from '../../src/systems/ActorWorldQuery';
+import { ActorCommandExecutor } from '../../src/mechanics/ActorCommandExecutor';
 import { createTestTextAssets } from './textAssetFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
@@ -243,6 +246,9 @@ export function createTestGame(): TestGameHarness {
       },
     } as any,
     inventoryManager: {} as any,
+    actorNavigation: {} as any,
+    actorWorld: {} as any,
+    actorCommands: {} as any,
     semantic: {} as any,
     get inventory() {
       return (this.inventoryManager as any)?.inventory || [];
@@ -295,17 +301,29 @@ export function createTestGame(): TestGameHarness {
     lookEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_look_entity');
     },
+    lookEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.lookEntityForActor(actor, entity);
+    },
     describeSpatialRelation(_anchorNodeId: string, _relation: SpatialRelationType) {
       return notImplementedOutcome('not_implemented_describe_spatial_relation');
     },
     examineEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_examine_entity');
     },
+    examineEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.examineEntityForActor(actor, entity);
+    },
     openEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_open_entity');
     },
+    openEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.openEntityForActor(actor, entity);
+    },
     closeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_close_entity');
+    },
+    closeEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.closeEntityForActor(actor, entity);
     },
     closeFocusedView() {
       const previewEntity = (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
@@ -336,6 +354,9 @@ export function createTestGame(): TestGameHarness {
     },
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
+    },
+    takeEntityForActor(actor: Actor | null, entity: Entity) {
+      return (this as any).semantic.takeEntityForActor(actor, entity);
     },
     putEntity(entity: Entity, target?: SceneObject | null, options?: any) {
       return (this as any).semantic.putEntity(entity, target, options);
@@ -428,6 +449,9 @@ export function createTestGame(): TestGameHarness {
     textAssets as any,
     game.text.bind(game)
   );
+  game.actorNavigation = new ActorNavigationService(game);
+  game.actorWorld = new ActorWorldQuery(game);
+  game.actorCommands = new ActorCommandExecutor(game);
   game.semantic = new GameSemanticAPI(game);
 
   (game as any).canTakeEntity = (entity: Entity): GameActionOutcome | null => {

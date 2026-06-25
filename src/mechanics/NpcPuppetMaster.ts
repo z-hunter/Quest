@@ -3,7 +3,9 @@ import { ActorPlanExecutor } from './ActorPlanExecutor';
 import { NpcWorldModelBuilder } from './NpcWorldModelBuilder';
 import type { IGame } from '../core/IGame';
 import type { Scene } from '../scene/Scene';
+import { Actor } from '../entities/Actor';
 import type { ActorMoveResult } from '../entities/Actor';
+import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
   NpcPlan,
   NpcPlanExecutionOutcome,
@@ -19,10 +21,16 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, TAKE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
-  'OBJECTIVES_SET and MEMORY_SET only update internal NPC state; include WAIT or MOVE_TO when the NPC should keep acting.',
-  'Do not claim unsupported OPEN, button press, or state-change actions have already happened.',
+  'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
+  'Titled objects inside inactive Subscenes may be used through virtual NPC access without opening the player view.',
+  'OPEN and CLOSE use real Switch rules, including keys held by the acting NPC.',
+  'Do not claim actions succeeded before a successful action_completed result.',
+  'Emit at most one consequential action per NPC plan and wait for its outcome.',
+  'inventory.available false means the Actor has no inventory, not that it is full.',
+  'Do not store attempted actions as successful facts in memory.',
+  'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
 ].join('\n');
 
 type NpcIndividualTrigger =
@@ -47,6 +55,33 @@ type NpcIndividualTrigger =
       result: NpcPlanExecutionOutcome;
     };
 
+type NpcBatchTrigger = {
+  type: 'batch';
+  triggersByNpc: Record<string, NpcIndividualTrigger[]>;
+};
+
+type PendingNpcBatch = {
+  scene: Scene;
+  npcIds: Set<string>;
+  triggersByNpc: Map<string, NpcIndividualTrigger[]>;
+  timeoutId: any;
+  completionResolvers: Array<() => void>;
+};
+
+type NpcLoopState = {
+  repeatKey: string;
+  count: number;
+  cooldownUntil: number;
+};
+
+const PM_BATCH_DEBOUNCE_MS = 150;
+const PM_REPEAT_WARNING_COUNT = 2;
+const PM_REPEAT_SUPPRESS_COUNT = 3;
+const PM_LOOP_COOLDOWN_MS = 10_000;
+const PM_RATE_WINDOW_MS = 10_000;
+const PM_MAX_NPC_CALLS_PER_WINDOW = 6;
+const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
+
 export class NpcPuppetMaster {
   private provider: ILlmProvider;
   private readonly worldModelBuilder: NpcWorldModelBuilder;
@@ -55,6 +90,12 @@ export class NpcPuppetMaster {
   private systemPromptCache: string | null = null;
   private processingScenes = new Set<string>();
   private lastDebugInfo: NpcPuppetMasterDebugInfo | null = null;
+  private haltGenerationId = 0;
+  private waitTimeouts = new Map<string, any>();
+  private pendingBatches = new Map<string, PendingNpcBatch>();
+  private loopStates = new Map<string, NpcLoopState>();
+  private npcCallTimes = new Map<string, number[]>();
+  private sceneCallTimes = new Map<string, number[]>();
 
   constructor(game: IGame, provider: ILlmProvider) {
     this.game = game;
@@ -63,23 +104,32 @@ export class NpcPuppetMaster {
     this.executor = new ActorPlanExecutor(
       game,
       (npcId, ms) => {
-        globalThis.setTimeout(() => {
+        const existing = this.waitTimeouts.get(npcId);
+        if (existing) {
+          globalThis.clearTimeout(existing);
+        }
+        const timeoutId = globalThis.setTimeout(() => {
+          this.waitTimeouts.delete(npcId);
           const scene = game.sceneManager.currentScene;
           if (scene) {
-            void this.processNpc(scene, npcId, { type: 'wait_elapsed', ms });
+            this.scheduleNpc(scene, npcId, { type: 'wait_elapsed', ms });
           }
         }, ms);
+        this.waitTimeouts.set(npcId, timeoutId);
       },
       (npcId, result) => {
         const scene = game.sceneManager.currentScene;
         if (scene) {
-          void this.processNpc(scene, npcId, { type: 'move_completed', result });
+          this.scheduleNpc(scene, npcId, { type: 'move_completed', result });
         }
       },
       (npcId, result) => {
         const scene = game.sceneManager.currentScene;
         if (scene) {
-          void this.processNpc(scene, npcId, { type: 'action_completed', result });
+          this.scheduleNpc(scene, npcId, {
+            type: 'action_completed',
+            result: this.recordActionProgress(scene, npcId, result),
+          });
         }
       }
     );
@@ -89,8 +139,99 @@ export class NpcPuppetMaster {
     this.provider = provider;
   }
 
+  haltAllNpcs(): void {
+    this.haltGenerationId++;
+    for (const timeoutId of this.waitTimeouts.values()) {
+      globalThis.clearTimeout(timeoutId);
+    }
+    this.waitTimeouts.clear();
+    for (const batch of this.pendingBatches.values()) {
+      globalThis.clearTimeout(batch.timeoutId);
+      batch.completionResolvers.forEach((resolve) => resolve());
+    }
+    this.pendingBatches.clear();
+    this.loopStates.clear();
+    this.npcCallTimes.clear();
+    this.sceneCallTimes.clear();
+    this.executor.clearAllPending();
+
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return;
+
+    for (const entity of scene.entities) {
+      if (entity instanceof Actor && ComponentSystem.isNpc(entity)) {
+        entity.stop();
+        this.executor.clearState(entity.name);
+      }
+    }
+  }
+
   getLastDebugInfo(): NpcPuppetMasterDebugInfo | null {
     return this.lastDebugInfo;
+  }
+
+  traceWake(stage: string, details: Record<string, unknown> = {}): void {
+    const console = (this.game as any).console;
+    if (!console?.parserPeekPmEnabled) return;
+    const body = Object.keys(details).length ? ` ${JSON.stringify(details)}` : '';
+    const message = `--- PM WAKE TRACE ---\n${stage}${body}`;
+    if (typeof console.logDebug === 'function') {
+      console.logDebug(message);
+    } else if (typeof console.log === 'function') {
+      console.log(message, 'info', { showInClosed: false });
+    }
+  }
+
+  async scheduleScene(scene: Scene): Promise<void> {
+    const npcStates = this.worldModelBuilder.getNpcActors(scene).map((npc) => ({
+      npcId: npc.name,
+      cursor: scene.sceneLog.lastPmProcessedAtByNpc[npc.name] ?? scene.sceneLog.lastPmProcessedAt,
+      unread: scene.sceneLog.getUnreadEntries(npc.name).map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        timestamp: entry.timestamp,
+      })),
+    }));
+    const unreadNpcIds = npcStates
+      .filter((state) => state.unread.length > 0)
+      .map((state) => state.npcId);
+    this.traceWake('schedule_scene_scan', {
+      sceneId: scene.id,
+      npcStates,
+      selectedNpcIds: unreadNpcIds,
+    });
+    if (!unreadNpcIds.length) {
+      this.traceWake('schedule_scene_stopped', {
+        reason: 'no_npc_with_unread_events',
+        sceneEntries: scene.sceneLog.entries.length,
+      });
+      return;
+    }
+
+    // External scene events such as player speech must never be starved by an
+    // autonomous NPC chain that exhausted its background rate budget.
+    this.sceneCallTimes.delete(scene.id);
+    const completions: Promise<void>[] = [];
+    for (const npcId of unreadNpcIds) {
+      this.clearLoopSuppression(scene, npcId);
+      this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
+      completions.push(this.enqueueNpc(scene, npcId));
+    }
+    await Promise.all(completions);
+  }
+
+  scheduleNpc(scene: Scene, npcId: string, trigger: NpcIndividualTrigger): void {
+    const loopState = this.loopStates.get(this.getNpcStateKey(scene, npcId));
+    if (
+      trigger.type === 'action_completed' &&
+      loopState?.cooldownUntil &&
+      loopState.cooldownUntil > Date.now() &&
+      trigger.result.repeatKey === loopState.repeatKey &&
+      (trigger.result.repeatCount || 0) > PM_REPEAT_SUPPRESS_COUNT
+    ) {
+      return;
+    }
+    void this.enqueueNpc(scene, npcId, trigger);
   }
 
   async processScene(scene: Scene): Promise<NpcPlan[]> {
@@ -109,11 +250,16 @@ export class NpcPuppetMaster {
       return [];
     }
 
+    const currentGeneration = this.haltGenerationId;
     this.processingScenes.add(processingKey);
     try {
       const worldModel = this.worldModelBuilder.build(scene);
       const plans = await this.processWorldModel(worldModel);
+      if (this.haltGenerationId !== currentGeneration) return [];
       if (this.lastDebugInfo?.error) return [];
+      for (const npc of worldModel.npcs) {
+        scene.sceneLog.markProcessed(undefined, npc.id);
+      }
       scene.sceneLog.markProcessed();
       return plans;
     } finally {
@@ -139,6 +285,7 @@ export class NpcPuppetMaster {
       return [];
     }
 
+    const currentGeneration = this.haltGenerationId;
     this.processingScenes.add(processingKey);
     try {
       const fullWorldModel = this.worldModelBuilder.build(scene);
@@ -147,7 +294,12 @@ export class NpcPuppetMaster {
         npcs: fullWorldModel.npcs.filter((npc) => npc.id === npcId),
       };
       if (!worldModel.npcs.length) return [];
-      return await this.processWorldModel(worldModel, trigger);
+      const plans = await this.processWorldModel(worldModel, trigger);
+      if (this.haltGenerationId !== currentGeneration) return [];
+      if (!this.lastDebugInfo?.error) {
+        scene.sceneLog.markProcessed(undefined, npcId);
+      }
+      return plans;
     } finally {
       this.processingScenes.delete(processingKey);
     }
@@ -155,11 +307,16 @@ export class NpcPuppetMaster {
 
   private async processWorldModel(
     worldModel: NpcWorldModel,
-    trigger?: NpcIndividualTrigger
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): Promise<NpcPlan[]> {
+    const currentGeneration = this.haltGenerationId;
     const system = await this.buildSystemPrompt(worldModel);
     const messages = this.buildMessages(worldModel, trigger);
     const response = await this.provider.sendMessageStream(system, messages, () => {});
+
+    if (this.haltGenerationId !== currentGeneration) {
+      return [];
+    }
 
     if (!response.ok) {
       this.lastDebugInfo = {
@@ -202,14 +359,20 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
-    let hasScheduledStep = false;
     for (const plan of normalized.plans) {
       const outcomes = this.executor.executePlan(plan);
-      if (outcomes.some((outcome) => outcome.status === 'scheduled')) {
-        hasScheduledStep = true;
-      }
+      const planTrigger =
+        trigger?.type === 'batch'
+          ? [...(trigger.triggersByNpc[plan.npcId] || [])]
+              .reverse()
+              .find((candidate) => candidate.type === 'move_completed')
+          : trigger;
+      this.maybeScheduleContinuation(
+        [plan],
+        planTrigger,
+        outcomes.some((outcome) => outcome.status === 'scheduled')
+      );
     }
-    this.maybeScheduleContinuation(normalized.plans, trigger, hasScheduledStep);
     return normalized.plans;
   }
 
@@ -229,7 +392,7 @@ export class NpcPuppetMaster {
       globalThis.setTimeout(() => {
         const scene = this.game.sceneManager.currentScene;
         if (!scene) return;
-        void this.processNpc(scene, plan.npcId, {
+        this.scheduleNpc(scene, plan.npcId, {
           type: 'plan_continued',
           reason: 'previous_plan_updated_memory_or_objectives_without_scheduling_action',
         });
@@ -245,8 +408,6 @@ export class NpcPuppetMaster {
         id: npc.id,
         title: npc.title,
         lore: npc.lore,
-        objectives: npc.objectives,
-        visibleEntities: npc.visibleEntities,
       })),
     };
 
@@ -262,16 +423,19 @@ export class NpcPuppetMaster {
 
   private buildMessages(
     worldModel: NpcWorldModel,
-    trigger?: NpcIndividualTrigger
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): LlmProviderMessage[] {
     const dynamicContext = {
       ...(trigger ? { trigger } : {}),
-      unreadSceneLog: worldModel.unreadSceneLog,
-      recentSceneLog: worldModel.recentSceneLog,
       npcs: worldModel.npcs.map((npc) => ({
         id: npc.id,
+        objectives: npc.objectives,
         memory: npc.memory,
-        heardEntries: npc.heardEntries,
+        inventory: npc.inventory,
+        actors: npc.actors,
+        newEvents: npc.newEvents,
+        recentEvents: npc.recentEvents,
+        entities: npc.entities,
       })),
     };
 
@@ -286,6 +450,233 @@ export class NpcPuppetMaster {
         ].join('\n'),
       },
     ];
+  }
+
+  private enqueueNpc(scene: Scene, npcId: string, trigger?: NpcIndividualTrigger): Promise<void> {
+    let resolveCompletion: () => void = () => {};
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    let batch = this.pendingBatches.get(scene.id);
+    if (!batch) {
+      batch = {
+        scene,
+        npcIds: new Set(),
+        triggersByNpc: new Map(),
+        timeoutId: null,
+        completionResolvers: [],
+      };
+      this.pendingBatches.set(scene.id, batch);
+    }
+    batch.npcIds.add(npcId);
+    if (trigger) {
+      const triggers = batch.triggersByNpc.get(npcId) || [];
+      triggers.push(trigger);
+      batch.triggersByNpc.set(npcId, triggers);
+    }
+    batch.completionResolvers.push(resolveCompletion);
+    this.traceWake('batch_enqueued', {
+      sceneId: scene.id,
+      npcId,
+      triggerType: trigger?.type,
+      batchNpcIds: [...batch.npcIds],
+      alreadyScheduled: !!batch.timeoutId,
+    });
+    if (batch.timeoutId) return completion;
+    batch.timeoutId = globalThis.setTimeout(() => {
+      void this.flushBatch(scene.id);
+    }, PM_BATCH_DEBOUNCE_MS);
+    return completion;
+  }
+
+  private async flushBatch(sceneId: string): Promise<void> {
+    const batch = this.pendingBatches.get(sceneId);
+    if (!batch) {
+      this.traceWake('batch_stopped', { sceneId, reason: 'batch_not_found' });
+      return;
+    }
+    this.pendingBatches.delete(sceneId);
+    const { scene } = batch;
+    if (scene !== this.game.sceneManager.currentScene) {
+      this.traceWake('batch_stopped', {
+        sceneId,
+        reason: 'scene_is_no_longer_current',
+      });
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+    if (!this.provider.isAvailable()) {
+      this.traceWake('batch_stopped', {
+        sceneId,
+        reason: 'provider_unavailable',
+        provider: this.provider.getProviderName(),
+        model: this.provider.getModelName(),
+      });
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+
+    if (!this.consumeSceneRateBudget(scene)) {
+      this.traceWake('batch_deferred', {
+        sceneId,
+        reason: 'scene_rate_limit',
+        npcIds: [...batch.npcIds],
+      });
+      this.deferBatch(batch);
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+    const allowedNpcIds = [...batch.npcIds].filter((npcId) =>
+      this.consumeNpcRateBudget(scene, npcId)
+    );
+    const deferredNpcIds = [...batch.npcIds].filter((npcId) => !allowedNpcIds.includes(npcId));
+    if (deferredNpcIds.length) {
+      this.traceWake('batch_deferred', {
+        sceneId,
+        reason: 'npc_rate_limit',
+        npcIds: deferredNpcIds,
+      });
+      this.deferBatch(batch, deferredNpcIds);
+    }
+    if (!allowedNpcIds.length) {
+      this.traceWake('batch_stopped', {
+        sceneId,
+        reason: 'no_npc_passed_rate_limit',
+      });
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+
+    const processingKey = `batch:${scene.id}`;
+    if (this.processingScenes.has(processingKey)) {
+      this.traceWake('batch_requeued', {
+        sceneId,
+        reason: 'scene_batch_already_processing',
+        npcIds: allowedNpcIds,
+      });
+      for (const npcId of allowedNpcIds) {
+        for (const trigger of batch.triggersByNpc.get(npcId) || []) {
+          void this.enqueueNpc(scene, npcId, trigger);
+        }
+      }
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+
+    this.processingScenes.add(processingKey);
+    try {
+      const fullWorldModel = this.worldModelBuilder.build(scene);
+      const worldModel = {
+        ...fullWorldModel,
+        npcs: fullWorldModel.npcs.filter((npc) => allowedNpcIds.includes(npc.id)),
+      };
+      if (!worldModel.npcs.length) {
+        this.traceWake('batch_stopped', {
+          sceneId,
+          reason: 'selected_npcs_missing_from_world_model',
+          npcIds: allowedNpcIds,
+        });
+        return;
+      }
+      const triggersByNpc = Object.fromEntries(
+        allowedNpcIds
+          .map((npcId) => [npcId, batch.triggersByNpc.get(npcId) || []] as const)
+          .filter(([, triggers]) => triggers.length > 0)
+      );
+      this.traceWake('provider_request_start', {
+        sceneId,
+        npcIds: worldModel.npcs.map((npc) => npc.id),
+        triggerNpcIds: Object.keys(triggersByNpc),
+        provider: this.provider.getProviderName(),
+        model: this.provider.getModelName(),
+      });
+      await this.processWorldModel(
+        worldModel,
+        Object.keys(triggersByNpc).length ? { type: 'batch', triggersByNpc } : undefined
+      );
+      if (!this.lastDebugInfo?.error) {
+        for (const npcId of allowedNpcIds) {
+          scene.sceneLog.markProcessed(undefined, npcId);
+        }
+      }
+    } finally {
+      this.processingScenes.delete(processingKey);
+      batch.completionResolvers.forEach((resolve) => resolve());
+    }
+  }
+
+  private recordActionProgress(
+    scene: Scene,
+    npcId: string,
+    result: NpcPlanExecutionOutcome
+  ): NpcPlanExecutionOutcome {
+    const stateKey = this.getNpcStateKey(scene, npcId);
+    const repeatKey =
+      result.repeatKey || `${result.actionType || 'ACTION'}:${result.targetId || ''}`;
+    if (result.worldChanged || !repeatKey) {
+      this.loopStates.delete(stateKey);
+      return { ...result, repeatCount: 0 };
+    }
+
+    const previous = this.loopStates.get(stateKey);
+    const count = previous?.repeatKey === repeatKey ? previous.count + 1 : 1;
+    const cooldownUntil = count >= PM_REPEAT_SUPPRESS_COUNT ? Date.now() + PM_LOOP_COOLDOWN_MS : 0;
+    this.loopStates.set(stateKey, { repeatKey, count, cooldownUntil });
+    if (count < PM_REPEAT_WARNING_COUNT) return { ...result, repeatCount: count };
+    return {
+      ...result,
+      status: count >= PM_REPEAT_SUPPRESS_COUNT ? 'failed' : result.status,
+      code: count >= PM_REPEAT_SUPPRESS_COUNT ? 'repeated_without_progress' : result.code,
+      repeatCount: count,
+      message:
+        count >= PM_REPEAT_SUPPRESS_COUNT
+          ? 'The same action produced no new information or world change repeatedly.'
+          : result.message,
+    };
+  }
+
+  private consumeNpcRateBudget(scene: Scene, npcId: string): boolean {
+    const now = Date.now();
+    const cutoff = now - PM_RATE_WINDOW_MS;
+    const npcKey = this.getNpcStateKey(scene, npcId);
+    const npcTimes = (this.npcCallTimes.get(npcKey) || []).filter((time) => time >= cutoff);
+    if (npcTimes.length >= PM_MAX_NPC_CALLS_PER_WINDOW) return false;
+    npcTimes.push(now);
+    this.npcCallTimes.set(npcKey, npcTimes);
+    return true;
+  }
+
+  private consumeSceneRateBudget(scene: Scene): boolean {
+    const now = Date.now();
+    const cutoff = now - PM_RATE_WINDOW_MS;
+    const sceneTimes = (this.sceneCallTimes.get(scene.id) || []).filter((time) => time >= cutoff);
+    if (sceneTimes.length >= PM_MAX_SCENE_CALLS_PER_WINDOW) return false;
+    sceneTimes.push(now);
+    this.sceneCallTimes.set(scene.id, sceneTimes);
+    return true;
+  }
+
+  private clearLoopSuppression(scene: Scene, npcId: string): void {
+    this.loopStates.delete(this.getNpcStateKey(scene, npcId));
+  }
+
+  private deferBatch(batch: PendingNpcBatch, npcIds: string[] = [...batch.npcIds]): void {
+    globalThis.setTimeout(() => {
+      for (const npcId of npcIds) {
+        const triggers = batch.triggersByNpc.get(npcId) || [];
+        if (!triggers.length) {
+          void this.enqueueNpc(batch.scene, npcId);
+          continue;
+        }
+        for (const trigger of triggers) {
+          void this.enqueueNpc(batch.scene, npcId, trigger);
+        }
+      }
+    }, 1000);
+  }
+
+  private getNpcStateKey(scene: Scene, npcId: string): string {
+    return `${scene.id}:${npcId}`;
   }
 
   private async loadSystemPrompt(): Promise<string> {
@@ -327,38 +718,199 @@ export class NpcPuppetMaster {
 
   private logPeekDebug(): void {
     const console = (this.game as any).console;
-    if (!console?.parserPeekPmEnabled || typeof console.log !== 'function') return;
+    const isPmPeek = !!console?.parserPeekPmEnabled;
+    const isLlmPeek = !!console?.parserPeekLlmEnabled;
+    if (!isPmPeek && !isLlmPeek) return;
+
     const debug = this.lastDebugInfo;
     if (!debug) return;
 
-    const formatSection = (title: string, value: unknown) => {
-      const body = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-      return `--- ${title.toUpperCase()} ---\n${body}`;
+    const logDebug = (message: string) => {
+      if (typeof console.logDebug === 'function') {
+        console.logDebug(message);
+      } else if (console.isOpen !== false && typeof console.log === 'function') {
+        console.log(message, 'info', { showInClosed: false });
+      }
     };
 
-    if (debug.prompt) {
-      console.log(formatSection('pm prompt', debug.prompt), 'info', { showInClosed: false });
+    const formatFullSection = (title: string, value: unknown) => {
+      const body = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      return `--- PM ${title.toUpperCase()} ---\n${body}`;
+    };
+
+    // 1. Raw LLM Logging (if #peekllm-on is active)
+    if (isLlmPeek) {
+      if (debug.prompt) {
+        logDebug(formatFullSection('llm prompt', debug.prompt));
+      }
+      logDebug(
+        formatFullSection('llm response', {
+          rawResponse: debug.rawResponse || '',
+          extractedJson: debug.extractedJson,
+          acceptedPlans: debug.acceptedPlans,
+          filteredPlans: debug.filteredPlans,
+          error: debug.error,
+          provider: debug.provider,
+          model: debug.model,
+          durationMs: debug.durationMs,
+          inputTokens: debug.inputTokens,
+          tokensGenerated: debug.tokensGenerated,
+          cacheCreationInputTokens: debug.cacheCreationInputTokens,
+          cacheReadInputTokens: debug.cacheReadInputTokens,
+        })
+      );
     }
 
-    console.log(
-      formatSection('pm response', {
-        rawResponse: debug.rawResponse || '',
-        extractedJson: debug.extractedJson,
-        acceptedPlans: debug.acceptedPlans,
-        filteredPlans: debug.filteredPlans,
-        error: debug.error,
-        provider: debug.provider,
-        model: debug.model,
-        matched: debug.matched,
-        durationMs: debug.durationMs,
-        inputTokens: debug.inputTokens,
-        tokensGenerated: debug.tokensGenerated,
-        cacheCreationInputTokens: debug.cacheCreationInputTokens,
-        cacheReadInputTokens: debug.cacheReadInputTokens,
-      }),
-      'info',
-      { showInClosed: false }
-    );
+    // 2. Compact PM Logging (if #peekpm-on is active)
+    if (isPmPeek) {
+      // Format Prompt (Trigger and Active NPCs context)
+      if (debug.prompt) {
+        let dynamicContext: any = null;
+        try {
+          const content = debug.prompt.messages[0]?.content;
+          if (typeof content === 'string') {
+            const startIdx = content.indexOf('{');
+            if (startIdx !== -1) {
+              let braceCount = 0;
+              let endIdx = -1;
+              for (let i = startIdx; i < content.length; i++) {
+                if (content[i] === '{') braceCount++;
+                else if (content[i] === '}') {
+                  braceCount--;
+                  if (braceCount === 0) {
+                    endIdx = i;
+                    break;
+                  }
+                }
+              }
+              if (endIdx !== -1) {
+                dynamicContext = JSON.parse(content.slice(startIdx, endIdx + 1));
+              }
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        const promptLines: string[] = ['--- PM PROMPT ---'];
+
+        if (dynamicContext) {
+          // Format Trigger
+          let triggerStr = 'None';
+          if (dynamicContext.trigger) {
+            const t = dynamicContext.trigger;
+            if (t.type === 'wait_elapsed') {
+              triggerStr = `Wait elapsed (${t.ms}ms)`;
+            } else if (t.type === 'move_completed') {
+              triggerStr = `Move completed (${t.result?.status || 'unknown'})`;
+            } else if (t.type === 'action_completed') {
+              triggerStr = `Action completed (${t.result?.code || 'unknown'})`;
+            } else if (t.type === 'plan_continued') {
+              triggerStr = `Plan continued: ${t.reason}`;
+            } else if (t.type === 'manual') {
+              triggerStr = `Manual trigger: ${t.reason || 'none'}`;
+            } else {
+              triggerStr = JSON.stringify(t);
+            }
+          }
+          promptLines.push(`Trigger: ${triggerStr}`);
+
+          // Format Speech Events if any
+          if (Array.isArray(dynamicContext.npcs)) {
+            for (const npc of dynamicContext.npcs) {
+              if (Array.isArray(npc.newEvents)) {
+                for (const ev of npc.newEvents) {
+                  if (ev.kind === 'speech') {
+                    promptLines.push(`Speech: ${ev.displayName || ev.actorId}: "${ev.text}"`);
+                  }
+                }
+              }
+            }
+          }
+
+          // Summarize Active NPCs
+          promptLines.push('Active NPCs:');
+          if (Array.isArray(dynamicContext.npcs)) {
+            for (const npc of dynamicContext.npcs) {
+              const objStr = npc.objectives ? JSON.stringify(npc.objectives) : '[]';
+              const memStr = npc.memory ? `"${npc.memory}"` : 'none';
+              let invStr = '';
+              if (npc.inventory && npc.inventory.available && Array.isArray(npc.inventory.items)) {
+                const itemNames = npc.inventory.items.map((i: any) => i.title || i.id);
+                if (itemNames.length > 0) {
+                  invStr = ` | Inventory: [${itemNames.join(', ')}]`;
+                }
+              }
+              let actorsStr = '';
+              if (Array.isArray(npc.actors)) {
+                const actorNames = npc.actors
+                  .filter((a: any) => a.id !== npc.id)
+                  .map((a: any) => a.title || a.id);
+                if (actorNames.length > 0) {
+                  actorsStr = ` | Seen: [${actorNames.join(', ')}]`;
+                }
+              }
+              promptLines.push(
+                `  * ${npc.id} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}${actorsStr}`
+              );
+            }
+          }
+        } else {
+          promptLines.push(JSON.stringify(debug.prompt, null, 2));
+        }
+
+        logDebug(promptLines.join('\n'));
+      }
+
+      // Format Response & Metrics
+      const responseLines: string[] = [];
+      if (debug.error) {
+        responseLines.push(`--- PM RESPONSE (ERROR: ${debug.error}) ---`);
+        if (debug.rawResponse) {
+          responseLines.push(`Raw Response:\n${debug.rawResponse}`);
+        }
+      } else {
+        responseLines.push('--- PM RESPONSE ---');
+        if (Array.isArray(debug.acceptedPlans) && debug.acceptedPlans.length > 0) {
+          for (const plan of debug.acceptedPlans) {
+            responseLines.push(`Plan for ${plan.npcId}:`);
+            if (Array.isArray(plan.steps)) {
+              for (const step of plan.steps) {
+                const stepArgs = { ...step };
+                delete (stepArgs as any).type;
+                const argsStr = Object.keys(stepArgs).length ? ` ${JSON.stringify(stepArgs)}` : '';
+                responseLines.push(`  * ${step.type}${argsStr}`);
+              }
+            }
+            if (plan.memory !== undefined) {
+              responseLines.push(`  * Memory Update: "${plan.memory}"`);
+            }
+          }
+        } else {
+          responseLines.push('No plans generated.');
+        }
+
+        if (Array.isArray(debug.filteredPlans) && debug.filteredPlans.length > 0) {
+          responseLines.push('Filtered (Invalid) Plans:');
+          for (const plan of debug.filteredPlans) {
+            responseLines.push(`  * ${JSON.stringify(plan)}`);
+          }
+        }
+      }
+
+      // Append Metrics Line
+      const durationSec =
+        debug.durationMs !== undefined ? (debug.durationMs / 1000).toFixed(2) : '?';
+      const cacheCreationStr = debug.cacheCreationInputTokens
+        ? `, ${debug.cacheCreationInputTokens} created`
+        : '';
+
+      responseLines.push(
+        `[${debug.model || 'unknown'} (${debug.provider || 'unknown'}) | ${durationSec}s | Tokens: ${debug.inputTokens ?? '?'} in, ${debug.tokensGenerated ?? '?'} out (Cache: ${debug.cacheReadInputTokens ? debug.cacheReadInputTokens + ' read' : '0 read'}${cacheCreationStr})]`
+      );
+
+      logDebug(responseLines.join('\n'));
+    }
   }
 
   private normalizeResponse(
@@ -430,6 +982,15 @@ export class NpcPuppetMaster {
       if (x !== undefined && y !== undefined) return { type: 'MOVE_TO', x, y };
       return targetId ? { type: 'MOVE_TO', targetId } : null;
     }
+    if (
+      record.type === 'LOOK' ||
+      record.type === 'EXAMINE' ||
+      record.type === 'OPEN' ||
+      record.type === 'CLOSE'
+    ) {
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return targetId ? { type: record.type, targetId } : null;
+    }
     if (record.type === 'TAKE') {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
       return targetId ? { type: 'TAKE', targetId } : null;
@@ -474,7 +1035,7 @@ export class NpcPuppetMaster {
     }
     if (record.type === 'WAIT') {
       const ms = typeof record.ms === 'number' && Number.isFinite(record.ms) ? record.ms : 0;
-      return ms > 0 ? { type: 'WAIT', ms } : null;
+      return ms > 0 ? { type: 'WAIT', ms: Math.max(250, Math.min(60_000, ms)) } : null;
     }
     return null;
   }

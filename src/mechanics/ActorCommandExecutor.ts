@@ -24,7 +24,13 @@ export type ActorUseOutcome = ActorCommandOutcome;
 export type ActorCommandAffordance = {
   id: string;
   label: string;
-  requires?: Array<{ entityId: string; scope: string }>;
+  available?: boolean;
+  requires?: Array<{
+    entityId: string;
+    scope: string;
+    satisfied?: boolean;
+    via?: 'held' | 'reachable' | 'visible' | 'takable';
+  }>;
   effects?: Array<{ type: string; stateId?: string; value?: StateValue }>;
 };
 
@@ -43,7 +49,7 @@ export class ActorCommandExecutor {
     const command = this.game.textAssets
       .getParserCommands()
       .find((candidate) => candidate.id === commandId);
-    if (!command || command.id === 'use_on') {
+    if (!command) {
       return {
         status: 'failed',
         code: 'actor_command_not_found',
@@ -64,6 +70,7 @@ export class ActorCommandExecutor {
       }
     }
 
+    this.game.emitActorAction?.(actor, 'used command', null, { commandId });
     return {
       status: 'ok',
       code: 'actor_command_executed',
@@ -134,6 +141,10 @@ export class ActorCommandExecutor {
         entity: target,
         args: { actorId: actor.name, itemId: item.name, targetId: target.name },
       });
+      this.game.emitActorAction?.(actor, 'used item', target, {
+        itemId: item.name,
+        targetId: target.name,
+      });
       return {
         status: 'ok',
         code: 'use_script_executed',
@@ -151,11 +162,11 @@ export class ActorCommandExecutor {
     };
   }
 
-  getAffordancesForEntity(entity: SceneObject): ActorCommandAffordance[] {
+  getAffordancesForEntity(entity: SceneObject, actor?: Actor | null): ActorCommandAffordance[] {
     const commands = this.game.textAssets.getParserCommands();
     return commands
       .filter((command) => command.id !== 'use_on' && this.commandTargetsEntity(command, entity))
-      .map((command) => this.buildAffordance(command, entity));
+      .map((command) => this.buildAffordance(command, entity, actor || null));
   }
 
   private executeCommandStep(
@@ -170,6 +181,8 @@ export class ActorCommandExecutor {
         return this.resolveArgumentEntity(actor, command, step, argumentsByName, state);
       case 'ensureHeldEntity':
         return this.ensureHeldEntity(actor, command, step, state);
+      case 'actorUseOn':
+        return this.actorUseOn(actor, command, step, state);
       case 'removeInventoryEntity':
         return this.removeInventoryEntity(actor, step, state);
       case 'showText':
@@ -183,16 +196,11 @@ export class ActorCommandExecutor {
       case 'setGroupDisabled':
         return this.setGroupDisabled(step);
       case 'runScript':
-        return this.runScript(step);
+        return this.runScript(actor, step);
       case 'stopScript':
         return this.stopScript(step);
       case 'goToSceneById':
-        return {
-          status: 'failed',
-          code: 'actor_command_go_to_scene_unsupported',
-          data: { commandId: command.id, sceneId: step.sceneId },
-          recoverable: true,
-        };
+        return this.goToScene(actor, step.sceneId);
       default:
         return {
           status: 'failed',
@@ -269,11 +277,51 @@ export class ActorCommandExecutor {
         data: { commandId: command.id, entityId: entity.name },
       };
     }
+    const outcome = this.game.takeEntityForActor(actor, entity);
+    if (outcome.status === 'failed' && step.noEffectMessageId) {
+      return {
+        ...outcome,
+        message:
+          command.messages?.[step.noEffectMessageId] ||
+          command.arguments[0]?.messages?.noEffect ||
+          outcome.message,
+      };
+    }
+    return outcome;
+  }
+
+  private actorUseOn(
+    actor: Actor,
+    command: ParserCommandSpec,
+    step: Extract<ParserCommandActionSpec, { type: 'actorUseOn' }>,
+    state: ActorCommandPlanState
+  ): ActorCommandOutcome {
+    const item = state[step.itemRef];
+    const target = state[step.targetRef];
+    if (!(item instanceof Entity) || !(target instanceof Entity)) {
+      return {
+        status: 'failed',
+        code: 'missing_plan_entity_ref',
+        data: { commandId: command.id },
+        recoverable: true,
+      };
+    }
+
+    const outcome = this.useItemOn(actor, item.name, target.name);
+    if (outcome.status === 'ok') return outcome;
+
+    const template =
+      (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
+      step.noEffectMessage;
+    if (!template) return outcome;
+    const message = template
+      .replace(/\{item\}/g, this.getTitle(item))
+      .replace(/\{target\}/g, this.getTitle(target));
     return {
-      status: 'failed',
-      code: 'actor_command_auto_take_unsupported',
-      data: { commandId: command.id, entityId: entity.name },
-      recoverable: true,
+      status: 'ok',
+      code: 'custom_message',
+      message,
+      displayMessages: [message],
     };
   }
 
@@ -448,6 +496,7 @@ export class ActorCommandExecutor {
   }
 
   private runScript(
+    actor: Actor,
     step: Extract<ParserCommandActionSpec, { type: 'runScript' }>
   ): ActorCommandOutcome {
     if (!ScriptRegistry.has(step.scriptId)) {
@@ -462,13 +511,39 @@ export class ActorCommandExecutor {
       ScriptRegistry.stop(step.scriptId);
     }
     if (!ScriptRegistry.isRunning(step.scriptId)) {
-      ScriptRegistry.execute(step.scriptId, { game: this.game });
+      ScriptRegistry.execute(step.scriptId, {
+        game: this.game,
+        entity: actor,
+        args: { actorId: actor.name },
+      });
     }
     return {
       status: 'ok',
       code: 'script_started',
       data: { scriptId: step.scriptId, restart: !!step.restart },
       effects: ['script_started'],
+    };
+  }
+
+  private goToScene(actor: Actor, sceneId: string): ActorCommandOutcome {
+    const sceneManager = this.game.sceneManager;
+    const destination = sceneManager.scenes.get(sceneId);
+    if (!destination) {
+      return {
+        status: 'failed',
+        code: 'scene_not_found',
+        data: { actorId: actor.name, sceneId },
+        recoverable: true,
+      };
+    }
+    sceneManager.transferActorToScene(actor, sceneId, {
+      activateScene: actor === sceneManager.currentScene?.player,
+    });
+    return {
+      status: 'ok',
+      code: 'scene_changed',
+      data: { actorId: actor.name, sceneId },
+      effects: ['scene_changed'],
     };
   }
 
@@ -530,7 +605,7 @@ export class ActorCommandExecutor {
     if (!scene) return [];
     const candidates = new Map<string, SceneObject>();
     const add = (object: SceneObject | null | undefined) => {
-      if (object && !object.disabled) candidates.set(object.name, object);
+      if (object) candidates.set(object.name, object);
     };
     for (const scope of scopes) {
       if (scope === 'held') {
@@ -538,9 +613,15 @@ export class ActorCommandExecutor {
       } else if (scope === 'visible' || scope === 'reachable' || scope === 'takable') {
         for (const object of scene.getAllSceneObjects()) {
           if (object === actor) continue;
-          if (object.disabled) continue;
-          if (scope === 'reachable' && !this.isReachable(actor, object)) continue;
-          if (scope === 'takable' && !(object instanceof Entity)) continue;
+          const perception = this.game.actorWorld.getObjectPerception(actor, object);
+          if (scope === 'visible' && perception.visibility !== 'visible') continue;
+          if (scope === 'reachable' && perception.interaction !== 'reachable') continue;
+          if (
+            scope === 'takable' &&
+            (!(object instanceof Entity) || perception.interaction !== 'reachable')
+          ) {
+            continue;
+          }
           add(object);
         }
       }
@@ -596,14 +677,27 @@ export class ActorCommandExecutor {
     return false;
   }
 
-  private buildAffordance(command: ParserCommandSpec, entity: SceneObject): ActorCommandAffordance {
-    const requires = new Map<string, { entityId: string; scope: string }>();
+  private buildAffordance(
+    command: ParserCommandSpec,
+    entity: SceneObject,
+    actor: Actor | null
+  ): ActorCommandAffordance {
+    const requires = new Map<
+      string,
+      {
+        entityId: string;
+        scope: string;
+        satisfied?: boolean;
+        via?: 'held' | 'reachable' | 'visible' | 'takable';
+      }
+    >();
     const effects: ActorCommandAffordance['effects'] = [];
     for (const step of command.plan) {
       if (step.type === 'requireEntityAvailable' && step.entityId !== entity.name) {
         requires.set(step.entityId, {
           entityId: step.entityId,
           scope: this.compactScope(step.scopes),
+          ...(actor ? this.getRequirementStatus(actor, step.entityId, step.scopes) : {}),
         });
       }
       if (step.type === 'requireAnyEntityAvailable') {
@@ -612,6 +706,7 @@ export class ActorCommandExecutor {
           requires.set(option.entityId, {
             entityId: option.entityId,
             scope: this.compactScope(option.scopes),
+            ...(actor ? this.getRequirementStatus(actor, option.entityId, option.scopes) : {}),
           });
         }
       }
@@ -619,12 +714,73 @@ export class ActorCommandExecutor {
         effects.push({ type: 'setEntityState', stateId: step.stateId, value: step.value });
       }
     }
+    const requirementList = [...requires.values()];
     return {
       id: command.id,
       label: command.phrases[0] || command.id,
-      ...(requires.size ? { requires: [...requires.values()] } : {}),
+      ...(actor ? { available: this.isCommandAvailable(actor, command) } : {}),
+      ...(requirementList.length ? { requires: requirementList } : {}),
       ...(effects.length ? { effects } : {}),
     };
+  }
+
+  private isCommandAvailable(actor: Actor, command: ParserCommandSpec): boolean {
+    for (const step of command.plan) {
+      if (
+        step.type === 'requireEntityAvailable' &&
+        !this.getRequirementStatus(actor, step.entityId, step.scopes).satisfied
+      ) {
+        return false;
+      }
+      if (
+        step.type === 'requireAnyEntityAvailable' &&
+        !step.options.some(
+          (option) => this.getRequirementStatus(actor, option.entityId, option.scopes).satisfied
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private getRequirementStatus(
+    actor: Actor,
+    entityId: string,
+    scopes: ParserScopeSlice[]
+  ): { satisfied: boolean; via?: 'held' | 'reachable' | 'visible' | 'takable' } {
+    const scene = this.game.sceneManager.currentScene;
+    const target = scene?.getObjectByName(entityId);
+    if (!target) return { satisfied: false };
+    for (const scope of scopes) {
+      if (
+        scope === 'held' &&
+        target instanceof Entity &&
+        this.isEntityInActorInventory(actor, target)
+      ) {
+        return { satisfied: true, via: 'held' };
+      }
+      if (
+        scope === 'reachable' &&
+        this.game.actorWorld.getObjectPerception(actor, target).interaction === 'reachable'
+      ) {
+        return { satisfied: true, via: 'reachable' };
+      }
+      if (
+        scope === 'visible' &&
+        this.game.actorWorld.getObjectPerception(actor, target).visibility === 'visible'
+      ) {
+        return { satisfied: true, via: 'visible' };
+      }
+      if (
+        scope === 'takable' &&
+        target instanceof Entity &&
+        this.game.actorWorld.getObjectPerception(actor, target).interaction === 'reachable'
+      ) {
+        return { satisfied: true, via: 'takable' };
+      }
+    }
+    return { satisfied: false };
   }
 
   private compactScope(scopes: ParserScopeSlice[]): string {

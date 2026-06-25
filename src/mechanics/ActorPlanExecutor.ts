@@ -2,9 +2,7 @@ import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
-import type { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { ActorCommandExecutor } from './ActorCommandExecutor';
 import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
@@ -16,8 +14,21 @@ export class ActorPlanExecutor {
   private readonly waitScheduler?: NpcWaitScheduler;
   private readonly moveCompletionScheduler?: NpcMoveCompletionScheduler;
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
-  private readonly commandExecutor: ActorCommandExecutor;
   private moveWatchTokens = new Map<string, number>();
+  private pendingTimeouts = new Set<any>();
+
+  clearState(npcId: string): void {
+    const current = this.moveWatchTokens.get(npcId) || 0;
+    this.moveWatchTokens.set(npcId, current + 1);
+  }
+
+  clearAllPending(): void {
+    this.moveWatchTokens.clear();
+    for (const timeoutId of this.pendingTimeouts) {
+      globalThis.clearTimeout(timeoutId);
+    }
+    this.pendingTimeouts.clear();
+  }
 
   constructor(
     game: IGame,
@@ -29,7 +40,6 @@ export class ActorPlanExecutor {
     this.waitScheduler = waitScheduler;
     this.moveCompletionScheduler = moveCompletionScheduler;
     this.actionCompletionScheduler = actionCompletionScheduler;
-    this.commandExecutor = new ActorCommandExecutor(game);
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
@@ -46,11 +56,17 @@ export class ActorPlanExecutor {
     }
 
     const outcomes: NpcPlanExecutionOutcome[] = [];
+    let completedSynchronously = true;
     for (const step of plan.steps) {
-      outcomes.push(this.executeStep(actor, step));
+      const outcome = this.executeStep(actor, step);
+      outcomes.push(outcome);
+      if (outcome.status !== 'ok') {
+        completedSynchronously = false;
+        break;
+      }
     }
 
-    if (typeof plan.memory === 'string') {
+    if (completedSynchronously && typeof plan.memory === 'string') {
       this.setNpcMemory(actor, plan.memory);
       outcomes.push({
         status: 'ok',
@@ -103,6 +119,22 @@ export class ActorPlanExecutor {
       return this.moveActor(actor, step);
     }
 
+    if (step.type === 'LOOK') {
+      return this.executeTargetAction(actor, step.targetId, 'LOOK');
+    }
+
+    if (step.type === 'EXAMINE') {
+      return this.executeTargetAction(actor, step.targetId, 'EXAMINE');
+    }
+
+    if (step.type === 'OPEN') {
+      return this.executeTargetAction(actor, step.targetId, 'OPEN');
+    }
+
+    if (step.type === 'CLOSE') {
+      return this.executeTargetAction(actor, step.targetId, 'CLOSE');
+    }
+
     if (step.type === 'TAKE') {
       return this.takeEntity(actor, step.targetId);
     }
@@ -151,12 +183,54 @@ export class ActorPlanExecutor {
     actor: Actor,
     step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>
   ): NpcPlanExecutionOutcome {
-    const target = this.resolveMoveTarget(actor, step);
+    if (typeof step.x === 'number' && typeof step.y === 'number') {
+      return this.startMove(actor, actor.moveTo(step.x, step.y));
+    }
+
+    const targetId = String(step.targetId || '').trim();
+    const target = this.game.sceneManager.currentScene?.getObjectByName(targetId);
     if (!target) {
       return { status: 'failed', code: 'move_target_not_found', npcId: actor.name };
     }
 
-    const result = actor.moveTo(target.x, target.y);
+    const approach = this.game.actorNavigation.planApproach(actor, target);
+    if (approach.status === 'already_reachable') {
+      const result: ActorMoveResult = {
+        status: 'arrived',
+        code: 'arrived',
+        message: 'Already close enough to interact.',
+        target: { x: actor.x, y: actor.y },
+        route: [],
+      };
+      this.scheduleMoveCompletion(actor.name, result, 0);
+      return {
+        status: 'scheduled',
+        code: 'npc_already_reachable',
+        npcId: actor.name,
+        message: result.message,
+      };
+    }
+    if (!approach.point) {
+      const result: ActorMoveResult = {
+        status: 'unreachable',
+        code: 'route_unreachable',
+        message: 'Destination is unreachable.',
+        target: null,
+        route: [],
+      };
+      this.scheduleMoveCompletion(actor.name, result, 0);
+      return {
+        status: 'failed',
+        code: result.code,
+        npcId: actor.name,
+        message: result.message,
+      };
+    }
+
+    return this.startMove(actor, actor.moveTo(approach.point.x, approach.point.y));
+  }
+
+  private startMove(actor: Actor, result: ActorMoveResult): NpcPlanExecutionOutcome {
     if (result.status === 'started') {
       this.watchMoveCompletion(actor);
       return {
@@ -173,43 +247,6 @@ export class ActorPlanExecutor {
       code: result.code,
       npcId: actor.name,
       message: result.message,
-    };
-  }
-
-  private resolveMoveTarget(
-    actor: Actor,
-    step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>
-  ): { x: number; y: number } | null {
-    if (typeof step.x === 'number' && typeof step.y === 'number') {
-      return { x: step.x, y: step.y };
-    }
-
-    const targetId = String(step.targetId || '').trim();
-    if (!targetId) return null;
-    const object = this.game.sceneManager.currentScene?.getObjectByName(targetId) as
-      | SceneObject
-      | undefined;
-    if (!object) return null;
-    const center = this.getObjectCenter(object);
-    return center ? this.findNearestWalkableTarget(actor, center.x, center.y) : null;
-  }
-
-  private getObjectCenter(object: SceneObject): { x: number; y: number } | null {
-    const record = object as unknown as {
-      x?: number;
-      y?: number;
-      poly?: Array<{ x: number; y: number }>;
-      vertices?: Array<{ x: number; y: number }>;
-    };
-    if (typeof record.x === 'number' && typeof record.y === 'number') {
-      return { x: record.x, y: record.y };
-    }
-
-    const points = Array.isArray(record.poly) && record.poly.length ? record.poly : record.vertices;
-    if (!Array.isArray(points) || !points.length) return null;
-    return {
-      x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-      y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
     };
   }
 
@@ -232,42 +269,53 @@ export class ActorPlanExecutor {
     globalThis.setTimeout(poll, 50);
   }
 
-  private findNearestWalkableTarget(
+  private executeTargetAction(
     actor: Actor,
-    targetX: number,
-    targetY: number
-  ): { x: number; y: number } | null {
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene || typeof scene.isWalkable !== 'function') return { x: targetX, y: targetY };
-    if (scene.isWalkable(targetX, targetY, actor)) return { x: targetX, y: targetY };
-
-    const step = 4;
-    const maxRadius = Math.max(160, actor.colliderWidth * 2, actor.colliderHeight * 8);
-    let best: { x: number; y: number; distanceSq: number } | null = null;
-
-    for (let radius = step; radius <= maxRadius; radius += step) {
-      for (let dx = -radius; dx <= radius; dx += step) {
-        for (let dy = -radius; dy <= radius; dy += step) {
-          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-          const x = targetX + dx;
-          const y = targetY + dy;
-          if (!scene.isWalkable(x, y, actor)) continue;
-          const distanceSq = dx * dx + dy * dy;
-          if (!best || distanceSq < best.distanceSq) {
-            best = { x, y, distanceSq };
-          }
-        }
-      }
-      const nearest = best;
-      if (nearest !== null) return { x: nearest.x, y: nearest.y };
+    targetId: string,
+    action: 'LOOK' | 'EXAMINE' | 'OPEN' | 'CLOSE'
+  ): NpcPlanExecutionOutcome {
+    const normalizedTargetId = String(targetId || '').trim();
+    const target = this.game.sceneManager.currentScene?.getObjectByName(normalizedTargetId);
+    if (!target) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: `${action.toLowerCase()}_target_not_found`,
+        npcId: actor.name,
+        targetId: normalizedTargetId,
+      });
     }
-
-    return null;
+    const outcome =
+      action === 'LOOK'
+        ? this.game.lookEntityForActor(actor, target)
+        : action === 'EXAMINE'
+          ? this.game.examineEntityForActor(actor, target)
+          : action === 'OPEN'
+            ? this.game.openEntityForActor(actor, target)
+            : this.game.closeEntityForActor(actor, target);
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      targetId: target.name,
+      message: outcome.message,
+      actionType: action,
+      worldChanged: outcome.data?.worldChanged === true || (outcome.effects?.length || 0) > 0,
+      discoveredEntityIds: Array.isArray(outcome.data?.discoveredEntityIds)
+        ? outcome.data.discoveredEntityIds.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : undefined,
+      repeatKey: `${action}:${target.name}`,
+    });
   }
 
   private scheduleMoveCompletion(npcId: string, result: ActorMoveResult, delayMs: number): void {
     if (!this.moveCompletionScheduler) return;
-    globalThis.setTimeout(() => this.moveCompletionScheduler?.(npcId, result), delayMs);
+    const timeoutId = globalThis.setTimeout(() => {
+      this.pendingTimeouts.delete(timeoutId);
+      this.moveCompletionScheduler?.(npcId, result);
+    }, delayMs);
+    this.pendingTimeouts.add(timeoutId);
   }
 
   private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
@@ -292,64 +340,16 @@ export class ActorPlanExecutor {
       });
     }
 
-    if (this.game.inventoryManager.hasInventoryEntity(actor, target, 'in')) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_already_held',
-        npcId: actor.name,
-        targetId: target.name,
-      });
-    }
-
-    const isItem =
-      target.isTakeable || target.components?.some((component: any) => component?.type === 'Item');
-    if (!isItem) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_not_takeable',
-        npcId: actor.name,
-        targetId: target.name,
-      });
-    }
-
-    const distanceError = ComponentSystem.canTakeItem(target, actor);
-    if (distanceError) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_unreachable',
-        npcId: actor.name,
-        targetId: target.name,
-        message: distanceError,
-      });
-    }
-
-    scene?.finishDropAnimation(target);
-    this.game.inventoryManager.ensureInventoryComponent(actor, 'in');
-    this.game.inventoryManager.clearInheritedSurfaceSwitchGroups(target);
-    this.game.inventoryManager.clearActiveContainerSwitchGroups(
-      target,
-      this.game.getSwitchComponent.bind(this.game)
-    );
-    const outcome = this.game.inventoryManager.addInventoryEntity(actor, target, 'in');
-    if (outcome.status !== 'ok') {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: outcome.code,
-        npcId: actor.name,
-        targetId: target.name,
-        message: outcome.message,
-      });
-    }
-
-    target.subsceneItemScale = 1;
-    target.update(0);
-    this.game.inventoryManager.notifyInventoryUiChange();
+    const outcome = this.game.takeEntityForActor(actor, target);
     return this.completeAction(actor.name, {
-      status: 'ok',
-      code: 'item_taken',
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
       npcId: actor.name,
       targetId: target.name,
       message: outcome.message,
+      actionType: 'TAKE',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `TAKE:${target.name}`,
     });
   }
 
@@ -358,13 +358,16 @@ export class ActorPlanExecutor {
     commandId: string,
     argumentsByName: Record<string, string | null> = {}
   ): NpcPlanExecutionOutcome {
-    const outcome = this.commandExecutor.executeCommand(actor, commandId, argumentsByName);
+    const outcome = this.game.actorCommands.executeCommand(actor, commandId, argumentsByName);
     return this.completeAction(actor.name, {
       status: outcome.status === 'ok' ? 'ok' : 'failed',
       code: outcome.code,
       npcId: actor.name,
       commandId,
       message: outcome.message || outcome.displayMessages?.join('\n'),
+      actionType: 'COMMAND',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `COMMAND:${commandId}`,
     });
   }
 
@@ -420,11 +423,14 @@ export class ActorPlanExecutor {
       itemId: item.name,
       targetId: target?.name,
       message: outcome.message,
+      actionType: 'PUT',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `PUT:${normalizedItemId}:${normalizedTargetId || 'floor'}:${relation || ''}`,
     });
   }
 
   private useItemOn(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
-    const outcome = this.commandExecutor.useItemOn(actor, itemId, targetId);
+    const outcome = this.game.actorCommands.useItemOn(actor, itemId, targetId);
     return this.completeAction(actor.name, {
       status: outcome.status === 'ok' ? 'ok' : 'failed',
       code: outcome.code,
@@ -432,12 +438,19 @@ export class ActorPlanExecutor {
       itemId,
       targetId,
       message: outcome.message,
+      actionType: 'USE',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `USE:${itemId}:${targetId}`,
     });
   }
 
   private completeAction(npcId: string, outcome: NpcPlanExecutionOutcome): NpcPlanExecutionOutcome {
     if (!this.actionCompletionScheduler) return outcome;
-    globalThis.setTimeout(() => this.actionCompletionScheduler?.(npcId, outcome), 0);
+    const timeoutId = globalThis.setTimeout(() => {
+      this.pendingTimeouts.delete(timeoutId);
+      this.actionCompletionScheduler?.(npcId, outcome);
+    }, 0);
+    this.pendingTimeouts.add(timeoutId);
     return { ...outcome, status: 'scheduled' };
   }
 }

@@ -3,7 +3,6 @@ import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { ActorCommandExecutor } from './ActorCommandExecutor';
 import type { NpcActorContext, NpcWorldModel } from './npcTypes';
 
 function compactRecord<T extends Record<string, unknown>>(value: T): T {
@@ -28,19 +27,13 @@ function compactRecord<T extends Record<string, unknown>>(value: T): T {
 
 export class NpcWorldModelBuilder {
   private readonly game: IGame;
-  private readonly commandExecutor: ActorCommandExecutor;
 
   constructor(game: IGame) {
     this.game = game;
-    this.commandExecutor = new ActorCommandExecutor(game);
   }
 
   build(scene: Scene): NpcWorldModel {
-    const unreadSceneLog = scene.sceneLog.getUnreadEntries();
-    const recentSceneLog = scene.sceneLog.entries;
-    const npcs = this.getNpcActors(scene).map((npc) =>
-      this.buildNpcContext(scene, npc, unreadSceneLog)
-    );
+    const npcs = this.getNpcActors(scene).map((npc) => this.buildNpcContext(scene, npc));
 
     return compactRecord<NpcWorldModel>({
       scene: compactRecord({
@@ -50,8 +43,6 @@ export class NpcWorldModelBuilder {
         lore: this.game.textAssets.getResolvedSceneField(scene, 'lore') || undefined,
       }),
       npcs,
-      recentSceneLog,
-      unreadSceneLog,
     });
   }
 
@@ -63,51 +54,72 @@ export class NpcWorldModelBuilder {
   }
 
   getNpcListenerIds(scene: Scene, actorId?: string | null): string[] {
-    return this.getNpcActors(scene)
-      .filter((npc) => npc.name !== actorId)
-      .map((npc) => npc.name);
+    const source = actorId ? scene.getObjectByName(actorId) : null;
+    if (source instanceof Actor) {
+      return this.game.actorWorld.getActionObservers(source).map((npc) => npc.name);
+    }
+    return this.getNpcActors(scene).map((npc) => npc.name);
   }
 
-  private buildNpcContext(
-    scene: Scene,
-    npc: Actor,
-    unreadEntries: NpcWorldModel['unreadSceneLog']
-  ): NpcActorContext {
+  private buildNpcContext(scene: Scene, npc: Actor): NpcActorContext {
     const component = ComponentSystem.getNpcComponent(npc);
     const title = this.getObjectTitle(npc) || npc.name;
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
-    const heardEntries = unreadEntries.filter((entry) => entry.knownByNpcIds.includes(npc.name));
+    const newEvents = scene.sceneLog.getUnreadEntries(npc.name);
+    const newEventIds = new Set(newEvents.map((entry) => entry.id));
+    const recentEvents = scene.sceneLog.entries
+      .filter(
+        (entry) =>
+          !newEventIds.has(entry.id) &&
+          (entry.actorId === npc.name || entry.knownByNpcIds.includes(npc.name))
+      )
+      .slice(-12);
 
     return compactRecord<NpcActorContext>({
       id: npc.name,
       title,
-      x: Math.round(npc.x),
-      y: Math.round(npc.y),
       lore: this.game.textAssets.getResolvedObjectField(npc, 'lore') || undefined,
       objectives,
       memory: component?.memory || undefined,
-      heardEntries,
-      visibleEntities: this.buildVisibleEntities(scene, npc),
+      inventory: this.game.actorWorld.getInventoryKnowledge(npc),
+      actors: scene.entities
+        .filter(
+          (entity): entity is Actor =>
+            entity instanceof Actor &&
+            !entity.disabled &&
+            (entity === npc ||
+              this.game.actorWorld.getObjectPerception(npc, entity).visibility === 'visible')
+        )
+        .map((actor) => ({
+          id: actor.name,
+          title: this.getObjectTitle(actor) || actor.name,
+        })),
+      newEvents,
+      recentEvents,
+      entities: this.buildKnownEntities(npc),
     });
   }
 
-  private buildVisibleEntities(scene: Scene, npc: Actor): NpcActorContext['visibleEntities'] {
-    return scene
-      .getAllSceneObjects()
-      .filter((object) => object !== npc && !object.disabled)
+  private buildKnownEntities(npc: Actor): NpcActorContext['entities'] {
+    return this.game.actorWorld
+      .getKnownObjects(npc)
       .map((object) => {
         const title = this.getObjectTitle(object);
         if (!title || !this.shouldIncludeVisibleEntity(object)) return null;
+        const perception = this.game.actorWorld.getObjectPerception(npc, object);
         return compactRecord({
           id: object.name,
           title,
-          ...this.getObjectCoordinates(object),
-          location: this.getObjectLocation(scene, object),
+          location: perception.location,
+          interaction: perception.interaction,
+          approach: perception.approach,
+          inspection: this.game.actorWorld.getInspectionAffordance(object),
+          switch: this.game.actorWorld.getSwitchAffordance(npc, object),
           states: ComponentSystem.getStateComponents(object).map((component) => ({
             id: component.id,
             value: ComponentSystem.getStateValue(object, component.id) ?? component.initialValue,
           })),
-          commands: this.commandExecutor.getAffordancesForEntity(object),
+          commands: this.game.actorCommands.getAffordancesForEntity(object, npc),
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);
@@ -158,49 +170,5 @@ export class NpcWorldModelBuilder {
       return textAssets.hasAuthoredObjectTitle(object);
     }
     return object.type !== 'Walkbox' && !!this.getObjectTitle(object);
-  }
-
-  private getObjectLocation(
-    scene: Scene,
-    object: SceneObject
-  ): NonNullable<NpcActorContext['visibleEntities'][number]['location']> | undefined {
-    const relation =
-      object.spatial?.relation === 'in' ||
-      object.spatial?.relation === 'on' ||
-      object.spatial?.relation === 'under' ||
-      object.spatial?.relation === 'behind'
-        ? object.spatial.relation
-        : null;
-    const targetId =
-      typeof object.spatial?.parentNodeId === 'string' ? object.spatial.parentNodeId.trim() : '';
-    if (!relation || !targetId) return undefined;
-
-    const target = scene.getObjectByName(targetId);
-    const targetTitle = target ? this.getObjectTitle(target) || undefined : undefined;
-    return compactRecord({
-      relation,
-      targetId,
-      targetTitle,
-    });
-  }
-
-  private getObjectCoordinates(object: SceneObject): { x?: number; y?: number } {
-    const record = object as unknown as {
-      x?: number;
-      y?: number;
-      poly?: Array<{ x: number; y: number }>;
-    };
-    if (typeof record.x === 'number' && typeof record.y === 'number') {
-      return { x: Math.round(record.x), y: Math.round(record.y) };
-    }
-    if (Array.isArray(record.poly) && record.poly.length) {
-      const xs = record.poly.map((point) => point.x);
-      const ys = record.poly.map((point) => point.y);
-      return {
-        x: Math.round((Math.min(...xs) + Math.max(...xs)) / 2),
-        y: Math.round((Math.min(...ys) + Math.max(...ys)) / 2),
-      };
-    }
-    return {};
   }
 }
