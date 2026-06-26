@@ -343,9 +343,7 @@ export class ActorCommandExecutor {
     step: Extract<ParserCommandActionSpec, { type: 'requireEntityAvailable' }>,
     state: ActorCommandPlanState
   ): ActorCommandOutcome {
-    const entity = this.getScopeCandidates(actor, step.scopes).find(
-      (candidate) => candidate.name === step.entityId
-    );
+    const entity = this.getAvailableEntityById(actor, step.entityId, step.scopes);
     if (!entity) {
       return {
         status: 'failed',
@@ -358,7 +356,7 @@ export class ActorCommandExecutor {
         recoverable: true,
       };
     }
-    if (step.saveAs) state[step.saveAs] = entity as Entity;
+    if (step.saveAs) state[step.saveAs] = entity instanceof Entity ? entity : entity.name;
     return {
       status: 'ok',
       code: 'required_entity_available',
@@ -373,9 +371,7 @@ export class ActorCommandExecutor {
     state: ActorCommandPlanState
   ): ActorCommandOutcome {
     for (const option of step.options) {
-      const entity = this.getScopeCandidates(actor, option.scopes).find(
-        (candidate) => candidate.name === option.entityId
-      );
+      const entity = this.getAvailableEntityById(actor, option.entityId, option.scopes);
       if (!entity) continue;
       if (step.saveAs) state[step.saveAs] = option.saveAsValue || entity.name;
       return {
@@ -405,6 +401,17 @@ export class ActorCommandExecutor {
       },
       recoverable: true,
     };
+  }
+
+  private getAvailableEntityById(
+    actor: Actor,
+    entityId: string,
+    scopes: ParserScopeSlice[]
+  ): SceneObject | null {
+    const scene = this.game.sceneManager.currentScene;
+    const entity = scene?.getObjectByName(entityId) || null;
+    if (!entity) return null;
+    return this.getRequirementStatus(actor, entityId, scopes, true).satisfied ? entity : null;
   }
 
   private setEntityState(
@@ -682,6 +689,21 @@ export class ActorCommandExecutor {
     entity: SceneObject,
     actor: Actor | null
   ): ActorCommandAffordance {
+    const requirementStatusCache = new Map<
+      string,
+      { satisfied: boolean; via?: 'held' | 'reachable' | 'visible' | 'takable' }
+    >();
+    const getCachedRequirementStatus = (entityId: string, scopes: ParserScopeSlice[]) => {
+      const key = `${entityId}:${scopes.join('|')}`;
+      let status = requirementStatusCache.get(key);
+      if (!status) {
+        status = actor
+          ? this.getRequirementStatus(actor, entityId, scopes, true)
+          : { satisfied: false };
+        requirementStatusCache.set(key, status);
+      }
+      return status;
+    };
     const requires = new Map<
       string,
       {
@@ -697,7 +719,7 @@ export class ActorCommandExecutor {
         requires.set(step.entityId, {
           entityId: step.entityId,
           scope: this.compactScope(step.scopes),
-          ...(actor ? this.getRequirementStatus(actor, step.entityId, step.scopes) : {}),
+          ...(actor ? getCachedRequirementStatus(step.entityId, step.scopes) : {}),
         });
       }
       if (step.type === 'requireAnyEntityAvailable') {
@@ -706,7 +728,7 @@ export class ActorCommandExecutor {
           requires.set(option.entityId, {
             entityId: option.entityId,
             scope: this.compactScope(option.scopes),
-            ...(actor ? this.getRequirementStatus(actor, option.entityId, option.scopes) : {}),
+            ...(actor ? getCachedRequirementStatus(option.entityId, option.scopes) : {}),
           });
         }
       }
@@ -718,25 +740,35 @@ export class ActorCommandExecutor {
     return {
       id: command.id,
       label: command.phrases[0] || command.id,
-      ...(actor ? { available: this.isCommandAvailable(actor, command) } : {}),
+      ...(actor
+        ? { available: this.isCommandAvailable(actor, command, getCachedRequirementStatus) }
+        : {}),
       ...(requirementList.length ? { requires: requirementList } : {}),
       ...(effects.length ? { effects } : {}),
     };
   }
 
-  private isCommandAvailable(actor: Actor, command: ParserCommandSpec): boolean {
+  private isCommandAvailable(
+    actor: Actor,
+    command: ParserCommandSpec,
+    getStatus: (
+      entityId: string,
+      scopes: ParserScopeSlice[]
+    ) => { satisfied: boolean; via?: 'held' | 'reachable' | 'visible' | 'takable' } = (
+      entityId,
+      scopes
+    ) => this.getRequirementStatus(actor, entityId, scopes)
+  ): boolean {
     for (const step of command.plan) {
       if (
         step.type === 'requireEntityAvailable' &&
-        !this.getRequirementStatus(actor, step.entityId, step.scopes).satisfied
+        !getStatus(step.entityId, step.scopes).satisfied
       ) {
         return false;
       }
       if (
         step.type === 'requireAnyEntityAvailable' &&
-        !step.options.some(
-          (option) => this.getRequirementStatus(actor, option.entityId, option.scopes).satisfied
-        )
+        !step.options.some((option) => getStatus(option.entityId, option.scopes).satisfied)
       ) {
         return false;
       }
@@ -747,7 +779,8 @@ export class ActorCommandExecutor {
   private getRequirementStatus(
     actor: Actor,
     entityId: string,
-    scopes: ParserScopeSlice[]
+    scopes: ParserScopeSlice[],
+    fast: boolean = false
   ): { satisfied: boolean; via?: 'held' | 'reachable' | 'visible' | 'takable' } {
     const scene = this.game.sceneManager.currentScene;
     const target = scene?.getObjectByName(entityId);
@@ -762,20 +795,20 @@ export class ActorCommandExecutor {
       }
       if (
         scope === 'reachable' &&
-        this.game.actorWorld.getObjectPerception(actor, target).interaction === 'reachable'
+        this.game.actorWorld.getObjectPerception(actor, target, fast).interaction === 'reachable'
       ) {
         return { satisfied: true, via: 'reachable' };
       }
       if (
         scope === 'visible' &&
-        this.game.actorWorld.getObjectPerception(actor, target).visibility === 'visible'
+        this.game.actorWorld.getObjectPerception(actor, target, fast).visibility === 'visible'
       ) {
         return { satisfied: true, via: 'visible' };
       }
       if (
         scope === 'takable' &&
         target instanceof Entity &&
-        this.game.actorWorld.getObjectPerception(actor, target).interaction === 'reachable'
+        this.game.actorWorld.getObjectPerception(actor, target, fast).interaction === 'reachable'
       ) {
         return { satisfied: true, via: 'takable' };
       }

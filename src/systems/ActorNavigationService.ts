@@ -23,6 +23,14 @@ export class ActorNavigationService {
     return !ComponentSystem.getInteractionDistanceError(target as any, actor);
   }
 
+  getFastApproachStatus(actor: Actor, target: SceneObject): ActorApproachStatus {
+    const approachTarget = this.getApproachTarget(target);
+    if (this.isReachable(actor, approachTarget)) return 'already_reachable';
+    const center = this.getObjectCenter(approachTarget);
+    const scene = this.game.sceneManager.currentScene;
+    return center && scene ? 'route_available' : 'unreachable';
+  }
+
   planApproach(actor: Actor, target: SceneObject): ActorApproachPlan {
     const approachTarget = this.getApproachTarget(target);
     if (this.isReachable(actor, approachTarget)) {

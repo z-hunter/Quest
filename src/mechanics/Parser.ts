@@ -55,6 +55,11 @@ type ParserNoteDebugEntry = {
   needsCheck?: boolean;
 };
 
+type ParserTimingEntry = {
+  label: string;
+  ms: number;
+};
+
 export class Parser {
   game: any;
   inputField: HTMLInputElement | null;
@@ -109,9 +114,19 @@ export class Parser {
     }
     const originScene = this.game.sceneManager.currentScene;
     try {
+      const parseStartedAt = this.now();
+      const timings: ParserTimingEntry[] = [];
+      const measure = <T>(label: string, fn: () => T): T => {
+        const startedAt = this.now();
+        try {
+          return fn();
+        } finally {
+          timings.push({ label, ms: this.now() - startedAt });
+        }
+      };
       this.nlpCascade.clearLastDebugInfo();
       this.llmCascade.clearLastDebugInfo();
-      const actionEnvelope = this.resolvePendingAction(trimmed);
+      const actionEnvelope = measure('pending', () => this.resolvePendingAction(trimmed));
       if (this.pendingClarificationCancelMessage) {
         const cancelMessage = this.pendingClarificationCancelMessage;
         this.pendingClarificationCancelMessage = null;
@@ -124,26 +139,34 @@ export class Parser {
         this.game.log(retryMessage);
         return;
       }
-      const worldModel = this.worldModelBuilder.build(trimmed, this.pendingState);
+      const worldModel = measure('worldModel', () =>
+        this.worldModelBuilder.build(trimmed, this.pendingState)
+      );
       this.activeWorldModel = worldModel;
       const context = worldModel.context;
       this.activeScope = worldModel.scope;
-      const contextJson = JSON.stringify(context);
+      const contextJson = measure('contextJson', () => JSON.stringify(context));
       let envelope =
         actionEnvelope ||
-        (this.game.console?.parserStage1Enabled === false
-          ? this.buildStage1BypassAction(trimmed)
-          : this.runStage1(trimmed));
-      envelope = this.applyFocusedDefaultTargets(envelope);
+        measure('stage1', () =>
+          this.game.console?.parserStage1Enabled === false
+            ? this.buildStage1BypassAction(trimmed)
+            : this.runStage1(trimmed)
+        );
+      envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(envelope));
 
       if (
         !actionEnvelope &&
         this.game.console?.parserStage2Enabled !== false &&
         this.isHandoffEnvelope(envelope)
       ) {
+        const stage2StartedAt = this.now();
         const stage2Envelope = await this.nlpCascade.parse(trimmed, context);
+        timings.push({ label: 'stage2', ms: this.now() - stage2StartedAt });
         if (stage2Envelope) {
-          envelope = this.applyFocusedDefaultTargets(stage2Envelope);
+          envelope = measure('focusedDefaults', () =>
+            this.applyFocusedDefaultTargets(stage2Envelope)
+          );
         }
       }
 
@@ -156,6 +179,7 @@ export class Parser {
       if (forceCascade1ToLlm) {
         llmAttempted = true;
         const cascade1Envelope = envelope;
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
           kind: 'forced_cascade_handoff',
           envelope: cascade1Envelope,
@@ -164,8 +188,11 @@ export class Parser {
             reason: 'c1_off',
           },
         });
-        envelope = this.applyFocusedDefaultTargets(
-          llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope)
+        timings.push({ label: 'llm', ms: this.now() - llmStartedAt });
+        envelope = measure('focusedDefaults', () =>
+          this.applyFocusedDefaultTargets(
+            llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope)
+          )
         );
       }
 
@@ -176,14 +203,18 @@ export class Parser {
         this.isHandoffEnvelope(envelope)
       ) {
         llmAttempted = true;
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context);
+        timings.push({ label: 'llm', ms: this.now() - llmStartedAt });
         if (llmEnvelope) {
-          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
+          envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(llmEnvelope));
         }
       }
 
-      const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
-      let resultJson = this.runParserCore(envelope);
+      const scopeJson = measure('scopeJson', () =>
+        JSON.stringify(this.buildPeekScopeSummary(worldModel.scope))
+      );
+      let resultJson = measure('core', () => this.runParserCore(envelope));
 
       if (
         !actionEnvelope &&
@@ -192,20 +223,29 @@ export class Parser {
         this.resultShouldRetryWithLlm(resultJson)
       ) {
         llmAttempted = true;
-        const parsedResult = this.safeParseJson(resultJson);
+        const parsedResult = measure('parseResult', () => this.safeParseJson(resultJson));
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
           kind: this.getPostApiLlmRetryKind(parsedResult),
           envelope,
           result: parsedResult,
         });
+        timings.push({ label: 'llmRetry', ms: this.now() - llmStartedAt });
         if (llmEnvelope) {
-          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
-          resultJson = this.runParserCore(envelope);
+          envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(llmEnvelope));
+          resultJson = measure('coreRetry', () => this.runParserCore(envelope));
         }
       }
 
-      const envelopeJson = JSON.stringify(envelope);
-      const response = this.buildResponse(resultJson, envelopeJson, contextJson, scopeJson);
+      const envelopeJson = measure('envelopeJson', () => JSON.stringify(envelope));
+      timings.push({ label: 'totalBeforeResponse', ms: this.now() - parseStartedAt });
+      const response = this.buildResponse(
+        resultJson,
+        envelopeJson,
+        contextJson,
+        scopeJson,
+        timings
+      );
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
@@ -251,6 +291,12 @@ export class Parser {
   private extractSayText(input: string): string {
     if (/^\s*-/.test(input)) return input.replace(/^\s*-\s*/, '').trim();
     return input.replace(/^\s*SAY\s*/i, '').trim();
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
   }
 
   private recordSceneParserTurn(scene: any, command: string, playerMessages: string[]): void {
@@ -4530,7 +4576,8 @@ export class Parser {
     resultJson: string,
     envelopeJson: string,
     contextJson: string,
-    scopeJson: string
+    scopeJson: string,
+    timings: ParserTimingEntry[] = []
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
@@ -4617,6 +4664,14 @@ export class Parser {
             stageStr += ` (NLP Match: ${nlpDebug.rawIntent} | score: ${nlpDebug.score.toFixed(2)})`;
           }
           peekLines.push(stageStr);
+
+          const visibleTimings = timings.filter((entry) => entry.ms >= 0.05);
+          if (visibleTimings.length) {
+            const timingStr = visibleTimings
+              .map((entry) => `${entry.label} ${entry.ms.toFixed(1)}ms`)
+              .join(' | ');
+            peekLines.push(`Timing: ${timingStr}`);
+          }
 
           if (parserNoteMutations.length > 0) {
             for (const mut of parserNoteMutations) {

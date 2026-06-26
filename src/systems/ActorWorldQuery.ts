@@ -68,6 +68,22 @@ export class ActorWorldQuery {
     });
   }
 
+  getActorListeners(source: Actor): Actor[] {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return [];
+    return scene.entities.filter((entity): entity is Actor => {
+      if (
+        !(entity instanceof Actor) ||
+        entity === source ||
+        entity.disabled ||
+        !ComponentSystem.isNpc(entity)
+      ) {
+        return false;
+      }
+      return this.getObjectPerception(entity, source, true).visibility === 'visible';
+    });
+  }
+
   getObjectPerception(
     actor: Actor,
     object: SceneObject,
@@ -114,7 +130,7 @@ export class ActorWorldQuery {
     if (accessState.inInactiveSubscene) {
       const approachPlan = fast
         ? {
-            status: this.navigation.planApproach(actor, object).status,
+            status: this.navigation.getFastApproachStatus(actor, object),
           }
         : this.navigation.planApproach(actor, object);
       return {

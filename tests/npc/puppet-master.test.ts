@@ -899,6 +899,36 @@ describe('NpcPuppetMaster', () => {
     );
   });
 
+  it('does not run route planning while summarizing command affordances', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    addNpc(fixture, 'guard');
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.x = 20;
+    tv.y = 20;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    remote.x = 2000;
+    remote.y = 2000;
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+
+    const model = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    const npcContext = model.npcs.find((npc) => npc.id === 'guard');
+    const tvContext = npcContext?.entities.find((entity) => entity.id === 'tv');
+
+    expect(tvContext?.commands?.find((command) => command.id === 'turn_tv_on')).toEqual(
+      expect.objectContaining({ available: false })
+    );
+    expect(planApproach).not.toHaveBeenCalled();
+  });
+
   it('uses shared perception for opaque and transparent closed container contents', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -952,6 +982,22 @@ describe('NpcPuppetMaster', () => {
     expect(fixture.game.actorWorld.getActionObservers(player).map((actor) => actor.name)).toEqual([
       nearNpc.name,
     ]);
+  });
+
+  it('keeps player speech listeners independent from action observation radius', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 700;
+    const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
+    npcComponent.perceptionRadius = 200;
+
+    expect(fixture.game.actorWorld.getActionObservers(player).map((actor) => actor.name)).toEqual(
+      []
+    );
+    expect(
+      new NpcWorldModelBuilder(fixture.game).getNpcListenerIds(fixture.scene, player.name)
+    ).toEqual([npc.name]);
   });
 
   it('executes actor-aware OPEN for a locked Switch using the NPC inventory key', async () => {
@@ -1494,6 +1540,8 @@ describe('NpcPuppetMaster', () => {
 
     expect(debugLines.join('\n')).toContain('schedule_scene_scan');
     expect(debugLines.join('\n')).toContain('batch_enqueued');
+    expect(debugLines.join('\n')).toContain('--- PM CONTEXT TRACE ---');
+    expect(debugLines.join('\n')).toContain('pm_context_entity_summary');
     expect(debugLines.join('\n')).toContain('provider_request_start');
   });
 

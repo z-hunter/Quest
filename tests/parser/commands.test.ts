@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ScriptRegistry } from '../../src/core/ScriptRegistry';
 import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
@@ -596,6 +596,28 @@ describe('Parser custom commands', () => {
 
     expect(result.messages.at(-1)).toBe('The TV clicks on.');
     expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
+  });
+
+  it('checks authored command requirements by id without route-planning the whole scene', async () => {
+    const fixture = setupTvCommandFixture({ heldRemote: true });
+    fixture.addTriggerbox('DeskCloseup', {
+      title: 'Desk close-up',
+      disabled: false,
+      components: [{ type: 'Subscene' }],
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Desk note',
+      description: 'A disabled inactive-subscene object that should not be route-planned.',
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'in' },
+    });
+
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('The TV clicks on.');
+    expect(planApproach).not.toHaveBeenCalled();
   });
 
   it('appends State-driven Parser Notes to LOOK after a command changes the State', async () => {
