@@ -24,9 +24,13 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
+  'An ok LOOK or EXAMINE means the anchor was inspected, not that any hidden item was found.',
   'Titled objects inside inactive Subscenes may be used through virtual NPC access without opening the player view.',
   'OPEN and CLOSE use real Switch rules, including keys held by the acting NPC.',
+  'Do not claim a hidden item was found unless it appears in discoveredEntityIds, refreshed reachable/held context, inventory, or a successful TAKE/COMMAND result.',
+  'If LOOK or EXAMINE returns worldChanged false with empty discoveredEntityIds, treat it as nothing new found there.',
   'Do not claim actions succeeded before a successful action_completed result.',
+  'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Emit at most one consequential action per NPC plan and wait for its outcome.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
   'Do not store attempted actions as successful facts in memory.',
@@ -74,6 +78,19 @@ type NpcLoopState = {
   cooldownUntil: number;
 };
 
+type NpcPatternLoopState = {
+  signatures: string[];
+  warned: boolean;
+  cooldownUntil: number;
+};
+
+type NpcActionHistoryRecord = {
+  signature: string;
+  summary: string;
+  count: number;
+  updatedAt: number;
+};
+
 const PM_BATCH_DEBOUNCE_MS = 150;
 const PM_REPEAT_WARNING_COUNT = 2;
 const PM_REPEAT_SUPPRESS_COUNT = 3;
@@ -81,6 +98,10 @@ const PM_LOOP_COOLDOWN_MS = 10_000;
 const PM_RATE_WINDOW_MS = 10_000;
 const PM_MAX_NPC_CALLS_PER_WINDOW = 6;
 const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
+const PM_MEMORY_CONTINUATION_LIMIT = 3;
+const PM_PATTERN_LOOP_WINDOW = 6;
+const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
+const PM_ACTION_HISTORY_LIMIT = 10;
 
 export class NpcPuppetMaster {
   private provider: ILlmProvider;
@@ -94,6 +115,9 @@ export class NpcPuppetMaster {
   private waitTimeouts = new Map<string, any>();
   private pendingBatches = new Map<string, PendingNpcBatch>();
   private loopStates = new Map<string, NpcLoopState>();
+  private patternLoopStates = new Map<string, NpcPatternLoopState>();
+  private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
+  private memoryContinuationCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
 
@@ -151,6 +175,9 @@ export class NpcPuppetMaster {
     }
     this.pendingBatches.clear();
     this.loopStates.clear();
+    this.patternLoopStates.clear();
+    this.actionHistories.clear();
+    this.memoryContinuationCounts.clear();
     this.npcCallTimes.clear();
     this.sceneCallTimes.clear();
     this.executor.clearAllPending();
@@ -214,6 +241,8 @@ export class NpcPuppetMaster {
     const completions: Promise<void>[] = [];
     for (const npcId of unreadNpcIds) {
       this.clearLoopSuppression(scene, npcId);
+      this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
+      this.memoryContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
       this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
       completions.push(this.enqueueNpc(scene, npcId));
     }
@@ -221,7 +250,16 @@ export class NpcPuppetMaster {
   }
 
   scheduleNpc(scene: Scene, npcId: string, trigger: NpcIndividualTrigger): void {
-    const loopState = this.loopStates.get(this.getNpcStateKey(scene, npcId));
+    const stateKey = this.getNpcStateKey(scene, npcId);
+    const loopState = this.loopStates.get(stateKey);
+    const patternLoopState = this.patternLoopStates.get(stateKey);
+    if (
+      trigger.type === 'action_completed' &&
+      patternLoopState?.cooldownUntil &&
+      patternLoopState.cooldownUntil > Date.now()
+    ) {
+      return;
+    }
     if (
       trigger.type === 'action_completed' &&
       loopState?.cooldownUntil &&
@@ -339,14 +377,23 @@ export class NpcPuppetMaster {
     const extractedJson = this.extractJson(response.text);
     const parsed = this.parseJson(extractedJson);
     const normalized = this.normalizeResponse(parsed, worldModel);
+    const acceptedPlans = normalized.valid
+      ? this.removeRepeatedNoProgressSteps(
+          this.removeUnsupportedDiscoveryClaims(
+            this.removeUnavailableCommandSteps(normalized.plans, worldModel),
+            trigger
+          ),
+          trigger
+        )
+      : normalized.plans;
     this.lastDebugInfo = {
-      matched: normalized.plans.length > 0,
+      matched: acceptedPlans.length > 0,
       provider: this.provider.getProviderName(),
       model: this.provider.getModelName(),
       prompt: { system, messages },
       rawResponse: response.text,
       extractedJson,
-      acceptedPlans: normalized.plans,
+      acceptedPlans,
       filteredPlans: normalized.filteredPlans,
       error: normalized.valid ? undefined : 'invalid_response',
       durationMs: response.durationMs,
@@ -359,7 +406,7 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
-    for (const plan of normalized.plans) {
+    for (const plan of acceptedPlans) {
       const outcomes = this.executor.executePlan(plan);
       const planTrigger =
         trigger?.type === 'batch'
@@ -373,7 +420,206 @@ export class NpcPuppetMaster {
         outcomes.some((outcome) => outcome.status === 'scheduled')
       );
     }
-    return normalized.plans;
+    return acceptedPlans;
+  }
+
+  private removeUnavailableCommandSteps(plans: NpcPlan[], worldModel: NpcWorldModel): NpcPlan[] {
+    return plans
+      .map((plan) => {
+        const npcContext = worldModel.npcs.find((npc) => npc.id === plan.npcId);
+        let removedCommand = false;
+        const steps = plan.steps.filter((step) => {
+          if (step.type !== 'COMMAND') return true;
+          const available = this.isCommandAvailableForNpc(npcContext, step.commandId);
+          if (available) return true;
+          removedCommand = true;
+          return false;
+        });
+        const memory = removedCommand ? undefined : plan.memory;
+        if (!steps.length && memory === undefined) return null;
+        return {
+          npcId: plan.npcId,
+          steps,
+          ...(memory !== undefined ? { memory } : {}),
+        };
+      })
+      .filter((plan): plan is NpcPlan => !!plan);
+  }
+
+  private isCommandAvailableForNpc(
+    npcContext: NpcWorldModel['npcs'][number] | undefined,
+    commandId: string
+  ): boolean {
+    if (!npcContext) return false;
+    for (const entity of npcContext.entities) {
+      const command = entity.commands?.find((candidate) => candidate.id === commandId);
+      if (command) return command.available !== false;
+    }
+    return false;
+  }
+
+  private removeUnsupportedDiscoveryClaims(
+    plans: NpcPlan[],
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): NpcPlan[] {
+    return plans
+      .map((plan) => {
+        const hasUnsupportedClaims =
+          !this.hasDiscoveryConfirmation(trigger, plan.npcId) && !this.hasPlanDiscoveryAction(plan);
+        if (!hasUnsupportedClaims) return plan;
+        const steps = plan.steps.filter((step) => {
+          if (step.type === 'SAY') return !this.hasUnsupportedDiscoveryClaim(step.text);
+          if (step.type === 'MEMORY_SET') return !this.hasUnsupportedDiscoveryClaim(step.memory);
+          return true;
+        });
+        const memory =
+          typeof plan.memory === 'string' && this.hasUnsupportedDiscoveryClaim(plan.memory)
+            ? undefined
+            : plan.memory;
+        if (!steps.length && memory === undefined) return null;
+        return {
+          npcId: plan.npcId,
+          steps,
+          ...(memory !== undefined ? { memory } : {}),
+        };
+      })
+      .filter((plan): plan is NpcPlan => !!plan);
+  }
+
+  private removeRepeatedNoProgressSteps(
+    plans: NpcPlan[],
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): NpcPlan[] {
+    const blockedByNpc = this.getBlockedNoProgressSignaturesByNpc(trigger);
+    if (!blockedByNpc.size) return plans;
+
+    return plans
+      .map((plan) => {
+        const blockedSignatures = blockedByNpc.get(plan.npcId);
+        if (!blockedSignatures?.size) return plan;
+        let removedBlockedAction = false;
+        const steps = plan.steps.filter((step) => {
+          const signature = this.getPlanStepPatternSignature(step);
+          if (!signature || !blockedSignatures.has(signature)) return true;
+          removedBlockedAction = true;
+          return false;
+        });
+        if (!removedBlockedAction) return plan;
+        if (!steps.some((step) => this.isConsequentialPlanStep(step))) return null;
+        return {
+          npcId: plan.npcId,
+          steps,
+        };
+      })
+      .filter((plan): plan is NpcPlan => !!plan);
+  }
+
+  private getBlockedNoProgressSignaturesByNpc(
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): Map<string, Set<string>> {
+    const result = new Map<string, Set<string>>();
+    let triggersByNpc: Array<[string, NpcIndividualTrigger[]]> = [];
+    if (trigger?.type === 'batch') {
+      triggersByNpc = Object.entries(trigger.triggersByNpc);
+    } else if (trigger) {
+      triggersByNpc = [['', [trigger]]];
+    }
+    for (const [npcIdFromBatch, triggers] of triggersByNpc) {
+      for (const candidate of triggers) {
+        if (candidate.type !== 'action_completed') continue;
+        if (!this.isTerminalNoProgressCode(candidate.result.code)) continue;
+        const signature = this.getPatternSignature(candidate.result);
+        if (!signature) continue;
+        const npcId = candidate.result.npcId || npcIdFromBatch;
+        if (!npcId) continue;
+        const signatures = result.get(npcId) || new Set<string>();
+        signatures.add(signature);
+        result.set(npcId, signatures);
+      }
+    }
+    return result;
+  }
+
+  private isTerminalNoProgressCode(code?: string): boolean {
+    return (
+      code === 'repeated_without_progress' ||
+      code === 'pattern_without_progress' ||
+      code === 'pattern_loop_sleep'
+    );
+  }
+
+  private getPlanStepPatternSignature(step: NpcPlanStep): string | null {
+    if (
+      step.type !== 'LOOK' &&
+      step.type !== 'EXAMINE' &&
+      step.type !== 'OPEN' &&
+      step.type !== 'CLOSE' &&
+      step.type !== 'MOVE_TO'
+    ) {
+      return null;
+    }
+    const target = step.type === 'MOVE_TO' ? step.targetId : step.targetId;
+    return target ? `${step.type}:${target}` : null;
+  }
+
+  private isConsequentialPlanStep(step: NpcPlanStep): boolean {
+    return (
+      step.type === 'MOVE_TO' ||
+      step.type === 'LOOK' ||
+      step.type === 'EXAMINE' ||
+      step.type === 'OPEN' ||
+      step.type === 'CLOSE' ||
+      step.type === 'TAKE' ||
+      step.type === 'PUT' ||
+      step.type === 'COMMAND' ||
+      step.type === 'USE' ||
+      step.type === 'WAIT'
+    );
+  }
+
+  private hasDiscoveryConfirmation(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string
+  ): boolean {
+    const triggers =
+      trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
+    return triggers.some((candidate) => {
+      if (candidate.type !== 'action_completed') return false;
+      const result = candidate.result;
+      if (result.status !== 'ok') return false;
+      const discovered = Array.isArray(result.discoveredEntityIds)
+        ? result.discoveredEntityIds
+        : [];
+      if (discovered.length > 0) return true;
+      return result.actionType === 'TAKE' || result.actionType === 'COMMAND';
+    });
+  }
+
+  private hasPlanDiscoveryAction(plan: NpcPlan): boolean {
+    return plan.steps.some((step) => step.type === 'TAKE' || step.type === 'COMMAND');
+  }
+
+  private hasUnsupportedDiscoveryClaim(text: string): boolean {
+    const normalized = text.toLowerCase();
+    if (
+      /\b(?:not|never)\s+found\b/.test(normalized) ||
+      /\bdid(?:n't| not)\s+find\b/.test(normalized) ||
+      /\bhave(?:n't| not)\s+found\b/.test(normalized) ||
+      /\bhas(?:n't| not)\s+found\b/.test(normalized) ||
+      /\bwithout\s+find(?:ing)?\b/.test(normalized) ||
+      /\bfound\s+nothing\b/.test(normalized) ||
+      /\bnothing\s+(?:new\s+)?(?:was\s+)?found\b/.test(normalized) ||
+      /\bunfound\b/.test(normalized)
+    ) {
+      return false;
+    }
+    return (
+      /\bfound\s+(?:it|the|that|a|my|your|tv remote|remote)\b/.test(normalized) ||
+      /\bi\s+found\b/.test(normalized) ||
+      /\bhere\s+it\s+is\b/.test(normalized) ||
+      /\bthere\s+it\s+is\b/.test(normalized) ||
+      /\bgot\s+(?:it|the\s+remote)\b/.test(normalized)
+    );
   }
 
   private maybeScheduleContinuation(
@@ -384,10 +630,21 @@ export class NpcPuppetMaster {
     if (hasScheduledStep || trigger?.type !== 'move_completed') return;
 
     for (const plan of plans) {
-      const shouldContinue =
-        typeof plan.memory === 'string' ||
-        plan.steps.some((step) => step.type === 'MEMORY_SET' || step.type === 'OBJECTIVES_SET');
-      if (!shouldContinue) continue;
+      const hasExplicitStateUpdate = plan.steps.some(
+        (step) => step.type === 'MEMORY_SET' || step.type === 'OBJECTIVES_SET'
+      );
+      const hasPlanMemory = typeof plan.memory === 'string';
+      if (!hasExplicitStateUpdate && !hasPlanMemory) continue;
+
+      const scene = this.game.sceneManager.currentScene;
+      const stateKey = scene ? this.getNpcStateKey(scene, plan.npcId) : plan.npcId;
+      if (hasExplicitStateUpdate) {
+        this.memoryContinuationCounts.delete(stateKey);
+      } else {
+        const count = this.memoryContinuationCounts.get(stateKey) || 0;
+        if (count >= PM_MEMORY_CONTINUATION_LIMIT) continue;
+        this.memoryContinuationCounts.set(stateKey, count + 1);
+      }
 
       globalThis.setTimeout(() => {
         const scene = this.game.sceneManager.currentScene;
@@ -433,6 +690,7 @@ export class NpcPuppetMaster {
         memory: npc.memory,
         inventory: npc.inventory,
         actors: npc.actors,
+        actionHistory: this.getNpcActionHistory(worldModel.scene.id, npc.id),
         newEvents: npc.newEvents,
         recentEvents: npc.recentEvents,
         entities: npc.entities,
@@ -611,10 +869,12 @@ export class NpcPuppetMaster {
     result: NpcPlanExecutionOutcome
   ): NpcPlanExecutionOutcome {
     const stateKey = this.getNpcStateKey(scene, npcId);
+    this.recordActionHistory(scene, npcId, result);
     const repeatKey =
       result.repeatKey || `${result.actionType || 'ACTION'}:${result.targetId || ''}`;
     if (result.worldChanged || !repeatKey) {
       this.loopStates.delete(stateKey);
+      this.patternLoopStates.delete(stateKey);
       return { ...result, repeatCount: 0 };
     }
 
@@ -622,17 +882,213 @@ export class NpcPuppetMaster {
     const count = previous?.repeatKey === repeatKey ? previous.count + 1 : 1;
     const cooldownUntil = count >= PM_REPEAT_SUPPRESS_COUNT ? Date.now() + PM_LOOP_COOLDOWN_MS : 0;
     this.loopStates.set(stateKey, { repeatKey, count, cooldownUntil });
-    if (count < PM_REPEAT_WARNING_COUNT) return { ...result, repeatCount: count };
+    const repeatedResult =
+      count < PM_REPEAT_WARNING_COUNT
+        ? { ...result, repeatCount: count }
+        : {
+            ...result,
+            status: count >= PM_REPEAT_SUPPRESS_COUNT ? 'failed' : result.status,
+            code: count >= PM_REPEAT_SUPPRESS_COUNT ? 'repeated_without_progress' : result.code,
+            repeatCount: count,
+            message:
+              count >= PM_REPEAT_SUPPRESS_COUNT
+                ? 'The same action produced no new information or world change repeatedly.'
+                : result.message,
+          };
+    return this.recordPatternProgress(scene, npcId, repeatedResult);
+  }
+
+  private recordPatternProgress(
+    scene: Scene,
+    npcId: string,
+    result: NpcPlanExecutionOutcome
+  ): NpcPlanExecutionOutcome {
+    const stateKey = this.getNpcStateKey(scene, npcId);
+    const signature = this.getPatternSignature(result);
+    if (!signature) {
+      this.patternLoopStates.delete(stateKey);
+      return result;
+    }
+
+    const previous = this.patternLoopStates.get(stateKey);
+    if (
+      previous?.warned &&
+      this.isMateriallyDifferentPatternTarget(previous.signatures, signature)
+    ) {
+      this.patternLoopStates.set(stateKey, {
+        signatures: [signature],
+        warned: false,
+        cooldownUntil: 0,
+      });
+      return result;
+    }
+    const signatures = [...(previous?.signatures || []), signature].slice(-PM_PATTERN_LOOP_WINDOW);
+    const uniqueCount = new Set(signatures).size;
+    const isLoop =
+      signatures.length >= PM_PATTERN_LOOP_WINDOW && uniqueCount <= PM_PATTERN_LOOP_UNIQUE_LIMIT;
+    if (!isLoop) {
+      this.patternLoopStates.set(stateKey, {
+        signatures,
+        warned: previous?.warned || false,
+        cooldownUntil: 0,
+      });
+      return result;
+    }
+
+    if (!previous?.warned) {
+      this.patternLoopStates.set(stateKey, { signatures, warned: true, cooldownUntil: 0 });
+      return {
+        ...result,
+        status: 'failed',
+        code: 'pattern_without_progress',
+        message: `Cyclic no-progress behavior detected: ${[...new Set(signatures)].join(', ')} have already been tried and did not help. Do not continue this action pattern. Choose a materially different strategy, ask for help, WAIT/rest voluntarily, or reconsider current objectives with OBJECTIVES_SET if the goal is not currently achievable.`,
+      };
+    }
+
+    this.patternLoopStates.set(stateKey, {
+      signatures,
+      warned: true,
+      cooldownUntil: Date.now() + PM_LOOP_COOLDOWN_MS,
+    });
     return {
       ...result,
-      status: count >= PM_REPEAT_SUPPRESS_COUNT ? 'failed' : result.status,
-      code: count >= PM_REPEAT_SUPPRESS_COUNT ? 'repeated_without_progress' : result.code,
-      repeatCount: count,
-      message:
-        count >= PM_REPEAT_SUPPRESS_COUNT
-          ? 'The same action produced no new information or world change repeatedly.'
-          : result.message,
+      status: 'failed',
+      code: 'pattern_loop_sleep',
+      message: `Cyclic no-progress behavior continued after warning: ${[...new Set(signatures)].join(', ')}. These actions were already tried and still did not help. Puppet Master is putting this NPC to sleep briefly to avoid wasting LLM calls; next time, use a materially different plan, WAIT/rest, ask for help, or revise objectives instead of repeating this pattern.`,
     };
+  }
+
+  private getPatternSignature(result: NpcPlanExecutionOutcome): string | null {
+    if (result.status === 'scheduled') return null;
+    if (result.worldChanged) return null;
+    const actionType = result.actionType || 'ACTION';
+    if (
+      actionType !== 'LOOK' &&
+      actionType !== 'EXAMINE' &&
+      actionType !== 'OPEN' &&
+      actionType !== 'CLOSE' &&
+      actionType !== 'MOVE_TO'
+    ) {
+      return null;
+    }
+    const target = result.targetId || result.commandId || result.itemId || '';
+    return `${actionType}:${target}`;
+  }
+
+  private isMateriallyDifferentPatternTarget(
+    previousSignatures: string[],
+    nextSignature: string
+  ): boolean {
+    const nextTarget = this.getPatternTarget(nextSignature);
+    if (!nextTarget) return false;
+    const previousTargets = new Set(
+      previousSignatures.map((signature) => this.getPatternTarget(signature)).filter(Boolean)
+    );
+    return !previousTargets.has(nextTarget);
+  }
+
+  private getPatternTarget(signature: string): string {
+    const separatorIndex = signature.indexOf(':');
+    return separatorIndex >= 0 ? signature.slice(separatorIndex + 1) : '';
+  }
+
+  private recordActionHistory(scene: Scene, npcId: string, result: NpcPlanExecutionOutcome): void {
+    const stateKey = this.getNpcStateKey(scene, npcId);
+    const target = result.targetId || result.commandId || result.itemId || '';
+    if (!target) return;
+
+    if (result.worldChanged) {
+      this.removeActionHistoryForTarget(stateKey, target);
+      this.upsertActionHistory(
+        stateKey,
+        `${result.actionType || 'ACTION'}:${target}:changed`,
+        `${result.actionType || 'ACTION'} ${target}: changed world state`
+      );
+      return;
+    }
+
+    const summary = this.summarizeNoProgressAction(result);
+    if (!summary) return;
+    this.upsertActionHistory(stateKey, summary.signature, summary.text);
+  }
+
+  private summarizeNoProgressAction(
+    result: NpcPlanExecutionOutcome
+  ): { signature: string; text: string } | null {
+    const actionType = result.actionType || 'ACTION';
+    const target = result.targetId || result.commandId || result.itemId || '';
+    if (!target) return null;
+
+    if (
+      result.status === 'ok' &&
+      (actionType === 'LOOK' || actionType === 'EXAMINE') &&
+      !result.worldChanged &&
+      (!result.discoveredEntityIds || result.discoveredEntityIds.length === 0)
+    ) {
+      return {
+        signature: `${actionType}:${target}:nothing_new`,
+        text: `${actionType} ${target}: inspected, nothing new found`,
+      };
+    }
+
+    if (result.code === 'switch_already_open') {
+      return {
+        signature: `${actionType}:${target}:already_open`,
+        text: `${actionType} ${target}: already open`,
+      };
+    }
+
+    if (result.code === 'switch_already_closed') {
+      return {
+        signature: `${actionType}:${target}:already_closed`,
+        text: `${actionType} ${target}: already closed`,
+      };
+    }
+
+    if (
+      result.code === 'repeated_without_progress' ||
+      result.code === 'pattern_without_progress' ||
+      result.code === 'pattern_loop_sleep'
+    ) {
+      return {
+        signature: `${actionType}:${target}:repeated_no_progress`,
+        text: `${actionType} ${target}: repeated without progress`,
+      };
+    }
+
+    return null;
+  }
+
+  private upsertActionHistory(stateKey: string, signature: string, summary: string): void {
+    const now = Date.now();
+    const records = this.actionHistories.get(stateKey) || [];
+    const existing = records.find((record) => record.signature === signature);
+    if (existing) {
+      existing.count += 1;
+      existing.summary = summary;
+      existing.updatedAt = now;
+    } else {
+      records.push({ signature, summary, count: 1, updatedAt: now });
+    }
+    records.sort((a, b) => a.updatedAt - b.updatedAt);
+    this.actionHistories.set(stateKey, records.slice(-PM_ACTION_HISTORY_LIMIT));
+  }
+
+  private removeActionHistoryForTarget(stateKey: string, target: string): void {
+    const records = this.actionHistories.get(stateKey);
+    if (!records?.length) return;
+    this.actionHistories.set(
+      stateKey,
+      records.filter((record) => !record.signature.includes(`:${target}:`))
+    );
+  }
+
+  private getNpcActionHistory(sceneId: string, npcId: string): string[] | undefined {
+    const records = this.actionHistories.get(`${sceneId}:${npcId}`);
+    if (!records?.length) return undefined;
+    return records.map((record) =>
+      record.count > 1 ? `${record.summary} x${record.count}` : record.summary
+    );
   }
 
   private consumeNpcRateBudget(scene: Scene, npcId: string): boolean {

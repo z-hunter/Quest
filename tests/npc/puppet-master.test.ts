@@ -579,6 +579,44 @@ describe('NpcPuppetMaster', () => {
     expect(npc.getMoveResult().target).toEqual({ x: tv.x, y: tv.y });
   });
 
+  it('limits move-completion continuations for plan-level memory alone', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    (fixture.game as any).sayAsActor = () => {};
+    const provider = new MockProvider([
+      ...Array.from({ length: 6 }, (_, index) =>
+        JSON.stringify({
+          kind: 'pm_response',
+          plans: [
+            {
+              npcId: 'guard',
+              steps: [{ type: 'SAY', text: `Perfect, I can relax now ${index}.` }],
+              memory: 'Objective complete. I am relaxing now.',
+            },
+          ],
+        })
+      ),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await pm.processNpc(fixture.scene, npc.name, {
+        type: 'move_completed',
+        result: {
+          status: 'arrived',
+          code: 'arrived',
+          message: 'Arrived.',
+          target: { x: 60, y: 20 },
+          route: [],
+        },
+      });
+    }
+
+    expect((pm as any).memoryContinuationCounts.get(`${fixture.scene.id}:${npc.name}`)).toBe(3);
+  });
+
   it('executes TAKE into the NPC inventory and wakes with an action_completed trigger', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
@@ -929,6 +967,102 @@ describe('NpcPuppetMaster', () => {
     expect(planApproach).not.toHaveBeenCalled();
   });
 
+  it('removes unsupported found-item claims after empty inspection results', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    const dialogue: string[] = [];
+    (fixture.game as any).sayAsActor = (_actor: Actor, text: string) => {
+      dialogue.push(text);
+    };
+    const pillow = fixture.addEntity('pillow', { title: 'Pillow' });
+    pillow.x = 20;
+    pillow.y = 20;
+    const otherPillow = fixture.addEntity('other_pillow', { title: 'Other pillow' });
+    otherPillow.x = 24;
+    otherPillow.y = 20;
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'SAY', text: 'Ah, here it is! Let me turn on the TV.' },
+              { type: 'EXAMINE', targetId: otherPillow.name },
+            ],
+            memory: 'Linda examined the pillow and found it.',
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'entity_details',
+        npcId: npc.name,
+        targetId: pillow.name,
+        actionType: 'EXAMINE',
+        worldChanged: false,
+        discoveredEntityIds: [],
+        repeatKey: `EXAMINE:${pillow.name}`,
+        repeatCount: 1,
+      },
+    });
+
+    expect(dialogue).toEqual([]);
+    expect(plans[0].steps).toEqual([{ type: 'EXAMINE', targetId: otherPillow.name }]);
+    expect(plans[0].memory).toBeUndefined();
+    expect(pm.getLastDebugInfo()?.acceptedPlans?.[0]).toEqual(plans[0]);
+  });
+
+  it('removes unsupported found-item claims after move completion without discovery', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    const dialogue: string[] = [];
+    (fixture.game as any).sayAsActor = (_actor: Actor, text: string) => {
+      dialogue.push(text);
+    };
+    const tv = fixture.addEntity('tv', { title: 'TV' });
+    tv.x = 50;
+    tv.y = 20;
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'SAY', text: 'Found it! Let me turn on the TV...' },
+              { type: 'MOVE_TO', targetId: tv.name },
+            ],
+            memory: 'Linda arrived at the sofa and found the remote.',
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, {
+      type: 'move_completed',
+      result: {
+        status: 'arrived',
+        code: 'arrived',
+        message: 'Arrived.',
+        target: { x: 20, y: 20 },
+        route: [],
+      },
+    });
+
+    expect(dialogue).toEqual([]);
+    expect(plans[0].steps).toEqual([{ type: 'MOVE_TO', targetId: tv.name }]);
+    expect(plans[0].memory).toBeUndefined();
+  });
+
   it('uses shared perception for opaque and transparent closed container contents', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -1081,7 +1215,13 @@ describe('NpcPuppetMaster', () => {
     const provider = new MockProvider([
       JSON.stringify({
         kind: 'pm_response',
-        plans: [{ npcId: 'guard', steps: [{ type: 'COMMAND', commandId: 'turn_tv_on' }] }],
+        plans: [
+          {
+            npcId: 'guard',
+            steps: [{ type: 'COMMAND', commandId: 'turn_tv_on' }],
+            memory: 'The remote requirement is not blocking the command execution.',
+          },
+        ],
       }),
       JSON.stringify({ kind: 'pm_response', plans: [] }),
     ]);
@@ -1102,7 +1242,7 @@ describe('NpcPuppetMaster', () => {
     );
   });
 
-  it('reports COMMAND prerequisite failures relative to the NPC actor', async () => {
+  it('filters unavailable COMMAND steps before execution', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 5, 5);
@@ -1138,14 +1278,16 @@ describe('NpcPuppetMaster', () => {
     ]);
     const pm = new NpcPuppetMaster(fixture.game, provider);
 
-    await pm.processScene(fixture.scene);
+    const plans = await pm.processScene(fixture.scene);
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
-    expect(provider.calls).toHaveLength(2);
-    expect(String(provider.calls[1].messages[0].content)).toContain(
-      '"code": "custom_command_required_entity_missing"'
+    expect(plans).toEqual([]);
+    expect((npc.components.find((component: any) => component.type === 'NPC') as any).memory).toBe(
+      'Old note.'
     );
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
+    expect(provider.calls).toHaveLength(1);
+    expect(pm.getLastDebugInfo()?.acceptedPlans).toEqual([]);
   });
 
   it('uses a reachable item inside an inactive Subscene without requiring NPC inventory', async () => {
@@ -1643,5 +1785,223 @@ describe('NpcPuppetMaster', () => {
     pm.scheduleNpc(fixture.scene, npc.name, { type: 'action_completed', result: fourth });
     await vi.advanceTimersByTimeAsync(200);
     expect(provider.calls).toHaveLength(3);
+  });
+
+  it('rejects a plan that repeats the terminal no-progress action', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const sofa = fixture.addEntity('Sofa', { title: 'Sofa' });
+    sofa.x = 20;
+    sofa.y = 20;
+    const dialogue: string[] = [];
+    (fixture.game as any).sayAsActor = (_actor: Actor, text: string) => {
+      dialogue.push(text);
+    };
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'SAY', text: 'Let me check behind the sofa...' },
+              { type: 'EXAMINE', targetId: sofa.name },
+            ],
+            memory: 'Trying a different spatial relation behind the sofa.',
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, {
+      type: 'action_completed',
+      result: {
+        status: 'failed',
+        code: 'repeated_without_progress',
+        npcId: npc.name,
+        targetId: sofa.name,
+        actionType: 'EXAMINE',
+        worldChanged: false,
+        discoveredEntityIds: [],
+        repeatKey: `EXAMINE:${sofa.name}`,
+        repeatCount: 3,
+      },
+    });
+
+    expect(plans).toEqual([]);
+    expect(dialogue).toEqual([]);
+    expect(pm.getLastDebugInfo()?.acceptedPlans).toEqual([]);
+  });
+
+  it('includes compact PM action history after an empty inspection', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    (pm as any).recordActionProgress(fixture.scene, npc.name, {
+      status: 'ok',
+      code: 'entity_details',
+      npcId: npc.name,
+      targetId: 'Sofa',
+      actionType: 'EXAMINE',
+      worldChanged: false,
+      discoveredEntityIds: [],
+      repeatKey: 'EXAMINE:Sofa',
+    });
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const prompt = String(provider.calls[0].messages[0].content);
+    expect(prompt).toContain('"actionHistory"');
+    expect(prompt).toContain('EXAMINE Sofa: inspected, nothing new found');
+  });
+
+  it('does not record unreachable inspection attempts as completed searches', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    (pm as any).recordActionProgress(fixture.scene, npc.name, {
+      status: 'failed',
+      code: 'too_far_to_examine',
+      npcId: npc.name,
+      targetId: 'Sofa',
+      actionType: 'EXAMINE',
+      worldChanged: false,
+      repeatKey: 'EXAMINE:Sofa',
+    });
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const prompt = String(provider.calls[0].messages[0].content);
+    expect(prompt).not.toContain('"actionHistory"');
+    expect(prompt).not.toContain('inspected, nothing new found');
+  });
+
+  it('warns when mixed no-progress action signatures form a loop', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const actions = [
+      ['EXAMINE', 'Drawer1'],
+      ['OPEN', 'Drawer1'],
+      ['LOOK', 'Drawer1'],
+      ['EXAMINE', 'Drawer1'],
+      ['OPEN', 'Drawer1'],
+      ['LOOK', 'Drawer1'],
+    ] as const;
+
+    const results = actions.map(([actionType, targetId]) =>
+      (pm as any).recordActionProgress(fixture.scene, npc.name, {
+        status: 'ok',
+        code: 'no_progress',
+        npcId: npc.name,
+        targetId,
+        actionType,
+        worldChanged: false,
+        repeatKey: `${actionType}:${targetId}`,
+      })
+    );
+
+    expect(results.at(-1)).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        code: 'pattern_without_progress',
+      })
+    );
+    expect(results.at(-1)?.message).toContain('Cyclic no-progress behavior detected');
+    expect(results.at(-1)?.message).toContain('OBJECTIVES_SET');
+  });
+
+  it('puts an NPC to sleep briefly when a mixed no-progress loop continues after warning', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const actions = [
+      ['EXAMINE', 'Drawer2'],
+      ['OPEN', 'Drawer2'],
+      ['LOOK', 'Drawer2'],
+      ['EXAMINE', 'Drawer2'],
+      ['OPEN', 'Drawer2'],
+      ['LOOK', 'Drawer2'],
+      ['EXAMINE', 'Drawer2'],
+    ] as const;
+
+    let result: any;
+    for (const [actionType, targetId] of actions) {
+      result = (pm as any).recordActionProgress(fixture.scene, npc.name, {
+        status: 'ok',
+        code: 'no_progress',
+        npcId: npc.name,
+        targetId,
+        actionType,
+        worldChanged: false,
+        repeatKey: `${actionType}:${targetId}`,
+      });
+    }
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        code: 'pattern_loop_sleep',
+      })
+    );
+    expect(result.message).toContain('WAIT/rest');
+    expect(
+      (pm as any).patternLoopStates.get(`${fixture.scene.id}:${npc.name}`).cooldownUntil
+    ).toBeGreaterThan(Date.now());
+  });
+
+  it('resets the pattern warning when the NPC tries a different target', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const loopActions = [
+      ['EXAMINE', 'Drawer2'],
+      ['OPEN', 'Drawer2'],
+      ['LOOK', 'Drawer2'],
+      ['EXAMINE', 'Drawer2'],
+      ['OPEN', 'Drawer2'],
+      ['LOOK', 'Drawer2'],
+    ] as const;
+
+    for (const [actionType, targetId] of loopActions) {
+      (pm as any).recordActionProgress(fixture.scene, npc.name, {
+        status: 'ok',
+        code: 'no_progress',
+        npcId: npc.name,
+        targetId,
+        actionType,
+        worldChanged: false,
+        repeatKey: `${actionType}:${targetId}`,
+      });
+    }
+
+    const result = (pm as any).recordActionProgress(fixture.scene, npc.name, {
+      status: 'ok',
+      code: 'no_progress',
+      npcId: npc.name,
+      targetId: 'Sofa',
+      actionType: 'EXAMINE',
+      worldChanged: false,
+      repeatKey: 'EXAMINE:Sofa',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ code: 'no_progress' }));
+    expect(result.code).not.toBe('pattern_loop_sleep');
+    expect((pm as any).patternLoopStates.get(`${fixture.scene.id}:${npc.name}`)).toEqual(
+      expect.objectContaining({
+        signatures: ['EXAMINE:Sofa'],
+        warned: false,
+        cooldownUntil: 0,
+      })
+    );
   });
 });
