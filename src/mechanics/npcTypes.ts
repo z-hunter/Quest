@@ -106,27 +106,28 @@ export type NpcActorContext = {
     available: boolean;
     itemIds: string[];
   };
-  actors: Array<{ id: string; title: string; lastSeenSceneId: string }>;
+  actors: Array<{ id: string; title: string; lastSeenSceneId?: string }>;
   visibleItemIds: string[];
   knownEntities: Array<{
     id: string;
     title: string;
     kind: 'item' | 'actor' | 'object';
-    lastSeenSceneId: string;
+    lastSeenSceneId?: string;
   }>;
   newEvents: SceneLogEntry[];
   recentEvents: SceneLogEntry[];
   entities: Array<{
     id: string;
     title: string;
-    lastSeenSceneId: string;
+    lastSeenSceneId?: string;
+    visibility?: 'visible' | 'hidden' | 'unknown';
     location?: {
       relation: string;
       targetId: string;
       targetTitle?: string;
     };
     interaction: 'held' | 'reachable' | 'blocked';
-    approach: 'already_reachable' | 'route_available' | 'unreachable';
+    approach?: 'already_reachable' | 'route_available' | 'unreachable';
     inspection?: {
       look: boolean;
       examine: boolean;
@@ -153,6 +154,28 @@ export type NpcActorContext = {
       }>;
       effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
     }>;
+  }>;
+};
+
+export type NpcStaticEntityContext = {
+  id: string;
+  title: string;
+  description?: string;
+  lore?: string;
+  item?: true;
+  inspection?: string[];
+  switch?: {
+    canOpen: boolean;
+    canClose: boolean;
+    requiredKeyId?: string;
+    blockedRelation?: string;
+    transparent?: boolean;
+  };
+  commands?: Array<{
+    id: string;
+    label: string;
+    requires?: Array<{ entityId: string; scope: string }>;
+    effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
   }>;
 };
 
@@ -189,7 +212,15 @@ export type NpcPuppetMasterDebugInfo = {
   tokensGenerated?: number;
   cacheCreationInputTokens?: number;
   cacheReadInputTokens?: number;
+  staticPrefix?: NpcStaticPrefixDebugInfo;
   strategy?: NpcPuppetMasterStrategyDebugInfo;
+};
+
+export type NpcStaticPrefixDebugInfo = {
+  hash: string;
+  characters: number;
+  estimatedTokens: number;
+  cacheEligible: boolean;
 };
 
 export type NpcPuppetMasterStrategyDebugInfo = {
@@ -211,6 +242,7 @@ export type NpcPuppetMasterStrategyDebugInfo = {
   tokensGenerated?: number;
   cacheCreationInputTokens?: number;
   cacheReadInputTokens?: number;
+  staticPrefix?: NpcStaticPrefixDebugInfo;
 };
 
 export type NpcPlanExecutionOutcome = {

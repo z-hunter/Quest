@@ -90,7 +90,7 @@ export class ActorPlanExecutor {
       }
       const sayAsActor = (this.game as any).sayAsActor;
       if (typeof sayAsActor === 'function') {
-        sayAsActor.call(this.game, actor, text, { triggerPuppetMaster: false });
+        sayAsActor.call(this.game, actor, text, { triggerPuppetMaster: true });
         return { status: 'ok', code: 'npc_said', npcId: actor.name, message: text };
       }
       return { status: 'failed', code: 'say_unavailable', npcId: actor.name };

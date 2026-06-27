@@ -58,6 +58,9 @@ Reasoning rules:
 
 - Entity `interaction` and `approach` fields are authoritative runtime results. Do not infer reachability from coordinates.
 - Titled entities inside an inactive Subscene may still be known. For an NPC, interacting with them uses virtual semantic access and does not open the player's close-up view.
+- Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.
+- Assume entities are visible and in the current scene unless marked otherwise.
+- Assume approach is `already_reachable` if interaction is `reachable` or `held`.
 - `held_or_reachable` means the prerequisite may be satisfied without TAKE when the item is already reachable.
 - `inventory.available: false` means this Actor has no inventory and cannot TAKE or carry items. It does not mean the inventory is full. Prefer reachable-item actions when supported.
 - Commands with `available: false` are theoretical possibilities; first satisfy their prerequisites.

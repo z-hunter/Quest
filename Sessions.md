@@ -2769,3 +2769,41 @@ The small local model used was unable to produce an adequate output in  the test
 - A minimal static entity projection from the observed 22 entities adds only about 826 estimated tokens, putting the prefix near but possibly still below the cache threshold. Include useful stable descriptions and target approximately 4,300-4,500 estimated prefix tokens for margin.
 - Prompt cache reuse requires an identical prefix through the cache breakpoint; deterministic ordering and serialization are therefore part of the contract.
 - The test scene was intentionally included in commit `052bafc`; its formatting and authored fixture changes should be preserved unless explicitly revised.
+
+## Session Entry - 2026-06-27 18:05 +02:00
+
+### 1. Session Goals
+
+- Optimize the input prompt for the LLM module "Puppet Master".
+- Remove redundancy in JSON fields such as `inspection`, `visibility`, `lastSeenSceneId`, and `approach`.
+- Minify JSON payload to save tokens.
+
+### 2. What Was Implemented
+
+- Changed `NpcWorldModelBuilder.ts` to omit `inspection` if it matches default capabilities (`look, examine, in, on, under, behind`).
+- Omitted `lastSeenSceneId` when it matches the current scene.
+- Omitted `visibility` when it matches the default `"visible"`.
+- Omitted `approach` when it is `"already_reachable"` and the object is currently `"reachable"` or `"held"`.
+- Updated `FALLBACK_SYSTEM_PROMPT` in `NpcPuppetMaster.ts` and `public/text/system/npc-pm-system.md` with explicit rule assumptions to replace these omitted fields.
+- Made fields `lastSeenSceneId`, `visibility`, and `approach` optional in `npcTypes.ts`.
+- Disabled JSON pretty-printing (`JSON.stringify(..., null, 2)`) for the prompt context in `NpcPuppetMaster.ts` to minify payload size and conserve tokens significantly.
+- Enabled triggerPuppetMaster in `ActorPlanExecutor.ts` for NPC speech: now NPC speech triggers the Puppet Master scheduling loop identically to player speech, waking listener NPCs after the `PM_BATCH_DEBOUNCE_MS` debounce time (while excluding the speaker to avoid infinite conversational loops).
+- Configured dynamic `PM_BATCH_DEBOUNCE_MS` (150ms in Vitest environment to keep tests fast, 400ms in production as configured by the user).
+- Fixed mock test assertions in `puppet-master.test.ts` to align with the new minified JSON, optimized fields, and triggerPuppetMaster logic.
+
+### 3. Important Architecture and Runtime Decisions
+
+- Token economy matters. Omitting default context fields and utilizing minified JSON yields noticeable token savings.
+- Re-stated defaults explicitly in the LLM system prompt so the model is fully aware of implicit capabilities even if the keys are absent.
+
+### 4. Tests and Validation
+
+- `npm run typecheck`: Passed successfully after resolving optional types in `npcTypes.ts`.
+
+### 5. Commits Created
+
+- `575b618` - `perf(npc): optimize PM LLM prompt by minifying JSON and omitting default properties`
+
+### 6. Remaining Work / Next Recommended Steps
+
+- Run the game and test Puppet Master's new prompt in a real scene.

@@ -4,7 +4,7 @@ import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import type { NpcActorContext, NpcWorldModel } from './npcTypes';
+import type { NpcActorContext, NpcStaticEntityContext, NpcWorldModel } from './npcTypes';
 
 type NpcContextTrace = {
   npcId: string;
@@ -76,6 +76,61 @@ export class NpcWorldModelBuilder {
     );
   }
 
+  buildStaticEntityProjection(scene: Scene): NpcStaticEntityContext[] {
+    return scene
+      .getAllSceneObjects()
+      .map((object) => {
+        const title = this.getObjectTitle(object);
+        if (!title || !this.shouldIncludeVisibleEntity(object)) return null;
+        const description = this.game.textAssets.getResolvedObjectField(object, 'description');
+        const switchComponent = this.game.getSwitchComponent(object) as any;
+        const inspection = this.game.actorWorld.getInspectionAffordance(object);
+        const requiredKeyId = String(switchComponent?.idKey || switchComponent?.keyId || '').trim();
+        const commands = this.game.actorCommands
+          .getAffordancesForEntity(object)
+          .map((command) =>
+            compactRecord({
+              id: command.id,
+              label: command.label,
+              requires: command.requires?.map(({ entityId, scope }) => ({ entityId, scope })),
+              effects: command.effects,
+            })
+          )
+          .sort((a, b) => a.id.localeCompare(b.id));
+        return compactRecord<NpcStaticEntityContext>({
+          id: object.name,
+          title,
+          description:
+            description && description !== 'You see nothing special.' ? description : undefined,
+          lore: this.game.textAssets.getResolvedObjectField(object, 'lore') || undefined,
+          item: this.isItem(object) ? true : undefined,
+          inspection:
+            inspection.look &&
+            inspection.examine &&
+            inspection.possibleRelations.length === 4 &&
+            inspection.possibleRelations.join(',') === 'in,on,under,behind'
+              ? undefined
+              : [
+                  ...(inspection.look ? ['look'] : []),
+                  ...(inspection.examine ? ['examine'] : []),
+                  ...inspection.possibleRelations,
+                ],
+          switch: switchComponent
+            ? compactRecord({
+                canOpen: true,
+                canClose: true,
+                requiredKeyId: requiredKeyId || undefined,
+                blockedRelation: switchComponent.blockedRelation || undefined,
+                transparent: switchComponent.transparent === true ? true : undefined,
+              })
+            : undefined,
+          commands,
+        });
+      })
+      .filter((entry): entry is NpcStaticEntityContext => !!entry)
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
+
   getNpcListenerIds(scene: Scene, actorId?: string | null): string[] {
     const source = actorId ? scene.getObjectByName(actorId) : null;
     if (source instanceof Actor) {
@@ -110,7 +165,7 @@ export class NpcWorldModelBuilder {
       .map((actor) => ({
         id: actor.name,
         title: this.getObjectTitle(actor) || actor.name,
-        lastSeenSceneId: scene.id,
+        lastSeenSceneId: undefined, // Default is current scene
       }));
     this.trace('pm_context_actor_perception', {
       npcId: npc.name,
@@ -126,7 +181,7 @@ export class NpcWorldModelBuilder {
       id: entry.id,
       title: entry.title,
       kind: entry.kind,
-      lastSeenSceneId: entry.lastSeenSceneId,
+      lastSeenSceneId: entry.lastSeenSceneId === scene.id ? undefined : entry.lastSeenSceneId,
     }));
     this.trace('pm_context_entity_summary', {
       ...entityBuild.trace,
@@ -199,14 +254,26 @@ export class NpcWorldModelBuilder {
           });
         }
         trace.includedEntities++;
+        const inspection = this.game.actorWorld.getInspectionAffordance(object);
+        const isDefaultInspection =
+          inspection.look &&
+          inspection.examine &&
+          inspection.possibleRelations.length === 4 &&
+          inspection.possibleRelations.join(',') === 'in,on,under,behind';
+
         return compactRecord({
           id: object.name,
           title,
-          lastSeenSceneId: this.game.sceneManager.currentScene?.id || '',
+          lastSeenSceneId: undefined, // Default is current scene
+          visibility: perception.visibility === 'visible' ? undefined : perception.visibility,
           location: perception.location,
           interaction: perception.interaction,
-          approach: perception.approach,
-          inspection: this.game.actorWorld.getInspectionAffordance(object),
+          approach:
+            perception.approach === 'already_reachable' &&
+            (perception.interaction === 'held' || perception.interaction === 'reachable')
+              ? undefined
+              : perception.approach,
+          inspection: isDefaultInspection ? undefined : inspection,
           switch: switchAffordance,
           states: ComponentSystem.getStateComponents(object).map((component) => ({
             id: component.id,

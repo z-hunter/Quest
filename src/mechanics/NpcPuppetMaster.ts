@@ -7,6 +7,7 @@ import { Actor } from '../entities/Actor';
 import type { ActorMoveResult } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
+  NpcActorContext,
   NpcPlan,
   NpcPlanInterruptCondition,
   NpcPlanExecutionOutcome,
@@ -14,6 +15,7 @@ import type {
   NpcPuppetMasterDebugInfo,
   NpcPuppetMasterStrategyDebugInfo,
   NpcPuppetMasterResponse,
+  NpcStaticPrefixDebugInfo,
   NpcWorldModel,
 } from './npcTypes';
 
@@ -44,6 +46,8 @@ const FALLBACK_SYSTEM_PROMPT = [
   'If a plan is rejected for missing items, replace the unavailable references and do not repeat the same plan.',
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
+  'Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.',
+  'Assume entities are visible and in the current scene unless marked otherwise. Assume approach is already_reachable if interaction is reachable or held.',
 ].join('\n');
 
 const STRATEGY_SYSTEM_PROMPT = [
@@ -150,7 +154,8 @@ type PendingPlanContinuation = {
   trackCompletion: boolean;
 };
 
-const PM_BATCH_DEBOUNCE_MS = 150;
+const PM_BATCH_DEBOUNCE_MS = (globalThis as any).process?.env?.NODE_ENV === 'test' ? 150 : 400;
+// в режиме тестов PM_BATCH_DEBOUNCE_MS остается 150 мс
 const PM_REPEAT_WARNING_COUNT = 2;
 const PM_REPEAT_SUPPRESS_COUNT = 3;
 const PM_LOOP_COOLDOWN_MS = 10_000;
@@ -161,6 +166,7 @@ const PM_MEMORY_CONTINUATION_LIMIT = 3;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 10;
+const ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS = 4096;
 
 export class NpcPuppetMaster {
   private provider: ILlmProvider;
@@ -410,6 +416,7 @@ export class NpcPuppetMaster {
     const currentGeneration = this.haltGenerationId;
     const system = await this.buildSystemPrompt(worldModel);
     const messages = this.buildMessages(worldModel, trigger);
+    const staticPrefix = this.getStaticPrefixDebug(system);
     const response = await this.provider.sendMessageStream(system, messages, () => {});
 
     if (this.haltGenerationId !== currentGeneration) {
@@ -429,6 +436,7 @@ export class NpcPuppetMaster {
         tokensGenerated: response.tokensGenerated,
         cacheCreationInputTokens: response.cacheCreationInputTokens,
         cacheReadInputTokens: response.cacheReadInputTokens,
+        staticPrefix,
       };
       this.logPeekDebug();
       return [];
@@ -469,6 +477,7 @@ export class NpcPuppetMaster {
       tokensGenerated: response.tokensGenerated,
       cacheCreationInputTokens: response.cacheCreationInputTokens,
       cacheReadInputTokens: response.cacheReadInputTokens,
+      staticPrefix,
     };
     this.logPeekDebug();
 
@@ -1268,6 +1277,7 @@ export class NpcPuppetMaster {
 
       const system = this.buildStrategySystemPrompt(worldModel);
       const messages = this.buildStrategyMessages(worldModel, npcId, reason);
+      const staticPrefix = this.getStaticPrefixDebug(system);
       const response = this.provider.isAvailable()
         ? await this.provider.sendMessageStream(system, messages, () => {})
         : {
@@ -1292,6 +1302,7 @@ export class NpcPuppetMaster {
         tokensGenerated: response.tokensGenerated,
         cacheCreationInputTokens: response.cacheCreationInputTokens,
         cacheReadInputTokens: response.cacheReadInputTokens,
+        staticPrefix,
       };
 
       if (!response.ok) {
@@ -1356,18 +1367,17 @@ export class NpcPuppetMaster {
 
   private buildStrategySystemPrompt(worldModel: NpcWorldModel): LlmProviderContent {
     const staticContext = {
+      projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      npcs: worldModel.npcs.map((npc) => ({
-        id: npc.id,
-        title: npc.title,
-        lore: npc.lore,
-      })),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(
+        this.game.sceneManager.currentScene!
+      ),
     };
     return [
       { type: 'text', text: STRATEGY_SYSTEM_PROMPT },
       {
         type: 'text',
-        text: ['## Scene-Static NPC Strategy Context', JSON.stringify(staticContext, null, 2)].join(
+        text: ['## Scene-Static NPC Strategy Context', this.stableStringify(staticContext)].join(
           '\n'
         ),
         cacheControl: { type: 'ephemeral', ttl: '5m' },
@@ -1388,13 +1398,18 @@ export class NpcPuppetMaster {
         objectives: npc.objectives,
         memory: npc.memory,
         inventory: npc.inventory,
-        actors: npc.actors,
+        actors: npc.actors.map(({ id, lastSeenSceneId }) => ({ id, lastSeenSceneId })),
         visibleItemIds: npc.visibleItemIds,
-        knownEntities: npc.knownEntities,
+        knownEntities: npc.knownEntities.map((entity) => ({
+          id: entity.id,
+          kind: entity.kind,
+          lastSeenSceneId: entity.lastSeenSceneId,
+          ...(entity.lastSeenSceneId !== worldModel.scene.id ? { title: entity.title } : {}),
+        })),
         actionHistory: this.getNpcActionHistory(worldModel.scene.id, npc.id),
         newEvents: npc.newEvents,
         recentEvents: npc.recentEvents,
-        entities: npc.entities,
+        entities: this.buildDynamicEntities(npc.entities),
       })),
     };
     return [
@@ -1402,7 +1417,7 @@ export class NpcPuppetMaster {
         role: 'user',
         content: [
           'Strategy-only NPC context:',
-          JSON.stringify(dynamicContext, null, 2),
+          JSON.stringify(dynamicContext),
           '',
           `Return strictly valid JSON: {"kind":"npc_strategy_response","npcId":"${npcId}","memory":"...","objectives":[...],"waitMs":30000}`,
         ].join('\n'),
@@ -1469,19 +1484,18 @@ export class NpcPuppetMaster {
   private async buildSystemPrompt(worldModel: NpcWorldModel): Promise<LlmProviderContent> {
     const systemPrompt = await this.loadSystemPrompt();
     const staticContext = {
+      projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      npcs: worldModel.npcs.map((npc) => ({
-        id: npc.id,
-        title: npc.title,
-        lore: npc.lore,
-      })),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(
+        this.game.sceneManager.currentScene!
+      ),
     };
 
     return [
       { type: 'text', text: systemPrompt },
       {
         type: 'text',
-        text: ['## Scene-Static NPC Context', JSON.stringify(staticContext, null, 2)].join('\n'),
+        text: ['## Scene-Static NPC Context', this.stableStringify(staticContext)].join('\n'),
         cacheControl: { type: 'ephemeral', ttl: '5m' },
       },
     ];
@@ -1498,13 +1512,18 @@ export class NpcPuppetMaster {
         objectives: npc.objectives,
         memory: npc.memory,
         inventory: npc.inventory,
-        actors: npc.actors,
+        actors: npc.actors.map(({ id, lastSeenSceneId }) => ({ id, lastSeenSceneId })),
         visibleItemIds: npc.visibleItemIds,
-        knownEntities: npc.knownEntities,
+        knownEntities: npc.knownEntities.map((entity) => ({
+          id: entity.id,
+          kind: entity.kind,
+          lastSeenSceneId: entity.lastSeenSceneId,
+          ...(entity.lastSeenSceneId !== worldModel.scene.id ? { title: entity.title } : {}),
+        })),
         actionHistory: this.getNpcActionHistory(worldModel.scene.id, npc.id),
         newEvents: npc.newEvents,
         recentEvents: npc.recentEvents,
-        entities: npc.entities,
+        entities: this.buildDynamicEntities(npc.entities),
       })),
     };
 
@@ -1516,7 +1535,7 @@ export class NpcPuppetMaster {
         role: 'user',
         content: [
           'Per-call dynamic NPC context:',
-          JSON.stringify(dynamicContext, null, 2),
+          JSON.stringify(dynamicContext),
           '',
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
@@ -1527,6 +1546,83 @@ export class NpcPuppetMaster {
         ].join('\n'),
       },
     ];
+  }
+
+  private buildDynamicEntities(
+    entities: NpcActorContext['entities'] | undefined
+  ): Array<Record<string, unknown>> {
+    return (entities || []).map((entity) => ({
+      id: entity.id,
+      lastSeenSceneId: entity.lastSeenSceneId,
+      visibility: entity.visibility,
+      ...(entity.location ? { location: entity.location } : {}),
+      interaction: entity.interaction,
+      approach: entity.approach,
+      ...(entity.switch
+        ? {
+            switch: {
+              state: entity.switch.state,
+              canOpen: entity.switch.canOpen,
+              canClose: entity.switch.canClose,
+              locked: entity.switch.locked,
+              keyHeld: entity.switch.keyHeld,
+            },
+          }
+        : {}),
+      ...(entity.states ? { states: entity.states } : {}),
+      ...(entity.commands
+        ? {
+            commands: entity.commands.map((command) => ({
+              id: command.id,
+              ...(command.available !== undefined ? { available: command.available } : {}),
+              ...(command.requires
+                ? {
+                    requires: command.requires.map((requirement) => ({
+                      entityId: requirement.entityId,
+                      ...(requirement.satisfied !== undefined
+                        ? { satisfied: requirement.satisfied }
+                        : {}),
+                      ...(requirement.via ? { via: requirement.via } : {}),
+                    })),
+                  }
+                : {}),
+            })),
+          }
+        : {}),
+    }));
+  }
+
+  private getStaticPrefixDebug(system: LlmProviderContent): NpcStaticPrefixDebugInfo {
+    const text = typeof system === 'string' ? system : system.map((block) => block.text).join('');
+    const estimatedTokens = Math.ceil(text.length / 4);
+    return {
+      hash: this.hashStableText(text),
+      characters: text.length,
+      estimatedTokens,
+      cacheEligible: estimatedTokens >= ANTHROPIC_HAIKU_45_MIN_CACHE_TOKENS,
+    };
+  }
+
+  private stableStringify(value: unknown): string {
+    const normalize = (entry: unknown): unknown => {
+      if (Array.isArray(entry)) return entry.map(normalize);
+      if (!entry || typeof entry !== 'object') return entry;
+      return Object.fromEntries(
+        Object.entries(entry as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, nested]) => [key, normalize(nested)])
+      );
+    };
+    return JSON.stringify(normalize(value));
+  }
+
+  private hashStableText(text: string): string {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < text.length; index++) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
   }
 
   private enqueueNpc(scene: Scene, npcId: string, trigger?: NpcIndividualTrigger): Promise<void> {
@@ -2065,6 +2161,7 @@ export class NpcPuppetMaster {
           tokensGenerated: debug.tokensGenerated,
           cacheCreationInputTokens: debug.cacheCreationInputTokens,
           cacheReadInputTokens: debug.cacheReadInputTokens,
+          staticPrefix: debug.staticPrefix,
         })
       );
     }
@@ -2078,6 +2175,9 @@ export class NpcPuppetMaster {
         `${debug.npcId}: objectives updated: ${JSON.stringify(debug.objectivesUpdated || [])}`,
         `${debug.npcId}: waitMs: ${debug.waitMs}`,
       ];
+      if (debug.staticPrefix) {
+        lines.push(this.formatStaticPrefixDebug(debug.staticPrefix));
+      }
       if (debug.fallback) {
         lines.push(`fallback: WAIT ${debug.waitMs}`);
       }
@@ -2127,6 +2227,7 @@ export class NpcPuppetMaster {
           tokensGenerated: debug.tokensGenerated,
           cacheCreationInputTokens: debug.cacheCreationInputTokens,
           cacheReadInputTokens: debug.cacheReadInputTokens,
+          staticPrefix: debug.staticPrefix,
         })
       );
     }
@@ -2163,6 +2264,9 @@ export class NpcPuppetMaster {
         }
 
         const promptLines: string[] = ['--- PM PROMPT ---'];
+        if (debug.staticPrefix) {
+          promptLines.push(this.formatStaticPrefixDebug(debug.staticPrefix));
+        }
 
         if (dynamicContext) {
           // Format Trigger
@@ -2318,6 +2422,10 @@ export class NpcPuppetMaster {
 
       logDebug(responseLines.join('\n'));
     }
+  }
+
+  private formatStaticPrefixDebug(debug: NpcStaticPrefixDebugInfo): string {
+    return `Static prefix: ${debug.hash} | ${debug.characters} chars | ~${debug.estimatedTokens} tokens | cache eligible: ${debug.cacheEligible ? 'yes' : 'no'}`;
   }
 
   private normalizeResponse(

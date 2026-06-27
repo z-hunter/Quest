@@ -10,19 +10,19 @@
 
 PM принимает решения, ориентируясь на:
 
-* Системный промпт из файла `public/text/system/npc-pm-system.md` (содержит инструкцию по поведению, правила DSL-плана и т.д.);
-* **Статический контекст сцены** (кешируется у LLM-провайдеров, поддерживающих prompt caching):
-  * id и заголовок сцены;
-  * описание (`description`) и лорный текст (`lore`) сцены;
-  * `id`, `title` и `lore` каждого NPC в сцене (берутся из Text Assets).
-* **Динамический контекст** (передаётся при каждом вызове):
-  * Текущие цели (`objectives`) и память (`memory`) NPC;
-  * Инвентарь NPC;
-  * Список воспринимаемых Entities (с данными об интерактивности, расстоянии, состоянии Switch и т.д.);
-  * Список видимых других Actor;
-  * Краткая runtime-история действий PM для этого NPC (`actionHistory`);
-  * Новые и последние события из лога сцены (`newEvents`, `recentEvents`);
-  * Тип триггера (речь игрока, завершение движения, таймер и т.д.).
+- Системный промпт из файла `public/text/system/npc-pm-system.md` (содержит инструкцию по поведению, правила DSL-плана и т.д.);
+- **Статический контекст сцены** (кешируется у LLM-провайдеров, поддерживающих prompt caching):
+  - id и заголовок сцены;
+  - описание (`description`) и лорный текст (`lore`) сцены;
+  - `id`, `title` и `lore` каждого NPC в сцене (берутся из Text Assets).
+- **Динамический контекст** (передаётся при каждом вызове):
+  - Текущие цели (`objectives`) и память (`memory`) NPC;
+  - Инвентарь NPC;
+  - Список воспринимаемых Entities (с данными об интерактивности, расстоянии, состоянии Switch и т.д.);
+  - Список видимых других Actor;
+  - Краткая runtime-история действий PM для этого NPC (`actionHistory`);
+  - Новые и последние события из лога сцены (`newEvents`, `recentEvents`);
+  - Тип триггера (речь игрока, завершение движения, таймер и т.д.).
 
 PM генерирует **структурированный DSL-план** для каждого NPC, а не свободный текст. Это позволяет NPC напрямую взаимодействовать с игровым миром через те же runtime-пути, что и игрок.
 
@@ -40,7 +40,7 @@ PM генерирует **структурированный DSL-план** дл
 
 ## Лог сцены (Scene Log)
 
-Реализован в `src/scene/SceneLog.ts`. Это временный текстовый лог, куда попадают все *реплики* и *действия*, совершённые NPC и игроком в этой сцене. Лог используется как единый канал сигнализации для PM.
+Реализован в `src/scene/SceneLog.ts`. Это временный текстовый лог, куда попадают все _реплики_ и _действия_, совершённые NPC и игроком в этой сцене. Лог используется как единый канал сигнализации для PM.
 
 ### Типы записей
 
@@ -50,10 +50,10 @@ PM генерирует **структурированный DSL-план** дл
 
 **Запись действия (`action`):** добавляется для значимых игровых действий. Движок автоматически преобразует их в краткую описательную форму:
 
-| КОМАНДА | ЧТО ВИДИТ ИГРОК | ЧТО ПИШЕТСЯ В ЛОГ СЦЕНЫ |
-| :--- | :--- | :--- |
+| КОМАНДА                       | ЧТО ВИДИТ ИГРОК                 | ЧТО ПИШЕТСЯ В ЛОГ СЦЕНЫ             |
+| :---------------------------- | :------------------------------ | :---------------------------------- |
 | `GIVE ID TO SECURITY OFFICER` | `Ты протянул пропуск охраннику` | `[Майлз передал пропуск охраннику]` |
-| `- Hello there!` | `You: Hello there!` | `Miles: Hello there!` |
+| `- Hello there!`              | `You: Hello there!`             | `Miles: Hello there!`               |
 
 Лог сохраняется вместе с игрой.
 
@@ -94,12 +94,12 @@ PM возвращает **структурированный JSON** в форм�
 | :--- | :--- | :--- |
 | `SAY` | `text: string` | NPC произносит реплику. Добавляет запись в лог сцены. |
 | `MOVE_TO` | `targetId?: string` или `x, y: number` | Начинает движение к объекту или координатам. Асинхронный: PM получит `move_completed` по завершении. |
-| `LOOK` | `targetId: string`, `relation?: 'in'|'on'|'under'|'behind'` | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
-| `EXAMINE` | `targetId: string`, `relation?: 'in'|'on'|'under'|'behind'` | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`. |
+| `LOOK` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
+| `EXAMINE` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`. |
 | `OPEN` | `targetId: string` | Открывает объект с компонентом Switch. Соблюдает правила ключей. |
 | `CLOSE` | `targetId: string` | Закрывает объект с компонентом Switch. |
 | `TAKE` | `targetId: string` | Берёт предмет в инвентарь. **Требует наличия компонента Inventory у NPC.** |
-| `PUT` | `itemId: string`, `targetId?: string`, `relation?: 'in'|'on'|'under'|'behind'` | Кладёт предмет на/в/под/за объект. Если `targetId` не указан, кладёт на пол. |
+| `PUT` | `itemId: string`, `targetId?: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Кладёт предмет на/в/под/за объект. Если `targetId` не указан, кладёт на пол. |
 | `COMMAND` | `commandId: string`, `arguments?: Record<string, string>` | Исполняет авторскую команду объекта. **Предпочтительнее `USE`**, так как исполняет authored runtime-контракт без лишней маршрутизации. |
 | `USE` | `itemId: string`, `targetId: string` | Использует предмет на объекте. Запасной вариант, если нет подходящей authored-команды. |
 | `WAIT` | `ms: number` | Ставит таймер. PM получит триггер `wait_elapsed` по истечении. Асинхронный. |
@@ -125,12 +125,12 @@ PM возвращает **структурированный JSON** в форм�
 
 У плана может быть поле `interruptOn`, задающее условия, при которых runtime остановит оставшиеся шаги и вызовет PM с `plan_interrupted`:
 
-| Условие | Аргументы | Когда срабатывает |
-| :--- | :--- | :--- |
-| `ITEM_FOUND` | `itemId?: string` | `discoveredEntityIds`, inventory или refreshed context подтверждают найденный предмет. |
-| `WORLD_CHANGED` | — | Последний action outcome имеет `worldChanged: true`. |
-| `STATE_CHANGED` | `targetId?: string`, `stateId?: string` | В v1 работает как `WORLD_CHANGED` с optional matching по `targetId`. |
-| `ACTION_FAILED` | — | Action или move завершились ошибкой/unsupported/unreachable. |
+| Условие         | Аргументы                               | Когда срабатывает                                                                      |
+| :-------------- | :-------------------------------------- | :------------------------------------------------------------------------------------- |
+| `ITEM_FOUND`    | `itemId?: string`                       | `discoveredEntityIds`, inventory или refreshed context подтверждают найденный предмет. |
+| `WORLD_CHANGED` | —                                       | Последний action outcome имеет `worldChanged: true`.                                   |
+| `STATE_CHANGED` | `targetId?: string`, `stateId?: string` | В v1 работает как `WORLD_CHANGED` с optional matching по `targetId`.                   |
+| `ACTION_FAILED` | —                                       | Action или move завершились ошибкой/unsupported/unreachable.                           |
 
 Если multi-step физический план не задаёт `interruptOn`, PM использует консервативные defaults: `ACTION_FAILED`, `ITEM_FOUND`, `WORLD_CHANGED`. Для процедур поиска внутри контейнеров модель обычно должна явно указать `ITEM_FOUND` и `ACTION_FAILED`, но опустить `WORLD_CHANGED`, чтобы `OPEN Drawer1` не остановил план до `EXAMINE Drawer1`.
 
@@ -166,9 +166,9 @@ PM возвращает **структурированный JSON** в форм�
 
 Этот шаг не говорит от лица NPC и не меняет игровой мир напрямую. Вместо этого PM делает отдельный strategy LLM-вызов с текущим контекстом NPC: `objectives`, `memory`, `actionHistory`, событиями, видимыми entities, inventory и командами. Ответ стратегии может только:
 
-* уплотнить или исправить `memory`;
-* заменить `objectives`;
-* выбрать короткий отдых через `waitMs`.
+- уплотнить или исправить `memory`;
+- заменить `objectives`;
+- выбрать короткий отдых через `waitMs`.
 
 Стратегический ответ имеет отдельный JSON-контракт `npc_strategy_response`. Любые реплики или физические действия в этом режиме недопустимы. Если ответ стратегии невалиден, PM не меняет память/цели и ставит fallback `WAIT 30000`.
 
@@ -186,9 +186,9 @@ PM возвращает **структурированный JSON** в форм�
 
 В историю попадают только подтверждённые факты выполнения:
 
-* Успешные `LOOK` / `EXAMINE`, которые вернули `worldChanged: false` и пустой `discoveredEntityIds`, записываются как «объект осмотрен, ничего нового не найдено».
-* Неудачные попытки вроде `too_far_to_examine` **не** считаются полноценным обыском.
-* Изменения мира (`worldChanged: true`) очищают устаревшие записи по той же цели и могут записывать факт изменения состояния.
+- Успешные `LOOK` / `EXAMINE`, которые вернули `worldChanged: false` и пустой `discoveredEntityIds`, записываются как «объект осмотрен, ничего нового не найдено».
+- Неудачные попытки вроде `too_far_to_examine` **не** считаются полноценным обыском.
+- Изменения мира (`worldChanged: true`) очищают устаревшие записи по той же цели и могут записывать факт изменения состояния.
 
 Системный промпт трактует `actionHistory` как авторитетную runtime-историю: если там сказано, что Sofa уже был осмотрен без результата, NPC не должен снова обыскивать Sofa, пока условия не изменились.
 
@@ -209,9 +209,10 @@ NPC:    JSON DSL → ActorPlanExecutor ─────────────�
 Поэтому видимость, контейнеры, hidden reveal, reachability, inventory protection, ключи и последствия действий **не имеют отдельных NPC- и Player-алгоритмов**. Игрок отличается только input/UI-адаптерами.
 
 См. также:
-* Полный pipeline Parser (текст → Intent → Executor): [Parser.md](Parser.md)
-* Типы DSL-шагов PM: [src/mechanics/npcTypes.ts](src/mechanics/npcTypes.ts)
-* Исполнитель шагов PM: [src/mechanics/ActorPlanExecutor.ts](src/mechanics/ActorPlanExecutor.ts)
+
+- Полный pipeline Parser (текст → Intent → Executor): [Parser.md](Parser.md)
+- Типы DSL-шагов PM: [src/mechanics/npcTypes.ts](src/mechanics/npcTypes.ts)
+- Исполнитель шагов PM: [src/mechanics/ActorPlanExecutor.ts](src/mechanics/ActorPlanExecutor.ts)
 
 ---
 
@@ -219,27 +220,32 @@ NPC:    JSON DSL → ActorPlanExecutor ─────────────�
 
 `NpcWorldModelBuilder` (`src/mechanics/NpcWorldModelBuilder.ts`) строит контекст для каждого NPC. Он включает:
 
-* **Текущие видимые объекты** (`entities`): только semantic-visible entities с authored title. Для каждого объекта указывается `id`, `lastSeenSceneId`, `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE` и authored commands.
-* **Структурированное знание** (`knownEntities` в NPC component и PM context): записи `{ id, title, kind, lastSeenSceneId, lastSeenAt }` только для замеченных Items и Actors. Обычные объекты сцены остаются в текущем `entities`, но не накапливаются в долговременном списке. Знание обновляется автоматически и не смешивается со свободным текстом `memory`.
-* **Непосредственно видимые предметы** (`visibleItemIds`): компактный список semantic-visible объектов с компонентом `Item` в текущей сцене. Обычный `disabled`-объект в него не попадает; исключение сохраняется только для authored объектов внутри неактивной `Subscene`, где disabled является визуальным состоянием крупного плана.
-* **Видимые Actor** (`actors`): другие персонажи, которых NPC воспринимает в данный момент.
-* **Runtime-история действий** (`actionHistory`): компактные факты о недавних действиях PM для этого NPC, например «EXAMINE Sofa: inspected, nothing new found».
-* Сырые координаты объектов в контекст **не передаются** — только семантические отношения.
-* **Hidden entity** нельзя адресовать в плане до успешного reveal через `LOOK`/`EXAMINE`.
+- **Текущие видимые объекты** (`entities`): только semantic-visible entities с authored title. Для каждого объекта указывается `id`, `lastSeenSceneId`, `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE` и authored commands.
+- **Структурированное знание** (`knownEntities` в NPC component и PM context): записи `{ id, title, kind, lastSeenSceneId, lastSeenAt }` только для замеченных Items и Actors. Обычные объекты сцены остаются в текущем `entities`, но не накапливаются в долговременном списке. Знание обновляется автоматически и не смешивается со свободным текстом `memory`.
+- **Непосредственно видимые предметы** (`visibleItemIds`): компактный список semantic-visible объектов с компонентом `Item` в текущей сцене. Обычный `disabled`-объект в него не попадает; исключение сохраняется только для authored объектов внутри неактивной `Subscene`, где disabled является визуальным состоянием крупного плана.
+- **Видимые Actor** (`actors`): другие персонажи, которых NPC воспринимает в данный момент.
+- **Runtime-история действий** (`actionHistory`): компактные факты о недавних действиях PM для этого NPC, например «EXAMINE Sofa: inspected, nothing new found».
+- Сырые координаты объектов в контекст **не передаются** — только семантические отношения.
+- **Hidden entity** нельзя адресовать в плане до успешного reveal через `LOOK`/`EXAMINE`.
 
 `LOOK` / `EXAMINE` с указанным `relation` дополняет outcome явным `relation_contents` или `relation_empty`; успешный `EXAMINE` без relation перечисляет непустые relations открытого контейнера или `Surface`. Id видимого содержимого помещаются в `discoveredEntityIds`. PM получает находку либо подтверждённую пустую проверку в том же `action_completed`. Закрытые opaque-контейнеры и hidden descendants по-прежнему фильтруются общим `SceneTextLayer`.
-* **Locked Switch** открывается только если у действующего Actor в инвентаре есть нужный ключ.
+
+- **Locked Switch** открывается только если у действующего Actor в инвентаре есть нужный ключ.
 
 ### Разделение контекста на статический и динамический (Prompt Caching)
 
 PM строит промпт из двух частей, оптимизированных под кеширование у провайдера (например, Anthropic):
 
-* **Статический блок** (system prompt): системный промпт + `id`, `title`, `lore` сцены + `id`, `title`, `lore` всех NPC. Этот блок меняется только при смене сцены. При поддержке кеширования провайдером он токенизируется **один раз**.
-* **Динамический блок** (user message): текущие цели, память, инвентарь, `actionHistory`, новые события, воспринимаемые entities. Обновляется при каждом вызове.
+- **Статический блок** (system prompt): системный промпт, authored-поля сцены и детерминированная scene-wide проекция entities. Для entity сюда входят `id`, `title`, authored `description`, `lore`, Item-признак, inspection affordances, определения commands (`label`, статический `scope`, effects) и статические возможности Switch. Entities и commands сортируются по стабильным id, а compact JSON сериализуется с рекурсивно отсортированными ключами.
+- **Динамический блок** (user message): trigger, objectives, memory, inventory ownership, события, `actionHistory`, известные/видимые entities и их runtime-проекция. Здесь остаются visibility, location, interaction/reachability/approach, State values, текущее состояние Switch и command prerequisite `available`/`satisfied`/`via`.
 
-На текущем тестовом prompt кэшируемый префикс занимает около `12 140` символов, или примерно `3 035` токенов. Это ниже минимального cacheable prefix Anthropic Haiku 4.5 (около `4 096` токенов), поэтому provider корректно получает `cache_control`, но возвращает `cacheCreationInputTokens: 0` и `cacheReadInputTokens: 0`. Общий размер запроса здесь не помогает: большой `Per-call dynamic NPC context` расположен после cache breakpoint.
+Authored description/lore/inspection/command definitions не повторяются в dynamic entities. Entity `id` остаётся в обеих частях как обязательный join key; title для known entity передаётся динамически только когда entity известна из другой сцены и поэтому отсутствует в текущей static projection.
 
-Следующий этап оптимизации — вынести в scene-static блок стабильную проекцию entities: authored `id`, `title`, descriptions, inspection affordances, определения commands и статические возможности Switch. Текущие state, visibility, location, reachability, inventory ownership и доступность prerequisites должны остаться динамическими. Статическую проекцию необходимо строить детерминированно и инвалидировать при изменении authored структуры сцены.
+PM не хранит потенциально устаревающий authored snapshot: static projection пересобирается из текущей сцены при каждом LLM-вызове. Пока authored структура неизменна, детерминированная сериализация даёт байт-в-байт тот же prefix и тот же hash. Любое изменение authored Text Asset, набора entities, Switch/command структуры или другого включённого authored поля меняет prefix/hash и тем самым корректно инвалидирует provider cache.
+
+На предыдущей реализации cacheable prefix занимал около `12 140` символов / `~3 035` оценочных токенов, а dynamic context — около `14 436` символов / `~3 609` токенов. Haiku 4.5 требует примерно `4 096` токенов до cache breakpoint. Новая полезная authored entity projection предназначена для целевого диапазона `~4 300–4 500` оценочных токенов без padding; фактический размер показывается диагностикой для конкретной сцены.
+
+Контрольный `test_room` после split: `17 672` символа / `~4 418` оценочных токенов, hash `fnv1a32:e2ed5439`, `cacheEligible: true`. Живой Anthropic-прогон подтвердил cache reuse (`cacheReadInputTokens: 4482`) при неизменном hash.
 
 ---
 
@@ -251,8 +257,8 @@ PM строит промпт из двух частей, оптимизиров�
 
 **Гейт слушателей:** Если реплика или действие не имеет NPC-слушателей, запись в лог не добавляется и PM не вызывается. Это принципиально важно для предотвращения бесконечных петель. Примеры:
 
-* NPC произнёс реплику — другие NPC могут слышать, но сам произнёсший **не является своим слушателем** и не отреагирует сам на себя.
-* В сцене только игрок, нет NPC — его речь не логируется, PM не вызывается.
+- NPC произнёс реплику — другие NPC могут слышать, но сам произнёсший **не является своим слушателем** и не отреагирует сам на себя.
+- В сцене только игрок, нет NPC — его речь не логируется, PM не вызывается.
 
 При пакетной обработке по речи игрока **rate limit сцены и NPC сбрасываются**: внешние события не должны быть задушены автономной NPC-цепочкой, исчерпавшей бюджет.
 
@@ -260,15 +266,15 @@ PM строит промпт из двух частей, оптимизиров�
 
 Вызывается для одного конкретного NPC по триггеру:
 
-| Триггер | Источник |
-| :--- | :--- |
-| `move_completed` | NPC завершил движение по `MOVE_TO` (дошёл до цели или упёрся в препятствие) |
-| `wait_elapsed` | Истёк таймер, заданный шагом `WAIT` |
-| `action_completed` | Завершено физическое действие (`TAKE`, `OPEN`, `LOOK` и т.д.) |
-| `manual` | Внешнее событие (наблюдаемое действие actor, приближение объекта с заданным тегом) |
-| `plan_continued` | Автоматический триггер защиты от зависания (см. ниже) |
+| Триггер            | Источник                                                                                                                          |
+| :----------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `move_completed`   | NPC завершил движение по `MOVE_TO` (дошёл до цели или упёрся в препятствие)                                                       |
+| `wait_elapsed`     | Истёк таймер, заданный шагом `WAIT`                                                                                               |
+| `action_completed` | Завершено физическое действие (`TAKE`, `OPEN`, `LOOK` и т.д.)                                                                     |
+| `manual`           | Внешнее событие (наблюдаемое действие actor, приближение объекта с заданным тегом)                                                |
+| `plan_continued`   | Автоматический триггер защиты от зависания (см. ниже)                                                                             |
 | `plan_interrupted` | Runtime остановил multi-step plan по `interruptOn` и передаёт PM причину, последний outcome, выполненные шаги и оставшийся хвост. |
-| `plan_completed` | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена. |
+| `plan_completed`   | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена.                       |
 
 ### Динамическое батчирование
 
@@ -282,8 +288,8 @@ PM строит промпт из двух частей, оптимизиров�
 
 Чтобы автономные NPC не провоцировали лавинообразный поток LLM-запросов, реализованы два уровня ограничений (см. `NpcPuppetMaster.ts`):
 
-* **На NPC:** максимум `6` вызовов за `10` секунд (`PM_MAX_NPC_CALLS_PER_WINDOW`, `PM_RATE_WINDOW_MS`).
-* **На сцену:** максимум `12` вызовов за `10` секунд (`PM_MAX_SCENE_CALLS_PER_WINDOW`).
+- **На NPC:** максимум `6` вызовов за `10` секунд (`PM_MAX_NPC_CALLS_PER_WINDOW`, `PM_RATE_WINDOW_MS`).
+- **На сцену:** максимум `12` вызовов за `10` секунд (`PM_MAX_SCENE_CALLS_PER_WINDOW`).
 
 Если бюджет исчерпан, вызов откладывается (deferred) до следующего свободного окна.
 
@@ -291,8 +297,8 @@ PM строит промпт из двух частей, оптимизиров�
 
 Если NPC раз за разом повторяет одно и то же действие без прогресса (`worldChanged = false`), система это отслеживает:
 
-* После `2` повторений (`PM_REPEAT_WARNING_COUNT`) — модель получает явное предупреждение об отсутствии прогресса.
-* После `3` повторений (`PM_REPEAT_SUPPRESS_COUNT`) — действие подавляется с кодом `repeated_without_progress` и включается cooldown на `10` секунд (`PM_LOOP_COOLDOWN_MS`).
+- После `2` повторений (`PM_REPEAT_WARNING_COUNT`) — модель получает явное предупреждение об отсутствии прогресса.
+- После `3` повторений (`PM_REPEAT_SUPPRESS_COUNT`) — действие подавляется с кодом `repeated_without_progress` и включается cooldown на `10` секунд (`PM_LOOP_COOLDOWN_MS`).
 
 ### Watchdog паттернов действий (Sliding Window)
 
@@ -302,9 +308,9 @@ PM строит промпт из двух частей, оптимизиров�
 
 Если окно длиной `6` действий (`PM_PATTERN_LOOP_WINDOW`) содержит не больше `3` уникальных сигнатур (`PM_PATTERN_LOOP_UNIQUE_LIMIT`), PM считает это петлёй:
 
-* Сначала возвращает модели предупреждение `pattern_without_progress` с перечислением повторяющихся сигнатур. Это даёт LLM шанс сменить стратегию, остановиться, подождать или попросить помощи.
-* Если после предупреждения NPC продолжает тот же паттерн, PM возвращает `pattern_loop_sleep` и ставит короткий cooldown, чтобы не сжигать LLM-вызовы.
-* Если после предупреждения NPC выбирает материально другую цель, warning-состояние сбрасывается и модель получает шанс продолжить нормальную деятельность.
+- Сначала возвращает модели предупреждение `pattern_without_progress` с перечислением повторяющихся сигнатур. Это даёт LLM шанс сменить стратегию, остановиться, подождать или попросить помощи.
+- Если после предупреждения NPC продолжает тот же паттерн, PM возвращает `pattern_loop_sleep` и ставит короткий cooldown, чтобы не сжигать LLM-вызовы.
+- Если после предупреждения NPC выбирает материально другую цель, warning-состояние сбрасывается и модель получает шанс продолжить нормальную деятельность.
 
 Этот watchdog не делает NPC «мертвым» навсегда. Он только гасит автономную бесполезную цепочку. Новый внешний стимул сцены, речь игрока или изменение мира может снова разбудить PM.
 
@@ -339,10 +345,11 @@ NPC может взять предмет (`TAKE`) только если у не�
 Механизм работает через **токен поколения** (`haltGenerationId: number`). При вызове halt-команды счётчик инкрементируется. Все активные асинхронные операции (ожидание ответа LLM, таймауты `WAIT`, движение по `MOVE_TO`) проверяют свой токен при завершении, и если он устарел — молча прекращают работу без изменения состояния игрового мира.
 
 Что именно останавливается:
-* Все запущенные таймеры `WAIT`;
-* Все pending batch-вызовы (их промисы резолвятся, не производя действий);
-* Всё физическое движение активных NPC Actor;
-* Внутренние счётчики rate limit и loop states.
+
+- Все запущенные таймеры `WAIT`;
+- Все pending batch-вызовы (их промисы резолвятся, не производя действий);
+- Всё физическое движение активных NPC Actor;
+- Внутренние счётчики rate limit и loop states.
 
 ---
 
@@ -360,49 +367,49 @@ Subscene для NPC не активируется визуально — это 
 
 Для диагностики работы PM в консоли движка доступны два режима. Важно понимать их разницу, чтобы не утопать в лишнем шуме.
 
-| Команда | Что выводит |
-| :--- | :--- |
-| `#PEEKPM-ON` / `#PEEKPM-OFF` | Компактный трейс работы PM: wake trigger, принятые/отфильтрованные планы, метрики, `visibleItemIds` и `knownEntities` с `lastSeenSceneId`. |
-| `#PEEKLLM-ON` / `#PEEKLLM-OFF` | Полный сырой LLM-запрос/ответ: системный промпт, динамический контекст, rawResponse, извлечённый JSON, acceptedPlans, filteredPlans, и токены (input/cache/generated). |
+| Команда                        | Что выводит                                                                                                                                                                                                      |
+| :----------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#PEEKPM-ON` / `#PEEKPM-OFF`   | Компактный трейс работы PM: wake trigger, принятые/отфильтрованные планы, `visibleItemIds`, `knownEntities`, static-prefix hash/размер/cache eligibility и provider cache counters.                              |
+| `#PEEKLLM-ON` / `#PEEKLLM-OFF` | Полный сырой LLM-запрос/ответ: системный prompt, static entity projection, dynamic context, rawResponse, планы, static-prefix hash/размер/cache eligibility и `cacheCreationInputTokens`/`cacheReadInputTokens`. |
 
 `#PEEKPM-ON` — обычный инструмент для диагностики поведения NPC в игровом сеансе. `#PEEKLLM-ON` нужен для отладки самого промпта и ответов модели, он генерирует значительно больше вывода.
 
 Для `THINK_STRATEGY` compact `#PEEKPM` дополнительно показывает:
 
-* `strategy_auto_triggered`, если PM заменил тупиковый повтор на стратегический анализ;
-* `strategy_request_start` перед strategy LLM-вызовом;
-* `--- PM STRATEGY RESPONSE ---` с флагом обновления memory, новым списком objectives и `waitMs`;
-* `--- PM STRATEGY RESPONSE (ERROR: ...) ---` и `fallback: WAIT 30000`, если strategy response невалиден.
+- `strategy_auto_triggered`, если PM заменил тупиковый повтор на стратегический анализ;
+- `strategy_request_start` перед strategy LLM-вызовом;
+- `--- PM STRATEGY RESPONSE ---` с флагом обновления memory, новым списком objectives и `waitMs`;
+- `--- PM STRATEGY RESPONSE (ERROR: ...) ---` и `fallback: WAIT 30000`, если strategy response невалиден.
 
 При `#PEEKLLM-ON` также выводятся полные `--- PM STRATEGY LLM PROMPT ---` и `--- PM STRATEGY LLM RESPONSE ---`.
 
 Для multi-step runtime chains compact `#PEEKPM` показывает accepted plan целиком, включая `Interrupt On`, а также служебные wake trace события:
 
-* `pending_plan_stored` — PM сохранил хвост плана после `scheduled` шага;
-* `plan_interrupt_check` — runtime проверил outcome завершённого шага против `interruptOn`;
-* `plan_interrupted` — цепочка остановлена и следующий PM-вызов получит `plan_interrupted`;
-* `plan_completed` — цепочка завершилась без interrupt и следующий PM-вызов получит `plan_completed`.
-* `move_no_progress_loop` — повторный `MOVE_TO` к той же цели снова завершился `arrived` с пустым route; runtime удалил хвост и speculative memory и отправил модели `repeated_without_progress`.
+- `pending_plan_stored` — PM сохранил хвост плана после `scheduled` шага;
+- `plan_interrupt_check` — runtime проверил outcome завершённого шага против `interruptOn`;
+- `plan_interrupted` — цепочка остановлена и следующий PM-вызов получит `plan_interrupted`;
+- `plan_completed` — цепочка завершилась без interrupt и следующий PM-вызов получит `plan_completed`.
+- `move_no_progress_loop` — повторный `MOVE_TO` к той же цели снова завершился `arrived` с пустым route; runtime удалил хвост и speculative memory и отправил модели `repeated_without_progress`.
 
 ---
 
 ## Ключевые файлы системы
 
-| Файл | Роль |
-| :--- | :--- |
-| `src/mechanics/NpcPuppetMaster.ts` | Главный оркестратор: батчинг, rate limiting, триггеры, вызов LLM, постобработка планов. |
-| `src/mechanics/ActorPlanExecutor.ts` | Выполнение DSL-шагов плана, маршрутизация к GameSemanticAPI. |
-| `src/mechanics/NpcWorldModelBuilder.ts` | Сборка NpcWorldModel: список entities, актеров, событий для каждого NPC. |
-| `src/mechanics/npcTypes.ts` | TypeScript-типы: `NpcPlanStep`, `NpcPlan`, `NpcActorContext`, `NpcWorldModel`, `NpcPlanExecutionOutcome`. |
-| `src/scene/SceneLog.ts` | Лог событий сцены, индивидуальные NPC-курсоры, TTL-прунинг. |
-| `src/systems/ComponentSystem.ts` | Структура компонента NPC (поля `memory`, `objectives`, `perceptionRadius` и др.). |
-| `src/systems/ActorWorldQuery.ts` | Построение восприятия актёра: `perceptionRadius`, видимость, known objects. |
-| `src/core/Game.ts` | `sayAsPlayer`, `sayAsActor`, `emitActorAction` — точки входа в систему логирования и вызова PM. |
-| `public/text/system/npc-pm-system.md` | Системный промпт PM: инструкции для LLM по поведению NPC и использованию DSL. |
+| Файл                                    | Роль                                                                                                      |
+| :-------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| `src/mechanics/NpcPuppetMaster.ts`      | Главный оркестратор: батчинг, rate limiting, триггеры, вызов LLM, постобработка планов.                   |
+| `src/mechanics/ActorPlanExecutor.ts`    | Выполнение DSL-шагов плана, маршрутизация к GameSemanticAPI.                                              |
+| `src/mechanics/NpcWorldModelBuilder.ts` | Сборка NpcWorldModel: список entities, актеров, событий для каждого NPC.                                  |
+| `src/mechanics/npcTypes.ts`             | TypeScript-типы: `NpcPlanStep`, `NpcPlan`, `NpcActorContext`, `NpcWorldModel`, `NpcPlanExecutionOutcome`. |
+| `src/scene/SceneLog.ts`                 | Лог событий сцены, индивидуальные NPC-курсоры, TTL-прунинг.                                               |
+| `src/systems/ComponentSystem.ts`        | Структура компонента NPC (поля `memory`, `objectives`, `perceptionRadius` и др.).                         |
+| `src/systems/ActorWorldQuery.ts`        | Построение восприятия актёра: `perceptionRadius`, видимость, known objects.                               |
+| `src/core/Game.ts`                      | `sayAsPlayer`, `sayAsActor`, `emitActorAction` — точки входа в систему логирования и вызова PM.           |
+| `public/text/system/npc-pm-system.md`   | Системный промпт PM: инструкции для LLM по поведению NPC и использованию DSL.                             |
 
 ## Тесты
 
 Основное тестовое покрытие системы:
 
-* `tests/npc/puppet-master.test.ts` — unit-тесты PM: батчинг, rate limiting, plan execution, discovery claim filter.
-* `tests/scene/scene-log.test.ts` — тесты SceneLog: курсоры, TTL, фильтрация событий по NPC.
+- `tests/npc/puppet-master.test.ts` — unit-тесты PM: батчинг, rate limiting, plan execution, discovery claim filter.
+- `tests/scene/scene-log.test.ts` — тесты SceneLog: курсоры, TTL, фильтрация событий по NPC.

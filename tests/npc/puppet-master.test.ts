@@ -52,8 +52,26 @@ class MockProvider implements ILlmProvider {
     messages: LlmProviderMessage[]
   ): Promise<LlmProviderResponse> {
     this.lastSystem = system;
-    this.lastMessages = messages;
-    this.calls.push({ system, messages });
+    const formattedMessages = messages.map((msg) => {
+      if (typeof msg.content === 'string') {
+        const lines = msg.content.split('\n');
+        if (
+          lines[0] === 'Per-call dynamic NPC context:' ||
+          lines[0] === 'Strategy-only NPC context:'
+        ) {
+          try {
+            const json = JSON.parse(lines[1]);
+            lines[1] = JSON.stringify(json, null, 2);
+            return { ...msg, content: lines.join('\n') };
+          } catch (e) {
+            // ignore JSON parse errors
+          }
+        }
+      }
+      return msg;
+    });
+    this.lastMessages = formattedMessages;
+    this.calls.push({ system, messages: formattedMessages });
     return {
       ok: true,
       text: this.responses.shift() || '{"kind":"pm_response","plans":[]}',
@@ -99,9 +117,103 @@ function addNpc(fixture: ReturnType<typeof createSceneFixture>, id: string): Act
   return npc;
 }
 
+function getStaticPmText(call: MockProvider['calls'][number]): string {
+  expect(Array.isArray(call.system)).toBe(true);
+  const blocks = call.system as Exclude<LlmProviderContent, string>;
+  return blocks.map((block) => block.text).join('');
+}
+
+function getDynamicPmText(call: MockProvider['calls'][number]): string {
+  return String(call.messages[0]?.content || '');
+}
+
 describe('NpcPuppetMaster', () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('keeps the deterministic static prefix stable across runtime state changes', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    addNpc(fixture, 'guard');
+    const terminal = fixture.addEntity('terminal', {
+      title: 'Terminal',
+      description: 'An authored control terminal.',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    const provider = new MockProvider([
+      '{"kind":"pm_response","plans":[]}',
+      '{"kind":"pm_response","plans":[]}',
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, 'guard');
+    (terminal.components.find((component: any) => component.type === 'State') as any).value = 'on';
+    await pm.processNpc(fixture.scene, 'guard');
+
+    expect(getStaticPmText(provider.calls[1])).toBe(getStaticPmText(provider.calls[0]));
+    expect(getDynamicPmText(provider.calls[0])).toContain('"value": "off"');
+    expect(getDynamicPmText(provider.calls[1])).toContain('"value": "on"');
+  });
+
+  it('changes the static prefix when authored scene structure changes', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    addNpc(fixture, 'guard');
+    fixture.addEntity('terminal', { title: 'Terminal', description: 'Original authored text.' });
+    const provider = new MockProvider([
+      '{"kind":"pm_response","plans":[]}',
+      '{"kind":"pm_response","plans":[]}',
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, 'guard');
+    fixture.textAssets.setObject('terminal', {
+      title: 'Terminal',
+      description: 'Changed authored text.',
+      lore: 'New authored lore.',
+    });
+    await pm.processNpc(fixture.scene, 'guard');
+
+    expect(getStaticPmText(provider.calls[1])).not.toBe(getStaticPmText(provider.calls[0]));
+    expect(getStaticPmText(provider.calls[1])).toContain('Changed authored text.');
+    expect(getStaticPmText(provider.calls[1])).toContain('New authored lore.');
+  });
+
+  it('keeps runtime fields dynamic and sends cache_control on the authored prefix', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    addNpc(fixture, 'guard');
+    fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      description: 'A steel cabinet.',
+      lore: 'Installed before the war.',
+      components: [{ type: 'Switch', state: 1, blockedRelation: 'in' }],
+    });
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, 'guard');
+
+    const blocks = provider.calls[0].system as Exclude<LlmProviderContent, string>;
+    const staticText = getStaticPmText(provider.calls[0]);
+    const dynamicText = getDynamicPmText(provider.calls[0]);
+    expect(blocks.at(-1)?.cacheControl).toEqual({ type: 'ephemeral', ttl: '5m' });
+    expect(staticText).toContain('A steel cabinet.');
+    expect(staticText).toContain('Installed before the war.');
+    expect(staticText).not.toContain('"inspection"');
+    expect(staticText).not.toContain('"visibility"');
+    expect(staticText).not.toContain('"interaction"');
+    expect(staticText).not.toContain('"approach"');
+    expect(staticText).not.toContain('"lastSeenSceneId"');
+    expect(staticText).not.toContain('"state": "closed"');
+    expect(dynamicText).toContain('"interaction"');
+    expect(dynamicText).toContain('"state": "closed"');
+    expect(dynamicText).not.toContain('A steel cabinet.');
+    expect(dynamicText).not.toContain('Installed before the war.');
+    expect(dynamicText).not.toContain('"inspection"');
   });
 
   it('executes valid SAY plans and stores NPC memory', async () => {
@@ -212,7 +324,7 @@ describe('NpcPuppetMaster', () => {
     expect(output).toContain('Cache: 222 read, 111 created');
     expect(output).toContain('visibleItemIds: ["visible_key"]');
     expect(output).toContain('knownEntities:');
-    expect(output).toContain(`"lastSeenSceneId":"${fixture.scene.id}"`);
+    expect(output).not.toContain('"lastSeenSceneId"');
   });
 
   it('prints PM prompt and response debug when the general #PEEKLLM mode is enabled', async () => {
@@ -426,14 +538,14 @@ describe('NpcPuppetMaster', () => {
     const component = ComponentSystem.getNpcComponent(npc)!;
 
     expect(context.visibleItemIds).toContain(remote.name);
-    expect(context.entities.find((entry) => entry.id === remote.name)?.lastSeenSceneId).toBe(
-      fixture.scene.id
-    );
+    expect(
+      context.entities.find((entry) => entry.id === remote.name)?.lastSeenSceneId
+    ).toBeUndefined();
     expect(context.knownEntities).toContainEqual(
       expect.objectContaining({
         id: remote.name,
         kind: 'item',
-        lastSeenSceneId: fixture.scene.id,
+        lastSeenSceneId: undefined,
       })
     );
     expect(component.knownEntities?.[remote.name]?.lastSeenSceneId).toBe(fixture.scene.id);
@@ -1359,7 +1471,8 @@ describe('NpcPuppetMaster', () => {
     sofa.x = 40;
     sofa.y = 20;
 
-    const model = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+    const builder = new NpcWorldModelBuilder(fixture.game);
+    const model = builder.build(fixture.scene);
     const npcContext = model.npcs.find((npc) => npc.id === 'guard');
     const tvContext = npcContext?.entities.find((entity) => entity.id === 'tv');
     const sofaContext = npcContext?.entities.find((entity) => entity.id === 'sofa');
@@ -1387,6 +1500,34 @@ describe('NpcPuppetMaster', () => {
     expect(tvContext?.commands?.find((command) => command.id === 'turn_tv_on')).toEqual(
       expect.objectContaining({ available: true })
     );
+
+    const staticTv = builder
+      .buildStaticEntityProjection(fixture.scene)
+      .find((entity) => entity.id === 'tv');
+    const staticCommand = staticTv?.commands?.find((command) => command.id === 'turn_tv_on');
+    const dynamicTv = (new NpcPuppetMaster(fixture.game, new MockProvider('')) as any)
+      .buildDynamicEntities(npcContext?.entities)
+      .find((entity: any) => entity.id === 'tv');
+    const dynamicCommand = dynamicTv?.commands?.find((command: any) => command.id === 'turn_tv_on');
+    expect(staticCommand).toEqual(
+      expect.objectContaining({
+        label: 'turn on tv',
+        requires: [expect.objectContaining({ entityId: 'tv_rc', scope: 'held_or_reachable' })],
+      })
+    );
+    expect(JSON.stringify(staticCommand)).not.toContain('available');
+    expect(JSON.stringify(staticCommand)).not.toContain('satisfied');
+    expect(JSON.stringify(staticCommand)).not.toContain('via');
+    expect(dynamicCommand).toEqual(
+      expect.objectContaining({
+        available: true,
+        requires: [
+          expect.objectContaining({ entityId: 'tv_rc', satisfied: true, via: 'reachable' }),
+        ],
+      })
+    );
+    expect(dynamicCommand).not.toHaveProperty('label');
+    expect(dynamicCommand.requires[0]).not.toHaveProperty('scope');
   });
 
   it('does not run route planning while summarizing command affordances', () => {
@@ -1802,9 +1943,8 @@ describe('NpcPuppetMaster', () => {
       ?.commands?.find((command) => command.id === 'turn_tv_on');
 
     expect(npcContext?.inventory).toEqual({ available: false });
-    expect(remoteContext).toEqual(
-      expect.objectContaining({ interaction: 'reachable', approach: 'already_reachable' })
-    );
+    expect(remoteContext).toEqual(expect.objectContaining({ interaction: 'reachable' }));
+    expect(remoteContext?.approach).toBeUndefined();
     expect(tvCommand).toEqual(expect.objectContaining({ available: true }));
     expect(tvCommand?.requires).toEqual(
       expect.arrayContaining([
@@ -2145,7 +2285,7 @@ describe('NpcPuppetMaster', () => {
     expect(retryPrompt).toContain('plan_rejected_missing_items');
     expect(retryPrompt).toContain('Bring me something valuable.');
     expect((fixture.game as any).sayAsActor).toHaveBeenCalledWith(npc, 'I will look around.', {
-      triggerPuppetMaster: false,
+      triggerPuppetMaster: true,
     });
   });
 
