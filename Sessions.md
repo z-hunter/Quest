@@ -2592,3 +2592,31 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ### 5. Remaining Work / Next Recommended Steps
 - Verify the in-game display of the new consolidated parser and PM logs.
 - Explore similar cleanup for other console debug logs.
+
+## Session Entry - 2026-06-27 15:33 +02:00
+
+### 1. Session Goals
+- Migrate the LLM engine from cloud API (`AnthropicProvider` / Claude Haiku) to local inference on CPU (`OllamaProvider` / `qwen2.5:3b`).
+- Resolve timeouts and JSON parsing errors when running 3B models locally.
+- Prevent NPC hallucinations (e.g., treating inventory items as NPCs or generating empty loops).
+- Document local LLM setup, architecture, and provider switching instructions in `tech-spec.md`.
+
+### 2. What Was Implemented
+- **OllamaProvider Integration**: Created `src/mechanics/llm/OllamaProvider.ts` implementing `ILlmProvider` over OpenAI-compatible endpoints (`http://localhost:11434/v1/chat/completions`).
+- **Hardware & CPU Tuning**: Configured context window to `num_ctx: 4096` to minimize quadratic Attention KV-cache overhead on CPU bus, enabled `keep_alive: -1` to keep weights loaded in RAM, and increased timeout to 600s.
+- **Grammar-Constrained JSON Mode**: Enforced `response_format: { type: 'json_object' }` and injected strict JSON schema examples into prompts, ensuring 100% syntactic validity without markdown block wrapper issues.
+- **Prompt Engineering**: Explicitly enumerated `activeNpcIds` and added rules forbidding item IDs in place of NPC IDs.
+- **Provider Switcher**: Added a clean `const USE_LOCAL_LLM = false;` toggle in `Parser.ts` and `Game.ts` to easily switch between cloud and local inference without triggering linter warnings.
+- **Documentation**: Updated `tech-spec.md` with detailed local inference architecture and setup guide.
+
+### 3. Important Decisions
+- Kept the engine's "sanitizer" logic (`isConsequentialPlanStep`) intact per user feedback, ensuring NPCs must take physical action rather than looping in internal thoughts.
+- Used a constant boolean toggle (`USE_LOCAL_LLM`) so both providers remain referenced in code, keeping ESLint happy (`--max-warnings=0`).
+
+### 4. Tests Run and Outcomes
+- `npm test`: Passed (465/465 tests, including new `ollama-provider.test.ts`).
+- Git commit `591db6a`: *feat(llm): implement OllamaProvider for local CPU inference and update docs*.
+
+### 5. Remaining Work / Next Recommended Steps
+- Test local gameplay flows with varied user inputs under Ollama.
+- Experiment with prompt variations if smaller models struggle with multi-step reasoning.
