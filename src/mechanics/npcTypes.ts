@@ -15,10 +15,12 @@ export type NpcPlanStep =
   | {
       type: 'LOOK';
       targetId: string;
+      relation?: 'in' | 'on' | 'under' | 'behind' | null;
     }
   | {
       type: 'EXAMINE';
       targetId: string;
+      relation?: 'in' | 'on' | 'under' | 'behind' | null;
     }
   | {
       type: 'OPEN';
@@ -53,6 +55,10 @@ export type NpcPlanStep =
       ms: number;
     }
   | {
+      type: 'THINK_STRATEGY';
+      reason?: string;
+    }
+  | {
       type: 'MEMORY_SET';
       memory: string;
     }
@@ -61,10 +67,28 @@ export type NpcPlanStep =
       objectives: string[];
     };
 
+export type NpcPlanInterruptCondition =
+  | {
+      type: 'ITEM_FOUND';
+      itemId?: string;
+    }
+  | {
+      type: 'WORLD_CHANGED';
+    }
+  | {
+      type: 'STATE_CHANGED';
+      targetId?: string;
+      stateId?: string;
+    }
+  | {
+      type: 'ACTION_FAILED';
+    };
+
 export type NpcPlan = {
   npcId: string;
   steps: NpcPlanStep[];
   memory?: string;
+  interruptOn?: NpcPlanInterruptCondition[];
 };
 
 export type NpcPuppetMasterResponse = {
@@ -82,12 +106,20 @@ export type NpcActorContext = {
     available: boolean;
     itemIds: string[];
   };
-  actors: Array<{ id: string; title: string }>;
+  actors: Array<{ id: string; title: string; lastSeenSceneId: string }>;
+  visibleItemIds: string[];
+  knownEntities: Array<{
+    id: string;
+    title: string;
+    kind: 'item' | 'actor' | 'object';
+    lastSeenSceneId: string;
+  }>;
   newEvents: SceneLogEntry[];
   recentEvents: SceneLogEntry[];
   entities: Array<{
     id: string;
     title: string;
+    lastSeenSceneId: string;
     location?: {
       relation: string;
       targetId: string;
@@ -145,8 +177,35 @@ export type NpcPuppetMasterDebugInfo = {
   rawResponse?: string;
   extractedJson?: string;
   acceptedPlans?: NpcPlan[];
+  rejectedPlans?: Array<{
+    plan: NpcPlan;
+    missingItems: Array<{ stepType: NpcPlanStep['type']; itemId: string }>;
+    retryScheduled: boolean;
+  }>;
   filteredPlans?: unknown[];
   error?: string;
+  durationMs?: number;
+  inputTokens?: number;
+  tokensGenerated?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  strategy?: NpcPuppetMasterStrategyDebugInfo;
+};
+
+export type NpcPuppetMasterStrategyDebugInfo = {
+  npcId: string;
+  reason?: string;
+  prompt?: {
+    system: LlmProviderContent;
+    messages: LlmProviderMessage[];
+  };
+  rawResponse?: string;
+  extractedJson?: string;
+  error?: string;
+  memoryUpdated: boolean;
+  objectivesUpdated?: string[];
+  waitMs: number;
+  fallback: boolean;
   durationMs?: number;
   inputTokens?: number;
   tokensGenerated?: number;
@@ -162,6 +221,7 @@ export type NpcPlanExecutionOutcome = {
   targetId?: string;
   itemId?: string;
   commandId?: string;
+  relation?: 'in' | 'on' | 'under' | 'behind' | null;
   actionType?: NpcPlanStep['type'];
   worldChanged?: boolean;
   discoveredEntityIds?: string[];

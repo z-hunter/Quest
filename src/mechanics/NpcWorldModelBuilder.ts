@@ -1,5 +1,6 @@
 import { Actor } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
+import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { ComponentSystem } from '../systems/ComponentSystem';
@@ -109,6 +110,7 @@ export class NpcWorldModelBuilder {
       .map((actor) => ({
         id: actor.name,
         title: this.getObjectTitle(actor) || actor.name,
+        lastSeenSceneId: scene.id,
       }));
     this.trace('pm_context_actor_perception', {
       npcId: npc.name,
@@ -116,6 +118,16 @@ export class NpcWorldModelBuilder {
     });
 
     const entityBuild = this.buildKnownEntities(npc);
+    this.rememberObservedEntities(scene, npc, actors, entityBuild.observedObjects);
+    const mutableComponent = npc.components?.find(
+      (candidate: any) => candidate?.type === 'NPC'
+    ) as typeof component;
+    const knownEntities = Object.values(mutableComponent?.knownEntities || {}).map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      kind: entry.kind,
+      lastSeenSceneId: entry.lastSeenSceneId,
+    }));
     this.trace('pm_context_entity_summary', {
       ...entityBuild.trace,
       durationMs: this.elapsedMs(startedAt),
@@ -129,6 +141,10 @@ export class NpcWorldModelBuilder {
       memory: component?.memory || undefined,
       inventory: this.game.actorWorld.getInventoryKnowledge(npc),
       actors,
+      visibleItemIds: entityBuild.observedObjects
+        .filter((object) => object instanceof Entity && this.isItem(object))
+        .map((object) => object.name),
+      knownEntities,
       newEvents,
       recentEvents,
       entities: entityBuild.entities,
@@ -137,6 +153,7 @@ export class NpcWorldModelBuilder {
 
   private buildKnownEntities(npc: Actor): {
     entities: NpcActorContext['entities'];
+    observedObjects: SceneObject[];
     trace: NpcContextTrace;
   } {
     const knownObjects = this.game.actorWorld.getKnownObjects(npc);
@@ -185,6 +202,7 @@ export class NpcWorldModelBuilder {
         return compactRecord({
           id: object.name,
           title,
+          lastSeenSceneId: this.game.sceneManager.currentScene?.id || '',
           location: perception.location,
           interaction: perception.interaction,
           approach: perception.approach,
@@ -198,7 +216,53 @@ export class NpcWorldModelBuilder {
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);
-    return { entities, trace };
+    return { entities, observedObjects: knownObjects, trace };
+  }
+
+  private rememberObservedEntities(
+    scene: Scene,
+    npc: Actor,
+    actors: Array<{ id: string; title: string }>,
+    objects: SceneObject[]
+  ): void {
+    const component = npc.components?.find(
+      (candidate: any) => candidate?.type === 'NPC'
+    ) as ReturnType<typeof ComponentSystem.getNpcComponent>;
+    if (!component) return;
+    const known = Object.fromEntries(
+      Object.entries(component.knownEntities || {}).filter(
+        ([, entry]) => entry.kind === 'item' || entry.kind === 'actor'
+      )
+    );
+    const lastSeenAt = Date.now();
+    for (const actor of actors) {
+      known[actor.id] = {
+        id: actor.id,
+        title: actor.title,
+        kind: 'actor',
+        lastSeenSceneId: scene.id,
+        lastSeenAt,
+      };
+    }
+    for (const object of objects) {
+      if (!(object instanceof Actor) && !(object instanceof Entity && this.isItem(object))) {
+        continue;
+      }
+      const title = this.getObjectTitle(object);
+      if (!title) continue;
+      known[object.name] = {
+        id: object.name,
+        title,
+        kind: object instanceof Actor ? 'actor' : 'item',
+        lastSeenSceneId: scene.id,
+        lastSeenAt,
+      };
+    }
+    component.knownEntities = known;
+  }
+
+  private isItem(object: SceneObject): boolean {
+    return !!object.components?.some((component: any) => component?.type === 'Item');
   }
 
   private getOrInitializeNpcObjectives(

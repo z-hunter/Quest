@@ -2657,7 +2657,7 @@ describe('Game semantic API', () => {
     const remote = fixture.addEntity('remote', {
       title: 'Remote',
       disabled: true,
-      groupID: '#drawer_open',
+      groupID: '#drawer_open,#quest_item',
       components: [{ type: 'Item', ignoreDistance: true }],
       spatial: { parentNodeId: drawer.name, relation: 'in' },
     });
@@ -2677,6 +2677,9 @@ describe('Game semantic API', () => {
     const taken = fixture.game.takeEntityForActor(npc, remote);
     expect(taken.code).toBe('item_taken');
     expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
+    expect(remote.disabled).toBe(false);
+    expect(remote.groupID).toBe('#quest_item');
+    expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
     expect(fixture.scene.activeSubscene).toBeNull();
   });
 });

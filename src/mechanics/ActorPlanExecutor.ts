@@ -8,12 +8,14 @@ import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
 export type NpcMoveCompletionScheduler = (npcId: string, result: ActorMoveResult) => void;
 export type NpcActionCompletionScheduler = (npcId: string, result: NpcPlanExecutionOutcome) => void;
+export type NpcStrategyScheduler = (npcId: string, reason?: string) => void;
 
 export class ActorPlanExecutor {
   private readonly game: IGame;
   private readonly waitScheduler?: NpcWaitScheduler;
   private readonly moveCompletionScheduler?: NpcMoveCompletionScheduler;
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
+  private readonly strategyScheduler?: NpcStrategyScheduler;
   private moveWatchTokens = new Map<string, number>();
   private pendingTimeouts = new Set<any>();
 
@@ -34,12 +36,14 @@ export class ActorPlanExecutor {
     game: IGame,
     waitScheduler?: NpcWaitScheduler,
     moveCompletionScheduler?: NpcMoveCompletionScheduler,
-    actionCompletionScheduler?: NpcActionCompletionScheduler
+    actionCompletionScheduler?: NpcActionCompletionScheduler,
+    strategyScheduler?: NpcStrategyScheduler
   ) {
     this.game = game;
     this.waitScheduler = waitScheduler;
     this.moveCompletionScheduler = moveCompletionScheduler;
     this.actionCompletionScheduler = actionCompletionScheduler;
+    this.strategyScheduler = strategyScheduler;
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
@@ -115,16 +119,30 @@ export class ActorPlanExecutor {
       };
     }
 
+    if (step.type === 'THINK_STRATEGY') {
+      if (!this.strategyScheduler) {
+        return { status: 'failed', code: 'strategy_unavailable', npcId: actor.name };
+      }
+      this.strategyScheduler(actor.name, step.reason);
+      return {
+        status: 'scheduled',
+        code: 'npc_strategy_think_scheduled',
+        npcId: actor.name,
+        message: step.reason,
+        actionType: 'THINK_STRATEGY',
+      };
+    }
+
     if (step.type === 'MOVE_TO') {
       return this.moveActor(actor, step);
     }
 
     if (step.type === 'LOOK') {
-      return this.executeTargetAction(actor, step.targetId, 'LOOK');
+      return this.executeTargetAction(actor, step.targetId, 'LOOK', step.relation);
     }
 
     if (step.type === 'EXAMINE') {
-      return this.executeTargetAction(actor, step.targetId, 'EXAMINE');
+      return this.executeTargetAction(actor, step.targetId, 'EXAMINE', step.relation);
     }
 
     if (step.type === 'OPEN') {
@@ -272,7 +290,8 @@ export class ActorPlanExecutor {
   private executeTargetAction(
     actor: Actor,
     targetId: string,
-    action: 'LOOK' | 'EXAMINE' | 'OPEN' | 'CLOSE'
+    action: 'LOOK' | 'EXAMINE' | 'OPEN' | 'CLOSE',
+    relation?: 'in' | 'on' | 'under' | 'behind' | null
   ): NpcPlanExecutionOutcome {
     const normalizedTargetId = String(targetId || '').trim();
     const target = this.game.sceneManager.currentScene?.getObjectByName(normalizedTargetId);
@@ -292,20 +311,53 @@ export class ActorPlanExecutor {
           : action === 'OPEN'
             ? this.game.openEntityForActor(actor, target)
             : this.game.closeEntityForActor(actor, target);
+    const relationOutcomes =
+      (action === 'LOOK' || action === 'EXAMINE') && outcome.status === 'ok'
+        ? (relation
+            ? [relation]
+            : action === 'EXAMINE'
+              ? (['in', 'on', 'under', 'behind'] as const)
+              : []
+          )
+            .map((candidate) => this.game.describeSpatialRelation(target.name, candidate))
+            .filter(
+              (candidate) =>
+                candidate.status === 'ok' &&
+                (candidate.code === 'relation_contents' ||
+                  (relation && candidate.code === 'relation_empty'))
+            )
+        : [];
+    const discoveredFromContents = relationOutcomes.flatMap((candidate) =>
+      Array.isArray(candidate.data?.discoveredEntityIds)
+        ? candidate.data.discoveredEntityIds.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : []
+    );
+    const messages = [
+      outcome.message,
+      ...relationOutcomes.map((candidate) => candidate.message),
+    ].filter((value): value is string => typeof value === 'string' && !!value.trim());
     return this.completeAction(actor.name, {
       status: outcome.status === 'ok' ? 'ok' : 'failed',
       code: outcome.code,
       npcId: actor.name,
       targetId: target.name,
-      message: outcome.message,
+      message: messages.join('\n'),
       actionType: action,
+      relation: relation || undefined,
       worldChanged: outcome.data?.worldChanged === true || (outcome.effects?.length || 0) > 0,
-      discoveredEntityIds: Array.isArray(outcome.data?.discoveredEntityIds)
-        ? outcome.data.discoveredEntityIds.filter(
-            (value): value is string => typeof value === 'string'
-          )
-        : undefined,
-      repeatKey: `${action}:${target.name}`,
+      discoveredEntityIds: Array.from(
+        new Set([
+          ...(Array.isArray(outcome.data?.discoveredEntityIds)
+            ? outcome.data.discoveredEntityIds.filter(
+                (value): value is string => typeof value === 'string'
+              )
+            : []),
+          ...discoveredFromContents,
+        ])
+      ),
+      repeatKey: relation ? `${action}:${target.name}:${relation}` : `${action}:${target.name}`,
     });
   }
 

@@ -71,6 +71,15 @@ export interface NpcComponent {
   objectives?: string[];
   objectivesInitializedFromTA?: boolean;
   perceptionRadius?: number;
+  knownEntities?: Record<string, NpcKnownEntityMemory>;
+}
+
+export interface NpcKnownEntityMemory {
+  id: string;
+  title: string;
+  kind: 'item' | 'actor' | 'object';
+  lastSeenSceneId: string;
+  lastSeenAt: number;
 }
 
 export interface InventoryComponent {
@@ -265,6 +274,10 @@ export class ComponentSystem {
         component.perceptionRadius >= 0
           ? component.perceptionRadius
           : 600,
+      knownEntities:
+        component.knownEntities && typeof component.knownEntities === 'object'
+          ? component.knownEntities
+          : undefined,
     };
   }
 

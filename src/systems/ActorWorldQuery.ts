@@ -106,6 +106,9 @@ export class ActorWorldQuery {
     }
 
     const accessState = getSceneTextLayerAccessState(scene, this.game, object);
+    if (object.disabled && !accessState.inInactiveSubscene) {
+      return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
+    }
     const visibility = accessState.hidden ? 'hidden' : 'visible';
     const location = this.getLocation(accessState);
     if (held) {

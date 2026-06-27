@@ -15,6 +15,7 @@ import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from './ScriptRegistry';
+import { OllamaProvider } from '../mechanics/llm/OllamaProvider';
 import { AnthropicProvider } from '../mechanics/llm/AnthropicProvider';
 import { NpcPuppetMaster } from '../mechanics/NpcPuppetMaster';
 import { NpcWorldModelBuilder } from '../mechanics/NpcWorldModelBuilder';
@@ -31,6 +32,9 @@ import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
 import { ActorNavigationService } from '../systems/ActorNavigationService';
 import { ActorWorldQuery } from '../systems/ActorWorldQuery';
 import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
+
+// Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
+const USE_LOCAL_LLM = false;
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -224,7 +228,10 @@ export class Game implements IGame {
 
     this.parser = new Parser(this);
     this.npcWorldModelBuilder = new NpcWorldModelBuilder(this);
-    this.npcPuppetMaster = new NpcPuppetMaster(this, new AnthropicProvider());
+    this.npcPuppetMaster = new NpcPuppetMaster(
+      this,
+      USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider()
+    );
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();

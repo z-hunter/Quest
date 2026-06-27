@@ -1160,6 +1160,13 @@ export class GameSemanticAPI {
       data: {
         relation,
         anchorNodeId,
+        discoveredEntityIds: effectiveRelation
+          ? getSceneTextRelationDirectDescendants(
+              buildSceneTextLayerSnapshot(scene, this.game),
+              anchorNodeId,
+              effectiveRelation
+            ).map((entry) => entry.object.name)
+          : [],
       },
     };
   }
@@ -1451,6 +1458,8 @@ export class GameSemanticAPI {
       if (moveOutcome.status !== 'ok') {
         return moveOutcome;
       }
+      entity.disabled = false;
+      scene.subsceneEntities.delete(entity);
       if (pickupAnimationState) {
         const heldState = {
           spatial: entity.spatial ? { ...entity.spatial } : entity.spatial,

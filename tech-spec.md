@@ -95,10 +95,36 @@ The engine features a robust spatial audio pipeline built on the Web Audio API, 
 
 ### 4.1 Text Parser & LLM Cascade
 
-The game features a hybrid parser system:
+The game features a hybrid parser system with flexible LLM backend support:
 
 - **Stage 1 (Deterministic)**: A fast, rule-based text parser (`Parser.ts`) handles exact matches, standard verbs, and direct interactions based on the active semantic world model.
-- **Stage 2 (LLM Game Master)**: A fallback AI cascade (using Claude Haiku via API) processes complex, creative, or out-of-bounds player inputs, providing atmospheric flavor while strictly separating language interpretation from game state execution.
+- **Stage 2 (LLM Game Master & NPC Puppet Master)**: A fallback AI cascade processes complex player inputs and drives autonomous NPC planning (`NpcPuppetMaster.ts`).
+
+#### LLM Provider Architecture & Local Inference
+
+The engine abstracts LLM connectivity via the `ILlmProvider` interface, allowing seamless switching between cloud and local inference:
+
+1. **`AnthropicProvider` (Cloud)**: Connects to Claude Haiku via API proxy (`/api/llm`). Ideal for cloud deployments or developer environments with API access.
+2. **`OllamaProvider` (Local CPU)**: Targets local OpenAI-compatible endpoints (`http://localhost:11434/v1/chat/completions`). Engineered specifically for offline playability on standard CPU hardware (e.g., 16 GB RAM).
+   - **Grammar-Constrained JSON Mode**: Enforces strict JSON schema compliance (`response_format: { type: 'json_object' }`), preventing parsing failures on compact 3B models.
+   - **CPU Prefill Tuning**: Configured with `num_ctx: 4096` (keeping Attention KV-cache overhead quadratic calculations minimal on CPU memory bus), `keep_alive: -1` (keeping model weights permanently loaded in RAM), and a 600s timeout to safely accommodate initial cold prefill.
+   - **Prompt KV-Caching**: Once the initial static scene context is prefilled, subsequent player turns execute almost instantaneously (~1.5s) via Ollama prompt cache hits.
+
+#### Local Setup & Provider Switching Guide
+
+To run Scanline Engine locally without internet connection or API keys:
+
+1. **Install Ollama**: Download from `https://ollama.com`.
+2. **Pull the Recommended Model**: Open your terminal and pull the compact 3B model optimized for CPU inference:
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+3. **Switch Provider in Code**:
+   Both `src/mechanics/Parser.ts` and `src/core/Game.ts` feature a top-level toggle switch near the imports. Simply set `USE_LOCAL_LLM` to `true`:
+   ```typescript
+   // Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
+   const USE_LOCAL_LLM = true;
+   ```
 
 ### 4.2 Spatial Model & Semantic API
 

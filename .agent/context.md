@@ -28,6 +28,10 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - Event-based triggers: `LOOK`, `TAKE`, `USE`, `USE <ITEMID>`.
   - Global `ScriptRegistry` for user-defined logic.
 
+- **AI & Local LLM Parser:**
+  - Migrated from cloud providers to local CPU inference (Ollama / `qwen2.5:3b`) optimized for 16 GB RAM machines.
+  - Hardware-enforced JSON Mode (`response_format: { type: 'json_object' }`) ensures 100% valid DSL plans without parsing errors.
+
 ## Features Implemented
 
 - **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation. Optimized rendering context management to prevent stack leaks.

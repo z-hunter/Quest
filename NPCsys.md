@@ -84,7 +84,7 @@ PM генерирует **структурированный DSL-план** дл
 
 ## DSL-план NPC
 
-PM возвращает **структурированный JSON** в формате `{ "kind": "pm_response", "plans": [...] }`. Каждый plan — это набор шагов для одного NPC.
+PM возвращает **структурированный JSON** в формате `{ "kind": "pm_response", "plans": [...] }`. Каждый plan — это набор шагов для одного NPC. План может быть коротким, но для связных процедур PM должен предпочитать проработанный multi-step plan, если это экономит LLM-вызовы и runtime может остановить цепочку через `interruptOn`.
 
 ### Полный список шагов плана
 
@@ -94,8 +94,8 @@ PM возвращает **структурированный JSON** в форм�
 | :--- | :--- | :--- |
 | `SAY` | `text: string` | NPC произносит реплику. Добавляет запись в лог сцены. |
 | `MOVE_TO` | `targetId?: string` или `x, y: number` | Начинает движение к объекту или координатам. Асинхронный: PM получит `move_completed` по завершении. |
-| `LOOK` | `targetId: string` | Осматривает объект. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
-| `EXAMINE` | `targetId: string` | Детально исследует объект. Работает аналогично `LOOK`. |
+| `LOOK` | `targetId: string`, `relation?: 'in'|'on'|'under'|'behind'` | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
+| `EXAMINE` | `targetId: string`, `relation?: 'in'|'on'|'under'|'behind'` | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`. |
 | `OPEN` | `targetId: string` | Открывает объект с компонентом Switch. Соблюдает правила ключей. |
 | `CLOSE` | `targetId: string` | Закрывает объект с компонентом Switch. |
 | `TAKE` | `targetId: string` | Берёт предмет в инвентарь. **Требует наличия компонента Inventory у NPC.** |
@@ -103,18 +103,36 @@ PM возвращает **структурированный JSON** в форм�
 | `COMMAND` | `commandId: string`, `arguments?: Record<string, string>` | Исполняет авторскую команду объекта. **Предпочтительнее `USE`**, так как исполняет authored runtime-контракт без лишней маршрутизации. |
 | `USE` | `itemId: string`, `targetId: string` | Использует предмет на объекте. Запасной вариант, если нет подходящей authored-команды. |
 | `WAIT` | `ms: number` | Ставит таймер. PM получит триггер `wait_elapsed` по истечении. Асинхронный. |
+| `THINK_STRATEGY` | `reason?: string` | Запускает внутренний стратегический LLM-анализ без реплик и физических действий. Используется, когда текущая стратегия зашла в тупик. |
 | `MEMORY_SET` | `memory: string` | Немедленно обновляет поле `memory` компонента NPC. Используется для сохранения фактов между сессиями. |
 | `OBJECTIVES_SET` | `objectives: string[]` | Немедленно заменяет список текущих целей NPC. |
 
 ### Выполнение плана
 
-Шаги выполняются **последовательно**. Если шаг завершается с ошибкой (статус `failed`), выполнение всего плана прерывается. Это гарантирует, что NPC не выполнит последующие действия, если предыдущее провалилось.
+Шаги выполняются **последовательно**. Если шаг возвращает `scheduled`, PM сохраняет хвост плана (`pendingPlanContinuations`) и продолжает его после `move_completed` или `action_completed`, не вызывая LLM заново. Это позволяет планам вида `MOVE_TO -> EXAMINE -> EXAMINE -> TAKE` выполняться как одна runtime-цепочка.
 
-Шаги `WAIT` и `MOVE_TO` являются **асинхронными**: они возвращают статус `scheduled`, и `ActorPlanExecutor` ставит коллбэк на соответствующее событие. Следующие шаги в плане будут выполнены только после того, как PM получит уведомление о завершении операции.
+Продолжение уже принятого runtime-плана выполняется до проверки PM rate limits и не расходует бюджет LLM-вызовов. Лимиты по-прежнему применяются к последующему `plan_completed` / `plan_interrupted`, поскольку эти триггеры требуют нового provider request.
+
+Шаги `WAIT`, `MOVE_TO` и `THINK_STRATEGY` являются **асинхронными**: они возвращают статус `scheduled`, и `ActorPlanExecutor` ставит коллбэк на соответствующее событие. Следующие шаги в плане будут выполнены только после того, как PM получит уведомление о завершении операции.
 
 Если план содержит только немедленные шаги (`MEMORY_SET`, `OBJECTIVES_SET`) после `MOVE_TO`, но не содержит других физических действий, PM автоматически посылает триггер `plan_continued` (см. «Защита от зависания»).
 
-Дополнительно у плана есть необязательное поле `memory: string`. Если оно задано и все шаги плана выполнены синхронно, поле `memory` компонента NPC обновляется в конце.
+Поле плана `memory: string` снова имеет post-plan семантику: runtime удерживает его до полного успешного завершения физических шагов и применяет только при `plan_completed`. При interrupt/failure оно отбрасывается. Явный `MEMORY_SET` по-прежнему может стоять перед физическими шагами и сохранять подтверждённый анализ предыдущих outcomes. Перед остальными действиями модель обязана сверять memory с `actionHistory`; при конфликте authoritative runtime history имеет приоритет, и memory сначала корректируется.
+
+### Runtime-прерывания (`interruptOn`)
+
+У плана может быть поле `interruptOn`, задающее условия, при которых runtime остановит оставшиеся шаги и вызовет PM с `plan_interrupted`:
+
+| Условие | Аргументы | Когда срабатывает |
+| :--- | :--- | :--- |
+| `ITEM_FOUND` | `itemId?: string` | `discoveredEntityIds`, inventory или refreshed context подтверждают найденный предмет. |
+| `WORLD_CHANGED` | — | Последний action outcome имеет `worldChanged: true`. |
+| `STATE_CHANGED` | `targetId?: string`, `stateId?: string` | В v1 работает как `WORLD_CHANGED` с optional matching по `targetId`. |
+| `ACTION_FAILED` | — | Action или move завершились ошибкой/unsupported/unreachable. |
+
+Если multi-step физический план не задаёт `interruptOn`, PM использует консервативные defaults: `ACTION_FAILED`, `ITEM_FOUND`, `WORLD_CHANGED`. Для процедур поиска внутри контейнеров модель обычно должна явно указать `ITEM_FOUND` и `ACTION_FAILED`, но опустить `WORLD_CHANGED`, чтобы `OPEN Drawer1` не остановил план до `EXAMINE Drawer1`.
+
+Когда все шаги плана завершились без interrupt, PM вызывает модель с `plan_completed` и списком результатов. Когда interrupt сработал, PM вызывает модель с `plan_interrupted`, причиной, последним outcome, выполненными шагами и оставшимся хвостом.
 
 ---
 
@@ -135,6 +153,26 @@ PM возвращает **структурированный JSON** в форм�
 Без этой области NPC помнили бы лишь то, что есть в логе сцены (до 10 минут), и забывали бы всё при переходе в другую локацию. NPC Memory сохраняется вместе с игрой.
 
 Обновляется через шаг `MEMORY_SET` или через поле `memory` в корне DSL-плана.
+
+---
+
+## Обдумать стратегию (`THINK_STRATEGY`)
+
+`THINK_STRATEGY` — внутреннее когнитивное действие PM. Оно нужно для ситуаций, где watchdog уже видит повтор без прогресса: `repeatCount >= 2`, либо terminal no-progress (`repeated_without_progress`, `pattern_without_progress`, `pattern_loop_sleep`).
+
+Это не обычный инструмент планирования и не реакция на любое затруднение. Если у NPC просто нет предмета в руках, команда пока недоступна, или нужно подойти/осмотреть другой объект, PM должен выбрать конкретное поддерживаемое действие (`MOVE_TO`, `LOOK`, `EXAMINE`, `OPEN`, `COMMAND`, `WAIT` и т.д.), а не `THINK_STRATEGY`.
+
+Этот шаг не говорит от лица NPC и не меняет игровой мир напрямую. Вместо этого PM делает отдельный strategy LLM-вызов с текущим контекстом NPC: `objectives`, `memory`, `actionHistory`, событиями, видимыми entities, inventory и командами. Ответ стратегии может только:
+
+* уплотнить или исправить `memory`;
+* заменить `objectives`;
+* выбрать короткий отдых через `waitMs`.
+
+Стратегический ответ имеет отдельный JSON-контракт `npc_strategy_response`. Любые реплики или физические действия в этом режиме недопустимы. Если ответ стратегии невалиден, PM не меняет память/цели и ставит fallback `WAIT 30000`.
+
+Если модель пытается вызвать `THINK_STRATEGY` преждевременно, без `repeatCount >= 2` или terminal no-progress триггера, PM вырезает этот шаг. Если после этого в плане не остаётся физического/асинхронного действия, план отбрасывается.
+
+После успешного `THINK_STRATEGY` обычный PM не вызывается сразу через `plan_continued`. NPC получает `WAIT` и проснётся позже по `wait_elapsed` или раньше от нового внешнего события сцены.
 
 ---
 
@@ -179,11 +217,15 @@ NPC:    JSON DSL → ActorPlanExecutor ─────────────�
 
 `NpcWorldModelBuilder` (`src/mechanics/NpcWorldModelBuilder.ts`) строит контекст для каждого NPC. Он включает:
 
-* **Известные объекты** (`entities`): только те entities, у которых есть authored title. Для каждого объекта указывается: `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE`, а также список доступных authored commands.
+* **Текущие видимые объекты** (`entities`): только semantic-visible entities с authored title. Для каждого объекта указывается `id`, `lastSeenSceneId`, `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE` и authored commands.
+* **Структурированное знание** (`knownEntities` в NPC component и PM context): записи `{ id, title, kind, lastSeenSceneId, lastSeenAt }` только для замеченных Items и Actors. Обычные объекты сцены остаются в текущем `entities`, но не накапливаются в долговременном списке. Знание обновляется автоматически и не смешивается со свободным текстом `memory`.
+* **Непосредственно видимые предметы** (`visibleItemIds`): компактный список semantic-visible объектов с компонентом `Item` в текущей сцене. Обычный `disabled`-объект в него не попадает; исключение сохраняется только для authored объектов внутри неактивной `Subscene`, где disabled является визуальным состоянием крупного плана.
 * **Видимые Actor** (`actors`): другие персонажи, которых NPC воспринимает в данный момент.
 * **Runtime-история действий** (`actionHistory`): компактные факты о недавних действиях PM для этого NPC, например «EXAMINE Sofa: inspected, nothing new found».
 * Сырые координаты объектов в контекст **не передаются** — только семантические отношения.
 * **Hidden entity** нельзя адресовать в плане до успешного reveal через `LOOK`/`EXAMINE`.
+
+`LOOK` / `EXAMINE` с указанным `relation` дополняет outcome явным `relation_contents` или `relation_empty`; успешный `EXAMINE` без relation перечисляет непустые relations открытого контейнера или `Surface`. Id видимого содержимого помещаются в `discoveredEntityIds`. PM получает находку либо подтверждённую пустую проверку в том же `action_completed`. Закрытые opaque-контейнеры и hidden descendants по-прежнему фильтруются общим `SceneTextLayer`.
 * **Locked Switch** открывается только если у действующего Actor в инвентаре есть нужный ключ.
 
 ### Разделение контекста на статический и динамический (Prompt Caching)
@@ -219,6 +261,8 @@ PM строит промпт из двух частей, оптимизиров�
 | `action_completed` | Завершено физическое действие (`TAKE`, `OPEN`, `LOOK` и т.д.) |
 | `manual` | Внешнее событие (наблюдаемое действие actor, приближение объекта с заданным тегом) |
 | `plan_continued` | Автоматический триггер защиты от зависания (см. ниже) |
+| `plan_interrupted` | Runtime остановил multi-step plan по `interruptOn` и передаёт PM причину, последний outcome, выполненные шаги и оставшийся хвост. |
+| `plan_completed` | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена. |
 
 ### Динамическое батчирование
 
@@ -258,6 +302,8 @@ PM строит промпт из двух частей, оптимизиров�
 
 Этот watchdog не делает NPC «мертвым» навсегда. Он только гасит автономную бесполезную цепочку. Новый внешний стимул сцены, речь игрока или изменение мира может снова разбудить PM.
 
+Если после terminal no-progress события (`repeated_without_progress`, `pattern_without_progress`, `pattern_loop_sleep`) модель всё равно предлагает повторить ту же физическую сигнатуру, PM вырезает этот шаг. Если после этого остаётся только реплика или speculative memory, план автоматически заменяется на `THINK_STRATEGY` с причиной `terminal no-progress loop`.
+
 ### Защита от зависания модели (Continuation Guard)
 
 Если plan NPC, пришедший в ответ на триггер `move_completed`, содержит только обновление памяти или целей (`MEMORY_SET` / `OBJECTIVES_SET`) без единого физического или асинхронного действия — NPC мог бы «застрять», ожидая триггера, который никогда не придёт.
@@ -275,6 +321,8 @@ PM строит промпт из двух частей, оптимизиров�
 ### Требования к инвентарю NPC
 
 NPC может взять предмет (`TAKE`) только если у него есть компонент **Inventory**. Это требование проверяется в `GameSemanticAPI` — той же системе, что обрабатывает взятие предметов игроком. Если инвентаря нет, действие завершается с ошибкой `inventory_missing`.
+
+Перед исполнением PM валидирует item references всего плана. `TAKE` разрешён для reachable предмета, а для `approach: route_available` — если раньше в том же плане есть `MOVE_TO` к этому предмету; успешно запланированный `TAKE` делает предмет доступным последующим `PUT`/`USE`/`COMMAND` той же цепочки. `COMMAND` также проверяет item-зависимости из authored `requires`. Unknown, protected и unreachable предметы остаются недоступными. Если предмет отсутствует, весь план отклоняется до исполнения даже первого `SAY`, а модель один раз вызывается повторно с trigger `plan_rejected_missing_items` и точными `{ stepType, itemId }`. До corrective retry SceneLog cursor данного NPC не продвигается, поэтому исходная речь/событие снова присутствует в prompt. После успешной коррекции либо исчерпания единственного retry событие помечается обработанным. Заявление игрока о владении предметом не делает protected inventory доступным: без authored `GIVE`/`TRADE` NPC должна договориться через `SAY` или попросить передать/положить предмет.
 
 Это согласованное поведение: движок не делает специальных исключений для NPC и не «читерит» обходя инвентарные правила.
 
@@ -298,6 +346,8 @@ Subscene для NPC не активируется визуально — это 
 
 При этом `scene.activeSubscene`, камера и disabled visual assets **не меняются**; реальные state/inventory изменения сохраняются.
 
+После успешного `TAKE` любым Actor предмет нормализуется как inventory object: `disabled` сбрасывается, временное членство в `scene.subsceneEntities` удаляется, `subsceneItemScale` возвращается к 1, а унаследованные группы Surface/Switch/Subscene снимаются. Это не позволяет закрытию Subscene повторно выключить уже взятый NPC предмет.
+
 ---
 
 ## Отладка системы NPC
@@ -306,10 +356,26 @@ Subscene для NPC не активируется визуально — это 
 
 | Команда | Что выводит |
 | :--- | :--- |
-| `#PEEKPM-ON` / `#PEEKPM-OFF` | Компактный трейс работы PM: какой NPC проснулся, по какому триггеру (`wake trace`), какие планы приняты/отфильтрованы, метрики вызовов. |
+| `#PEEKPM-ON` / `#PEEKPM-OFF` | Компактный трейс работы PM: wake trigger, принятые/отфильтрованные планы, метрики, `visibleItemIds` и `knownEntities` с `lastSeenSceneId`. |
 | `#PEEKLLM-ON` / `#PEEKLLM-OFF` | Полный сырой LLM-запрос/ответ: системный промпт, динамический контекст, rawResponse, извлечённый JSON, acceptedPlans, filteredPlans, и токены (input/cache/generated). |
 
 `#PEEKPM-ON` — обычный инструмент для диагностики поведения NPC в игровом сеансе. `#PEEKLLM-ON` нужен для отладки самого промпта и ответов модели, он генерирует значительно больше вывода.
+
+Для `THINK_STRATEGY` compact `#PEEKPM` дополнительно показывает:
+
+* `strategy_auto_triggered`, если PM заменил тупиковый повтор на стратегический анализ;
+* `strategy_request_start` перед strategy LLM-вызовом;
+* `--- PM STRATEGY RESPONSE ---` с флагом обновления memory, новым списком objectives и `waitMs`;
+* `--- PM STRATEGY RESPONSE (ERROR: ...) ---` и `fallback: WAIT 30000`, если strategy response невалиден.
+
+При `#PEEKLLM-ON` также выводятся полные `--- PM STRATEGY LLM PROMPT ---` и `--- PM STRATEGY LLM RESPONSE ---`.
+
+Для multi-step runtime chains compact `#PEEKPM` показывает accepted plan целиком, включая `Interrupt On`, а также служебные wake trace события:
+
+* `pending_plan_stored` — PM сохранил хвост плана после `scheduled` шага;
+* `plan_interrupt_check` — runtime проверил outcome завершённого шага против `interruptOn`;
+* `plan_interrupted` — цепочка остановлена и следующий PM-вызов получит `plan_interrupted`;
+* `plan_completed` — цепочка завершилась без interrupt и следующий PM-вызов получит `plan_completed`.
 
 ---
 
