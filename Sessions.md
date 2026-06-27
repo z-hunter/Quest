@@ -2715,3 +2715,57 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ### 5. Remaining Work / Known Problems
 
 The small local model used was unable to produce an adequate output in  the test scene, where Cloud Haiku works without problems.
+
+## Session Entry - 2026-06-27 16:32 +02:00
+
+### 1. Session Goals
+
+- Make Puppet Master plans factual, efficient, and resistant to repeated no-progress behavior.
+- Let PM execute coherent multi-step procedures without an LLM call after every small action.
+- Improve NPC perception, scene-aware entity knowledge, inventory/subscene parity, memory correctness, and PM debugging.
+- Diagnose Anthropic prompt caching and leave a concrete implementation target for the next session.
+
+### 2. What Was Implemented
+
+- Added generic multi-step PM plans with plan-level `interruptOn` conditions (`ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, `ACTION_FAILED`). Runtime stores and executes the remaining chain without intermediate provider calls, then reports `plan_interrupted` or `plan_completed` with confirmed outcomes.
+- Added `THINK_STRATEGY`, a silent strategy-only LLM pass for terminal no-progress situations. It may correct memory/objectives and schedules a bounded wait, but cannot speak or perform physical actions.
+- Added a sliding-window action-pattern watchdog and authoritative `actionHistory`. Literal and mixed no-progress loops now warn, suppress repeated physical signatures, or briefly sleep the NPC instead of spending unbounded LLM calls.
+- Added plan prevalidation for item references and one corrective retry with `plan_rejected_missing_items`. Sequential plans may establish item availability through `MOVE_TO`/`TAKE` before later `PUT`, `USE`, or `COMMAND` steps.
+- Restored ordinary plan-level memory semantics while strengthening the prompt: `actionHistory` is authoritative and conflicting memory must be corrected before other planning. Runtime still discards speculative plan memory when a physical plan is interrupted or fails.
+- `LOOK`/`EXAMINE` outcomes now report visible contents and `discoveredEntityIds`, including relation-aware inspection. Newly observed items and actors are recorded with `lastSeenSceneId`; durable `knownEntities` is limited to Items and Actors, while `visibleItemIds` lists currently visible scene items.
+- NPC `TAKE` now normalizes items taken from Subscenes like player `TAKE`: clears disabled state and temporary Subscene/group ownership. Disabled entities outside Subscenes remain invisible.
+- Expanded `#PEEKPM` and `#PEEKLLM` for entity knowledge, visible items, accepted chains, continuation storage, interrupt checks, strategy flow, raw prompts/responses, and cache metrics.
+- Added a terminal guard for repeated no-op movement: a second `MOVE_TO` to the same target that returns `arrived` with `route: []` becomes `repeated_without_progress`, drops the pending tail and speculative memory, and asks PM to change action, wait, think strategically, or stop.
+- Updated `NPCsys.md` with the resulting contracts, debug traces, and the measured prompt-caching limitation.
+
+### 3. Important Architecture and Runtime Decisions
+
+- Runtime outcomes, `actionHistory`, inventory, and refreshed world context are authoritative; model intention and prose are not evidence that an action succeeded.
+- Long plans are preferred only for one coherent procedure. Unknown-dependent branches are handled by runtime interrupts and a subsequent PM call.
+- The first empty-route arrival remains valid because it may be the barrier before a useful tail such as `MOVE_TO -> TAKE`. Only repetition to the same target is terminal no-progress.
+- NPC knowledge is scene-aware in preparation for future cross-scene movement, but only Items and Actors accumulate in `knownEntities` to control token use.
+- Prompt caching remains provider-specific. The current cacheable PM prefix measured about 12,140 characters / roughly 3,035 tokens, below the approximately 4,096-token Haiku 4.5 minimum.
+
+### 4. Tests and Validation
+
+- `npm test -- tests/npc/puppet-master.test.ts`: 66/66 tests passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed; only expected LF-to-CRLF worktree warnings were reported.
+- Commit hooks ran Prettier and ESLint successfully.
+
+### 5. Commits Created
+
+- `052bafc` - `fix(npc): stop repeated no-op movement plans` (includes the current PM/runtime, prompt, test-scene, test, and documentation state).
+
+### 6. Remaining Work / Next Recommended Steps
+
+1. Split stable authored entity data into the scene-static PM prefix: `id`, `title`, descriptions, inspection affordances, command definitions, and static Switch capabilities.
+2. Keep current state, visibility, location, reachability, inventory ownership, and prerequisite availability in the dynamic suffix.
+3. Build the static projection deterministically, invalidate it when authored scene structure changes, and expose estimated/cacheable prefix metrics in debug output.
+4. Re-run the same `#PEEKLLM-ON` scenario twice within five minutes and verify nonzero `cacheCreationInputTokens` followed by `cacheReadInputTokens`.
+
+### 7. Risks and Caveats
+
+- A minimal static entity projection from the observed 22 entities adds only about 826 estimated tokens, putting the prefix near but possibly still below the cache threshold. Include useful stable descriptions and target approximately 4,300-4,500 estimated prefix tokens for margin.
+- Prompt cache reuse requires an identical prefix through the cache breakpoint; deterministic ordering and serialization are therefore part of the contract.
+- The test scene was intentionally included in commit `052bafc`; its formatting and authored fixture changes should be preserved unless explicitly revised.
