@@ -59,11 +59,6 @@
               "id": "test_1",
               "x": 555,
               "y": 214
-            },
-            {
-              "id": "tv_rc",
-              "x": 326,
-              "y": 247
             }
           ]
         }
@@ -1018,9 +1013,9 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0395827360124572,
-      "x": 360.0394367129184,
-      "y": 246.1217287569747,
+      "parallax": 1.0395605064515094,
+      "x": 285.75890786359884,
+      "y": 246.1207284267321,
       "width": 71.03999999999999,
       "height": 290.08,
       "baseWidth": 96,
@@ -1039,7 +1034,7 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1579,29 +1574,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 303.7384447742837,
-      "y": 227.0621368222477,
+      "x": 230.38814191687663,
+      "y": 227.06213810950482,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 303.7384447742837,
-          "y": 227.0621368222477,
-          "p": 1.0271473596851906
+          "x": 230.38814191687663,
+          "y": 227.06213810950482,
+          "p": 1.0271473882909037
         },
         {
-          "x": 396.19496419889686,
-          "y": 226.03127252637125,
-          "p": 1.0264923540918802
+          "x": 322.8047867968371,
+          "y": 226.0362437644618,
+          "p": 1.0264932303423315
         },
         {
-          "x": 493.87388181348706,
-          "y": 256.8629075907265,
-          "p": 1.0466967547373218
+          "x": 421.682250771955,
+          "y": 256.7096582791758,
+          "p": 1.0465622243717163
         },
         {
-          "x": 438.1791787567301,
-          "y": 255.4792414736097,
-          "p": 1.0457900561493743
+          "x": 365.9284507006487,
+          "y": 255.3322617383211,
+          "p": 1.0456431406559226
         }
       ],
       "color": "#2b019d",
@@ -2278,47 +2273,6 @@
       "blur": 0
     },
     {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 360.0394367129184,
-      "y": 246.1217287569747,
-      "width": 15.332913027824578,
-      "height": 21.78887640796124,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.7783258482960813,
-      "refScale": 0.8,
-      "modelScale": 0.8,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
-    },
-    {
       "name": "tv_rc",
       "type": "Entity",
       "locked": false,
@@ -2334,23 +2288,23 @@
       ],
       "layer": 0,
       "visible": true,
-      "hidden": false,
+      "hidden": "lookable",
       "spatial": {
-        "parentNodeId": "Walk_main",
-        "relation": "on"
+        "parentNodeId": "sofa_pillow2",
+        "relation": "under"
       },
       "parallax": 1,
-      "x": 326,
-      "y": 247,
-      "width": 25.322631578947366,
-      "height": 37.350881578947366,
+      "x": 542,
+      "y": 312,
+      "width": 25.999999999999996,
+      "height": 38.35,
       "baseWidth": 199.99999999999997,
       "baseHeight": 295,
       "colliderWidth": 0,
       "colliderHeight": 0,
       "spriteName": "tv_rc",
       "color": "#AAAAAA",
-      "scale": 0.12661315789473684,
+      "scale": 0.13,
       "refScale": 0.13,
       "modelScale": 0.13,
       "ignoreScaling": false,
@@ -2392,18 +2346,18 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.074675389293572,
-      "x": 1168.001219154498,
-      "y": 300.00009951210075,
-      "width": 146.9613259668508,
-      "height": 282.37569060773495,
-      "baseWidth": 146.9613259668508,
+      "parallax": 1.0344333822850917,
+      "x": 1134.5499702152197,
+      "y": 238.02740871904118,
+      "width": 141.30140362022482,
+      "height": 271.50055409886056,
+      "baseWidth": 146.9613259668509,
       "baseHeight": 282.37569060773495,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
+      "colliderWidth": 44,
+      "colliderHeight": 8,
       "spriteName": "girl",
       "color": "#36d87fff",
-      "scale": 1,
+      "scale": 0.9614869945586721,
       "refScale": 1,
       "modelScale": 1,
       "ignoreScaling": false,
@@ -2415,6 +2369,47 @@
       "speed": 0.1,
       "direction": "down",
       "animSets": {}
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Hero_1",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 285.75890786359884,
+      "y": 246.1207284267321,
+      "width": 15.3328943586326,
+      "height": 21.78884987805685,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.7783249006147989,
+      "refScale": 0.8,
+      "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
     }
   ],
   "folders": [

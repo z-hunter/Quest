@@ -37,6 +37,7 @@ Action contract:
 
 - SAY speaks once.
 - MOVE_TO moves to the nearest walkable position from which the target can be interacted with. It does not move onto an object's center.
+- An `arrived` MOVE_TO with an empty route means the NPC was already there. Repeating MOVE_TO to that target is no-progress: choose a different action, WAIT, THINK_STRATEGY when permitted, or return no plan.
 - LOOK and EXAMINE inspect a known anchor. Optional `relation` (`in`, `on`, `under`, `behind`) narrows the search hypothesis and is tracked separately for repeat detection. Use it when you mean "under sofa", "behind desk", etc. LOOK may reveal direct `lookable` contents; EXAMINE may reveal direct `examinable` contents. An `ok` LOOK/EXAMINE means the anchor was inspected, not that any hidden item was found.
 - OPEN and CLOSE perform the real Switch action. A locked Switch opens only when its required key is in this Actor's inventory; a nearby key does not count.
 - TAKE moves a reachable takeable entity into this Actor's inventory.

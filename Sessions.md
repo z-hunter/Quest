@@ -1560,6 +1560,7 @@ During the session the following checks were run successfully:
 
 - Not all components have associated SVG icons yet; the UI implementation handles missing icons gracefully by simply rendering the text.
 - Static hosting of the game will break Editor features; testing via the native Tauri build or the development environment is recommended.
+
 ## Session Entry - 2026-05-09 19:37 Europe/Warsaw
 
 ### 1. Session Goals
@@ -1850,61 +1851,74 @@ Commit scope:
 # Session Summary
 
 ## Session Goal
+
 Refining 3D Spatial Audio for the engine, ensuring that sound triggering, panning, and environmental effects respond naturally to camera zoom and entity movement.
 
 ## What Was Implemented
 
 ### 1. SoundManager Architecture
+
 - Implemented `SoundManager.ts` using Web Audio API.
 - Support for 3D Spatial Audio (HRTF panning), Convolution Reverb, and Delay effects.
 - Dynamic Proximity EQ (+6dB bass boost at 250Hz) and Reverb Scaling.
 
 ### 2. 2.5D Spatial Logic
+
 - Developed a physically grounded 2.5D sound model:
-    * Parallax 1.1 = Head Level (Z=0).
-    * Parallax 1.0 = Foreground (Z=-400).
-    * Parallax 0.0 = Infinity (Z=-10000).
-    * Parallax < 0 = Behind Listener (+Z).
+  - Parallax 1.1 = Head Level (Z=0).
+  - Parallax 1.0 = Foreground (Z=-400).
+  - Parallax 0.0 = Infinity (Z=-10000).
+  - Parallax < 0 = Behind Listener (+Z).
 - Integrated Camera Zoom scaling: Z-depth is attenuated by 1/zoom.
 
 ### 3. Engine Integration
+
 - Synchronized SoundManager update loop in `Game.ts`.
 - Exposed complete Audio API through `ScriptAPI.ts` (`api.playSoundAttached`, `api.loadReverbIR`, etc.).
 - Created a demo script and scene for visual/auditory validation.
 
 ### 4. Documentation & Memory
+
 - Wrote comprehensive technical documentation in `SoundSys.md`.
 - Persisted architectural facts in `agent_memory`.
 
 ## Important Architecture / Runtime Decisions
+
 - Piecewise non-linear mapping for parallax (1.1 = head, 1.0 = front, 0.0 = infinity).
 - Fixed listener at Z=0 to prevent panning artifacts.
 - Exponential dry/wet scaling (power of 1.5) for natural transition.
 - Global constants for world scale (AUDIO_MAX_DISTANCE = 10000).
 
 ## Tests Run
+
 - `npm run typecheck`: Passed.
 - Manual auditory checks via `test_3d_sound.ts` confirmed correct panning and attenuation.
 
 ## Commits Created
+
 - `fa9fcbc` вЂ” `Feature: Sound Manager with 3d spatial system and dynamic reverb/delay FX`
 
 ## Current State
+
 - Sound system is fully integrated, calibrated, and documented. Ready for production asset population.
 
 ## Remaining Work / Next Steps
+
 1. Performance Tuning: Monitor `ConvolverNode` overhead in high-density scenes.
 2. SFX Library: Start populating the `/public/sounds/` directory with production assets.
 3. Gameplay Mechanics: Integrate sound triggers into common object prefabs (Doors, Switches).
+
 ## Session Entry - 2026-05-13 01:02 Europe/Warsaw
 
 ### Session Goals
+
 - Stabilize Scanline Engine's scene-wide Default Reverb IR workflow for live 3D attached sounds.
 - Make `SceneProperties` -> `SoundManager` hot-swapping work without stopping sounds.
 - Restore the documented `SoundSys.md` dry/wet behavior for 3D SOUND ENV.
 - Calibrate reverb gain staging and distance behavior enough for `#run test_3d_sound2` in `test_room` to be usable.
 
 ### What Was Implemented
+
 - Fixed live Default Reverb IR updates for active attached sounds:
   - Scene-default IR changes now call `setEffects(playbackId, {}, true)` instead of passing scene default IR as a custom `reverbIR`.
   - This preserves `usingDefaultIR`, so active sounds keep listening to later scene default changes.
@@ -1934,6 +1948,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - `DRY_ONLY_DISTANCE_MIN_LEVEL = 0.3` makes attached sounds attenuate with distance even when no scene reverb IR is active.
 
 ### Important Architecture / Runtime Decisions
+
 - Scene-level default reverb and per-sound custom reverb must remain distinct:
   - Scene default updates must never mark a sound as custom.
   - Custom `reverbIR` still clears `usingDefaultIR`.
@@ -1943,6 +1958,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - When no reverb branch exists, proximity update should still attenuate dry-only attached sounds by distance, but not make them silent near the listener.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - No parser, mechanics, inventory, or subscene behavior was changed.
 - Scene/editor/runtime sound environment behavior changed through:
   - `src/systems/SoundManager.ts`
@@ -1951,6 +1967,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Existing dirty/user work around scene/audio assets was preserved during the investigation; final repo status later showed clean after commit.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/systems/sound-manager.test.ts -- --runInBand`
   - Passed, 8 tests.
   - Covers default IR hot-swap, basename normalization, late default IR enablement, zero-min-at-listener, SoundSys dry/wet crossfade, clear-to-dry, stale async clear, and dry-only distance attenuation.
@@ -1962,9 +1979,11 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed.
 
 ### Commits Created
+
 - `98a7069` - `feat(audio): implement comprehensive 3D sound environment and scene-wide default reverb`
 
 ### Remaining Work / Next Recommended Steps
+
 - Consider promoting the hardcoded sound calibration constants to scene/editor controls if more scene-specific tuning is needed:
   - `REVERB_WET_OUTPUT_GAIN`
   - `REVERB_DISTANCE_MIN_LEVEL`
@@ -1978,6 +1997,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - If authored scene defaults should persist in `test_room`, verify `public/scenes/test_room.json` after manual editor saves.
 
 ### Risks / Caveats / Open Questions
+
 - Convolution reverb loudness remains inherently IR-dependent; the current output trim is calibrated empirically for the tested IRs.
 - `Reverb Min % = 0` only guarantees no wet at true zero total distance. `test_3d_sound2` often still has nonzero X/Z distance, so some reverb can remain by design.
 - NotebookLM source upload for this wrap-up required CLI re-auth because `python -m notebooklm source list` reported expired authentication.
@@ -1985,12 +2005,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-15 12:33 +02:00
 
 ### Session Goals
+
 - Diagnose corrupted `test_room` scene/inventory state where a held cassette had lost its usable connection to the scene object.
 - Fix editor/runtime cleanup so deleted scene entities cannot remain as phantom Inventory/Surface entries.
 - Correct parser/runtime visibility behavior around `LOOK` / `EXAMINE` nested spatial contents.
 - Commit the complete current working tree as a single `Fixes` commit and leave a durable handoff.
 
 ### What Was Implemented
+
 - Fixed the broken cassette state in `public/scenes/test_room.json`:
   - The held `Compact cassette` now points at the real scene entity `test`.
   - The stale phantom `test_` entry was removed from the player inventory data.
@@ -2013,6 +2035,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Included the current workspace's scene, prompt, LLM cascade, and kitchen asset changes in the all-in `Fixes` commit as requested.
 
 ### Important Architecture / Runtime Decisions
+
 - Inventory state must be derived from Inventory/Surface component storage, not from spatial `relation: "in"`.
 - Spatial `IN` means world containment; it does not imply the object is carried by the player.
 - `LOOK` and `EXAMINE` are descriptive/reveal commands and should expose only the first semantic level below the target.
@@ -2021,6 +2044,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Recursive spatial traversal remains valid for targeted gameplay mechanics where the command explicitly scopes through a container.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - `Scene.removeEntity()` now clears current inventory/storage ownership before scene deletion.
 - `SceneTextLayer` now exposes direct relation helpers alongside existing recursive helpers.
 - `GameSemanticAPI` uses direct helpers for `describeSpatialRelation()` and hidden descendant reveal during examine/look flows.
@@ -2033,6 +2057,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - nested `TAKE FROM` still reaching deeper candidates where intended.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/game/semantic-api.test.ts -- --runInBand`
   - Passed.
 - `npm test -- tests/integration/parser-game.test.ts -- --runInBand`
@@ -2050,10 +2075,12 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - First attempt caught one unused fixture import; it was removed and the second commit attempt passed.
 
 ### Commits Created
+
 - `6102beb` - `Fixes`
   - Includes inventory/entity deletion cleanup, `LOOK` / `EXAMINE` direct semantic reveal behavior, parser/game regression tests, current scene/prompt/LLM-cascade updates, and kitchen assets.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify in the running editor/game that:
   - `LOOK SOFA` reports only the sofa's first-level pillows.
   - `LOOK RIGHT PILLOW` reveals the `TV remote`.
@@ -2063,6 +2090,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - If UX needs it, add an editor validation warning for Inventory/Surface references that point to deleted scene entities.
 
 ### Risks / Caveats / Open Questions
+
 - The `Fixes` commit intentionally includes all current workspace changes, including scene data, prompt/LLM cascade files, and kitchen assets, per user request.
 - The parser's lower regex cascade correctly does not resolve `rc` while `tv_rc` is hidden and unrevealed; this was confirmed as intended behavior during the session.
 - Direct semantic content behavior is now narrower by design; any previous tests expecting recursive `LOOK` disclosure were updated to the new contract.
@@ -2070,6 +2098,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-17 21:09 +02:00
 
 ### Session Goals
+
 - Continue from the previous wrap-up without repeating the `Fixes` work.
 - Introduce a centralized Actor scene-transfer path that moves a live Actor together with inventory/spatial-owned entities.
 - Fix scene travel through `GO`, `Exit`/`Entry`, and script API so player/NPC transfers preserve live objects and inventory state.
@@ -2078,6 +2107,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Improve text-console cursor/focus behavior in game mode.
 
 ### What Was Implemented
+
 - Added `SceneManager.transferActorToScene(actor, targetSceneId, options?)` as the central transfer API.
   - Collects the Actor itself.
   - Collects Entity descendants spatially owned by the Actor.
@@ -2104,6 +2134,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Same-scene teleport uses the same transfer API but skips detach/add and only applies Entry placement.
 
 ### Scaling And Editor Changes
+
 - Added `Scene.scaling.correctionalScale` with default `1`.
 - Added internal `Entity.refScale` serialization as the stored reference/prefab scale.
   - The editor-facing field remains the normal `Scale` field.
@@ -2128,12 +2159,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - The field edits `refScale` internally while preserving the old UI concept.
 
 ### Text Console / Input Changes
+
 - Improved text console cursor behavior.
 - Added Ctrl+Left / Ctrl+Right command-line navigation.
 - Added protection against losing command-line focus in game mode.
 - The latest related commits are separate from the scene-transfer commit.
 
 ### Important Architecture / Runtime Decisions
+
 - Actor scene movement must use `SceneManager.transferActorToScene()` rather than raw `oldScene.removeEntity(actor)` / `targetScene.addEntity(actor)`.
 - Direct scene removal is unsafe for carried objects because normal entity removal clears inventory/storage ownership.
 - Inventory contents are live scene entities and should travel with their owning Actor.
@@ -2143,6 +2176,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Object `Scale` remains portable; scene normalization should mutate the authored scene layout, not objects entering that scene.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - Parser `GO` scene changes now preserve the live player Actor and its inventory.
 - `Exit`/`Entry`, semantic `GO`, and script transfer all share the same central Actor-transfer path.
 - Inventory-owned items remain hidden and spatially owned by the Actor after transfer.
@@ -2151,6 +2185,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Parser static prompt preparation, scene exposure, and scene-change hooks remain part of scene activation.
 
 ### Tests Run And Outcomes
+
 - Focused scene transfer and scale tests:
   - `npm test -- tests/entities/entity-ref-scale.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-transition.test.ts -- --runInBand`
   - Passed.
@@ -2174,6 +2209,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed with only CRLF warnings.
 
 ### Commits Created
+
 - `758e5ce` - `Feature: Centralized Actor Scene Transfer API`
   - Central Actor transfer API, GO/Exit/script transfer integration, Entry fallback, camera zoom reset, Entry parallax/layer, Scale/Correctional Scale model, scene correction tests, docs, and scene/text additions including `quad5`.
 - `0e546e5` - `Fixed and improved cursor in text console. Added Ctrl+ left/right arrows for navigation`
@@ -2182,6 +2218,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Focus protection around game canvas/UI overlay so the command line does not lose focus unexpectedly.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify in the editor:
   - `GO quad4` places the transferred player on the target `Triggerbox` Entry.
   - The transferred player keeps inventory contents.
@@ -2193,6 +2230,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Consider a small UI hint that `Correctional Scale` is a destructive authored-layout normalization, not a temporary runtime multiplier.
 
 ### Risks / Caveats / Open Questions
+
 - The current working tree is clean at wrap-up time.
 - The previous memory decision that described transfer-time object correction was superseded by the later decision: `Correctional Scale` is editor-only scene normalization.
 - Scene correction intentionally affects locked objects. This differs from normal transform editing, where locked objects are protected from accidental manual manipulation.
@@ -2201,12 +2239,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-29 10:23 +02:00
 
 ### Session Goals
+
 - Generalize authored `State` changes into a reusable runtime event path instead of a TV-specific parser hack.
 - Keep `ScriptAPI`, parser commands, and LLM direct actions on the same mutation path.
 - Make Script Events UI represent state-driven interactions in a reusable way for any authored `State`.
 - Finish the wrap-up by recording durable notes, refreshing notebook sources, and preserving the feature in git.
 
 ### What Was Implemented
+
 - Added `StateEventSystem` as the shared runtime helper for authored State mutation side effects.
 - Routed `ScriptAPI.setState` and parser `setEntityState` through the new State event helper so real changes dispatch script events.
 - Removed the parser-specific `tv/power` side effect and moved TV glow behavior into an authored `tv_power_changed` script event.
@@ -2216,6 +2256,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Updated parser/LLM guidance so direct world actions can set State without pretending the runtime has a TV-only path.
 
 ### Important Architecture / Runtime Decisions
+
 - `ComponentSystem.setStateValue` remains a low-level helper without script side effects.
 - Runtime State changes now flow through `StateEventSystem.setState(game, entity, stateId, value, source)`.
 - Matching `interactions` keys are `state:<stateId>` and `state:<stateId>=<value>`.
@@ -2224,12 +2265,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The Script Events editor only creates `State Changed` when the selected object already has authored State components.
 
 ### Parser / Mechanics / Editor Changes
+
 - Parser and LLM direct actions now report State mutations via the same common path, which keeps command, script, and Game Master behavior aligned.
 - The `turn_tv_on` / `turn_tv_off` command assets now focus on state mutation plus text; they no longer own glow toggling.
 - The `tv_power_changed` script handles enabling/disabling `#tv_glow` and starting/stopping `tv_glow`.
 - The Script Events editor now shows readable `STATE` rows, supports State id selection, and preserves legacy state keys.
 
 ### Tests Run And Outcomes
+
 - Focused tests:
   - `npm test -- tests/systems/state-event-system.test.ts tests/core/script-api-state.test.ts tests/parser/commands.test.ts tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`
   - Passed.
@@ -2244,14 +2287,17 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed, 34 files / 405 tests.
 
 ### Commits Created
+
 - `bb15d13` - `Major Feature: Improved Commands System, integrated with "States" component + expanded Script Events for states changes.`
   - State runtime event system, TV command rewrite, authored TV glow event, parser/LLM runtime alignment, editor Script Events UX, tests, docs, and related scene/text assets.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify any additional authored objects with multiple State components use the new `State Changed` selector cleanly in the editor.
 - If more gameplay systems need state-driven reactions, add authored `state:<id>` interactions rather than new parser-specific branches.
 
 ### Risks / Caveats / Open Questions
+
 - Value-specific state events are runtime-supported but still hand-authored; the current UI does not create them automatically.
 - The current scene asset for `tv` now relies on `state:power -> tv_power_changed`; if future scenes copy the TV pattern, they must author the interaction explicitly.
 - `StateEventSystem` only dispatches when the value truly changes, which keeps event scripts idempotent but means same-value writes will not retrigger side effects.
@@ -2259,11 +2305,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-30 01:58 +02:00
 
 ### Session Goals
+
 - Wrap up the state/parser-notes work with a durable handoff in repo and NotebookLM.
 - Keep the authored `State` UI refinements, runtime state hydration fixes, and hover/cursor contract changes documented for the next session.
 - Preserve the latest session context in `Sessions.md` and refresh the curated `AgentMemory.md` export used by NotebookLM.
 
 ### What Was Implemented
+
 - Added optional `parserNoteTextAssets` support to authored `State` components so a state value can point at a Text Asset field whose content becomes the object's Parser Note.
 - Kept the authored `State` UI compact and editable:
   - `ID / Type` share one row.
@@ -2277,6 +2325,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Involved content changes in `public/scenes/test_room.json` and related object text assets so the `tv` example exercises the new path end to end.
 
 ### Important Architecture / Runtime Decisions
+
 - `state:*` bindings are script/state events only, not click/hover interactions.
 - Parser-note text is sourced from authored object Text Assets at runtime and overwrites existing Parser Notes when a matching state is active.
 - Scene activation now replays authored State side effects so load-time state matches in-game state mutation behavior.
@@ -2284,27 +2333,32 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - User-authored content changes in `test_room` were intentionally included in the feature commit because they are part of the example and regression surface.
 
 ### Parser / Mechanics / Scene / Editor Changes
+
 - Parser `LOOK` now includes Parser Notes produced from state-linked Text Asset fields.
 - Scene activation dispatches authored State events so objects like the TV can start their state-driven scripts when the level loads.
 - Hover handling no longer turns pure `state:*` bindings into a hand cursor.
 - State editor layout is denser and easier to scan during authoring.
 
 ### Tests Run And Outcomes
+
 - Focused regression checks around state events, parser context, command handling, and scene interaction passed during implementation.
 - TypeScript checks passed with `npm run typecheck`.
 - Earlier state/parser/scenario test runs also passed during the feature work, including the `tv` load-time regression path.
 
 ### Commits Created
+
 - `d3acf1e` - `Add State-driven parser notes and scene-load state hydration`
   - Core runtime, parser-note, scene-load hydration, `tv` fix, and content updates.
 - `4b26284` - `Added UI tips for previously commited State component`
   - Tooltip polish for the State editor labels and row fields.
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep an eye on future authored `State` components that use parser-note mappings; the authoring pattern is now simple, but it still depends on the object text asset being valid.
 - If more authored state-driven objects appear, reuse the same `state:<id> -> script event` model instead of adding special-case parser behavior.
 
 ### Risks / Caveats / Open Questions
+
 - The current worktree was clean before this wrap-up entry was written.
 - The NotebookLM notebook already contained older `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources, so the wrap-up process needs to replace those rather than add duplicates.
 - `tv` remains the canonical regression example for state-driven parser notes and scene-load hydration.
@@ -2312,11 +2366,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-30 16:28 +02:00
 
 ### Session Goals
+
 - Stop LLM hidden-object leakage in the Game Master path without turning hidden items into ordinary world facts.
 - Keep hidden diagnostics for the parser/engine intact while giving the LLM a spoiler-aware prompt surface.
 - Preserve indirect clueing so the model can still act like a good GM when the player physically explores the scene.
 
 ### What Was Implemented
+
 - Added a plain-text `Hidden Objects / Spoiler Protection` section to the LLM prompt assembly.
 - Listed hidden scene objects by `id`, player-facing title, and synonyms only.
 - Scrubbed hidden `knownEntities` so the LLM no longer receives raw `location`, `contents`, `description`, `details`, `lore`, or `interactions` for hidden entities.
@@ -2324,17 +2380,20 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Kept the parser diagnostics contract untouched for hidden entity awareness.
 
 ### Important Architecture / Runtime Decisions
+
 - `knownEntities` continues to mean diagnostics data for the parser/engine, not player-visible facts.
 - LLM-facing hidden data is now a safe projection, not the raw diagnostics record.
 - Hidden objects are treated as spoiler-protected gameplay content whose direct reveal would spoil discovery.
 - Indirect sensory or environmental hints remain allowed when they follow from visible scene logic or physically plausible player actions.
 
 ### Parser / Mechanics / Scene / Editor Changes
+
 - `LlmCascade` now appends the spoiler section to the dynamic user prompt.
 - Hidden `knownEntities` now lose raw location/details fields before reaching the LLM.
 - No scene or parser discovery behavior was changed; the fix is prompt/context shaping only.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/parser/llm-cascade.test.ts`
 - `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`
 - `npm run typecheck`
@@ -2342,14 +2401,17 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - All passed.
 
 ### Commits Created
+
 - `c67d83f` - `Harden hidden-object spoiler protection for LLM GM`
   - Added spoiler-protection prompt text, hidden entity scrubbing for the LLM projection, and regression coverage.
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep an eye out for any future prompt regressions that reintroduce raw hidden locations into the LLM context.
 - If new hidden-object patterns appear, extend the spoiler section with more safe clue examples rather than exposing hidden facts.
 
 ### Risks, Caveats, Open Questions
+
 - `Sessions.md` already had unrelated pre-existing content before this entry.
 - `public/scenes/home/room.json` also has unrelated pre-existing edits and was intentionally left out of the commit.
 - The fix is ingress-based; if prompt regressions continue, a second output-repair guard may still be worth considering later.
@@ -2359,6 +2421,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-02 11:39 +02:00
 
 ### Session Goals
+
 - Implement the major Puppet Master / Actor Actions feature slice so NPCs can do real world actions instead of only narrating intent.
 - Make NPC movement respect the same walkability/collider constraints as the player while still allowing zero-collider objects to remain nonblocking.
 - Let NPCs approach reachable positions near target objects instead of trying to walk onto object centers outside walkboxes.
@@ -2367,6 +2430,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Update the documentation and durable knowledge sources after the architecture changed.
 
 ### What Was Implemented
+
 - Added real Puppet Master action execution for NPC plans beyond speech/objective updates, including movement completion and action completion loops.
 - Added `TAKE` support for NPCs so they can actually pick up takeable visible entities into their own inventory.
 - Added `COMMAND` support for PM plans, allowing NPCs to execute authored command plans by `commandId`.
@@ -2380,6 +2444,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Kept zero-collider objects intentionally nonblocking, while nonzero colliders block NPC movement the same way they block the player.
 
 ### Important Architecture / Runtime Decisions
+
 - Authored command execution is now shared actor-aware runtime behavior, not a parser-only concern.
 - NPCs must not send natural-language `RUN_COMMAND` text into the real parser pipeline. PM emits structured DSL steps such as `COMMAND` and `USE`; the engine executes already-authored command plans as data.
 - `COMMAND` is preferred when a visible entity exposes a suitable authored command affordance because it can perform real state changes and side effects.
@@ -2390,6 +2455,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Actor-aware `PUT` was identified as the next required PM action after the test NPC tried to place the TV remote on the desk but could only narrate intent or mistakenly retry `TAKE`.
 
 ### Parser / Mechanics / Scene / NPC Changes
+
 - `ActorCommandExecutor` / actor-facing command runtime became the shared place for authored command execution and fallback use behavior.
 - `ActorPlanExecutor` was extended to handle PM `COMMAND` and `USE` action steps.
 - `NpcWorldModelBuilder` now exposes compact command affordances on visible semantic entities.
@@ -2399,6 +2465,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The TV test path became the canonical validation scenario: Linda can take the remote, turn the TV on, turn it off, and understand command affordances on `tv`.
 
 ### Documentation / Session-Handoff Work
+
 - Ran a Gemini-assisted audit to find documentation that still described authored commands and semantic execution as player/parser-only.
 - Updated `Commands.md` so authored commands are described as shared runtime content rather than parser-only assets.
 - Updated `Parser.md` to clarify that `Game API` has actor-aware clients, including Puppet Master-style runtime execution.
@@ -2411,6 +2478,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Synced the shared memory mirror, regenerated curated `AgentMemory.md`, and replaced stale NotebookLM `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources.
 
 ### Tests / Validation
+
 - Focused NPC Puppet Master and parser command tests passed during the actor actions implementation.
 - Full test suite passed after the actor-actions code slice: `37 files`, `450 tests passed`.
 - TypeScript validation passed with `npm run typecheck`.
@@ -2421,11 +2489,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - The missing `PUT` action is now visible as a real capability gap rather than a command-execution failure.
 
 ### Commits
+
 - `b584cda` - `feat: let NPCs run authored actor commands`
   - Added shared actor-aware command execution, PM `COMMAND`/`USE`, per-object command affordances, player `USE` regression preservation, and tests.
 - No new commit was created during the final documentation/wrap-up step; the documentation refresh is still in the working tree.
 
 ### Remaining Work / Next Steps
+
 - Commit the documentation refresh and updated session entry as part of the actor actions feature handoff.
 - Implement actor-aware `PUT` so NPCs can place/drop/give items instead of only taking and using them.
 - Update PM prompt and tests once `PUT` lands so NPCs do not overpromise item placement.
@@ -2433,6 +2503,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Continue broadening actor parity so player and NPC actions converge on the same semantic runtime contracts.
 
 ### Risks / Caveats
+
 - Actor-aware `PUT` is now implemented for PM plans; future placement work should build on this shared semantic runtime path.
 - The documentation refresh is not yet committed, so the working tree contains expected modified docs and the updated `Sessions.md`.
 - `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a generated build artifact only.
@@ -2441,11 +2512,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-19 02:22 +02:00
 
 ### Session Goals
+
 - Rework the right-side editor properties UI to match the new mock-ups more closely without changing the layout structure or the number of visible controls.
 - Fix button colors, section behavior, spacing, dropdown styling, checkbox label styling, and slider appearance so the panel reads like the new UI rather than the old one.
 - Preserve existing editor behavior while tightening visual consistency across Actor, Quad, and shared property sections.
 
 ### What Was Implemented
+
 - Updated the properties panel styling to the new darker palette and applied the mock-up-inspired treatment to the right panel background, section headers, nested blocks, and control surfaces.
 - Reworked section behavior so empty sections do not show collapse/expand affordances, cannot be toggled, and auto-open again when a new item appears.
 - Fixed the `TRANSFORM`/`SCRIPT EVENTS`/`COMPONENTS` style edge cases so the section headers and empty-state behavior now match the intended semantics.
@@ -2457,17 +2530,20 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Restored the missing lower section content area so the hidden miscellaneous controls such as `LOCKED`, `DISABLED`, and related fields are visible again with proper padding.
 
 ### Important Architecture / Runtime Decisions
+
 - The properties panel now treats empty sections as a distinct UI state rather than as collapsible content.
 - When a section gains content, it should be allowed to open automatically so the user does not have to discover newly added items inside a closed empty shell.
 - Shared styling for nested property items is preferable to one-off per-section hacks, especially for repeated affordances like add/remove buttons and compact dropdowns.
 - Visual changes were intentionally kept UI-only; the layout and control count were preserved.
 
 ### Parser / Mechanics / Scene / UI Changes
+
 - No parser or gameplay mechanics logic changed in this session.
 - The work was concentrated in the editor properties UI, especially Actor, Quad, and shared property panel components.
 - The most visible changes landed in section headers, nested blocks, select controls, checkbox labels, and slider styling.
 
 ### Tests / Validation
+
 - `npm run typecheck` passed after the UI changes.
 - Playwright smoke checks confirmed the key visual fixes, including:
   - centered dropdown caret alignment;
@@ -2478,17 +2554,20 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - improved vertical spacing between headers, labels, and inputs.
 
 ### Commits
+
 - `770d799` - `ui minor tweaks`
 - `f6d35b7` - `minor, UI: removed all caps from checkmarks labels`
 - `28d0940` - `fixes`
 - `59f6ed2` - `fixed many broken UI elements, paddings, alignements, etc`
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep a quick eye on any remaining panel spacing outliers that show up only on narrower or taller editor states.
 - If the mock-up set changes again, re-run the same visual pass against the right panel so the nested controls stay consistent.
 - Future UI work should continue reusing the shared add/remove/select styling instead of introducing new local variants.
 
 ### Risks / Caveats
+
 - The work is visually broad, so a later style tweak in one shared class can affect multiple property sections at once.
 - No functional editor logic was changed, so the main risk is only visual regression rather than data loss or runtime breakage.
 - The session left the repository clean at wrap-up time, with no pending local edits beyond the committed UI work.
@@ -2504,25 +2583,31 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## What Was Implemented
 
 ### 1. Общие perception-запросы (ActorWorldQuery)
+
 - Добавлен единый read-only слой восприятия `ActorWorldQuery`.
 - Реализованы общие методы определения видимости, доступности взаимодействия и навигационного подхода (`getObjectPerception`, `getInteractionAccess`, `getApproachAccess` и др.).
 - Удален `NpcWorldModelBuilder.isVisibleToActor` и другие дублирующие PM-эвристики.
 
 ### 2. Общие навигационные запросы (ActorNavigationService)
+
 - Вынесен поиск позиции подхода из `ActorPlanExecutor` в общий `ActorNavigationService` (методы `findInteractionPosition`, `planApproach`, `moveActorToTarget`).
 - Убран дублирующий поиск точек кольцами со стороны PM.
 
 ### 3. Общие семантические действия (GameSemanticAPI)
+
 - LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND и USE переведены на контракт `*ForActor(actor, target)`.
 - Player API и PM адаптеры теперь являются тонкими обертками вокруг этих общих методов.
 
 ### 4. Централизация переключателей (Switch) и ключей
+
 - Проверка ключей вынесена в общий runtime (`getSwitchLockOutcome`). Ключ проверяется только в инвентаре действующего актора.
 
 ### 5. Общие authored-команды
+
 - Выполнение authored plans переведено на единый `ActorCommandExecutor` для Player и NPC. Parser теперь отвечает только за разбор текста и аргументов.
 
 ### 6. События восприятия и NPC-курсоры в SceneLog
+
 - Добавлено свойство `perceptionRadius` для NPC.
 - Семантические действия теперь публикуют структурированные события.
 - Внедрены индивидуальные NPC-курсоры для чтения лога `SceneLog` во избежание проглатывания событий при наличии нескольких наблюдателей.
@@ -2542,6 +2627,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Documentation Updated
 
 Обновлены следующие файлы:
+
 - [GDD.md](file:///D:/GAMES/New%20folder/Quest/GDD.md)
 - [NPCsys.md](file:///D:/GAMES/New%20folder/Quest/NPCsys.md)
 - `npc-pm-system.md` (документация по PM-архитектуре)
@@ -2569,12 +2655,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-25 22:00 +02:00
 
 ### 1. Session Goals
+
 - Fix regression where Puppet Master debug logs (`#PEEKPM-ON`) did not show in the console (closed console state filtering).
 - Optimize the Puppet Master (`#PEEKPM-ON`) and Parser (`#PEEK-ON`) logs by eliminating raw JSON "noise" and replacing them with compact, clean, human-readable summaries.
 - Separate `#PEEKLLM-ON` (for raw LLM prompt/response inspection) and `#PEEKPM-ON` (for compact PM plans/triggers tracking) so they do not duplicate each other.
 - Update autotests to align with the new log formats and ensure full test suite success.
 
 ### 2. What Was Implemented
+
 - **Console Bypass (Closed State)**: Modified `Console.logDebug` to bypass the `!this.isOpen` check, ensuring that peek/debug commands successfully append logs to the buffer with `showInClosed: false`.
 - **Puppet Master Log Optimization**: Refactored PM peek logging to display trigger source, new speech events, active NPCs (including objectives, memory, inventory contents, and perceived actors), target plans, and provider token/time metrics.
 - **Parser Log Optimization**: Replaced the 8 separate JSON-block dumps of `#PEEK-ON` with a single unified `--- PARSER PEEK ---` output listing input command, active scene, inventory, visible/held scope, match stage (regex, NLP, LLM), mutated parser notes, outcomes, and LLM metrics.
@@ -2582,26 +2670,31 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - **Test Compliance**: Updated test expectations in `puppet-master.test.ts` and `llm-parser.test.ts` to assert the new formats.
 
 ### 3. Important Decisions
+
 - Keep raw LLM prompts/responses in `#PEEKLLM-ON` completely raw for precision, but keep general peeks (`#PEEK-ON`, `#PEEKPM-ON`) highly readable and noise-free.
 - Include key context facts like inventory and seen actors in the active NPC list to maintain debugging utility.
 
 ### 4. Tests Run and Outcomes
+
 - `npm test`: Passed (464/464 tests).
 - `npm run typecheck`: Passed.
 
 ### 5. Remaining Work / Next Recommended Steps
+
 - Verify the in-game display of the new consolidated parser and PM logs.
 - Explore similar cleanup for other console debug logs.
 
 ## Session Entry - 2026-06-27 15:33 +02:00
 
 ### 1. Session Goals
-- Migrate the LLM engine from cloud API (`AnthropicProvider` / Claude Haiku) to local inference on CPU (`OllamaProvider` / `qwen2.5:3b`).
+
+- Implemented local LLM inference on CPU (`OllamaProvider` / `qwen2.5:3b`).
 - Resolve timeouts and JSON parsing errors when running 3B models locally.
 - Prevent NPC hallucinations (e.g., treating inventory items as NPCs or generating empty loops).
 - Document local LLM setup, architecture, and provider switching instructions in `tech-spec.md`.
 
 ### 2. What Was Implemented
+
 - **OllamaProvider Integration**: Created `src/mechanics/llm/OllamaProvider.ts` implementing `ILlmProvider` over OpenAI-compatible endpoints (`http://localhost:11434/v1/chat/completions`).
 - **Hardware & CPU Tuning**: Configured context window to `num_ctx: 4096` to minimize quadratic Attention KV-cache overhead on CPU bus, enabled `keep_alive: -1` to keep weights loaded in RAM, and increased timeout to 600s.
 - **Grammar-Constrained JSON Mode**: Enforced `response_format: { type: 'json_object' }` and injected strict JSON schema examples into prompts, ensuring 100% syntactic validity without markdown block wrapper issues.
@@ -2610,13 +2703,15 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - **Documentation**: Updated `tech-spec.md` with detailed local inference architecture and setup guide.
 
 ### 3. Important Decisions
+
 - Kept the engine's "sanitizer" logic (`isConsequentialPlanStep`) intact per user feedback, ensuring NPCs must take physical action rather than looping in internal thoughts.
 - Used a constant boolean toggle (`USE_LOCAL_LLM`) so both providers remain referenced in code, keeping ESLint happy (`--max-warnings=0`).
 
 ### 4. Tests Run and Outcomes
+
 - `npm test`: Passed (465/465 tests, including new `ollama-provider.test.ts`).
 - Git commit `591db6a`: *feat(llm): implement OllamaProvider for local CPU inference and update docs*.
 
-### 5. Remaining Work / Next Recommended Steps
-- Test local gameplay flows with varied user inputs under Ollama.
-- Experiment with prompt variations if smaller models struggle with multi-step reasoning.
+### 5. Remaining Work / Known Problems
+
+The small local model used was unable to produce an adequate output in  the test scene, where Cloud Haiku works without problems.

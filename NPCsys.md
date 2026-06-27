@@ -113,6 +113,8 @@ PM возвращает **структурированный JSON** в форм�
 
 Продолжение уже принятого runtime-плана выполняется до проверки PM rate limits и не расходует бюджет LLM-вызовов. Лимиты по-прежнему применяются к последующему `plan_completed` / `plan_interrupted`, поскольку эти триггеры требуют нового provider request.
 
+`MOVE_TO`, завершившийся как `arrived` с пустым route, означает, что NPC уже находился у target и фактически не двигался. Первый такой barrier остаётся допустимым для хвоста вроде `MOVE_TO -> TAKE`; повторный `MOVE_TO` к тому же target считается terminal no-progress. Runtime удаляет pending tail и его memory, выдаёт `repeated_without_progress` и требует от PM сменить действие, выбрать `WAIT`/стратегию либо вернуть пустой план.
+
 Шаги `WAIT`, `MOVE_TO` и `THINK_STRATEGY` являются **асинхронными**: они возвращают статус `scheduled`, и `ActorPlanExecutor` ставит коллбэк на соответствующее событие. Следующие шаги в плане будут выполнены только после того, как PM получит уведомление о завершении операции.
 
 Если план содержит только немедленные шаги (`MEMORY_SET`, `OBJECTIVES_SET`) после `MOVE_TO`, но не содержит других физических действий, PM автоматически посылает триггер `plan_continued` (см. «Защита от зависания»).
@@ -234,6 +236,10 @@ PM строит промпт из двух частей, оптимизиров�
 
 * **Статический блок** (system prompt): системный промпт + `id`, `title`, `lore` сцены + `id`, `title`, `lore` всех NPC. Этот блок меняется только при смене сцены. При поддержке кеширования провайдером он токенизируется **один раз**.
 * **Динамический блок** (user message): текущие цели, память, инвентарь, `actionHistory`, новые события, воспринимаемые entities. Обновляется при каждом вызове.
+
+На текущем тестовом prompt кэшируемый префикс занимает около `12 140` символов, или примерно `3 035` токенов. Это ниже минимального cacheable prefix Anthropic Haiku 4.5 (около `4 096` токенов), поэтому provider корректно получает `cache_control`, но возвращает `cacheCreationInputTokens: 0` и `cacheReadInputTokens: 0`. Общий размер запроса здесь не помогает: большой `Per-call dynamic NPC context` расположен после cache breakpoint.
+
+Следующий этап оптимизации — вынести в scene-static блок стабильную проекцию entities: authored `id`, `title`, descriptions, inspection affordances, определения commands и статические возможности Switch. Текущие state, visibility, location, reachability, inventory ownership и доступность prerequisites должны остаться динамическими. Статическую проекцию необходимо строить детерминированно и инвалидировать при изменении authored структуры сцены.
 
 ---
 
@@ -376,6 +382,7 @@ Subscene для NPC не активируется визуально — это 
 * `plan_interrupt_check` — runtime проверил outcome завершённого шага против `interruptOn`;
 * `plan_interrupted` — цепочка остановлена и следующий PM-вызов получит `plan_interrupted`;
 * `plan_completed` — цепочка завершилась без interrupt и следующий PM-вызов получит `plan_completed`.
+* `move_no_progress_loop` — повторный `MOVE_TO` к той же цели снова завершился `arrived` с пустым route; runtime удалил хвост и speculative memory и отправил модели `repeated_without_progress`.
 
 ---
 

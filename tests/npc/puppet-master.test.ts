@@ -2249,6 +2249,61 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[4].messages[0].content)).toContain('Strategy-only NPC context');
   });
 
+  it('stops a repeated MOVE_TO when both arrivals have empty routes', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const firstPlan = {
+      npcId: npc.name,
+      steps: [{ type: 'MOVE_TO' as const, targetId: 'sofa' }],
+    };
+    const repeatedPlan = {
+      ...firstPlan,
+      memory: 'This memory must not be committed by the repeated unfinished move.',
+    };
+    const scheduledOutcome = {
+      status: 'scheduled' as const,
+      code: 'move_scheduled',
+      npcId: npc.name,
+      actionType: 'MOVE_TO' as const,
+      targetId: 'sofa',
+    };
+    const emptyArrival = {
+      type: 'move_completed' as const,
+      result: {
+        status: 'arrived' as const,
+        code: 'arrived',
+        message: 'Already close enough to interact.',
+        target: { x: 20, y: 20 },
+        route: [],
+      },
+    };
+
+    (pm as any).storePendingContinuationAfterScheduledOutcome(fixture.scene, firstPlan, [
+      scheduledOutcome,
+    ]);
+    expect((pm as any).tryExecutePendingContinuation(fixture.scene, npc.name, [emptyArrival])).toBe(
+      false
+    );
+
+    (pm as any).storePendingContinuationAfterScheduledOutcome(fixture.scene, repeatedPlan, [
+      scheduledOutcome,
+    ]);
+    expect((pm as any).tryExecutePendingContinuation(fixture.scene, npc.name, [emptyArrival])).toBe(
+      true
+    );
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(provider.calls).toHaveLength(1);
+    const correctivePrompt = String(provider.calls[0].messages[0].content);
+    expect(correctivePrompt).toContain('"code": "repeated_without_progress"');
+    expect(correctivePrompt).toContain('"repeatKey": "MOVE_TO:sofa"');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    expect(component.memory || '').not.toContain('must not be committed');
+  });
+
   it('delivers the terminal repeated_without_progress outcome before suppressing further repeats', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();

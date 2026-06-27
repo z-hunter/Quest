@@ -142,6 +142,7 @@ type NpcStrategyResponse = {
 
 type PendingPlanContinuation = {
   npcId: string;
+  barrierStep: NpcPlanStep;
   steps: NpcPlanStep[];
   memory?: string;
   interruptOn: NpcPlanInterruptCondition[];
@@ -629,12 +630,22 @@ export class NpcPuppetMaster {
     const scheduledIndex = outcomes.findIndex((outcome) => outcome.status === 'scheduled');
     if (scheduledIndex < 0) return;
     const remainingSteps = plan.steps.slice(scheduledIndex + 1);
+    const barrierStep = plan.steps[scheduledIndex];
+    if (!barrierStep) return;
     const hasPendingMemory = typeof plan.memory === 'string';
     const interruptOn = this.getPlanInterruptConditions(plan);
     const trackCompletion = this.shouldTrackPlanCompletion(plan, interruptOn);
-    if (!remainingSteps.length && !hasPendingMemory && !interruptOn.length) return;
+    if (
+      !remainingSteps.length &&
+      !hasPendingMemory &&
+      !interruptOn.length &&
+      barrierStep.type !== 'MOVE_TO'
+    ) {
+      return;
+    }
     this.pendingPlanContinuations.set(this.getNpcStateKey(scene, plan.npcId), {
       npcId: plan.npcId,
+      barrierStep,
       steps: remainingSteps,
       ...(hasPendingMemory ? { memory: plan.memory } : {}),
       interruptOn,
@@ -672,6 +683,46 @@ export class NpcPuppetMaster {
     if (!trigger) return false;
 
     const barrierResult = this.getContinuationBarrierResult(trigger, npcId);
+    if (trigger.type === 'move_completed' && pending.barrierStep.type === 'MOVE_TO') {
+      const targetId = String(pending.barrierStep.targetId || '').trim();
+      const didNotMove = trigger.result.status === 'arrived' && trigger.result.route.length === 0;
+      if (didNotMove && targetId) {
+        const moveProgress = this.recordActionProgress(scene, npcId, {
+          status: 'ok',
+          code: 'arrived',
+          npcId,
+          targetId,
+          actionType: 'MOVE_TO',
+          worldChanged: false,
+          repeatKey: `MOVE_TO:${targetId}`,
+        });
+        if ((moveProgress.repeatCount || 0) >= 2) {
+          const terminalResult: NpcPlanExecutionOutcome = {
+            ...moveProgress,
+            status: 'failed',
+            code: 'repeated_without_progress',
+            message: `Already at ${targetId}; repeating MOVE_TO cannot make progress.`,
+          };
+          this.recordActionHistory(scene, npcId, terminalResult);
+          this.pendingPlanContinuations.delete(stateKey);
+          this.traceWake('move_no_progress_loop', {
+            sceneId: scene.id,
+            npcId,
+            targetId,
+            repeatCount: terminalResult.repeatCount,
+          });
+          globalThis.setTimeout(() => {
+            this.scheduleNpc(scene, npcId, {
+              type: 'action_completed',
+              result: terminalResult,
+            });
+          }, 0);
+          return true;
+        }
+      } else if (trigger.result.status === 'arrived') {
+        this.clearLoopSuppression(scene, npcId);
+      }
+    }
     const completedSteps =
       trigger.type === 'action_completed' || trigger.type === 'wait_elapsed'
         ? [...pending.completedSteps, barrierResult as NpcPlanExecutionOutcome]
