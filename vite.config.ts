@@ -39,7 +39,14 @@ export default defineConfig({
                   fs.mkdirSync(dir, { recursive: true });
                 }
 
-                fs.writeFileSync(targetPath, content);
+                let fileContent: string | Buffer = content;
+                if (typeof content === 'string' && content.startsWith('data:')) {
+                  const matches = content.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+                  if (matches && matches.length === 3) {
+                    fileContent = Buffer.from(matches[2], 'base64');
+                  }
+                }
+                fs.writeFileSync(targetPath, fileContent);
                 console.log(`[Vite] Saved file: ${targetPath}`);
 
                 res.statusCode = 200;
@@ -315,4 +322,12 @@ export default defineConfig({
       },
     },
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        vetool: path.resolve(__dirname, 'vetool.html'),
+      },
+    },
+  },
 });
