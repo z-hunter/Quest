@@ -96,7 +96,7 @@ export const renderSection = (
         </div>
       </div>
     )}
-    {children}
+    <div className="properties-section-body">{children}</div>
   </div>
 );
 

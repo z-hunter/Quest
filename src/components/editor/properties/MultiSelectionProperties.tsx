@@ -461,7 +461,6 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                     alignItems: 'center',
                     gap: '6px',
                     marginBottom: 0,
-                    color: sharedFilled === 'on' ? '#ffffff' : 'inherit',
                   }}
                 >
                   <input
@@ -488,7 +487,6 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    color: sharedIsGrid === 'on' ? '#ffffff' : 'inherit',
                   }}
                 >
                   <input

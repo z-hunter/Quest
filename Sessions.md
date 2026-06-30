@@ -2437,3 +2437,58 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The documentation refresh is not yet committed, so the working tree contains expected modified docs and the updated `Sessions.md`.
 - `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a generated build artifact only.
 - The actor command architecture intentionally avoids feeding NPC natural-language commands into the player parser to prevent extra LLM calls, player-centric context, console noise, and recursion.
+
+## Session Entry - 2026-06-19 02:22 +02:00
+
+### Session Goals
+- Rework the right-side editor properties UI to match the new mock-ups more closely without changing the layout structure or the number of visible controls.
+- Fix button colors, section behavior, spacing, dropdown styling, checkbox label styling, and slider appearance so the panel reads like the new UI rather than the old one.
+- Preserve existing editor behavior while tightening visual consistency across Actor, Quad, and shared property sections.
+
+### What Was Implemented
+- Updated the properties panel styling to the new darker palette and applied the mock-up-inspired treatment to the right panel background, section headers, nested blocks, and control surfaces.
+- Reworked section behavior so empty sections do not show collapse/expand affordances, cannot be toggled, and auto-open again when a new item appears.
+- Fixed the `TRANSFORM`/`SCRIPT EVENTS`/`COMPONENTS` style edge cases so the section headers and empty-state behavior now match the intended semantics.
+- Unified the `+ ADD` controls and delete `X` buttons so they share the same size and visual language across components, animation sets, and other nested lists.
+- Corrected dropdown rendering so the custom caret no longer clashes with section arrows, and aligned the caret vertically in the button.
+- Fixed the checkbox label style regression so labels such as `IS PLAYER` use the same standard text treatment as other non-accent labels.
+- Added spacing where section titles, field labels, and control groups had been visually too tight, while also reducing a few overly large vertical gaps that had appeared during the UI pass.
+- Removed the extra border framing from sliders so they now read like a line with a handle, closer to the mock-up reference.
+- Restored the missing lower section content area so the hidden miscellaneous controls such as `LOCKED`, `DISABLED`, and related fields are visible again with proper padding.
+
+### Important Architecture / Runtime Decisions
+- The properties panel now treats empty sections as a distinct UI state rather than as collapsible content.
+- When a section gains content, it should be allowed to open automatically so the user does not have to discover newly added items inside a closed empty shell.
+- Shared styling for nested property items is preferable to one-off per-section hacks, especially for repeated affordances like add/remove buttons and compact dropdowns.
+- Visual changes were intentionally kept UI-only; the layout and control count were preserved.
+
+### Parser / Mechanics / Scene / UI Changes
+- No parser or gameplay mechanics logic changed in this session.
+- The work was concentrated in the editor properties UI, especially Actor, Quad, and shared property panel components.
+- The most visible changes landed in section headers, nested blocks, select controls, checkbox labels, and slider styling.
+
+### Tests / Validation
+- `npm run typecheck` passed after the UI changes.
+- Playwright smoke checks confirmed the key visual fixes, including:
+  - centered dropdown caret alignment;
+  - empty `SCRIPT EVENTS` behavior;
+  - consistent `+ ADD` and delete button sizing;
+  - visible miscellaneous section controls;
+  - slider border removal;
+  - improved vertical spacing between headers, labels, and inputs.
+
+### Commits
+- `770d799` - `ui minor tweaks`
+- `f6d35b7` - `minor, UI: removed all caps from checkmarks labels`
+- `28d0940` - `fixes`
+- `59f6ed2` - `fixed many broken UI elements, paddings, alignements, etc`
+
+### Remaining Work / Next Recommended Steps
+- Keep a quick eye on any remaining panel spacing outliers that show up only on narrower or taller editor states.
+- If the mock-up set changes again, re-run the same visual pass against the right panel so the nested controls stay consistent.
+- Future UI work should continue reusing the shared add/remove/select styling instead of introducing new local variants.
+
+### Risks / Caveats
+- The work is visually broad, so a later style tweak in one shared class can affect multiple property sections at once.
+- No functional editor logic was changed, so the main risk is only visual regression rather than data loss or runtime breakage.
+- The session left the repository clean at wrap-up time, with no pending local edits beyond the committed UI work.

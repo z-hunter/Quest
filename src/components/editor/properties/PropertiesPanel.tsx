@@ -193,6 +193,17 @@ export const PropertiesPanel: React.FC = () => {
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, []);
 
+  const openSection = React.useCallback((section: number) => {
+    const node = sectionRefs.current[section];
+    if (!node) return;
+    if (node.classList.contains('properties-section-empty')) return;
+    node.classList.remove('collapsed');
+    const header = node.querySelector<HTMLElement>('.properties-section-header');
+    header?.classList.remove('properties-section-flash');
+    window.setTimeout(() => header?.classList.add('properties-section-flash'), 0);
+    window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
+  }, []);
+
   const isPanelTextEntryFocused = React.useCallback(() => {
     const active = document.activeElement as HTMLElement | null;
     if (!active || !panelRef.current || !panelRef.current.contains(active)) return false;
@@ -204,17 +215,103 @@ export const PropertiesPanel: React.FC = () => {
   // ─── Keyboard section navigation ───────────────────────────────────────────
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isPanelHoveredRef.current) return;
+      if (!panelRef.current) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (isPanelTextEntryFocused()) return;
       const key = e.key;
       if (!/^[0-6]$/.test(key)) return;
       e.preventDefault();
-      scrollToSection(parseInt(key, 10));
+      const section = parseInt(key, 10);
+      openSection(section);
+      scrollToSection(section);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPanelTextEntryFocused, scrollToSection]);
+  }, [isPanelTextEntryFocused, openSection, scrollToSection]);
+
+  React.useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const header = target?.closest('.properties-section-header') as HTMLElement | null;
+      if (!header || !panel.contains(header)) return;
+      if (target?.closest('button, input, select, textarea, .custom-select-container')) return;
+      const section = header.closest('.properties-section-block');
+      if (section?.classList.contains('properties-section-empty')) return;
+      section?.classList.toggle('collapsed');
+    };
+
+    panel.addEventListener('click', handleClick);
+    return () => panel.removeEventListener('click', handleClick);
+  });
+
+  React.useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
+    sections.forEach((section) => {
+      const id = Number(section.dataset.section);
+      const hasHeader = !!section.querySelector(':scope > .properties-section-header');
+      section.classList.toggle(
+        'collapsed',
+        hasHeader && !section.classList.contains('properties-section-empty') && id !== 0 && id !== 1
+      );
+    });
+  }, [selectedObjectId, selectedObjectType]);
+
+  React.useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const decimalPlaces = (step: number) => {
+      if (!Number.isFinite(step)) return 0;
+      const text = String(step);
+      return text.includes('.') ? text.split('.')[1].length : 0;
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const label = (event.target as HTMLElement | null)?.closest('label.e-label');
+      if (!label || !panel.contains(label)) return;
+      const group = label.parentElement;
+      const input = group?.querySelector<HTMLInputElement>('input[type="number"]');
+      if (!input || input.disabled || input.readOnly) return;
+
+      event.preventDefault();
+      const startX = event.clientX;
+      const startValue = Number(input.value || 0);
+      const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
+      const precision = decimalPlaces(step);
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const next = startValue + Math.round(delta / 6) * step;
+        setInputValue(input, precision > 0 ? next.toFixed(precision) : String(Math.round(next)));
+      };
+
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.classList.remove('is-scrubbing-number');
+      };
+
+      document.body.classList.add('is-scrubbing-number');
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+    };
+
+    panel.addEventListener('mousedown', handleMouseDown);
+    return () => panel.removeEventListener('mousedown', handleMouseDown);
+  });
 
   // ─── Tooltip injection ─────────────────────────────────────────────────────
   React.useEffect(() => {

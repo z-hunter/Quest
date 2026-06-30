@@ -21,7 +21,7 @@ export const ActorProperties: React.FC = () => {
 
       {/* Is Player */}
       <div className="e-row">
-        <label className="e-label ui-inline-flex-center ui-text-accent-blue">
+        <label className="e-label ui-inline-flex-center">
           <input
             type="checkbox"
             style={{ marginRight: '5px' }}
@@ -82,12 +82,11 @@ export const ActorProperties: React.FC = () => {
       <div className="e-row" style={{ marginTop: '10px' }}>
         <div
           className="e-label ui-text-accent-blue ui-font-bold"
-          style={{ display: 'flex', justifyContent: 'space-between' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <span>ANIMATION SETS</span>
           <button
-            className="e-btn"
-            style={{ padding: '0 5px', fontSize: '10px' }}
+            className="e-btn e-action-add-btn"
             onClick={() => {
               if (!actor.animSets) actor.animSets = {};
               let newId = 'idle';
@@ -121,11 +120,9 @@ export const ActorProperties: React.FC = () => {
           return (
             <div
               key={setId}
+              className="component-block"
               style={{
-                background: '#222',
-                padding: '5px',
                 marginBottom: '5px',
-                borderRadius: '4px',
               }}
             >
               <div
@@ -140,10 +137,10 @@ export const ActorProperties: React.FC = () => {
                   className="e-input"
                   style={{
                     fontWeight: 'bold',
-                    color: '#ddd',
+                    color: 'var(--ui-input-text)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: '1px solid #444',
+                    borderBottom: '1px solid var(--ui-input-border)',
                     maxWidth: '100px',
                   }}
                   defaultValue={setId}
@@ -166,8 +163,7 @@ export const ActorProperties: React.FC = () => {
                   }}
                 />
                 <button
-                  className="e-btn e-btn-red"
-                  style={{ padding: '0 5px' }}
+                  className="e-btn e-btn-red e-action-delete-btn"
                   onClick={() => {
                     if (confirm(`Delete animation set '${setId}'?`)) {
                       delete actor.animSets[setId];

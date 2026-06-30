@@ -420,9 +420,9 @@ export const SceneProperties: React.FC = () => {
 
       {scene.soundEnv && (
         <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
-          <div className="properties-section-header properties-section-purple">
+          <div className="properties-section-header properties-section-red">
             <div className="properties-section-title">
-              <span className="properties-section-number properties-section-purple">3</span>
+              <span className="properties-section-number properties-section-red">3</span>
               <span className="properties-section-label">3D SOUND ENV.</span>
             </div>
           </div>

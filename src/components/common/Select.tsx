@@ -137,10 +137,15 @@ export const Select: React.FC<SelectProps> = ({
       }}
       tabIndex={0} // Make focusable for keyboard events
       onKeyDown={handleKeyDown}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <div
         className="custom-select-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -169,7 +174,7 @@ export const Select: React.FC<SelectProps> = ({
             {displayLabel}
           </span>
         </div>
-        <span style={{ fontSize: '10px', marginLeft: '5px' }}>▼</span>
+        <span className="custom-select-caret" aria-hidden="true" />
       </div>
 
       {isOpen && (
@@ -193,7 +198,10 @@ export const Select: React.FC<SelectProps> = ({
             <div
               key={opt.value}
               className={`custom-option ${opt.value === value ? 'selected' : ''} ${idx === focusedIndex ? 'focused' : ''}`}
-              onClick={() => handleSelect(opt.value)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelect(opt.value);
+              }}
               onMouseEnter={() => setFocusedIndex(idx)}
               style={{
                 padding: '4px',
