@@ -637,6 +637,12 @@
   font-family: var(--ui-display-font);
 }
 
+.editor-sidebar.right .custom-select-options {
+  background: var(--ui-dropdown-bg, #050a07);
+  border: 1px solid var(--ui-input-border, #2a523d);
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.85);
+}
+
 .editor-sidebar.right .custom-select-container.compact-action-select {
   min-width: 0;
 }
