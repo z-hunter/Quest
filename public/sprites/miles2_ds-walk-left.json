@@ -1,0 +1,9 @@
+{
+  "id": "miles2_ds-walk-left",
+  "imageFile": "public/assets/miles2.png",
+  "x": 148,
+  "y": 0,
+  "width": 164,
+  "height": 347,
+  "frames": 15
+}

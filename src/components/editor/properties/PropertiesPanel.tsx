@@ -204,11 +204,18 @@ export const PropertiesPanel: React.FC = () => {
     window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
   }, []);
 
-  const isPanelTextEntryFocused = React.useCallback(() => {
+  const shouldIgnoreKeyboardShortcuts = React.useCallback(() => {
+    // If a modal like the file browser is open, yield key events to it
+    if (document.querySelector('.file-browser-modal, .modal-overlay, .e-modal, .e-modal-overlay'))
+      return true;
+
     const active = document.activeElement as HTMLElement | null;
-    if (!active || !panelRef.current || !panelRef.current.contains(active)) return false;
+    if (!active) return false;
+
+    // Check if any text entry is focused globally
     if (active.matches('input, textarea, select, [contenteditable="true"]')) return true;
     if (active.closest('.custom-select-container')) return true;
+
     return false;
   }, []);
 
@@ -217,7 +224,7 @@ export const PropertiesPanel: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!panelRef.current) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      if (isPanelTextEntryFocused()) return;
+      if (shouldIgnoreKeyboardShortcuts()) return;
       const key = e.key;
       if (!/^[0-6]$/.test(key)) return;
       e.preventDefault();
@@ -227,7 +234,7 @@ export const PropertiesPanel: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPanelTextEntryFocused, openSection, scrollToSection]);
+  }, [shouldIgnoreKeyboardShortcuts, openSection, scrollToSection]);
 
   React.useEffect(() => {
     const panel = panelRef.current;

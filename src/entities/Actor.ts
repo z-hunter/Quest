@@ -394,31 +394,37 @@ export class Actor extends Entity {
     if (!set) return;
 
     let spriteName = set[this.direction];
+    let doFlip = false;
 
-    // Fallback: Use idle's direction sprite?
-    if (!spriteName && set.id !== 'idle' && this.animSets['idle']) {
-      spriteName = this.animSets['idle'][this.direction];
-    }
-
-    // Implicit Flip: If Left missing, use Right + Flip
-    if (!spriteName && this.direction === 'left' && set['right']) {
+    if (spriteName) {
+      // 1. Current set has explicit direction
+      doFlip = false;
+    } else if (this.direction === 'left' && set['right']) {
+      // 2. Current set has opposite direction (right -> left)
       spriteName = set['right'];
-      this.flipX = true;
-    } else if (
-      !spriteName &&
-      this.direction === 'left' &&
-      this.animSets['idle'] &&
-      this.animSets['idle']['right']
-    ) {
-      // Fallback to idle right flipped
-      spriteName = this.animSets['idle']['right'];
-      this.flipX = true;
-    } else if (this.direction === 'left' && spriteName) {
-      // Have explicit left, don't flip
-      this.flipX = false;
-    } else {
-      this.flipX = false;
+      doFlip = true;
+    } else if (this.direction === 'right' && set['left']) {
+      // 2. Current set has opposite direction (left -> right)
+      spriteName = set['left'];
+      doFlip = true;
+    } else if (set.id !== 'idle' && this.animSets['idle']) {
+      const idleSet = this.animSets['idle'];
+      if (idleSet[this.direction]) {
+        // 3. Fallback to idle's explicit direction
+        spriteName = idleSet[this.direction];
+        doFlip = false;
+      } else if (this.direction === 'left' && idleSet['right']) {
+        // 4. Fallback to idle's opposite direction (right -> left)
+        spriteName = idleSet['right'];
+        doFlip = true;
+      } else if (this.direction === 'right' && idleSet['left']) {
+        // 4. Fallback to idle's opposite direction (left -> right)
+        spriteName = idleSet['left'];
+        doFlip = true;
+      }
     }
+
+    this.flipX = doFlip;
 
     // If still nothing, we might be empty (invisible or red box)
 

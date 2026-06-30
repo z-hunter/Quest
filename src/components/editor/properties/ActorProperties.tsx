@@ -198,7 +198,17 @@ export const ActorProperties: React.FC = () => {
                     className="e-input"
                     style={{ flex: 1, fontSize: '10px', padding: '1px' }}
                     value={set[dir] || ''}
-                    readOnly
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      set[dir] = val;
+                      const selectedActor = game.editor.selectedObject as Actor;
+                      if (selectedActor && selectedActor.animSets) {
+                        const realSet = selectedActor.animSets[setId];
+                        if (realSet) realSet[dir] = val;
+                        selectedActor.updateSpriteForState();
+                      }
+                      incrementObjectVersion();
+                    }}
                   />
                   <button
                     className="e-btn"
