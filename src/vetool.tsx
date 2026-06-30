@@ -48,6 +48,8 @@ export function VetoolApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameCache = useRef<(HTMLCanvasElement | null)[]>([]);
   const canCache = useRef<boolean>(true);
+  const lastFrameTime = useRef<number>(0);
+  const currentFrameRef = useRef<number>(0);
 
   // Dragging & Resizing Refs/State
   const dragInfo = useRef<{
@@ -71,6 +73,11 @@ export function VetoolApp() {
       frameCache.current = new Array(total).fill(null);
     }
   }, [fps, videoUrl, videoDuration]);
+
+  const setFrameIndex = (frame: number) => {
+    setCurrentFrame(frame);
+    currentFrameRef.current = frame;
+  };
 
   const activeBox = useMemo(() => {
     return boxes.find((b) => b.id === activeBoxId) || null;
@@ -158,31 +165,65 @@ export function VetoolApp() {
     let animFrame: number;
 
     const updateLoop = () => {
-      if (video.paused && !isPlaying) return;
-
-      let targetFrame = currentFrame;
-
-      // Handle loop constraints
-      if (!video.seeking) {
-        if (video.currentTime >= loopEnd || video.currentTime < loopStart) {
-          video.currentTime = loopStart;
-          targetFrame = Math.floor(loopStart * fps);
-        } else {
-          targetFrame = Math.floor(video.currentTime * fps);
-        }
-        setCurrentFrame(targetFrame);
+      if (!isPlaying) {
+        drawCanvas(currentFrameRef.current);
+        return;
       }
 
-      drawCanvas(targetFrame);
+      const now = performance.now();
+      const frameDuration = 1000 / fps;
+      const elapsed = now - lastFrameTime.current;
+
+      const startFrame = Math.floor(loopStart * fps);
+      const endFrame = Math.floor(loopEnd * fps);
+
+      let nextFrame = currentFrameRef.current;
+      if (elapsed >= frameDuration) {
+        nextFrame = currentFrameRef.current + stepSize;
+        if (nextFrame > endFrame || nextFrame < startFrame) {
+          nextFrame = startFrame;
+        }
+      }
+
+      const isNextFrameCached = canCache.current && frameCache.current[nextFrame] !== null;
+
+      if (isNextFrameCached) {
+        if (elapsed >= frameDuration) {
+          setFrameIndex(nextFrame);
+          lastFrameTime.current = now - (elapsed % frameDuration);
+        }
+        if (!video.paused) {
+          video.pause();
+        }
+        drawCanvas(nextFrame);
+      } else {
+        if (video.paused && isPlaying) {
+          video.play().catch(() => setIsPlaying(false));
+        }
+
+        if (!video.seeking) {
+          if (video.currentTime >= loopEnd || video.currentTime < loopStart) {
+            video.currentTime = loopStart;
+            nextFrame = startFrame;
+          } else {
+            nextFrame = Math.floor(video.currentTime * fps);
+          }
+          setFrameIndex(nextFrame);
+        }
+        drawCanvas(nextFrame);
+        lastFrameTime.current = now;
+      }
 
       animFrame = requestAnimationFrame(updateLoop);
     };
 
     if (isPlaying) {
-      video.play().catch(() => setIsPlaying(false));
+      lastFrameTime.current = performance.now();
       animFrame = requestAnimationFrame(updateLoop);
     } else {
       video.pause();
+      // Seek video to current frame when pausing so user sees the correct frame
+      video.currentTime = currentFrameRef.current / fps;
     }
 
     return () => {
@@ -196,7 +237,7 @@ export function VetoolApp() {
     const video = videoRef.current;
     if (!video) return;
     const frameIdx = Math.floor(video.currentTime * fps);
-    setCurrentFrame(frameIdx);
+    setFrameIndex(frameIdx);
     drawCanvas(frameIdx);
   };
 
@@ -529,7 +570,7 @@ export function VetoolApp() {
     setVideoHeight(video.videoHeight);
     setLoopStart(0);
     setLoopEnd(video.duration);
-    setCurrentFrame(0);
+    setFrameIndex(0);
 
     // Initialize frame cache
     const total = Math.max(1, Math.floor(video.duration * fps));
