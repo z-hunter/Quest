@@ -784,9 +784,7 @@ export function VetoolApp() {
             } else {
               // Video doesn't match or not loaded. Store config and prompt user to select the video
               pendingConfigRef.current = data;
-              alert(
-                `This configuration is for the video "${data.videoFilename}".\n\nPlease select this video file from your computer in the next window.`
-              );
+              showToast(`Please select the video "${data.videoFilename}" from your computer.`);
               fileInputRef.current?.click();
             }
           } else {
