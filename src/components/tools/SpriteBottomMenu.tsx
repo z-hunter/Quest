@@ -49,23 +49,23 @@ export const SpriteBottomMenu: React.FC = () => {
       <button className="e-menu-btn" onClick={() => spriteEditor.newSprite()}>
         <span className="hotkey-accent">F4</span> New
       </button>
+      <button className="e-menu-btn" onClick={() => toggleSpriteEditor(false)}>
+        <span className="hotkey-accent">F5</span> Close
+      </button>
       {ctrlPressed && isBrowser ? (
         <button className="e-menu-btn" onClick={() => window.open('/vetool.html', '_blank')}>
-          <span className="hotkey-accent">F5</span> VETOOL TAB
+          <span className="hotkey-accent">F6</span> VETOOL TAB
         </button>
       ) : (
-        <button className="e-menu-btn" onClick={() => toggleSpriteEditor(false)}>
-          <span className="hotkey-accent">F5</span> Close
+        <button
+          className="e-menu-btn"
+          onClick={() => {
+            window.location.href = '/vetool.html';
+          }}
+        >
+          <span className="hotkey-accent">F6</span> VETOOL
         </button>
       )}
-      <button
-        className="e-menu-btn"
-        onClick={() => {
-          window.location.href = '/vetool.html';
-        }}
-      >
-        <span className="hotkey-accent">F6</span> VETOOL
-      </button>
     </div>
   );
 };

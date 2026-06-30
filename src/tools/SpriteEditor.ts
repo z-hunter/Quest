@@ -135,7 +135,7 @@ export class SpriteEditor {
       return;
     }
 
-    if (e.ctrlKey && e.key === 'F5') {
+    if (e.ctrlKey && e.key === 'F6') {
       if (!isTauriRuntime()) {
         e.preventDefault();
         e.stopPropagation();
