@@ -124,7 +124,8 @@ export function VetoolApp() {
       const endFrame = Math.floor(loopEnd * fps);
 
       let nextFrame = currentFrameRef.current;
-      if (elapsed >= frameDuration) {
+      const stepDuration = frameDuration * stepSize;
+      if (elapsed >= stepDuration) {
         nextFrame = currentFrameRef.current + stepSize;
         if (nextFrame > endFrame || nextFrame < startFrame) {
           nextFrame = startFrame;
@@ -134,9 +135,9 @@ export function VetoolApp() {
       const isNextFrameCached = canCache.current && frameCache.current[nextFrame] !== null;
 
       if (isNextFrameCached) {
-        if (elapsed >= frameDuration) {
+        if (elapsed >= stepDuration) {
           setFrameIndex(nextFrame);
-          lastFrameTime.current = now - (elapsed % frameDuration);
+          lastFrameTime.current = now - (elapsed % stepDuration);
         }
         if (!video.paused) {
           video.pause();
@@ -179,7 +180,7 @@ export function VetoolApp() {
       cancelAnimationFrame(animFrame);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, loopStart, loopEnd, fps]);
+  }, [isPlaying, loopStart, loopEnd, fps, stepSize]);
 
   // Seek event handler for video
   const handleSeeked = () => {
