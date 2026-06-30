@@ -70,6 +70,16 @@ export function VetoolApp() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingConfigRef = useRef<any>(null);
   const loadedLoopBoundsRef = useRef<{ start: number; end: number } | null>(null);
+  const seekTimeoutRef = useRef<number | null>(null);
+
+  // Clear seek timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (seekTimeoutRef.current !== null) {
+        window.clearTimeout(seekTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Dragging & Resizing Refs/State
   const dragInfo = useRef<{
@@ -187,6 +197,10 @@ export function VetoolApp() {
     const video = videoRef.current;
     if (!video) return;
 
+    if (seekTimeoutRef.current !== null) {
+      window.clearTimeout(seekTimeoutRef.current);
+    }
+
     const rawFrame = Math.floor(video.currentTime * fps);
     const startFrame = Math.floor(loopStart * fps);
     const endFrame = Math.floor(loopEnd * fps);
@@ -199,7 +213,11 @@ export function VetoolApp() {
     }
 
     setFrameIndex(frameIdx);
-    drawCanvas(frameIdx);
+
+    seekTimeoutRef.current = window.setTimeout(() => {
+      drawCanvas(frameIdx);
+      seekTimeoutRef.current = null;
+    }, 40);
   };
 
   // Draw main viewport canvas
