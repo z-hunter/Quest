@@ -41,6 +41,20 @@ export function VetoolApp() {
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportStatusText, setExportStatusText] = useState<string>('');
   const [uiScale, setUiScale] = useState<number>(1.0);
+  const [toastMessage, setToastMessage] = useState<{ id: number; text: string } | null>(null);
+
+  const showToast = React.useCallback((text: string) => {
+    setToastMessage({ id: Date.now(), text });
+  }, []);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // File Browser / Configuration State
   const [browserMode, setBrowserMode] = useState<'save' | 'load' | null>(null);
@@ -485,6 +499,7 @@ export function VetoolApp() {
         if (data.loopStart !== undefined && data.loopEnd !== undefined) {
           loadedLoopBoundsRef.current = { start: data.loopStart, end: data.loopEnd };
         }
+        showToast('Configuration loaded successfully.');
       }
     }
   };
@@ -722,7 +737,7 @@ export function VetoolApp() {
           };
           const filePath = `public/vetool/${selectedFile}`;
           await saveProjectFile(filePath, JSON.stringify(config, null, 2));
-          alert('Configuration saved successfully.');
+          showToast('Configuration saved successfully.');
         } catch (err: any) {
           alert(`Failed to save configuration: ${err.message || String(err)}`);
         }
@@ -751,7 +766,7 @@ export function VetoolApp() {
             if (videoUrl && videoFilename === data.videoFilename) {
               // Video matches currently loaded video, apply config immediately
               applyConfig(data);
-              alert('Configuration loaded successfully.');
+              showToast('Configuration loaded successfully.');
             } else {
               // Video doesn't match or not loaded. Store config and prompt user to select the video
               pendingConfigRef.current = data;
@@ -763,14 +778,14 @@ export function VetoolApp() {
           } else {
             // No video associated with this config, just apply the boxes/settings
             applyConfig(data);
-            alert('Configuration loaded successfully.');
+            showToast('Configuration loaded successfully.');
           }
         } catch (err: any) {
           alert(`Failed to load configuration: ${err.message || String(err)}`);
         }
       }
     },
-    [browserMode, videoFilename, videoUrl, loopStart, loopEnd, fps, stepSize, boxes]
+    [browserMode, videoFilename, videoUrl, loopStart, loopEnd, fps, stepSize, boxes, showToast]
   );
 
   // Keyboard navigation & playback loop
@@ -1330,6 +1345,13 @@ export function VetoolApp() {
               <p style={{ marginTop: '8px', color: '#888' }}>{exportProgress}% complete</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div key={toastMessage.id} className="notification-toast">
+          {toastMessage.text}
         </div>
       )}
     </div>
