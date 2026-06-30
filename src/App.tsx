@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
 import { HierarchyPanel } from './components/editor/HierarchyPanel';
@@ -14,7 +14,18 @@ import './editor.css';
 
 function App() {
   const [game, setGame] = useState<Game | null>(null);
-  const { enabled: editorEnabled, spriteEditorEnabled } = useEditorStore();
+  const { enabled: editorEnabled, spriteEditorEnabled, toggleSpriteEditor } = useEditorStore();
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#sprite-editor') {
+        toggleSpriteEditor(true);
+      }
+    };
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [toggleSpriteEditor]);
 
   const showLayout = editorEnabled || spriteEditorEnabled;
 
