@@ -40,6 +40,7 @@ export function VetoolApp() {
   // Export State
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportStatusText, setExportStatusText] = useState<string>('');
+  const [uiScale, setUiScale] = useState<number>(1.0);
 
   // File Browser / Configuration State
   const [browserMode, setBrowserMode] = useState<'save' | 'load' | null>(null);
@@ -882,6 +883,29 @@ export function VetoolApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes, activeBoxId, videoUrl, currentFrame]);
 
+  // Load UI Scale settings
+  useEffect(() => {
+    const updateScale = () => {
+      try {
+        const json = localStorage.getItem('quest_settings');
+        if (json) {
+          const loaded = JSON.parse(json);
+          const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
+          if (loadedEditor && typeof loadedEditor.uiScale === 'number') {
+            setUiScale(loadedEditor.uiScale);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load quest_settings in vetool:', e);
+      }
+    };
+
+    updateScale();
+
+    window.addEventListener('storage', updateScale);
+    return () => window.removeEventListener('storage', updateScale);
+  }, []);
+
   return (
     <div className="vetool-container">
       {/* 1. Header */}
@@ -1059,7 +1083,7 @@ export function VetoolApp() {
         </div>
 
         {/* Right Side: Sidebar Controls */}
-        <div className="vetool-sidebar">
+        <div className="vetool-sidebar" style={{ fontSize: `${12 * uiScale}px` }}>
           {/* File Operations */}
           <div className="vetool-sidebar-section">
             <h3>Video File</h3>

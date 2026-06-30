@@ -179,7 +179,7 @@
   margin: 0 0 10px 0;
   font-family: var(--ui-display-font), sans-serif;
   color: #fff;
-  font-size: 0.95rem;
+  font-size: 0.95em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px dashed var(--ui-main-color, #4aa07f);
@@ -206,7 +206,7 @@
 }
 
 .vetool-form-group label {
-  font-size: 0.75rem;
+  font-size: 0.75em;
   color: var(--ui-label-color, #888);
   text-transform: uppercase;
 }
@@ -226,7 +226,7 @@
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.8em;
 }
 
 .vetool-box-list-item.active {
@@ -247,7 +247,7 @@
 
 .vetool-box-meta {
   color: var(--ui-label-color, #888);
-  font-size: 0.7rem;
+  font-size: 0.7em;
 }
 
 /* Modals & Dialogs */
@@ -318,7 +318,7 @@
 
 /* Hotkey cheatsheet */
 .vetool-cheatsheet {
-  font-size: 0.75rem;
+  font-size: 0.75em;
   color: var(--ui-label-color, #888);
   line-height: 1.4;
   margin-top: 8px;
