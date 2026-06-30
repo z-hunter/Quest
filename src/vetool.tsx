@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { saveProjectFile } from './platform/fileApi';
+import { saveProjectFile, readProjectFileExisting } from './platform/fileApi';
 import { calculateSpritesheetLayout } from './utils/vetoolLayout';
+import { FileBrowser } from './components/FileBrowser';
 import './index.css';
+import './editor.css';
 import './vetool.css';
 
 interface Box {
@@ -29,6 +31,7 @@ export function VetoolApp() {
   const [stepSize, setStepSize] = useState<number>(1);
   const [loopStart, setLoopStart] = useState<number>(0); // in seconds
   const [loopEnd, setLoopEnd] = useState<number>(0); // in seconds
+  const [videoLoadError, setVideoLoadError] = useState<boolean>(false);
 
   // Bounding Boxes State
   const [boxes, setBoxes] = useState<Box[]>([]);
@@ -37,6 +40,10 @@ export function VetoolApp() {
   // Export State
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportStatusText, setExportStatusText] = useState<string>('');
+
+  // File Browser / Configuration State
+  const [browserMode, setBrowserMode] = useState<'save' | 'load' | null>(null);
+  const browserFilename = 'vetool_config.json';
 
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -78,67 +85,6 @@ export function VetoolApp() {
   const activeBox = useMemo(() => {
     return boxes.find((b) => b.id === activeBoxId) || null;
   }, [boxes, activeBoxId]);
-
-  // Keyboard navigation & playback loop
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is inside an input field
-      if (document.activeElement instanceof HTMLInputElement) return;
-
-      const video = videoRef.current;
-      if (!video) return;
-
-      const frameTime = 1 / fps;
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const nextTime = Math.min(video.duration, video.currentTime + stepSize * frameTime);
-        video.currentTime = nextTime;
-        setIsPlaying(false);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const prevTime = Math.max(0, video.currentTime - stepSize * frameTime);
-        video.currentTime = prevTime;
-        setIsPlaying(false);
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        setIsPlaying((prev) => !prev);
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        if (e.ctrlKey) {
-          video.currentTime = 0;
-        } else {
-          video.currentTime = loopStart;
-        }
-        setIsPlaying(false);
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        if (e.ctrlKey) {
-          video.currentTime = video.duration;
-        } else {
-          video.currentTime = loopEnd;
-        }
-        setIsPlaying(false);
-      } else if (e.key === '[') {
-        e.preventDefault();
-        setLoopStart(video.currentTime);
-      } else if (e.key === ']') {
-        e.preventDefault();
-        setLoopEnd(video.currentTime);
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (activeBoxId) {
-          e.preventDefault();
-          setBoxes((prev) => prev.filter((b) => b.id !== activeBoxId));
-          setActiveBoxId(null);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [fps, stepSize, loopStart, loopEnd, activeBoxId]);
 
   // Video playback loop & seek update
   useEffect(() => {
@@ -514,12 +460,6 @@ export function VetoolApp() {
   };
 
   // Reset/Clear all frames
-  const handleClearBoxes = () => {
-    if (window.confirm('Delete all bounding boxes?')) {
-      setBoxes([]);
-      setActiveBoxId(null);
-    }
-  };
 
   // Load local file input
   const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -528,6 +468,7 @@ export function VetoolApp() {
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
       setVideoFilename(file.name);
+      setVideoLoadError(false);
       setIsPlaying(false);
     }
   };
@@ -575,7 +516,7 @@ export function VetoolApp() {
   };
 
   // EXPORT PROCESS
-  const handleExport = async () => {
+  const handleExport = React.useCallback(async () => {
     if (boxes.length === 0) {
       alert('Draw at least one bounding box to export.');
       return;
@@ -712,7 +653,197 @@ export function VetoolApp() {
       alert(`Export failed: ${err.message || String(err)}`);
       setExportProgress(null);
     }
-  };
+  }, [boxes, fps, loopStart, loopEnd, stepSize, videoWidth, videoHeight]);
+
+  // CONFIGURATION SAVE / LOAD
+  const handleOpenSaveConfig = React.useCallback(() => {
+    setBrowserMode('save');
+  }, []);
+
+  const handleOpenLoadConfig = React.useCallback(() => {
+    setBrowserMode('load');
+  }, []);
+
+  const handleNewProject = React.useCallback(() => {
+    if (window.confirm('Start a new project? This will clear all boxes and reset settings.')) {
+      setBoxes([]);
+      setActiveBoxId(null);
+      setVideoUrl(null);
+      setVideoFilename('');
+      setVideoDuration(0);
+      setVideoWidth(0);
+      setVideoHeight(0);
+      setLoopStart(0);
+      setLoopEnd(0);
+      setFrameIndex(0);
+      setVideoLoadError(false);
+      frameCache.current = [];
+    }
+  }, []);
+
+  const handleBrowserConfirm = React.useCallback(
+    async (selectedFile: string) => {
+      setBrowserMode(null);
+      if (!selectedFile) return;
+
+      if (browserMode === 'save') {
+        try {
+          const config = {
+            _isVetoolConfig: true,
+            videoFilename,
+            loopStart,
+            loopEnd,
+            fps,
+            stepSize,
+            boxes,
+          };
+          const filePath = `public/vetool/${selectedFile}`;
+          await saveProjectFile(filePath, JSON.stringify(config, null, 2));
+          alert('Configuration saved successfully.');
+        } catch (err: any) {
+          alert(`Failed to save configuration: ${err.message || String(err)}`);
+        }
+      } else if (browserMode === 'load') {
+        try {
+          const rawContent = await readProjectFileExisting(`public/vetool/${selectedFile}`);
+          if (!rawContent) {
+            throw new Error('File is empty or could not be read.');
+          }
+          const data = JSON.parse(rawContent);
+          if (!data._isVetoolConfig) {
+            alert('Selected file is not a valid Video Export Tool configuration.');
+            return;
+          }
+
+          if (data.fps) setFps(data.fps);
+          if (data.stepSize) setStepSize(data.stepSize);
+          if (data.loopStart !== undefined) setLoopStart(data.loopStart);
+          if (data.loopEnd !== undefined) setLoopEnd(data.loopEnd);
+          if (data.boxes) setBoxes(data.boxes);
+
+          if (data.videoFilename) {
+            // Keep existing video URL if filename matches to avoid breaking local blobs
+            if (videoFilename !== data.videoFilename || !videoUrl) {
+              setVideoFilename(data.videoFilename);
+              const clientUrl = `/assets/${data.videoFilename}`;
+              setVideoUrl(clientUrl);
+              setVideoLoadError(false);
+            }
+          }
+
+          // Clear frameCache
+          frameCache.current = [];
+
+          alert('Configuration loaded successfully.');
+        } catch (err: any) {
+          alert(`Failed to load configuration: ${err.message || String(err)}`);
+        }
+      }
+    },
+    [browserMode, videoFilename, videoUrl, loopStart, loopEnd, fps, stepSize, boxes]
+  );
+
+  // Keyboard navigation & playback loop
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is inside an input field
+      if (document.activeElement instanceof HTMLInputElement) return;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      const frameTime = 1 / fps;
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const nextTime = Math.min(video.duration, video.currentTime + stepSize * frameTime);
+        video.currentTime = nextTime;
+        setIsPlaying(false);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prevTime = Math.max(0, video.currentTime - stepSize * frameTime);
+        video.currentTime = prevTime;
+        setIsPlaying(false);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        if (e.ctrlKey) {
+          video.currentTime = 0;
+        } else {
+          video.currentTime = loopStart;
+        }
+        setIsPlaying(false);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        if (e.ctrlKey) {
+          video.currentTime = video.duration;
+        } else {
+          video.currentTime = loopEnd;
+        }
+        setIsPlaying(false);
+      } else if (e.key === '[') {
+        e.preventDefault();
+        setLoopStart(video.currentTime);
+      } else if (e.key === ']') {
+        e.preventDefault();
+        setLoopEnd(video.currentTime);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (activeBoxId) {
+          e.preventDefault();
+          setBoxes((prev) => prev.filter((b) => b.id !== activeBoxId));
+          setActiveBoxId(null);
+        }
+      } else if (e.key === 'F1') {
+        e.preventDefault();
+        window.location.href = '/';
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        handleOpenSaveConfig();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        handleOpenLoadConfig();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        handleNewProject();
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        window.location.href = '/#sprite-editor';
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        const cur = video.currentTime;
+        setLoopStart(cur);
+        if (loopEnd < cur) setLoopEnd(video.duration);
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        handleExport();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        const cur = video.currentTime;
+        if (cur > loopStart) setLoopEnd(cur);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    fps,
+    stepSize,
+    loopStart,
+    loopEnd,
+    activeBoxId,
+    videoDuration,
+    handleExport,
+    handleOpenSaveConfig,
+    handleOpenLoadConfig,
+    handleNewProject,
+  ]);
 
   // Draw initial state of canvas if video is not playing
   useEffect(() => {
@@ -741,8 +872,10 @@ export function VetoolApp() {
         {/* Left Side: Video Viewport & Timeline */}
         <div className="vetool-workspace">
           {/* Video Viewport Box */}
-          <div className={`vetool-viewport-card ${!videoUrl ? 'vetool-checkerboard' : ''}`}>
-            {videoUrl ? (
+          <div
+            className={`vetool-viewport-card ${!videoUrl || videoLoadError ? 'vetool-checkerboard' : ''}`}
+          >
+            {videoUrl && !videoLoadError ? (
               <>
                 <video
                   ref={videoRef}
@@ -750,6 +883,7 @@ export function VetoolApp() {
                   style={{ display: 'none' }}
                   onLoadedMetadata={handleLoadedMetadata}
                   onSeeked={handleSeeked}
+                  onError={() => setVideoLoadError(true)}
                   loop={false}
                 />
                 <canvas
@@ -760,6 +894,22 @@ export function VetoolApp() {
                   onMouseUp={handleMouseUp}
                 />
               </>
+            ) : videoLoadError ? (
+              <div className="ui-text-dim text-center">
+                <h2 style={{ color: '#ff4d4d' }}>VIDEO LOAD FAILED</h2>
+                <p>Could not load "{videoFilename}" automatically from server assets.</p>
+                <p style={{ marginTop: '8px' }}>
+                  Please click <strong>CHOOSE FILE</strong> in the sidebar to load the video from
+                  your local computer.
+                </p>
+                <video
+                  ref={videoRef}
+                  src={videoUrl || undefined}
+                  style={{ display: 'none' }}
+                  onError={() => setVideoLoadError(true)}
+                  loop={false}
+                />
+              </div>
             ) : (
               <div className="ui-text-dim text-center">
                 <h2>NO VIDEO LOADED</h2>
@@ -1022,43 +1172,82 @@ export function VetoolApp() {
       </div>
 
       {/* 3. Bottom Actions */}
-      {videoUrl && (
-        <div className="vetool-bottom-actions">
-          <button className="e-btn" onClick={() => setIsPlaying((prev) => !prev)}>
-            {isPlaying ? 'PAUSE' : 'PLAY'} [Space]
-          </button>
-          <button className="e-btn" onClick={handleClearBoxes}>
-            CLEAR ALL BOXES [F2]
-          </button>
-          <button
-            className="e-btn"
-            onClick={() => {
-              if (boxes.length < 10) {
-                const newId = 'box_' + Date.now();
-                const newBox: Box = {
-                  id: newId,
-                  spriteId: `sprite_box_${boxes.length}`,
-                  targetPng: `public/assets/exported_sprites.png`,
-                  colIndex: boxes.length,
-                  x: Math.floor(videoWidth / 2) - 16,
-                  y: Math.floor(videoHeight / 2) - 16,
-                  w: 32,
-                  h: 32,
-                };
-                setBoxes((prev) => [...prev, newBox]);
-                setActiveBoxId(newId);
-              }
-            }}
-          >
-            + ADD BOX
-          </button>
-          <button
-            className="e-btn"
-            style={{ borderColor: '#79efa4', color: '#79efa4', fontWeight: 'bold' }}
-            onClick={handleExport}
-          >
-            EXPORT ATLAS [F8]
-          </button>
+      <div className="editor-bottom-menu" style={{ zIndex: 2000 }}>
+        <div className="mem-counter">VETOOL</div>
+
+        <button className="e-menu-btn" onClick={() => (window.location.href = '/')}>
+          <span className="hotkey-accent">F1</span>Game
+        </button>
+        <button className="e-menu-btn" onClick={handleOpenSaveConfig} disabled={!videoUrl}>
+          <span className="hotkey-accent">F2</span>Save
+        </button>
+        <button className="e-menu-btn" onClick={handleOpenLoadConfig}>
+          <span className="hotkey-accent">F3</span>Load
+        </button>
+        <button className="e-menu-btn" onClick={handleNewProject}>
+          <span className="hotkey-accent">F4</span>New
+        </button>
+        <button className="e-menu-btn" onClick={() => (window.location.href = '/#sprite-editor')}>
+          <span className="hotkey-accent">F5</span>Sprite
+        </button>
+        <button className="e-menu-btn" onClick={() => setIsPlaying((p) => !p)} disabled={!videoUrl}>
+          <span className="hotkey-accent">F6</span>
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        <button
+          className="e-menu-btn"
+          disabled={!videoUrl}
+          onClick={() => {
+            if (videoRef.current) {
+              const cur = videoRef.current.currentTime;
+              setLoopStart(cur);
+              if (loopEnd < cur) setLoopEnd(videoDuration);
+            }
+          }}
+        >
+          <span className="hotkey-accent">F7</span>Set Start
+        </button>
+        <button className="e-menu-btn" onClick={handleExport} disabled={!videoUrl}>
+          <span className="hotkey-accent">F8</span>Export
+        </button>
+        <button
+          className="e-menu-btn"
+          disabled={!videoUrl}
+          onClick={() => {
+            if (videoRef.current) {
+              const cur = videoRef.current.currentTime;
+              if (cur > loopStart) setLoopEnd(cur);
+            }
+          }}
+        >
+          <span className="hotkey-accent">F9</span>Set End
+        </button>
+
+        <div className="fps-counter">FPS: {fps}</div>
+      </div>
+
+      {/* File Browser Modal for Config Save/Load */}
+      {browserMode !== null && (
+        <div
+          style={{
+            pointerEvents: 'auto',
+            zIndex: 5000,
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          <FileBrowser
+            mode={browserMode}
+            directory="public/vetool"
+            defaultFilename={browserFilename}
+            onConfirm={handleBrowserConfirm}
+            onCancel={() => setBrowserMode(null)}
+            extension=".json"
+            title={browserMode === 'save' ? 'Save Vetool Config' : 'Load Vetool Config'}
+          />
         </div>
       )}
 

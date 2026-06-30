@@ -150,17 +150,9 @@
   color: var(--ui-label-color, #888);
 }
 
-.vetool-bottom-actions {
-  background: var(--ui-panel-header-bg, #111a14);
-  border-top: 2px solid var(--ui-main-color, #4aa07f);
-  padding: 6px;
-  display: flex;
-  justify-content: space-around;
-}
-
 .vetool-sidebar {
   width: 26rem;
-  background: rgba(0, 0, 0, 0.9);
+  background: var(--ui-panel-header-bg, #111a14);
   border-left: 2px solid var(--ui-main-color, #4aa07f);
   padding: 12px;
   overflow-y: auto;
@@ -171,7 +163,7 @@
 }
 
 .vetool-sidebar-section {
-  border-bottom: 1px solid #222;
+  border-bottom: 1px dashed var(--ui-input-border, #2a523d);
   padding-bottom: 12px;
 }
 
