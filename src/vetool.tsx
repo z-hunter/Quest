@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { listProjectFiles, saveProjectFile } from './platform/fileApi';
+import { saveProjectFile } from './platform/fileApi';
 import { calculateSpritesheetLayout } from './utils/vetoolLayout';
 import './index.css';
 import './vetool.css';
@@ -34,11 +34,6 @@ export function VetoolApp() {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [activeBoxId, setActiveBoxId] = useState<string | null>(null);
 
-  // File Browser State (Server Files)
-  const [fileBrowserOpen, setFileBrowserOpen] = useState<boolean>(false);
-  const [serverFiles, setServerFiles] = useState<{ name: string; isDir: boolean }[]>([]);
-  const [currentServerDir, setCurrentServerDir] = useState<string>('public/assets');
-
   // Export State
   const [exportProgress, setExportProgress] = useState<number | null>(null);
   const [exportStatusText, setExportStatusText] = useState<string>('');
@@ -50,6 +45,7 @@ export function VetoolApp() {
   const canCache = useRef<boolean>(true);
   const lastFrameTime = useRef<number>(0);
   const currentFrameRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Dragging & Resizing Refs/State
   const dragInfo = useRef<{
@@ -82,19 +78,6 @@ export function VetoolApp() {
   const activeBox = useMemo(() => {
     return boxes.find((b) => b.id === activeBoxId) || null;
   }, [boxes, activeBoxId]);
-
-  // Load server assets on mount / when folder changes
-  const loadServerFiles = async (dir: string) => {
-    try {
-      const files = await listProjectFiles(dir);
-      // Filter for mp4s or directories
-      const filtered = files.filter((f) => f.isDir || f.name.toLowerCase().endsWith('.mp4'));
-      setServerFiles(filtered);
-      setCurrentServerDir(dir);
-    } catch (e) {
-      console.error('Failed to list server files', e);
-    }
-  };
 
   // Keyboard navigation & playback loop
   useEffect(() => {
@@ -410,7 +393,7 @@ export function VetoolApp() {
       const newBox: Box = {
         id: newId,
         spriteId: `sprite_box_${boxes.length}`,
-        targetPng: `public/sprites/exported_sprites.png`,
+        targetPng: `public/assets/exported_sprites.png`,
         colIndex: boxes.length,
         x,
         y,
@@ -549,17 +532,6 @@ export function VetoolApp() {
     }
   };
 
-  // Load server asset
-  const handleLoadServerAsset = (filename: string) => {
-    // Relative path for client
-    let clientUrl = `/${currentServerDir.substring(7)}/${filename}`;
-    clientUrl = clientUrl.replace(/\/+/g, '/'); // Clean double slashes
-    setVideoUrl(clientUrl);
-    setVideoFilename(filename);
-    setFileBrowserOpen(false);
-    setIsPlaying(false);
-  };
-
   // Video loaded metadata handler
   const handleLoadedMetadata = () => {
     const video = videoRef.current;
@@ -635,12 +607,15 @@ export function VetoolApp() {
     setExportStatusText('Initializing export...');
 
     try {
-      // Group boxes by their target PNG spritesheet paths
+      // Group boxes by their target PNG spritesheet filenames (always saving under public/assets/)
       const groups: Record<string, Box[]> = {};
       boxes.forEach((box) => {
-        const path = box.targetPng.trim() || 'public/sprites/exported_sprites.png';
-        if (!groups[path]) groups[path] = [];
-        groups[path].push(box);
+        const rawPath = box.targetPng.trim() || 'exported_sprites.png';
+        const filename = rawPath.split(/[/\\]/).pop() || 'exported_sprites.png';
+        const targetPath = `public/assets/${filename}`;
+
+        if (!groups[targetPath]) groups[targetPath] = [];
+        groups[targetPath].push(box);
       });
 
       const totalSteps = Object.keys(groups).length * exportFrames.length;
@@ -846,25 +821,20 @@ export function VetoolApp() {
           <div className="vetool-sidebar-section">
             <h3>Video File</h3>
             <div className="vetool-form-group">
-              <label>Load Local File (Browser)</label>
-              <label
-                className="file-upload"
-                style={{ display: 'block', textAlign: 'center', marginTop: '4px' }}
-              >
-                CHOOSE FILE
-                <input type="file" accept="video/mp4,video/*" onChange={handleLocalFileChange} />
-              </label>
-            </div>
-            <div className="vetool-form-group" style={{ marginTop: '8px' }}>
-              <label>Workspace Files</label>
+              <label>Video File (.mp4)</label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="video/mp4,video/*"
+                onChange={handleLocalFileChange}
+                style={{ display: 'none' }}
+              />
               <button
                 className="e-btn"
-                onClick={() => {
-                  loadServerFiles(currentServerDir);
-                  setFileBrowserOpen(true);
-                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{ width: '100%', marginTop: '4px' }}
               >
-                Browse Server Assets
+                CHOOSE FILE
               </button>
             </div>
           </div>
@@ -1068,7 +1038,7 @@ export function VetoolApp() {
                 const newBox: Box = {
                   id: newId,
                   spriteId: `sprite_box_${boxes.length}`,
-                  targetPng: `public/sprites/exported_sprites.png`,
+                  targetPng: `public/assets/exported_sprites.png`,
                   colIndex: boxes.length,
                   x: Math.floor(videoWidth / 2) - 16,
                   y: Math.floor(videoHeight / 2) - 16,
@@ -1089,57 +1059,6 @@ export function VetoolApp() {
           >
             EXPORT ATLAS [F8]
           </button>
-        </div>
-      )}
-
-      {/* Server File Browser Modal */}
-      {fileBrowserOpen && (
-        <div className="vetool-modal-backdrop" onClick={() => setFileBrowserOpen(false)}>
-          <div className="vetool-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="vetool-modal-header">
-              <span>Select Server Asset</span>
-              <button className="e-btn" onClick={() => setFileBrowserOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div className="vetool-modal-body">
-              <p style={{ color: '#888', marginBottom: '8px' }}>
-                Folder: <span className="ui-text-accent-cyan">{currentServerDir}</span>
-              </p>
-              {currentServerDir !== 'public/assets' && (
-                <div
-                  className="vetool-file-list-item ui-text-accent-yellow"
-                  onClick={() => {
-                    const parts = currentServerDir.split('/');
-                    parts.pop();
-                    loadServerFiles(parts.join('/'));
-                  }}
-                >
-                  [.. Parent Directory]
-                </div>
-              )}
-              {serverFiles.map((file) => (
-                <div
-                  key={file.name}
-                  className={`vetool-file-list-item ${file.isDir ? 'ui-text-accent-yellow' : ''}`}
-                  onClick={() => {
-                    if (file.isDir) {
-                      loadServerFiles(`${currentServerDir}/${file.name}`);
-                    } else {
-                      handleLoadServerAsset(file.name);
-                    }
-                  }}
-                >
-                  {file.isDir ? `[Dir] ${file.name}` : file.name}
-                </div>
-              ))}
-              {serverFiles.length === 0 && (
-                <div className="ui-text-dim text-center py-10">
-                  No MP4 files found in this folder.
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
