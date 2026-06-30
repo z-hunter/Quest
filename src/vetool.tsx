@@ -770,12 +770,13 @@ export function VetoolApp() {
             <h3>Video File</h3>
             <div className="vetool-form-group">
               <label>Load Local File (Browser)</label>
-              <input
-                type="file"
-                accept="video/mp4,video/*"
-                onChange={handleLocalFileChange}
-                style={{ fontSize: '0.85em' }}
-              />
+              <label
+                className="file-upload"
+                style={{ display: 'block', textAlign: 'center', marginTop: '4px' }}
+              >
+                CHOOSE FILE
+                <input type="file" accept="video/mp4,video/*" onChange={handleLocalFileChange} />
+              </label>
             </div>
             <div className="vetool-form-group" style={{ marginTop: '8px' }}>
               <label>Workspace Files</label>
