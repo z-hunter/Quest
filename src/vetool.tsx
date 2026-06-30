@@ -53,6 +53,8 @@ export function VetoolApp() {
   const lastFrameTime = useRef<number>(0);
   const currentFrameRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingConfigRef = useRef<any>(null);
+  const loadedLoopBoundsRef = useRef<{ start: number; end: number } | null>(null);
 
   // Dragging & Resizing Refs/State
   const dragInfo = useRef<{
@@ -470,6 +472,19 @@ export function VetoolApp() {
       setVideoFilename(file.name);
       setVideoLoadError(false);
       setIsPlaying(false);
+
+      // If there is a pending configuration, apply it now
+      if (pendingConfigRef.current) {
+        const data = pendingConfigRef.current;
+        pendingConfigRef.current = null;
+
+        if (data.fps) setFps(data.fps);
+        if (data.stepSize) setStepSize(data.stepSize);
+        if (data.boxes) setBoxes(data.boxes);
+        if (data.loopStart !== undefined && data.loopEnd !== undefined) {
+          loadedLoopBoundsRef.current = { start: data.loopStart, end: data.loopEnd };
+        }
+      }
     }
   };
 
@@ -481,8 +496,15 @@ export function VetoolApp() {
     setVideoDuration(video.duration);
     setVideoWidth(video.videoWidth);
     setVideoHeight(video.videoHeight);
-    setLoopStart(0);
-    setLoopEnd(video.duration);
+
+    if (loadedLoopBoundsRef.current) {
+      setLoopStart(loadedLoopBoundsRef.current.start);
+      setLoopEnd(loadedLoopBoundsRef.current.end);
+      loadedLoopBoundsRef.current = null;
+    } else {
+      setLoopStart(0);
+      setLoopEnd(video.duration);
+    }
     setFrameIndex(0);
 
     // Initialize frame cache
@@ -715,26 +737,33 @@ export function VetoolApp() {
             return;
           }
 
-          if (data.fps) setFps(data.fps);
-          if (data.stepSize) setStepSize(data.stepSize);
-          if (data.loopStart !== undefined) setLoopStart(data.loopStart);
-          if (data.loopEnd !== undefined) setLoopEnd(data.loopEnd);
-          if (data.boxes) setBoxes(data.boxes);
+          const applyConfig = (configData: any) => {
+            if (configData.fps) setFps(configData.fps);
+            if (configData.stepSize) setStepSize(configData.stepSize);
+            if (configData.loopStart !== undefined) setLoopStart(configData.loopStart);
+            if (configData.loopEnd !== undefined) setLoopEnd(configData.loopEnd);
+            if (configData.boxes) setBoxes(configData.boxes);
+            frameCache.current = [];
+          };
 
           if (data.videoFilename) {
-            // Keep existing video URL if filename matches to avoid breaking local blobs
-            if (videoFilename !== data.videoFilename || !videoUrl) {
-              setVideoFilename(data.videoFilename);
-              const clientUrl = `/assets/${data.videoFilename}`;
-              setVideoUrl(clientUrl);
-              setVideoLoadError(false);
+            if (videoUrl && videoFilename === data.videoFilename) {
+              // Video matches currently loaded video, apply config immediately
+              applyConfig(data);
+              alert('Configuration loaded successfully.');
+            } else {
+              // Video doesn't match or not loaded. Store config and prompt user to select the video
+              pendingConfigRef.current = data;
+              alert(
+                `This configuration is for the video "${data.videoFilename}".\n\nPlease select this video file from your computer in the next window.`
+              );
+              fileInputRef.current?.click();
             }
+          } else {
+            // No video associated with this config, just apply the boxes/settings
+            applyConfig(data);
+            alert('Configuration loaded successfully.');
           }
-
-          // Clear frameCache
-          frameCache.current = [];
-
-          alert('Configuration loaded successfully.');
         } catch (err: any) {
           alert(`Failed to load configuration: ${err.message || String(err)}`);
         }
