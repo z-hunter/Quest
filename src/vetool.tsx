@@ -214,17 +214,20 @@ export function VetoolApp() {
     if (canCache.current && frameCache.current[frameIndex]) {
       ctx.drawImage(frameCache.current[frameIndex]!, 0, 0);
     } else if (!video.seeking) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const currentVideoFrame = Math.floor(video.currentTime * fps);
+      if (stepSize === 1 || currentVideoFrame === frameIndex) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Cache this frame if possible
-      if (canCache.current && video.readyState >= 2) {
-        const offscreen = document.createElement('canvas');
-        offscreen.width = canvas.width;
-        offscreen.height = canvas.height;
-        const oCtx = offscreen.getContext('2d');
-        if (oCtx) {
-          oCtx.drawImage(video, 0, 0);
-          frameCache.current[frameIndex] = offscreen;
+        // Cache this frame if possible
+        if (canCache.current && video.readyState >= 2) {
+          const offscreen = document.createElement('canvas');
+          offscreen.width = canvas.width;
+          offscreen.height = canvas.height;
+          const oCtx = offscreen.getContext('2d');
+          if (oCtx) {
+            oCtx.drawImage(video, 0, 0);
+            frameCache.current[frameIndex] = offscreen;
+          }
         }
       }
     }
