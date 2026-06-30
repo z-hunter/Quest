@@ -27,6 +27,21 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [toggleSpriteEditor]);
 
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const isSceneDirty = Game.instance?.editor?.persistenceManager?.isCurrentSceneDirty?.();
+      const isSpriteDirty = Game.instance?.spriteEditor?.isDirty;
+
+      if (isSceneDirty || isSpriteDirty) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   const showLayout = (editorEnabled || spriteEditorEnabled) && game !== null;
 
   return (

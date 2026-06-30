@@ -16,6 +16,7 @@ export const SpritePropertiesPanel: React.FC = () => {
 
   const handlePropChange = (field: string, value: any) => {
     (spriteEditor.sprite as any)[field] = value;
+    spriteEditor.isDirty = true;
     spriteEditor.updatePreview();
     incrementSpriteVersion();
   };

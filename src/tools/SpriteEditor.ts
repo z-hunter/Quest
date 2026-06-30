@@ -27,6 +27,7 @@ export class SpriteEditor {
 
   // Data State
   sprite: SpriteData;
+  isDirty: boolean = false;
   sourceImage: HTMLImageElement | null = null;
 
   // Rendering State
@@ -393,6 +394,9 @@ export class SpriteEditor {
     }
 
     this.sprite.imageFile = path; // Keep original path in data
+    if (!keepDimensions) {
+      this.isDirty = true;
+    }
     this.sourceImage = new Image();
     this.sourceImage.src = src;
     this.sourceImage.onload = () => {
@@ -484,6 +488,7 @@ export class SpriteEditor {
 
     try {
       await saveProjectFile(filePath, data);
+      this.isDirty = false;
       // Use Toast Message instead of Alert
       this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
     } catch (e) {
@@ -505,6 +510,7 @@ export class SpriteEditor {
         })
         .then((data) => {
           this.sprite = data;
+          this.isDirty = false;
 
           // Sync ID with filename path (sub/file -> sub\file)
           const id = file.replace('.json', '').replace(/\//g, '\\');
@@ -533,6 +539,7 @@ export class SpriteEditor {
       height: 32,
       frames: 1,
     };
+    this.isDirty = false;
     this.sourceImage = null;
     this.updateUI();
   }
