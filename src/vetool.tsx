@@ -160,18 +160,20 @@ export function VetoolApp() {
     const updateLoop = () => {
       if (video.paused && !isPlaying) return;
 
+      let targetFrame = currentFrame;
+
       // Handle loop constraints
       if (!video.seeking) {
         if (video.currentTime >= loopEnd || video.currentTime < loopStart) {
           video.currentTime = loopStart;
-          setCurrentFrame(Math.floor(loopStart * fps));
+          targetFrame = Math.floor(loopStart * fps);
         } else {
-          // Sync frame index only when not seeking to avoid jitter
-          setCurrentFrame(Math.floor(video.currentTime * fps));
+          targetFrame = Math.floor(video.currentTime * fps);
         }
+        setCurrentFrame(targetFrame);
       }
 
-      drawCanvas();
+      drawCanvas(targetFrame);
 
       animFrame = requestAnimationFrame(updateLoop);
     };
@@ -193,12 +195,13 @@ export function VetoolApp() {
   const handleSeeked = () => {
     const video = videoRef.current;
     if (!video) return;
-    setCurrentFrame(Math.floor(video.currentTime * fps));
-    drawCanvas();
+    const frameIdx = Math.floor(video.currentTime * fps);
+    setCurrentFrame(frameIdx);
+    drawCanvas(frameIdx);
   };
 
   // Draw main viewport canvas
-  const drawCanvas = () => {
+  const drawCanvas = (frameIndex: number = currentFrame) => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -207,8 +210,8 @@ export function VetoolApp() {
     if (!ctx) return;
 
     // Draw Video Frame (use cache if available)
-    if (canCache.current && frameCache.current[currentFrame]) {
-      ctx.drawImage(frameCache.current[currentFrame]!, 0, 0);
+    if (canCache.current && frameCache.current[frameIndex]) {
+      ctx.drawImage(frameCache.current[frameIndex]!, 0, 0);
     } else {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -220,7 +223,7 @@ export function VetoolApp() {
         const oCtx = offscreen.getContext('2d');
         if (oCtx) {
           oCtx.drawImage(video, 0, 0);
-          frameCache.current[currentFrame] = offscreen;
+          frameCache.current[frameIndex] = offscreen;
         }
       }
     }
