@@ -1,7 +1,7 @@
 import { ScriptRegistry } from './ScriptRegistry';
 import { SceneSpatialValidator } from '../scene/SceneSpatialValidator';
 
-export type ConsoleLineType = 'output' | 'command' | 'error' | 'info';
+export type ConsoleLineType = 'output' | 'command' | 'error' | 'info' | 'dialogue';
 
 export interface ConsoleLine {
   text: string;
@@ -32,6 +32,7 @@ export class Console {
   parserPeekEnabled: boolean = false;
   parserPeekLlmEnabled: boolean = false;
   parserPeekPnEnabled: boolean = false;
+  parserPeekPmEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
   parserLlmEnabled: boolean = false;
@@ -188,6 +189,16 @@ export class Console {
     this.registerCommand('#PEEKPN-OFF', () => {
       this.parserPeekPnEnabled = false;
       this.log('Parser Notes peek disabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPM-ON', () => {
+      this.parserPeekPmEnabled = true;
+      this.log('Puppet Master peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPM-OFF', () => {
+      this.parserPeekPmEnabled = false;
+      this.log('Puppet Master peek disabled.', 'info');
     });
 
     this.registerCommand('#STAGE1-OFF', () => {

@@ -65,6 +65,26 @@ describe('Parser LLM Integration', () => {
     expect(console.parserPeekPnEnabled).toBe(false);
   });
 
+  it('#PEEKPM-ON/#PEEKPM-OFF toggle parserPeekPmEnabled on a real Console instance', () => {
+    const game = {
+      log: vi.fn(),
+      textAssets: {
+        getParserCommands: () => ({}),
+        getParserLexicon: () => ({}),
+      },
+      sceneManager: { currentScene: null },
+    };
+    const console = new Console(game);
+
+    expect(console.parserPeekPmEnabled).toBe(false);
+
+    console.processCommand('#peekpm-on');
+    expect(console.parserPeekPmEnabled).toBe(true);
+
+    console.processCommand('#peekpm-off');
+    expect(console.parserPeekPmEnabled).toBe(false);
+  });
+
   it('#C1-OFF/#C1-ON toggle forced LLM handoff mode', () => {
     const game = {
       log: vi.fn(),

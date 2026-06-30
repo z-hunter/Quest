@@ -6,6 +6,7 @@ import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
 type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
+  hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
@@ -213,12 +214,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
@@ -350,6 +349,11 @@ export function createTestTextAssets(): TestTextAssets {
         return (obj as { description?: string }).description || null;
       }
       return null;
+    },
+    hasAuthoredObjectTitle(obj) {
+      const asset = objectAssets.get(obj.name);
+      const text = resolveTextValue(asset?.title);
+      return !!text?.trim();
     },
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);

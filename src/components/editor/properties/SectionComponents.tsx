@@ -218,7 +218,12 @@ export const SectionComponents: React.FC = () => {
                     { value: 'WalkBox', label: 'WalkBox (Collider)' },
                   ]
                 : []),
-              ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
+              ...(selectedObjectType === 'Actor'
+                ? [
+                    { value: 'NPC', label: 'NPC' },
+                    { value: 'Shadow', label: 'Shadow' },
+                  ]
+                : []),
             ].map((opt) => ({ ...opt, icon: getIconUrl(opt.value) }))}
             placeholder="+ Add Component"
             onChange={(value) => {
@@ -319,6 +324,18 @@ export const SectionComponents: React.FC = () => {
                   offsetX: 0,
                   offsetY: 0,
                   triggerId: '',
+                });
+              } else if (type === 'NPC') {
+                const initialObjectives = game.textAssets.getResolvedObjectListField(
+                  o,
+                  'objectives'
+                );
+                o.components.push({
+                  type: 'NPC',
+                  enabled: true,
+                  memory: '',
+                  objectives: initialObjectives,
+                  objectivesInitializedFromTA: true,
                 });
               } else if (type === '3d-parallax') {
                 o.components.push({ type: '3d-parallax' });
@@ -422,6 +439,71 @@ export const SectionComponents: React.FC = () => {
               >
                 Enables Actor movement, direction, player mode, and animation sets.
               </div>
+            )}
+
+            {comp.type === 'NPC' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#ccc',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Enables Puppet Master dialogue, NPC memory, and runtime objectives.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    <input
+                      type="checkbox"
+                      checked={comp.enabled !== false}
+                      onChange={(e) => {
+                        comp.enabled = e.target.checked;
+                        incrementObjectVersion();
+                      }}
+                    />{' '}
+                    Enabled
+                  </label>
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Memory
+                  </label>
+                  <textarea
+                    className="e-input"
+                    rows={3}
+                    value={comp.memory || ''}
+                    onChange={(e) => {
+                      comp.memory = e.target.value;
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Current Objectives
+                  </label>
+                  <textarea
+                    className="e-input"
+                    rows={3}
+                    value={
+                      Array.isArray(comp.objectives) &&
+                      (comp.objectives.length > 0 || comp.objectivesInitializedFromTA === true)
+                        ? comp.objectives.join('\n')
+                        : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
+                    }
+                    onChange={(e) => {
+                      comp.objectives = e.target.value
+                        .split(/\r?\n/)
+                        .map((line) => line.trim())
+                        .filter(Boolean);
+                      comp.objectivesInitializedFromTA = true;
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              </>
             )}
 
             {comp.type === 'Backface' && (

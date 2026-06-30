@@ -64,6 +64,14 @@ export interface ActorComponent {
   type: 'Actor';
 }
 
+export interface NpcComponent {
+  type: 'NPC';
+  enabled?: boolean;
+  memory?: string;
+  objectives?: string[];
+  objectivesInitializedFromTA?: boolean;
+}
+
 export interface InventoryComponent {
   type: 'Inventory';
   relation?: Exclude<SpatialRelationType, 'near'>;
@@ -116,6 +124,7 @@ export type AnyComponent = (
   | EntryComponent
   | ItemComponent
   | ActorComponent
+  | NpcComponent
   | InventoryComponent
   | SurfaceComponent
   | StateComponent
@@ -233,6 +242,27 @@ export class ComponentSystem {
       .filter((component: any): component is StateComponent => component?.type === 'State')
       .map((component) => this.normalizeStateComponent(component))
       .filter((component): component is StateComponent => !!component && !!component.id);
+  }
+
+  static getNpcComponent(entity: SceneObject | null | undefined): NpcComponent | null {
+    if (!entity?.components) return null;
+    const component = entity.components.find(
+      (candidate: any): candidate is NpcComponent => candidate?.type === 'NPC'
+    );
+    if (!component) return null;
+    return {
+      type: 'NPC',
+      enabled: component.enabled !== false,
+      memory: typeof component.memory === 'string' ? component.memory : '',
+      objectives: Array.isArray(component.objectives)
+        ? component.objectives.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
+    };
+  }
+
+  static isNpc(entity: SceneObject | null | undefined): boolean {
+    return !!this.getNpcComponent(entity)?.enabled;
   }
 
   static getStateComponent(

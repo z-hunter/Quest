@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Game } from '../../src/core/Game';
+import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
@@ -916,6 +917,43 @@ describe('Game semantic API', () => {
     expect(outcome.status).toBe('ok');
     expect(outcome.code).toBe('item_put_into_inventory');
     expect(fixture.game.inventory).not.toContain(cassette);
+    expect(fixture.game.getInventoryEntities(recorder)).toContain(cassette);
+  });
+
+  it('putEntityForActor can move a scene item using NPC-relative reachability', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 500, 500);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'Linda');
+    npc.components = [
+      { type: 'Actor' },
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: Number.MAX_SAFE_INTEGER,
+        groups: [],
+        items: [],
+      },
+    ];
+    fixture.scene.addEntity(npc);
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 8;
+    cassette.y = 0;
+    const recorder = fixture.addEntity('recorder', {
+      title: 'Tape recorder',
+      description: 'A tape recorder.',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    recorder.x = 10;
+    recorder.y = 0;
+
+    const outcome = fixture.game.putEntityForActor(npc, cassette, recorder, { relation: 'in' });
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.code).toBe('item_put_into_inventory');
     expect(fixture.game.getInventoryEntities(recorder)).toContain(cassette);
   });
 

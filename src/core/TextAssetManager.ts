@@ -34,6 +34,7 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
   lore?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue[];
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -376,12 +377,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
@@ -560,6 +559,7 @@ export class TextAssetManager {
       description: fallbackDescription,
       details: '',
       lore: '',
+      objectives: [],
       takeFailure: '',
       synonyms: [],
     };
@@ -778,6 +778,13 @@ export class TextAssetManager {
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
   }
 
+  hasAuthoredObjectTitle(obj: SceneObject): boolean {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
+    return !!title?.trim();
+  }
+
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
@@ -965,6 +972,8 @@ export class TextAssetManager {
       normalized.details = asset.details as TextAssetTextValue;
     if (this.resolveTextValue(asset.lore) !== null)
       normalized.lore = asset.lore as TextAssetTextValue;
+    if (Array.isArray(asset.objectives))
+      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');
