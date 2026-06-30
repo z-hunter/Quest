@@ -152,7 +152,10 @@ export function VetoolApp() {
             video.currentTime = loopStart;
             nextFrame = startFrame;
           } else {
-            nextFrame = Math.floor(video.currentTime * fps);
+            const rawFrame = Math.floor(video.currentTime * fps);
+            const rel = rawFrame - startFrame;
+            const snappedRel = Math.floor(rel / stepSize) * stepSize;
+            nextFrame = startFrame + snappedRel;
           }
           setFrameIndex(nextFrame);
         }
@@ -182,7 +185,18 @@ export function VetoolApp() {
   const handleSeeked = () => {
     const video = videoRef.current;
     if (!video) return;
-    const frameIdx = Math.floor(video.currentTime * fps);
+
+    const rawFrame = Math.floor(video.currentTime * fps);
+    const startFrame = Math.floor(loopStart * fps);
+    const endFrame = Math.floor(loopEnd * fps);
+
+    let frameIdx = rawFrame;
+    if (rawFrame >= startFrame && rawFrame <= endFrame) {
+      const rel = rawFrame - startFrame;
+      const snappedRel = Math.floor(rel / stepSize) * stepSize;
+      frameIdx = startFrame + snappedRel;
+    }
+
     setFrameIndex(frameIdx);
     drawCanvas(frameIdx);
   };
