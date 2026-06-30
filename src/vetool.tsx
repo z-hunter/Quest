@@ -199,7 +199,7 @@ export function VetoolApp() {
     // Draw Video Frame (use cache if available)
     if (canCache.current && frameCache.current[frameIndex]) {
       ctx.drawImage(frameCache.current[frameIndex]!, 0, 0);
-    } else {
+    } else if (!video.seeking) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Cache this frame if possible
