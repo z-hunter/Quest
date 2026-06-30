@@ -175,6 +175,25 @@ The Editor's Properties Panel uses a centralized, dynamic tooltip injection syst
 - **Convention**: Developers should **not** manually add `title` attributes to labels in specific property components (like `SceneProperties.tsx`). Instead, the label text must match an entry in the registry to receive a tooltip and the associated `e-tooltip-label` CSS styles (help cursor, hover color).
 - **Normalization**: The system includes a `normalizeTooltipLabelText` helper to handle common variations and prefixes (e.g., stripping "Mode:" or handling "Opacity").
 
+### 6.3 Standard Buttons & Hotkey Styling (`.e-btn`)
+
+To maintain visual cohesion, standard button elements in the editor panels utilize the `.e-btn` (or `.e-button`) class.
+
+- **Convex 3D Styling**: Buttons feature a subtle 3D bevel effect using a light top inset highlight and a soft bottom drop shadow:
+  `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 3px rgba(0, 0, 0, 0.6);`
+- **Muted Borders**: Instead of the bright primary green, standard buttons use a dedicated muted border variable:
+  `border: 1px solid var(--ui-btn-border-muted, #387d60);`
+  This places their borders midway in brightness between the active UI accent green and the dark unselected input borders.
+- **Embedded Hotkey Badges**: Standard buttons support embedding a hotkey indicator on the left using the `.hotkey-accent` helper class:
+  ```html
+  <button class="e-btn">
+    <span class="hotkey-accent">[</span> SET START
+  </button>
+  ```
+  - **Color Contrast**: Inside `.e-btn`, hotkey characters are automatically styled with a dark green color (`#2a5c43`) to prevent them from blending into the button's bright green text.
+  - **Hover/Active States**: When the button is hovered or receives the `.active-press` class (solid green fill with black text), the hotkey color automatically resets to black (`#000`) to remain readable.
+- **Keypress Feedback (`.active-press`)**: To visually reflect keyboard trigger actions, buttons (both `.e-btn` and `.e-menu-btn`) should receive the `.active-press` class for `150ms` upon keyboard hotkey detection.
+
 ---
 
 ## 7. Coding Standards & Flows
