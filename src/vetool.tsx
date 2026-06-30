@@ -902,6 +902,7 @@ export function VetoolApp() {
         handleNewProject();
       } else if (e.key === 'F5') {
         e.preventDefault();
+        e.stopPropagation();
         window.location.href = '/#sprite-editor';
       } else if (e.key === 'F6') {
         e.preventDefault();
@@ -921,9 +922,9 @@ export function VetoolApp() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [
     fps,
