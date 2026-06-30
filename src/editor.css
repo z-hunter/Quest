@@ -108,7 +108,7 @@
 .e-btn,
 .e-button {
   background: var(--ui-input-bg);
-  border: 1px solid var(--ui-main-color);
+  border: 1px solid var(--ui-btn-border-muted, #387d60);
   color: var(--ui-main-color);
   padding: 6px 10px;
   font-family: var(--ui-display-font);

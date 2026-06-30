@@ -67,6 +67,7 @@ body {
   --ui-btn-bg: #000000;
   --ui-btn-text: #52c966;
   --ui-btn-border: #79efa4;
+  --ui-btn-border-muted: #387d60;
 
   /* F-Keys */
   --ui-fkey-text: #79efa4;
