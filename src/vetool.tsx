@@ -46,6 +46,8 @@ export function VetoolApp() {
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameCache = useRef<(HTMLCanvasElement | null)[]>([]);
+  const canCache = useRef<boolean>(true);
 
   // Dragging & Resizing Refs/State
   const dragInfo = useRef<{
@@ -61,6 +63,14 @@ export function VetoolApp() {
     if (!videoDuration) return 0;
     return Math.floor(videoDuration * fps);
   }, [videoDuration, fps]);
+
+  // Reset cache when FPS or URL changes
+  useEffect(() => {
+    if (videoDuration) {
+      const total = Math.max(1, Math.floor(videoDuration * fps));
+      frameCache.current = new Array(total).fill(null);
+    }
+  }, [fps, videoUrl, videoDuration]);
 
   const activeBox = useMemo(() => {
     return boxes.find((b) => b.id === activeBoxId) || null;
@@ -151,15 +161,16 @@ export function VetoolApp() {
       if (video.paused && !isPlaying) return;
 
       // Handle loop constraints
-      if (video.currentTime >= loopEnd) {
-        video.currentTime = loopStart;
-      }
-      if (video.currentTime < loopStart) {
-        video.currentTime = loopStart;
+      if (!video.seeking) {
+        if (video.currentTime >= loopEnd || video.currentTime < loopStart) {
+          video.currentTime = loopStart;
+          setCurrentFrame(Math.floor(loopStart * fps));
+        } else {
+          // Sync frame index only when not seeking to avoid jitter
+          setCurrentFrame(Math.floor(video.currentTime * fps));
+        }
       }
 
-      // Sync frame index
-      setCurrentFrame(Math.floor(video.currentTime * fps));
       drawCanvas();
 
       animFrame = requestAnimationFrame(updateLoop);
@@ -195,8 +206,24 @@ export function VetoolApp() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Draw Video Frame
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Draw Video Frame (use cache if available)
+    if (canCache.current && frameCache.current[currentFrame]) {
+      ctx.drawImage(frameCache.current[currentFrame]!, 0, 0);
+    } else {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Cache this frame if possible
+      if (canCache.current && video.readyState >= 2) {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = canvas.width;
+        offscreen.height = canvas.height;
+        const oCtx = offscreen.getContext('2d');
+        if (oCtx) {
+          oCtx.drawImage(video, 0, 0);
+          frameCache.current[currentFrame] = offscreen;
+        }
+      }
+    }
 
     // Draw Bounding Boxes
     boxes.forEach((box, index) => {
@@ -501,6 +528,12 @@ export function VetoolApp() {
     setLoopEnd(video.duration);
     setCurrentFrame(0);
 
+    // Initialize frame cache
+    const total = Math.max(1, Math.floor(video.duration * fps));
+    frameCache.current = new Array(total).fill(null);
+    const volume = video.videoWidth * video.videoHeight * total;
+    canCache.current = volume < 400_000_000; // Limit cache size to avoid browser OOM
+
     // Resize canvas buffer
     const canvas = canvasRef.current;
     if (canvas) {
@@ -668,7 +701,7 @@ export function VetoolApp() {
       drawCanvas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boxes, activeBoxId, videoUrl]);
+  }, [boxes, activeBoxId, videoUrl, currentFrame]);
 
   return (
     <div className="vetool-container">
