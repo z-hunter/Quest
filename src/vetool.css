@@ -14,7 +14,7 @@
 
 .vetool-header {
   background: var(--ui-panel-header-bg, #111a14);
-  padding: 8px 16px;
+  padding: 0.6em 1.2em;
   border-bottom: 2px solid var(--ui-main-color, #4aa07f);
   display: flex;
   justify-content: space-between;
@@ -26,7 +26,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: -0.02em;
-  font-size: 1.25rem;
+  font-size: 1.25em;
 }
 
 .vetool-main {

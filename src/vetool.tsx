@@ -909,7 +909,7 @@ export function VetoolApp() {
   return (
     <div className="vetool-container">
       {/* 1. Header */}
-      <header className="vetool-header">
+      <header className="vetool-header" style={{ fontSize: `${12 * uiScale}px` }}>
         <div className="vetool-title">Video Export Tool (vetool)</div>
         <div className="ui-inline-flex-center gap-10">
           {videoFilename && (
