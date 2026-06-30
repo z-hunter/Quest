@@ -2848,3 +2848,60 @@ The small local model used was unable to produce an adequate output in  the test
 1. Verify and test the tool with real MP4 animation assets in a web browser at `/vetool.html`.
 2. Integrate a link/button inside Scanline Sprite Editor (F5) to open the Video Export Tool in a new tab if desired.
 
+
+
+## Session Entry - 2026-06-30 23:45 +02:00
+
+### Session Goals
+
+- Доработать функционал и стабильность VETOOL (Video Export Tool).
+- Наладить переходы между Sprite Editor и VETOOL в обе стороны (F6 для перехода в VETOOL, F5 для возврата в редактор спрайтов).
+- Сделать воспроизведение видео в VETOOL с учетом STEP SIZE плавным и визуально наглядным.
+- Исправить баги воспроизведения, загрузки файлов и конфигураций в VETOOL.
+- Улучшить стилистику и интерактивный отклик кнопок интерфейса.
+
+### What Was Implemented
+
+#### 1. Стабильность воспроизведения и рендеринга VETOOL
+
+- **Предотвращение артефактов при поиске:** Заблокировано рисование кадров на холсте и кэширование, если `video.seeking === true`, убирая мерцание и пустые кадры.
+- **Поддержка stepSize во время воспроизведения:** Шаг воспроизведения `stepDuration` теперь масштабируется как `frameDuration * stepSize`, позволяя воспроизводить видео с пропуском кадров на физической скорости 1x. Playhead-кадры привязываются (snap) к ближайшим кратным stepSize кадрам относительно `loopStart`.
+- **Разблокирование выбора файлов:** Предупреждающий попап при несовпадении видеофайла в конфигурации заменен на Toast-уведомление. Это позволило сохранить контекст пользовательского жеста (user gesture) и предотвратить блокировку окна выбора файлов браузером.
+- **Сброс кэша при смене файла:** При загрузке нового локального видео мгновенно сбрасываются границы, длительность и очищается кэш кадров во избежание рендеринга старых данных. Добавлен эффект `.load()` при смене `videoUrl`.
+- **Устранение дрожания seek-рендеринга:** Добавлен 40-мс debounce на отрисовку кадра по событию `onSeeked`, давая GPU декодировать новый кадр до попытки его отрисовки.
+
+#### 2. Двусторонняя интеграция Sprite Editor и VETOOL
+
+- **Переход из Sprite Editor (F6):** В Sprite Editor добавлены горячая клавиша `F6` и пункт меню `F6 VETOOL` для перехода на страницу `/vetool.html`. Для браузерной версии (вне Tauri) добавлена поддержка `Ctrl+F6` для открытия VETOOL в новой вкладке.
+- **Возврат из VETOOL по F5:** 
+  - На главной странице (`App.tsx`) реализовано чтение хэша URL (`#sprite-editor`) на mount и событии `hashchange` с переключением в режим редактора спрайтов.
+  - Устранена критическая ошибка рендеринга (White Screen of Death) при загрузке страницы: рендер боковых панелей и меню редактора теперь откладывается до полной инициализации синглтона `Game`.
+  - В VETOOL обработчик клавиш переведен на фазу перехвата (`useCapture = true`) с вызовом `e.stopPropagation()` для надежной блокировки дефолтной перезагрузки страницы браузером при нажатии `F5`.
+  - Горячие клавиши `F1`-`F5` в `handleKeyDown` перенесены выше проверки существования видео, гарантируя их работоспособность при незагруженном видеофайле.
+
+#### 3. Улучшение стилей и визуального отклика
+
+- **3D-выпуклость кнопок (.e-btn):** Для всех стандартных кнопок добавлена легкая тень снизу и внутренний блик сверху:
+  `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 3px rgba(0, 0, 0, 0.6);`
+  Эта тень сохраняется и в состоянии `:hover` / `.active-press`.
+- **Приглушенные рамки кнопок:** Введена переменная `--ui-btn-border-muted: #387d60`, делая рамку кнопок мягче основного ярко-зеленого акцента, но оставляя её ярче неактивных полей ввода.
+- **Интерактивные вспышки хоткеев:** При нажатии клавиш быстрого вызова (F1-F6, F8, `[`, `]`) соответствующим кнопкам на 150 мс присваивается класс `.active-press`, визуально имитируя нажатие.
+- **Очистка и хоткеи границ цикла:** Удалены избыточные кнопки `F7 Set Start` и `F9 Set End` из нижнего меню VETOOL. Кнопки в боковой панели переведены на новый стиль отображения хоткеев `[` и `]` с левой стороны текста с затемнением цвета хоткея для улучшения читаемости.
+
+### Tests Run
+
+- `npm run typecheck` — успешно.
+- `npx vitest run tests/editor/vetool.test.ts` — 3 теста успешно пройдены.
+- Полный набор автотестов (`npm test`) — 512 тестов успешно пройдены.
+
+### Commits Created
+
+- `a7abbfb` — `fix(editor): parse window.location.hash to open sprite editor when returning from VETOOL`
+- `f795208` — `fix(editor): prevent rendering SpriteBottomMenu before Game is initialized to avoid app startup crash`
+- `82cb71e` — `fix(vetool): use capture phase to intercept F5 key event to prevent browser reload`
+- `87785d3` — `fix(vetool): process independent keys in handleKeyDown before checking for active video element`
+- `e1017e9` — `style(editor): add subtle drop-shadow and top-highlight bevel to e-btn class`
+- `1b5c00b` — `style(editor): preserve convex bottom shadow on button hover state`
+- `6329cb7` — `style(editor): slightly mute standard button border using new color variable`
+- `9967220` — `feat(vetool): remove redundant F7/F9 loop set buttons, support F-key style hotkeys inside standard e-btn`
+- `2d7304d` — `feat(vetool): darken e-btn hotkeys for better contrast, flash buttons on hotkey press`
