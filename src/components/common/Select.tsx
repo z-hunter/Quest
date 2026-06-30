@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 
 interface Option {
   label: string;
@@ -13,6 +13,7 @@ interface SelectProps {
   placeholder?: string;
   style?: React.CSSProperties;
   className?: string; // Additional classes
+  filterable?: boolean; // Enable inline filtering input when open
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -22,12 +23,20 @@ export const Select: React.FC<SelectProps> = ({
   placeholder,
   style,
   className,
+  filterable = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null); // Ref for options container
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
+  const [filterQuery, setFilterQuery] = useState('');
+
+  // Calculate placement options based on search query
+  const filteredOptions = useMemo(() => {
+    if (!filterable || !filterQuery) return options;
+    return options.filter((opt) => opt.label.toLowerCase().includes(filterQuery.toLowerCase()));
+  }, [options, filterable, filterQuery]);
 
   // Close on click outside
   useEffect(() => {
@@ -63,15 +72,33 @@ export const Select: React.FC<SelectProps> = ({
   // Handle initial focus index
   useEffect(() => {
     if (isOpen) {
-      const idx = options.findIndex((opt) => opt.value === value);
-      setFocusedIndex(idx);
+      const idx = filteredOptions.findIndex((opt) => opt.value === value);
+      setFocusedIndex(idx >= 0 ? idx : 0);
 
-      // Focus container to capture keys
-      if (containerRef.current) {
+      // Focus container to capture keys (if not filterable, otherwise input handles focus)
+      if (!filterable && containerRef.current) {
         containerRef.current.focus();
       }
     }
-  }, [isOpen, value, options]);
+  }, [isOpen, value, filteredOptions, filterable]);
+
+  // Adjust focusedIndex when filteredOptions changes
+  useEffect(() => {
+    if (isOpen && filterable) {
+      setFocusedIndex((prev) => {
+        if (filteredOptions.length === 0) return -1;
+        if (prev >= filteredOptions.length) return 0;
+        return prev >= 0 ? prev : 0;
+      });
+    }
+  }, [filteredOptions, isOpen, filterable]);
+
+  // Reset filter query when dropdown closes
+  useEffect(() => {
+    if (!isOpen) {
+      setFilterQuery('');
+    }
+  }, [isOpen]);
 
   // Scroll focused item into view
   useEffect(() => {
@@ -100,7 +127,7 @@ export const Select: React.FC<SelectProps> = ({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIndex((prev) => Math.min(prev + 1, options.length - 1));
+        setFocusedIndex((prev) => Math.min(prev + 1, filteredOptions.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -108,8 +135,8 @@ export const Select: React.FC<SelectProps> = ({
         break;
       case 'Enter':
         e.preventDefault();
-        if (focusedIndex >= 0) {
-          handleSelect(options[focusedIndex].value);
+        if (focusedIndex >= 0 && filteredOptions[focusedIndex]) {
+          handleSelect(filteredOptions[focusedIndex].value);
         }
         break;
       case 'Escape':
@@ -135,7 +162,7 @@ export const Select: React.FC<SelectProps> = ({
         outline: 'none', // Handle focus style via CSS if needed
         ...style,
       }}
-      tabIndex={0} // Make focusable for keyboard events
+      tabIndex={filterable && isOpen ? -1 : 0} // Make container unfocusable when typing in input
       onKeyDown={handleKeyDown}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -144,6 +171,10 @@ export const Select: React.FC<SelectProps> = ({
         className="custom-select-trigger"
         onClick={(e) => {
           e.stopPropagation();
+          if (isOpen && filterable) {
+            // Clicking the input area or trigger area while filtering shouldn't toggle/close it
+            return;
+          }
           setIsOpen(!isOpen);
         }}
         style={{
@@ -153,28 +184,92 @@ export const Select: React.FC<SelectProps> = ({
           padding: '4px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-          {selectedOption?.icon && (
-            <div
+        {isOpen && filterable ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              position: 'relative',
+              boxSizing: 'border-box',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="text"
+              className="e-input"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder="Filter..."
+              autoFocus
               style={{
-                width: '1em',
-                height: '1em',
-                marginRight: '6px',
-                backgroundColor: 'currentColor',
-                maskImage: `url("${selectedOption.icon}")`,
-                WebkitMaskImage: `url("${selectedOption.icon}")`,
-                maskSize: 'contain',
-                maskRepeat: 'no-repeat',
-                maskPosition: 'center',
-                flexShrink: 0,
+                width: '100%',
+                boxSizing: 'border-box',
+                paddingRight: filterQuery ? '20px' : '4px',
+                height: '18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--ui-input-text, #79efa4)',
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                outline: 'none',
+                paddingTop: 0,
+                paddingBottom: 0,
+                paddingLeft: 0,
               }}
             />
-          )}
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {displayLabel}
-          </span>
-        </div>
-        <span className="custom-select-caret" aria-hidden="true" />
+            {filterQuery && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFilterQuery('');
+                }}
+                style={{
+                  position: 'absolute',
+                  right: '0',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--ui-label-color, #888)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '16px',
+                  height: '16px',
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            {selectedOption?.icon && (
+              <div
+                style={{
+                  width: '1em',
+                  height: '1em',
+                  marginRight: '6px',
+                  backgroundColor: 'currentColor',
+                  maskImage: `url("${selectedOption.icon}")`,
+                  WebkitMaskImage: `url("${selectedOption.icon}")`,
+                  maskSize: 'contain',
+                  maskRepeat: 'no-repeat',
+                  maskPosition: 'center',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayLabel}
+            </span>
+          </div>
+        )}
+        {!(isOpen && filterable) && <span className="custom-select-caret" aria-hidden="true" />}
       </div>
 
       {isOpen && (
@@ -186,50 +281,63 @@ export const Select: React.FC<SelectProps> = ({
             top: placement === 'bottom' ? '100%' : 'auto',
             bottom: placement === 'top' ? '100%' : 'auto',
             left: 0,
-            // Removed 'right: 0' to allow expansion
-            minWidth: '100%', // At least as wide as trigger
-            width: 'max-content', // Allow growing to fit content
+            minWidth: '100%',
+            width: 'max-content',
             zIndex: 1000,
             maxHeight: '200px',
             overflowY: 'auto',
           }}
         >
-          {options.map((opt, idx) => (
+          {filteredOptions.length === 0 ? (
             <div
-              key={opt.value}
-              className={`custom-option ${opt.value === value ? 'selected' : ''} ${idx === focusedIndex ? 'focused' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSelect(opt.value);
-              }}
-              onMouseEnter={() => setFocusedIndex(idx)}
+              className="custom-option"
               style={{
                 padding: '4px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
+                color: 'var(--ui-label-color, #888)',
+                fontStyle: 'italic',
+                cursor: 'default',
               }}
             >
-              {opt.icon && (
-                <div
-                  style={{
-                    width: '1em',
-                    height: '1em',
-                    marginRight: '6px',
-                    backgroundColor: 'currentColor',
-                    maskImage: `url("${opt.icon}")`,
-                    WebkitMaskImage: `url("${opt.icon}")`,
-                    maskSize: 'contain',
-                    maskRepeat: 'no-repeat',
-                    maskPosition: 'center',
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              {opt.label}
+              No matches found
             </div>
-          ))}
+          ) : (
+            filteredOptions.map((opt, idx) => (
+              <div
+                key={opt.value}
+                className={`custom-option ${opt.value === value ? 'selected' : ''} ${idx === focusedIndex ? 'focused' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelect(opt.value);
+                }}
+                onMouseEnter={() => setFocusedIndex(idx)}
+                style={{
+                  padding: '4px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {opt.icon && (
+                  <div
+                    style={{
+                      width: '1em',
+                      height: '1em',
+                      marginRight: '6px',
+                      backgroundColor: 'currentColor',
+                      maskImage: `url("${opt.icon}")`,
+                      WebkitMaskImage: `url("${opt.icon}")`,
+                      maskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                {opt.label}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

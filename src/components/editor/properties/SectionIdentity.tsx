@@ -206,6 +206,7 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                 }}
                 options={getSceneSpatialParentOptions()}
                 style={{ width: '100%' }}
+                filterable={true}
               />
             </div>
             {o.spatial?.parentNodeId && (
