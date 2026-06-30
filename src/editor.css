@@ -146,6 +146,11 @@
   filter: saturate(1.05);
 }
 
+.e-btn:hover .hotkey-accent,
+.e-button:hover .hotkey-accent {
+  color: #000;
+}
+
 .e-btn-red {
   border-color: var(--sec-color-3);
   color: var(--sec-color-3);

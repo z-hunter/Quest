@@ -915,18 +915,9 @@ export function VetoolApp() {
       } else if (e.key === 'F6') {
         e.preventDefault();
         setIsPlaying((prev) => !prev);
-      } else if (e.key === 'F7') {
-        e.preventDefault();
-        const cur = video.currentTime;
-        setLoopStart(cur);
-        if (loopEnd < cur) setLoopEnd(video.duration);
       } else if (e.key === 'F8') {
         e.preventDefault();
         handleExport();
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        const cur = video.currentTime;
-        if (cur > loopStart) setLoopEnd(cur);
       }
     };
 
@@ -1121,33 +1112,8 @@ export function VetoolApp() {
               <span className="hotkey-accent">F6</span>
               {isPlaying ? 'Pause' : 'Play'}
             </button>
-            <button
-              className="e-menu-btn"
-              disabled={!videoUrl}
-              onClick={() => {
-                if (videoRef.current) {
-                  const cur = videoRef.current.currentTime;
-                  setLoopStart(cur);
-                  if (loopEnd < cur) setLoopEnd(videoDuration);
-                }
-              }}
-            >
-              <span className="hotkey-accent">F7</span>Set Start
-            </button>
             <button className="e-menu-btn" onClick={handleExport} disabled={!videoUrl}>
               <span className="hotkey-accent">F8</span>Export
-            </button>
-            <button
-              className="e-menu-btn"
-              disabled={!videoUrl}
-              onClick={() => {
-                if (videoRef.current) {
-                  const cur = videoRef.current.currentTime;
-                  if (cur > loopStart) setLoopEnd(cur);
-                }
-              }}
-            >
-              <span className="hotkey-accent">F9</span>Set End
             </button>
 
             <div className="fps-counter">FPS: {fps}</div>
@@ -1208,13 +1174,13 @@ export function VetoolApp() {
                   className="e-btn"
                   onClick={() => videoRef.current && setLoopStart(videoRef.current.currentTime)}
                 >
-                  Set Loop Start [
+                  <span className="hotkey-accent">[</span> SET START
                 </button>
                 <button
                   className="e-btn"
                   onClick={() => videoRef.current && setLoopEnd(videoRef.current.currentTime)}
                 >
-                  Set Loop End ]
+                  <span className="hotkey-accent">]</span> SET END
                 </button>
               </div>
               <button
