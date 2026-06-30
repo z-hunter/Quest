@@ -47,6 +47,20 @@ export function VetoolApp() {
     setToastMessage({ id: Date.now(), text });
   }, []);
 
+  const [activeHotkey, setActiveHotkey] = useState<string | null>(null);
+  const hotkeyTimeoutRef = useRef<number | null>(null);
+
+  const triggerHotkeyFlash = React.useCallback((key: string) => {
+    if (hotkeyTimeoutRef.current !== null) {
+      window.clearTimeout(hotkeyTimeoutRef.current);
+    }
+    setActiveHotkey(key);
+    hotkeyTimeoutRef.current = window.setTimeout(() => {
+      setActiveHotkey(null);
+      hotkeyTimeoutRef.current = null;
+    }, 150);
+  }, []);
+
   useEffect(() => {
     if (toastMessage) {
       const timer = setTimeout(() => {
@@ -72,11 +86,14 @@ export function VetoolApp() {
   const loadedLoopBoundsRef = useRef<{ start: number; end: number } | null>(null);
   const seekTimeoutRef = useRef<number | null>(null);
 
-  // Clear seek timeout on unmount
+  // Clear seek & hotkey timeouts on unmount
   useEffect(() => {
     return () => {
       if (seekTimeoutRef.current !== null) {
         window.clearTimeout(seekTimeoutRef.current);
+      }
+      if (hotkeyTimeoutRef.current !== null) {
+        window.clearTimeout(hotkeyTimeoutRef.current);
       }
     };
   }, []);
@@ -845,23 +862,28 @@ export function VetoolApp() {
       // Independent Hotkeys (don't require video to be ready)
       if (e.key === 'F1') {
         e.preventDefault();
+        triggerHotkeyFlash('F1');
         window.location.href = '/';
         return;
       } else if (e.key === 'F2') {
         e.preventDefault();
+        triggerHotkeyFlash('F2');
         handleOpenSaveConfig();
         return;
       } else if (e.key === 'F3') {
         e.preventDefault();
+        triggerHotkeyFlash('F3');
         handleOpenLoadConfig();
         return;
       } else if (e.key === 'F4') {
         e.preventDefault();
+        triggerHotkeyFlash('F4');
         handleNewProject();
         return;
       } else if (e.key === 'F5') {
         e.preventDefault();
         e.stopPropagation();
+        triggerHotkeyFlash('F5');
         window.location.href = '/#sprite-editor';
         return;
       }
@@ -902,9 +924,11 @@ export function VetoolApp() {
         setIsPlaying(false);
       } else if (e.key === '[') {
         e.preventDefault();
+        triggerHotkeyFlash('[');
         setLoopStart(video.currentTime);
       } else if (e.key === ']') {
         e.preventDefault();
+        triggerHotkeyFlash(']');
         setLoopEnd(video.currentTime);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (activeBoxId) {
@@ -914,9 +938,11 @@ export function VetoolApp() {
         }
       } else if (e.key === 'F6') {
         e.preventDefault();
+        triggerHotkeyFlash('F6');
         setIsPlaying((prev) => !prev);
       } else if (e.key === 'F8') {
         e.preventDefault();
+        triggerHotkeyFlash('F8');
         handleExport();
       }
     };
@@ -936,6 +962,7 @@ export function VetoolApp() {
     handleOpenSaveConfig,
     handleOpenLoadConfig,
     handleNewProject,
+    triggerHotkeyFlash,
   ]);
 
   // Draw initial state of canvas if video is not playing
@@ -1086,33 +1113,50 @@ export function VetoolApp() {
           <div className="editor-bottom-menu" style={{ zIndex: 2000 }}>
             <div className="mem-counter">VETOOL</div>
 
-            <button className="e-menu-btn" onClick={() => (window.location.href = '/')}>
+            <button
+              className={`e-menu-btn ${activeHotkey === 'F1' ? 'active-press' : ''}`}
+              onClick={() => (window.location.href = '/')}
+            >
               <span className="hotkey-accent">F1</span>Game
             </button>
-            <button className="e-menu-btn" onClick={handleOpenSaveConfig} disabled={!videoUrl}>
+            <button
+              className={`e-menu-btn ${activeHotkey === 'F2' ? 'active-press' : ''}`}
+              onClick={handleOpenSaveConfig}
+              disabled={!videoUrl}
+            >
               <span className="hotkey-accent">F2</span>Save
             </button>
-            <button className="e-menu-btn" onClick={handleOpenLoadConfig}>
+            <button
+              className={`e-menu-btn ${activeHotkey === 'F3' ? 'active-press' : ''}`}
+              onClick={handleOpenLoadConfig}
+            >
               <span className="hotkey-accent">F3</span>Load
             </button>
-            <button className="e-menu-btn" onClick={handleNewProject}>
+            <button
+              className={`e-menu-btn ${activeHotkey === 'F4' ? 'active-press' : ''}`}
+              onClick={handleNewProject}
+            >
               <span className="hotkey-accent">F4</span>New
             </button>
             <button
-              className="e-menu-btn"
+              className={`e-menu-btn ${activeHotkey === 'F5' ? 'active-press' : ''}`}
               onClick={() => (window.location.href = '/#sprite-editor')}
             >
               <span className="hotkey-accent">F5</span>Sprite
             </button>
             <button
-              className="e-menu-btn"
+              className={`e-menu-btn ${activeHotkey === 'F6' ? 'active-press' : ''}`}
               onClick={() => setIsPlaying((p) => !p)}
               disabled={!videoUrl}
             >
               <span className="hotkey-accent">F6</span>
               {isPlaying ? 'Pause' : 'Play'}
             </button>
-            <button className="e-menu-btn" onClick={handleExport} disabled={!videoUrl}>
+            <button
+              className={`e-menu-btn ${activeHotkey === 'F8' ? 'active-press' : ''}`}
+              onClick={handleExport}
+              disabled={!videoUrl}
+            >
               <span className="hotkey-accent">F8</span>Export
             </button>
 
@@ -1171,13 +1215,13 @@ export function VetoolApp() {
               </div>
               <div className="vetool-grid-2" style={{ marginTop: '6px' }}>
                 <button
-                  className="e-btn"
+                  className={`e-btn ${activeHotkey === '[' ? 'active-press' : ''}`}
                   onClick={() => videoRef.current && setLoopStart(videoRef.current.currentTime)}
                 >
                   <span className="hotkey-accent">[</span> SET START
                 </button>
                 <button
-                  className="e-btn"
+                  className={`e-btn ${activeHotkey === ']' ? 'active-press' : ''}`}
                   onClick={() => videoRef.current && setLoopEnd(videoRef.current.currentTime)}
                 >
                   <span className="hotkey-accent">]</span> SET END
