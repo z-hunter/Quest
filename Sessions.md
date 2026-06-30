@@ -2807,3 +2807,44 @@ The small local model used was unable to produce an adequate output in  the test
 ### 6. Remaining Work / Next Recommended Steps
 
 - Run the game and test Puppet Master's new prompt in a real scene.
+
+## Session Entry - 2026-06-30 03:10 +02:00
+
+### 1. Session Goals
+
+- Implement the Video Export Tool (vetool) for batch frame exporting from video to animation atlases.
+- Style the UI matching the Scanline Engine design language.
+- Re-use the existing Vite dev server backend for file list and save operations.
+
+### 2. What Was Implemented
+
+- **Vite Backend Middleware Patch**: Modified `vite.config.ts` `/api/save` endpoint to detect Base64 image data URLs and save them as binary buffers.
+- **Entry Points**: Added `vetool.html` in the project root and `src/vetool.tsx` / `src/vetool.css` for the separate application.
+- **Video Handling**: Implemented frame-by-frame seeking on hidden `<video>` element, loop playback within custom loop bounds, and interactive seek timeline showing frame index and time.
+- **Box Drawing Overlay**: Enabled interactive canvas on top of the video workspace supporting up to 10 rectangular bounding boxes. Users can drag to create boxes, and move/resize them with mouse handles or edit precise coordinates in the sidebar.
+- **Exporter**: Implemented column-based packing layout. Columns are sorted by index and packed side-by-side. The exporter crops video frames, renders the packed layout on a temporary canvas, and saves the final PNG spritesheet alongside sprite `.json` configuration files via standard `/api/save` endpoints.
+- **Unit Tests**: Created `tests/editor/vetool.test.ts` to test the coordinate packing and spritesheet layout calculation logic. All tests passed.
+- **Typecheck & Build**: Validated with `npm run typecheck` and `npm run build` (both finished successfully without errors).
+
+### 3. Important Architecture and Runtime Decisions
+
+- Kept vetool as a separate single-page web app to ensure zero runtime impact/conflict with Scanline engine.
+- Used original video resolution as canvas drawing buffer size, making mouse event coords map 1-to-1 without scaling calculations.
+- Added base64 image decoding in dev server `/api/save` to enable standard browser canvas image exports without a dedicated upload server.
+
+### 4. Tests and Validation
+
+- `npm test -- tests/editor/vetool.test.ts` (3 tests passed).
+- `npm run typecheck` (Passed).
+- `npm run build` (Passed, outputting index.html and vetool.html bundles).
+- Full `npm test` (512 tests passed).
+
+### 5. Commits Created
+
+- `c542210` - `Implement Video Export Tool (vetool) with layout utility and unit tests`
+
+### 6. Remaining Work / Next Recommended Steps
+
+1. Verify and test the tool with real MP4 animation assets in a web browser at `/vetool.html`.
+2. Integrate a link/button inside Scanline Sprite Editor (F5) to open the Video Export Tool in a new tab if desired.
+

@@ -62,6 +62,12 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - Ability to lock/unlock objects via `Alt+L` (hotkey) or Property Panel (checkbox).
   - Locked objects are transparent to mouse clicks in the Scene Editor but selectble in Hierarchy.
   - Locking only affects the editor; objects behave normally in-game.
+- **Video Export Tool (vetool):**
+  - Independent web application served via `vetool.html` at `/vetool.html`.
+  - Frame-by-frame navigation, timeline playback loops, and customizable frame steps.
+  - Interactive bounding boxes drawn directly on the video viewport with resize handles and sidebar inputs.
+  - Automatic column-based grid spritesheet packaging and batch saving of PNG assets and sprite JSON configs.
+  - Reuses Scanline's Vite dev server backend endpoints by adding Base64 binary decoding support to `/api/save`.
 
 ## Known Issues / Technical Debt
 
