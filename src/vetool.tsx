@@ -898,100 +898,164 @@ export function VetoolApp() {
 
       {/* 2. Main Workspace */}
       <div className="vetool-main">
-        {/* Left Side: Video Viewport & Timeline */}
-        <div className="vetool-workspace">
-          {/* Video Viewport Box */}
-          <div
-            className={`vetool-viewport-card ${!videoUrl || videoLoadError ? 'vetool-checkerboard' : ''}`}
-          >
-            {videoUrl && !videoLoadError ? (
-              <>
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  style={{ display: 'none' }}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onSeeked={handleSeeked}
-                  onError={() => setVideoLoadError(true)}
-                  loop={false}
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="vetool-video-canvas"
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                />
-              </>
-            ) : videoLoadError ? (
-              <div className="ui-text-dim text-center">
-                <h2 style={{ color: '#ff4d4d' }}>VIDEO LOAD FAILED</h2>
-                <p>Could not load "{videoFilename}" automatically from server assets.</p>
-                <p style={{ marginTop: '8px' }}>
-                  Please click <strong>CHOOSE FILE</strong> in the sidebar to load the video from
-                  your local computer.
-                </p>
-                <video
-                  ref={videoRef}
-                  src={videoUrl || undefined}
-                  style={{ display: 'none' }}
-                  onError={() => setVideoLoadError(true)}
-                  loop={false}
-                />
-              </div>
-            ) : (
-              <div className="ui-text-dim text-center">
-                <h2>NO VIDEO LOADED</h2>
-                <p>Use controls in the sidebar to load an MPEG-4 file.</p>
+        <div className="vetool-center-column">
+          {/* Left Side: Video Viewport & Timeline */}
+          <div className="vetool-workspace">
+            {/* Video Viewport Box */}
+            <div
+              className={`vetool-viewport-card ${!videoUrl || videoLoadError ? 'vetool-checkerboard' : ''}`}
+            >
+              {videoUrl && !videoLoadError ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    style={{ display: 'none' }}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onSeeked={handleSeeked}
+                    onError={() => setVideoLoadError(true)}
+                    loop={false}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="vetool-video-canvas"
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                  />
+                </>
+              ) : videoLoadError ? (
+                <div className="ui-text-dim text-center">
+                  <h2 style={{ color: '#ff4d4d' }}>VIDEO LOAD FAILED</h2>
+                  <p>Could not load "{videoFilename}" automatically from server assets.</p>
+                  <p style={{ marginTop: '8px' }}>
+                    Please click <strong>CHOOSE FILE</strong> in the sidebar to load the video from
+                    your local computer.
+                  </p>
+                  <video
+                    ref={videoRef}
+                    src={videoUrl || undefined}
+                    style={{ display: 'none' }}
+                    onError={() => setVideoLoadError(true)}
+                    loop={false}
+                  />
+                </div>
+              ) : (
+                <div className="ui-text-dim text-center">
+                  <h2>NO VIDEO LOADED</h2>
+                  <p>Use controls in the sidebar to load an MPEG-4 file.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Timeline & Controls */}
+            {videoUrl && (
+              <div className="vetool-timeline-panel">
+                <div className="vetool-timeline-container">
+                  {/* Highlighted Loop Range */}
+                  <div
+                    className="vetool-loop-range-bar"
+                    style={{
+                      left: `${(loopStart / videoDuration) * 100}%`,
+                      width: `${((loopEnd - loopStart) / videoDuration) * 100}%`,
+                    }}
+                  />
+                  {/* Timeline slider */}
+                  <input
+                    type="range"
+                    className="vetool-timeline-slider"
+                    min={0}
+                    max={totalFrames - 1}
+                    value={currentFrame}
+                    onChange={(e) => {
+                      if (videoRef.current) {
+                        videoRef.current.currentTime = Number(e.target.value) / fps;
+                        setIsPlaying(false);
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Time display readouts */}
+                <div className="vetool-timeline-readout">
+                  <span>
+                    LOOP START: <span className="ui-text-accent-cyan">{loopStart.toFixed(3)}s</span>{' '}
+                    (F: {Math.floor(loopStart * fps)})
+                  </span>
+                  <span className="ui-text-bright ui-font-bold">
+                    TIME: {videoRef.current ? videoRef.current.currentTime.toFixed(3) : '0.000'}s /{' '}
+                    {videoDuration.toFixed(3)}s | FRAME: {currentFrame} / {totalFrames}
+                  </span>
+                  <span>
+                    LOOP END: <span className="ui-text-accent-red">{loopEnd.toFixed(3)}s</span> (F:{' '}
+                    {Math.floor(loopEnd * fps)})
+                  </span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Timeline & Controls */}
-          {videoUrl && (
-            <div className="vetool-timeline-panel">
-              <div className="vetool-timeline-container">
-                {/* Highlighted Loop Range */}
-                <div
-                  className="vetool-loop-range-bar"
-                  style={{
-                    left: `${(loopStart / videoDuration) * 100}%`,
-                    width: `${((loopEnd - loopStart) / videoDuration) * 100}%`,
-                  }}
-                />
-                {/* Timeline slider */}
-                <input
-                  type="range"
-                  className="vetool-timeline-slider"
-                  min={0}
-                  max={totalFrames - 1}
-                  value={currentFrame}
-                  onChange={(e) => {
-                    if (videoRef.current) {
-                      videoRef.current.currentTime = Number(e.target.value) / fps;
-                      setIsPlaying(false);
-                    }
-                  }}
-                />
-              </div>
+          {/* 3. Bottom Actions */}
+          <div className="editor-bottom-menu" style={{ zIndex: 2000 }}>
+            <div className="mem-counter">VETOOL</div>
 
-              {/* Time display readouts */}
-              <div className="vetool-timeline-readout">
-                <span>
-                  LOOP START: <span className="ui-text-accent-cyan">{loopStart.toFixed(3)}s</span>{' '}
-                  (F: {Math.floor(loopStart * fps)})
-                </span>
-                <span className="ui-text-bright ui-font-bold">
-                  TIME: {videoRef.current ? videoRef.current.currentTime.toFixed(3) : '0.000'}s /{' '}
-                  {videoDuration.toFixed(3)}s | FRAME: {currentFrame} / {totalFrames}
-                </span>
-                <span>
-                  LOOP END: <span className="ui-text-accent-red">{loopEnd.toFixed(3)}s</span> (F:{' '}
-                  {Math.floor(loopEnd * fps)})
-                </span>
-              </div>
-            </div>
-          )}
+            <button className="e-menu-btn" onClick={() => (window.location.href = '/')}>
+              <span className="hotkey-accent">F1</span>Game
+            </button>
+            <button className="e-menu-btn" onClick={handleOpenSaveConfig} disabled={!videoUrl}>
+              <span className="hotkey-accent">F2</span>Save
+            </button>
+            <button className="e-menu-btn" onClick={handleOpenLoadConfig}>
+              <span className="hotkey-accent">F3</span>Load
+            </button>
+            <button className="e-menu-btn" onClick={handleNewProject}>
+              <span className="hotkey-accent">F4</span>New
+            </button>
+            <button
+              className="e-menu-btn"
+              onClick={() => (window.location.href = '/#sprite-editor')}
+            >
+              <span className="hotkey-accent">F5</span>Sprite
+            </button>
+            <button
+              className="e-menu-btn"
+              onClick={() => setIsPlaying((p) => !p)}
+              disabled={!videoUrl}
+            >
+              <span className="hotkey-accent">F6</span>
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button
+              className="e-menu-btn"
+              disabled={!videoUrl}
+              onClick={() => {
+                if (videoRef.current) {
+                  const cur = videoRef.current.currentTime;
+                  setLoopStart(cur);
+                  if (loopEnd < cur) setLoopEnd(videoDuration);
+                }
+              }}
+            >
+              <span className="hotkey-accent">F7</span>Set Start
+            </button>
+            <button className="e-menu-btn" onClick={handleExport} disabled={!videoUrl}>
+              <span className="hotkey-accent">F8</span>Export
+            </button>
+            <button
+              className="e-menu-btn"
+              disabled={!videoUrl}
+              onClick={() => {
+                if (videoRef.current) {
+                  const cur = videoRef.current.currentTime;
+                  if (cur > loopStart) setLoopEnd(cur);
+                }
+              }}
+            >
+              <span className="hotkey-accent">F9</span>Set End
+            </button>
+
+            <div className="fps-counter">FPS: {fps}</div>
+          </div>
         </div>
 
         {/* Right Side: Sidebar Controls */}
@@ -1198,61 +1262,6 @@ export function VetoolApp() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* 3. Bottom Actions */}
-      <div className="editor-bottom-menu" style={{ zIndex: 2000 }}>
-        <div className="mem-counter">VETOOL</div>
-
-        <button className="e-menu-btn" onClick={() => (window.location.href = '/')}>
-          <span className="hotkey-accent">F1</span>Game
-        </button>
-        <button className="e-menu-btn" onClick={handleOpenSaveConfig} disabled={!videoUrl}>
-          <span className="hotkey-accent">F2</span>Save
-        </button>
-        <button className="e-menu-btn" onClick={handleOpenLoadConfig}>
-          <span className="hotkey-accent">F3</span>Load
-        </button>
-        <button className="e-menu-btn" onClick={handleNewProject}>
-          <span className="hotkey-accent">F4</span>New
-        </button>
-        <button className="e-menu-btn" onClick={() => (window.location.href = '/#sprite-editor')}>
-          <span className="hotkey-accent">F5</span>Sprite
-        </button>
-        <button className="e-menu-btn" onClick={() => setIsPlaying((p) => !p)} disabled={!videoUrl}>
-          <span className="hotkey-accent">F6</span>
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <button
-          className="e-menu-btn"
-          disabled={!videoUrl}
-          onClick={() => {
-            if (videoRef.current) {
-              const cur = videoRef.current.currentTime;
-              setLoopStart(cur);
-              if (loopEnd < cur) setLoopEnd(videoDuration);
-            }
-          }}
-        >
-          <span className="hotkey-accent">F7</span>Set Start
-        </button>
-        <button className="e-menu-btn" onClick={handleExport} disabled={!videoUrl}>
-          <span className="hotkey-accent">F8</span>Export
-        </button>
-        <button
-          className="e-menu-btn"
-          disabled={!videoUrl}
-          onClick={() => {
-            if (videoRef.current) {
-              const cur = videoRef.current.currentTime;
-              if (cur > loopStart) setLoopEnd(cur);
-            }
-          }}
-        >
-          <span className="hotkey-accent">F9</span>Set End
-        </button>
-
-        <div className="fps-counter">FPS: {fps}</div>
       </div>
 
       {/* File Browser Modal for Config Save/Load */}

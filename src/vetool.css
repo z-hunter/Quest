@@ -35,6 +35,14 @@
   overflow: hidden;
 }
 
+.vetool-center-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
 .vetool-workspace {
   flex: 1;
   display: flex;
