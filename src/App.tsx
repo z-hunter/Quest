@@ -27,7 +27,7 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [toggleSpriteEditor]);
 
-  const showLayout = editorEnabled || spriteEditorEnabled;
+  const showLayout = (editorEnabled || spriteEditorEnabled) && game !== null;
 
   return (
     <div className="app-container">
