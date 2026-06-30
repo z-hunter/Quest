@@ -842,6 +842,30 @@ export function VetoolApp() {
       // Ignore if user is inside an input field
       if (document.activeElement instanceof HTMLInputElement) return;
 
+      // Independent Hotkeys (don't require video to be ready)
+      if (e.key === 'F1') {
+        e.preventDefault();
+        window.location.href = '/';
+        return;
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        handleOpenSaveConfig();
+        return;
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        handleOpenLoadConfig();
+        return;
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        handleNewProject();
+        return;
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = '/#sprite-editor';
+        return;
+      }
+
       const video = videoRef.current;
       if (!video) return;
 
@@ -888,22 +912,6 @@ export function VetoolApp() {
           setBoxes((prev) => prev.filter((b) => b.id !== activeBoxId));
           setActiveBoxId(null);
         }
-      } else if (e.key === 'F1') {
-        e.preventDefault();
-        window.location.href = '/';
-      } else if (e.key === 'F2') {
-        e.preventDefault();
-        handleOpenSaveConfig();
-      } else if (e.key === 'F3') {
-        e.preventDefault();
-        handleOpenLoadConfig();
-      } else if (e.key === 'F4') {
-        e.preventDefault();
-        handleNewProject();
-      } else if (e.key === 'F5') {
-        e.preventDefault();
-        e.stopPropagation();
-        window.location.href = '/#sprite-editor';
       } else if (e.key === 'F6') {
         e.preventDefault();
         setIsPlaying((prev) => !prev);
