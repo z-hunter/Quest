@@ -506,6 +506,12 @@ export function VetoolApp() {
       setVideoLoadError(false);
       setIsPlaying(false);
 
+      // Reset loop boundaries, duration, and frame cache immediately to prevent stale states
+      setLoopStart(0);
+      setLoopEnd(0);
+      setVideoDuration(0);
+      frameCache.current = [];
+
       // If there is a pending configuration, apply it now
       if (pendingConfigRef.current) {
         const data = pendingConfigRef.current;
@@ -558,6 +564,14 @@ export function VetoolApp() {
       drawCanvas();
     }, 100);
   };
+
+  // Force video reload when url changes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && videoUrl) {
+      video.load();
+    }
+  }, [videoUrl]);
 
   // Helper utility to seek video asynchronously and wait for seeked event
   const seekVideo = (video: HTMLVideoElement, time: number): Promise<void> => {
