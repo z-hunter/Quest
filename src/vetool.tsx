@@ -653,11 +653,17 @@ export function VetoolApp() {
     setExportStatusText('Initializing export...');
 
     try {
+      const sanitizeName = (name: string, fallback: string) => {
+        let safe = (name || '').trim();
+        safe = safe.split(/[/\\]/).pop() || '';
+        safe = safe.replace(/^\.+|\.+$/g, '').trim();
+        return safe || fallback;
+      };
+
       // Group boxes by their target PNG spritesheet filenames (always saving under public/assets/)
       const groups: Record<string, Box[]> = {};
       boxes.forEach((box) => {
-        const rawPath = box.targetPng.trim() || 'exported_sprites.png';
-        const filename = rawPath.split(/[/\\]/).pop() || 'exported_sprites.png';
+        const filename = sanitizeName(box.targetPng, 'exported_sprites.png');
         const targetPath = `public/assets/${filename}`;
 
         if (!groups[targetPath]) groups[targetPath] = [];
@@ -732,11 +738,12 @@ export function VetoolApp() {
 
         // Save JSON config files for each sprite
         for (const box of groupBoxes) {
-          const spriteJsonPath = `public/sprites/${box.spriteId}.json`;
-          setExportStatusText(`Saving sprite metadata: ${box.spriteId}.json...`);
+          const safeSpriteId = sanitizeName(box.spriteId, 'unnamed_sprite');
+          const spriteJsonPath = `public/sprites/${safeSpriteId}.json`;
+          setExportStatusText(`Saving sprite metadata: ${safeSpriteId}.json...`);
 
           const spriteData = {
-            id: box.spriteId,
+            id: safeSpriteId,
             imageFile: targetPath,
             x: colX[box.id],
             y: 0,

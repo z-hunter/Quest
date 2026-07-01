@@ -659,6 +659,23 @@ export const PropertiesPanel: React.FC = () => {
       incrementObjectVersion();
 
       if (field === 'name') incrementHierarchyVersion();
+      if (field === 'isPlayer') {
+        const scene = game?.sceneManager?.currentScene;
+        if (scene && obj && (obj as any).type === 'Actor') {
+          if (finalVal) {
+            scene.entities.forEach((ent) => {
+              if ((ent as any).type === 'Actor' && ent !== obj && (ent as any).isPlayer) {
+                (ent as any).isPlayer = false;
+              }
+            });
+            scene.player = obj as any;
+          } else {
+            if (scene.player === obj) {
+              scene.player = null;
+            }
+          }
+        }
+      }
       if (field === 'spriteName') {
         if (obj.setSprite) obj.setSprite(finalVal);
       }
