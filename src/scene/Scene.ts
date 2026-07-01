@@ -139,8 +139,8 @@ export class Scene {
   camMaxY?: number;
 
   // Internal state for "Smart Deadzone" (Catch-up mode)
-  private _isCenteringX: boolean = false;
-  private _isCenteringY: boolean = false;
+  private _centeringDirX: number = 0;
+  private _centeringDirY: number = 0;
 
   // Default Camera (saved to scene file, restored on load/reset)
   defaultCamera: { x: number; y: number; zoom: number };
@@ -199,8 +199,8 @@ export class Scene {
     this.camera.y = targetY;
 
     // Explicitly reset any cached centering state
-    this._isCenteringX = false;
-    this._isCenteringY = false;
+    this._centeringDirX = 0;
+    this._centeringDirY = 0;
   }
 
   private normalizeSpatialPlacement(
@@ -1071,11 +1071,11 @@ export class Scene {
     this.syncSubsceneItemScales();
 
     const cameraState = updateSceneCamera(this, deltaTime, {
-      isCenteringX: this._isCenteringX,
-      isCenteringY: this._isCenteringY,
+      centeringDirX: this._centeringDirX,
+      centeringDirY: this._centeringDirY,
     });
-    this._isCenteringX = cameraState.isCenteringX;
-    this._isCenteringY = cameraState.isCenteringY;
+    this._centeringDirX = cameraState.centeringDirX;
+    this._centeringDirY = cameraState.centeringDirY;
 
     this.entities.forEach((entity) => {
       if (entity.disabled) return;
