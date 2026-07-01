@@ -17,17 +17,26 @@ export class ActorPlanExecutor {
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
   private readonly strategyScheduler?: NpcStrategyScheduler;
   private moveWatchTokens = new Map<string, number>();
-  private pendingTimeouts = new Set<any>();
+  private pendingTimeouts = new Map<string, Set<any>>();
 
   clearState(npcId: string): void {
     const current = this.moveWatchTokens.get(npcId) || 0;
     this.moveWatchTokens.set(npcId, current + 1);
+    const timeouts = this.pendingTimeouts.get(npcId);
+    if (timeouts) {
+      for (const timeoutId of timeouts) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      this.pendingTimeouts.delete(npcId);
+    }
   }
 
   clearAllPending(): void {
     this.moveWatchTokens.clear();
-    for (const timeoutId of this.pendingTimeouts) {
-      globalThis.clearTimeout(timeoutId);
+    for (const timeouts of this.pendingTimeouts.values()) {
+      for (const timeoutId of timeouts) {
+        globalThis.clearTimeout(timeoutId);
+      }
     }
     this.pendingTimeouts.clear();
   }
@@ -238,7 +247,7 @@ export class ActorPlanExecutor {
       };
       this.scheduleMoveCompletion(actor.name, result, 0);
       return {
-        status: 'failed',
+        status: 'scheduled',
         code: result.code,
         npcId: actor.name,
         message: result.message,
@@ -364,10 +373,20 @@ export class ActorPlanExecutor {
   private scheduleMoveCompletion(npcId: string, result: ActorMoveResult, delayMs: number): void {
     if (!this.moveCompletionScheduler) return;
     const timeoutId = globalThis.setTimeout(() => {
-      this.pendingTimeouts.delete(timeoutId);
+      const timeouts = this.pendingTimeouts.get(npcId);
+      if (timeouts) {
+        timeouts.delete(timeoutId);
+        if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
+      }
       this.moveCompletionScheduler?.(npcId, result);
     }, delayMs);
-    this.pendingTimeouts.add(timeoutId);
+
+    let timeouts = this.pendingTimeouts.get(npcId);
+    if (!timeouts) {
+      timeouts = new Set();
+      this.pendingTimeouts.set(npcId, timeouts);
+    }
+    timeouts.add(timeoutId);
   }
 
   private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
@@ -499,10 +518,20 @@ export class ActorPlanExecutor {
   private completeAction(npcId: string, outcome: NpcPlanExecutionOutcome): NpcPlanExecutionOutcome {
     if (!this.actionCompletionScheduler) return outcome;
     const timeoutId = globalThis.setTimeout(() => {
-      this.pendingTimeouts.delete(timeoutId);
+      const timeouts = this.pendingTimeouts.get(npcId);
+      if (timeouts) {
+        timeouts.delete(timeoutId);
+        if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
+      }
       this.actionCompletionScheduler?.(npcId, outcome);
     }, 0);
-    this.pendingTimeouts.add(timeoutId);
+
+    let timeouts = this.pendingTimeouts.get(npcId);
+    if (!timeouts) {
+      timeouts = new Set();
+      this.pendingTimeouts.set(npcId, timeouts);
+    }
+    timeouts.add(timeoutId);
     return { ...outcome, status: 'scheduled' };
   }
 }

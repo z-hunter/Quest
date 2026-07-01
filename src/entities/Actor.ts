@@ -424,11 +424,10 @@ export class Actor extends Entity {
       }
     }
 
-    this.flipX = doFlip;
-
     // If still nothing, we might be empty (invisible or red box)
 
     if (spriteName) {
+      this.flipX = doFlip;
       let normalized = spriteName;
       if (!normalized.toLowerCase().endsWith('.json')) normalized += '.json';
 

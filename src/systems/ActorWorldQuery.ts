@@ -57,7 +57,12 @@ export class ActorWorldQuery {
     const focus = subject || source;
     const focusPoint = this.game.inventoryManager.getSceneObjectReferencePoint(focus);
     return scene.entities.filter((entity): entity is Actor => {
-      if (!(entity instanceof Actor) || entity === source || !ComponentSystem.isNpc(entity)) {
+      if (
+        !(entity instanceof Actor) ||
+        entity === source ||
+        entity.disabled ||
+        !ComponentSystem.isNpc(entity)
+      ) {
         return false;
       }
       const npc = ComponentSystem.getNpcComponent(entity);

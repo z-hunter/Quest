@@ -82,49 +82,10 @@ export class NpcWorldModelBuilder {
       .map((object) => {
         const title = this.getObjectTitle(object);
         if (!title || !this.shouldIncludeVisibleEntity(object)) return null;
-        const description = this.game.textAssets.getResolvedObjectField(object, 'description');
-        const switchComponent = this.game.getSwitchComponent(object) as any;
-        const inspection = this.game.actorWorld.getInspectionAffordance(object);
-        const requiredKeyId = String(switchComponent?.idKey || switchComponent?.keyId || '').trim();
-        const commands = this.game.actorCommands
-          .getAffordancesForEntity(object)
-          .map((command) =>
-            compactRecord({
-              id: command.id,
-              label: command.label,
-              requires: command.requires?.map(({ entityId, scope }) => ({ entityId, scope })),
-              effects: command.effects,
-            })
-          )
-          .sort((a, b) => a.id.localeCompare(b.id));
         return compactRecord<NpcStaticEntityContext>({
           id: object.name,
           title,
-          description:
-            description && description !== 'You see nothing special.' ? description : undefined,
-          lore: this.game.textAssets.getResolvedObjectField(object, 'lore') || undefined,
           item: this.isItem(object) ? true : undefined,
-          inspection:
-            inspection.look &&
-            inspection.examine &&
-            inspection.possibleRelations.length === 4 &&
-            inspection.possibleRelations.join(',') === 'in,on,under,behind'
-              ? undefined
-              : [
-                  ...(inspection.look ? ['look'] : []),
-                  ...(inspection.examine ? ['examine'] : []),
-                  ...inspection.possibleRelations,
-                ],
-          switch: switchComponent
-            ? compactRecord({
-                canOpen: true,
-                canClose: true,
-                requiredKeyId: requiredKeyId || undefined,
-                blockedRelation: switchComponent.blockedRelation || undefined,
-                transparent: switchComponent.transparent === true ? true : undefined,
-              })
-            : undefined,
-          commands,
         });
       })
       .filter((entry): entry is NpcStaticEntityContext => !!entry)
@@ -254,6 +215,8 @@ export class NpcWorldModelBuilder {
           });
         }
         trace.includedEntities++;
+        const description = this.game.textAssets.getResolvedObjectField(object, 'description');
+        const lore = this.game.textAssets.getResolvedObjectField(object, 'lore');
         const inspection = this.game.actorWorld.getInspectionAffordance(object);
         const isDefaultInspection =
           inspection.look &&
@@ -264,6 +227,9 @@ export class NpcWorldModelBuilder {
         return compactRecord({
           id: object.name,
           title,
+          description:
+            description && description !== 'You see nothing special.' ? description : undefined,
+          lore: lore || undefined,
           lastSeenSceneId: undefined, // Default is current scene
           visibility: perception.visibility === 'visible' ? undefined : perception.visibility,
           location: perception.location,

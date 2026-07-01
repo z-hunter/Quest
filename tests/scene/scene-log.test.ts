@@ -7,24 +7,27 @@ describe('SceneLog', () => {
     const log = new SceneLog();
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
 
-    const first = log.appendSpeech({
-      actorId: 'Hero',
-      displayName: 'Hero',
-      text: 'First',
-      knownByNpcIds: ['NPC'],
-    });
-    log.markProcessed(undefined, 'NPC');
-    const second = log.appendSpeech({
-      actorId: 'Hero',
-      displayName: 'Hero',
-      text: 'Second',
-      knownByNpcIds: ['NPC'],
-    });
+    try {
+      const first = log.appendSpeech({
+        actorId: 'Hero',
+        displayName: 'Hero',
+        text: 'First',
+        knownByNpcIds: ['NPC'],
+      });
+      log.markProcessed(undefined, 'NPC');
+      const second = log.appendSpeech({
+        actorId: 'Hero',
+        displayName: 'Hero',
+        text: 'Second',
+        knownByNpcIds: ['NPC'],
+      });
 
-    expect(first?.timestamp).toBe(1000);
-    expect(second?.timestamp).toBe(1001);
-    expect(log.getUnreadEntries('NPC').map((entry) => entry.text)).toEqual(['Second']);
-    now.mockRestore();
+      expect(first?.timestamp).toBe(1000);
+      expect(second?.timestamp).toBe(1001);
+      expect(log.getUnreadEntries('NPC').map((entry) => entry.text)).toEqual(['Second']);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it('does not advance an NPC cursor over events unknown to that NPC', () => {

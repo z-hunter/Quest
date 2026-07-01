@@ -664,7 +664,11 @@ export class Game implements IGame {
     });
   }
 
-  sayAsActor(actor: Actor, text: string, options: { triggerPuppetMaster?: boolean } = {}): void {
+  async sayAsActor(
+    actor: Actor,
+    text: string,
+    options: { triggerPuppetMaster?: boolean } = {}
+  ): Promise<void> {
     const scene = this.sceneManager.currentScene;
     const speech = text.trim();
     if (!scene || !speech) return;
@@ -678,7 +682,7 @@ export class Game implements IGame {
       knownByNpcIds,
     });
     if (options.triggerPuppetMaster && knownByNpcIds.length) {
-      this.npcPuppetMaster.scheduleScene(scene);
+      await this.npcPuppetMaster.scheduleScene(scene);
     }
   }
 

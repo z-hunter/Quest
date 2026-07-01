@@ -274,10 +274,34 @@ export class ComponentSystem {
         component.perceptionRadius >= 0
           ? component.perceptionRadius
           : 600,
-      knownEntities:
-        component.knownEntities && typeof component.knownEntities === 'object'
-          ? component.knownEntities
-          : undefined,
+      knownEntities: (() => {
+        if (!component.knownEntities || typeof component.knownEntities !== 'object') {
+          return undefined;
+        }
+        const cleaned: Record<string, NpcKnownEntityMemory> = {};
+        for (const [key, entry] of Object.entries(component.knownEntities)) {
+          if (entry && typeof entry === 'object') {
+            const rawId = (entry as any).id;
+            const rawTitle = (entry as any).title;
+            const rawKind = (entry as any).kind;
+            const id = typeof rawId === 'string' ? rawId.trim() : '';
+            const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+            const kind =
+              rawKind === 'item' || rawKind === 'actor' || rawKind === 'object'
+                ? rawKind
+                : 'object';
+            if (id && title) {
+              cleaned[key] = {
+                ...(entry as any),
+                id,
+                title,
+                kind,
+              };
+            }
+          }
+        }
+        return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+      })(),
     };
   }
 

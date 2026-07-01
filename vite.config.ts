@@ -41,7 +41,7 @@ export default defineConfig({
 
                 let fileContent: string | Buffer = content;
                 if (typeof content === 'string' && content.startsWith('data:')) {
-                  const matches = content.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+                  const matches = content.match(/^data:([A-Za-z0-9-+/]+);base64,(.+)$/);
                   if (matches && matches.length === 3) {
                     fileContent = Buffer.from(matches[2], 'base64');
                   }

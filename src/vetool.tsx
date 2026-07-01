@@ -610,11 +610,16 @@ export function VetoolApp() {
 
   // Helper utility to seek video asynchronously and wait for seeked event
   const seekVideo = (video: HTMLVideoElement, time: number): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const onSeeked = () => {
+        if (timeoutId) clearTimeout(timeoutId);
         video.removeEventListener('seeked', onSeeked);
         resolve();
       };
+      const timeoutId = setTimeout(() => {
+        video.removeEventListener('seeked', onSeeked);
+        reject(new Error(`Seeking to ${time}s timed out.`));
+      }, 5000);
       video.addEventListener('seeked', onSeeked);
       video.currentTime = time;
     });
@@ -652,6 +657,9 @@ export function VetoolApp() {
     setExportProgress(0);
     setExportStatusText('Initializing export...');
 
+    const succeededGroups: string[] = [];
+    let currentGroup: string | null = null;
+
     try {
       const sanitizeName = (name: string, fallback: string) => {
         let safe = (name || '').trim();
@@ -682,6 +690,7 @@ export function VetoolApp() {
 
       // Process each spritesheet group
       for (const targetPath of Object.keys(groups)) {
+        currentGroup = targetPath.split('/').pop() || targetPath;
         const groupBoxes = groups[targetPath];
 
         const { colX, totalWidth, totalHeight } = calculateSpritesheetLayout(
@@ -754,6 +763,9 @@ export function VetoolApp() {
 
           await saveProjectFile(spriteJsonPath, JSON.stringify(spriteData, null, 2));
         }
+
+        succeededGroups.push(currentGroup);
+        currentGroup = null;
       }
 
       setExportStatusText('Export complete! All files saved successfully.');
@@ -762,7 +774,10 @@ export function VetoolApp() {
       }, 2000);
     } catch (err: any) {
       console.error(err);
-      alert(`Export failed: ${err.message || String(err)}`);
+      const succeededText =
+        succeededGroups.length > 0 ? ` Succeeded groups: ${succeededGroups.join(', ')}.` : '';
+      const interruptedText = currentGroup ? ` Interrupted group: ${currentGroup}.` : '';
+      alert(`Export failed: ${err.message || String(err)}.${succeededText}${interruptedText}`);
       setExportProgress(null);
     }
   }, [boxes, fps, loopStart, loopEnd, stepSize, videoWidth, videoHeight]);
@@ -863,8 +878,14 @@ export function VetoolApp() {
   // Keyboard navigation & playback loop
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is inside an input field
-      if (document.activeElement instanceof HTMLInputElement) return;
+      // Ignore if user is inside an input/select/textarea field
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLSelectElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
 
       // Independent Hotkeys (don't require video to be ready)
       if (e.key === 'F1') {

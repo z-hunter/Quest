@@ -165,10 +165,7 @@ export class SceneLog {
 
     const requestedTimestamp = normalizeTimestamp(args.timestamp, Date.now());
     const previousTimestamp = this.entries.at(-1)?.timestamp ?? 0;
-    const timestamp =
-      typeof args.timestamp === 'number'
-        ? requestedTimestamp
-        : Math.max(requestedTimestamp, previousTimestamp + 1);
+    const timestamp = Math.max(requestedTimestamp, previousTimestamp + 1);
     const entry: SceneLogEntry = {
       id: `${timestamp}-${this.entries.length + 1}`,
       kind: args.kind,

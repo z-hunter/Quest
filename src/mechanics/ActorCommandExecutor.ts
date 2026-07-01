@@ -70,7 +70,10 @@ export class ActorCommandExecutor {
       }
     }
 
-    this.game.emitActorAction?.(actor, 'used command', null, { commandId });
+    const hasSpecificEmit = command.plan.some((step) => step.type === 'actorUseOn');
+    if (!hasSpecificEmit) {
+      this.game.emitActorAction?.(actor, 'used command', null, { commandId });
+    }
     return {
       status: 'ok',
       code: 'actor_command_executed',
@@ -534,7 +537,7 @@ export class ActorCommandExecutor {
 
   private goToScene(actor: Actor, sceneId: string): ActorCommandOutcome {
     const sceneManager = this.game.sceneManager;
-    const destination = sceneManager.scenes.get(sceneId);
+    const destination = sceneManager.scenes.get(sceneId) || sceneManager.sceneRegistry.get(sceneId);
     if (!destination) {
       return {
         status: 'failed',
@@ -625,7 +628,9 @@ export class ActorCommandExecutor {
           if (scope === 'reachable' && perception.interaction !== 'reachable') continue;
           if (
             scope === 'takable' &&
-            (!(object instanceof Entity) || perception.interaction !== 'reachable')
+            (!(object instanceof Entity) ||
+              !object.components?.some((c: any) => c.type === 'Item') ||
+              perception.interaction !== 'reachable')
           ) {
             continue;
           }
@@ -808,6 +813,7 @@ export class ActorCommandExecutor {
       if (
         scope === 'takable' &&
         target instanceof Entity &&
+        target.components?.some((c: any) => c.type === 'Item') &&
         this.game.actorWorld.getObjectPerception(actor, target, fast).interaction === 'reachable'
       ) {
         return { satisfied: true, via: 'takable' };

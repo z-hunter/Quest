@@ -601,6 +601,29 @@ export class GameSemanticAPI {
       return null;
 
     if (!scene) return null;
+
+    const inactiveSubsceneAncestors = getInactiveSubsceneAncestors(scene, entity);
+    const isVirtualNpcAccess =
+      !!inactiveSubsceneAncestors.length && !!activeActor && activeActor !== scene.player;
+    if (isVirtualNpcAccess) {
+      for (const triggerbox of inactiveSubsceneAncestors) {
+        const distanceError = ComponentSystem.getInteractionDistanceError(
+          triggerbox as any,
+          activeActor
+        );
+        if (distanceError) {
+          return {
+            status: 'failed',
+            code: 'too_far_to_examine',
+            message: distanceError,
+            data: { entityId: entity.name, subsceneId: triggerbox.name },
+            recoverable: true,
+          };
+        }
+      }
+      return null;
+    }
+
     const accessState = getSceneTextLayerAccessState(scene, this.game, entity);
     if (!accessState.blocked && !accessState.hidden) return null;
 
@@ -1121,6 +1144,11 @@ export class GameSemanticAPI {
         }).filter((accessState) => accessState.hiddenReason === 'lookable')
       : [];
     const discoveredLookables = revealableLookables.length > 0;
+    const priorDirectDescendants = effectiveRelation
+      ? getSceneTextRelationDirectDescendants(textLayer, anchorNodeId, effectiveRelation) || []
+      : [];
+    const priorEntityNames = new Set(priorDirectDescendants.map((entry) => entry.object.name));
+
     if (effectiveRelation && revealableLookables.length) {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
       const revealedTextLayer = buildSceneTextLayerSnapshot(scene, this.game);
@@ -1165,7 +1193,9 @@ export class GameSemanticAPI {
               buildSceneTextLayerSnapshot(scene, this.game),
               anchorNodeId,
               effectiveRelation
-            ).map((entry) => entry.object.name)
+            )
+              .map((entry) => entry.object.name)
+              .filter((name) => !priorEntityNames.has(name))
           : [],
       },
     };
@@ -1386,8 +1416,28 @@ export class GameSemanticAPI {
       );
       if (inventoryAccessFailure) return inventoryAccessFailure;
     } else if (!inventorySlot) {
-      const blockedOutcome = this.getBlockedAccessOutcome(entity, activeActor);
-      if (blockedOutcome) return blockedOutcome;
+      const inactiveSubsceneAncestors = getInactiveSubsceneAncestors(scene, entity);
+      const isVirtualNpcAccess = !!inactiveSubsceneAncestors.length && activeActor !== scene.player;
+      if (isVirtualNpcAccess) {
+        for (const triggerbox of inactiveSubsceneAncestors) {
+          const distanceError = ComponentSystem.getInteractionDistanceError(
+            triggerbox as any,
+            activeActor
+          );
+          if (distanceError) {
+            return {
+              status: 'failed',
+              code: 'too_far_to_examine',
+              message: distanceError,
+              data: { entityId: entity.name, subsceneId: triggerbox.name },
+              recoverable: true,
+            };
+          }
+        }
+      } else {
+        const blockedOutcome = this.getBlockedAccessOutcome(entity, activeActor);
+        if (blockedOutcome) return blockedOutcome;
+      }
     }
 
     const interactionId =

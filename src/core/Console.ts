@@ -182,6 +182,39 @@ export class Console {
         '*   #VALIDATE-SPATIAL — Runs topological checks on the current scene for cyclic or invalid references.',
         'info'
       );
+
+      const hardcoded = new Set([
+        '#HELP',
+        '#CLS',
+        '#RUN',
+        '#HALT',
+        '#HALTNPC',
+        '#PEEK-ON',
+        '#PEEK-OFF',
+        '#PEEKLLM-ON',
+        '#PEEKLLM-OFF',
+        '#PEEKPN-ON',
+        '#PEEKPN-OFF',
+        '#PEEKPM-ON',
+        '#PEEKPM-OFF',
+        '#STAGE1-ON',
+        '#STAGE1-OFF',
+        '#STAGE2-ON',
+        '#STAGE2-OFF',
+        '#LLM-ON',
+        '#LLM-OFF',
+        '#C1-ON',
+        '#C1-OFF',
+        '#С1-ON',
+        '#С1-OFF',
+        '#VALIDATE-SPATIAL',
+      ]);
+
+      for (const cmd of this.commands.keys()) {
+        if (!hardcoded.has(cmd)) {
+          this.log(`*   ${cmd} — (Dynamically registered command)`, 'info');
+        }
+      }
     });
 
     this.registerCommand('#RUN', (args) => {

@@ -20,12 +20,20 @@ function App() {
     const handleHashChange = () => {
       if (window.location.hash === '#sprite-editor') {
         toggleSpriteEditor(true);
+      } else {
+        toggleSpriteEditor(false);
       }
     };
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [toggleSpriteEditor]);
+
+  useEffect(() => {
+    if (!spriteEditorEnabled && window.location.hash === '#sprite-editor') {
+      window.location.hash = '';
+    }
+  }, [spriteEditorEnabled]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {

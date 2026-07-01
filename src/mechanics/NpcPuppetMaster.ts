@@ -592,7 +592,14 @@ export class NpcPuppetMaster {
       const retryScheduled = !!scene && previousRetryCount < 1;
       rejectedPlans.push({ plan, missingItems: uniqueMissing, retryScheduled });
       if (retryScheduled && scene) {
+        const currentGeneration = this.haltGenerationId;
+        const currentScene = scene;
         globalThis.setTimeout(() => {
+          if (
+            this.haltGenerationId !== currentGeneration ||
+            this.game.sceneManager.currentScene !== currentScene
+          )
+            return;
           this.scheduleNpc(scene, plan.npcId, {
             type: 'plan_rejected_missing_items',
             missingItems: uniqueMissing,
@@ -720,7 +727,14 @@ export class NpcPuppetMaster {
             targetId,
             repeatCount: terminalResult.repeatCount,
           });
+          const currentGeneration = this.haltGenerationId;
+          const currentScene = scene;
           globalThis.setTimeout(() => {
+            if (
+              this.haltGenerationId !== currentGeneration ||
+              this.game.sceneManager.currentScene !== currentScene
+            )
+              return;
             this.scheduleNpc(scene, npcId, {
               type: 'action_completed',
               result: terminalResult,
@@ -755,7 +769,14 @@ export class NpcPuppetMaster {
         completedSteps: completedSteps.length,
         remainingSteps: pending.steps.length,
       });
+      const currentGeneration = this.haltGenerationId;
+      const currentScene = scene;
       globalThis.setTimeout(() => {
+        if (
+          this.haltGenerationId !== currentGeneration ||
+          this.game.sceneManager.currentScene !== currentScene
+        )
+          return;
         this.scheduleNpc(scene, npcId, {
           type: 'plan_interrupted',
           reason: interrupt.type,
@@ -794,7 +815,14 @@ export class NpcPuppetMaster {
       steps: finalResults.length,
       worldChanged: finalResults.some((outcome) => outcome.worldChanged),
     });
+    const currentGeneration = this.haltGenerationId;
+    const currentScene = scene;
     globalThis.setTimeout(() => {
+      if (
+        this.haltGenerationId !== currentGeneration ||
+        this.game.sceneManager.currentScene !== currentScene
+      )
+        return;
       this.scheduleNpc(scene, npcId, {
         type: 'plan_completed',
         results: finalResults,
@@ -885,6 +913,12 @@ export class NpcPuppetMaster {
   ): boolean {
     if (!('worldChanged' in result) || result.worldChanged !== true) return false;
     if (condition.targetId && 'targetId' in result && result.targetId !== condition.targetId) {
+      return false;
+    }
+    if (
+      condition.stateId &&
+      (!('stateId' in result) || (result as any).stateId !== condition.stateId)
+    ) {
       return false;
     }
     return true;
@@ -1228,10 +1262,17 @@ export class NpcPuppetMaster {
         this.memoryContinuationCounts.set(stateKey, count + 1);
       }
 
+      const currentGeneration = this.haltGenerationId;
+      const currentScene = scene;
       globalThis.setTimeout(() => {
-        const scene = this.game.sceneManager.currentScene;
-        if (!scene) return;
-        this.scheduleNpc(scene, plan.npcId, {
+        const activeScene = this.game.sceneManager.currentScene;
+        if (
+          !activeScene ||
+          this.haltGenerationId !== currentGeneration ||
+          activeScene !== currentScene
+        )
+          return;
+        this.scheduleNpc(activeScene, plan.npcId, {
           type: 'plan_continued',
           reason: 'previous_plan_updated_memory_or_objectives_without_scheduling_action',
         });
@@ -1244,10 +1285,12 @@ export class NpcPuppetMaster {
     if (existing) {
       globalThis.clearTimeout(existing);
     }
+    const currentGeneration = this.haltGenerationId;
+    const currentScene = this.game.sceneManager.currentScene;
     const timeoutId = globalThis.setTimeout(() => {
       this.waitTimeouts.delete(npcId);
       const scene = this.game.sceneManager.currentScene;
-      if (scene) {
+      if (scene && this.haltGenerationId === currentGeneration && scene === currentScene) {
         this.scheduleNpc(scene, npcId, { type: 'wait_elapsed', ms });
       }
     }, ms);
@@ -1540,7 +1583,7 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
@@ -1656,7 +1699,16 @@ export class NpcPuppetMaster {
       alreadyScheduled: !!batch.timeoutId,
     });
     if (batch.timeoutId) return completion;
+    const currentGeneration = this.haltGenerationId;
+    const currentScene = scene;
     batch.timeoutId = globalThis.setTimeout(() => {
+      if (
+        this.haltGenerationId !== currentGeneration ||
+        this.game.sceneManager.currentScene !== currentScene
+      ) {
+        batch.completionResolvers.forEach((resolve) => resolve());
+        return;
+      }
       void this.flushBatch(scene.id);
     }, PM_BATCH_DEBOUNCE_MS);
     return completion;
@@ -2072,7 +2124,14 @@ export class NpcPuppetMaster {
   }
 
   private deferBatch(batch: PendingNpcBatch, npcIds: string[] = [...batch.npcIds]): void {
+    const currentGeneration = this.haltGenerationId;
+    const currentScene = batch.scene;
     globalThis.setTimeout(() => {
+      if (
+        this.haltGenerationId !== currentGeneration ||
+        this.game.sceneManager.currentScene !== currentScene
+      )
+        return;
       for (const npcId of npcIds) {
         const triggers = batch.triggersByNpc.get(npcId) || [];
         if (!triggers.length) {
