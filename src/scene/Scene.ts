@@ -116,6 +116,7 @@ export class Scene {
 
   // Runtime Camera (used for rendering)
   camera: { x: number; y: number; zoom: number };
+  collisionCamera: { x: number; y: number } | null;
   autoCenter: boolean;
   cameraSpeed: number;
   camDeadzoneX: number = 50;
@@ -442,6 +443,7 @@ export class Scene {
     };
     this.player = null;
     this.camera = { x: 0, y: 0, zoom: 1.0 };
+    this.collisionCamera = null;
     this.defaultCamera = { x: 0, y: 0, zoom: 1.0 };
     this.renderer = new SceneRenderer(game);
 
@@ -785,12 +787,13 @@ export class Scene {
     }
 
     let sourceRect = null;
+    const cam = this.collisionCamera || this.camera;
     if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
       // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
       const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
       const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
       const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
-      const sourceVisual = toVisualPosition({ x, y }, this.camera, sp, { x: svOx, y: svOy });
+      const sourceVisual = toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
 
       sourceRect = {
         x: sourceVisual.x - sourceEntity.colliderWidth / 2,
@@ -809,7 +812,7 @@ export class Scene {
         const vOx = (other as any).visualOffset ? (other as any).visualOffset.x : 0;
         const vOy = (other as any).visualOffset ? (other as any).visualOffset.y : 0;
         const p = other.parallax !== undefined ? other.parallax : 1.0;
-        const otherVisual = toVisualPosition({ x: other.x, y: other.y }, this.camera, p, {
+        const otherVisual = toVisualPosition({ x: other.x, y: other.y }, cam, p, {
           x: vOx,
           y: vOy,
         });
@@ -843,9 +846,9 @@ export class Scene {
             const p = v.p !== undefined ? v.p : (entity as any).parallax || 1.0;
             let vx = v.x;
             let vy = v.y;
-            if (this.camera && p !== 1.0) {
-              vx = v.x - this.camera.x * (p - 1.0);
-              vy = v.y - this.camera.y * (p - 1.0);
+            if (cam && p !== 1.0) {
+              vx = v.x - cam.x * (p - 1.0);
+              vy = v.y - cam.y * (p - 1.0);
             }
             return { x: vx, y: vy };
           });

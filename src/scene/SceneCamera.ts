@@ -10,7 +10,10 @@ export function updateSceneCamera(
   deltaTime: number,
   state: CameraCenteringState
 ): CameraCenteringState {
-  if (!scene.player || !scene.autoCenter) return state;
+  if (!scene.player || !scene.autoCenter) {
+    scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+    return state;
+  }
 
   const pHeight = scene.player.height || 0;
   const playerCenterX = scene.player.x;
@@ -53,6 +56,9 @@ export function updateSceneCamera(
   if (scene.camMaxX !== undefined) targetX = Math.min(scene.camMaxX, targetX);
   if (scene.camMinY !== undefined) targetY = Math.max(scene.camMinY, targetY);
   if (scene.camMaxY !== undefined) targetY = Math.min(scene.camMaxY, targetY);
+
+  // Store the unsmoothed target camera position for deterministic collision checks
+  scene.collisionCamera = { x: targetX, y: targetY };
 
   const dt = deltaTime / 1000;
   const speed = scene.cameraSpeed || 5.0;
