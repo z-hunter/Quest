@@ -1158,10 +1158,6 @@ export class GameSemanticAPI {
         }).filter((accessState) => accessState.hiddenReason === 'lookable')
       : [];
     const discoveredLookables = revealableLookables.length > 0;
-    const priorDirectDescendants = effectiveRelation
-      ? getSceneTextRelationDirectDescendants(textLayer, anchorNodeId, effectiveRelation) || []
-      : [];
-    const priorEntityNames = new Set(priorDirectDescendants.map((entry) => entry.object.name));
 
     if (effectiveRelation && revealableLookables.length) {
       revealableLookables.forEach((accessState) => scene.revealHiddenEntity(accessState.object));
@@ -1207,9 +1203,7 @@ export class GameSemanticAPI {
               buildSceneTextLayerSnapshot(scene, this.game),
               anchorNodeId,
               effectiveRelation
-            )
-              .map((entry) => entry.object.name)
-              .filter((name) => !priorEntityNames.has(name))
+            ).map((entry) => entry.object.name)
           : [],
       },
     };
