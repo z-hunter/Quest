@@ -1,7 +1,0 @@
-{
-  "answer": "I confirm that I have successfully accessed all 18 provided sources and our complete conversation history.",
-  "conversation_id": "4134a68c-33d4-4145-883b-f7fe0018f2a1",
-  "turn_number": 1,
-  "is_follow_up": true,
-  "references": []
-}
