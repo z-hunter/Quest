@@ -800,4 +800,64 @@ describe('Game navigation and spatial API', () => {
     expect(loadedEntity.colliderWidth).toBe(12.5);
     expect(loadedEntity.colliderHeight).toBe(2.5);
   });
+
+  it('allows an Actor to walk between bordering Walkbox objects and Quad Walkboxes', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 98, 50); // Standing near the border of two walkboxes
+    actor.colliderWidth = 8;
+    actor.colliderHeight = 8;
+
+    // Standard walkbox from x = 0 to 100
+    const floor = new Walkbox(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ],
+      'standard_floor'
+    );
+    floor.mode = 'Add';
+    fixture.scene.addWalkbox(floor);
+
+    // Quad walkbox from x = 101 to 201 (creating a 1px misalignment gap)
+    const quad = new QuadObject(fixture.game, 'quad_floor');
+    quad.vertices = [
+      { x: 101, y: 0, p: 1 },
+      { x: 201, y: 0, p: 1 },
+      { x: 201, y: 100, p: 1 },
+      { x: 101, y: 100, p: 1 },
+    ];
+    quad.components = [
+      {
+        id: 'quad-wb-comp',
+        type: 'WalkBox',
+        mode: 'Add',
+      },
+    ];
+    fixture.scene.addEntity(quad);
+
+    // Actor's collider spans from x = 94 to x = 102
+    // It should be walkable because it is fully inside the union of positive walkboxes
+    expect(fixture.scene.isWalkable(98, 50, actor)).toBe(true);
+
+    // Verify it is also walkable at x = 100 (exactly inside the 1-pixel gap)
+    expect(fixture.scene.isWalkable(100, 50, actor)).toBe(true);
+
+    // Verify it is not walkable if we step completely out of bounds (e.g. x = 205)
+    expect(fixture.scene.isWalkable(205, 50, actor)).toBe(false);
+
+    // --- Strict Exterior Boundary Checks ---
+    // Left edge of standard_floor is at x = 0.
+    // Actor with colliderWidth = 8, at x = 3 has collider left at -1. Should be blocked.
+    expect(fixture.scene.isWalkable(3, 50, actor)).toBe(false);
+    // Actor at x = 4 has collider left at 0. Should be walkable.
+    expect(fixture.scene.isWalkable(4, 50, actor)).toBe(true);
+
+    // Right edge of quad_floor is at x = 201.
+    // Actor at x = 197 has collider right at 201. Should be walkable.
+    expect(fixture.scene.isWalkable(197, 50, actor)).toBe(true);
+    // Actor at x = 198 has collider right at 202. Should be blocked.
+    expect(fixture.scene.isWalkable(198, 50, actor)).toBe(false);
+  });
 });

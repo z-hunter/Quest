@@ -40,7 +40,7 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - **Editor Decoupling:** File I/O operations (Save/Load) are handled by `EditorPersistenceManager` to keep `SceneEditor` focused on interaction.
   - **Advanced Snapping:** Zoom-aware (20px) threshold. Support for horizontal grid edges and Entity corners (with automatic parallax adoption).
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
-  - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
+  - **Walkbox Transitions:** Seamless transitions between bordering or contiguous positive walkboxes (such as regular Walkbox objects and Quad Walkbox components) are supported via union checks.
   - **Quad Objects:** 4-vertex primitives with vertex-specific Parallax, Retro-Grid mode, and Sorting modes.
   - **Unified Y-Sorting:** Stable Z-ordering between Quads and Entities via consistent Visual Y calculation (Screen Space Depth).
   - **Auto-Center Fix:** Player keyboard input no longer blocked by UI hover states while Auto-Center is active.

@@ -3041,3 +3041,31 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 
 - Изменения самого skill `wrap-up-session` находятся в пользовательском каталоге Codex, а не в репозитории Quest, поэтому не входят в перечисленные git commits.
 - Корневые Markdown-файлы при wrap-up синхронизируются не рекурсивно; документы из подкаталогов намеренно не загружаются.
+
+## Session Entry - 2026-07-02 23:25 +02:00
+
+### Session Goal
+
+Исправление багов переходов Actor-а через стыки смежных Walkbox областей (обычных Walkbox-ов сцены и компонентов WalkBox на объектах Quad) и предотвращение выхода за внешние границы игровой области.
+
+### Outstanding User Requests
+
+- **Fix Quad Walkbox transitions from the "outside"**: Исправлена ситуация, когда Actor не мог переходить между граничащими Walkbox-ами.
+- **Strict Boundaries**: Исправлен баг, при котором Actor мог выскочить за внешние границы (exterior edges) и застрять.
+
+### Work Accomplished
+
+- **Strict Boundary and Gap Bridging Logic**:
+  - Реализован метод `Geometry.isPointInsideUnionOfPolygons` в `src/utils/Geometry.ts`.
+  - При нахождении точки за пределами всех полигонов проверяется, находится ли она в микро-зазоре стыка: для этого она должна быть в радиусе `epsilon` (2.0 пикселя) как минимум от **двух разных** Walkbox-ов. Если рядом только один Walkbox, точка классифицируется как внешнее пространство, и движение за границу блокируется.
+  - Первым этапом проверяется строгое попадание точки внутрь любого Walkbox с микро-допуском `0.001` пикселя (для компенсации погрешности float-вычислений на стыках внешних границ).
+- **Point Mode strictness**:
+  - В `Scene.isWalkable` Point Mode проверки заменены на `isPointInPolygonWithEpsilon` со строгим допуском `0.001`, исключая выход клика за пределы зон.
+- **Test Coverage**:
+  - В `tests/game/navigation-and-spatial.test.ts` расширен тест `allows an Actor to walk between bordering Walkbox objects and Quad Walkboxes`. Добавлены явный 1-пиксельный зазор и строгие проверки недопустимости выхода за внешние границы (слева и справа). Тест успешно проходит.
+
+### Tests and Validation
+
+- Все тесты навигации и пространственной логики успешно пройдены.
+- ПолныйVitest run: 526 passed, 4 pre-existing puppet-master failures.
+- Проведено локальное тестирование: Actor корректно переходит через границы Quad, но его коллайдер жестко останавливается на внешних границах walkbox-а.

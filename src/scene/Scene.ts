@@ -894,11 +894,21 @@ export class Scene {
         }
 
         if (!safe) {
+          // If not in a single walkbox, check if the collider is inside the union of positive walkboxes
+          if (
+            Geometry.rectInsideUnionOfPolygons(
+              sourceRect,
+              positives.map((wb) => wb.poly)
+            )
+          ) {
+            safe = true;
+          }
+        }
+
+        if (!safe) {
           return false;
         }
       }
-
-      return true;
 
       return true;
     } else {
@@ -907,7 +917,7 @@ export class Scene {
       // 1. Subtract
       for (const wb of activeWalkboxes) {
         if (wb.mode === 'Subtract') {
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             return false;
           }
         }
@@ -916,7 +926,7 @@ export class Scene {
       // 2. Add
       for (const wb of activeWalkboxes) {
         if (wb.mode === 'Add') {
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             return true;
           }
         }
@@ -928,7 +938,7 @@ export class Scene {
       for (const wb of activeWalkboxes) {
         if (!wb.mode || wb.mode === 'Invert') {
           hasInvert = true;
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             inclusionCount++;
           }
         }
