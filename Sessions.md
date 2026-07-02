@@ -3061,11 +3061,15 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
   - Первым этапом проверяется строгое попадание точки внутрь любого Walkbox с микро-допуском `0.001` пикселя (для компенсации погрешности float-вычислений на стыках внешних границ).
 - **Point Mode strictness**:
   - В `Scene.isWalkable` Point Mode проверки заменены на `isPointInPolygonWithEpsilon` со строгим допуском `0.001`, исключая выход клика за пределы зон.
+- **Camera Smoothing Lag Decoupling ("Rubber Band" Fix)**:
+  - Устранена проблема, при которой коллайдер выходил за рамки Walkbox при движении из-за отставания плавной камеры, а затем втягивался обратно ("эффект резинки").
+  - Добавлено свойство `scene.collisionCamera` в `Scene.ts`, хранящее мгновенные целевые координаты камеры без сглаживания (рассчитывается в `SceneCamera.ts`).
+  - Все проекции в методе `isWalkable` переведены на использование `collisionCamera` вместо отстающей `camera`. Теперь проверка столкновений полностью независима от лага отрисовки камеры.
 - **Test Coverage**:
   - В `tests/game/navigation-and-spatial.test.ts` расширен тест `allows an Actor to walk between bordering Walkbox objects and Quad Walkboxes`. Добавлены явный 1-пиксельный зазор и строгие проверки недопустимости выхода за внешние границы (слева и справа). Тест успешно проходит.
 
 ### Tests and Validation
 
 - Все тесты навигации и пространственной логики успешно пройдены.
-- ПолныйVitest run: 526 passed, 4 pre-existing puppet-master failures.
-- Проведено локальное тестирование: Actor корректно переходит через границы Quad, но его коллайдер жестко останавливается на внешних границах walkbox-а.
+- Полный Vitest run: 526 passed, 4 pre-existing puppet-master failures.
+- Проведено локальное тестирование в сцене `wt`: эффект "резинки" устранен, коллайдер игрока строго удерживается внутри Walkbox в любой момент движения.

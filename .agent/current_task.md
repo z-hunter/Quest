@@ -8,4 +8,7 @@
   - Exterior boundary checks use a strict `0.001` float epsilon, preventing the actor's collider from going outside the walkable boundaries.
   - Interior shared borders use a `2.0` pixel epsilon and require the point to be close to at least *two* different walkboxes to bridge any minor editor misalignment gaps.
 - **Point Mode Strictness:** Switched Point Mode walkbox checks in `Scene.ts` to `isPointInPolygonWithEpsilon` with a strict `0.001` epsilon, preventing click target drift outside walkboxes.
+- **Camera Smoothing Lag Decoupling ("Rubber Band" Fix):** Decoupled visual collision checks from the time-lagged active camera. 
+  - Added `scene.collisionCamera` property to store the unsmoothed camera position target.
+  - Updated `isWalkable` checks to project vertices using `collisionCamera` instead of the lagging `camera`, preventing colliders from drifting outside walkbox boundaries during movement and then "snapping" back when stationary.
 - **Verification:** Updated the unit test in `tests/game/navigation-and-spatial.test.ts` to model a 1-pixel gap and verify that the Actor can transition across the shared gap, but is strictly blocked from crossing any exterior walkbox boundaries (left/right). The test suite runs and passes successfully.
