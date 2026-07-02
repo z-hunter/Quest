@@ -131,7 +131,9 @@ export const ConsoleOverlay: React.FC<ConsoleOverlayProps> = ({ game }) => {
                     ? '#f55'
                     : line.type === 'dialogue'
                       ? '#7dd3fc'
-                      : '#fff',
+                      : line.type === 'info'
+                        ? '#888'
+                        : '#fff',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
               userSelect: 'text',

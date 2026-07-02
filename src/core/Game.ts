@@ -520,7 +520,13 @@ export class Game implements IGame {
     for (let index = 0; index < visibleOutput.length; index += 1) {
       const line = visibleOutput[index];
       ctx.fillStyle =
-        line.type === 'command' ? '#aaa' : line.type === 'dialogue' ? '#7dd3fc' : '#fff';
+        line.type === 'command'
+          ? '#aaa'
+          : line.type === 'dialogue'
+            ? '#7dd3fc'
+            : line.type === 'info'
+              ? '#888'
+              : '#fff';
       ctx.fillText(line.text, 2, consoleY + 2 + lineHeight * index);
     }
 
