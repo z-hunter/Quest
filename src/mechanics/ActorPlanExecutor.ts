@@ -56,8 +56,12 @@ export class ActorPlanExecutor {
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
-    const scene = this.game.sceneManager.currentScene;
-    const actor = scene?.getObjectByName(plan.npcId);
+    const currentScene = this.game.sceneManager.currentScene;
+    const actor =
+      currentScene?.getObjectByName(plan.npcId) ||
+      Array.from(this.game.sceneManager.scenes.values())
+        .map((scene) => scene.getObjectByName(plan.npcId))
+        .find((candidate) => candidate instanceof Actor);
     if (!(actor instanceof Actor) || !ComponentSystem.isNpc(actor)) {
       return [
         {
@@ -144,6 +148,10 @@ export class ActorPlanExecutor {
 
     if (step.type === 'MOVE_TO') {
       return this.moveActor(actor, step);
+    }
+
+    if (step.type === 'TRAVERSE_EXIT') {
+      return this.traverseExit(actor, step.targetId);
     }
 
     if (step.type === 'LOOK') {
@@ -257,6 +265,51 @@ export class ActorPlanExecutor {
     return this.startMove(actor, actor.moveTo(approach.point.x, approach.point.y));
   }
 
+  private traverseExit(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
+    const normalizedTargetId = String(targetId || '').trim();
+    const scene = this.game.sceneManager.currentScene;
+    const target = scene?.getObjectByName(normalizedTargetId);
+    const exit = target?.components?.find((component: any) => component?.type === 'Exit') as
+      | { portal?: boolean; collider?: boolean }
+      | undefined;
+    if (!scene || !target || !exit) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_target_not_found',
+        npcId: actor.name,
+        targetId: normalizedTargetId,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    if (!this.game.actorNavigation.isReachable(actor, target)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_not_reachable',
+        npcId: actor.name,
+        targetId: target.name,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    if (exit.portal !== true && exit.collider === false) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_disabled',
+        npcId: actor.name,
+        targetId: target.name,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    scene.activateObject(target, 0, actor);
+    return this.completeAction(actor.name, {
+      status: 'ok',
+      code: 'exit_traversed',
+      npcId: actor.name,
+      targetId: target.name,
+      actionType: 'TRAVERSE_EXIT',
+      worldChanged: true,
+    });
+  }
+
   private startMove(actor: Actor, result: ActorMoveResult): NpcPlanExecutionOutcome {
     if (result.status === 'started') {
       this.watchMoveCompletion(actor);
@@ -303,8 +356,31 @@ export class ActorPlanExecutor {
     relation?: 'in' | 'on' | 'under' | 'behind' | null
   ): NpcPlanExecutionOutcome {
     const normalizedTargetId = String(targetId || '').trim();
-    const target = this.game.sceneManager.currentScene?.getObjectByName(normalizedTargetId);
+    const scene = this.game.sceneManager.currentScene;
+    const target = scene?.getObjectByName(normalizedTargetId);
     if (!target) {
+      const sceneTitle = scene
+        ? this.game.textAssets.getResolvedSceneField(scene, 'title')?.trim()
+        : '';
+      const targetsScene =
+        !!scene &&
+        (normalizedTargetId.toLowerCase() === scene.id.toLowerCase() ||
+          (!!sceneTitle && normalizedTargetId.toLowerCase() === sceneTitle.toLowerCase()));
+      if (targetsScene && (action === 'LOOK' || action === 'EXAMINE')) {
+        const description = this.game.textAssets.getResolvedSceneField(scene, 'description') || '';
+        return this.completeAction(actor.name, {
+          status: 'ok',
+          code: action === 'LOOK' ? 'scene_looked' : 'scene_examined',
+          npcId: actor.name,
+          targetId: scene.id,
+          message: description,
+          actionType: action,
+          relation: relation || undefined,
+          worldChanged: false,
+          discoveredEntityIds: [],
+          repeatKey: `${action}:SCENE:${scene.id}:${relation || '*'}`,
+        });
+      }
       return this.completeAction(actor.name, {
         status: 'failed',
         code: `${action.toLowerCase()}_target_not_found`,

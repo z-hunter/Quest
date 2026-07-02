@@ -1272,29 +1272,11 @@ export class Parser {
           },
         };
       case 'quit':
-        if (!this.hasClosableView()) {
-          return {
-            stage: 'regex-v1',
-            output: {
-              kind: 'handoff_up',
-              reason: 'quit_not_applicable',
-              verb,
-              noun,
-              rawInput: input,
-            },
-            debug: {
-              rawInput: input,
-              normalizedInput: input.trim().toUpperCase(),
-              verb,
-              noun,
-            },
-          };
-        }
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
-            actions: [{ type: 'quitCurrentView' }],
+            actions: [{ type: 'quitCurrentView', target: match?.remainder || noun || null }],
           },
           debug: {
             rawInput: input,
@@ -1668,7 +1650,9 @@ export class Parser {
       case 'closeTarget':
         return this.resolveOpenCloseTarget('close', action.target);
       case 'quitCurrentView':
-        return this.game.closeFocusedView();
+        return this.hasClosableView()
+          ? this.game.closeFocusedView()
+          : this.resolveQuitTarget(action.target || null);
       case 'showInventory':
         return this.game.showInventory();
       case 'setSceneParserNote':
@@ -3980,6 +3964,28 @@ export class Parser {
       };
     }
 
+    const normalizedDestination = rawTarget.trim().toUpperCase();
+    const destinationExit = this.getScopeCandidates(['visible']).find((candidate) => {
+      const exit = candidate.components?.find((component: any) => component?.type === 'Exit') as
+        | { targetSceneId?: string }
+        | undefined;
+      if (!exit) return false;
+      const targetSceneId = String(exit.targetSceneId || '')
+        .trim()
+        .replace(/\.json$/i, '');
+      const scene = this.game.sceneManager.scenes.get(targetSceneId);
+      const descriptor = this.game.sceneManager.sceneRegistry.get(targetSceneId);
+      const title =
+        (scene && this.game.textAssets.getResolvedSceneField(scene, 'title')) || descriptor?.title;
+      return (
+        targetSceneId.toUpperCase() === normalizedDestination ||
+        String(title || '')
+          .trim()
+          .toUpperCase() === normalizedDestination
+      );
+    });
+    if (destinationExit) return this.game.goToEntity(destinationExit);
+
     const sceneOutcome = this.game.goToSceneTarget(rawTarget);
     if (sceneOutcome.status === 'ok') {
       return sceneOutcome;
@@ -3987,9 +3993,7 @@ export class Parser {
 
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['visible']).filter(
-        (candidate): candidate is Entity => candidate instanceof Entity
-      ),
+      this.getScopeCandidates(['visible']),
       'parser.go_to_which_one'
     );
     if (resolved.status === 'escalate') {
@@ -4018,6 +4022,44 @@ export class Parser {
       data: { target: rawTarget },
       recoverable: true,
     };
+  }
+
+  private resolveQuitTarget(rawTarget: string | null): GameActionOutcome {
+    const exits = this.getScopeCandidates(['visible']).filter((candidate) =>
+      candidate.components?.some((component: any) => component?.type === 'Exit')
+    );
+    if (!rawTarget) {
+      if (exits.length === 1) return this.game.goToEntity(exits[0]);
+      return exits.length > 1
+        ? {
+            status: 'needs_clarification',
+            code: 'ambiguous_destination',
+            message: this.game.text('parser.go_to_prompt'),
+            data: { options: exits.map((exit) => exit.name) },
+            recoverable: true,
+          }
+        : {
+            status: 'failed',
+            code: 'quit_not_applicable',
+            recoverable: true,
+          };
+    }
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget.replace(/^THROUGH\s+/i, ''),
+      exits,
+      'parser.go_to_which_one'
+    );
+    if (resolved.status === 'found') return this.game.goToEntity(resolved.entity);
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_destination',
+        message: resolved.message,
+        data: { options: resolved.options, clarificationOptions: resolved.clarificationOptions },
+        recoverable: true,
+      };
+    }
+    return { status: 'failed', code: 'destination_not_found', recoverable: true };
   }
 
   private executeResolveArgumentEntity(

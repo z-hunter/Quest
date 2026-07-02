@@ -42,6 +42,13 @@ export type ParserEntityContext = {
   parserNoteNeedsCheck?: true;
   interactions?: string[];
   states?: ParserStateContext[];
+  exit?: {
+    targetSceneId: string;
+    targetEntryId: string | null;
+    targetSceneTitle: string | null;
+    portal: boolean;
+    collider: boolean;
+  };
 };
 
 export type ParserInventoryItemContext = {
@@ -310,6 +317,7 @@ export type ParserToolAction =
     }
   | {
       type: 'quitCurrentView';
+      target?: string | null;
     }
   | {
       type: 'showInventory';

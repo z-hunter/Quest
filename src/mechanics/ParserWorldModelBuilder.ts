@@ -164,6 +164,31 @@ export class ParserWorldModelBuilder {
           : null;
         const reachable =
           isDirectSceneObject && perception?.interaction === 'reachable' ? true : undefined;
+
+        const exitComponent = sceneObject.components?.find(
+          (component: any) => component?.type === 'Exit'
+        ) as any;
+        let exitContext = undefined;
+        if (exitComponent) {
+          let sceneId =
+            exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id || '';
+          if (sceneId.toLowerCase().endsWith('.json')) sceneId = sceneId.slice(0, -5);
+
+          const targetScene = this.game.sceneManager.scenes.get(sceneId);
+          const descriptor = this.game.sceneManager.sceneRegistry.get(sceneId);
+          exitContext = {
+            targetSceneId:
+              exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id,
+            targetEntryId: exitComponent.targetEntryId || null,
+            targetSceneTitle:
+              (targetScene && this.game.textAssets.getResolvedSceneField(targetScene, 'title')) ||
+              descriptor?.title ||
+              null,
+            portal: exitComponent.portal === true,
+            collider: exitComponent.collider !== false,
+          };
+        }
+
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title: entry.title,
@@ -190,6 +215,7 @@ export class ParserWorldModelBuilder {
             : undefined,
           interactions,
           states: this.buildStateContexts(sceneObject),
+          exit: exitContext,
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -213,6 +239,31 @@ export class ParserWorldModelBuilder {
         const isItem = !!sceneObject.components?.find(
           (component: any) => component?.type === 'Item'
         );
+
+        const exitComponent = sceneObject.components?.find(
+          (component: any) => component?.type === 'Exit'
+        ) as any;
+        let exitContext = undefined;
+        if (exitComponent) {
+          let sceneId =
+            exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id || '';
+          if (sceneId.toLowerCase().endsWith('.json')) sceneId = sceneId.slice(0, -5);
+
+          const targetScene = this.game.sceneManager.scenes.get(sceneId);
+          const descriptor = this.game.sceneManager.sceneRegistry.get(sceneId);
+          exitContext = {
+            targetSceneId:
+              exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id,
+            targetEntryId: exitComponent.targetEntryId || null,
+            targetSceneTitle:
+              (targetScene && this.game.textAssets.getResolvedSceneField(targetScene, 'title')) ||
+              descriptor?.title ||
+              null,
+            portal: exitComponent.portal === true,
+            collider: exitComponent.collider !== false,
+          };
+        }
+
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title,
@@ -254,6 +305,7 @@ export class ParserWorldModelBuilder {
             : undefined,
           interactions: Object.keys(sceneObject.interactions || {}),
           states: this.buildStateContexts(sceneObject),
+          exit: exitContext,
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);

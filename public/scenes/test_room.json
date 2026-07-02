@@ -791,7 +791,7 @@
       "script": ""
     },
     {
-      "name": "Entry",
+      "name": "E1",
       "type": "Triggerbox",
       "locked": false,
       "disabled": false,
@@ -802,7 +802,7 @@
       "components": [
         {
           "type": "Entry",
-          "direction": "down"
+          "direction": "left"
         }
       ],
       "layer": 0,
@@ -811,16 +811,16 @@
       "parallax": 1,
       "poly": [
         {
-          "x": 1341,
-          "y": 220
+          "x": 1238.8191123637155,
+          "y": 221.41939833717382
         },
         {
-          "x": 1303,
-          "y": 243
+          "x": 1194.8191123637155,
+          "y": 259.41939833717385
         },
         {
-          "x": 1366,
-          "y": 253
+          "x": 1282.8191123637155,
+          "y": 263.41939833717385
         }
       ],
       "script": ""
@@ -980,77 +980,6 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0
-    },
-    {
-      "name": "Hero_1",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 10,
-          "groups": [],
-          "protected": true,
-          "items": [],
-          "relation": "in"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1.030164714125378,
-      "x": 1052.6950036853648,
-      "y": 231.453659753082,
-      "width": 124.32,
-      "height": 298.2,
-      "baseWidth": 148,
-      "baseHeight": 355,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
-      "spriteName": "miles2_ds-idle-left.json",
-      "color": "#00ffff",
-      "scale": 0.84,
-      "refScale": 0.84,
-      "modelScale": 0.84,
-      "ignoreScaling": true,
-      "animationSpeed": 53,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "isPlayer": true,
-      "speed": 0.24,
-      "direction": "right",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles2_ds-idle-up.json",
-          "down": "miles2_ds-idle-down.json",
-          "left": "miles2_ds-idle-left.json",
-          "right": ""
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles2_ds-wlk-up.json",
-          "down": "miles2_ds-walk-down.json",
-          "left": "miles2_ds-walk-left.json",
-          "right": ""
-        }
-      }
     },
     {
       "name": "Black_1",
@@ -1416,8 +1345,8 @@
       "visible": true,
       "hidden": false,
       "parallax": 1.0791811402100033,
-      "x": 223.04286339314535,
-      "y": 306.93895592340493,
+      "x": 223.04286339314518,
+      "y": 306.9389559234049,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
@@ -1574,29 +1503,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 979.0845124869521,
-      "y": 209.81937946759462,
+      "x": 1005.2779727164655,
+      "y": 228.888621257255,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 979.0845124869521,
-          "y": 209.81937946759462,
-          "p": 1.0160695966701028
+          "x": 1005.2779727164655,
+          "y": 228.888621257255,
+          "p": 1.0284991047125032
         },
         {
-          "x": 1081.3246597711973,
-          "y": 208.7094955071422,
-          "p": 1.0153754011685574
+          "x": 1099.9496981696807,
+          "y": 227.69188197423148,
+          "p": 1.027714327370604
         },
         {
-          "x": 1272.4126644742882,
-          "y": 241.90450384169526,
-          "p": 1.0369509765205813
+          "x": 1429.2881663467724,
+          "y": 259.9747452200141,
+          "p": 1.048687004383216
         },
         {
-          "x": 1205.5460823025787,
-          "y": 240.41643293092238,
-          "p": 1.0359846967083912
+          "x": 1345.4433259137747,
+          "y": 257.47736046009027,
+          "p": 1.0471544312305519
         }
       ],
       "color": "#2b019d",
@@ -2349,13 +2278,13 @@
       "parallax": 1.0318181826731165,
       "x": 1233.0000273620126,
       "y": 234.00000131659937,
-      "width": 135.70912295390127,
-      "height": 279.52665262517417,
-      "baseWidth": 317.9999999999999,
-      "baseHeight": 655.0000000000002,
+      "width": 92.60653987734776,
+      "height": 278.6731361286087,
+      "baseWidth": 217,
+      "baseHeight": 653,
       "colliderWidth": 44,
       "colliderHeight": 8,
-      "spriteName": "linda_walk_left.json",
+      "spriteName": "linda_idle_right.json",
       "color": "#36d87fff",
       "scale": 0.42675824828270853,
       "refScale": 0.446,
@@ -2371,10 +2300,10 @@
       "animSets": {
         "idle": {
           "id": "idle",
-          "up": null,
-          "down": null,
+          "up": "linda_idle_up.json",
+          "down": "linda_idle_down.json",
           "left": null,
-          "right": null
+          "right": "linda_idle_right.json"
         },
         "walk": {
           "id": "walk",
@@ -2382,6 +2311,143 @@
           "down": "linda_walk_down.json",
           "left": "linda_walk_left.json",
           "right": null
+        }
+      }
+    },
+    {
+      "name": "door",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "Corridor",
+          "targetEntryId": "E1",
+          "portal": true,
+          "collider": false
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1402.7035503655463,
+      "y": -36.05629787211462,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 1352.7035503655463,
+          "y": -136.0562978721146,
+          "p": 1
+        },
+        {
+          "x": 1396,
+          "y": -144,
+          "p": 1
+        },
+        {
+          "x": 1396,
+          "y": 246,
+          "p": 1
+        },
+        {
+          "x": 1354,
+          "y": 215,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": false,
+      "blur": 0
+    },
+    {
+      "name": "Hero_1",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1.0421980367918666,
+      "x": 1080.1585068366549,
+      "y": 249.98497665947454,
+      "width": 121.24102847519698,
+      "height": 290.8146291128036,
+      "baseWidth": 148,
+      "baseHeight": 355,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
+      "spriteName": "miles2_ds-idle-left.json",
+      "color": "#00ffff",
+      "scale": 0.8191961383459255,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
         }
       }
     },

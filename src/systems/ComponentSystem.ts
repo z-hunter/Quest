@@ -48,6 +48,8 @@ export interface ExitComponent {
   type: 'Exit';
   targetSceneId: string;
   targetEntryId: string;
+  collider?: boolean;
+  portal?: boolean;
 }
 
 export interface EntryComponent {
@@ -539,7 +541,7 @@ export class ComponentSystem {
     if (activator) {
       sceneManager.transferActorToScene(activator, targetSceneId, {
         targetEntryId: exit.targetEntryId?.trim() || null,
-        activateScene: true,
+        activateScene: activator === sceneManager.currentScene?.player,
       });
       return true;
     }
@@ -555,7 +557,12 @@ export class ComponentSystem {
     if (actors.length === 0) return;
 
     const exitObjects = [...scene.entities, ...scene.triggerboxes].filter(
-      (obj) => !obj.disabled && obj.components?.some((component) => component.type === 'Exit')
+      (obj) =>
+        !obj.disabled &&
+        obj.components?.some(
+          (component) =>
+            component.type === 'Exit' && (component as ExitComponent).collider !== false
+        )
     );
     if (exitObjects.length === 0) return;
 
@@ -717,8 +724,20 @@ export class ComponentSystem {
     if (surfacePlacement) {
       targetX = surfacePlacement.x;
       targetY = surfacePlacement.y;
-    } else if (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) {
-      const poly = (entity as any).poly as Array<{ x: number; y: number }>;
+    } else if (
+      (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) ||
+      (Array.isArray((entity as any).vertices) && (entity as any).vertices.length > 0)
+    ) {
+      const rawPoints = (
+        Array.isArray((entity as any).poly) ? (entity as any).poly : (entity as any).vertices
+      ) as Array<{ x: number; y: number; p?: number }>;
+      const camera = game?.sceneManager?.currentScene?.camera;
+      const poly = rawPoints.map((vertex) => {
+        const parallax = vertex.p ?? (entity as any).parallax ?? 1;
+        return camera
+          ? toVisualPosition({ x: vertex.x, y: vertex.y }, camera, parallax)
+          : { x: vertex.x, y: vertex.y };
+      });
       dist = this.getPointToPolygonDistance({ x: player.x || 0, y: player.y || 0 }, poly);
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;

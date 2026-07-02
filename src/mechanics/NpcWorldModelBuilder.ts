@@ -86,6 +86,7 @@ export class NpcWorldModelBuilder {
           id: object.name,
           title,
           item: this.isItem(object) ? true : undefined,
+          exit: this.getExitContext(scene, object),
         });
       })
       .filter((entry): entry is NpcStaticEntityContext => !!entry)
@@ -246,6 +247,7 @@ export class NpcWorldModelBuilder {
             value: ComponentSystem.getStateValue(object, component.id) ?? component.initialValue,
           })),
           commands,
+          exit: this.getExitContext(this.game.sceneManager.currentScene!, object),
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);
@@ -296,6 +298,29 @@ export class NpcWorldModelBuilder {
 
   private isItem(object: SceneObject): boolean {
     return !!object.components?.some((component: any) => component?.type === 'Item');
+  }
+
+  private getExitContext(scene: Scene, object: SceneObject): NpcStaticEntityContext['exit'] {
+    const exit = object.components?.find((component: any) => component?.type === 'Exit') as
+      | { targetSceneId?: string; targetEntryId?: string; portal?: boolean; collider?: boolean }
+      | undefined;
+    if (!exit) return undefined;
+    const targetSceneId = String(exit.targetSceneId || scene.id)
+      .trim()
+      .replace(/\.json$/i, '');
+    const target = this.game.sceneManager.scenes.get(targetSceneId);
+    const descriptor = this.game.sceneManager.sceneRegistry.get(targetSceneId);
+    const targetSceneTitle =
+      (target && this.game.textAssets.getResolvedSceneField(target, 'title')) ||
+      descriptor?.title ||
+      undefined;
+    return compactRecord({
+      targetSceneId,
+      targetEntryId: String(exit.targetEntryId || '').trim() || undefined,
+      targetSceneTitle,
+      portal: exit.portal === true,
+      collider: exit.collider !== false,
+    });
   }
 
   private getOrInitializeNpcObjectives(

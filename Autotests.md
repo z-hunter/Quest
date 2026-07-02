@@ -174,6 +174,15 @@ This is the preferred entry point for parser-side tests.
 
 ### Scene Runtime
 
+#### `tests/scene/scene-transition.test.ts`
+
+Covers:
+
+- Exit/Entry transfer between scenes and within one scene;
+- Exit components on Triggerbox, Entity and Quad;
+- actor-aware collider activation and Entry placement;
+- visual collider/parallax handling for Quad exits.
+
 #### `tests/scene/spatial-index.test.ts`
 
 Covers:

@@ -2057,7 +2057,7 @@ export class GameSemanticAPI {
     };
   }
 
-  goToEntity(entity: Entity): GameActionOutcome {
+  goToEntity(entity: SceneObject): GameActionOutcome {
     const currentScene = this.game.sceneManager.currentScene;
     if (currentScene?.player && 'x' in entity && 'y' in entity) {
       const entityTitle = this.getPlayerFacingObjectTitle(entity);
@@ -2069,7 +2069,41 @@ export class GameSemanticAPI {
           recoverable: true,
         };
       }
-      currentScene.player.moveTo((entity as any).x, (entity as any).y);
+      const moveResult = this.game.actorNavigation.moveActorToTarget(currentScene.player, entity);
+      if (!moveResult) {
+        if (entity.components?.some((component: any) => component?.type === 'Exit')) {
+          this.game.showMessage(this.game.text('engine.too_far_generic'));
+        }
+        return {
+          status: 'failed',
+          code: 'route_unreachable',
+          message: 'Destination is unreachable.',
+          data: { targetType: 'entity', entityId: entity.name },
+          recoverable: true,
+        };
+      }
+      if (moveResult.status === 'unreachable' || moveResult.status === 'blocked') {
+        if (entity.components?.some((component: any) => component?.type === 'Exit')) {
+          this.game.showMessage(this.game.text('engine.too_far_generic'));
+        }
+        return {
+          status: 'failed',
+          code: moveResult.code,
+          message: moveResult.message,
+          data: { targetType: 'entity', entityId: entity.name },
+          recoverable: true,
+        };
+      }
+      const exit = entity.components?.find((component: any) => component?.type === 'Exit') as
+        | { portal?: boolean; collider?: boolean }
+        | undefined;
+      if (exit && (exit.portal === true || exit.collider !== false)) {
+        if (moveResult.status === 'arrived') {
+          currentScene.activateObject(entity, 0, currentScene.player);
+        } else if (exit.portal === true) {
+          this.activateExitAfterArrival(currentScene.player, entity);
+        }
+      }
       return {
         status: 'ok',
         code: 'player_moving',
@@ -2086,6 +2120,22 @@ export class GameSemanticAPI {
       code: 'destination_not_found',
       recoverable: true,
     };
+  }
+
+  private activateExitAfterArrival(actor: Actor, exitObject: SceneObject): void {
+    const poll = () => {
+      const result = actor.getMoveResult();
+      if (result.status === 'started' && actor.state === 'walk') {
+        globalThis.setTimeout(poll, 50);
+        return;
+      }
+      if (result.status !== 'arrived') return;
+      const scene = this.game.sceneManager.currentScene;
+      if (scene?.getObjectByName(exitObject.name) === exitObject) {
+        scene.activateObject(exitObject, 0, actor);
+      }
+    };
+    globalThis.setTimeout(poll, 50);
   }
 
   playSound(name: string): void {

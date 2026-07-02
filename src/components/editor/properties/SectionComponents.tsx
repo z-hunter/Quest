@@ -1174,6 +1174,119 @@ export const SectionComponents: React.FC = () => {
                     }}
                   />
                 </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Trigger Options
+                  </label>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      fontSize: '10px',
+                      color: 'var(--ui-label-color)',
+                    }}
+                  >
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={comp.collider !== false}
+                        onChange={(e) => {
+                          comp.collider = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Collider
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!comp.portal}
+                        onChange={(e) => {
+                          comp.portal = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Portal
+                    </label>
+                  </div>
+                </div>
+                <div className="e-row">
+                  <button
+                    className="e-button"
+                    style={{ marginTop: '4px' }}
+                    onClick={() => {
+                      let sceneId = comp.targetSceneId?.trim() || '';
+                      if (sceneId.toLowerCase().endsWith('.json')) {
+                        sceneId = sceneId.slice(0, -5);
+                      }
+
+                      const entryId = comp.targetEntryId?.trim();
+                      if (!sceneId) {
+                        sceneId = game.sceneManager.currentScene?.id || '';
+                      }
+                      if (!sceneId) {
+                        game.onMessage?.(
+                          'Error: Target Scene ID is empty and no current scene loaded.'
+                        );
+                        return;
+                      }
+
+                      const targetScene = game.sceneManager.scenes.get(sceneId);
+                      const descriptor = game.sceneManager.sceneRegistry.get(sceneId);
+
+                      if (!targetScene && !descriptor) {
+                        game.onMessage?.(`Error: Scene "${sceneId}" not found in registry.`);
+                        return;
+                      }
+
+                      let msg = `Scene "${sceneId}" found.`;
+
+                      const targetTitle = targetScene?.name || descriptor?.title;
+
+                      if (!targetTitle?.trim()) {
+                        msg += ' Warning: Target scene has no Title.';
+                      } else {
+                        msg += ` Title: "${targetTitle}".`;
+                      }
+
+                      if (entryId) {
+                        if (targetScene) {
+                          const targetObj = targetScene.getObjectByName(entryId);
+                          const hasEntry =
+                            targetObj && targetObj.components?.some((c: any) => c.type === 'Entry');
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in loaded scene.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else if (descriptor?.sourceData) {
+                          const sd = descriptor.sourceData;
+                          const allObjects = [...(sd.entities || []), ...(sd.triggerboxes || [])];
+                          const hasEntry = allObjects.some(
+                            (e: any) =>
+                              String(e.name || '').trim() === entryId &&
+                              (e.components || []).some((c: any) => c.type === 'Entry')
+                          );
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in scene data.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else {
+                          msg += ` (Scene not loaded, entry check skipped).`;
+                        }
+                      }
+
+                      game.onMessage?.(msg);
+                    }}
+                  >
+                    Check
+                  </button>
+                </div>
               </>
             )}
 

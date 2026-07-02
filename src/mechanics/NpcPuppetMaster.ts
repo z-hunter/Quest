@@ -25,7 +25,9 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
+  'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
+  'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
   'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
@@ -788,6 +790,33 @@ export class NpcPuppetMaster {
             : {}),
         });
       }, 0);
+      return true;
+    }
+
+    if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
+      this.pendingPlanContinuations.delete(stateKey);
+      const completionOutcomes = this.executor.executePlan({
+        npcId: pending.npcId,
+        steps: [],
+        ...(pending.memory !== undefined ? { memory: pending.memory } : {}),
+      });
+      const finalResults = [...completedSteps, ...completionOutcomes];
+      const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
+        (candidate) => candidate.getObjectByName(npcId)
+      );
+      this.traceWake('plan_completed_after_scene_transfer', {
+        sourceSceneId: scene.id,
+        destinationSceneId: destinationScene?.id,
+        npcId,
+        discardedStepTypes: pending.steps.map((step) => step.type),
+        steps: finalResults.length,
+      });
+      if (pending.trackCompletion && destinationScene) {
+        this.scheduleNpc(destinationScene, npcId, {
+          type: 'plan_completed',
+          results: finalResults,
+        });
+      }
       return true;
     }
 
@@ -1583,7 +1612,7 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
@@ -1613,6 +1642,7 @@ export class NpcPuppetMaster {
           }
         : {}),
       ...(entity.states ? { states: entity.states } : {}),
+      ...(entity.exit ? { exit: entity.exit } : {}),
       ...(entity.commands
         ? {
             commands: entity.commands.map((command) => ({
@@ -1700,12 +1730,11 @@ export class NpcPuppetMaster {
     });
     if (batch.timeoutId) return completion;
     const currentGeneration = this.haltGenerationId;
-    const currentScene = scene;
     batch.timeoutId = globalThis.setTimeout(() => {
-      if (
-        this.haltGenerationId !== currentGeneration ||
-        this.game.sceneManager.currentScene !== currentScene
-      ) {
+      if (this.haltGenerationId !== currentGeneration) {
+        if (this.pendingBatches.get(scene.id) === batch) {
+          this.pendingBatches.delete(scene.id);
+        }
         batch.completionResolvers.forEach((resolve) => resolve());
         return;
       }
@@ -1722,14 +1751,6 @@ export class NpcPuppetMaster {
     }
     this.pendingBatches.delete(sceneId);
     const { scene } = batch;
-    if (scene !== this.game.sceneManager.currentScene) {
-      this.traceWake('batch_stopped', {
-        sceneId,
-        reason: 'scene_is_no_longer_current',
-      });
-      batch.completionResolvers.forEach((resolve) => resolve());
-      return;
-    }
     const continuationNpcIds = [...batch.npcIds].filter((npcId) =>
       this.tryExecutePendingContinuation(scene, npcId, batch.triggersByNpc.get(npcId) || [])
     );
@@ -1742,6 +1763,15 @@ export class NpcPuppetMaster {
         npcIds: continuationNpcIds,
         rateLimitBypassed: true,
       });
+    }
+    if (scene !== this.game.sceneManager.currentScene) {
+      this.traceWake('batch_stopped', {
+        sceneId,
+        reason: 'scene_is_no_longer_current',
+        continuationsExecuted: continuationNpcIds,
+      });
+      batch.completionResolvers.forEach((resolve) => resolve());
+      return;
     }
     if (!providerCandidateNpcIds.length) {
       batch.completionResolvers.forEach((resolve) => resolve());
@@ -2517,11 +2547,14 @@ export class NpcPuppetMaster {
     const npcId = typeof record.npcId === 'string' ? record.npcId.trim() : '';
     if (!npcId || !allowedNpcIds.has(npcId)) return null;
 
-    const steps = Array.isArray(record.steps)
+    const normalizedSteps = Array.isArray(record.steps)
       ? record.steps
           .map((step) => this.normalizeStep(step))
           .filter((step): step is NpcPlanStep => !!step)
       : [];
+    const traverseIndex = normalizedSteps.findIndex((step) => step.type === 'TRAVERSE_EXIT');
+    const steps =
+      traverseIndex >= 0 ? normalizedSteps.slice(0, traverseIndex + 1) : normalizedSteps;
     const memory = typeof record.memory === 'string' ? record.memory.trim() : undefined;
     if (!steps.length && memory === undefined) return null;
     const interruptOn = Array.isArray(record.interruptOn)
@@ -2582,6 +2615,10 @@ export class NpcPuppetMaster {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : undefined;
       if (x !== undefined && y !== undefined) return { type: 'MOVE_TO', x, y };
       return targetId ? { type: 'MOVE_TO', targetId } : null;
+    }
+    if (record.type === 'TRAVERSE_EXIT') {
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return targetId ? { type: 'TRAVERSE_EXIT', targetId } : null;
     }
     if (
       record.type === 'LOOK' ||

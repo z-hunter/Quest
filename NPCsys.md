@@ -94,6 +94,7 @@ PM возвращает **структурированный JSON** в форм�
 | :--- | :--- | :--- |
 | `SAY` | `text: string` | NPC произносит реплику. Добавляет запись в лог сцены. |
 | `MOVE_TO` | `targetId?: string` или `x, y: number` | Начинает движение к объекту или координатам. Асинхронный: PM получит `move_completed` по завершении. |
+| `TRAVERSE_EXIT` | `targetId: string` | Активирует доступный объект с `Exit` и переносит NPC в целевую сцену. Если Exit ещё не reachable, перед ним нужен `MOVE_TO`. Всегда является последним физическим шагом плана. |
 | `LOOK` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
 | `EXAMINE` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`. |
 | `OPEN` | `targetId: string` | Открывает объект с компонентом Switch. Соблюдает правила ключей. |
@@ -110,6 +111,8 @@ PM возвращает **структурированный JSON** в форм�
 ### Выполнение плана
 
 Шаги выполняются **последовательно**. Если шаг возвращает `scheduled`, PM сохраняет хвост плана (`pendingPlanContinuations`) и продолжает его после `move_completed` или `action_completed`, не вызывая LLM заново. Это позволяет планам вида `MOVE_TO -> EXAMINE -> EXAMINE -> TAKE` выполняться как одна runtime-цепочка.
+
+Успешный `TRAVERSE_EXIT` завершает план в исходной сцене: оставшийся хвост отбрасывается, post-plan memory применяется только после подтверждённого перехода, а `plan_completed` планируется уже для NPC в целевой сцене. Продолжение, поставленное исходной сценой, не теряется при смене активной сцены; provider request выполняется только для актуальной сцены NPC.
 
 Продолжение уже принятого runtime-плана выполняется до проверки PM rate limits и не расходует бюджет LLM-вызовов. Лимиты по-прежнему применяются к последующему `plan_completed` / `plan_interrupted`, поскольку эти триггеры требуют нового provider request.
 
@@ -220,9 +223,9 @@ NPC:    JSON DSL → ActorPlanExecutor ─────────────�
 
 `NpcWorldModelBuilder` (`src/mechanics/NpcWorldModelBuilder.ts`) строит контекст для каждого NPC. Он включает:
 
-- **Текущие видимые объекты** (`entities`): только semantic-visible entities с authored title. Для каждого объекта указывается `id`, `lastSeenSceneId`, `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE` и authored commands.
+- **Текущие видимые объекты** (`entities`): semantic-visible entities с authored title, а также usable объекты с `Exit` даже без Title (в этом случае текстовым fallback служит object id). Для каждого объекта указывается `id`, `lastSeenSceneId`, `interaction` (`held` | `reachable` | `blocked`), `approach` (`already_reachable` | `route_available` | `unreachable`), location relation, switch-состояние, affordances для `LOOK`/`EXAMINE`, authored commands и Exit metadata (`targetSceneId`, `targetEntryId`, `targetSceneTitle`, `portal`, `collider`). `approach` проверяется общей Actor-навигацией до реальной walkable interaction-точки, а не до геометрического центра объекта.
 - **Структурированное знание** (`knownEntities` в NPC component и PM context): записи `{ id, title, kind, lastSeenSceneId, lastSeenAt }` только для замеченных Items и Actors. Обычные объекты сцены остаются в текущем `entities`, но не накапливаются в долговременном списке. Знание обновляется автоматически и не смешивается со свободным текстом `memory`.
-- **Непосредственно видимые предметы** (`visibleItemIds`): компактный список semantic-visible объектов с компонентом `Item` в текущей сцене. Обычный `disabled`-объект в него не попадает; исключение сохраняется только для authored объектов внутри неактивной `Subscene`, где disabled является визуальным состоянием крупного плана.
+- **Непосредственно видимые предметы** (`visibleItemIds`): компактный список semantic-visible объектов с компонентом `Item` в текущей сцене. Объекты с `visible: false` и обычные `disabled`-объекты в него не попадают; исключение для disabled сохраняется только внутри неактивной `Subscene`, где disabled является визуальным состоянием крупного плана.
 - **Видимые Actor** (`actors`): другие персонажи, которых NPC воспринимает в данный момент.
 - **Runtime-история действий** (`actionHistory`): компактные факты о недавних действиях PM для этого NPC, например «EXAMINE Sofa: inspected, nothing new found».
 - Сырые координаты объектов в контекст **не передаются** — только семантические отношения.

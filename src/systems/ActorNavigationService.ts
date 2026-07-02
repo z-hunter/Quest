@@ -28,7 +28,31 @@ export class ActorNavigationService {
     if (this.isReachable(actor, approachTarget)) return 'already_reachable';
     const center = this.getObjectCenter(approachTarget);
     const scene = this.game.sceneManager.currentScene;
-    return center && scene ? 'route_available' : 'unreachable';
+    if (!center || !scene) return 'unreachable';
+
+    const step = 16;
+    const maxRadius = Math.max(
+      240,
+      actor.colliderWidth * 4,
+      actor.colliderHeight * 12,
+      this.getInteractionRange(actor, approachTarget) * 2
+    );
+    for (let radius = 0; radius <= maxRadius; radius += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
+        for (let dy = -radius; dy <= radius; dy += step) {
+          if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const point = { x: center.x + dx, y: center.y + dy };
+          if (!scene.isWalkable(point.x, point.y, actor)) continue;
+          const probe = Object.create(actor) as Actor;
+          Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
+          Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
+          if (!ComponentSystem.getInteractionDistanceError(approachTarget as any, probe)) {
+            return 'route_available';
+          }
+        }
+      }
+    }
+    return 'unreachable';
   }
 
   planApproach(actor: Actor, target: SceneObject): ActorApproachPlan {
@@ -46,7 +70,6 @@ export class ActorNavigationService {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return { status: 'unreachable', point: null, route: [] };
 
-    const step = 16;
     const maxRadius = Math.max(
       240,
       actor.colliderWidth * 4,
@@ -61,27 +84,30 @@ export class ActorNavigationService {
         }
       | undefined;
 
-    for (let radius = 0; radius <= maxRadius; radius += step) {
-      for (let dx = -radius; dx <= radius; dx += step) {
-        for (let dy = -radius; dy <= radius; dy += step) {
-          if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-          const point = { x: center.x + dx, y: center.y + dy };
-          if (!scene.isWalkable(point.x, point.y, actor)) continue;
-          const probe = Object.create(actor) as Actor;
-          Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
-          Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
-          const distanceError = ComponentSystem.getInteractionDistanceError(
-            approachTarget as any,
-            probe
-          );
-          if (distanceError) continue;
-          const route = actor.previewRouteTo(point.x, point.y);
-          if (!route) continue;
-          const distanceSq = (point.x - actor.x) ** 2 + (point.y - actor.y) ** 2;
-          if (!best || distanceSq < best.distanceSq) {
-            best = { point, route, distanceSq };
+    for (const step of [16, 4]) {
+      for (let radius = 0; radius <= maxRadius; radius += step) {
+        for (let dx = -radius; dx <= radius; dx += step) {
+          for (let dy = -radius; dy <= radius; dy += step) {
+            if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+            const point = { x: center.x + dx, y: center.y + dy };
+            if (!scene.isWalkable(point.x, point.y, actor)) continue;
+            const probe = Object.create(actor) as Actor;
+            Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
+            Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
+            const distanceError = ComponentSystem.getInteractionDistanceError(
+              approachTarget as any,
+              probe
+            );
+            if (distanceError) continue;
+            const route = actor.previewRouteTo(point.x, point.y);
+            if (!route) continue;
+            const distanceSq = (point.x - actor.x) ** 2 + (point.y - actor.y) ** 2;
+            if (!best || distanceSq < best.distanceSq) {
+              best = { point, route, distanceSq };
+            }
           }
         }
+        if (best) break;
       }
       if (best) break;
     }

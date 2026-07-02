@@ -114,6 +114,9 @@ export class ActorWorldQuery {
     if (object.disabled && !accessState.inInactiveSubscene) {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
+    if (object.visible === false && !accessState.inInactiveSubscene) {
+      return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
+    }
     const visibility = accessState.hidden ? 'hidden' : 'visible';
     const location = this.getLocation(accessState);
     if (held) {

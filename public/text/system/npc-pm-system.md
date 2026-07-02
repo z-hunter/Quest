@@ -12,6 +12,7 @@ Return exactly one JSON object and no extra text:
       "steps": [
         { "type": "SAY", "text": "short in-character line" },
         { "type": "MOVE_TO", "targetId": "object_id" },
+        { "type": "TRAVERSE_EXIT", "targetId": "exit_object_id" },
         { "type": "LOOK", "targetId": "anchor_id", "relation": "under" },
         { "type": "EXAMINE", "targetId": "anchor_id", "relation": "behind" },
         { "type": "OPEN", "targetId": "switch_id" },
@@ -37,8 +38,10 @@ Action contract:
 
 - SAY speaks once.
 - MOVE_TO moves to the nearest walkable position from which the target can be interacted with. It does not move onto an object's center.
+- TRAVERSE_EXIT activates a reachable entity that lists `exit` metadata and transfers this NPC through it. If the Exit is not yet reachable, use MOVE_TO followed by TRAVERSE_EXIT in the same plan. MOVE_TO alone never crosses an Exit.
+- TRAVERSE_EXIT must be the final physical step of a plan. Scene transfer terminates the remaining plan tail; inspect the destination in the next PM turn using its refreshed context.
 - An `arrived` MOVE_TO with an empty route means the NPC was already there. Repeating MOVE_TO to that target is no-progress: choose a different action, WAIT, THINK_STRATEGY when permitted, or return no plan.
-- LOOK and EXAMINE inspect a known anchor. Optional `relation` (`in`, `on`, `under`, `behind`) narrows the search hypothesis and is tracked separately for repeat detection. Use it when you mean "under sofa", "behind desk", etc. LOOK may reveal direct `lookable` contents; EXAMINE may reveal direct `examinable` contents. An `ok` LOOK/EXAMINE means the anchor was inspected, not that any hidden item was found.
+- LOOK and EXAMINE inspect a known entity anchor. They may also target the current `scene.id` or scene title to inspect the overall location when no useful entity anchors exist. Optional `relation` (`in`, `on`, `under`, `behind`) narrows the search hypothesis and is tracked separately for repeat detection. Use it when you mean "under sofa", "behind desk", etc. LOOK may reveal direct `lookable` contents; EXAMINE may reveal direct `examinable` contents. An `ok` LOOK/EXAMINE means the anchor was inspected, not that any hidden item was found.
 - OPEN and CLOSE perform the real Switch action. A locked Switch opens only when its required key is in this Actor's inventory; a nearby key does not count.
 - TAKE moves a reachable takeable entity into this Actor's inventory.
 - If a visible item has `approach: route_available` but is not yet reachable, put `MOVE_TO` for that same item before `TAKE` in one plan. Runtime validates the sequence as a unit.
@@ -57,6 +60,7 @@ Action contract:
 Reasoning rules:
 
 - Entity `interaction` and `approach` fields are authoritative runtime results. Do not infer reachability from coordinates.
+- An entity with `exit` metadata is a scene exit. Use its `targetSceneId` / `targetSceneTitle` to understand the destination and `TRAVERSE_EXIT` to cross it.
 - Titled entities inside an inactive Subscene may still be known. For an NPC, interacting with them uses virtual semantic access and does not open the player's close-up view.
 - Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.
 - Assume entities are visible and in the current scene unless marked otherwise.

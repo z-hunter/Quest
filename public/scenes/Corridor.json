@@ -1,0 +1,1273 @@
+{
+  "id": "Corridor",
+  "name": "New Scene",
+  "description": "You are in New Scene.",
+  "textRedirects": {},
+  "filename": "Corridor",
+  "walkbox": [
+    {
+      "name": "Walk_main",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -1078,
+          "y": 226
+        },
+        {
+          "x": -507,
+          "y": -153
+        },
+        {
+          "x": -428,
+          "y": -153
+        },
+        {
+          "x": -578,
+          "y": 220
+        },
+        {
+          "x": -1054,
+          "y": 229
+        }
+      ],
+      "mode": "Add"
+    },
+    {
+      "name": "Walk_main2",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 1626,
+          "y": -14
+        },
+        {
+          "x": 1811,
+          "y": -19
+        },
+        {
+          "x": 1812,
+          "y": 291
+        },
+        {
+          "x": 1358,
+          "y": 283
+        }
+      ],
+      "mode": "Add"
+    }
+  ],
+  "triggerboxes": [
+    {
+      "name": "E1",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Entry",
+          "direction": "right"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -616,
+          "y": -18
+        },
+        {
+          "x": -598,
+          "y": -74
+        },
+        {
+          "x": -550,
+          "y": -19
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "E2",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Entry",
+          "direction": "up"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 1547,
+          "y": 167
+        },
+        {
+          "x": 1709,
+          "y": 181
+        },
+        {
+          "x": 1661,
+          "y": 87
+        },
+        {
+          "x": 1547,
+          "y": 164
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "Ex3",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "",
+          "targetEntryId": "E3"
+        },
+        {
+          "type": "Exit",
+          "targetSceneId": "",
+          "targetEntryId": ""
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 1190,
+          "y": 180
+        },
+        {
+          "x": 1944,
+          "y": 260
+        },
+        {
+          "x": 1961,
+          "y": 359
+        },
+        {
+          "x": 1057,
+          "y": 305
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "E3",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Entry",
+          "direction": "down"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -509.12081347080675,
+          "y": -112.85919793916675
+        },
+        {
+          "x": -486.12081347080675,
+          "y": -115.85919793916672
+        },
+        {
+          "x": -504.12081347080675,
+          "y": -100.85919793916675
+        }
+      ],
+      "script": ""
+    },
+    {
+      "name": "Trig_656",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
+      "script": ""
+    }
+  ],
+  "scaling": {
+    "enabled": true,
+    "min": 0.22,
+    "max": 1.1,
+    "horizon": -146,
+    "front": 131,
+    "correctionalScale": 3.21
+  },
+  "entities": [
+    {
+      "name": "Quad_650",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#f",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -636,
+      "y": 52.25,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -535,
+          "y": -139,
+          "p": 1
+        },
+        {
+          "x": -431,
+          "y": -137,
+          "p": 1
+        },
+        {
+          "x": -589,
+          "y": 245,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_350",
+            "type": "vertex",
+            "index": 3
+          }
+        },
+        {
+          "x": -1117,
+          "y": 245,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_939",
+            "type": "vertex",
+            "index": 3
+          }
+        }
+      ],
+      "color": "#41050c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_574",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "test_room",
+          "targetEntryId": "E1"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -871.25,
+      "y": -105.5,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -929,
+          "y": -290,
+          "p": 1
+        },
+        {
+          "x": -832,
+          "y": -265,
+          "p": 1
+        },
+        {
+          "x": -826,
+          "y": 53,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_650",
+            "type": "grid",
+            "gridU": 0,
+            "gridV": 0.5
+          }
+        },
+        {
+          "x": -923,
+          "y": 117,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_650",
+            "type": "grid",
+            "gridU": 0,
+            "gridV": 0.6666666666666666
+          }
+        }
+      ],
+      "color": "#111624",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "test_room",
+          "targetEntryId": "E1",
+          "collider": false,
+          "portal": true
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -644.25,
+      "y": -140.5,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -662,
+          "y": -242,
+          "p": 1
+        },
+        {
+          "x": -631,
+          "y": -232,
+          "p": 1
+        },
+        {
+          "x": -632,
+          "y": -75,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_650",
+            "type": "grid",
+            "gridU": 0,
+            "gridV": 0.16666666666666666
+          }
+        },
+        {
+          "x": -663,
+          "y": -54,
+          "p": 1
+        }
+      ],
+      "color": "#111624",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_808",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -700,
+      "y": -423,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -416,
+          "y": -589,
+          "p": 1
+        },
+        {
+          "x": -410,
+          "y": -259,
+          "p": 1
+        },
+        {
+          "x": -538,
+          "y": -259,
+          "p": 1
+        },
+        {
+          "x": -1436,
+          "y": -585,
+          "p": 1
+        }
+      ],
+      "color": "#303030",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#161616",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Static_281",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "",
+          "targetEntryId": "E2"
+        }
+      ],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -489,
+      "y": -124,
+      "width": 154,
+      "height": 127,
+      "baseWidth": 479.7507788161992,
+      "baseHeight": 395.63862928348897,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "corr",
+      "color": "#AAAAAA",
+      "scale": 0.3210000000000001,
+      "refScale": 0.3210000000000001,
+      "modelScale": 0.3210000000000001,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "Static_497",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#F2",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1592,
+      "y": 237,
+      "width": 527.578,
+      "height": 658.552,
+      "baseWidth": 1002.9999999999999,
+      "baseHeight": 1252,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": "corr",
+      "color": "#AAAAAA",
+      "scale": 0.526,
+      "refScale": 0.526,
+      "modelScale": 0.526,
+      "ignoreScaling": true,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    },
+    {
+      "name": "Quad_629",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1847,
+      "y": 27,
+      "ignoreScaling": true,
+      "vertices": [
+        {
+          "x": 1556,
+          "y": -250,
+          "p": 1
+        },
+        {
+          "x": 1609,
+          "y": -227,
+          "p": 1
+        },
+        {
+          "x": 1603,
+          "y": 5,
+          "p": 1
+        },
+        {
+          "x": 1548,
+          "y": 68,
+          "p": 1
+        }
+      ],
+      "color": "#271c39",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1559.9559404147335,
+      "y": -89.29846093867248,
+      "ignoreScaling": true,
+      "vertices": [
+        {
+          "x": 1557,
+          "y": -247,
+          "p": 1
+        },
+        {
+          "x": 1592,
+          "y": -231,
+          "p": 1
+        },
+        {
+          "x": 1586,
+          "y": 2,
+          "p": 1
+        },
+        {
+          "x": 1552,
+          "y": 42,
+          "p": 1
+        }
+      ],
+      "color": "#3c2b57",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_350",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "WalkBox",
+          "mode": "Add"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -436.8811052748214,
+      "y": 238.31252751251327,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -534,
+          "y": 99,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_2",
+            "type": "vertex",
+            "index": 3
+          }
+        },
+        {
+          "x": -30,
+          "y": 95,
+          "p": 1
+        },
+        {
+          "x": 120.2443604980802,
+          "y": 245.3780121805007,
+          "p": 1
+        },
+        {
+          "x": -589,
+          "y": 245,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_650",
+            "type": "vertex",
+            "index": 2
+          }
+        }
+      ],
+      "color": "#41050c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_430",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1.1,
+      "x": -445.845526259903,
+      "y": 61.5968856188253,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -526,
+          "y": -581,
+          "p": 1
+        },
+        {
+          "x": -67,
+          "y": -578,
+          "p": 1
+        },
+        {
+          "x": -50,
+          "y": 84,
+          "p": 1
+        },
+        {
+          "x": -526,
+          "y": 87,
+          "p": 1
+        }
+      ],
+      "color": "#121212",
+      "sortMode": "v2",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_939",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -489.03110316549305,
+      "y": -25.758512613409955,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -533,
+          "y": -141,
+          "p": 1
+        },
+        {
+          "x": -516,
+          "y": -140,
+          "p": 1
+        },
+        {
+          "x": -1026,
+          "y": 241,
+          "p": 1
+        },
+        {
+          "x": -1117,
+          "y": 245,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_650",
+            "type": "vertex",
+            "index": 3
+          }
+        }
+      ],
+      "color": "#391a3c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "shadow",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -766.6924610570918,
+      "y": 151.8607720741931,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -766.6924610570918,
+          "y": 151.8607720741931,
+          "p": 1.0431424643929696
+        },
+        {
+          "x": -659.1958915768238,
+          "y": 150.5295121347555,
+          "p": 1.0424314168264899
+        },
+        {
+          "x": -296.19110742927137,
+          "y": 185.86930198488824,
+          "p": 1.0467476902559403
+        },
+        {
+          "x": -385.91144050626036,
+          "y": 182.9003602047509,
+          "p": 1.0405613305364574
+        }
+      ],
+      "color": "#830a83",
+      "sortMode": "ignore",
+      "opacity": 0.95,
+      "blendMode": "multiply",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 7
+    },
+    {
+      "name": "Quad_2",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -382.5665861475008,
+      "y": -85.72026240815993,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -435,
+          "y": -132,
+          "p": 1
+        },
+        {
+          "x": -432,
+          "y": -130,
+          "p": 1
+        },
+        {
+          "x": -489,
+          "y": 98,
+          "p": 1
+        },
+        {
+          "x": -534,
+          "y": 99,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_350",
+            "type": "vertex",
+            "index": 0
+          }
+        }
+      ],
+      "color": "#391a3c",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "Quad_3",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "test_room",
+          "targetEntryId": "E1"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -900.9427774779361,
+      "y": -76.07580420544957,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -928,
+          "y": -270,
+          "p": 1
+        },
+        {
+          "x": -852,
+          "y": -247,
+          "p": 1
+        },
+        {
+          "x": -850,
+          "y": 49,
+          "p": 1
+        },
+        {
+          "x": -923,
+          "y": 96,
+          "p": 1
+        }
+      ],
+      "color": "#1c2439",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "door_to_MilesFlat",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "test_room",
+          "targetEntryId": "E1"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -693.8102368745199,
+      "y": -90.01043217990772,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": -659,
+          "y": -229,
+          "p": 1
+        },
+        {
+          "x": -637,
+          "y": -221,
+          "p": 1
+        },
+        {
+          "x": -640,
+          "y": -78,
+          "p": 1
+        },
+        {
+          "x": -660,
+          "y": -68,
+          "p": 1
+        }
+      ],
+      "color": "#1c2439",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0
+    },
+    {
+      "name": "shadow2",
+      "type": "Quad",
+      "locked": false,
+      "disabled": true,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": false,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1531.3717633857443,
+      "y": 202.3574366142606,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 1531.3717633857443,
+          "y": 202.3574366142606,
+          "p": 1
+        },
+        {
+          "x": 1561.4560715354648,
+          "y": 204.56278265058336,
+          "p": 1
+        },
+        {
+          "x": 1539.357929337821,
+          "y": 269.1378461698822,
+          "p": 1
+        },
+        {
+          "x": 1435.4860831090905,
+          "y": 321.2618144039158,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "multiply",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 4
+    },
+    {
+      "name": "Hero_1",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -670.9106011178505,
+      "y": 173.26712304121696,
+      "width": 136.752,
+      "height": 328.02000000000004,
+      "baseWidth": 148,
+      "baseHeight": 355,
+      "colliderWidth": 88,
+      "colliderHeight": 4,
+      "spriteName": "miles2_ds-idle-left.json",
+      "color": "#00ffff",
+      "scale": 0.924,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "direction": "right",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      }
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Hero_1",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 527.9903429541549,
+      "y": 230.99913665961606,
+      "width": 17.335879945429745,
+      "height": 24.635197817189635,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "colliderWidth": 0,
+      "colliderHeight": 0,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.8800000000000001,
+      "refScale": 0.8,
+      "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0
+    }
+  ],
+  "folders": [],
+  "camera": {
+    "x": -504.89112754286134,
+    "y": -87.81452702300292,
+    "zoom": 0.4735139310000002
+  },
+  "autoCenter": true,
+  "cameraSpeed": 5,
+  "camDeadzoneX": 50,
+  "camDeadzoneY": 30,
+  "soundEnv": {
+    "audioMaxDistance": 10000,
+    "reverbMaxDist": 1750,
+    "reverbMinPercent": 0.2,
+    "zoomSensitivity": 0.7,
+    "pannerRefDistance": 100,
+    "pannerRolloffFactor": 0.7,
+    "panningModel": "HRTF",
+    "distanceModel": "linear"
+  },
+  "sceneLog": {
+    "entries": [],
+    "lastPmProcessedAt": 0,
+    "lastPmProcessedAtByNpc": {}
+  }
+}

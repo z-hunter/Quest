@@ -522,6 +522,11 @@ describe('NpcPuppetMaster', () => {
       disabled: true,
     });
     const visibleObject = fixture.addEntity('ordinary_object', { title: 'Ordinary object' });
+    const invisibleItem = fixture.addEntity('inventory_ghost', {
+      title: 'Inventory ghost',
+      components: [{ type: 'Item' }],
+    });
+    invisibleItem.visible = false;
     const rawComponent = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
     rawComponent.knownEntities = {
       stale_object: {
@@ -552,8 +557,177 @@ describe('NpcPuppetMaster', () => {
     expect(context.entities.some((entry) => entry.id === disabledDecoration.name)).toBe(false);
     expect(component.knownEntities?.[disabledDecoration.name]).toBeUndefined();
     expect(context.entities.some((entry) => entry.id === visibleObject.name)).toBe(true);
+    expect(context.visibleItemIds).not.toContain(invisibleItem.name);
+    expect(context.entities.some((entry) => entry.id === invisibleItem.name)).toBe(false);
+    expect(component.knownEntities?.[invisibleItem.name]).toBeUndefined();
     expect(component.knownEntities?.[visibleObject.name]).toBeUndefined();
     expect(component.knownEntities?.stale_object).toBeUndefined();
+  });
+
+  it('projects Exit affordances and lets a reachable NPC traverse the Exit', () => {
+    const fixture = createGameSemanticFixture('start');
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    fixture.scene.addEntity(npc);
+    npc.x = 20;
+    npc.y = 20;
+    const targetScene = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const entry = fixture.addTriggerbox('EntryA', {
+      scene: targetScene,
+      components: [{ type: 'Entry', direction: 'right' }],
+    });
+    entry.poly = [
+      { x: 90, y: 90 },
+      { x: 110, y: 90 },
+      { x: 110, y: 110 },
+      { x: 90, y: 110 },
+    ];
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      components: [
+        {
+          type: 'Exit',
+          targetSceneId: targetScene.id,
+          targetEntryId: entry.name,
+          portal: true,
+          collider: false,
+        },
+      ],
+    });
+    door.x = 30;
+    door.y = 20;
+
+    const context = new NpcWorldModelBuilder(fixture.game).build(fixture.scene).npcs[0];
+    expect(context.entities.find((entity) => entity.id === door.name)?.exit).toEqual({
+      targetSceneId: targetScene.id,
+      targetEntryId: entry.name,
+      targetSceneTitle: 'Corridor',
+      portal: true,
+      collider: false,
+    });
+
+    const outcomes = new ActorPlanExecutor(fixture.game).executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'TRAVERSE_EXIT', targetId: door.name }],
+    });
+
+    expect(outcomes[0]).toEqual(expect.objectContaining({ status: 'ok', code: 'exit_traversed' }));
+    expect(targetScene.entities).toContain(npc);
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+
+    const completion = new ActorPlanExecutor(fixture.game).executePlan({
+      npcId: npc.name,
+      steps: [],
+      memory: 'Reached the corridor.',
+    });
+    expect(completion).toEqual([
+      expect.objectContaining({ status: 'ok', code: 'npc_memory_updated' }),
+    ]);
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
+  });
+
+  it('lets an NPC inspect the current scene as a read-only LOOK anchor', () => {
+    const fixture = createGameSemanticFixture('corridor');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    fixture.scene.addEntity(npc);
+
+    const outcome = new ActorPlanExecutor(fixture.game).executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'LOOK', targetId: fixture.scene.id, relation: 'in' }],
+    })[0];
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        status: 'ok',
+        code: 'scene_looked',
+        targetId: fixture.scene.id,
+        worldChanged: false,
+        discoveredEntityIds: [],
+      })
+    );
+  });
+
+  it('treats TRAVERSE_EXIT as the terminal step of a normalized PM plan', () => {
+    const fixture = createSceneFixture();
+    addNpc(fixture, 'guard');
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+
+    const plan = (pm as any).normalizePlan(
+      {
+        npcId: 'guard',
+        steps: [
+          { type: 'MOVE_TO', targetId: 'door' },
+          { type: 'TRAVERSE_EXIT', targetId: 'door' },
+          { type: 'LOOK', targetId: 'old_scene' },
+        ],
+        memory: 'Crossing the door.',
+      },
+      new Set(['guard'])
+    );
+
+    expect(plan.steps).toEqual([
+      { type: 'MOVE_TO', targetId: 'door' },
+      { type: 'TRAVERSE_EXIT', targetId: 'door' },
+    ]);
+  });
+
+  it('clears a destination batch whose debounce fires before that scene becomes current', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+
+    void (pm as any).enqueueNpc(destination, 'guard', { type: 'manual' });
+    expect((pm as any).pendingBatches.has(destination.id)).toBe(true);
+    await vi.runAllTimersAsync();
+    expect((pm as any).pendingBatches.has(destination.id)).toBe(false);
+
+    fixture.game.sceneManager.currentScene = destination;
+    void (pm as any).enqueueNpc(destination, 'guard', { type: 'manual' });
+    expect((pm as any).pendingBatches.get(destination.id)?.timeoutId).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('executes a source-scene Exit continuation after the active scene has changed', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    destination.addEntity(npc);
+    fixture.game.sceneManager.currentScene = destination;
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    (pm as any).pendingPlanContinuations.set('start:guard', {
+      npcId: 'guard',
+      barrierStep: { type: 'TRAVERSE_EXIT', targetId: 'door' },
+      steps: [],
+      memory: 'Reached the corridor.',
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+
+    void (pm as any).enqueueNpc(fixture.scene, 'guard', {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'exit_traversed',
+        npcId: 'guard',
+        targetId: 'door',
+        actionType: 'TRAVERSE_EXIT',
+        worldChanged: true,
+      },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
+    expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
+    vi.useRealTimers();
   });
 
   it('returns visible open-container contents in an NPC EXAMINE outcome', async () => {

@@ -13,6 +13,10 @@ export type NpcPlanStep =
       targetId?: string;
     }
   | {
+      type: 'TRAVERSE_EXIT';
+      targetId: string;
+    }
+  | {
       type: 'LOOK';
       targetId: string;
       relation?: 'in' | 'on' | 'under' | 'behind' | null;
@@ -154,6 +158,13 @@ export type NpcActorContext = {
       }>;
       effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
     }>;
+    exit?: {
+      targetSceneId: string;
+      targetEntryId?: string;
+      targetSceneTitle?: string;
+      portal: boolean;
+      collider: boolean;
+    };
   }>;
 };
 
@@ -163,6 +174,13 @@ export type NpcStaticEntityContext = {
   description?: string;
   lore?: string;
   item?: true;
+  exit?: {
+    targetSceneId: string;
+    targetEntryId?: string;
+    targetSceneTitle?: string;
+    portal: boolean;
+    collider: boolean;
+  };
   inspection?: string[];
   switch?: {
     canOpen: boolean;

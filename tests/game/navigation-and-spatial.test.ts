@@ -4,9 +4,29 @@ import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
 import { Triggerbox } from '../../src/entities/Triggerbox';
 import { Walkbox } from '../../src/entities/Walkbox';
+import { QuadObject } from '../../src/entities/QuadObject';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Game navigation and spatial API', () => {
+  it('measures interaction distance to Quad vertices instead of its editor anchor', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 50);
+    actor.width = 40;
+    const door = new QuadObject(fixture.game, 'door');
+    door.x = 1000;
+    door.y = -500;
+    door.vertices = [
+      { x: 50, y: 0, p: 1 },
+      { x: 100, y: 0, p: 1 },
+      { x: 100, y: 100, p: 1 },
+      { x: 50, y: 100, p: 1 },
+    ];
+    fixture.scene.addEntity(door);
+
+    expect(ComponentSystem.getInteractionDistanceError(door, actor)).toBeNull();
+    expect(fixture.game.actorNavigation.planApproach(actor, door).status).toBe('already_reachable');
+  });
+
   it('does not derive interaction reach from visual width when an Actor collider is disabled', () => {
     const fixture = createGameSemanticFixture();
     const actor = fixture.addPlayer('Hero', 0, 50);
@@ -30,6 +50,30 @@ describe('Game navigation and spatial API', () => {
 
     expect(ComponentSystem.getInteractionDistanceError(target, actor)).not.toBeNull();
     expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('route_available');
+  });
+
+  it('does not advertise a route when no walkable interaction point exists near the target', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 50);
+    actor.colliderWidth = 8;
+    actor.colliderHeight = 8;
+    const floor = new Walkbox(
+      [
+        { x: -50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: -50, y: 100 },
+      ],
+      'Floor'
+    );
+    floor.mode = 'Add';
+    fixture.scene.addWalkbox(floor);
+    const target = fixture.addEntity('remote_island', { title: 'Remote island' });
+    target.x = 1000;
+    target.y = 50;
+
+    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe('unreachable');
+    expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('unreachable');
   });
 
   it('goToSceneTarget resolves scene by id and title', () => {
@@ -111,14 +155,37 @@ describe('Game navigation and spatial API', () => {
       title: 'Chair',
       description: 'A wooden chair.',
     });
-    chair.x = 42;
-    chair.y = 84;
+    player.colliderWidth = 8;
+    player.colliderHeight = 8;
+    const floor = new Walkbox(
+      [
+        { x: -20, y: -20 },
+        { x: 300, y: -20 },
+        { x: 300, y: 140 },
+        { x: -20, y: 140 },
+      ],
+      'Floor'
+    );
+    floor.mode = 'Add';
+    fixture.scene.addWalkbox(floor);
+    chair.x = 220;
+    chair.y = 80;
+    chair.colliderWidth = 60;
+    chair.colliderHeight = 30;
 
     const outcome = fixture.game.goToEntity(chair);
 
     expect(outcome.status).toBe('ok');
     expect(outcome.message).toBe(fixture.game.text('parser.go_to_success', { target: 'Chair' }));
-    expect(player.target).toEqual({ x: 42, y: 84 });
+    expect(player.getMoveResult().status).toBe('started');
+    expect(player.getMoveResult().target).not.toEqual({ x: chair.x, y: chair.y });
+    expect(
+      fixture.scene.isWalkable(
+        player.getMoveResult().target!.x,
+        player.getMoveResult().target!.y,
+        player
+      )
+    ).toBe(true);
   });
 
   it('describeSpatialRelation returns populated and empty relation messages', () => {

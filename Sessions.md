@@ -2905,3 +2905,77 @@ The small local model used was unable to produce an adequate output in  the test
 - `6329cb7` — `style(editor): slightly mute standard button border using new color variable`
 - `9967220` — `feat(vetool): remove redundant F7/F9 loop set buttons, support F-key style hotkeys inside standard e-btn`
 - `2d7304d` — `feat(vetool): darken e-btn hotkeys for better contrast, flash buttons on hotkey press`
+
+
+## Session Entry - 2026-07-02 20:48 +02:00
+
+### Session Goal
+
+Реализация компонента Exit для Scanline Engine: добавление двух режимов активации (Collider и Portal), телепортация Actor-а в целевой Entry, кнопка Check для валидации целевой сцены/Entry в редакторе.
+
+### What Was Implemented
+
+**Exit component — два режима активации:**
+
+- **Collider** (чекбокс в SectionComponents.tsx): активируется автоматически каждый кадр через ComponentSystem.checkTriggerboxCollisions(), когда коллайдер Actor-а пересекает область объекта с компонентом Exit. Работает для Triggerbox, Quad (через визуальный полигон с parallax) и Entity (через визуальный прямоугольник). Каждый кадр при коллизии вызывается scene.activateObject(exitObject, 0, actor).
+- **Portal** (чекбокс): активируется кликом мышью (handleSceneClick) или через semantic API. Над объектом показывается курсор ack. Для player активируется немедленно; для NPC — тихий перенос без смены активной сцены.
+
+**Логика handleExit в ComponentSystem.ts:**
+
+- 	ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
+- Пустой 	argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
+- Флаг ctivateScene = true только если активатор это scene.player; NPC переносится молча
+
+**Передача activator из handleSceneClick:**
+
+- Исправлена критическая ошибка: клики по порталу не передавали ctivator в ctivateSceneObject(), из-за чего handleExit делал switchTo() без переноса Actor-а. Добавлено scene.player ?? undefined в оба вызова ctivateSceneObject() в handleSceneClick (строки 425 и 453, SceneInteraction.ts).
+
+**Кнопка Check в редакторе (SectionComponents.tsx):**
+
+- Проверяет 	argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
+- Нормализует ID сцены: обрезает .json, понимает пустой ID как текущую сцену
+- Ищет Entry-объект по 
+ame во всех объектах: entities, 	riggerboxes (и Quad через entities)
+
+**ParserWorldModelBuilder.ts:**
+
+- Добавлено поле exit в ParserEntityContext: { targetSceneId, targetEntryId, targetSceneTitle }
+- 	argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
+- Пустой 	argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
+
+**Тесты (	ests/scene/scene-transition.test.ts):**
+
+- Создан новый тестовый файл с 4 сценариями: обычный переход, локальный (пустой targetSceneId), Exit на Entity, Exit на Quad с parallax
+- В тестах actor корректно назначен как scene.player (isPlayer = true), что соответствует семантике — ctivateScene срабатывает только для player
+
+### Architecture/Runtime Decisions
+
+- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в 	ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
+- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по 
+ame объекта.
+- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной 	argetSceneId нужно нормализовать перед любым lookup.
+- **Два источника данных о сценах**: sceneManager.scenes (загруженные) и sceneManager.sceneRegistry (все), оба нужно проверять.
+
+### Tests Run
+
+- 
+pm run typecheck — чисто (исправлены 2 ошибки Actor | null vs Actor | undefined через ?? undefined)
+- 
+px vitest run tests/scene/scene-transition.test.ts — 4/4 pass
+- 
+px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, не связаны с этой сессией)
+
+### Files Changed
+
+- src/systems/ComponentSystem.ts — handleExit, checkTriggerboxCollisions, флаг ctivateScene
+- src/scene/SceneInteraction.ts — передача scene.player ?? undefined в ctivateSceneObject при кликах
+- src/components/editor/properties/SectionComponents.tsx — UI чекбоксов Collider/Portal, кнопка Check
+- src/mechanics/ParserWorldModelBuilder.ts — поле exit в entity context, нормализация targetSceneId
+- 	ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
+- GDD.md — обновлено описание компонента Exit с полной спецификацией
+
+### Remaining Work / Next Steps
+
+- Pre-existing 4 фейла в puppet-master.test.ts требуют отдельного разбора
+- Collider-режим для NPC не тестируется автоматически — потенциальная зона для дополнительных тестов
+- Поддержка GO TO <exit-object> через parser (Portal + автоподход) — описана в GDD как планируемая функциональность
