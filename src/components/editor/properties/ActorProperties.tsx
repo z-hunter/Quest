@@ -66,6 +66,23 @@ export const ActorProperties: React.FC = () => {
         />
       </div>
 
+      {/* Perception Radius */}
+      <div className="e-row">
+        <label className="e-label">Perception Radius</label>
+        <input
+          type="number"
+          min="0"
+          step="10"
+          className="e-input"
+          value={formatPanelNumber(actor.perceptionRadius ?? 600)}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            actor.perceptionRadius = Number.isFinite(value) ? Math.max(0, value) : 600;
+            incrementObjectVersion();
+          }}
+        />
+      </div>
+
       {/* Anim Speed */}
       <div className="e-row">
         <label className="e-label">Anim Speed (ms)</label>

@@ -25,6 +25,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
   'Each plan must target a real NPC id from context.',
+  'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
@@ -2389,6 +2390,8 @@ export class NpcPuppetMaster {
                 for (const ev of npc.newEvents) {
                   if (ev.kind === 'speech') {
                     promptLines.push(`Speech: ${ev.displayName || ev.actorId}: "${ev.text}"`);
+                  } else if (ev.kind === 'action') {
+                    promptLines.push(`Action: ${ev.text}`);
                   }
                 }
               }

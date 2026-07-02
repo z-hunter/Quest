@@ -72,7 +72,7 @@ export class ActorCommandExecutor {
 
     const hasSpecificEmit = command.plan.some((step) => step.type === 'actorUseOn');
     if (!hasSpecificEmit) {
-      this.game.emitActorAction?.(actor, 'used command', null, { commandId });
+      this.game.emitActorAction?.(actor, 'command', null, { commandId });
     }
     return {
       status: 'ok',
@@ -144,7 +144,7 @@ export class ActorCommandExecutor {
         entity: target,
         args: { actorId: actor.name, itemId: item.name, targetId: target.name },
       });
-      this.game.emitActorAction?.(actor, 'used item', target, {
+      this.game.emitActorAction?.(actor, 'use', target, {
         itemId: item.name,
         targetId: target.name,
       });

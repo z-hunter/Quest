@@ -39,7 +39,11 @@ export interface IGame {
   getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null;
   lookScene(scene?: Scene | null): GameActionOutcome;
   lookEntity(entity: SceneObject): GameActionOutcome;
-  lookEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
+  lookEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
   getRelationScopedTakeCandidates?(
     anchor: SceneObject,
@@ -51,7 +55,11 @@ export interface IGame {
     relation: SpatialRelationType | 'near' | null
   ): boolean;
   examineEntity(entity: SceneObject): GameActionOutcome;
-  examineEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
+  examineEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
   openEntity(entity: SceneObject): GameActionOutcome;
   openEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
   closeEntity(entity: SceneObject): GameActionOutcome;
@@ -114,7 +122,7 @@ export interface IGame {
   playSound(name: string): void;
   emitActorAction?(
     actor: Actor,
-    action: string,
+    action: ObservedActorActionCode,
     subject?: SceneObject | null,
     payload?: Record<string, unknown>
   ): void;
@@ -138,3 +146,13 @@ export interface IGame {
   ctx: CanvasRenderingContext2D | null;
   bufferCanvas: HTMLCanvasElement;
 }
+export type ObservedActorActionCode =
+  | 'look'
+  | 'examine'
+  | 'open'
+  | 'close'
+  | 'take'
+  | 'put'
+  | 'use'
+  | 'command'
+  | 'traverse_exit';

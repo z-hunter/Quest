@@ -3064,7 +3064,16 @@ export class Parser {
       };
     }
 
-    return this.game.describeSpatialRelation(resolved.node.id, relation);
+    const outcome = this.game.describeSpatialRelation(resolved.node.id, relation);
+    const actor = this.game.sceneManager.currentScene?.player || null;
+    const anchorObject = this.game.sceneManager.currentScene?.getObjectByName(resolved.node.id);
+    if (outcome.status === 'ok' && actor && anchorObject) {
+      this.game.emitActorAction?.(actor, intent, anchorObject, {
+        targetId: anchorObject.name,
+        relation,
+      });
+    }
+    return outcome;
   }
 
   private resolveContainerAnchor(

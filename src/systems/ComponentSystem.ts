@@ -72,7 +72,6 @@ export interface NpcComponent {
   memory?: string;
   objectives?: string[];
   objectivesInitializedFromTA?: boolean;
-  perceptionRadius?: number;
   knownEntities?: Record<string, NpcKnownEntityMemory>;
 }
 
@@ -270,12 +269,6 @@ export class ComponentSystem {
         ? component.objectives.filter((item): item is string => typeof item === 'string')
         : undefined,
       objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
-      perceptionRadius:
-        typeof component.perceptionRadius === 'number' &&
-        Number.isFinite(component.perceptionRadius) &&
-        component.perceptionRadius >= 0
-          ? component.perceptionRadius
-          : 600,
       knownEntities: (() => {
         if (!component.knownEntities || typeof component.knownEntities !== 'object') {
           return undefined;
@@ -517,7 +510,7 @@ export class ComponentSystem {
 
     for (const comp of entity.components) {
       if (comp.type === 'Exit') {
-        return this.handleExit(comp as ExitComponent, scene, activator);
+        return this.handleExit(entity, comp as ExitComponent, scene, activator);
       } else if (comp.type === 'Subtrigger') {
         return this.handleSubtrigger(entity, comp as SubtriggerComponent, scene, depth, activator);
       } else if (comp.type === 'Subscene') {
@@ -530,6 +523,7 @@ export class ComponentSystem {
   }
 
   private static handleExit(
+    exitObject: SceneObject,
     exit: ExitComponent,
     scene: ActivationSceneContext,
     activator?: Actor
@@ -537,8 +531,14 @@ export class ComponentSystem {
     const sceneManager = scene.game?.sceneManager;
     const targetSceneId = exit.targetSceneId?.trim() || scene.id;
     if (!sceneManager || !targetSceneId) return false;
+    if (!sceneManager.scenes.has(targetSceneId) && !sceneManager.sceneRegistry.has(targetSceneId)) {
+      return false;
+    }
 
     if (activator) {
+      scene.game?.emitActorAction?.(activator, 'traverse_exit', exitObject, {
+        targetId: exitObject.name,
+      });
       sceneManager.transferActorToScene(activator, targetSceneId, {
         targetEntryId: exit.targetEntryId?.trim() || null,
         activateScene: activator === sceneManager.currentScene?.player,

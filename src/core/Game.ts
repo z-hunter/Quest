@@ -648,7 +648,7 @@ export class Game implements IGame {
       this.npcPuppetMaster.traceWake('player_speech_logged', {
         entryId: entry?.id,
         timestamp: entry?.timestamp,
-        knownByNpcIds: entry?.knownByNpcIds,
+        knownByActorIds: entry?.knownByActorIds,
         cursors: Object.fromEntries(
           knownByNpcIds.map((npcId) => [
             npcId,
@@ -688,7 +688,7 @@ export class Game implements IGame {
 
   emitActorAction(
     actor: Actor,
-    action: string,
+    action: import('./IGame').ObservedActorActionCode,
     subject?: SceneObject | null,
     payload: Record<string, unknown> = {}
   ): void {
@@ -696,29 +696,70 @@ export class Game implements IGame {
     if (!scene) return;
     const observers = this.actorWorld.getActionObservers(actor, subject);
     if (!observers.length) return;
-    const subjectTitle = subject
-      ? this.textAssets.getResolvedObjectField(subject as any, 'title')?.trim() || subject.name
-      : '';
     const displayName = this.getActorDialogueName(actor);
+    const text = this.formatObservedActorAction(displayName, action, subject, payload);
     scene.sceneLog.appendAction({
       actorId: actor.name,
       displayName,
-      text: subjectTitle
-        ? `${displayName} ${action} ${subjectTitle}.`
-        : `${displayName} ${action}.`,
-      knownByNpcIds: observers.map((npc) => npc.name),
+      text,
+      knownByActorIds: observers.map((observer) => observer.name),
       payload: {
         action,
         ...(subject ? { subjectId: subject.name } : {}),
         ...payload,
       },
     });
-    for (const observer of observers) {
-      this.npcPuppetMaster.scheduleNpc(scene, observer.name, {
-        type: 'manual',
-        reason: 'observed_actor_action',
-      });
+    if (scene.player && observers.includes(scene.player)) {
+      this.console?.log(text, 'info', { showInClosed: true });
     }
+  }
+
+  private formatObservedActorAction(
+    actorTitle: string,
+    action: import('./IGame').ObservedActorActionCode,
+    subject: SceneObject | null | undefined,
+    payload: Record<string, unknown>
+  ): string {
+    const scene = this.sceneManager.currentScene;
+    const titleFor = (id: unknown, fallback = ''): string => {
+      const normalized = typeof id === 'string' ? id.trim() : '';
+      const object = normalized ? scene?.getObjectByName(normalized) : null;
+      return object
+        ? this.textAssets.getResolvedObjectField(object as any, 'title')?.trim() || object.name
+        : fallback || normalized;
+    };
+    const subjectTitle = subject
+      ? this.textAssets.getResolvedObjectField(subject as any, 'title')?.trim() || subject.name
+      : '';
+    const relation = typeof payload.relation === 'string' ? payload.relation.trim() : '';
+    const item = titleFor(payload.itemId);
+    const target = titleFor(payload.targetId, subjectTitle);
+    const command =
+      action === 'command' && typeof payload.commandId === 'string'
+        ? this.textAssets
+            .getParserCommands()
+            .find((candidate) => candidate.id === payload.commandId)?.phrases?.[0] ||
+          payload.commandId
+        : '';
+    const params = {
+      actor: actorTitle,
+      subject: subjectTitle || target || item || command || 'something',
+      item: item || subjectTitle || 'something',
+      target: target || subjectTitle || 'something',
+      relation,
+    };
+    const key =
+      (action === 'look' || action === 'examine') && relation
+        ? 'engine.observed_look_relation'
+        : action === 'put' && relation && target
+          ? 'engine.observed_put_relation'
+          : action === 'put' && target
+            ? 'engine.observed_put_target'
+            : action === 'put'
+              ? 'engine.observed_drop'
+              : `engine.observed_${action}`;
+    const fallback = `[ ${actorTitle} acts. ]`;
+    return this.textAssets.getServiceText(key, params, fallback);
   }
 
   private isSayInput(input: string): boolean {
@@ -896,16 +937,24 @@ export class Game implements IGame {
     return this.semantic.lookEntity(entity);
   }
 
-  lookEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
-    return this.semantic.lookEntityForActor(actor, entity);
+  lookEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options: { relation?: SpatialRelationType | null } = {}
+  ): GameActionOutcome {
+    return this.semantic.lookEntityForActor(actor, entity, options);
   }
 
   examineEntity(entity: SceneObject): GameActionOutcome {
     return this.semantic.examineEntity(entity);
   }
 
-  examineEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
-    return this.semantic.examineEntityForActor(actor, entity);
+  examineEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options: { relation?: SpatialRelationType | null } = {}
+  ): GameActionOutcome {
+    return this.semantic.examineEntityForActor(actor, entity, options);
   }
 
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {

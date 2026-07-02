@@ -112,7 +112,7 @@ export class NpcWorldModelBuilder {
       .filter(
         (entry) =>
           !newEventIds.has(entry.id) &&
-          (entry.actorId === npc.name || entry.knownByNpcIds.includes(npc.name))
+          (entry.actorId === npc.name || entry.knownByActorIds.includes(npc.name))
       )
       .slice(-12);
 

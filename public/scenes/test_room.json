@@ -2260,8 +2260,7 @@
           "enabled": true,
           "memory": "",
           "objectives": ["TV is ON"],
-          "objectivesInitializedFromTA": true,
-          "perceptionRadius": 800
+          "objectivesInitializedFromTA": true
         },
         {
           "type": "Inventory",
@@ -2296,6 +2295,7 @@
       "blur": 0,
       "isPlayer": false,
       "speed": 0.23,
+      "perceptionRadius": 800,
       "direction": "right",
       "animSets": {
         "idle": {

@@ -84,7 +84,7 @@ describe('SceneLog', () => {
       actorId: 'Hero',
       displayName: 'Miles',
       text: '[Miles opens the locker]',
-      knownByNpcIds: ['guard'],
+      knownByActorIds: ['guard'],
       timestamp: 1,
     });
     log.appendSpeech({
@@ -114,5 +114,26 @@ describe('SceneLog', () => {
     });
 
     expect(fixture.scene.toJSON().sceneLog?.entries?.[0].text).toBe('Anyone here?');
+  });
+
+  it('loads legacy knownByNpcIds as actor-aware recipients', () => {
+    const log = new SceneLog();
+    log.load({
+      entries: [
+        {
+          id: 'legacy-action',
+          kind: 'action',
+          timestamp: 1000,
+          actorId: 'Hero',
+          displayName: 'Hero',
+          text: '[ Hero opens Locker ]',
+          knownByNpcIds: ['guard'],
+        },
+      ],
+    });
+
+    expect(log.entries[0].knownByActorIds).toEqual(['guard']);
+    expect(log.getUnreadEntries('guard')).toHaveLength(1);
+    expect((log.toJSON().entries?.[0] as any).knownByNpcIds).toBeUndefined();
   });
 });

@@ -294,6 +294,14 @@ describe('NpcPuppetMaster', () => {
       knownByNpcIds: [npc.name],
       timestamp: 1000,
     });
+    fixture.scene.sceneLog.appendAction({
+      actorId: player.name,
+      displayName: 'Miles',
+      text: '[ Miles is examining Boombox ]',
+      knownByActorIds: [npc.name],
+      timestamp: 1001,
+      payload: { action: 'examine', targetId: 'boombox' },
+    });
     const pm = new NpcPuppetMaster(
       fixture.game,
       new MockProvider(
@@ -316,6 +324,7 @@ describe('NpcPuppetMaster', () => {
     const output = debugLogs.join('\n');
     expect(output).toContain('--- PM PROMPT ---');
     expect(output).toContain('--- PM RESPONSE ---');
+    expect(output).toContain('Action: [ Miles is examining Boombox ]');
     expect(output).toContain('Hello, Miles.');
     expect(output).toContain('Plan for guard:');
     expect(output).toContain('mock-npc (mock)');
@@ -1414,7 +1423,7 @@ describe('NpcPuppetMaster', () => {
     fixture.scene.update(1000);
     await vi.advanceTimersByTimeAsync(300);
 
-    expect(examine).toHaveBeenCalledWith(npc, desk);
+    expect(examine).toHaveBeenCalledWith(npc, desk, { relation: 'on' });
     expect(provider.calls).toHaveLength(1);
   });
 
@@ -1864,21 +1873,15 @@ describe('NpcPuppetMaster', () => {
     );
   });
 
-  it('selects action observers with the authored NPC perception radius', () => {
+  it('selects action observers with each Actor perception radius', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
     const nearNpc = addNpc(fixture, 'near_guard');
     nearNpc.x = 100;
     const farNpc = addNpc(fixture, 'far_guard');
     farNpc.x = 700;
-    const nearComponent = nearNpc.components.find(
-      (component: any) => component.type === 'NPC'
-    ) as any;
-    const farComponent = farNpc.components.find(
-      (component: any) => component.type === 'NPC'
-    ) as any;
-    nearComponent.perceptionRadius = 200;
-    farComponent.perceptionRadius = 200;
+    nearNpc.perceptionRadius = 200;
+    farNpc.perceptionRadius = 200;
 
     expect(fixture.game.actorWorld.getActionObservers(player).map((actor) => actor.name)).toEqual([
       nearNpc.name,
@@ -1890,8 +1893,7 @@ describe('NpcPuppetMaster', () => {
     const player = fixture.addPlayer('Hero', 0, 0);
     const npc = addNpc(fixture, 'guard');
     npc.x = 700;
-    const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
-    npcComponent.perceptionRadius = 200;
+    npc.perceptionRadius = 200;
 
     expect(fixture.game.actorWorld.getActionObservers(player).map((actor) => actor.name)).toEqual(
       []

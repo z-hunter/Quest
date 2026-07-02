@@ -39,6 +39,7 @@ import { ComponentSystem } from '../systems/ComponentSystem';
 export interface ActorData extends EntityData {
   direction: ActorDirection;
   animSets: Record<string, AnimationSet>;
+  perceptionRadius?: number;
 }
 
 export class Actor extends Entity {
@@ -50,6 +51,7 @@ export class Actor extends Entity {
   overrideAnimSet: string | null;
 
   speed: number;
+  perceptionRadius: number;
   target: { x: number; y: number } | null;
   visualTarget: { x: number; y: number } | null;
   route: { x: number; y: number }[];
@@ -67,6 +69,7 @@ export class Actor extends Entity {
     ...Entity.SERIALIZABLE_PROPS,
     'isPlayer',
     'speed',
+    'perceptionRadius',
     'direction',
     'animSets',
   ];
@@ -83,6 +86,7 @@ export class Actor extends Entity {
     this.direction = 'down';
     this.state = 'idle';
     this.speed = 0.1;
+    this.perceptionRadius = 600;
     this.target = null;
     this.visualTarget = null;
     this.route = [];
@@ -842,6 +846,25 @@ export class Actor extends Entity {
     this.startLoading();
     try {
       super.load(data);
+      if (data.perceptionRadius === undefined) {
+        const legacyNpc = Array.isArray(data.components)
+          ? data.components.find((component: any) => component?.type === 'NPC')
+          : null;
+        if (
+          typeof legacyNpc?.perceptionRadius === 'number' &&
+          Number.isFinite(legacyNpc.perceptionRadius)
+        ) {
+          this.perceptionRadius = Math.max(0, legacyNpc.perceptionRadius);
+        }
+      }
+      this.perceptionRadius = Number.isFinite(this.perceptionRadius)
+        ? Math.max(0, this.perceptionRadius)
+        : 600;
+      for (const component of this.components || []) {
+        if (component?.type === 'NPC' && 'perceptionRadius' in component) {
+          delete (component as any).perceptionRadius;
+        }
+      }
       // Initial sprite update based on loaded state/direction
       this.updateSpriteForState();
     } finally {

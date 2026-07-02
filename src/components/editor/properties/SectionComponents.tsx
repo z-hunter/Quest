@@ -352,7 +352,6 @@ export const SectionComponents: React.FC = () => {
                   memory: '',
                   objectives: initialObjectives,
                   objectivesInitializedFromTA: true,
-                  perceptionRadius: 600,
                 });
               } else if (type === '3d-parallax') {
                 o.components.push({ type: '3d-parallax' });
@@ -479,23 +478,6 @@ export const SectionComponents: React.FC = () => {
                     />{' '}
                     Enabled
                   </label>
-                </div>
-                <div className="e-row">
-                  <label className="e-label" style={{ fontSize: '10px' }}>
-                    Perception Radius
-                  </label>
-                  <input
-                    className="e-input"
-                    type="number"
-                    min={0}
-                    step={10}
-                    value={comp.perceptionRadius ?? 600}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      comp.perceptionRadius = Number.isFinite(value) ? Math.max(0, value) : 600;
-                      incrementObjectVersion();
-                    }}
-                  />
                 </div>
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>

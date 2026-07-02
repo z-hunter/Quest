@@ -301,8 +301,8 @@ export function createTestGame(): TestGameHarness {
     lookEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_look_entity');
     },
-    lookEntityForActor(actor: Actor | null, entity: SceneObject) {
-      return (this as any).semantic.lookEntityForActor(actor, entity);
+    lookEntityForActor(actor: Actor | null, entity: SceneObject, options?: any) {
+      return (this as any).semantic.lookEntityForActor(actor, entity, options);
     },
     describeSpatialRelation(_anchorNodeId: string, _relation: SpatialRelationType) {
       return notImplementedOutcome('not_implemented_describe_spatial_relation');
@@ -310,8 +310,8 @@ export function createTestGame(): TestGameHarness {
     examineEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_examine_entity');
     },
-    examineEntityForActor(actor: Actor | null, entity: SceneObject) {
-      return (this as any).semantic.examineEntityForActor(actor, entity);
+    examineEntityForActor(actor: Actor | null, entity: SceneObject, options?: any) {
+      return (this as any).semantic.examineEntityForActor(actor, entity, options);
     },
     openEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_open_entity');

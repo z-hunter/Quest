@@ -388,11 +388,12 @@ export class ActorPlanExecutor {
         targetId: normalizedTargetId,
       });
     }
+    const relationOptions = relation ? { relation } : undefined;
     const outcome =
       action === 'LOOK'
-        ? this.game.lookEntityForActor(actor, target)
+        ? this.game.lookEntityForActor(actor, target, relationOptions)
         : action === 'EXAMINE'
-          ? this.game.examineEntityForActor(actor, target)
+          ? this.game.examineEntityForActor(actor, target, relationOptions)
           : action === 'OPEN'
             ? this.game.openEntityForActor(actor, target)
             : this.game.closeEntityForActor(actor, target);

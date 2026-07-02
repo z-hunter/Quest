@@ -61,12 +61,13 @@ export class ActorWorldQuery {
         !(entity instanceof Actor) ||
         entity === source ||
         entity.disabled ||
-        !ComponentSystem.isNpc(entity)
+        entity.visible === false
       ) {
         return false;
       }
-      const npc = ComponentSystem.getNpcComponent(entity);
-      const radius = npc?.perceptionRadius ?? 600;
+      const radius = Number.isFinite(entity.perceptionRadius)
+        ? Math.max(0, entity.perceptionRadius)
+        : 600;
       const distance = Math.hypot(entity.x - focusPoint.x, entity.y - focusPoint.y);
       if (distance > radius) return false;
       return this.getObjectPerception(entity, focus, true).visibility === 'visible';

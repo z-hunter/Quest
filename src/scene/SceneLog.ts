@@ -7,12 +7,17 @@ export interface SceneLogEntry {
   actorId: string;
   displayName: string;
   text: string;
-  knownByNpcIds: string[];
+  knownByActorIds: string[];
   payload?: Record<string, unknown>;
 }
 
 export interface SceneLogData {
-  entries?: SceneLogEntry[];
+  entries?: Array<
+    | SceneLogEntry
+    | (Omit<SceneLogEntry, 'knownByActorIds'> & {
+        knownByNpcIds?: string[];
+      })
+  >;
   lastPmProcessedAt?: number;
   lastPmProcessedAtByNpc?: Record<string, number>;
 }
@@ -27,7 +32,7 @@ function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function normalizeKnownNpcIds(value: unknown): string[] {
+function normalizeKnownActorIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return Array.from(
     new Set(
@@ -57,7 +62,7 @@ export class SceneLog {
       actorId: args.actorId,
       displayName: args.displayName,
       text: args.text,
-      knownByNpcIds: args.knownByNpcIds || [],
+      knownByActorIds: args.knownByNpcIds || [],
       timestamp: args.timestamp,
     });
   }
@@ -66,7 +71,7 @@ export class SceneLog {
     actorId: string;
     displayName: string;
     text: string;
-    knownByNpcIds?: string[];
+    knownByActorIds?: string[];
     timestamp?: number;
     payload?: Record<string, unknown>;
   }): SceneLogEntry | null {
@@ -75,7 +80,7 @@ export class SceneLog {
       actorId: args.actorId,
       displayName: args.displayName,
       text: args.text,
-      knownByNpcIds: args.knownByNpcIds || [],
+      knownByActorIds: args.knownByActorIds || [],
       timestamp: args.timestamp,
       payload: args.payload,
     });
@@ -90,8 +95,8 @@ export class SceneLog {
       (entry) =>
         entry.timestamp > cursor &&
         (normalizedNpcId
-          ? entry.knownByNpcIds.includes(normalizedNpcId)
-          : entry.knownByNpcIds.length > 0)
+          ? entry.knownByActorIds.includes(normalizedNpcId)
+          : entry.knownByActorIds.length > 0)
     );
   }
 
@@ -102,7 +107,7 @@ export class SceneLog {
       : this.lastPmProcessedAt;
     const newestEntryTime = this.entries.reduce(
       (latest, entry) =>
-        !normalizedNpcId || entry.knownByNpcIds.includes(normalizedNpcId)
+        !normalizedNpcId || entry.knownByActorIds.includes(normalizedNpcId)
           ? Math.max(latest, entry.timestamp)
           : latest,
       currentCursor
@@ -122,7 +127,10 @@ export class SceneLog {
 
   toJSON(): SceneLogData {
     return {
-      entries: this.entries.map((entry) => ({ ...entry, knownByNpcIds: [...entry.knownByNpcIds] })),
+      entries: this.entries.map((entry) => ({
+        ...entry,
+        knownByActorIds: [...entry.knownByActorIds],
+      })),
       lastPmProcessedAt: this.lastPmProcessedAt,
       lastPmProcessedAtByNpc: { ...this.lastPmProcessedAtByNpc },
     };
@@ -155,7 +163,7 @@ export class SceneLog {
     actorId: string;
     displayName: string;
     text: string;
-    knownByNpcIds: string[];
+    knownByActorIds: string[];
     timestamp?: number;
     payload?: Record<string, unknown>;
   }): SceneLogEntry | null {
@@ -173,7 +181,7 @@ export class SceneLog {
       actorId,
       displayName: normalizeText(args.displayName) || actorId,
       text,
-      knownByNpcIds: normalizeKnownNpcIds(args.knownByNpcIds),
+      knownByActorIds: normalizeKnownActorIds(args.knownByActorIds),
       ...(args.payload ? { payload: { ...args.payload } } : {}),
     };
 
@@ -184,7 +192,7 @@ export class SceneLog {
 
   private normalizeEntry(value: unknown, fallbackTimestamp: number): SceneLogEntry | null {
     if (!value || typeof value !== 'object') return null;
-    const record = value as Partial<SceneLogEntry>;
+    const record = value as Partial<SceneLogEntry> & { knownByNpcIds?: string[] };
     const kind = record.kind === 'action' ? 'action' : record.kind === 'speech' ? 'speech' : null;
     const actorId = normalizeText(record.actorId);
     const text = normalizeText(record.text);
@@ -197,7 +205,7 @@ export class SceneLog {
       actorId,
       displayName: normalizeText(record.displayName) || actorId,
       text,
-      knownByNpcIds: normalizeKnownNpcIds(record.knownByNpcIds),
+      knownByActorIds: normalizeKnownActorIds(record.knownByActorIds || record.knownByNpcIds),
       ...(record.payload && typeof record.payload === 'object' && !Array.isArray(record.payload)
         ? { payload: { ...record.payload } }
         : {}),

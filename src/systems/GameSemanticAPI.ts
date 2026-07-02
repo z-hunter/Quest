@@ -741,7 +741,7 @@ export class GameSemanticAPI {
       updateVisualTargets: !virtualSubsceneAccess,
     });
     if (activeActor) {
-      this.game.emitActorAction?.(activeActor, desiredState === 2 ? 'opened' : 'closed', entity, {
+      this.game.emitActorAction?.(activeActor, desiredState === 2 ? 'open' : 'close', entity, {
         targetId: entity.name,
         state: desiredState,
       });
@@ -860,10 +860,17 @@ export class GameSemanticAPI {
     return this.lookEntityForActor(actor, entity);
   }
 
-  lookEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+  lookEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options: { relation?: SpatialRelationType | null } = {}
+  ): GameActionOutcome {
     const outcome = this.executeLookEntityForActor(actor, entity);
     if (outcome.status === 'ok' && actor) {
-      this.game.emitActorAction?.(actor, 'looked at', entity, { targetId: entity.name });
+      this.game.emitActorAction?.(actor, 'look', entity, {
+        targetId: entity.name,
+        relation: options.relation || null,
+      });
     }
     return outcome;
   }
@@ -961,10 +968,17 @@ export class GameSemanticAPI {
     return this.examineEntityForActor(actor, entity);
   }
 
-  examineEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+  examineEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options: { relation?: SpatialRelationType | null } = {}
+  ): GameActionOutcome {
     const outcome = this.executeExamineEntityForActor(actor, entity);
     if (outcome.status === 'ok' && actor) {
-      this.game.emitActorAction?.(actor, 'examined', entity, { targetId: entity.name });
+      this.game.emitActorAction?.(actor, 'examine', entity, {
+        targetId: entity.name,
+        relation: options.relation || null,
+      });
     }
     return outcome;
   }
@@ -1544,7 +1558,7 @@ export class GameSemanticAPI {
           recoverable: true,
         };
       }
-      this.game.emitActorAction?.(activeActor, 'took', null, {
+      this.game.emitActorAction?.(activeActor, 'take', null, {
         itemId: entity.name,
         previousLocation: takeSourceTitle || undefined,
       });

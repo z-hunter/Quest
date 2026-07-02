@@ -174,6 +174,16 @@ This is the preferred entry point for parser-side tests.
 
 ### Scene Runtime
 
+#### `tests/game/observed-actor-actions.test.ts`
+
+Covers:
+
+- actor-wide perception radius and observer filtering;
+- passive action logging without Puppet Master wake-up;
+- immediate player console messages for observed foreign actions;
+- delayed NPC consumption through `newEvents` / `recentEvents`;
+- migration from legacy `NPC.perceptionRadius`.
+
 #### `tests/scene/scene-transition.test.ts`
 
 Covers:
