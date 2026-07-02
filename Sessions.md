@@ -2979,3 +2979,65 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - Pre-existing 4 фейла в puppet-master.test.ts требуют отдельного разбора
 - Collider-режим для NPC не тестируется автоматически — потенциальная зона для дополнительных тестов
 - Поддержка GO TO <exit-object> через parser (Portal + автоподход) — описана в GDD как планируемая функциональность
+
+
+## Session Entry - 2026-07-02 21:21 +02:00
+
+### Session Goals
+
+- Завершить actor-aware механику Exit для player и NPC.
+- Перевести player `GO TO` на общий `ActorNavigationService`.
+- Унифицировать дальнюю активацию Exit и Subscene через автоматический физический подход.
+- Исправить PM-продолжения после фонового переноса NPC между сценами.
+- Синхронизировать техническую документацию и расширить wrap-up загрузкой всех корневых Markdown-файлов.
+
+### What Was Implemented
+
+- NPC world context теперь включает usable Exit даже без authored Title, используя object id как fallback, и передаёт `targetSceneId`, `targetEntryId`, `targetSceneTitle`, `portal`, `collider`.
+- В PM DSL добавлен `TRAVERSE_EXIT`. NPC должен выполнить `MOVE_TO`, если Exit ещё не reachable, затем терминальный `TRAVERSE_EXIT`; один `MOVE_TO` больше не считается переходом между сценами.
+- Успешный переход завершает исходный план, отбрасывает stale tail, применяет post-plan memory только после подтверждённого transfer и планирует `plan_completed` в фактической целевой сцене NPC.
+- Исправлено динамическое PM-батчирование при смене сцен: runtime continuation не теряется из-за того, что source scene перестала быть current; provider request выполняется только для актуальной сцены NPC.
+- Player `GO TO <object>` использует общий `ActorNavigationService` и ближайшую walkable interaction-точку вместо попытки идти в заблокированный центр объекта.
+- Portal Exit активируется сразу, если reachable; иначе player автоматически подходит и активирует его после прибытия. При невозможном маршруте используется стандартное сообщение Subscene о слишком большой дистанции.
+- Дальняя Subscene переведена на тот же activate-or-approach flow.
+- Parser разрешает Exit по id/Title объекта и по id/name/Title целевой сцены; `GO TO/THROUGH` и `QUIT [THROUGH ...]` используют единый Exit runtime path.
+- NPC perception исключает объекты с `visible: false`; сохранено специальное исключение для disabled authored content неактивной Subscene.
+- Геометрия Quad и быстрый `approach` status теперь используют фактическую форму/walkable interaction position.
+- Исправлено пропорциональное масштабирование Entity collider и добавлены проверки навигации.
+
+### Architecture and Runtime Decisions
+
+- `ActorNavigationService` является общей точкой физического подхода для player и NPC world-query, чтобы parser, клики и PM не расходились в оценке достижимости.
+- `TRAVERSE_EXIT` всегда является последним физическим шагом PM-плана: межсценовый transfer меняет authoritative scene context, поэтому старый хвост нельзя продолжать автоматически.
+- Untitled Exit является семантически значимым исключением из общего правила authored Title: без этого NPC видит маршрут до двери в диагностике, но не получает адресуемую сущность в prompt.
+- Background transfer NPC не должен переключать active player scene, но обязан сохранить live Actor, inventory ownership и последующие PM wake events.
+
+### Documentation
+
+- Обновлены `GDD.md`, `NPCsys.md`, `Parser.md`, `SpatialSys.md` и `Autotests.md` в соответствии с текущим Exit/navigation/PM контрактом.
+- Skill `wrap-up-session` изменён: теперь Scanline Engine получает все `*.md` непосредственно из корня проекта (без рекурсии) и дополнительный curated `AgentMemory.md`; старые источники заменяются по точному basename.
+
+### Tests and Validation
+
+- Focused Exit/navigation/PM tests прошли.
+- `npm run typecheck` прошёл.
+- Полный Vitest run: 511 passed, 4 pre-existing failures в `tests/npc/puppet-master.test.ts` на момент проверки.
+- Markdown изменения прошли `git diff --check`.
+- Обе обнаруженные копии `wrap-up-session` прошли `quick_validate.py`.
+
+### Commits
+
+- `9cda3f6` — `Improvements to the Exit component for Scanline Engine`: Exit/NPC/parser/navigation runtime, тесты, сцены и документация.
+- `f29c585` — `Fix Entity collider proportional scaling and add verification tests`.
+- `583ce24` — `upd`: удалён временный `temp_output.txt`.
+
+### Current State and Remaining Work
+
+- Рабочее дерево чистое; ветка `puppet-master2` синхронизирована с `origin/puppet-master2`.
+- Рекомендуется отдельно разобрать четыре ранее наблюдавшихся PM test failures и подтвердить, остаются ли они воспроизводимыми после текущих изменений.
+- Полезен ручной end-to-end прогон: player просит NPC пройти через дверь, NPC отвечает после перехода уже из Corridor, а player отдельно проверяет дальние `GO TO Chair`, Exit и Subscene.
+
+### Caveats
+
+- Изменения самого skill `wrap-up-session` находятся в пользовательском каталоге Codex, а не в репозитории Quest, поэтому не входят в перечисленные git commits.
+- Корневые Markdown-файлы при wrap-up синхронизируются не рекурсивно; документы из подкаталогов намеренно не загружаются.
