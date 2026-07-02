@@ -753,4 +753,51 @@ describe('Game navigation and spatial API', () => {
       })
     );
   });
+
+  it('proportionally scales colliderWidth and colliderHeight with scale', () => {
+    const fixture = createGameSemanticFixture('start');
+    const entity = fixture.addEntity('test_object', {
+      title: 'Test Object',
+      description: 'A test object.',
+    });
+
+    // 1. Initial scale 1.0
+    entity.scale = 1.0;
+    entity.colliderWidth = 10;
+    entity.colliderHeight = 20;
+
+    expect(entity.colliderWidth).toBe(10);
+    expect(entity.colliderHeight).toBe(20);
+
+    // 2. Scale up to 2.0
+    entity.scale = 2.0;
+    expect(entity.colliderWidth).toBe(20);
+    expect(entity.colliderHeight).toBe(40);
+
+    // 3. Edit collider values when scale is 2.0
+    entity.colliderWidth = 50; // should set base to 25
+    entity.colliderHeight = 10; // should set base to 5
+
+    expect(entity.colliderWidth).toBe(50);
+    expect(entity.colliderHeight).toBe(10);
+
+    // 4. Serialize to JSON
+    const data = entity.toJSON();
+    expect(data.colliderWidth).toBe(25); // serialized base value
+    expect(data.colliderHeight).toBe(5); // serialized base value
+
+    // 5. Load serialized data into another entity
+    const loadedEntity = new Entity(fixture.game as any, 0, 0, 30, 30, 'loaded_object');
+    loadedEntity.load(data);
+    loadedEntity.scale = 1.0;
+
+    // Now scale is 1.0, so should match serialized base value
+    expect(loadedEntity.colliderWidth).toBe(25);
+    expect(loadedEntity.colliderHeight).toBe(5);
+
+    // Scale to 0.5
+    loadedEntity.scale = 0.5;
+    expect(loadedEntity.colliderWidth).toBe(12.5);
+    expect(loadedEntity.colliderHeight).toBe(2.5);
+  });
 });
