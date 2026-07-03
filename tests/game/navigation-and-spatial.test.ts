@@ -8,6 +8,26 @@ import { QuadObject } from '../../src/entities/QuadObject';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Game navigation and spatial API', () => {
+  it('measures interaction distance from the center of an Actor', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 100);
+    actor.width = 40;
+    actor.height = 100;
+    const headLevelTarget = fixture.addEntity('head_level_target', {
+      title: 'Head-level target',
+    });
+    headLevelTarget.x = 40;
+    headLevelTarget.y = 0;
+    const floorLevelTarget = fixture.addEntity('floor_level_target', {
+      title: 'Floor-level target',
+    });
+    floorLevelTarget.x = 40;
+    floorLevelTarget.y = 100;
+
+    expect(ComponentSystem.getInteractionDistanceError(headLevelTarget, actor)).toBeNull();
+    expect(ComponentSystem.getInteractionDistanceError(floorLevelTarget, actor)).toBeNull();
+  });
+
   it('measures interaction distance to Quad vertices instead of its editor anchor', () => {
     const fixture = createGameSemanticFixture();
     const actor = fixture.addPlayer('Hero', 1, 50);

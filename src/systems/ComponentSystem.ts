@@ -716,6 +716,11 @@ export class ComponentSystem {
     const game = (entity as any).game as IGame | undefined;
     if (!player || options?.ignoreDistance) return null;
 
+    const actorCenter = {
+      x: player.x || 0,
+      y: (player.y || 0) - (player.height || 0) / 2,
+    };
+
     let targetX = 0;
     let targetY = 0;
     let dist: number | null = null;
@@ -738,7 +743,7 @@ export class ComponentSystem {
           ? toVisualPosition({ x: vertex.x, y: vertex.y }, camera, parallax)
           : { x: vertex.x, y: vertex.y };
       });
-      dist = this.getPointToPolygonDistance({ x: player.x || 0, y: player.y || 0 }, poly);
+      dist = this.getPointToPolygonDistance(actorCenter, poly);
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
     } else {
@@ -747,11 +752,11 @@ export class ComponentSystem {
       targetY = e.y || 0;
     }
 
-    dist ??= Math.hypot(player.x - targetX, player.y - targetY);
+    dist ??= Math.hypot(actorCenter.x - targetX, actorCenter.y - targetY);
     // A zero collider disables collision, but must not grant interaction range
     // based on an arbitrarily large visual sprite.
     const interactionWidth = player.colliderWidth === 0 ? 30 : player.width || 30;
-    const allowedDist = interactionWidth * 2.3;
+    const allowedDist = interactionWidth * 2;
 
     if (dist > allowedDist) {
       const title = this.getPlayerFacingTitle(game, entity);
@@ -921,7 +926,8 @@ export class ComponentSystem {
         cy = (e.y || 0) - (e.height || 0) / 2;
       }
 
-      const dist = Math.hypot(actor.x - cx, actor.y - cy);
+      const actorCenterY = actor.y - (actor.height || 0) / 2;
+      const dist = Math.hypot(actor.x - cx, actorCenterY - cy);
       const allowedDist = (actor.width || 30) * 4.5;
 
       if (dist > allowedDist) {
