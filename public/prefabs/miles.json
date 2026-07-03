@@ -1,37 +1,79 @@
 {
+  "name": "Miles",
   "type": "Actor",
-  "name": "Hero_1",
-  "x": 278,
-  "y": 236,
-  "width": 110.5,
-  "height": 284.5,
-  "baseWidth": 221,
-  "baseHeight": 569,
-  "spriteName": "miles-idle-right.json",
-  "color": "#00ffff",
-  "scale": 0.5,
-  "modelScale": 0.5,
+  "locked": false,
+  "disabled": false,
+  "groupID": null,
+  "customName": "",
+  "textRedirects": {},
+  "interactions": {},
+  "components": [
+    {
+      "type": "Actor"
+    },
+    {
+      "type": "Shadow",
+      "shadowQuadId": "shadow",
+      "offsetX": -70,
+      "offsetY": -25,
+      "triggerId": "#f"
+    },
+    {
+      "type": "Inventory",
+      "capacity": 10,
+      "groups": [],
+      "protected": true,
+      "items": [],
+      "relation": "in"
+    },
+    {
+      "type": "Shadow",
+      "shadowQuadId": "shadow2",
+      "offsetX": -12,
+      "offsetY": -14,
+      "triggerId": "#F2"
+    }
+  ],
   "layer": 0,
+  "visible": true,
+  "hidden": false,
   "parallax": 1,
+  "x": 1661.362095116703,
+  "y": 96.46790488335338,
+  "width": 125.5962397884692,
+  "height": 300.4126276021493,
+  "baseWidth": 148,
+  "baseHeight": 354,
+  "spriteName": "miles2_ds-idle-down.json",
+  "color": "#00ffff",
+  "scale": 0.8486232418139811,
+  "refScale": 0.84,
+  "modelScale": 0.84,
   "ignoreScaling": false,
-  "animationSpeed": 30,
+  "animationSpeed": 53,
+  "opacity": 1,
+  "blendMode": "source-over",
+  "blur": 0,
   "isPlayer": true,
   "speed": 0.24,
-  "direction": "left",
+  "perceptionRadius": 600,
+  "direction": "down",
   "animSets": {
     "idle": {
       "id": "idle",
-      "up": "miles-idle-up.json",
-      "down": "miles-idle-down.json",
-      "left": null,
-      "right": "miles-idle-right.json"
+      "up": "miles2_ds-idle-up.json",
+      "down": "miles2_ds-idle-down.json",
+      "left": "miles2_ds-idle-left.json",
+      "right": ""
     },
     "walk": {
       "id": "walk",
-      "up": "miles-walk-up.json",
-      "down": "miles-walk-down.json",
-      "left": null,
-      "right": "miles-walk-right.json"
+      "up": "miles2_ds-wlk-up.json",
+      "down": "miles2_ds-walk-down.json",
+      "left": "miles2_ds-walk-left.json",
+      "right": ""
     }
-  }
+  },
+  "colliderWidth": 88,
+  "colliderHeight": 4
 }

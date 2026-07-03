@@ -3,7 +3,7 @@ import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBui
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Parser world model context', () => {
-  it('includes the inventory preview item as focusedTarget for LLM default target resolution', () => {
+  it('includes the inventory preview item as focusedTarget without TA details', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
     const book = fixture.addEntity('book', {
@@ -28,8 +28,10 @@ describe('Parser world model context', () => {
       title: 'Book',
       source: 'inventoryPreview',
       description: 'A thumbed paperback.',
-      details: 'Someone has underlined every pessimistic sentence.',
     });
+    expect(model.context.inventory?.find((entity) => entity.id === 'book')).not.toHaveProperty(
+      'details'
+    );
   });
 
   it('includes scene and object lore in LLM context without replacing player-facing text', () => {
