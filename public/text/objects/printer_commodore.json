@@ -1,0 +1,11 @@
+{
+  "title": "printer",
+  "description": "You see your trusty Epson MX-80 printer.",
+  "details": [
+    "The Epson MX-80 sits on the desk. Reliable. Loud. Compact.",
+    "It uses the same kind of ink ribbon you'd find in an old typewriter. Its 9-pin print head has hammered out mountains of source code, copied manuals, late-night notes, and enough continuous-feed paper to wallpaper this apartment.",
+    "Sure, the MX-80 can print crude black-and-white graphics if you insist. But the real magic is the fast text mode."
+  ],
+  "takeFailure": "That would require either remarkable dedication to portable computing or a very specific kind of mental collapse.",
+  "synonyms": ["epson", "mx-80"]
+}

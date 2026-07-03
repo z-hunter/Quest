@@ -14,6 +14,22 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     'lookScene',
     'lookEntity',
     'examineEntity',
+    'openEntity',
+    'closeEntity',
+    'closeFocusedView',
+    'takeEntity',
+    'canTakeEntity',
+    'canPutSourceEntity',
+    'putEntity',
+    'hasPutStorageForRelation',
+    'getRelationScopedTakeCandidates',
+    'isEntityInPutTarget',
+    'addInventoryEntity',
+    'removeEntityFromInventory',
+    'hasInventoryEntity',
+    'getInventoryEntities',
+    'addEntityToSurface',
+    'removeEntityFromSurface',
     'showInventory',
     'removeInventoryEntity',
     'goToSceneTarget',
@@ -25,13 +41,12 @@ export function createGameSemanticFixture(sceneId: string = 'test_scene'): GameS
     delete (fixture.game as Record<string, unknown>)[methodName];
   }
 
-  fixture.game.sceneManager.switchTo = (id: string) => {
-    const scene = fixture.game.sceneManager.scenes.get(id);
-    if (scene) {
-      fixture.game.sceneManager.currentScene = scene;
-      if (fixture.game.onSceneChange) {
-        fixture.game.onSceneChange(scene.name);
-      }
+  const switchTo = fixture.game.sceneManager.switchTo.bind(fixture.game.sceneManager);
+  fixture.game.sceneManager.switchTo = (id: string, activator?: any) => {
+    switchTo(id, activator);
+    const scene = fixture.game.sceneManager.currentScene;
+    if (scene && fixture.game.onSceneChange) {
+      fixture.game.onSceneChange(scene.name);
     }
   };
 

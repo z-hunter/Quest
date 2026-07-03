@@ -7,18 +7,25 @@ import type { SpatialPlacement, SpatialRelationType } from '../../src/scene/spat
 import { createTestGame, type TestGameHarness } from './gameFactory';
 
 type EntityOptions = {
-  title?: string;
+  title?: string | null;
   description?: string;
+  lore?: string | string[];
+  objectives?: string[];
+  takeFailure?: string;
   disabled?: boolean;
   groupID?: string | null;
   components?: any[];
   spatial?: SpatialPlacement;
+  semanticTags?: string[];
+  relationFacts?: Array<Record<string, unknown>>;
 };
 
 type TriggerboxOptions = {
-  title?: string;
+  scene?: Scene;
+  title?: string | null;
   description?: string;
   details?: string;
+  lore?: string | string[];
   disabled?: boolean;
   groupID?: string | null;
   components?: any[];
@@ -27,6 +34,7 @@ type TriggerboxOptions = {
 
 export type SceneFixture = TestGameHarness & {
   scene: Scene;
+  addScene(id: string, name?: string, description?: string): Scene;
   addEntity(name: string, options?: EntityOptions): Entity;
   addPlayer(name?: string, x?: number, y?: number): Actor;
   addTriggerbox(name: string, options?: TriggerboxOptions): Triggerbox;
@@ -61,6 +69,24 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
   return {
     ...harness,
     scene,
+    addScene(id, name = id, description = '') {
+      const nextScene = new Scene(harness.game, id, name);
+      nextScene.description = description;
+      harness.game.sceneManager.scenes.set(id, nextScene);
+      harness.game.sceneManager.sceneRegistry.set(id, {
+        id,
+        path: `${id}.json`,
+        name,
+        title: name,
+        sourceData: null,
+        lastIndexed: Date.now(),
+      });
+      harness.textAssets.setScene(id, {
+        title: name,
+        description,
+      });
+      return nextScene;
+    },
     addEntity(name, options = {}) {
       const entity = new Entity(harness.game, 0, 0, 10, 10, name);
       entity.description = options.description || `Description for ${name}`;
@@ -70,14 +96,30 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       entity.spatial = options.spatial || {};
       scene.addEntity(entity);
       harness.textAssets.setObject(name, {
-        title: options.title || name,
+        ...(options.title === null
+          ? {}
+          : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
+        lore: options.lore,
+        objectives: options.objectives,
+        takeFailure: options.takeFailure,
+        semanticTags: options.semanticTags,
+        relationFacts: options.relationFacts as any,
       });
       return entity;
     },
     addPlayer(name = 'Hero', x = 0, y = 0) {
       const player = new Actor(harness.game, x, y, 10, 10, name);
       player.isPlayer = true;
+      player.components = [
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: Number.MAX_SAFE_INTEGER,
+          groups: [],
+          items: [],
+        },
+      ];
       scene.addEntity(player);
       harness.textAssets.setObject(name, {
         title: name,
@@ -86,16 +128,21 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
       return player;
     },
     addTriggerbox(name, options = {}) {
+      const targetScene = options.scene || harness.game.sceneManager.currentScene || scene;
       const triggerbox = new Triggerbox(DEFAULT_POLY, name, '');
       triggerbox.disabled = options.disabled ?? false;
       triggerbox.groupID = options.groupID ?? null;
       triggerbox.components = options.components || [];
       triggerbox.spatial = options.spatial || {};
-      scene.triggerboxes.push(triggerbox);
+      targetScene.triggerboxes.push(triggerbox);
+      (triggerbox as any).scene = targetScene;
       harness.textAssets.setObject(name, {
-        title: options.title || name,
+        ...(options.title === null
+          ? {}
+          : { title: options.title !== undefined ? options.title : name }),
         description: options.description || `${name} triggerbox`,
         details: options.details,
+        lore: options.lore,
       });
       return triggerbox;
     },

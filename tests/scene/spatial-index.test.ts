@@ -17,8 +17,18 @@ describe('Scene spatial index', () => {
     const index = fixture.scene.getSpatialIndex();
 
     expect(index.childrenByParentId.get('Table')?.map((node) => node.id)).toEqual(['Key', 'Note']);
-    expect(index.childrenByParentAndRelation.get('Table')?.get('under')?.map((node) => node.id)).toEqual(['Key']);
-    expect(index.childrenByParentAndRelation.get('Table')?.get('on')?.map((node) => node.id)).toEqual(['Note']);
+    expect(
+      index.childrenByParentAndRelation
+        .get('Table')
+        ?.get('under')
+        ?.map((node) => node.id)
+    ).toEqual(['Key']);
+    expect(
+      index.childrenByParentAndRelation
+        .get('Table')
+        ?.get('on')
+        ?.map((node) => node.id)
+    ).toEqual(['Note']);
   });
 
   it('returns only direct children from the helper', () => {
@@ -48,6 +58,11 @@ describe('Scene spatial index', () => {
 
     const index = fixture.scene.getSpatialIndex();
 
-    expect(index.childrenByParentAndRelation.get('Cabinet')?.get('in')?.map((node) => node.id)).toEqual(['Folder']);
+    expect(
+      index.childrenByParentAndRelation
+        .get('Cabinet')
+        ?.get('in')
+        ?.map((node) => node.id)
+    ).toEqual(['Folder']);
   });
 });

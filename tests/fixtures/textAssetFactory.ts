@@ -1,21 +1,25 @@
 import type { Scene } from '../../src/scene/Scene';
 import type { SceneObject } from '../../src/entities/SceneObject';
-import type {
-  ObjectTextAssetData,
-  SceneTextAssetData,
-} from '../../src/core/TextAssetManager';
+import type { ObjectTextAssetData, SceneTextAssetData } from '../../src/core/TextAssetManager';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../../src/mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
 type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
+  hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
+  getResolvedObjectStructuredListField<T>(
+    obj: SceneObject,
+    field: string,
+    normalize: (value: unknown) => T | null
+  ): T[];
   getResolvedSceneField(scene: Scene, field: string): string | null;
   getServiceText(key: string, params?: Record<string, string | number>): string;
   getParserLexicon(): ParserLexiconAsset;
   getParserTraining(): ParserTrainingAsset;
   getParserCommands(): ParserCommandSpec[];
   readParserTrainingAsset(): Promise<ParserTrainingAsset>;
+  getServiceList(key: string): string[];
 };
 
 export type TestTextAssets = TextAssetLike & {
@@ -24,10 +28,14 @@ export type TestTextAssets = TextAssetLike & {
   setParserCommands(commands: ParserCommandSpec[]): void;
 };
 
-const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
+  'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
+  'engine.cant_reach_generic': "You can't reach it.",
+  'engine.blocked_inside_closed': "You can't reach that while it is inside something closed.",
+  'engine.closed_container': 'The {target} is closed.',
   'engine.locked_needs': 'Locked. Needs {item}',
   'engine.locked_generic': 'Locked.',
   'parser.look_default_scene': 'You are in {scene}.',
@@ -38,18 +46,49 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.examine_which_one': 'Which one do you want to examine: {options}?',
   'parser.take_prompt': 'Take what?',
   'parser.take_which_one': 'Which item do you mean: {options}?',
+  'parser.take_which_target': 'Which container do you mean: {options}?',
+  'parser.take_target_not_found': "You don't see any suitable container near {target}.",
   'parser.take_pickup_success': 'You picked up the {item}.',
+  'parser.take_pickup_success_from': 'You picked up the {item} from the {source}.',
+  'parser.take_already_held': 'You are already carrying the {item}.',
   'parser.take_cannot': 'You cannot take that.',
+  'parser.put_prompt': 'Put what?',
+  'parser.put_which_item': 'Which item do you want to put down: {options}?',
+  'parser.put_which_target': 'Where exactly do you want to put it: {options}?',
+  'parser.put_item_not_held': "You aren't carrying the {item}.",
+  'parser.put_target_not_found': "You don't see anywhere suitable near {target}.",
+  'parser.put_no_place': "You can't put that there.",
+  'parser.put_target_full_in': 'There is no more room in the {target}.',
+  'parser.put_target_full_on': 'There is no more room on the {target}.',
+  'parser.put_target_no_fit_in': 'The {item} does not fit in the {target}.',
+  'parser.put_target_no_fit_on': 'The {item} does not fit on the {target}.',
+  'parser.put_success_surface': 'You put the {item} on the {target}.',
+  'parser.put_success_inventory': 'You put the {item} into the {target}.',
+  'parser.put_success_under': 'You put the {item} under the {target}.',
+  'parser.put_success_behind': 'You put the {item} behind the {target}.',
+  'parser.drop_success': 'You drop the {item}.',
+  'parser.open_prompt': 'Open what?',
+  'parser.open_which_one': 'Which thing do you want to open: {options}?',
+  'parser.open_success': 'You open the {target}.',
+  'parser.open_already': 'The {target} is already open.',
+  'parser.close_prompt': 'Close what?',
+  'parser.close_which_one': 'Which thing do you want to close: {options}?',
+  'parser.close_success': 'You close the {target}.',
+  'parser.close_already': 'The {target} is already closed.',
+  'parser.inventory_missing': 'You have nowhere to carry anything.',
   'parser.inventory_empty': 'You are not carrying anything.',
   'parser.inventory_items': 'You are carrying: {items}',
   'parser.go_to_prompt': 'Where do you want to go?',
   'parser.go_to_which_one': 'Where exactly do you want to go: {options}?',
   'parser.go_to_not_found': "You can't get to {target} from here.",
   'parser.go_to_success': 'You go to {target}.',
+  'parser.clarification_cancel_replies': ['none', 'cancel'],
+  'parser.clarification_cancelled': 'Command cancelled.',
   'parser.command_no_effect': "That doesn't work.",
   'parser.parse_unknown': "I don't understand.",
   'parser.relation_empty': 'You see nothing {relation} the {target}.',
   'parser.relation_contents': '{Relation} the {target} you see: {items}.',
+  'parser.relation_discovered_contents': '{Relation} the {target} you discover: {items}.',
 };
 
 const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
@@ -57,6 +96,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check', 'x'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go', 'walk', 'move'],
     showInventory: ['inventory', 'inv'],
   },
@@ -64,6 +107,20 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
     examine: ['look closely at', 'take a closer look at', 'examine', 'inspect', 'check'],
     take: ['pick up', 'take', 'get', 'grab'],
+    put: [
+      'put down',
+      'throw away',
+      'toss away',
+      'put',
+      'drop',
+      'place',
+      'throw',
+      'toss',
+      'discard',
+    ],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go to', 'walk to', 'move to', 'go', 'walk', 'move'],
     showInventory: [],
   },
@@ -73,7 +130,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
   relationMarkers: {
     on: ['on'],
     under: ['under', 'beneath'],
-    in: ['in', 'inside'],
+    in: ['in', 'inside', 'into'],
     behind: ['behind'],
     near: ['near', 'next to', 'by'],
   },
@@ -82,7 +139,11 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
 const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   look: ['look chair', 'look at the chair', 'describe the chair'],
   examine: ['examine chair', 'inspect the chair', 'check the card'],
-  take: ['take key', 'pick up key'],
+  take: ['take key', 'pick up key', 'take key from drawer'],
+  put: ['put key', 'drop key', 'throw key', 'put key on desk', 'put cassette into recorder'],
+  open: ['open drawer', 'open cabinet'],
+  close: ['close drawer', 'shut cabinet'],
+  quit: ['quit', 'exit'],
   goTo: ['go to office', 'walk office'],
   showInventory: ['inventory', 'show inventory', 'what do i have'],
 };
@@ -104,7 +165,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
           noEffect: "That doesn't work.",
         },
         validation: {
-          allowedTitles: ['your ID card'],
+          allowedEntityIds: ['miles_id'],
         },
       },
     ],
@@ -153,16 +214,95 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    },
+  },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
     },
   },
 ];
@@ -173,6 +313,13 @@ function interpolate(template: string, params?: Record<string, string | number>)
     const value = params[token];
     return value === undefined || value === null ? `{${token}}` : String(value);
   });
+}
+
+function resolveTextValue(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return null;
+  if (!value.every((item) => typeof item === 'string')) return null;
+  return value.join('\n');
 }
 
 export function createTestTextAssets(): TestTextAssets {
@@ -188,24 +335,46 @@ export function createTestTextAssets(): TestTextAssets {
       sceneAssets.set(String(id), data);
     },
     getResolvedObjectField(obj, field) {
+      if (obj?.type === 'Walkbox' && field === 'title') {
+        return DEFAULT_SERVICE_TEXT['engine.floor_label'];
+      }
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
-      if (typeof value === 'string') return value;
-      if (field === 'description' && typeof (obj as { description?: unknown }).description === 'string') {
+      const text = resolveTextValue(value);
+      if (text !== null) return text;
+      if (
+        field === 'description' &&
+        typeof (obj as { description?: unknown }).description === 'string'
+      ) {
         return (obj as { description?: string }).description || null;
       }
       return null;
     },
+    hasAuthoredObjectTitle(obj) {
+      const asset = objectAssets.get(obj.name);
+      const text = resolveTextValue(asset?.title);
+      return !!text?.trim();
+    },
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
-      return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+      return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : [];
+    },
+    getResolvedObjectStructuredListField(obj, field, normalize) {
+      const asset = objectAssets.get(obj.name);
+      const value = asset?.[field];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => normalize(item)).filter((item): item is T => item !== null);
     },
     getResolvedSceneField(scene, field) {
       const asset = sceneAssets.get(scene.id);
       const value = asset?.[field];
-      if (typeof value === 'string') return value;
-      if (field === 'description' && typeof scene.description === 'string') return scene.description || null;
+      const text = resolveTextValue(value);
+      if (text !== null) return text;
+      if (field === 'description' && typeof scene.description === 'string')
+        return scene.description || null;
       return null;
     },
     getParserLexicon() {
@@ -224,7 +393,13 @@ export function createTestTextAssets(): TestTextAssets {
       parserCommands = structuredClone(commands);
     },
     getServiceText(key, params) {
-      return interpolate(DEFAULT_SERVICE_TEXT[key] || key, params);
+      const text = resolveTextValue(DEFAULT_SERVICE_TEXT[key]);
+      return interpolate(text || key, params);
+    },
+    getServiceList(key) {
+      const value = DEFAULT_SERVICE_TEXT[key];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => String(item).trim()).filter(Boolean);
     },
   };
 }

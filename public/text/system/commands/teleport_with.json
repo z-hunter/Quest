@@ -8,7 +8,7 @@
       "required": true,
       "scopes": ["held", "takable"],
       "validation": {
-        "allowedTitles": ["your ID card"]
+        "allowedEntityIds": ["miles_id"]
       },
       "messages": {
         "missing": "Teleport with what?",

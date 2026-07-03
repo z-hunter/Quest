@@ -1,19 +1,34 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Game } from '../core/Game';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
 
 interface GameCanvasProps {
   onGameInit: (game: Game) => void;
 }
+
+type ZoomMode = 'fit' | '1' | '1.5' | '2';
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const uiCanvasRef = useRef<HTMLCanvasElement>(null);
   const editorOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [zoomMode, setZoomMode] = useState<ZoomMode>('fit');
+  const [viewportSize, setViewportSize] = useState({
+    width: GAME_DESIGN_WIDTH,
+    height: GAME_DESIGN_HEIGHT,
+    scale: 1,
+  });
 
   useEffect(() => {
-    if (canvasRef.current && uiCanvasRef.current && editorOverlayCanvasRef.current && !gameRef.current) {
+    if (
+      canvasRef.current &&
+      uiCanvasRef.current &&
+      editorOverlayCanvasRef.current &&
+      !gameRef.current
+    ) {
       // Initialize Game with BOTH canvases
       // canvasRef -> WebGL (CRT)
       // uiCanvasRef -> 2D (UI/Input)
@@ -25,6 +40,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
 
       // Pass game instance up to parent (for UI to bind)
       onGameInit(game);
+
+      const savedZoom = game.settings.editor?.viewportZoom;
+      if (savedZoom === 'fit' || savedZoom === '1' || savedZoom === '1.5' || savedZoom === '2') {
+        setZoomMode(savedZoom);
+      }
     }
 
     return () => {
@@ -37,17 +57,45 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
 
   useEffect(() => {
     const handleResize = () => {
-      if (containerRef.current && canvasRef.current && gameRef.current) {
-        const { clientWidth, clientHeight } = containerRef.current;
+      if (shellRef.current && viewportRef.current && canvasRef.current && gameRef.current) {
+        const { clientWidth, clientHeight } = shellRef.current;
+        if (clientWidth <= 0 || clientHeight <= 0) return;
+
+        const fitScale = Math.min(
+          clientWidth / GAME_DESIGN_WIDTH,
+          clientHeight / GAME_DESIGN_HEIGHT
+        );
+        const requestedScale = zoomMode === 'fit' ? fitScale : Number.parseFloat(zoomMode);
+        const appliedScale = zoomMode === 'fit' ? fitScale : Math.min(fitScale, requestedScale);
+        const width = Math.max(1, Math.round(GAME_DESIGN_WIDTH * appliedScale));
+        const height = Math.max(1, Math.round(GAME_DESIGN_HEIGHT * appliedScale));
+        setViewportSize({ width, height, scale: appliedScale });
+        const offsetX = Math.max(0, Math.round((clientWidth - width) / 2));
+        const offsetY = Math.max(0, Math.round((clientHeight - height) / 2));
+
+        const container = shellRef.current.parentElement;
+        if (container) {
+          container.style.setProperty('--game-viewport-width', `${width}px`);
+          container.style.setProperty('--game-viewport-height', `${height}px`);
+          container.style.setProperty('--game-viewport-left', `${offsetX}px`);
+          container.style.setProperty('--game-viewport-top', `${offsetY}px`);
+          container.style.setProperty(
+            '--game-console-height',
+            `${Math.round(34 * appliedScale)}px`
+          );
+        }
+
+        const viewportWidth = viewportRef.current.clientWidth || width;
+        const viewportHeight = viewportRef.current.clientHeight || height;
         const dpr = window.devicePixelRatio || 1;
 
         // Set RENDERER canvas size to display size * dpr for sharp rendering
-        canvasRef.current.width = clientWidth * dpr;
-        canvasRef.current.height = clientHeight * dpr;
+        canvasRef.current.width = Math.max(1, Math.round(viewportWidth * dpr));
+        canvasRef.current.height = Math.max(1, Math.round(viewportHeight * dpr));
 
         if (editorOverlayCanvasRef.current) {
-          editorOverlayCanvasRef.current.width = clientWidth * dpr;
-          editorOverlayCanvasRef.current.height = clientHeight * dpr;
+          editorOverlayCanvasRef.current.width = Math.max(1, Math.round(viewportWidth * dpr));
+          editorOverlayCanvasRef.current.height = Math.max(1, Math.round(viewportHeight * dpr));
         }
 
         // Notify game of resize
@@ -55,32 +103,60 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
       }
     };
 
-    // Initial resize
+    // Initial resize (best-effort)
     handleResize();
+
+    // Layout often stabilizes 1–2 frames later (flex panels, fonts, DPR, etc).
+    // Ensure we resize again after paint to avoid "wrong initial CRT scaling" until user triggers editor layout.
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      handleResize();
+      raf2 = window.requestAnimationFrame(() => {
+        handleResize();
+      });
+    });
+    const t = window.setTimeout(() => handleResize(), 75);
 
     // Listen for window resize
     window.addEventListener('resize', handleResize);
 
     // Also use ResizeObserver for container changes
     const resizeObserver = new ResizeObserver(handleResize);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
+    if (shellRef.current) {
+      resizeObserver.observe(shellRef.current);
+    }
+    // In some layouts, the parent flex container changes size while this node doesn't emit reliably.
+    // Observing the parent makes the resize robust when editor panels mount/unmount.
+    const parent = shellRef.current?.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
     }
 
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(t);
     };
-  }, []);
+  }, [zoomMode]);
+
+  useEffect(() => {
+    if (gameRef.current?.settings.editor) {
+      gameRef.current.settings.editor.viewportZoom = zoomMode;
+    }
+  }, [zoomMode]);
 
   return (
     <div
-      ref={containerRef}
+      ref={shellRef}
       onMouseEnter={() => {
         // Blur active inputs when entering game view
         const active = document.activeElement as HTMLElement;
         if (
           active &&
+          active.id !== 'parser-input' &&
           (active.tagName === 'INPUT' ||
             active.tagName === 'TEXTAREA' ||
             active.tagName === 'SELECT')
@@ -91,64 +167,78 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameInit }) => {
         if (gameRef.current) gameRef.current.isMouseOverUI = false;
       }}
       style={{
-        // Center the 840x600 canvas in the 840x640 container
-        width: '840px',
-        height: '600px',
+        width: '100%',
+        height: '100%',
         position: 'relative',
-        backgroundColor: '#000', // Restore bg color as well
-        overflow: 'hidden', // Restore clipping
+        backgroundColor: '#000',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      {/* Layer 1: Game (WebGL + CRT) */}
-      <canvas
-        ref={canvasRef}
-        id="game-canvas"
+      <div
+        ref={viewportRef}
         style={{
-          width: '100%',
-          height: '100%',
-          display: 'block',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          zIndex: 1,
+          width: `${viewportSize.width}px`,
+          height: `${viewportSize.height}px`,
+          position: 'relative',
+          backgroundColor: '#000',
+          overflow: 'hidden',
+          boxShadow: '0 0 20px rgba(0, 0, 0, 0.5)',
         }}
-      />
+      >
+        {/* Layer 1: Game (WebGL + CRT) */}
+        <canvas
+          ref={canvasRef}
+          id="game-canvas"
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 1,
+          }}
+        />
 
-      {/* Layer 2: UI/Editor (2D, No CRT) */}
-      <canvas
-        ref={uiCanvasRef}
-        id="ui-canvas"
-        width={420} // Internal Resolution
-        height={300}
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'block',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          zIndex: 2,
-          backgroundColor: 'transparent',
-          imageRendering: 'pixelated',
-          pointerEvents: 'auto',
-        }}
-      />
+        {/* Layer 2: UI/Editor (2D, No CRT) */}
+        <canvas
+          ref={uiCanvasRef}
+          id="ui-canvas"
+          width={GAME_DESIGN_WIDTH}
+          height={GAME_DESIGN_HEIGHT}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 2,
+            backgroundColor: 'transparent',
+            imageRendering: 'pixelated',
+            pointerEvents: 'auto',
+          }}
+        />
 
-      <canvas
-        ref={editorOverlayCanvasRef}
-        id="editor-overlay-canvas"
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'block',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          zIndex: 3,
-          backgroundColor: 'transparent',
-          pointerEvents: 'none',
-        }}
-      />
+        <canvas
+          ref={editorOverlayCanvasRef}
+          id="editor-overlay-canvas"
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 3,
+            backgroundColor: 'transparent',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
     </div>
   );
 };

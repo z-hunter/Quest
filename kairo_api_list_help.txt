@@ -1,0 +1,316 @@
+﻿{
+  "success": true,
+  "data": [
+    {
+      "id": "aaaaaaabtximf5yw4nja65vutce44qtw",
+      "title": "Prepare Kotlin workshop #2",
+      "description": "I need to conduct a practical workshop on Kotlin for students. 2 groups. \n* 23HR: 13:20-14:50\n* 23LR: 17:00-18:30",
+      "tags": [
+        "ehu",
+        "owner:z-hunter"
+      ],
+      "priority": 1,
+      "status": "todo",
+      "deadline": "2026-05-06T03:06:00Z",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtyci6gogzeob6lz7al7m7e4g",
+      "title": "[Quest] Prevent direct EXAMINE from revealing hidden semantic targets",
+      "description": "Owner: codex\nContext: User clarified that `EXAMINE \u003chidden item\u003e` should not reveal hidden semantic objects, because the player does not know the object exists. `EXAMINE` reveal should happen through a visible parent/anchor such as `EXAMINE BOOMBOX` revealing examinable `audio_cables` behind it.\nOutcome: Removed parser direct semantic-hidden target resolution for EXAMINE and deleted now-unused `resolveSemanticHiddenTarget()`. `GameSemanticAPI.examineEntity()` no longer reveals the target before access checks, so direct API calls on unrevealed hidden targets fail with `hidden_semantic_target`. Anchor EXAMINE reveal remains: after a visible anchor passes access checks, it reveals `examinable` descendants in `in/on/under/behind`. Updated parser fixture and regression tests: direct `LOOK CACHE`/`EXAMINE CACHE` both not-found and unrevealed; `EXAMINE BOOMBOX` reveals hidden examinable `audio_cables`, after which `LOOK CABLES` succeeds.\nFiles: `src/mechanics/Parser.ts`, `src/systems/GameSemanticAPI.ts`, `tests/fixtures/parserFactory.ts`, `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm run typecheck`; `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm test -- tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts`; full `npm test` (24 files, 277 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T22:29:07Z",
+      "updated_at": "2026-05-07T22:31:19Z"
+    },
+    {
+      "id": "aaaaaaabtycixjvbybkjokvywrlocxdn",
+      "title": "[Quest] Reveal examinable hidden descendants when examining their anchor",
+      "description": "Owner: codex\nContext: User reported `hidden: \"examinable\"` on `audio_cables` behind `boombox` is not revealed by `EXAMINE BOOMBOX`; expected behavior is that examining the anchor/place reveals examinable hidden contents.\nOutcome: Added `GameSemanticAPI.revealHiddenDescendantsForExamine()`, called from `examineEntity()` after access checks. It scans anchor-relative `in/on/under/behind` descendants with `getSceneTextRelationAccessStates(..., { includeHidden: true })` and reveals those with `hiddenReason === \"examinable\"`. Updated parser fixture to mirror production behavior. Added semantic API and parser integration regressions for `audio_cables` behind `boombox`: `LOOK CABLES` is not found before `EXAMINE BOOMBOX`, then succeeds after reveal. LOOK behavior remains unchanged.\nFiles: `src/systems/GameSemanticAPI.ts`, `tests/fixtures/parserFactory.ts`, `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts`; full `npm test` (24 files, 277 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T22:25:21Z",
+      "updated_at": "2026-05-07T22:26:58Z"
+    },
+    {
+      "id": "aaaaaaabtychrxvgbhyp7xhxadx7fy7n",
+      "title": "[Quest] Fix hidden titled objects leaking into LOOK scope",
+      "description": "Owner: codex\nContext: User reported hidden `audio_cables` behind `boombox` in `test_room` are returned by `LOOK CABLES` before discovery.\nOutcome: Confirmed root cause in `Parser.resolveLookTarget()`: direct LOOK fell back to hidden lookable semantic resolution and then `lookEntity()` revealed/described the object. Removed that fallback so direct LOOK only sees visible/held targets (plus existing inactive-subscene switch exception). Relation LOOK remains the reveal path. Updated parser fixture relation LOOK to mirror production hidden lookable reveal behavior. Added regression coverage including `audio_cables` behind `boombox`: direct `LOOK CABLES` returns not-found before `LOOK BEHIND BOOMBOX`, then succeeds after reveal.\nFiles: `src/mechanics/Parser.ts`, `tests/fixtures/parserFactory.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm test -- tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (24 files, 275 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T22:04:50Z",
+      "updated_at": "2026-05-07T22:08:48Z"
+    },
+    {
+      "id": "aaaaaaabtyceqiy4q5q6mpyaj4ibemcy",
+      "title": "[Quest] Make codex-doctor auto-repair NotebookLM CLI auth",
+      "description": "Owner: codex\nContext: User requested codex-doctor to automatically detect expired NotebookLM auth and try the light auto-recovery path without user intervention.\nOutcome: Updated `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.ps1` so non-Fast NotebookLM readiness forwards `-AutoLogin` by default. Added `-NoNotebookAutoLogin` to opt out for a single run. `-ManualFallback` remains explicit only, so the default path does not require user involvement.\nValidation: PowerShell parse check; direct `notebooklm-ready.ps1 -AutoLogin -LoginWaitSeconds 3` caught expired `list`, auto-login repaired auth, and smoke ask passed; `codex-doctor -Fast -Json` passed 17/17; full `codex-doctor` passed 19/19 including `npm run typecheck` and full `npm test` (24 files, 274 tests).\nSource: chat 2026-05-07",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T21:11:36Z",
+      "updated_at": "2026-05-07T21:13:32Z"
+    },
+    {
+      "id": "aaaaaaabtybw5vlgykm2eqvhskfqu6ra",
+      "title": "[Quest] Add TA override for non-takeable objects",
+      "description": "Owner: codex\nContext: User requested a new standard object Text Asset field that replaces the generic `You cannot take...` message when the player tries to take a non-takeable object. Follow-up requested JSON-friendly multiline text support for TA.\nOutcome: Added standard object TA field `takeFailure`; default object TA generation includes it. `GameSemanticAPI.takeEntity` and `canTakeEntity` now use resolved non-empty `takeFailure` for generic `cannot_take`/`not_takeable` TAKE failures and mark those outcomes `recoverable: false`, which short-circuits Parser post-API LLM recovery. Test fixtures understand the field. Fixed `public/text/objects/boombox.json` from invalid backtick syntax to valid JSON, added/kept boombox `takeFailure`, and converted `boombox.details` to the new string-array multiline format. `TextAssetManager` now resolves string arrays as multiline text for object/scene/service text APIs while list APIs preserve `synonyms`/semantic list semantics. Docs updated in `GDD.md`, `TextAssets.md`, and `Parser.md`.\nValidation: `npm test -- tests/core/text-asset-manager.test.ts tests/game/semantic-api.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test`; `git diff --check`.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:gdd",
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T17:14:15Z",
+      "updated_at": "2026-05-07T18:08:34Z"
+    },
+    {
+      "id": "aaaaaaabtybovqouo5bfcrh3gru6asfb",
+      "title": "[Quest] Implement closed-console modal multiline output",
+      "description": "Owner: codex\nContext: User requested GDD-described closed console modal state for parser responses longer than two wrapped screen lines, word wrapping in closed console, and forced newline support in text resources. Follow-up found real `LOOK CITY` in `test_room` did not stay modal.\nOutcome: `Console` computes closed-console display lines with word wrapping and forced newline preservation; `Console.logResponse` now evaluates modal threshold over the full parser response batch. `Parser.parse` sends player-facing responses through `Game.logResponse`, while `Game.logResponse` falls back safely for tests/stubs. Low-res `Game.renderUI` expands the console with `[Continue]`, input is blocked while modal, and `UIOverlay` stops parser-submit Enter from bubbling to global input and immediately dismissing the modal.\nAcceptance criteria: `LOOK CITY` in real browser enters closed modal, disables input, and canvas click dismisses to last two wrapped lines. Focused tests cover wrapping, modal dismissal, forced newlines, and multi-message parser responses.\nValidation: `codex-doctor -Fast`; `npm test -- tests/parser/preprocessor.test.ts tests/parser/commands.test.ts tests/integration/parser-game.test.ts`; `npm run typecheck`; Playwright real input smoke for `LOOK CITY`; `npm test`; `git diff --check`.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:parser",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "source:gdd",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-07T14:50:00Z",
+      "updated_at": "2026-05-07T15:06:12Z"
+    },
+    {
+      "id": "aaaaaaabtx7vs4jszpcqxbuwowbeep3j",
+      "title": "[Quest] Fix Quad shadow zones to use polygon hitTest",
+      "description": "Owner: codex\nContext: Investigated Quad4 lightspot1 #lightSpots bug where Hero shadow toggled off inside parts of the visible Quad.\nOutcome: ShadowSystem now uses QuadObject.hitTest for Quad trigger targets instead of inherited Entity.containsPoint AABB; non-Quad targets still use containsPoint. Added regression coverage using a lightspot1-shaped Quad where hitTest is true but containsPoint is false.\nValidation: `npm test -- tests/scene/shadow-system.test.ts`; `npm test -- tests/scene`.\nNote: `npm run typecheck` currently fails on unrelated dirty spatial relation `near` errors in SceneSpatialValidator/GameSemanticAPI.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:scene",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-06T22:12:25Z",
+      "updated_at": "2026-05-06T22:12:25Z"
+    },
+    {
+      "id": "aaaaaaabtxiuxl33noumpd3tq4thyvfe",
+      "title": "design way to implement \"darkness\" for LOOK",
+      "tags": [
+        "quest"
+      ],
+      "priority": 3,
+      "status": "todo",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtxit666h7474as3fskx4npg2",
+      "title": "design NPC AI System",
+      "description": "* Dialogue system - the lines begins with \"- \", NPC can \"hear it\"\n* NPC can react with answers\n* NPC can just do their business, controlled by AI",
+      "tags": [
+        "quest"
+      ],
+      "priority": 3,
+      "status": "todo",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtxiumqevnvpofcwfg7gbyvl3",
+      "title": "Improve MoveTo",
+      "description": "Better path-founding with multi-point way and interrupt sys\nConnected to NPC AI sys",
+      "tags": [
+        "feature",
+        "minor",
+        "quest"
+      ],
+      "priority": 3,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtxifnl2hsdrxgilimr4th54w",
+      "title": "[Quest] Seed Kairo tag taxonomy",
+      "description": "Owner: codex\nProject: Quest\nContext: Service task used to initialize the current Quest tag taxonomy in Kairo. Kairo stores tags on tasks rather than through a separate tag-management API.\nExpected outcome: Standard tags are available/discoverable through task filtering and future task creation.\nAcceptance criteria: The seed task is marked done and carries the baseline Quest TaskOps tags.\nSource: chat\nNotes: Do not reopen unless changing the taxonomy.",
+      "tags": [
+        "area:core",
+        "area:docs",
+        "area:gdd",
+        "area:mechanics",
+        "area:parser",
+        "area:scene",
+        "area:systems",
+        "area:ui",
+        "owner:codex",
+        "owner:gemini",
+        "owner:user",
+        "proj:quest",
+        "session:2026-04-27",
+        "source:chat",
+        "source:gdd",
+        "source:memory",
+        "source:notebooklm",
+        "source:review",
+        "source:test",
+        "source:user",
+        "status-meta:blocked",
+        "status-meta:delegated",
+        "status-meta:needs-acceptance",
+        "status-meta:needs-user",
+        "status-meta:waiting",
+        "type:bug",
+        "type:chore",
+        "type:decision",
+        "type:docs",
+        "type:feature",
+        "type:followup",
+        "type:research",
+        "type:review",
+        "type:test"
+      ],
+      "priority": 3,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtx5ixylx5tpg5nq3qygv5tss",
+      "title": "[Quest] Make parser LLM context expose explicit containment",
+      "description": "Implemented TA-driven semantic world facts for the LLM parser context.\n\nOutcome:\n- Object Text Assets can carry `semanticTags` and `relationFacts`.\n- ParserWorldModelBuilder generates generic semantic `worldFacts` from parent relation rules and child tags.\n- Removed the hardcoded loaded-media heuristic from world model construction.\n- LLM prompt assets now use generic world fact authority instructions, not PLAY/cassette-specific wording.\n- Current Boombox/cassette assets define the loaded-media fact through Text Assets.\n- Documentation updated in `TextAssets.md` and `Parser.md`.\n\nCommit:\n- `51e64b6 Add TA-driven semantic facts for LLM parser context`\n\nValidation:\n- `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`\n- `npm test -- tests/parser tests/integration/parser-game.test.ts`\n- `npm run typecheck`\n- `git diff --check`\n- `npm test`",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-06",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtx5eenwrgq6uxydwnc44evan",
+      "title": "[Quest] Add LLM recovery for parser failed outcomes",
+      "description": "Owner: codex\nContext: Implemented LLM post-API recovery for parser recoverable failures like cannot_take/not_takeable while keeping retry prompts in Text Assets instead of hardcoded code strings.\nOutcome: Added `post_api_recovery` previousAttempt kind; parser now retries selected recoverable failed outcomes through LLM when #LLM-ON is active; LLM can return corrected plans, atmospheric final_response/showText, or explicit `{ kind: \"fallback\" }` to preserve the original parser response. Added `public/text/system/parser-llm.json` for retry prompt fragments and updated `parser-llm-system.md` for fallback.\nAcceptance criteria: Focused LLM/parser tests added and passing; parser integration suite passing; full tests passing; typecheck passing.\nValidation: `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (23 files, 259 tests).\nSource: chat",
+      "tags": [
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-06",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtx4yd3f45sovk3pbwhktwukd",
+      "title": "[Quest] Fix duplicate held item leaking into parser takable scope",
+      "description": "Owner: codex\nContext: Full `npm test` on 2026-05-05 failed independently of Actor MoveTo route planning.\nFailure: `tests/parser/world-model-context.test.ts` \u003e `omits scene duplicates whose stable id is already held from takable scope` asserted takable scope should not include `compact_cassette`, but actual takable list included it.\nResolution: `ParserWorldModelBuilder` now filters `takable` and external takable candidates through stable inventory identity (`inventoryManager.hasEntityIdInInventory`) before consulting `canTakeEntity`; the test fixture `canTakeEntity` now mirrors runtime semantics by using `hasEntityIdInInventory` instead of object identity.\nValidation: `npm test -- tests/parser/world-model-context.test.ts`; `npm test -- tests/integration/parser-game.test.ts`; `npm test -- tests/game/semantic-api.test.ts`; `npm run typecheck`; full `npm test` all passed.\nSource: validation during Actor MoveTo route planning session.",
+      "tags": [
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:test",
+        "type:bug",
+        "type:test"
+      ],
+      "priority": 2,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtx4xsjhyh7s4h5cacq32fdlg",
+      "title": "[Quest] Implement Actor MoveTo route planning",
+      "description": "Owner: codex\nContext: Improved Actor MoveTo so it plans a route around obstacles, reports impossible destinations immediately, and reports route invalidation when movement is blocked mid-route.\nOutcome: `Actor.moveTo` now returns `ActorMoveResult`; `Actor.getMoveResult()` exposes arrived/blocked/unreachable states for AI polling; grid A* route planning uses `Scene.isWalkable` as the single collision/walkbox oracle; GDD and focused tests were added.\nValidation: `npm test -- tests/entities/actor-movement.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-interaction.test.ts` passed; `npm run typecheck` passed. Full `npm test` has an unrelated existing parser duplicate held-item failure tracked separately.\nSource: chat 2026-05-05",
+      "tags": [
+        "area:movement",
+        "area:pathfinding",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    },
+    {
+      "id": "aaaaaaabtx46sp2xtaegqja6tfwk76ez",
+      "title": "[Quest] Add global codex-doctor health check wrapper",
+      "description": "Owner: codex\nContext: Built a global workstation health-check wrapper for Quest/Scanline Engine using AGENTS.md and notebooklm-cli rules.\nOutcome: Added canonical script `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.ps1`, helper shim `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.cmd`, and PATH shim `C:\\Users\\Professional\\AppData\\Local\\Programs\\kairo\\codex-doctor.cmd` so `codex-doctor` is globally callable.\nChecks covered: NotebookLM readiness, Kairo executable/database/sync repo/git status, agent_memory MCP binary/database, local RAG data/docs/index, Quest git status, Node/npm, package-lock/node_modules, `npm run typecheck`, `npm test`, plus `-Deep` extras for Kairo sync/lint/build/check:anthropic.\nValidation: `codex-doctor -Fast` passed 17/17; normal `codex-doctor` passed typecheck and full tests (23 files, 255 tests) with one NotebookLM readiness warning because CLI auth is expired.\nSource: chat",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "created_at": "2026-05-06T15:17:46Z",
+      "updated_at": "2026-05-06T15:17:46Z"
+    }
+  ]
+}

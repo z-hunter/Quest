@@ -76,12 +76,12 @@ Contains all remaining object-specific controls not covered above.
 - [x] Reorganize `Entity` / `Actor` / `Static`
 - [x] Reorganize `Quad`
 - [x] Reorganize `Triggerbox`
-- [ ] Keep `Walkbox` layout unchanged
-- [ ] Keep `SETTINGS` layout unchanged
+- [x] Keep `Walkbox` layout unchanged
+- [x] Keep `SETTINGS` layout unchanged
 - [x] Verify build after section restructuring
-- [ ] Manual audit of section contents and navigation behavior
-- [ ] Final visual audit of multi-selection panel
-- [ ] Update any remaining field placement mismatches found during QA
+- [x] Manual audit of section contents and navigation behavior
+- [x] Final visual audit of multi-selection panel
+- [x] Update any remaining field placement mismatches found during QA
 
 ## Current Status
 

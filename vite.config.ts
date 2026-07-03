@@ -231,6 +231,87 @@ export default defineConfig({
             next();
           }
         });
+
+        server.middlewares.use('/api/llm', (req, res, next) => {
+          if (req.method !== 'POST') {
+            next();
+            return;
+          }
+
+          const apiKey = process.env.ANTHROPIC_API_KEY;
+          if (!apiKey) {
+            res.statusCode = 503;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }));
+            return;
+          }
+
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk.toString();
+          });
+          req.on('end', async () => {
+            try {
+              const payload = JSON.parse(body) as {
+                model?: string;
+                max_tokens?: number;
+                system?: unknown;
+                messages?: unknown[];
+                stream?: boolean;
+              };
+              const isStream = payload.stream === true;
+
+              const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': apiKey,
+                  'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                  model: payload.model || 'claude-haiku-4-5-20251001',
+                  max_tokens: payload.max_tokens || 1024,
+                  system: payload.system || '',
+                  messages: payload.messages || [],
+                  stream: isStream,
+                }),
+              });
+
+              if (isStream && response.ok && response.body) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    res.write(decoder.decode(value, { stream: true }));
+                  }
+                  res.write(decoder.decode());
+                } catch (streamErr) {
+                  console.error('[Vite] LLM stream error:', streamErr);
+                } finally {
+                  res.end();
+                }
+                return;
+              }
+
+              const data = await response.text();
+              res.statusCode = response.status;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(data);
+            } catch (err) {
+              console.error('[Vite] LLM proxy error:', err);
+              res.statusCode = 502;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: String(err) }));
+            }
+          });
+        });
       },
     },
   ],

@@ -1,6 +1,6 @@
 # Parser Smoke Checks
 
-These checks are intended for quick manual regression testing of the current parser stack in `Scanline`, before the future LLM cascade exists.
+These checks are intended for quick manual regression testing of the current parser stack in `Scanline`, including the opt-in Stage 2 LLM cascade.
 
 Run them in a scene that contains at least:
 - one visible object with `title`
@@ -21,7 +21,54 @@ Expected:
 - parser accepts commands normally
 - `#PEEK` shows `context`, `scope`, `envelope`, `core`, `result`
 
-## Stage Toggles
+## LLM Cascade Smoke
+
+These checks are opt-in and require the Vite dev server. They should not be part of normal autotests.
+
+Before live LLM checks, verify the API key from the same shell that will run Vite:
+
+```powershell
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+npm run check:anthropic
+npm run dev
+```
+
+1. Ensure lower layers are enabled:
+   - `#STAGE1-ON`
+   - `#STAGE2-ON`
+2. Enable LLM and debug:
+   - `#LLM-ON`
+   - `#PEEK-ON`
+3. Enter a command the lower layers should not resolve, for example:
+   - `hello`
+   - `look logotype`
+4. Disable LLM:
+   - `#LLM-OFF`
+
+Expected:
+- normal mode shows only a live `...` thinking line plus the final game response or fallback
+- with `#PEEK-ON`, output includes an `LLM` block with provider/model/duration/rawResponse/extractedJson/actions/error data
+- without `ANTHROPIC_API_KEY`, the game falls back safely and the LLM debug block reports the provider/proxy error
+- with `ANTHROPIC_API_KEY`, conversational input can return a short in-world response and semantic aliases can return a safe DSL action
+- standard commands that reach `Game API` and produce `status: "escalate"` can get one post-API LLM retry
+- after `#LLM-OFF`, unresolved commands return to the lower-cascade fallback behavior
+
+Optional Cascade 1 bypass test:
+
+1. Enable forced LLM handoff after Cascade 1:
+   - `#C1-OFF`
+2. Enter a command Cascade 1 normally understands:
+   - `LOOK IN WINDOW`
+3. Restore normal execution:
+   - `#C1-ON`
+
+Expected:
+- Cascade 1 still builds its normal envelope for debug/reference
+- parser sends that lower-cascade interpretation to the LLM instead of executing it directly
+- LLM may return a richer `final_response` / `showText`, or may return the same safe action plan if it judges that best
+- `#PEEK-ON` shows an LLM block for the command
+
+## Lower Stage Toggles
 
 1. Disable stage 1:
    - `#STAGE1-OFF`
@@ -36,8 +83,9 @@ Expected:
    - `#STAGE2-ON`
 
 Expected:
-- with `#STAGE1-OFF`, stage 1 bypasses and stage 2 can still parse
+- with `#STAGE1-OFF`, stage 1 bypasses and the NLP stage can still parse
 - with `#STAGE2-OFF`, stage 1 handoff does not reach NLP
+- `#STAGE2` is the legacy console name for the NLP stage; the LLM cascade is controlled separately by `#LLM-ON/OFF`
 
 ## Clarification Flow
 

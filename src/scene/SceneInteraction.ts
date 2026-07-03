@@ -1,15 +1,18 @@
 import type { Scene } from './Scene';
 import { SceneObject } from '../entities/SceneObject';
 import { Triggerbox } from '../entities/Triggerbox';
+import { Actor } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
+import { getSceneTextLayerAccessState } from './SceneTextLayer';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
 function getScreenSize(scene: Scene): { width: number; height: number } {
   const canvas = scene.game?.canvas;
   return {
-    width: canvas?.width || 420,
-    height: canvas?.height || 300,
+    width: canvas?.width || GAME_DESIGN_WIDTH,
+    height: canvas?.height || GAME_DESIGN_HEIGHT,
   };
 }
 
@@ -57,19 +60,55 @@ function isHitAtScreenPoint(
 
   if ('x' in obj && 'y' in obj) {
     const entity = obj as any;
-    const p = entity.parallax !== undefined ? entity.parallax : 1.0;
     const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
     const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
-    const worldX = (screenX - halfW) / zoom + camX * p - vOx;
-    const worldY = (screenY - halfH) / zoom + camY * p - vOy;
+    const worldX = (screenX - halfW) / zoom + camX - vOx;
+    const worldY = (screenY - halfH) / zoom + camY - vOy;
     return obj.hitTest(worldX, worldY);
   }
 
   const worldPos = {
-    x: (screenX - halfW) / zoom + camX * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
-    y: (screenY - halfH) / zoom + camY * (((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0)),
+    x:
+      (screenX - halfW) / zoom +
+      camX * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+    y:
+      (screenY - halfH) / zoom +
+      camY * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
   };
   return obj.hitTest(worldPos.x, worldPos.y);
+}
+
+function containsScreenPoint(
+  scene: Scene,
+  obj: SceneObject,
+  screenX: number,
+  screenY: number
+): boolean {
+  const { width: screenW, height: screenH } = getScreenSize(scene);
+  const halfW = screenW / 2;
+  const halfH = screenH / 2;
+  const camX = scene.camera.x;
+  const camY = scene.camera.y;
+  const zoom = scene.camera.zoom;
+
+  if ('x' in obj && 'y' in obj) {
+    const entity = obj as any;
+    const vOx = entity.visualOffset ? entity.visualOffset.x : 0;
+    const vOy = entity.visualOffset ? entity.visualOffset.y : 0;
+    const worldX = (screenX - halfW) / zoom + camX - vOx;
+    const worldY = (screenY - halfH) / zoom + camY - vOy;
+    return obj.containsPoint(worldX, worldY);
+  }
+
+  const worldPos = {
+    x:
+      (screenX - halfW) / zoom +
+      camX * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+    y:
+      (screenY - halfH) / zoom +
+      camY * ((obj as any).parallax !== undefined ? (obj as any).parallax : 1.0),
+  };
+  return obj.containsPoint(worldPos.x, worldPos.y);
 }
 
 function getClickableTypePriority(obj: SceneObject): number {
@@ -121,6 +160,20 @@ function findTopHitInCandidates(
   return null;
 }
 
+function isContainedInCandidates(
+  scene: Scene,
+  candidates: SceneObject[],
+  screenX: number,
+  screenY: number
+): boolean {
+  for (const candidate of sortClickableCandidates(candidates)) {
+    if (containsScreenPoint(scene, candidate, screenX, screenY)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
   const subtrigger = obj.components?.find((c: any) => c?.type === 'Subtrigger') as
     | { target?: string }
@@ -135,7 +188,7 @@ function resolveSubtriggerTarget(scene: Scene, obj: SceneObject): SceneObject {
 
 function canActivateOnClick(obj: SceneObject): boolean {
   if (obj instanceof Triggerbox && obj.script) return true;
-  if (obj.interactions && Object.keys(obj.interactions).length > 0) return true;
+  if (ComponentSystem.hasClickInteractionKeys(obj)) return true;
   if (!obj.components || obj.components.length === 0) return false;
 
   return obj.components.some((component: any) =>
@@ -145,6 +198,10 @@ function canActivateOnClick(obj: SceneObject): boolean {
 
 function hasClickOutput(scene: Scene, obj: SceneObject): boolean {
   const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  if (accessState.hiddenReason === 'examinable') {
+    return false;
+  }
   const seeMessage = scene.game.getSeeMessage(titleOwner);
   if (seeMessage) return true;
 
@@ -152,8 +209,57 @@ function hasClickOutput(scene: Scene, obj: SceneObject): boolean {
   return !!(title && title.trim());
 }
 
+function revealLookableByClick(scene: Scene, obj: SceneObject): void {
+  const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  if (accessState.hiddenReason === 'lookable') {
+    scene.revealHiddenEntity(titleOwner);
+  }
+}
+
+function shouldSuppressTitleByHiddenState(scene: Scene, obj: SceneObject): boolean {
+  const titleOwner = resolveSubtriggerTarget(scene, obj);
+  const accessState = getSceneTextLayerAccessState(scene, scene.game, titleOwner);
+  return accessState.hiddenReason === 'examinable';
+}
+
+function movePlayerToClick(scene: Scene, x: number, y: number): void {
+  if (!scene.player) return;
+
+  const visualTarget = toWorld(scene, x, y);
+  if (typeof (scene.player as any).moveToVisual === 'function') {
+    (scene.player as any).moveToVisual(visualTarget.x, visualTarget.y);
+  } else if (typeof scene.player.walkTo === 'function') {
+    const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+    const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+    scene.player.walkTo(playerTarget.x, playerTarget.y);
+  } else if (typeof scene.player.moveTo === 'function') {
+    const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
+    const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
+    scene.player.moveTo(playerTarget.x, playerTarget.y);
+  }
+}
+
 function hasMeaningfulClickResult(scene: Scene, obj: SceneObject): boolean {
   return hasClickOutput(scene, obj) || canActivateOnClick(obj);
+}
+
+function isTechnicalStorageSurface(scene: Scene, obj: SceneObject): boolean {
+  const hasSurface = obj.components?.some((component: any) => component?.type === 'Surface');
+  if (!hasSurface) return false;
+  if (hasMeaningfulClickResult(scene, obj)) return false;
+
+  const nonSurfaceComponents =
+    obj.components?.filter((component: any) => component?.type !== 'Surface') || [];
+  if (nonSurfaceComponents.length > 0) return false;
+
+  return true;
+}
+
+function getSubsceneClickCandidates(scene: Scene): SceneObject[] {
+  return Array.from(scene.subsceneEntities).filter(
+    (obj) => !obj.disabled && obj.visible && !isTechnicalStorageSurface(scene, obj)
+  );
 }
 
 function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | null {
@@ -176,7 +282,7 @@ function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | 
   }
 
   const isScriptTrigger = obj instanceof Triggerbox && obj.script && obj.script.length > 0;
-  const hasInteractions = !!(obj.interactions && Object.keys(obj.interactions).length > 0);
+  const hasInteractions = ComponentSystem.hasClickInteractionKeys(obj);
   if (isScriptTrigger || hasInteractions) {
     return 'hand';
   }
@@ -195,27 +301,6 @@ function findTopLayerHitCandidatesAtScreenPoint(
 
   for (const candidate of sortClickableCandidates(candidates)) {
     if (!isHitAtScreenPoint(scene, candidate, screenX, screenY)) continue;
-    const candidateLayer = candidate.layer || 0;
-    if (topLayer === null) {
-      topLayer = candidateLayer;
-    }
-    if (candidateLayer !== topLayer) break;
-    hits.push(candidate);
-  }
-
-  return hits;
-}
-
-function findTopLayerHitCandidatesAtWorldPoint(
-  candidates: SceneObject[],
-  worldX: number,
-  worldY: number
-): SceneObject[] {
-  const hits: SceneObject[] = [];
-  let topLayer: number | null = null;
-
-  for (const candidate of sortClickableCandidates(candidates)) {
-    if (!candidate.hitTest(worldX, worldY)) continue;
     const candidateLayer = candidate.layer || 0;
     if (topLayer === null) {
       topLayer = candidateLayer;
@@ -248,14 +333,12 @@ export function getHoverCursorAtScreenPoint(
   screenY: number
 ): HoverCursor | null {
   if (scene.activeSubscene) {
-    const world = toWorld(scene, screenX, screenY);
-    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
-    );
-    const topLayerHits = findTopLayerHitCandidatesAtWorldPoint(
+    const subsceneCandidates = getSubsceneClickCandidates(scene);
+    const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
+      scene,
       subsceneCandidates,
-      world.x,
-      world.y
+      screenX,
+      screenY
     );
     for (const obj of topLayerHits) {
       const hoverCursor = getHoverCursorForObject(scene, obj);
@@ -263,7 +346,7 @@ export function getHoverCursorAtScreenPoint(
         return hoverCursor;
       }
     }
-    return topLayerHits.length > 0 ? null : 'back';
+    return isContainedInCandidates(scene, subsceneCandidates, screenX, screenY) ? null : 'back';
   }
 
   const topLayerHits = findTopLayerHitCandidatesAtScreenPoint(
@@ -281,13 +364,18 @@ export function getHoverCursorAtScreenPoint(
   return null;
 }
 
-export function activateSceneObject(scene: Scene, obj: SceneObject, depth: number = 0): boolean {
+export function activateSceneObject(
+  scene: Scene,
+  obj: SceneObject,
+  depth: number = 0,
+  activator?: Actor
+): boolean {
   if (depth > 5) {
     console.warn('[Scene] Recursion limit reached.');
     return false;
   }
 
-  if (ComponentSystem.handleActivation(obj, scene, depth)) {
+  if (ComponentSystem.handleActivation(obj, scene, depth, activator)) {
     return true;
   }
 
@@ -300,24 +388,28 @@ export function activateSceneObject(scene: Scene, obj: SceneObject, depth: numbe
 }
 
 export function handleSceneClick(scene: Scene, x: number, y: number): void {
-  const world = toWorld(scene, x, y);
-
   if (scene.activeSubscene) {
-    const subsceneCandidates = Array.from(scene.subsceneEntities).filter(
-      (obj) => !obj.disabled && obj.visible
-    );
-    const subsceneHitCandidates = findTopLayerHitCandidatesAtWorldPoint(
+    const subsceneCandidates = getSubsceneClickCandidates(scene);
+    const subsceneHitCandidates = findTopLayerHitCandidatesAtScreenPoint(
+      scene,
       subsceneCandidates,
-      world.x,
-      world.y
+      x,
+      y
     );
-    const subsceneHit =
+    const subsceneHitRaw =
       subsceneHitCandidates.find((obj) => hasMeaningfulClickResult(scene, obj)) || null;
 
-    if (subsceneHit) {
-      const titleOwner = resolveSubtriggerTarget(scene, subsceneHit);
-      const seeMessage = scene.game.getSeeMessage(titleOwner);
-      const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+    if (subsceneHitRaw) {
+      const subsceneHit = resolveSubtriggerTarget(scene, subsceneHitRaw);
+      if (subsceneHit.type === 'Walkbox') {
+        movePlayerToClick(scene, x, y);
+        return;
+      }
+      revealLookableByClick(scene, subsceneHit);
+      const seeMessage = scene.game.getSeeMessage(subsceneHit);
+      const title = shouldSuppressTitleByHiddenState(scene, subsceneHit)
+        ? null
+        : scene.game.textAssets.getResolvedObjectField(subsceneHit, 'title');
       if (seeMessage) {
         scene.game.log(seeMessage);
       } else if (title && title.trim()) {
@@ -327,7 +419,10 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
       return;
     }
 
-    if (subsceneHitCandidates.length > 0) {
+    if (
+      subsceneHitCandidates.length > 0 ||
+      isContainedInCandidates(scene, subsceneCandidates, x, y)
+    ) {
       return;
     }
 
@@ -335,12 +430,19 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     return;
   }
 
-  const hitObj = findBestMeaningfulHit(scene, getSortedClickableCandidates(scene), x, y);
+  const rawHitObj = findBestMeaningfulHit(scene, getSortedClickableCandidates(scene), x, y);
 
-  if (hitObj) {
-    const titleOwner = resolveSubtriggerTarget(scene, hitObj);
-    const seeMessage = scene.game.getSeeMessage(titleOwner);
-    const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+  if (rawHitObj) {
+    const hitObj = resolveSubtriggerTarget(scene, rawHitObj);
+    if (hitObj.type === 'Walkbox') {
+      movePlayerToClick(scene, x, y);
+      return;
+    }
+    revealLookableByClick(scene, hitObj);
+    const seeMessage = scene.game.getSeeMessage(hitObj);
+    const title = shouldSuppressTitleByHiddenState(scene, hitObj)
+      ? null
+      : scene.game.textAssets.getResolvedObjectField(hitObj, 'title');
     const activated = activateSceneObject(scene, hitObj);
 
     if (seeMessage) {
@@ -358,11 +460,14 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     }
   }
 
-  const visibleHitObj = findVisibleHitObject(scene, x, y);
-  if (visibleHitObj) {
-    const titleOwner = resolveSubtriggerTarget(scene, visibleHitObj);
-    const seeMessage = scene.game.getSeeMessage(titleOwner);
-    const title = scene.game.textAssets.getResolvedObjectField(titleOwner, 'title');
+  const rawVisibleHitObj = findVisibleHitObject(scene, x, y);
+  if (rawVisibleHitObj) {
+    const visibleHitObj = resolveSubtriggerTarget(scene, rawVisibleHitObj);
+    revealLookableByClick(scene, visibleHitObj);
+    const seeMessage = scene.game.getSeeMessage(visibleHitObj);
+    const title = shouldSuppressTitleByHiddenState(scene, visibleHitObj)
+      ? null
+      : scene.game.textAssets.getResolvedObjectField(visibleHitObj, 'title');
     if (seeMessage) {
       scene.game.log(seeMessage);
       return;
@@ -374,17 +479,6 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
   }
 
   if (scene.player) {
-    const visualTarget = toWorld(scene, x, y);
-    if (typeof (scene.player as any).moveToVisual === 'function') {
-      (scene.player as any).moveToVisual(visualTarget.x, visualTarget.y);
-    } else if (typeof scene.player.walkTo === 'function') {
-      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
-      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
-      scene.player.walkTo(playerTarget.x, playerTarget.y);
-    } else if (typeof scene.player.moveTo === 'function') {
-      const playerParallax = scene.player.parallax !== undefined ? scene.player.parallax : 1.0;
-      const playerTarget = toWorldForParallax(scene, x, y, playerParallax);
-      scene.player.moveTo(playerTarget.x, playerTarget.y);
-    }
+    movePlayerToClick(scene, x, y);
   }
 }

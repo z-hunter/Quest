@@ -60,10 +60,19 @@ export class EditorUndoManager {
 
     // Clear existing
     scene.entities = [];
+    scene.folders = [];
     scene.walkbox = [];
     scene.triggerboxes = [];
     scene.player = null;
     scene.activeSubscene = null;
+
+    if (data.folders) {
+      data.folders.forEach((fData: any) => {
+        this.editor.createObjectFromData({ ...fData, type: 'Folder' }, undefined, undefined, {
+          preserveBindings: true,
+        });
+      });
+    }
 
     // Restore Entities
     if (data.entities) {

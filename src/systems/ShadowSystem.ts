@@ -5,7 +5,7 @@ import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
 
 export interface ShadowComponent {
   type: 'Shadow';
-  id: string;
+  id?: string;
   shadowQuadId: string;
   offsetX: number;
   offsetY: number;
@@ -43,8 +43,14 @@ export class ShadowSystem {
     let inside = false;
 
     for (const t of targets) {
-      if (typeof t.hitTest === 'function') {
+      if (t instanceof QuadObject) {
         const hit = t.hitTest(checkX, checkY);
+        if (hit) {
+          inside = true;
+          break;
+        }
+      } else if (typeof t.containsPoint === 'function') {
+        const hit = t.containsPoint(checkX, checkY);
         if (hit) {
           inside = true;
           break;

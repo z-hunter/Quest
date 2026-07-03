@@ -1,0 +1,123 @@
+import React from 'react';
+import { Game } from '../../core/Game';
+import { Entity } from '../../entities/Entity';
+import { InventoryEntityCanvas } from './InventoryEntityCanvas';
+
+type PlayerInventoryPanelProps = {
+  game: Game;
+};
+
+export const PlayerInventoryPanel: React.FC<PlayerInventoryPanelProps> = ({ game }) => {
+  const [, forceRefresh] = React.useState(0);
+  const [arrivingItems, setArrivingItems] = React.useState<Record<string, number>>({});
+  const arrivalTokenRef = React.useRef(0);
+  const arrivalTimeoutsRef = React.useRef<number[]>([]);
+  const knownInventoryItemsRef = React.useRef<Set<string>>(
+    new Set(game.inventory.filter((entity) => !entity.disabled).map((entity) => entity.name))
+  );
+
+  const syncInventoryArrivals = React.useCallback(() => {
+    const currentItems = game.inventory
+      .filter((entity) => !entity.disabled)
+      .map((entity) => entity.name);
+    const currentItemSet = new Set(currentItems);
+    const newItems = currentItems.filter((name) => !knownInventoryItemsRef.current.has(name));
+    knownInventoryItemsRef.current = currentItemSet;
+
+    if (newItems.length === 0) return;
+
+    const nextTokens = newItems.reduce<Record<string, number>>((tokens, name) => {
+      arrivalTokenRef.current += 1;
+      tokens[name] = arrivalTokenRef.current;
+      return tokens;
+    }, {});
+
+    setArrivingItems((items) => ({ ...items, ...nextTokens }));
+
+    Object.entries(nextTokens).forEach(([name, token]) => {
+      const timeoutId = window.setTimeout(() => {
+        setArrivingItems((items) => {
+          if (items[name] !== token) return items;
+          const { [name]: _removed, ...remainingItems } = items;
+          return remainingItems;
+        });
+      }, 640);
+      arrivalTimeoutsRef.current.push(timeoutId);
+    });
+  }, [game]);
+
+  React.useEffect(() => {
+    return game.subscribeInventoryUi(() => {
+      syncInventoryArrivals();
+      forceRefresh((value) => value + 1);
+    });
+  }, [game, syncInventoryArrivals]);
+
+  React.useEffect(() => {
+    let rafId = 0;
+    let lastSignature = '';
+
+    const tick = () => {
+      const inventorySignature = game.inventory
+        .filter((entity) => !entity.disabled)
+        .map((entity) => entity.name)
+        .join('|');
+      const previewSignature = game.getInventoryPreviewEntity()?.name || '';
+      const nextSignature = `${inventorySignature}::${previewSignature}`;
+      if (nextSignature !== lastSignature) {
+        lastSignature = nextSignature;
+        syncInventoryArrivals();
+        forceRefresh((value) => value + 1);
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    tick();
+    return () => window.cancelAnimationFrame(rafId);
+  }, [game, syncInventoryArrivals]);
+
+  React.useEffect(() => {
+    return () => {
+      arrivalTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      arrivalTimeoutsRef.current = [];
+    };
+  }, []);
+
+  const inventoryItems = [...game.inventory].filter((entity) => !entity.disabled);
+  const previewedItem = game.getInventoryPreviewEntity();
+
+  if (inventoryItems.length === 0) return null;
+
+  return (
+    <aside className="player-inventory-panel">
+      <div className="player-inventory-grid">
+        {inventoryItems.map((item: Entity) => {
+          const title = game.textAssets.getResolvedObjectField(item, 'title') || item.name;
+          const objectDescription = game.textAssets.getResolvedObjectField(item, 'description');
+          const runtimeDescription = typeof item.description === 'string' ? item.description : null;
+          const description = objectDescription || runtimeDescription;
+          const isActive = previewedItem === item;
+          const isArriving = arrivingItems[item.name] !== undefined;
+          return (
+            <button
+              key={item.name}
+              type="button"
+              className={`player-inventory-slot${isActive ? ' is-active' : ''}${
+                isArriving ? ' is-arriving' : ''
+              }`}
+              onClick={() => {
+                game.openInventoryPreview(item, null);
+                if (description && description.trim()) {
+                  game.log(description);
+                }
+              }}
+              title={title}
+            >
+              <InventoryEntityCanvas entity={item} size={60} />
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+};

@@ -7,19 +7,33 @@ import { SpriteEditor } from '../tools/SpriteEditor';
 import { AssetLoader } from './AssetLoader';
 import { Entity } from '../entities/Entity';
 import { SceneObject } from '../entities/SceneObject';
+import { Actor } from '../entities/Actor';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
 import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
+import { SoundManager } from '../systems/SoundManager';
+import { ScriptRegistry } from './ScriptRegistry';
+import { AnthropicProvider } from '../mechanics/llm/AnthropicProvider';
+import { NpcPuppetMaster } from '../mechanics/NpcPuppetMaster';
+import { NpcWorldModelBuilder } from '../mechanics/NpcWorldModelBuilder';
 
 import { Console } from './Console';
-import { ScriptRegistry } from './ScriptRegistry';
-import { ComponentSystem } from '../systems/ComponentSystem';
+import type { SwitchComponent } from '../systems/ComponentSystem';
 
 import type { IGame } from './IGame';
+import { InventoryManager } from '../systems/InventoryManager';
+import { GameSemanticAPI } from '../systems/GameSemanticAPI';
 import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
+import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
+
+type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
+
+export type RelationScopedTakeCandidates =
+  | { status: 'resolved'; candidates: Entity[]; hasStorage: boolean }
+  | GameActionOutcome;
 
 export class Game implements IGame {
   public static instance: Game;
@@ -27,7 +41,7 @@ export class Game implements IGame {
   canvas: HTMLCanvasElement; // UI Canvas
   editorOverlayCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement; // High-Res Display (WebGL)
-  bufferCanvas: HTMLCanvasElement; // 420x300 Buffer (Internal)
+  bufferCanvas: HTMLCanvasElement; // Design-resolution buffer (Internal)
 
   ctx: CanvasRenderingContext2D | null;
   rendererCtx: CanvasRenderingContext2D | null; // For simple 2D upscale if CRT disabled
@@ -37,16 +51,15 @@ export class Game implements IGame {
   crtFilter: CRTFilter | null;
   lastTime: number;
   isRunning: boolean;
-  inventory: Entity[];
 
   playSound(name: string): void {
-    if (this.audio) {
-      this.audio.playSound(name);
-    }
+    SoundManager.getInstance().play(name);
   }
 
   input: Input;
   parser: Parser;
+  npcPuppetMaster: NpcPuppetMaster;
+  npcWorldModelBuilder: NpcWorldModelBuilder;
   sceneManager: SceneManager;
   assets: AssetLoader;
   audio: AudioManager;
@@ -57,6 +70,18 @@ export class Game implements IGame {
   score: number = 0;
   cursorBlink: number = 0;
 
+  /** Manages all inventory/surface storage state and logic. */
+  inventoryManager: InventoryManager;
+  semantic: GameSemanticAPI;
+
+  // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
+  get inventory(): Entity[] {
+    return this.inventoryManager.inventory;
+  }
+  set inventory(value: Entity[]) {
+    this.inventoryManager.inventory = value;
+  }
+
   // FPS Counter
   fps: number = 0;
   frameCount: number = 0;
@@ -65,7 +90,6 @@ export class Game implements IGame {
   // UI State
   public isMouseOverUI: boolean = false;
 
-  // Callbacks for React
   // Callbacks for React
   onSceneChange: ((sceneName: string) => void) | undefined;
   onMessage: ((text: string) => void) | null = null;
@@ -92,6 +116,10 @@ export class Game implements IGame {
     crt: CRTSettings & { enabled: boolean };
     editor: {
       uiScale: number;
+      viewportZoom: EditorViewportZoom;
+    };
+    audio: {
+      attachedVolume: number;
     };
   };
 
@@ -141,8 +169,8 @@ export class Game implements IGame {
 
     // Create an offscreen buffer for the game to draw onto
     this.bufferCanvas = document.createElement('canvas');
-    this.bufferCanvas.width = 420;
-    this.bufferCanvas.height = 300;
+    this.bufferCanvas.width = GAME_DESIGN_WIDTH;
+    this.bufferCanvas.height = GAME_DESIGN_HEIGHT;
     this.ctx = this.bufferCanvas.getContext('2d');
 
     // We won't strictly need 2D context for rendererCanvas if we use WebGL,
@@ -164,6 +192,10 @@ export class Game implements IGame {
       },
       editor: {
         uiScale: 1.0,
+        viewportZoom: 'fit',
+      },
+      audio: {
+        attachedVolume: 1.0,
       },
     };
 
@@ -172,26 +204,36 @@ export class Game implements IGame {
 
     this.lastTime = 0;
     this.isRunning = false;
-    this.inventory = []; // Player inventory
-
-    // Load Settings from LocalStorage
-    this.loadSettings();
 
     // Disable smoothing for pixel art look
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
     if (this.uiCtx) this.uiCtx.imageSmoothingEnabled = false;
     if (this.editorOverlayCtx) this.editorOverlayCtx.imageSmoothingEnabled = true;
 
-    // (Previously corrupted lines removed)
     this.input = new Input(this);
     this.console = new Console(this); // Init Console with Game Reference
+
+    // Load Settings from LocalStorage (after console exists for safe diagnostics elsewhere)
+    this.loadSettings();
+
     this.parser = new Parser(this);
+    this.npcWorldModelBuilder = new NpcWorldModelBuilder(this);
+    this.npcPuppetMaster = new NpcPuppetMaster(this, new AnthropicProvider());
     this.assets = new AssetLoader();
     this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
     void this.textAssets.preloadParserLanguageAssets();
     this.sceneManager = new SceneManager(this);
+
+    // Initialize InventoryManager after sceneManager and textAssets are ready
+    this.inventoryManager = new InventoryManager(
+      this.sceneManager,
+      this.textAssets,
+      this.text.bind(this)
+    );
+    this.semantic = new GameSemanticAPI(this);
+
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {
         __QUEST_DEBUG__?: Record<string, unknown>;
@@ -201,6 +243,13 @@ export class Game implements IGame {
         game: this,
         profileCurrentSceneMemory: () => this.sceneManager.profileCurrentSceneMemory(),
         profileScenes: (sceneIds: string[]) => this.sceneManager.profileScenes(sceneIds),
+        enablePutDebug: () => {
+          this.inventoryManager.enablePutDebug();
+        },
+        disablePutDebug: () => {
+          this.inventoryManager.disablePutDebug();
+        },
+        getScriptRuntimeState: () => ScriptRegistry.getRuntimeState(),
       };
     }
     this.editor = new SceneEditor(this);
@@ -224,12 +273,10 @@ export class Game implements IGame {
 
   stop(): void {
     this.isRunning = false;
-    // Do not destroy here, as stop might be just pause.
   }
 
   destroy(): void {
     this.stop();
-    // Remove global listeners
     if (this.editor) {
       this.editor.destroy();
     }
@@ -253,9 +300,6 @@ export class Game implements IGame {
         this.lastFpsTime = timestamp;
       }
 
-      // Cap delta time to prevent spiraling or fast-forwarding after backgrounding
-      // If the game was in the background, this prevents animations from trying to "catch up"
-      // by playing all missed frames at once.
       if (deltaTime > 100) {
         deltaTime = 100;
       }
@@ -276,8 +320,25 @@ export class Game implements IGame {
     if (this.editor.enabled) {
       this.editor.update(deltaTime);
     }
+    ScriptRegistry.update(deltaTime, this.sceneManager.currentScene?.id);
 
-    // Cursor Logic: Change to contextual cursor if hovering over interactive object in Game Mode
+    if (this.sceneManager.currentScene) {
+      const scene = this.sceneManager.currentScene;
+      SoundManager.getInstance().updateAttachedSounds(
+        scene.camera.x,
+        scene.camera.y,
+        scene.camera.zoom,
+        (id: string) => {
+          const obj = scene.getObjectByName(id) as any;
+          if (obj && obj.x !== undefined && obj.y !== undefined) {
+            return { x: obj.x, y: obj.y, parallax: obj.parallax !== undefined ? obj.parallax : 1 };
+          }
+          return null;
+        }
+      );
+    }
+
+    // Cursor Logic
     if (!this.editor.enabled && this.sceneManager.currentScene) {
       const hoverCursor = this.sceneManager.currentScene.checkHover(
         this.input.mouse.x,
@@ -299,11 +360,10 @@ export class Game implements IGame {
   render(): void {
     // 1. Render Game to Buffer
     if (this.ctx) {
-      // Clear buffer
       this.ctx.fillStyle = '#000';
       this.ctx.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
-      // Draw text BEHIND scene (Watermark)
+      // Watermark
       this.ctx.fillStyle = '#666';
       this.ctx.font = '10px monospace';
       this.ctx.fillText(
@@ -314,7 +374,6 @@ export class Game implements IGame {
 
       this.sceneManager.render(this.ctx);
 
-      // RENDER UI (Status Bar & Command Line) ON TOP OF SCENE (Inside CRT)
       try {
         this.renderUI(this.ctx);
       } catch (uiErr) {
@@ -322,7 +381,7 @@ export class Game implements IGame {
       }
     }
 
-    // 2. Render Buffer to Screen via CRT Filter (or Fallback)
+    // 2. Render Buffer to Screen via CRT Filter
     if (this.crtFilter && this.crtFilter.isValid()) {
       let settings = this.settings.crt;
 
@@ -341,14 +400,21 @@ export class Game implements IGame {
       }
 
       try {
-        this.crtFilter.render(this.bufferCanvas, settings);
+        const designW = GAME_DESIGN_WIDTH;
+        const designH = GAME_DESIGN_HEIGHT;
+        const scaleX = this.rendererCanvas?.width ? this.rendererCanvas.width / designW : 1;
+        const scaleY = this.rendererCanvas?.height ? this.rendererCanvas.height / designH : 1;
+        const effectiveSettings = {
+          ...settings,
+          scanlineCount: (settings.scanlineCount || 0) * scaleY,
+          aberration: (settings.aberration || 0) * scaleX,
+        };
+        this.crtFilter.render(this.bufferCanvas, effectiveSettings);
       } catch (e) {
         console.warn('CRT Filter failed, disabling:', e);
         this.disableCRT();
-        // If it fails, allow fallback next frame
       }
     } else {
-      // Fallback: If WebGL failed
       if (this.uiCtx) {
         this.uiCtx.imageSmoothingEnabled = false;
         this.uiCtx.drawImage(this.bufferCanvas, 0, 0, this.canvas.width, this.canvas.height);
@@ -370,7 +436,6 @@ export class Game implements IGame {
     }
 
     if (this.uiCtx) {
-      // Sprite Editor Overlay (Takes over screen if active)
       if (this.spriteEditor.active) {
         this.spriteEditor.render(this.uiCtx);
       } else if (!this.editorOverlayCtx) {
@@ -406,63 +471,84 @@ export class Game implements IGame {
     this.consoleInput?.focus();
   }
 
+  revealCommandCursor(): void {
+    this.cursorBlink = 0;
+  }
+
   renderUI(ctx: CanvasRenderingContext2D): void {
     const w = this.bufferCanvas.width;
     const h = this.bufferCanvas.height;
-    // Use a fixed height for the closed console area (last 2 lines + input)
-    // 3 lines * 10px = 30px? GDD says "2 last lines ... and under them input".
-    // Let's allocate roughly 3 lines of text height.
     const lineHeight = 10;
-    const consoleHeight = lineHeight * 3 + 4; // 3 lines + padding
+    const isClosedModal = this.console.isClosedModal;
+    const closedDisplayLines = isClosedModal
+      ? this.console.getClosedModalDisplayLines()
+      : this.console.getClosedDisplayLines();
+    const maxModalLines = Math.max(1, Math.floor((h - 4) / lineHeight) - 1);
+    const outputLineCount = isClosedModal
+      ? Math.min(Math.max(closedDisplayLines.length, 1), maxModalLines)
+      : this.console.CLOSED_CONSOLE_VISIBLE_LINES;
+    const continueLineCount = isClosedModal ? 1 : 0;
+    const inputLineCount = isClosedModal ? 0 : 1;
+    const consoleHeight = lineHeight * (outputLineCount + continueLineCount + inputLineCount) + 4;
 
     ctx.font = '10px monospace';
     ctx.textBaseline = 'top';
 
-    // --- CLOSED CONSOLE (Bottom Only) ---
-    // Replacing Status Bar (Top) with nothing as per GDD ("we clean up status bar").
-
-    // Draw Background for Console Area
     const consoleY = h - consoleHeight;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Semi-transparent black backing? Or solid for readability?
-    // GDD: "In closed state... integrated into game picture... drawn on low-res 2d canvas".
-    // Let's use solid black for the bottom strip to ensure text readability.
     ctx.fillStyle = '#000';
     ctx.fillRect(0, consoleY, w, consoleHeight);
 
-    // --- Draw Last 2 Lines of Buffer ---
     ctx.fillStyle = '#fff';
-    const buffer = this.console.buffer;
-    const lastIndex = buffer.length - 1;
+    const visibleOutput = closedDisplayLines.slice(-outputLineCount);
 
-    // Show last 2 lines above input
-    // Line -2
-    if (lastIndex >= 1) {
-      const line = buffer[lastIndex - 1];
-      ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
-      ctx.fillText(line.text, 2, consoleY + 2);
-    }
-    // Line -1
-    if (lastIndex >= 0) {
-      const line = buffer[lastIndex];
-      ctx.fillStyle = line.type === 'command' ? '#aaa' : '#fff';
-      ctx.fillText(line.text, 2, consoleY + 2 + lineHeight);
+    for (let index = 0; index < visibleOutput.length; index += 1) {
+      const line = visibleOutput[index];
+      ctx.fillStyle =
+        line.type === 'command' ? '#aaa' : line.type === 'dialogue' ? '#7dd3fc' : '#fff';
+      ctx.fillText(line.text, 2, consoleY + 2 + lineHeight * index);
     }
 
-    // --- INPUT LINE ---
+    if (isClosedModal) {
+      this.cursorBlink += 16;
+      const cursorVisible = Math.floor(this.cursorBlink / 500) % 2 === 0;
+      const continueText = '[Continue]';
+      const continueX = Math.max(2, w - ctx.measureText(continueText).width - 2);
+      ctx.fillStyle = cursorVisible ? '#fff' : '#777';
+      ctx.fillText(continueText, continueX, consoleY + 2 + lineHeight * outputLineCount);
+      return;
+    }
+
     const inputText = this.consoleInput ? this.consoleInput.value : '';
     const isFocused = document.activeElement === this.consoleInput;
+    const caretIndex =
+      this.consoleInput && typeof this.consoleInput.selectionStart === 'number'
+        ? Math.max(
+            0,
+            Math.min(this.consoleInput.selectionStart ?? inputText.length, inputText.length)
+          )
+        : inputText.length;
 
-    // Cursor Blink (Only if focused)
-    let cursor = '';
+    let cursorVisible = false;
     if (isFocused) {
-      this.cursorBlink += 16; // Approx ms per frame
-      if (Math.floor(this.cursorBlink / 500) % 2 === 0) {
-        cursor = '_';
-      }
+      this.cursorBlink += 16;
+      cursorVisible = Math.floor(this.cursorBlink / 500) % 2 === 0;
     }
 
+    const inputX = 2;
+    const inputY = consoleY + 2 + lineHeight * outputLineCount;
+    const promptText = `> ${inputText}`;
     ctx.fillStyle = '#fff';
-    ctx.fillText(`> ${inputText}${cursor}`, 2, consoleY + 2 + lineHeight * 2);
+    ctx.fillText(promptText, inputX, inputY);
+
+    if (cursorVisible) {
+      const beforeCaretText = `> ${inputText.slice(0, caretIndex)}`;
+      const cursorChar = inputText[caretIndex] || ' ';
+      const cursorX = inputX + ctx.measureText(beforeCaretText).width;
+      const cursorWidth = Math.max(1, ctx.measureText(cursorChar).width);
+      ctx.fillRect(cursorX, inputY, cursorWidth, lineHeight);
+      ctx.fillStyle = '#000';
+      ctx.fillText(cursorChar, cursorX, inputY);
+    }
   }
 
   disableCRT(): void {
@@ -470,17 +556,16 @@ export class Game implements IGame {
   }
 
   onMouseClick(x: number, y: number): void {
-    // Only focus parser if editor is NOT enabled
-    if (!this.editor.enabled) {
-      this.focusCommandInput();
-    }
-
-    // If editor consumes the click, don't pass to game
-    if (this.editor.onClick(x, y)) {
+    if (this.console.continueClosedModal()) {
       return;
     }
 
-    // Forward click to current scene
+    if (!this.editor.enabled) {
+      this.focusCommandInput();
+    }
+    if (this.editor.onClick(x, y)) {
+      return;
+    }
     if (this.sceneManager.currentScene) {
       this.sceneManager.currentScene.onClick(x, y);
     }
@@ -492,382 +577,313 @@ export class Game implements IGame {
     this.console.log(text);
   }
 
+  logResponse(messages: string[]): void {
+    if (typeof this.console?.logResponse !== 'function') {
+      for (const message of messages) {
+        this.log(message);
+      }
+      return;
+    }
+
+    for (const message of messages) {
+      console.log(`[GAME LOG] ${message}`);
+    }
+    this.console.logResponse(messages);
+  }
+
+  async submitGameplayInput(input: string): Promise<void> {
+    const preprocessed = this.console.preprocessGameplayInput(input);
+    if (!preprocessed) return;
+
+    if (this.isSayInput(preprocessed)) {
+      this.console.addHistory(preprocessed);
+      await this.sayAsPlayer(this.extractSayText(preprocessed));
+      return;
+    }
+
+    this.console.log(preprocessed, 'command');
+    this.console.addHistory(preprocessed);
+    await this.parser.parse(preprocessed);
+  }
+
+  async sayAsPlayer(text: string): Promise<void> {
+    const scene = this.sceneManager.currentScene;
+    const player = scene?.player;
+    if (!scene || !player) return;
+    const speech = text.trim();
+    if (!speech) return;
+
+    const actorTitle = this.getActorDialogueName(player);
+    const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, player.name);
+    this.console.log(`You: ${speech}`, 'dialogue');
+    if (knownByNpcIds.length) {
+      scene.sceneLog.appendSpeech({
+        actorId: player.name,
+        displayName: actorTitle,
+        text: speech,
+        knownByNpcIds,
+      });
+      await this.npcPuppetMaster.processScene(scene);
+    }
+  }
+
+  sayAsActor(actor: Actor, text: string, options: { triggerPuppetMaster?: boolean } = {}): void {
+    const scene = this.sceneManager.currentScene;
+    const speech = text.trim();
+    if (!scene || !speech) return;
+    const displayName = this.getActorDialogueName(actor);
+    const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, actor.name);
+    this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    scene.sceneLog.appendSpeech({
+      actorId: actor.name,
+      displayName,
+      text: speech,
+      knownByNpcIds,
+    });
+    if (options.triggerPuppetMaster && knownByNpcIds.length) {
+      void this.npcPuppetMaster.processScene(scene);
+    }
+  }
+
+  private isSayInput(input: string): boolean {
+    return /^\s*-\s*\S/.test(input) || /^\s*SAY(?:\s+|$)/i.test(input);
+  }
+
+  private extractSayText(input: string): string {
+    if (/^\s*-/.test(input)) return input.replace(/^\s*-\s*/, '').trim();
+    return input.replace(/^\s*SAY\s*/i, '').trim();
+  }
+
+  private getActorDialogueName(actor: Actor): string {
+    return this.textAssets.getResolvedObjectField(actor, 'title')?.trim() || actor.name;
+  }
+
   text(key: string, params?: Record<string, string | number>): string {
     return this.textAssets.getServiceText(key, params);
   }
 
-  private getPlayerFacingObjectTitle(target: SceneObject): string | null {
-    const title = this.textAssets.getResolvedObjectField(target as any, 'title');
-    return title && title.trim() ? title.trim() : null;
+  // ─── Inventory UI / Preview delegates ───────────────────────────────────
+
+  subscribeInventoryUi(listener: () => void): () => void {
+    return this.inventoryManager.subscribeInventoryUi(listener);
   }
 
-  private getRelationDisplayText(relation: SpatialRelationType): string {
-    switch (relation) {
-      case 'in':
-        return 'in';
-      case 'on':
-        return 'on';
-      case 'under':
-        return 'under';
-      case 'behind':
-        return 'behind';
-      default:
-        return relation;
+  getInventoryPreviewEntity(): Entity | null {
+    return this.inventoryManager.getInventoryPreviewEntity();
+  }
+
+  getInventoryPreviewText(): string | null {
+    return this.inventoryManager.getInventoryPreviewText();
+  }
+
+  openInventoryPreview(entity: Entity, previewText?: string | null): void {
+    this.inventoryManager.openInventoryPreview(entity, previewText);
+  }
+
+  closeInventoryPreview(): void {
+    this.inventoryManager.closeInventoryPreview();
+  }
+
+  isEntityInInventory(entity: Entity): boolean {
+    return this.inventoryManager.isEntityInInventory(entity);
+  }
+
+  closeFocusedView(): GameActionOutcome {
+    const previewEntity = this.getInventoryPreviewEntity();
+    if (previewEntity) {
+      this.closeInventoryPreview();
+      return {
+        status: 'ok',
+        code: 'inventory_preview_closed',
+        data: { entityId: previewEntity.name },
+        effects: ['inventory_preview_closed'],
+      };
     }
-  }
 
-  private capitalize(value: string): string {
-    return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
-  }
-
-  private formatTitleList(items: string[]): string {
-    if (items.length <= 1) return items[0] || '';
-    if (items.length === 2) return `${items[0]} and ${items[1]}`;
-    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-  }
-
-  private getSpatialParentMessage(target: SceneObject): string | null {
     const scene = this.sceneManager.currentScene;
-    if (!scene) return null;
+    if (scene?.activeSubscene) {
+      const subsceneId = scene.activeSubscene;
+      scene.activeSubscene = null;
+      return {
+        status: 'ok',
+        code: 'subscene_closed',
+        data: { subsceneId },
+        effects: ['subscene_closed'],
+      };
+    }
 
-    const placement = scene.getSpatialPlacementForObject(target);
-    if (!placement?.parentNodeId || !placement.relation) return null;
+    return {
+      status: 'escalate',
+      code: 'no_active_view_to_close',
+      recoverable: true,
+    };
+  }
 
-    const itemTitle = this.getPlayerFacingObjectTitle(target);
-    const parentNode = scene.getSpatialNode(placement.parentNodeId);
-    const parentTitle = parentNode?.title?.trim() || null;
-    if (!itemTitle || !parentTitle) return null;
-
-    return this.text('parser.relation_contents', {
-      Relation: this.capitalize(this.getRelationDisplayText(placement.relation)),
-      relation: this.getRelationDisplayText(placement.relation),
-      target: parentTitle,
-      items: itemTitle,
-    });
+  getSurfacePutMessage(
+    surface: SceneObject,
+    item: Entity,
+    relation: SpatialRelationType | null,
+    target?: SceneObject | null
+  ): string {
+    return this.semantic.getSurfacePutMessage(surface, item, relation, target);
   }
 
   getSeeMessage(target: SceneObject): string | null {
-    return this.getSpatialParentMessage(target) || null;
+    return this.semantic.getSeeMessage(target);
   }
 
-  private isEntityInInventory(entity: Entity): boolean {
-    return this.inventory.includes(entity);
+  // ─── Inventory / Surface storage delegates ───────────────────────────────
+
+  getAccessibleInventoryItems(): Entity[] {
+    return this.inventoryManager.getAccessibleInventoryItems(
+      this.semantic.getBlockedAccessOutcome.bind(this.semantic)
+    );
   }
 
-  private canExamineObject(entity: SceneObject): GameActionOutcome | null {
-    if (entity instanceof Entity && this.isEntityInInventory(entity)) return null;
+  getInventoryEntities(
+    owner: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'in'
+  ): Entity[] {
+    return this.inventoryManager.getInventoryEntities(owner, relation);
+  }
 
-    const scene = this.sceneManager.currentScene;
-    if (!scene) {
-      return {
-        status: 'failed',
-        code: 'no_current_scene',
-        message: this.text('parser.parse_unknown'),
-        recoverable: false,
-      };
-    }
+  getSurfaceEntities(
+    surface: SceneObject,
+    relation: Exclude<SpatialRelationType, 'near'> = 'on'
+  ): Entity[] {
+    return this.inventoryManager.getSurfaceEntities(surface, relation);
+  }
 
-    if (scene.activeSubscene && scene.subsceneEntities.has(entity as any)) {
-      return null;
-    }
+  hasInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'in'
+  ): boolean {
+    return this.inventoryManager.hasInventoryEntity(owner, entity, relation);
+  }
 
-    const distanceError = ComponentSystem.getInteractionDistanceError(entity as any, scene.player);
-    if (distanceError) {
-      return {
-        status: 'failed',
-        code: 'too_far_to_examine',
-        message: distanceError,
-        data: { entityId: entity.name },
-        recoverable: true,
-      };
-    }
+  addInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'in'
+  ): GameActionOutcome {
+    return this.inventoryManager.addInventoryEntity(owner, entity, relation);
+  }
 
-    return null;
+  removeEntityFromInventory(
+    owner: Entity,
+    entity: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'in'
+  ): GameActionOutcome {
+    return this.inventoryManager.removeEntityFromInventory(owner, entity, relation);
+  }
+
+  addEntityToSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'on',
+    options: { preferPlayerPoint?: boolean; preferredPoint?: { x: number; y: number } } = {}
+  ): GameActionOutcome {
+    return this.inventoryManager.addEntityToSurface(
+      surface,
+      entity,
+      relation,
+      this.getSwitchComponent.bind(this),
+      options
+    );
+  }
+
+  removeEntityFromSurface(
+    surface: SceneObject,
+    entity: Entity,
+    relation: Exclude<SpatialRelationType, 'near'> = 'on'
+  ): GameActionOutcome {
+    return this.inventoryManager.removeEntityFromSurface(surface, entity, relation);
+  }
+
+  getSwitchComponent(entity: SceneObject): SwitchComponent | null {
+    const component = entity.components?.find((candidate: any) => candidate?.type === 'Switch');
+    return (component as SwitchComponent | undefined) || null;
+  }
+
+  // --- Core Semantic API delegates ---
+
+  getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null {
+    return this.semantic.getBlockedAccessOutcome(entity);
   }
 
   lookScene(scene?: Scene | null): GameActionOutcome {
-    const targetScene = scene || this.sceneManager.currentScene;
-    if (!targetScene) {
-      return {
-        status: 'failed',
-        code: 'no_current_scene',
-        message: this.text('parser.parse_unknown'),
-        recoverable: false,
-      };
-    }
-
-    const sceneDescription =
-      this.textAssets.getResolvedSceneField(targetScene, 'description') ||
-      targetScene.description ||
-      this.text('parser.look_default_scene', { scene: targetScene.name });
-    // Intentionally disabled for now:
-    // const directItems = this.getDirectSceneLookItems(targetScene);
-    // const contentsMessage = directItems.length
-    //   ? this.text('parser.look_scene_contents', {
-    //       items: this.formatTitleList(directItems),
-    //     })
-    //   : '';
-    return {
-      status: 'ok',
-      code: 'scene_description',
-      message: sceneDescription,
-      data: { targetType: 'scene', sceneId: targetScene.id },
-    };
+    return this.semantic.lookScene(scene);
   }
 
   lookEntity(entity: SceneObject): GameActionOutcome {
-    const interactionId =
-      entity.interactions && (entity.interactions.look || entity.interactions.LOOK);
-    if (interactionId) {
-      ScriptRegistry.execute(interactionId, { game: this, entity });
-      return {
-        status: 'ok',
-        code: 'delegated_script',
-        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
-        effects: ['script_executed'],
-      };
-    }
-
-    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
-    const runtimeDescription =
-      typeof (entity as any).description === 'string' ? (entity as any).description : null;
-    const description = objectDescription || runtimeDescription;
-    if (description && description.trim()) {
-      return {
-        status: 'ok',
-        code: 'entity_description',
-        message: description,
-        data: { targetType: 'entity', entityId: entity.name },
-      };
-    }
-
-    const targetTitle = this.getPlayerFacingObjectTitle(entity);
-    if (targetTitle) {
-      const genericMessage = this.text('parser.look_default_object', { target: targetTitle });
-      return {
-        status: 'ok',
-        code: 'entity_generic_description',
-        message: genericMessage,
-        data: { targetType: 'entity', entityId: entity.name },
-      };
-    }
-
-    return {
-      status: 'escalate',
-      code: 'missing_description',
-      data: { targetType: 'entity', entityId: entity.name },
-      recoverable: true,
-    };
+    return this.semantic.lookEntity(entity);
   }
 
   examineEntity(entity: SceneObject): GameActionOutcome {
-    const accessError = this.canExamineObject(entity);
-    if (accessError) return accessError;
-
-    const subsceneComponent = entity.components?.find(
-      (component: any) => component?.type === 'Subscene'
-    );
-    if (subsceneComponent && this.sceneManager.currentScene) {
-      this.sceneManager.currentScene.activateObject(entity);
-      const seeMessage = this.getSeeMessage(entity);
-      const targetTitle = this.getPlayerFacingObjectTitle(entity);
-      return {
-        status: 'ok',
-        code: 'subscene_activated',
-        ...(seeMessage
-          ? { message: seeMessage }
-          : targetTitle
-            ? { message: this.text('engine.click_you_see', { title: targetTitle }) }
-            : {}),
-        data: { targetType: 'entity', entityId: entity.name },
-        effects: ['subscene_opened'],
-      };
-    }
-
-    const interactionId =
-      entity.interactions &&
-      (entity.interactions.examine ||
-        entity.interactions.EXAMINE ||
-        entity.interactions.inspect ||
-        entity.interactions.INSPECT ||
-        entity.interactions.check ||
-        entity.interactions.CHECK);
-    if (interactionId) {
-      ScriptRegistry.execute(interactionId, { game: this, entity });
-      return {
-        status: 'ok',
-        code: 'delegated_script',
-        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
-        effects: ['script_executed'],
-      };
-    }
-
-    const details = this.textAssets.getResolvedObjectField(entity, 'details');
-    if (details && details.trim()) {
-      return {
-        status: 'ok',
-        code: 'entity_details',
-        message: details,
-        data: { targetType: 'entity', entityId: entity.name },
-      };
-    }
-
-    const objectDescription = this.textAssets.getResolvedObjectField(entity, 'description');
-    const runtimeDescription =
-      typeof (entity as any).description === 'string' ? (entity as any).description : null;
-    const description = objectDescription || runtimeDescription;
-    if (description && description.trim()) {
-      return {
-        status: 'ok',
-        code: 'entity_description_fallback',
-        message: description,
-        data: { targetType: 'entity', entityId: entity.name },
-      };
-    }
-
-    return {
-      status: 'escalate',
-      code: 'missing_details',
-      data: { targetType: 'entity', entityId: entity.name },
-      recoverable: true,
-    };
+    return this.semantic.examineEntity(entity);
   }
 
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome {
-    const scene = this.sceneManager.currentScene;
-    if (!scene) {
-      return {
-        status: 'failed',
-        code: 'no_current_scene',
-        message: this.text('parser.parse_unknown'),
-        recoverable: false,
-      };
-    }
+    return this.semantic.describeSpatialRelation(anchorNodeId, relation);
+  }
 
-    const anchorNode = scene.getSpatialNode(anchorNodeId);
-    const anchorObject =
-      scene.entities.find((entity) => entity.name === anchorNodeId) ||
-      scene.triggerboxes.find((triggerbox) => triggerbox.name === anchorNodeId) ||
-      scene.walkbox.find((walkbox) => walkbox.name === anchorNodeId) ||
-      null;
-    const anchorTitle =
-      anchorNode?.title?.trim() ||
-      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject)?.trim() : null) ||
-      null;
-    if (!anchorTitle) {
-      return {
-        status: 'escalate',
-        code: 'spatial_node_missing_title',
-        recoverable: true,
-      };
-    }
+  getRelationScopedTakeCandidates(
+    anchor: SceneObject,
+    relation: SpatialRelationType | 'near'
+  ): RelationScopedTakeCandidates {
+    return this.semantic.getRelationScopedTakeCandidates(anchor, relation);
+  }
 
-    const childTitles = scene
-      .getDirectSpatialChildren(anchorNodeId, relation)
-      .map((child) => this.getPlayerFacingObjectTitle(child))
-      .filter((title): title is string => !!title);
-
-    if (!childTitles.length) {
-      return {
-        status: 'ok',
-        code: 'relation_empty',
-        message: this.text('parser.relation_empty', {
-          relation: this.getRelationDisplayText(relation),
-          target: anchorTitle,
-        }),
-        data: {
-          relation,
-          anchorNodeId,
-        },
-      };
-    }
-
-    return {
-      status: 'ok',
-      code: 'relation_contents',
-      message: this.text('parser.relation_contents', {
-        Relation: this.capitalize(this.getRelationDisplayText(relation)),
-        relation: this.getRelationDisplayText(relation),
-        target: anchorTitle,
-        items: this.formatTitleList(childTitles),
-      }),
-      data: {
-        relation,
-        anchorNodeId,
-      },
-    };
+  isEntityInPutTarget(
+    source: SceneObject,
+    target: SceneObject,
+    relation: SpatialRelationType | 'near' | null
+  ): boolean {
+    return this.semantic.isEntityInPutTarget(source, target, relation);
   }
 
   takeEntity(entity: Entity): GameActionOutcome {
+    return this.semantic.takeEntity(entity);
+  }
+
+  canTakeEntity(entity: Entity): GameActionOutcome | null {
+    return this.semantic.canTakeEntity(entity);
+  }
+
+  canPutSourceEntity(entity: Entity): GameActionOutcome | null {
+    return this.semantic.canPutSourceEntity(entity);
+  }
+
+  putEntity(
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome {
+    return this.semantic.putEntity(entity, target, options);
+  }
+
+  putEntityForActor(
+    actor: import('../entities/Actor').Actor | null,
+    entity: Entity,
+    target?: SceneObject | null,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome {
+    return this.semantic.putEntityForActor(actor, entity, target, options);
+  }
+
+  removeInventoryEntity(entity: Entity): GameActionOutcome {
     const scene = this.sceneManager.currentScene;
-    if (!scene) {
+    const player = scene?.player instanceof Entity ? scene.player : null;
+    if (!this.inventoryManager.hasMainInventory(player)) {
       return {
         status: 'failed',
-        code: 'no_current_scene',
-        message: this.text('parser.parse_unknown'),
-        recoverable: false,
-      };
-    }
-
-    const interactionId =
-      entity.interactions && (entity.interactions.pickup || entity.interactions.PICKUP);
-    if (interactionId) {
-      ScriptRegistry.execute(interactionId, { game: this, entity });
-      return {
-        status: 'ok',
-        code: 'delegated_script',
-        data: { targetType: 'entity', entityId: entity.name, scriptId: interactionId },
-        effects: ['script_executed'],
-      };
-    }
-
-    const errorMsg = ComponentSystem.canTakeItem(entity, scene.player);
-    if (errorMsg) {
-      return {
-        status: 'failed',
-        code: 'cannot_take',
-        message: errorMsg,
-        data: { entityId: entity.name },
+        code: 'player_inventory_missing',
+        message: this.text('parser.inventory_missing'),
         recoverable: true,
       };
     }
 
-    const isItem = entity.components && entity.components.find((c: any) => c.type === 'Item');
-    if (isItem || entity.isTakeable) {
-      scene.playPickupAnimation(entity);
-      scene.removeEntity(entity);
-      this.inventory.push(entity);
-      const itemTitle = this.getPlayerFacingObjectTitle(entity);
-      if (!itemTitle) {
-        return {
-          status: 'escalate',
-          code: 'taken_item_missing_title',
-          data: { entityId: entity.name },
-          effects: ['moved_to_inventory'],
-          recoverable: true,
-        };
-      }
-      return {
-        status: 'ok',
-        code: 'item_taken',
-        message: this.text('parser.take_pickup_success', {
-          item: itemTitle,
-        }),
-        data: { entityId: entity.name },
-        effects: ['moved_to_inventory'],
-      };
-    }
-
-    return {
-      status: 'failed',
-      code: 'not_takeable',
-      message: this.text('parser.take_cannot'),
-      data: { entityId: entity.name },
-      recoverable: true,
-    };
-  }
-
-  removeInventoryEntity(entity: Entity): GameActionOutcome {
     const index = this.inventory.indexOf(entity);
     if (index === -1) {
       return {
@@ -878,6 +894,9 @@ export class Game implements IGame {
     }
 
     this.inventory.splice(index, 1);
+    this.inventoryManager.syncPlayerInventoryComponent();
+    this.inventoryManager.reconcileInventoryPreview();
+    this.inventoryManager.notifyInventoryUiChange();
     return {
       status: 'ok',
       code: 'inventory_item_removed',
@@ -887,63 +906,11 @@ export class Game implements IGame {
   }
 
   showInventory(): GameActionOutcome {
-    const inventoryTitles = this.inventory
-      .map((entity: any) => this.getPlayerFacingObjectTitle(entity))
-      .filter((title): title is string => !!title);
-
-    if (inventoryTitles.length !== this.inventory.length) {
-      return {
-        status: 'escalate',
-        code: 'inventory_item_missing_title',
-        data: {
-          count: this.inventory.length,
-        },
-        recoverable: true,
-      };
-    }
-
-    return {
-      status: 'ok',
-      code: 'inventory_list',
-      message:
-        this.inventory.length === 0
-          ? this.text('parser.inventory_empty')
-          : this.text('parser.inventory_items', {
-              items: inventoryTitles.join(', '),
-            }),
-      data: {
-        count: this.inventory.length,
-      },
-    };
+    return this.semantic.showInventory();
   }
 
   goToSceneTarget(target: string): GameActionOutcome {
-    const normalized = String(target || '')
-      .trim()
-      .toUpperCase();
-    if (!normalized) {
-      return {
-        status: 'failed',
-        code: 'destination_not_found',
-        recoverable: true,
-      };
-    }
-
-    for (const descriptor of this.sceneManager.sceneRegistry.values()) {
-      if (
-        descriptor.id.toUpperCase() === normalized ||
-        descriptor.name.toUpperCase() === normalized ||
-        (!!descriptor.title && descriptor.title.toUpperCase() === normalized)
-      ) {
-        return this.goToScene(descriptor.id);
-      }
-    }
-
-    return {
-      status: 'failed',
-      code: 'destination_not_found',
-      recoverable: true,
-    };
+    return this.semantic.goToSceneTarget(target);
   }
 
   goToScene(sceneId: string): GameActionOutcome {
@@ -957,7 +924,13 @@ export class Game implements IGame {
       };
     }
 
-    this.sceneManager.switchTo(sceneId);
+    const player =
+      currentScene?.player ||
+      (currentScene?.entities.find((entity) => entity instanceof Actor && entity.isPlayer) as
+        | Actor
+        | undefined);
+
+    this.sceneManager.switchTo(sceneId, player || undefined);
     const switchedScene = this.sceneManager.currentScene;
     return {
       status: 'ok',
@@ -972,34 +945,7 @@ export class Game implements IGame {
   }
 
   goToEntity(entity: Entity): GameActionOutcome {
-    const currentScene = this.sceneManager.currentScene;
-    if (currentScene?.player && 'x' in entity && 'y' in entity) {
-      const entityTitle = this.getPlayerFacingObjectTitle(entity);
-      if (!entityTitle) {
-        return {
-          status: 'escalate',
-          code: 'destination_missing_title',
-          data: { targetType: 'entity', entityId: entity.name },
-          recoverable: true,
-        };
-      }
-      currentScene.player.moveTo((entity as any).x, (entity as any).y);
-      return {
-        status: 'ok',
-        code: 'player_moving',
-        message: this.text('parser.go_to_success', {
-          target: entityTitle,
-        }),
-        data: { targetType: 'entity', entityId: entity.name },
-        effects: ['player_move_started'],
-      };
-    }
-
-    return {
-      status: 'failed',
-      code: 'destination_not_found',
-      recoverable: true,
-    };
+    return this.semantic.goToEntity(entity);
   }
 
   showNotification(text: string): void {
@@ -1012,17 +958,21 @@ export class Game implements IGame {
     this.log(text);
   }
 
+  openEntity(entity: SceneObject): GameActionOutcome {
+    return this.semantic.openEntity(entity);
+  }
+
+  closeEntity(entity: SceneObject): GameActionOutcome {
+    return this.semantic.closeEntity(entity);
+  }
+
   bindUI(): void {
     this.editor.initUI();
   }
 
   resize(width: number, height: number): void {
-    // Update RENDERER canvas size (High Res)
     this.rendererCanvas.width = width;
     this.rendererCanvas.height = height;
-
-    // Note: We do NOT resize bufferCanvas. It stays at 420x300.
-    // Note: We do NOT resize uiCanvas (this.canvas). It stays at 420x300 (set in React).
   }
 
   saveSettings(): void {
@@ -1038,18 +988,66 @@ export class Game implements IGame {
   loadSettings(): void {
     try {
       const json = localStorage.getItem('quest_settings');
+      const coerceNumber = (value: unknown, fallback: number) => {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+          const n = Number.parseFloat(value);
+          return Number.isFinite(n) ? n : fallback;
+        }
+        return fallback;
+      };
+
       if (json) {
         const loaded = JSON.parse(json);
-        // Merge loaded settings with defaults (simple shallow merge for crt)
-        if (loaded.crt) {
-          this.settings.crt = { ...this.settings.crt, ...loaded.crt };
+        const loadedCrt = loaded?.crt ?? loaded?.settings?.crt ?? loaded?.graphics?.crt;
+        const loadedEditor = loaded?.editor ?? loaded?.settings?.editor;
+        const loadedAudio = loaded?.audio ?? loaded?.settings?.audio;
+
+        if (loadedCrt) {
+          this.settings.crt = {
+            ...this.settings.crt,
+            ...loadedCrt,
+            curvature: coerceNumber(loadedCrt.curvature, this.settings.crt.curvature),
+            scanlineCount: coerceNumber(loadedCrt.scanlineCount, this.settings.crt.scanlineCount),
+            scanlineIntensity: coerceNumber(
+              loadedCrt.scanlineIntensity,
+              this.settings.crt.scanlineIntensity
+            ),
+            aberration: coerceNumber(loadedCrt.aberration, this.settings.crt.aberration),
+            vignette: coerceNumber(loadedCrt.vignette, this.settings.crt.vignette),
+            phosphor: coerceNumber(loadedCrt.phosphor, this.settings.crt.phosphor),
+            bloom: coerceNumber(loadedCrt.bloom, this.settings.crt.bloom),
+            enabled:
+              typeof loadedCrt.enabled === 'boolean'
+                ? loadedCrt.enabled
+                : this.settings.crt.enabled,
+            bezelGlow:
+              typeof loadedCrt.bezelGlow === 'boolean'
+                ? loadedCrt.bezelGlow
+                : this.settings.crt.bezelGlow,
+          };
         }
-        if (loaded.editor) {
-          this.settings.editor = { ...this.settings.editor, ...loaded.editor };
+
+        if (loadedEditor) {
+          this.settings.editor = { ...this.settings.editor, ...loadedEditor };
+        }
+
+        if (loadedAudio) {
+          this.settings.audio = {
+            ...this.settings.audio,
+            attachedVolume: Math.max(
+              0,
+              Math.min(
+                10,
+                coerceNumber(loadedAudio.attachedVolume, this.settings.audio.attachedVolume)
+              )
+            ),
+          };
         }
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
+    SoundManager.getInstance().setAttachedVolume(this.settings.audio.attachedVolume);
   }
 }

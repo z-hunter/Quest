@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 interface Option {
   label: string;
   value: string;
+  icon?: string;
 }
 
 interface SelectProps {
@@ -136,10 +137,15 @@ export const Select: React.FC<SelectProps> = ({
       }}
       tabIndex={0} // Make focusable for keyboard events
       onKeyDown={handleKeyDown}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <div
         className="custom-select-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -147,10 +153,28 @@ export const Select: React.FC<SelectProps> = ({
           padding: '4px',
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {displayLabel}
-        </span>
-        <span style={{ fontSize: '10px', marginLeft: '5px' }}>▼</span>
+        <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+          {selectedOption?.icon && (
+            <div
+              style={{
+                width: '1em',
+                height: '1em',
+                marginRight: '6px',
+                backgroundColor: 'currentColor',
+                maskImage: `url("${selectedOption.icon}")`,
+                WebkitMaskImage: `url("${selectedOption.icon}")`,
+                maskSize: 'contain',
+                maskRepeat: 'no-repeat',
+                maskPosition: 'center',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {displayLabel}
+          </span>
+        </div>
+        <span className="custom-select-caret" aria-hidden="true" />
       </div>
 
       {isOpen && (
@@ -174,10 +198,35 @@ export const Select: React.FC<SelectProps> = ({
             <div
               key={opt.value}
               className={`custom-option ${opt.value === value ? 'selected' : ''} ${idx === focusedIndex ? 'focused' : ''}`}
-              onClick={() => handleSelect(opt.value)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelect(opt.value);
+              }}
               onMouseEnter={() => setFocusedIndex(idx)}
-              style={{ padding: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{
+                padding: '4px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+              }}
             >
+              {opt.icon && (
+                <div
+                  style={{
+                    width: '1em',
+                    height: '1em',
+                    marginRight: '6px',
+                    backgroundColor: 'currentColor',
+                    maskImage: `url("${opt.icon}")`,
+                    WebkitMaskImage: `url("${opt.icon}")`,
+                    maskSize: 'contain',
+                    maskRepeat: 'no-repeat',
+                    maskPosition: 'center',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
               {opt.label}
             </div>
           ))}

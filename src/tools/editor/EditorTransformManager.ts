@@ -4,6 +4,7 @@ import { Actor } from '../../entities/Actor';
 import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
 import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
+import { Folder } from '../../entities/Folder';
 import { SceneObject } from '../../entities/SceneObject';
 
 import { Geometry } from '../../utils/Geometry';
@@ -98,11 +99,10 @@ export class EditorTransformManager {
       const entity = entities[i];
       if (entity.disabled || entity.locked) continue;
 
-      const p = entity.parallax !== undefined ? entity.parallax : 1.0;
       const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
       const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-      const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-      const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
+      const worldX = (pos.x - halfW) / zoom + camX - vOx;
+      const worldY = (pos.y - halfH) / zoom + camY - vOy;
 
       if (entity.hitTest(worldX, worldY)) return entity;
     }
@@ -268,16 +268,9 @@ export class EditorTransformManager {
         }
       }
 
-      if (e.button === 0 && !hitObject && !e.ctrlKey) {
-        this.boxSelectActive = true;
-        this.boxSelectStart = { x: pos.x, y: pos.y };
-        this.boxSelectCurrent = { x: pos.x, y: pos.y };
-        e.stopPropagation();
-        return;
-      }
-
-      // 0. CHECK SELECTED POLYGON VERTICES (High Priority)
+      // 0. CHECK SELECTED POLYGON VERTICES (High Priority — must be BEFORE box-select guard)
       if (
+        e.button === 0 &&
         editor.selectedObject &&
         (editor.selectedObject instanceof Walkbox ||
           editor.selectedObject instanceof Triggerbox ||
@@ -339,8 +332,8 @@ export class EditorTransformManager {
           }
 
           if (
-            Math.abs(worldPos.x - vx) < vertexRadius / 2 &&
-            Math.abs(worldPos.y - vy) < vertexRadius / 2
+            Math.abs(worldPos.x - vx) < vertexRadius &&
+            Math.abs(worldPos.y - vy) < vertexRadius
           ) {
             if (!editor.selectedObject.locked) {
               editor.saveUndoState();
@@ -370,6 +363,14 @@ export class EditorTransformManager {
             return;
           }
         }
+      }
+
+      if (e.button === 0 && !hitObject && !e.ctrlKey) {
+        this.boxSelectActive = true;
+        this.boxSelectStart = { x: pos.x, y: pos.y };
+        this.boxSelectCurrent = { x: pos.x, y: pos.y };
+        e.stopPropagation();
+        return;
       }
 
       // 0.5 CHECK SELECTED ENTITY (High Priority)
@@ -462,16 +463,14 @@ export class EditorTransformManager {
         if (entity.disabled) continue;
         if (entity.locked) continue;
 
-        const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-
         // @ts-ignore
         const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
         // @ts-ignore
         const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
 
-        // Mouse World Pos for this entity layer
-        const worldX = (pos.x - halfW) / zoom + camX * p - vOx;
-        const worldY = (pos.y - halfH) / zoom + camY * p - vOy;
+        // Entity.hitTest expects visual world coordinates; it applies its own parallax projection.
+        const worldX = (pos.x - halfW) / zoom + camX - vOx;
+        const worldY = (pos.y - halfH) / zoom + camY - vOy;
 
         if (entity.hitTest(worldX, worldY)) {
           this.editor.selectObject(entity);
@@ -643,42 +642,55 @@ export class EditorTransformManager {
           const newY = snapResult.y;
           this.currentSnapBinding = snapResult.binding;
 
-          // Calculate effective delta from current position
+          if (!isQuad) {
+            // Walkbox / Triggerbox: vertices are plain {x, y} world coords — no parallax p.
+            // Just assign snapped position directly.
+            const prevX = v.x;
+            const prevY = v.y;
+            v.x = Math.round(newX);
+            v.y = Math.round(newY);
+            if (Math.abs(v.x - prevX) < 0.001 && Math.abs(v.y - prevY) < 0.001) return;
+            store.incrementObjectVersion();
+            return;
+          }
+
+          // ── Quad path ──────────────────────────────────────────────────────
+          // Calculate effective delta from current visual position
           // Note: v.x/v.y are RAW. newX/newY are VISUAL.
-          // We need to convert current V to Visual to get delta.
           const currentVisX = v.x - camX * (v.p - 1.0);
           const currentVisY = v.y - camY * (v.p - 1.0);
 
           const diffX = newX - currentVisX;
           const diffY = newY - currentVisY;
+          const nextPrimaryP = snapResult.p !== undefined ? snapResult.p : v.p;
 
           // If NO interaction (diff is 0), skip
-          if (Math.abs(diffX) < 0.001 && Math.abs(diffY) < 0.001) {
+          if (
+            Math.abs(diffX) < 0.001 &&
+            Math.abs(diffY) < 0.001 &&
+            Math.abs(nextPrimaryP - v.p) < 0.001
+          ) {
             return;
           }
 
           // 3. Find Connected Group (BFS)
-          // We need to move ALL vertices that are mutually bound.
-          // Setup
           interface VertexRef {
             quad: QuadObject;
             index: number;
             v: any;
           }
           const group: VertexRef[] = [];
-          const visited = new Set<string>(); // "QuadName_Index"
+          const visited = new Set<string>();
           const queue: VertexRef[] = [];
 
-          if (isQuad) {
-            const startRef = {
-              quad: editor.selectedObject as QuadObject,
-              index: this.draggingVertexIndex,
-              v: v,
-            };
-            queue.push(startRef);
-            visited.add(`${startRef.quad.name}_${startRef.index}`);
-            group.push(startRef);
-          }
+          const startRef = {
+            quad: editor.selectedObject as QuadObject,
+            index: this.draggingVertexIndex,
+            v: v,
+          };
+          queue.push(startRef);
+          visited.add(`${startRef.quad.name}_${startRef.index}`);
+          group.push(startRef);
 
           // BFS Expansion
           while (queue.length > 0) {
@@ -689,7 +701,6 @@ export class EditorTransformManager {
               const targetName = current.v.binding.targetName;
               const targetIdx = current.v.binding.index || 0;
               if (!visited.has(`${targetName}_${targetIdx}`)) {
-                // Find Quad
                 const tEnt = scene.entities.find((e: any) => e.name === targetName);
                 if (tEnt && (tEnt as any).type === 'Quad') {
                   const tQuad = tEnt as QuadObject;
@@ -704,7 +715,6 @@ export class EditorTransformManager {
             }
 
             // B. Check INCOMING bindings (Who is bound to me)
-            // This requires scanning all Quads. Optimizable but N is small.
             scene.entities.forEach((e: any) => {
               if ((e as any).type === 'Quad') {
                 const q = e as QuadObject;
@@ -729,35 +739,12 @@ export class EditorTransformManager {
 
           // 4. Move Group
           group.forEach((ref) => {
-            // Apply diff to Visual Position implies modifying Raw Position
-            // NewRaw = OldRaw + diff?
-            // Vis1 = Raw1 - Cam*(p-1).
-            // Vis2 = Vis1 + diff.
-            // Raw2 = Vis2 + Cam*(p-1) = (Raw1 - Cam*(p-1) + diff) + Cam*(p-1) = Raw1 + diff.
-            // YES, diff applies directly to Raw if P is constant.
-
-            // PARALLAX HANDLING
-            // User said: "all mutually bound vertices will change coordinates and/or parallax"
-            // If the PRIMARY vertex snapped to an Entity/Grid with specific P, we adopt it.
-            // If it just moved in space, we keep P.
-            // If we interactively change P (e.g. via property), that's different.
-            // Here we are dragging X/Y.
-
-            // BUT: If the primary vertex snapped to a target with a DIFFERENT Parallax,
-            // `snapResult.p` might be set.
-            // If so, we should update P for the whole group?
-            // "form a entity... always moves together and changes parallax together".
-            // Yes.
-
-            if (snapResult.p !== undefined) {
-              ref.v.p = snapResult.p;
-            }
-
-            // Update Position
-            ref.v.x += diffX;
-            ref.v.y += diffY;
-
-            // Rounding?
+            const nextP = snapResult.p !== undefined ? snapResult.p : ref.v.p;
+            const refVisX = ref.v.x - camX * (ref.v.p - 1.0);
+            const refVisY = ref.v.y - camY * (ref.v.p - 1.0);
+            ref.v.p = nextP;
+            ref.v.x = refVisX + diffX + camX * (nextP - 1.0);
+            ref.v.y = refVisY + diffY + camY * (nextP - 1.0);
             ref.v.x = Math.round(ref.v.x);
             ref.v.y = Math.round(ref.v.y);
           });
@@ -1275,6 +1262,12 @@ export class EditorTransformManager {
       editor.selectObject(newTrigger);
       useEditorStore.getState().incrementHierarchyVersion();
       editor.redrawSelected();
+    } else if (type === 'Folder') {
+      const name = 'Folder_' + Math.floor(Math.random() * 1000);
+      const folder = new Folder(editor.game, name);
+      scene.addFolder(folder);
+      editor.selectObject(folder);
+      useEditorStore.getState().incrementHierarchyVersion();
     }
   }
 

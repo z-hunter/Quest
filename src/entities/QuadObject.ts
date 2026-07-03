@@ -93,7 +93,6 @@ export class QuadObject extends Entity {
 
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.globalCompositeOperation = this.blendMode;
 
     // Apply Blur
     if (this.blur > 0) {
@@ -147,6 +146,7 @@ export class QuadObject extends Entity {
 
     // 1. Draw Fill (Solid Mode)
     if (this.filled) {
+      ctx.globalCompositeOperation = this.blendMode;
       ctx.fillStyle = this.color;
       ctx.beginPath();
       screenVerts.forEach((v, i) => {
@@ -159,6 +159,7 @@ export class QuadObject extends Entity {
 
     // 2. Draw Grid (Overlay)
     if (this.isGrid) {
+      ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = this.gridColor;
       ctx.lineWidth = this.lineWidth;
 

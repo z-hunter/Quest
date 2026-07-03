@@ -2,7 +2,7 @@
 
 ## Summary
 
-`Commands` in `Scanline` are parser-level action specifications that describe **custom gameplay commands** without hardcoding one-off logic into `Parser.ts`.
+`Commands` in `Scanline` are authored action specifications that describe **custom gameplay commands** without hardcoding one-off logic into `Parser.ts`.
 
 The goal is to let us add commands such as:
 - `TELEPORT WITH ID CARD`
@@ -10,7 +10,7 @@ The goal is to let us add commands such as:
 - `REPAIR BOOMBOX WITH SOLDERING IRON`
 - `USE ITEM ON TARGET`
 
-while reusing the same generic parser systems for:
+while reusing the same generic parser and runtime systems for:
 - target resolution
 - ambiguity clarification
 - missing-argument clarification
@@ -36,15 +36,15 @@ Instead:
 - each custom command is described by data
 - `Parser Core` executes a generic plan
 
-This is also the best preparation for the future LLM cascade:
-- lower layers and mocked scenarios can emit the same plan format
-- `Core` can be hardened before real LLM integration
+This is also the shared execution foundation for the LLM cascade and other actor-aware clients:
+- lower layers, custom commands, mocked scenarios, NPC Puppet Master plans, and LLM outputs can emit the same plan format
+- parser-produced plans still execute through `Parser Core`, while non-parser actor plans use the shared actor-aware executor instead of going through text parsing again
 
 ---
 
 ## Position In The Architecture
 
-Custom command assets belong to the **parser layer**, not to `Game`.
+Custom command assets are authored content, not hardcoded `Game` logic. Their execution is shared runtime behavior, even when the initiating client is the parser.
 
 They are:
 - language-aware
@@ -63,8 +63,50 @@ The flow is:
 2. Stage 1 tries built-in parser logic
 3. Stage 1 also checks custom command assets
 4. A matching command asset produces a parser envelope / plan
-5. `Parser Core` resolves arguments and executes the plan
-6. `Game API` performs the actual world operations
+5. `Parser Core` resolves arguments and executes the plan for parser-originated input
+6. `Game API` / shared actor-aware runtime performs the actual world operations
+
+---
+
+## Built-In Group Syntax
+
+Direct group syntax for standard commands is implemented in the built-in parser flow, not in custom command assets.
+
+Currently this applies to standard `TAKE` and `PUT`:
+
+```text
+take all cassettes
+take both cassettes
+take blue and red pills
+take blue pill and red pill
+put all cassettes into recorder
+put blue and red pills in box
+```
+
+The behavior is equivalent to resolving an ambiguity clarification and answering with multiple source items, but without asking the intermediate question.
+
+Important rules:
+- group syntax selects **source items**, not multiple destinations;
+- source selection and clarification use actionable source scopes (`takable` for `TAKE`, `held + putSource` for `PUT`), not all visible/known objects;
+- group input expands into a linear parser plan of ordinary `takeTarget` / `putTarget` actions;
+- execution remains stop-on-error through `Parser Core`;
+- `all` selects every matching source item in the command's normal source scope;
+- `both` is valid only when exactly two source items match;
+- list forms use comma / `and`;
+- shared-head list forms such as `blue and red pills` expand to `blue pills` and `red pills`;
+- simple trailing-`s` plural matching is supported for group source matching only.
+
+For `PUT`, target resolution has priority:
+- the destination is validated before source fallback or source clarification;
+- unknown destinations such as `recirder` fail as target-not-found;
+- source items already stored in the selected destination are filtered out before building the batch.
+- relation targets such as `PUT cassette UNDER chair` resolve only to an existing `Inventory`/`Surface` slot for that relation; parser/runtime checks must not auto-create missing containers.
+- `floor`/`ground` can resolve to a Walkbox pseudo-floor target for `PUT`/`DROP`, including `PUT item ON FLOOR` and `PUT item IN FLOOR`.
+- For `LOOK floor` / `EXAMINE floor`, the parser first tries the current Walkbox pseudo-floor under the player, but only if it has the needed text field (`description` for `LOOK`, `details` for `EXAMINE`). Otherwise it falls back to a real visible/held object titled or synonymed `Floor`, then to `parser.look_default_object`.
+- for untitled technical storage nodes, the relation to the player-facing target is the first spatial relation from the nearest titled parent to that technical chain. A Surface inside an untitled `UNDER` child of `Chair` is therefore treated as `UNDER chair`, even if the Surface's internal placement relation is `ON`.
+- visible but currently unusable source items are reserved for diagnostics, not clarification. For example, a far cassette can produce a distance-specific failure, but it must not be offered as a selectable source option when a usable cassette is available.
+
+Custom command assets do not currently declare group syntax. They should continue to use normal argument resolution and pending clarification until the command asset format explicitly grows a group-argument feature.
 
 ---
 
@@ -360,7 +402,7 @@ Custom command assets are one of the producers of the unified parser DSL.
 
 They are not a separate execution system.
 
-Built-in commands and future LLM outputs should converge on the same general model:
+Built-in commands and LLM outputs converge on the same general model:
 - envelope
 - plan
 - `Parser Core`
@@ -368,7 +410,7 @@ Built-in commands and future LLM outputs should converge on the same general mod
 
 This is why `TELEPORT WITH` is useful as a test scenario:
 - it exercises a richer plan
-- without needing a real LLM yet
+- without needing a live LLM provider during deterministic tests
 
 ---
 
@@ -557,6 +599,6 @@ Later, command assets may grow to support:
 - richer scope policies
 - optional conditions
 - richer message overrides
-- LLM-generated plans that still reuse the same execution model
+- richer LLM-generated plans that still reuse the same execution model
 
 But the first version should stay deliberately small and stable.

@@ -1,7 +1,9 @@
 import { SceneEditor } from '../SceneEditor';
 import { Entity } from '../../entities/Entity';
 import { SceneObject } from '../../entities/SceneObject';
+import { SceneSpatialValidator } from '../../scene/SceneSpatialValidator';
 import { useEditorStore } from '../../store/editorStore';
+import { saveProjectFile } from '../../platform/fileApi';
 
 export class EditorPersistenceManager {
   private editor: SceneEditor;
@@ -22,6 +24,23 @@ export class EditorPersistenceManager {
 
   markSceneSaved(): void {
     this.editor.undoManager.markSaved();
+  }
+
+  private reportSceneSpatialValidation(phase: 'load' | 'save') {
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const result = SceneSpatialValidator.validate(scene, this.editor.game as any);
+    if (result.issues.length === 0) {
+      console.info(`[SceneSpatialValidator] ${phase}: '${scene.name}' has no issues.`);
+      return result;
+    }
+
+    const summary = `Spatial validation ${phase}: ${result.errors.length} error(s), ${result.warnings.length} warning(s)`;
+    this.editor.game.showNotification(summary);
+    const logMethod = result.errors.length > 0 ? console.warn : console.info;
+    logMethod(`[SceneSpatialValidator] ${summary} in '${scene.name}'.`, result.issues);
+    return result;
   }
 
   isCurrentSceneDirty(): boolean {
@@ -132,6 +151,13 @@ export class EditorPersistenceManager {
   async performSaveScene(filenameId: string, previousSceneId?: string): Promise<boolean> {
     const scene = this.editor.game.sceneManager.currentScene;
     if (!scene) return false;
+    const validation = this.reportSceneSpatialValidation('save');
+    if (validation && validation.errors.length > 0) {
+      this.editor.game.showNotification(
+        `Scene not saved: fix ${validation.errors.length} spatial validation error(s)`
+      );
+      return false;
+    }
 
     // Ensure filenameId uses forward slashes for URL/Path
     const normalizedPath = filenameId.replace(/\\/g, '/');
@@ -141,22 +167,13 @@ export class EditorPersistenceManager {
     const filePath = `public/scenes/${normalizedPath}.json`;
 
     try {
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json }),
-      });
-
-      if (response.ok) {
-        this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
-        await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
-        this.markSceneSaved();
-        // Use Toast Message
-        this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
-        return true;
-      } else {
-        throw new Error(await response.text());
-      }
+      await saveProjectFile(filePath, json);
+      this.editor.game.sceneManager.syncSceneRegistration(scene, previousSceneId, data);
+      await this.editor.game.textAssets.carrySceneAssetIfNeeded(previousSceneId, scene);
+      this.markSceneSaved();
+      // Use Toast Message
+      this.editor.game.showNotification(`Scene saved as ${normalizedPath}.json`);
+      return true;
     } catch (e) {
       console.error('Failed to save scene:', e);
       this.editor.game.showNotification(`Error saving scene: ${e}`);
@@ -177,6 +194,7 @@ export class EditorPersistenceManager {
         if (scene) {
           this.trackedSceneRef = scene;
           this.editor.undoManager.resetForCleanScene();
+          this.reportSceneSpatialValidation('load');
         }
       });
     });
@@ -185,7 +203,7 @@ export class EditorPersistenceManager {
   // --- Prefab Saving ---
 
   async saveObject(): Promise<void> {
-    const selection = this.editor.selectionManager.hasMultiSelection()
+    let selection = this.editor.selectionManager.hasMultiSelection()
       ? this.editor.selectionManager.getSelectedObjects()
       : this.editor.selectedObject instanceof SceneObject
         ? [this.editor.selectedObject]
@@ -194,6 +212,29 @@ export class EditorPersistenceManager {
     if (!selection.length) {
       this.editor.game.showNotification('Select an Object to Save');
       return;
+    }
+
+    // If selection includes folders, also include their contents
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (scene) {
+      const folderIds = selection
+        .filter((obj) => obj.type === 'Folder')
+        .map((obj) => (obj as any).folderId)
+        .filter(Boolean);
+      if (folderIds.length > 0) {
+        const result = new Set<SceneObject>(selection);
+        const allObjects: SceneObject[] = [
+          ...scene.entities,
+          ...scene.walkbox,
+          ...scene.triggerboxes,
+        ];
+        for (const obj of allObjects) {
+          if ((obj as any).folder && folderIds.includes((obj as any).folder)) {
+            result.add(obj);
+          }
+        }
+        selection = Array.from(result);
+      }
     }
 
     this.editor.game.openFileBrowser('save', 'public/prefabs', (filename: string) => {
@@ -221,20 +262,11 @@ export class EditorPersistenceManager {
     const filePath = `public/prefabs/${filename}`;
 
     try {
-      const response = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: json }),
-      });
-
-      if (response.ok) {
-        this.editor.game.showNotification(`Prefab Saved: ${filename} `);
-      } else {
-        throw new Error(await response.text());
-      }
+      await saveProjectFile(filePath, json);
+      this.editor.game.showNotification(`Prefab Saved: ${filename}`);
     } catch (e) {
       console.error('Failed to save prefab:', e);
-      this.editor.game.showNotification(`Error: ${e} `);
+      this.editor.game.showNotification(`Error: ${e}`);
     }
   }
 

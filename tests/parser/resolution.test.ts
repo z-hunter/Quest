@@ -47,8 +47,156 @@ describe('Parser resolution', () => {
 
     const result = await fixture.run('look id');
 
-    expect(result.messages.at(-1)).toBe('Which one do you mean: your ID card, Someone ID card?');
+    expect(result.messages.at(-1)).toBe(
+      'Which one do you mean: 1: your ID card, 2: Someone ID card?'
+    );
     expect(result.pendingIntent).toBe('look');
+  });
+
+  it('resolves clarification by temporary number', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    const ambiguous = await fixture.run('look cassette');
+    expect(ambiguous.messages.at(-1)).toBe(
+      "Which one do you mean: 1: Compact cassette, 2: Cassette 'Music'?"
+    );
+
+    const resolved = await fixture.run('2');
+    expect(resolved.messages.at(-1)).toBe('A music cassette.');
+    expect(resolved.pendingIntent).toBeNull();
+  });
+
+  it('resolves multi-select clarification by numbers, text, all, and both', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    await fixture.run('look cassette');
+    const numeric = await fixture.run('1, 2');
+    expect(numeric.messages).toEqual(['A compact cassette.', 'A music cassette.']);
+
+    await fixture.run('look cassette');
+    const text = await fixture.run('Compact and Music');
+    expect(text.messages).toEqual(['A compact cassette.', 'A music cassette.']);
+
+    await fixture.run('look cassette');
+    const all = await fixture.run('all');
+    expect(all.messages).toEqual(['A compact cassette.', 'A music cassette.']);
+
+    await fixture.run('look cassette');
+    const both = await fixture.run('both');
+    expect(both.messages).toEqual(['A compact cassette.', 'A music cassette.']);
+  });
+
+  it('rejects invalid multi-select clarification without clearing pending state', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    const ambiguous = await fixture.run('look cassette');
+    const retry = await fixture.run('1, 99');
+
+    expect(retry.messages.at(-1)).toBe(ambiguous.messages.at(-1));
+    expect(retry.pendingIntent).toBe('look');
+
+    const textRetry = await fixture.run('Compact and banana');
+    expect(textRetry.messages.at(-1)).toBe(ambiguous.messages.at(-1));
+    expect(textRetry.pendingIntent).toBe('look');
+
+    const resolved = await fixture.run('1');
+    expect(resolved.messages.at(-1)).toBe('A compact cassette.');
+    expect(resolved.pendingIntent).toBeNull();
+  });
+
+  it('cancels pending clarification with an empty reply', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    await fixture.run('look cassette');
+    const cancelled = await fixture.run('');
+
+    expect(cancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(cancelled.pendingIntent).toBeNull();
+
+    const next = await fixture.run('2');
+    expect(next.messages.at(-1)).toBe("I don't understand.");
+  });
+
+  it('cancels pending clarification with text asset aliases', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+
+    await fixture.run('look cassette');
+    const noneCancelled = await fixture.run('none');
+    expect(noneCancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(noneCancelled.pendingIntent).toBeNull();
+
+    await fixture.run('look cassette');
+    const cancelCancelled = await fixture.run('cancel');
+    expect(cancelCancelled.messages.at(-1)).toBe('Command cancelled.');
+    expect(cancelCancelled.pendingIntent).toBeNull();
+  });
+
+  it('rejects BOTH when clarification has more than two options', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+    });
+    fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+    });
+    fixture.addEntity('backup_cassette', {
+      title: 'Backup cassette',
+      description: 'A backup cassette.',
+    });
+
+    const ambiguous = await fixture.run('look cassette');
+    const retry = await fixture.run('both');
+
+    expect(retry.messages.at(-1)).toBe(ambiguous.messages.at(-1));
+    expect(retry.pendingIntent).toBe('look');
   });
 
   it('prefers the inventory copy when duplicate titles are indistinguishable', async () => {
@@ -72,6 +220,41 @@ describe('Parser resolution', () => {
     expect(result.messages.at(-1)).toBe('Inventory coin.');
     expect(fixture.game.inventory).toContain(inventoryCoin);
     expect(fixture.scene.entities).toContain(sceneCoin);
+  });
+
+  it('looks up a taken item from inventory instead of stale closed-drawer scene context', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('Desk', {
+      title: 'Desk',
+      description: 'A desk.',
+    });
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Upper drawer',
+      description: 'A desk drawer.',
+      components: [{ type: 'Switch', state: 2, clearlyOpenable: true }],
+      spatial: { parentNodeId: 'Desk', relation: 'in' },
+    });
+    const note = fixture.addEntity('Note', {
+      title: 'Note',
+      description: 'Inventory note.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'Drawer', relation: 'in' },
+    });
+
+    const taken = fixture.game.takeEntity(note);
+    expect(taken.status).toBe('ok');
+    expect((note as any).spatial).toEqual({ parentNodeId: 'Hero', relation: 'in' });
+
+    (
+      drawer.components?.find((component: any) => component?.type === 'Switch') as {
+        state?: number;
+      }
+    ).state = 1;
+
+    const result = await fixture.run('look note');
+
+    expect(result.messages.at(-1)).toBe('Inventory note.');
   });
 
   it('prefers the nearest scene object when duplicate titles are both in scene', async () => {

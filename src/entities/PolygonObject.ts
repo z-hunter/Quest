@@ -19,10 +19,21 @@ export class PolygonObject extends SceneObject {
   }
 
   hitTest(x: number, y: number): boolean {
-    // Import Geometry if not already available? It is not imported in this file.
-    // Needs import { Geometry } from '../utils/Geometry';
-    // But we can't easily add import with replace_file_content if top of file not shown.
-    // Wait, I should check imports first.
-    return Geometry.isPointInPolygon({ x, y }, this.poly);
+    const scene = this.scene;
+    if (!scene || !this.poly || this.poly.length < 3) {
+      return Geometry.isPointInPolygon({ x, y }, this.poly);
+    }
+
+    const camX = scene.camera.x;
+    const camY = scene.camera.y;
+    const p = this.parallax !== undefined ? this.parallax : 1.0;
+
+    // Project polygon to visual space at P=1.0 equivalent
+    const projectedPoly = this.poly.map((v) => ({
+      x: v.x - camX * (p - 1.0),
+      y: v.y - camY * (p - 1.0),
+    }));
+
+    return Geometry.isPointInPolygon({ x, y }, projectedPoly);
   }
 }

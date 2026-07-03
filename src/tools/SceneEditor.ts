@@ -4,7 +4,7 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
-import { normalizeTriggerComponents } from '../entities/TriggerComponents';
+import { Folder } from '../entities/Folder';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
 
@@ -57,7 +57,7 @@ export class SceneEditor {
 
     this.selectionManager.selectedObject = null;
     this.lastMousePos = { x: 0, y: 0 };
-    this.lastClientMousePos = { x: 0, y: 0 };
+    this.lastClientMousePos = { x: Number.NaN, y: Number.NaN };
 
     // Bind handlers once for cleanup
 
@@ -136,7 +136,12 @@ export class SceneEditor {
   handleGlobalKey(e: KeyboardEvent): void {
     const isTypingInField =
       document.activeElement instanceof HTMLInputElement ||
-      document.activeElement instanceof HTMLTextAreaElement;
+      document.activeElement instanceof HTMLTextAreaElement ||
+      document.activeElement instanceof HTMLSelectElement;
+
+    if (this.enabled && !isTypingInField && this.isArrowKey(e.key) && this.isMouseOverCanvas()) {
+      e.preventDefault();
+    }
 
     if (
       this.enabled &&
@@ -321,7 +326,7 @@ export class SceneEditor {
     }
 
     // Prevent default for F-keys and Editor keys when editor is open
-    if (this.enabled) {
+    if (this.enabled && e.key) {
       if (
         ['F2', 'F3', 'F4', 'F5', 's', 'a', 'w', 't', '+', '-', '*', '/'].includes(
           e.key.toLowerCase()
@@ -393,6 +398,9 @@ export class SceneEditor {
           const pos = this.getMouseWorldPosIfOverCanvas();
           this.startCreating('Quad', pos?.x, pos?.y);
         }
+        break;
+      case 'f':
+        this.startCreating('Folder');
         break;
 
       // Camera Hotkeys
@@ -467,6 +475,18 @@ export class SceneEditor {
       }
     }
     return null;
+  }
+
+  private isArrowKey(key: string): boolean {
+    return key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight';
+  }
+
+  private isMouseOverCanvas(): boolean {
+    const { x, y } = this.lastClientMousePos;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+    const rect = this.game.canvas.getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
   convertScreenToWorld(screenX: number, screenY: number): { x: number; y: number } {
@@ -595,6 +615,86 @@ export class SceneEditor {
     this.selectionManager.selectObject(obj);
   }
 
+  convertEntityToActor(entity: Entity): Actor | null {
+    if (!entity || entity instanceof Actor || entity.type === 'Quad') return null;
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const index = scene.entities.indexOf(entity);
+    if (index < 0) return null;
+
+    this.saveUndoState();
+
+    const inventoryOwner = entity.getInventoryPositionOwner?.() || null;
+    const data = entity.toJSON();
+    const components = Array.isArray(data.components) ? data.components : [];
+    const actor = Actor.fromJSON(this.game, {
+      ...data,
+      type: 'Actor',
+      direction: data.direction || 'down',
+      speed: typeof data.speed === 'number' ? data.speed : 0.1,
+      animSets: data.animSets || {},
+      isPlayer: !!data.isPlayer,
+      components: components.some((component: any) => component?.type === 'Actor')
+        ? components
+        : [{ type: 'Actor' }, ...components],
+    });
+
+    actor.scene = scene;
+    actor.setInventoryPositionOwner?.(inventoryOwner);
+    scene.entities[index] = actor;
+    if (actor.isPlayer) scene.player = actor;
+    if (scene.subsceneEntities.has(entity)) {
+      scene.subsceneEntities.delete(entity);
+      scene.subsceneEntities.add(actor);
+    }
+
+    this.game.sceneManager.exposeEntitiesToWindow();
+    this.selectObject(actor);
+    useEditorStore.getState().incrementObjectVersion();
+    this.refreshHierarchy();
+    return actor;
+  }
+
+  convertActorToEntity(actor: Actor): Entity | null {
+    if (!actor || !(actor instanceof Actor)) return null;
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const index = scene.entities.indexOf(actor);
+    if (index < 0) return null;
+
+    this.saveUndoState();
+
+    const inventoryOwner = actor.getInventoryPositionOwner?.() || null;
+    const data = actor.toJSON();
+    const components = Array.isArray(data.components)
+      ? data.components.filter(
+          (component: any) => component?.type !== 'Actor' && component?.type !== 'Shadow'
+        )
+      : [];
+    const entity = Entity.fromJSON(this.game, {
+      ...data,
+      type: 'Entity',
+      components,
+    });
+
+    entity.scene = scene;
+    entity.setInventoryPositionOwner?.(inventoryOwner);
+    scene.entities[index] = entity;
+    if (scene.player === actor) scene.player = null;
+    if (scene.subsceneEntities.has(actor)) {
+      scene.subsceneEntities.delete(actor);
+      scene.subsceneEntities.add(entity);
+    }
+
+    this.game.sceneManager.exposeEntitiesToWindow();
+    this.selectObject(entity);
+    useEditorStore.getState().incrementObjectVersion();
+    this.refreshHierarchy();
+    return entity;
+  }
+
   toggleObjectSelection(obj: SceneObject): void {
     this.selectionManager.toggleObjectSelection(obj);
   }
@@ -626,6 +726,9 @@ export class SceneEditor {
     const name = sep >= 0 ? key.slice(sep + 1) : key;
     if (!type || !name) return null;
 
+    if (type === 'Folder') {
+      return (scene.folders || []).find((obj: any) => obj?.name === name) || null;
+    }
     if (type === 'Entity' || type === 'Actor') {
       return (scene.entities || []).find((obj: any) => obj?.name === name) || null;
     }
@@ -778,12 +881,7 @@ export class SceneEditor {
         }
 
         newObj = new Walkbox(poly, data.name);
-        if (data.mode) newObj.mode = data.mode;
-        if (data.groupID) newObj.groupID = data.groupID;
-        if (data.locked) newObj.locked = data.locked;
-        if (data.disabled) newObj.disabled = data.disabled;
-        if (data.customName) newObj.customName = data.customName;
-        if (data.interactions) newObj.interactions = data.interactions;
+        newObj.load({ ...data, poly, type: 'Walkbox' });
       } else if (type === 'Triggerbox') {
         // ... (Triggerbox logic remains) ...
         let poly = data.poly || [];
@@ -803,12 +901,7 @@ export class SceneEditor {
           poly = poly.map((p: any) => ({ x: p.x, y: p.y }));
         }
         newObj = new Triggerbox(poly, data.name, data.script || '');
-        if (data.groupID) newObj.groupID = data.groupID;
-        if (data.components) newObj.components = normalizeTriggerComponents(data.components);
-        if (data.locked) newObj.locked = data.locked;
-        if (data.disabled) newObj.disabled = data.disabled;
-        if (data.customName) newObj.customName = data.customName;
-        if (data.interactions) newObj.interactions = data.interactions;
+        newObj.load({ ...data, poly, type: 'Triggerbox' });
       } else if (type === 'Quad') {
         newObj = QuadObject.fromJSON(this.game, data);
 
@@ -842,10 +935,17 @@ export class SceneEditor {
             });
           }
         }
-      } else if (type === 'Actor') {
+      } else if (
+        type === 'Actor' ||
+        (Array.isArray(data.components) &&
+          data.components.some((component: any) => component?.type === 'Actor'))
+      ) {
+        data.type = 'Actor';
         newObj = Actor.fromJSON(this.game, data);
       } else if (type === 'Player') {
         newObj = Actor.fromJSON(this.game, { ...data, type: 'Actor', isPlayer: true });
+      } else if (type === 'Folder') {
+        newObj = Folder.fromData(this.game, data);
       } else if (type === 'Static' || type === 'Entity') {
         newObj = Entity.fromJSON(this.game, data);
       }
@@ -863,6 +963,8 @@ export class SceneEditor {
       } else if (type === 'Triggerbox') {
         if (!scene.triggerboxes) scene.triggerboxes = [];
         scene.triggerboxes.push(newObj);
+      } else if (type === 'Folder') {
+        scene.addFolder(newObj);
       } else {
         scene.addEntity(newObj);
       }
@@ -911,13 +1013,47 @@ export class SceneEditor {
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
-      if (this.selectedObject instanceof Walkbox) {
+      if (this.selectedObject.type === 'Folder') {
+        const rootFolderId = (this.selectedObject as any).folderId;
+        const folderIdsToDelete = new Set<string>([rootFolderId]);
+        const subFoldersToDelete: any[] = [];
+
+        const queue: string[] = [rootFolderId];
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          for (const f of scene.folders) {
+            const fid = (f as any).folderId;
+            if ((f as any).folder === current && !folderIdsToDelete.has(fid)) {
+              folderIdsToDelete.add(fid);
+              subFoldersToDelete.push(f);
+              queue.push(fid);
+            }
+          }
+        }
+
+        const children = [
+          ...scene.entities.filter((e: any) => folderIdsToDelete.has(e.folder)),
+          ...scene.walkbox.filter((w: any) => folderIdsToDelete.has(w.folder)),
+          ...scene.triggerboxes.filter((t: any) => folderIdsToDelete.has(t.folder)),
+        ];
+        for (const child of children) {
+          if (child instanceof Walkbox) scene.removeWalkbox(child);
+          else if (child instanceof Triggerbox) scene.removeTriggerbox(child);
+          else if (child instanceof Entity) scene.removeEntity(child);
+        }
+
+        for (const sub of subFoldersToDelete) {
+          scene.removeFolder(sub);
+        }
+      }
+
+      if (this.selectedObject.type === 'Folder') {
+        scene.removeFolder(this.selectedObject as any);
+      } else if (this.selectedObject instanceof Walkbox) {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
         scene.removeTriggerbox(this.selectedObject);
       } else if (this.selectedObject instanceof Entity) {
-        scene.removeEntity(this.selectedObject);
-      } else if (this.selectedObject instanceof Actor) {
         scene.removeEntity(this.selectedObject);
       }
     }
@@ -1015,6 +1151,11 @@ export class SceneEditor {
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
       if (selected instanceof Entity) {
+        if (this.game.inventoryManager?.getInventorySlotForEntity(selected)) {
+          ctx.restore();
+          continue;
+        }
+
         if ((selected as any).type === 'Quad') {
           // ** QUAD SELECTION RENDERING **
           const quad = selected as QuadObject;

@@ -1,0 +1,9 @@
+{
+  "id": "tv_rc",
+  "imageFile": "public/assets/tv_rc.png",
+  "x": 0,
+  "y": 0,
+  "width": 200,
+  "height": 295,
+  "frames": 1
+}

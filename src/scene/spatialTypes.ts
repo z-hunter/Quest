@@ -1,4 +1,4 @@
-export type SpatialRelationType = 'in' | 'on' | 'under' | 'behind';
+export type SpatialRelationType = 'in' | 'on' | 'under' | 'behind' | 'near';
 
 export type SpatialPlacement = {
   parentNodeId?: string | null;

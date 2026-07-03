@@ -4,22 +4,16 @@ import { normalizeTriggerComponents, type AnyTriggerComponent } from './TriggerC
 export class Triggerbox extends PolygonObject {
   script: string;
   components: AnyTriggerComponent[];
-  parallax: number;
 
   /**
    * List of properties to be serialized to/from JSON.
    */
-  static override SERIALIZABLE_PROPS: string[] = [
-    ...PolygonObject.SERIALIZABLE_PROPS,
-    'script',
-    'parallax',
-  ];
+  static override SERIALIZABLE_PROPS: string[] = [...PolygonObject.SERIALIZABLE_PROPS, 'script'];
 
   constructor(poly: { x: number; y: number }[], name: string = 'Triggerbox', script: string = '') {
     super(poly, name, 'Triggerbox');
     this.script = script;
     this.components = [];
-    this.parallax = 1.0;
   }
 
   toJSON(): any {

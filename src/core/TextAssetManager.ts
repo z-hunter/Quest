@@ -2,18 +2,43 @@ import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../mechanics/parserTypes';
+import {
+  deleteProjectFile,
+  ensureProjectFile,
+  openProjectFile,
+  saveProjectFile,
+} from '../platform/fileApi';
 
-type TextAssetValue = string | string[];
+export type TextAssetStructuredValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TextAssetStructuredValue[]
+  | { [key: string]: TextAssetStructuredValue };
+
+type TextAssetValue =
+  | string
+  | string[]
+  | TextAssetStructuredValue[]
+  | Record<string, TextAssetStructuredValue>;
 type TextAssetData = Record<string, TextAssetValue>;
+type TextAssetTextValue = string | string[];
 export type SceneTextAssetData = TextAssetData & {
-  title?: string;
-  description?: string;
+  title?: TextAssetTextValue;
+  description?: TextAssetTextValue;
+  lore?: TextAssetTextValue;
 };
 export type ObjectTextAssetData = TextAssetData & {
-  title?: string;
-  description?: string;
-  details?: string;
+  title?: TextAssetTextValue;
+  description?: TextAssetTextValue;
+  details?: TextAssetTextValue;
+  lore?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue[];
+  takeFailure?: TextAssetTextValue;
   synonyms?: string[];
+  semanticTags?: string[];
+  relationFacts?: TextAssetStructuredValue[];
 };
 
 const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
@@ -29,12 +54,39 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     examine_relation_prompt: 'Examine what area?',
     relation_empty: 'You see nothing {relation} the {target}.',
     relation_contents: '{Relation} the {target} you see: {items}.',
+    relation_discovered_contents: '{Relation} the {target} you discover: {items}.',
     relation_location: 'It is {relation} the {target}.',
     relation_not_supported: "You can't determine what is {relation} the {target} from here.",
     take_prompt: 'Take what?',
     take_which_one: 'Which item do you mean: {options}?',
     take_pickup_success: 'You picked up the {item}.',
+    take_pickup_success_from: 'You picked up the {item} from the {source}.',
+    take_already_held: 'You are already carrying the {item}.',
     take_cannot: 'You cannot take that.',
+    put_prompt: 'Put what?',
+    put_which_item: 'Which item do you want to put down: {options}?',
+    put_which_target: 'Where exactly do you want to put it: {options}?',
+    put_item_not_held: "You aren't carrying the {item}.",
+    put_target_not_found: "You don't see anywhere suitable near {target}.",
+    put_no_place: "You can't put that there.",
+    put_target_full_in: 'There is no more room in the {target}.',
+    put_target_full_on: 'There is no more room on the {target}.',
+    put_target_no_fit_in: 'The {item} does not fit in the {target}.',
+    put_target_no_fit_on: 'The {item} does not fit on the {target}.',
+    put_success_surface: 'You put the {item} on the {target}.',
+    put_success_inventory: 'You put the {item} into the {target}.',
+    put_success_under: 'You put the {item} under the {target}.',
+    put_success_behind: 'You put the {item} behind the {target}.',
+    drop_success: 'You drop the {item}.',
+    open_prompt: 'Open what?',
+    open_which_one: 'Which thing do you want to open: {options}?',
+    open_success: 'You open the {target}.',
+    open_already: 'The {target} is already open.',
+    close_prompt: 'Close what?',
+    close_which_one: 'Which thing do you want to close: {options}?',
+    close_success: 'You close the {target}.',
+    close_already: 'The {target} is already closed.',
+    inventory_missing: 'You have nowhere to carry anything.',
     inventory_empty: 'You are not carrying anything.',
     inventory_items: 'You are carrying: {items}',
     go_to_prompt: 'Where do you want to go?',
@@ -46,13 +98,19 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     use_missing_item: "You don't have the {item}.",
     use_no_effect_pair: 'Using the {item} on the {target} does nothing.',
     use_no_effect_single: 'You try to use the {target}, but nothing happens.',
+    clarification_cancel_replies: ['none', 'cancel'],
+    clarification_cancelled: 'Command cancelled.',
     command_no_effect: "That doesn't work.",
     parse_unknown: "I don't understand.",
   },
   engine: {
+    floor_label: 'floor',
     click_you_see: 'You see {title}',
     too_far_generic: 'You are too far away.',
     too_far_from_entity: 'You are too far away from the {target}.',
+    cant_reach_generic: "You can't reach it.",
+    blocked_inside_closed: "You can't reach that while it is inside something closed.",
+    closed_container: 'The {target} is closed.',
     locked_needs: 'Locked. Needs {item}',
     locked_generic: 'Locked.',
   },
@@ -69,6 +127,10 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check'],
     take: ['take', 'get', 'pickup', 'pick up'],
+    put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: ['go', 'walk', 'move'],
     showInventory: ['inventory', 'inv'],
   },
@@ -85,6 +147,20 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
       'check',
     ],
     take: ['pick up', 'take', 'get', 'grab'],
+    put: [
+      'put down',
+      'throw away',
+      'toss away',
+      'put',
+      'drop',
+      'place',
+      'throw',
+      'toss',
+      'discard',
+    ],
+    open: ['open'],
+    close: ['close', 'shut'],
+    quit: ['quit', 'exit'],
     goTo: [
       'go over to',
       'walk over to',
@@ -172,6 +248,31 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
     'i want to take the key',
     'please pick up the card',
   ],
+  put: [
+    'put key',
+    'drop key',
+    'put key on table',
+    'drop the tape on desk',
+    'put cassette into recorder',
+    'place note under table',
+  ],
+  open: [
+    'open',
+    'open drawer',
+    'open desk drawer',
+    'open cabinet',
+    'open the drawer',
+    'open the compartment',
+  ],
+  close: [
+    'close',
+    'close drawer',
+    'close desk drawer',
+    'shut drawer',
+    'close the drawer',
+    'shut the compartment',
+  ],
+  quit: ['quit', 'exit'],
   goTo: [
     'go',
     'go office',
@@ -227,7 +328,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
           noEffect: "That doesn't work.",
         },
         validation: {
-          allowedTitles: ['your ID card'],
+          allowedEntityIds: ['miles_id'],
         },
       },
     ],
@@ -276,16 +377,95 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    },
+  },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
     },
   },
 ];
@@ -352,6 +532,7 @@ export class TextAssetManager {
       title: scene.name || scene.id || 'Untitled Scene',
       description:
         scene.description || `You are in ${scene.name || scene.id || 'an unnamed scene'}.`,
+      lore: '',
     };
   }
 
@@ -377,6 +558,9 @@ export class TextAssetManager {
       title: fallbackTitle,
       description: fallbackDescription,
       details: '',
+      lore: '',
+      objectives: [],
+      takeFailure: '',
       synonyms: [],
     };
   }
@@ -585,16 +769,38 @@ export class TextAssetManager {
   }
 
   getResolvedObjectField(obj: SceneObject, field: string): string | null {
+    if (obj?.type === 'Walkbox' && field === 'title') {
+      return this.getServiceText('engine.floor_label');
+    }
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
   }
 
+  hasAuthoredObjectTitle(obj: SceneObject): boolean {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
+    return !!title?.trim();
+  }
+
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     return this.resolveListField(asset, field);
+  }
+
+  getResolvedObjectStructuredListField<T>(
+    obj: SceneObject,
+    field: string,
+    normalize: (value: unknown) => T | null
+  ): T[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const raw = asset?.[field];
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) => normalize(item)).filter((item): item is T => item !== null);
   }
 
   getServiceText(key: string, params?: Record<string, string | number>, fallback?: string): string {
@@ -621,12 +827,38 @@ export class TextAssetManager {
 
     const domainAsset = this.serviceCache.get(domain) || {};
     const template = domainAsset[entryKey];
-    if (typeof template !== 'string') {
+    const text = this.resolveTextValue(template);
+    if (text === null) {
       console.warn(`[TextAssetManager] Missing service text '${rawKey}'.`);
       return fallback || rawKey;
     }
 
-    return this.interpolate(template, params);
+    return this.interpolate(text, params);
+  }
+
+  getServiceList(key: string): string[] {
+    const rawKey = String(key || '').trim();
+    if (!rawKey) return [];
+
+    const dotIndex = rawKey.indexOf('.');
+    if (dotIndex === -1) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    const domain = rawKey.slice(0, dotIndex).toLowerCase();
+    const entryKey = rawKey.slice(dotIndex + 1);
+    if (!entryKey) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    if (!this.serviceCache.has(domain)) {
+      this.serviceCache.set(domain, this.getDefaultServiceDomain(domain));
+      void this.readServiceAsset(domain, true);
+    }
+
+    return this.resolveListField(this.serviceCache.get(domain) || {}, entryKey);
   }
 
   private resolveField(
@@ -639,23 +871,35 @@ export class TextAssetManager {
     const redirectTarget = redirects && redirects[field];
     if (redirectTarget) {
       const redirected = asset[redirectTarget];
-      if (typeof redirected === 'string') return redirected;
+      const redirectedText = this.resolveTextValue(redirected);
+      if (redirectedText !== null) return redirectedText;
       console.warn(
         `[TextAssetManager] Missing redirected field '${redirectTarget}' for '${field}'.`
       );
     }
     const direct = asset[field];
-    if (typeof direct === 'string') return direct;
+    const directText = this.resolveTextValue(direct);
+    if (directText !== null) return directText;
     return fallback;
+  }
+
+  private resolveTextValue(value: TextAssetValue | undefined): string | null {
+    if (typeof value === 'string') return value;
+    if (!Array.isArray(value)) return null;
+    if (!value.every((item) => typeof item === 'string')) return null;
+    return value.join('\n');
   }
 
   private resolveListField(asset: TextAssetData | null | undefined, field: string): string[] {
     const raw = asset?.[field];
     if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const values: string[] = [];
+    for (const item of raw) {
+      if (typeof item !== 'string') continue;
+      const trimmed = item.trim();
+      if (trimmed) values.push(trimmed);
+    }
+    return values;
   }
 
   private async fetchJson(url: string): Promise<TextAssetData | null> {
@@ -706,23 +950,50 @@ export class TextAssetManager {
   private normalizeSceneAssetData(asset: TextAssetData | null): SceneTextAssetData | null {
     if (!asset) return null;
     const normalized: SceneTextAssetData = { ...asset };
-    if (typeof asset.title === 'string') normalized.title = asset.title;
-    if (typeof asset.description === 'string') normalized.description = asset.description;
+    if (this.resolveTextValue(asset.title) !== null) {
+      normalized.title = asset.title as TextAssetTextValue;
+    }
+    if (this.resolveTextValue(asset.description) !== null)
+      normalized.description = asset.description as TextAssetTextValue;
+    if (this.resolveTextValue(asset.lore) !== null)
+      normalized.lore = asset.lore as TextAssetTextValue;
     return normalized;
   }
 
   private normalizeObjectAssetData(asset: TextAssetData | null): ObjectTextAssetData | null {
     if (!asset) return null;
     const normalized: ObjectTextAssetData = { ...asset };
-    if (typeof asset.title === 'string') normalized.title = asset.title;
-    if (typeof asset.description === 'string') normalized.description = asset.description;
-    if (typeof asset.details === 'string') normalized.details = asset.details;
+    if (this.resolveTextValue(asset.title) !== null) {
+      normalized.title = asset.title as TextAssetTextValue;
+    }
+    if (this.resolveTextValue(asset.description) !== null)
+      normalized.description = asset.description as TextAssetTextValue;
+    if (this.resolveTextValue(asset.details) !== null)
+      normalized.details = asset.details as TextAssetTextValue;
+    if (this.resolveTextValue(asset.lore) !== null)
+      normalized.lore = asset.lore as TextAssetTextValue;
+    if (Array.isArray(asset.objectives))
+      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
+    if (this.resolveTextValue(asset.takeFailure) !== null)
+      normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');
     return normalized;
   }
 
   private async fetchUnknownJson(url: string): Promise<unknown | null> {
     try {
+      // In Tauri distributions, read from local filesystem instead of bundled assets
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      if (isTauriRuntime()) {
+        const path = `public${url.split('?')[0]}`;
+        try {
+          const content = await readProjectFileExisting(path);
+          return JSON.parse(content);
+        } catch {
+          return null;
+        }
+      }
+
       const response = await fetch(`${url}?t=${Date.now()}`);
       if (!response.ok) {
         if (response.status === 404) return null;
@@ -734,7 +1005,7 @@ export class TextAssetManager {
       }
       return await response.json();
     } catch (error) {
-      console.error('[TextAssetManager] Failed to fetch text asset:', error);
+      console.error(`[TextAssetManager] error reading ${url}:`, error);
       return null;
     }
   }
@@ -751,33 +1022,15 @@ export class TextAssetManager {
   }
 
   private async ensureFile(filePath: string, content: string): Promise<void> {
-    await fetch('/api/ensure-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
+    await ensureProjectFile(filePath, content);
   }
 
   private async saveFile(filePath: string, content: string): Promise<void> {
-    const response = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await saveProjectFile(filePath, content);
   }
 
   private async openFile(filePath: string, content: string): Promise<void> {
-    const response = await fetch('/api/open-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await openProjectFile(filePath, content);
   }
 
   async duplicateObjectAssetIfExists(
@@ -789,14 +1042,7 @@ export class TextAssetManager {
     if (!sourceData) return;
 
     const targetPath = this.getObjectAssetProjectPath(targetObjectId);
-    const response = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: targetPath, content: JSON.stringify(sourceData, null, 2) }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await saveProjectFile(targetPath, JSON.stringify(sourceData, null, 2));
     this.objectCache.set(this.normalizeId(targetObjectId), sourceData);
   }
 
@@ -832,13 +1078,6 @@ export class TextAssetManager {
   }
 
   private async deleteFile(filePath: string): Promise<void> {
-    const response = await fetch('/api/delete-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    await deleteProjectFile(filePath);
   }
 }

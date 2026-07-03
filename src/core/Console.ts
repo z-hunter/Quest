@@ -1,11 +1,22 @@
 import { ScriptRegistry } from './ScriptRegistry';
+import { SceneSpatialValidator } from '../scene/SceneSpatialValidator';
 
-export type ConsoleLineType = 'output' | 'command' | 'error' | 'info';
+export type ConsoleLineType = 'output' | 'command' | 'error' | 'info' | 'dialogue';
 
 export interface ConsoleLine {
   text: string;
   type: ConsoleLineType;
   timestamp: number;
+  showInClosed?: boolean;
+}
+
+export interface ConsoleDisplayLine {
+  text: string;
+  type: ConsoleLineType;
+}
+
+export interface ConsoleLogOptions {
+  showInClosed?: boolean;
 }
 
 export interface ConsoleState {
@@ -19,12 +30,21 @@ export class Console {
   history: string[] = [];
   isOpen: boolean = false;
   parserPeekEnabled: boolean = false;
+  parserPeekLlmEnabled: boolean = false;
+  parserPeekPnEnabled: boolean = false;
+  parserPeekPmEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
+  parserLlmEnabled: boolean = false;
+  parserCascade1ForceLlm: boolean = false;
+  isClosedModal: boolean = false;
+  private closedModalDisplayLines: ConsoleDisplayLine[] = [];
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
   readonly MAX_HISTORY = 50;
+  readonly CLOSED_CONSOLE_VISIBLE_LINES = 2;
+  readonly CLOSED_CONSOLE_WRAP_COLUMNS = 68;
 
   // Command Registry
   private commands: Map<string, (args: string[]) => void> = new Map();
@@ -57,6 +77,10 @@ export class Console {
   }
 
   preprocessGameplayInput(input: string): string {
+    if (this.isClosedModal) {
+      return '';
+    }
+
     const trimmed = input.trim();
     if (!trimmed) return trimmed;
 
@@ -72,10 +96,16 @@ export class Console {
       return trimmed.replace(/^l/i, 'LOOK');
     }
 
+    if (/^q$/i.test(trimmed)) {
+      return 'QUIT';
+    }
+
     return trimmed;
   }
 
   processCommand(input: string): void {
+    if (this.isClosedModal) return;
+
     const trimmed = input.trim();
     if (!trimmed) return;
 
@@ -141,6 +171,36 @@ export class Console {
       this.log('Parser peek disabled.', 'info');
     });
 
+    this.registerCommand('#PEEKLLM-ON', () => {
+      this.parserPeekLlmEnabled = true;
+      this.log('LLM prompt/response peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKLLM-OFF', () => {
+      this.parserPeekLlmEnabled = false;
+      this.log('LLM prompt/response peek disabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPN-ON', () => {
+      this.parserPeekPnEnabled = true;
+      this.log('Parser Notes peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPN-OFF', () => {
+      this.parserPeekPnEnabled = false;
+      this.log('Parser Notes peek disabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPM-ON', () => {
+      this.parserPeekPmEnabled = true;
+      this.log('Puppet Master peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKPM-OFF', () => {
+      this.parserPeekPmEnabled = false;
+      this.log('Puppet Master peek disabled.', 'info');
+    });
+
     this.registerCommand('#STAGE1-OFF', () => {
       this.parserStage1Enabled = false;
       this.log(
@@ -163,6 +223,52 @@ export class Console {
       this.parserStage2Enabled = true;
       this.log('Parser stage2 enabled.', 'info');
     });
+
+    this.registerCommand('#LLM-ON', () => {
+      this.parserLlmEnabled = true;
+      this.log('LLM cascade enabled.', 'info');
+    });
+
+    this.registerCommand('#LLM-OFF', () => {
+      this.parserLlmEnabled = false;
+      this.log('LLM cascade disabled.', 'info');
+    });
+
+    const enableCascade1 = () => {
+      this.parserCascade1ForceLlm = false;
+      this.log('Cascade 1 normal execution enabled.', 'info');
+    };
+    const forceCascade1ToLlm = () => {
+      this.parserCascade1ForceLlm = true;
+      this.log('Cascade 1 forced LLM handoff enabled.', 'info');
+    };
+
+    this.registerCommand('#C1-ON', enableCascade1);
+    this.registerCommand('#C1-OFF', forceCascade1ToLlm);
+    this.registerCommand('#С1-ON', enableCascade1);
+    this.registerCommand('#С1-OFF', forceCascade1ToLlm);
+
+    this.registerCommand('#VALIDATE-SPATIAL', () => {
+      const scene = this.game?.sceneManager?.currentScene || null;
+      const result = SceneSpatialValidator.validate(scene, this.game);
+      if (!scene) {
+        this.log('Spatial validation failed: no current scene.', 'error');
+        return;
+      }
+
+      this.log(
+        `Spatial validation for '${scene.name}': ${result.errors.length} error(s), ${result.warnings.length} warning(s).`,
+        result.ok ? 'info' : 'error'
+      );
+
+      for (const issue of result.issues) {
+        const prefix = issue.severity === 'error' ? 'ERROR' : 'WARN';
+        this.log(
+          `[${prefix}] ${issue.code}: ${issue.message}`,
+          issue.severity === 'error' ? 'error' : 'info'
+        );
+      }
+    });
   }
 
   private runScript(id: string, args: string[]) {
@@ -181,6 +287,14 @@ export class Console {
   }
 
   toggle(): void {
+    if (this.isClosedModal) {
+      this.isClosedModal = false;
+      this.closedModalDisplayLines = [];
+      this.isOpen = true;
+      this.notifyListeners();
+      return;
+    }
+
     this.isOpen = !this.isOpen;
     this.notifyListeners();
   }
@@ -190,11 +304,12 @@ export class Console {
     this.notifyListeners();
   }
 
-  log(text: string, type: ConsoleLineType = 'output'): void {
+  log(text: string, type: ConsoleLineType = 'output', options: ConsoleLogOptions = {}): number {
     const line: ConsoleLine = {
       text,
       type,
       timestamp: Date.now(),
+      showInClosed: options.showInClosed,
     };
 
     this.buffer.push(line);
@@ -204,6 +319,72 @@ export class Console {
       this.buffer.shift();
     }
 
+    if (
+      this.lineShowsInClosed(line) &&
+      !this.isOpen &&
+      type === 'output' &&
+      this.getWrappedLineCount(text) > 2
+    ) {
+      this.isClosedModal = true;
+      this.closedModalDisplayLines = this.buildDisplayLines([{ text, type }]);
+    }
+
+    this.notifyListeners();
+    return this.buffer.length - 1;
+  }
+
+  logResponse(
+    messages: string[],
+    type: ConsoleLineType = 'output',
+    options: ConsoleLogOptions = {}
+  ): number[] {
+    const lineIndexes: number[] = [];
+    const timestamp = Date.now();
+
+    for (const message of messages) {
+      const line: ConsoleLine = {
+        text: message,
+        type,
+        timestamp,
+        showInClosed: options.showInClosed,
+      };
+
+      this.buffer.push(line);
+      lineIndexes.push(this.buffer.length - 1);
+
+      if (this.buffer.length > this.MAX_BUFFER_LINES) {
+        this.buffer.shift();
+        for (let index = 0; index < lineIndexes.length; index += 1) {
+          lineIndexes[index] -= 1;
+        }
+      }
+    }
+
+    if (
+      options.showInClosed !== false &&
+      !this.isOpen &&
+      type === 'output' &&
+      this.getWrappedLineCount(messages) > 2
+    ) {
+      this.isClosedModal = true;
+      this.closedModalDisplayLines = this.buildDisplayLines(
+        messages.map((message) => ({ text: message, type }))
+      );
+    }
+
+    this.notifyListeners();
+    return lineIndexes;
+  }
+
+  updateLine(index: number, text: string, type?: ConsoleLineType): void {
+    const line = this.buffer[index];
+    if (!line) return;
+    this.buffer[index] = {
+      ...line,
+      text,
+      type: type || line.type,
+      timestamp: Date.now(),
+    };
     this.notifyListeners();
   }
 
@@ -222,9 +403,94 @@ export class Console {
 
   clear(): void {
     this.buffer = [];
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
     this.log('Console cleared', 'info');
     // log already notifies, but if we clear buffer directly first, we might want to ensure update.
     // actually log() calls notify, so we are good.
+  }
+
+  continueClosedModal(): boolean {
+    if (!this.isClosedModal) return false;
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
+    this.notifyListeners();
+    return true;
+  }
+
+  getClosedModalDisplayLines(): ConsoleDisplayLine[] {
+    return this.closedModalDisplayLines;
+  }
+
+  getClosedDisplayLines(): ConsoleDisplayLine[] {
+    return this.buildDisplayLines(
+      this.buffer
+        .filter((line) => this.lineShowsInClosed(line))
+        .map((line) => ({ text: line.text, type: line.type }))
+    );
+  }
+
+  private lineShowsInClosed(line: ConsoleLine): boolean {
+    return line.showInClosed !== false;
+  }
+
+  private getWrappedLineCount(text: string | string[]): number {
+    const messages = Array.isArray(text) ? text : [text];
+    return messages.reduce((count, message) => count + this.wrapConsoleText(message).length, 0);
+  }
+
+  private buildDisplayLines(
+    lines: Array<{ text: string; type: ConsoleLineType }>
+  ): ConsoleDisplayLine[] {
+    return lines.flatMap((line) =>
+      this.wrapConsoleText(line.text).map((text) => ({ text, type: line.type }))
+    );
+  }
+
+  private wrapConsoleText(text: string): string[] {
+    const paragraphs = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const lines: string[] = [];
+
+    for (const paragraph of paragraphs) {
+      if (paragraph.length === 0) {
+        lines.push('');
+        continue;
+      }
+
+      lines.push(...this.wrapParagraph(paragraph));
+    }
+
+    return lines.length > 0 ? lines : [''];
+  }
+
+  private wrapParagraph(text: string): string[] {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let current = '';
+
+    for (const word of words) {
+      if (word.length > this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+        if (current) {
+          lines.push(current);
+          current = '';
+        }
+        for (let index = 0; index < word.length; index += this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+          lines.push(word.slice(index, index + this.CLOSED_CONSOLE_WRAP_COLUMNS));
+        }
+        continue;
+      }
+
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > this.CLOSED_CONSOLE_WRAP_COLUMNS) {
+        if (current) lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+
+    if (current) lines.push(current);
+    return lines.length > 0 ? lines : [''];
   }
 
   // Serialization for Save/Load
@@ -240,5 +506,7 @@ export class Console {
     if (state.buffer) this.buffer = state.buffer;
     if (state.history) this.history = state.history;
     if (state.isOpen !== undefined) this.isOpen = state.isOpen;
+    this.isClosedModal = false;
+    this.closedModalDisplayLines = [];
   }
 }

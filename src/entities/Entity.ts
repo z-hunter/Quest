@@ -19,6 +19,7 @@ export interface EntityData {
   spriteName: string | null;
   color: string;
   scale: number;
+  refScale?: number;
   modelScale?: number; // User defined scale
   layer: number;
   parallax?: number;
@@ -42,7 +43,10 @@ export interface EntityData {
 
 export class Entity extends SceneObject {
   private _x: number = 0;
+  private inventoryPositionOwner: Entity | null = null;
+
   get x(): number {
+    if (this.inventoryPositionOwner) return this.inventoryPositionOwner.x;
     return this._x;
   }
   set x(val: number) {
@@ -55,6 +59,7 @@ export class Entity extends SceneObject {
 
   private _y: number = 0;
   get y(): number {
+    if (this.inventoryPositionOwner) return this.inventoryPositionOwner.y;
     return this._y;
   }
   set y(val: number) {
@@ -91,6 +96,7 @@ export class Entity extends SceneObject {
   spriteName: string | null;
   image: HTMLImageElement | null;
   scale: number;
+  refScale: number;
   modelScale: number;
   // layer: number; // Inherited
   baseWidth: number;
@@ -99,13 +105,14 @@ export class Entity extends SceneObject {
   colliderHeight: number;
   animator: Animator | null;
   flipX: boolean;
-  scene: any; // Reference to the scene this entity belongs to
 
-  private _parallax: number = 1.0;
-  get parallax(): number {
+  /**
+   * Override parallax to notify editor on change.
+   */
+  override get parallax(): number {
     return this._parallax;
   }
-  set parallax(val: number) {
+  override set parallax(val: number) {
     if (this._parallax === val) return;
     this._parallax = val;
     if (this.game.editor && this.game.editor.enabled) {
@@ -113,6 +120,7 @@ export class Entity extends SceneObject {
     }
   }
   ignoreScaling: boolean;
+  subsceneItemScale: number;
   // locked: boolean; // Inherited from SceneObject
   // readonly type: string = 'Static'; // Inherited
 
@@ -147,6 +155,28 @@ export class Entity extends SceneObject {
   animationSpeed: number; // Added
   game: IGame;
 
+  getInventoryPositionOwner(): Entity | null {
+    return this.inventoryPositionOwner;
+  }
+
+  setInventoryPositionOwner(owner: Entity | null): void {
+    if (owner === this) owner = null;
+    let current = owner;
+    while (current) {
+      if (current === this) {
+        owner = null;
+        break;
+      }
+      current = current.getInventoryPositionOwner();
+    }
+
+    if (this.inventoryPositionOwner === owner) return;
+    this.inventoryPositionOwner = owner;
+    if (this.game.editor && this.game.editor.enabled) {
+      this.game.editor.selectionManager.notifyObjectChanged(this);
+    }
+  }
+
   /**
    * List of properties to be serialized to/from JSON.
    * Extends SceneObject.SERIALIZABLE_PROPS.
@@ -164,6 +194,7 @@ export class Entity extends SceneObject {
     'spriteName',
     'color',
     'scale',
+    'refScale',
     'modelScale',
     'parallax',
     'ignoreScaling',
@@ -188,6 +219,7 @@ export class Entity extends SceneObject {
 
     // Initialize defaults BEFORE setting width/height (which now rely on scale)
     this.scale = 1.0;
+    this.refScale = 1.0;
     this.baseWidth = width;
     this.baseHeight = height;
 
@@ -207,6 +239,7 @@ export class Entity extends SceneObject {
     // this.layer = 0; // Inherited
     this._parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
     this.ignoreScaling = false;
+    this.subsceneItemScale = 1.0;
     this.animationSpeed = 150; // Default 150ms
     // this.locked = false; // Inherited
 
@@ -218,6 +251,20 @@ export class Entity extends SceneObject {
     this.flipX = false;
     this.scene = null;
     this.loadingRefCount = 0;
+  }
+
+  applySceneCorrectionalScale(_scene: any = this.scene): void {
+    const ref =
+      typeof this.refScale === 'number' && Number.isFinite(this.refScale) && this.refScale > 0
+        ? this.refScale
+        : typeof this.modelScale === 'number' &&
+            Number.isFinite(this.modelScale) &&
+            this.modelScale > 0
+          ? this.modelScale
+          : 1;
+    this.refScale = ref;
+    this.modelScale = ref;
+    this.update(0);
   }
 
   setSprite(filename: string, keepSize: boolean = false): void {
@@ -316,7 +363,7 @@ export class Entity extends SceneObject {
     }
 
     // Final Scale = User Model Scale * Depth Factor
-    this.scale = this.modelScale * depthFactor;
+    this.scale = this.modelScale * this.subsceneItemScale * depthFactor;
 
     if (this.animator) {
       this.animator.update(deltaTime);
@@ -456,6 +503,8 @@ export class Entity extends SceneObject {
   load(data: any): void {
     this.startLoading();
     try {
+      const hasAuthoredRefScale =
+        typeof data.refScale === 'number' && Number.isFinite(data.refScale) && data.refScale > 0;
       // Special handling for missing baseWidth/baseHeight in old JSONs
       if (data.baseWidth === undefined && data.width !== undefined) {
         const scale = data.scale || 1.0;
@@ -467,6 +516,25 @@ export class Entity extends SceneObject {
       }
 
       super.load(data);
+
+      if (!hasAuthoredRefScale) {
+        const fallback =
+          typeof data.modelScale === 'number' &&
+          Number.isFinite(data.modelScale) &&
+          data.modelScale > 0
+            ? data.modelScale
+            : typeof data.scale === 'number' && Number.isFinite(data.scale) && data.scale > 0
+              ? data.scale
+              : 1;
+        this.refScale = fallback;
+      }
+      if (
+        typeof this.modelScale !== 'number' ||
+        !Number.isFinite(this.modelScale) ||
+        this.modelScale <= 0
+      ) {
+        this.modelScale = this.refScale;
+      }
 
       if (data.spriteName) {
         this.setSprite(data.spriteName, true);
@@ -489,14 +557,33 @@ export class Entity extends SceneObject {
   private static _hitTestCtx: CanvasRenderingContext2D | null = null;
 
   hitTest(x: number, y: number): boolean {
-    if (this.disabled || !this.visible) return false;
+    return this.hitTestInternal(x, y, false);
+  }
 
-    // 1. Initial AABB Check (World Space)
-    // Entity Pivot is Bottom-Center
-    const left = this.x - this.width / 2;
-    const right = this.x + this.width / 2;
-    const top = this.y - this.height;
-    const bottom = this.y;
+  override containsPoint(x: number, y: number): boolean {
+    return this.hitTestInternal(x, y, true);
+  }
+
+  private hitTestInternal(x: number, y: number, ignoreInteractionLock: boolean): boolean {
+    if (this.disabled || !this.visible) return false;
+    if (!ignoreInteractionLock && this.interactionLocked) return false;
+
+    // Use this.scene if available, fallback to global scene manager
+    // @ts-ignore
+    const scene = this.scene || this.game?.sceneManager?.currentScene;
+    const camX = scene?.camera?.x || 0;
+    const camY = scene?.camera?.y || 0;
+    const p = this.parallax !== undefined ? this.parallax : 1.0;
+
+    // 1. Initial AABB Check (Projected to Visual Space)
+    // We must compare the input (x,y) with our VISUAL boundaries.
+    const visualX = this.x - camX * (p - 1.0);
+    const visualY = this.y - camY * (p - 1.0);
+
+    const left = visualX - this.width / 2;
+    const right = visualX + this.width / 2;
+    const top = visualY - this.height;
+    const bottom = visualY;
 
     // Fast Fail
     if (x < left || x > right || y < top || y > bottom) return false;

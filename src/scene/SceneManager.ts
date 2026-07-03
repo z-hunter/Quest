@@ -2,9 +2,16 @@ import { Scene } from './Scene';
 import type { IGame } from '../core/IGame';
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
+import type { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
+import type { EntryTrigger } from '../entities/TriggerComponents';
 import { QuadObject } from '../entities/QuadObject';
+import { listProjectFiles } from '../platform/fileApi';
+import { Folder } from '../entities/Folder';
+import { SoundManager } from '../systems/SoundManager';
+import { ScriptRegistry } from '../core/ScriptRegistry';
+import { StateEventSystem } from '../systems/StateEventSystem';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -69,9 +76,20 @@ type CachedSceneEntry = {
   pinned: boolean;
 };
 
+export type ActorSceneTransferOptions = {
+  targetEntryId?: string | null;
+  removeExistingPlayer?: boolean;
+  setAsScenePlayer?: boolean;
+  preserveSpatialChildren?: boolean;
+  activateScene?: boolean;
+};
+
 export class SceneManager {
   game: IGame;
   currentScene: Scene | null;
+  /** ID of the Entry trigger to use when loading the next scene. */
+  pendingEntryId: string | null = null;
+
   scenes: Map<string, Scene>;
   sceneRegistry: Map<string, SceneDescriptor>;
   private sceneCacheMeta: Map<string, CachedSceneEntry>;
@@ -102,22 +120,261 @@ export class SceneManager {
     this.cacheScene(scene, false);
   }
 
-  switchTo(sceneId: string): void {
+  private getInventoryRelations(entity: Entity): Array<'in' | 'on' | 'under' | 'behind'> {
+    const relations = (entity.components || [])
+      .filter((component: any) => component?.type === 'Inventory')
+      .map((component: any) =>
+        component?.relation === 'on' ||
+        component?.relation === 'under' ||
+        component?.relation === 'behind' ||
+        component?.relation === 'in'
+          ? component.relation
+          : 'in'
+      );
+    return Array.from(new Set(relations));
+  }
+
+  private collectActorTransferEntities(actor: Actor, sourceScene: Scene | null): Entity[] {
+    const collected = new Set<Entity>([actor]);
+    const queue: Entity[] = [actor];
+
+    const enqueue = (entity: Entity | null | undefined) => {
+      if (!entity || collected.has(entity)) return;
+      collected.add(entity);
+      queue.push(entity);
+    };
+
+    for (const relation of this.getInventoryRelations(actor)) {
+      for (const entity of this.game.inventoryManager?.getInventoryEntities?.(actor, relation) ||
+        []) {
+        enqueue(entity);
+      }
+    }
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || !sourceScene) continue;
+
+      for (const candidate of sourceScene.entities) {
+        if (!(candidate instanceof Entity)) continue;
+        const parentId =
+          typeof (candidate as any).spatial?.parentNodeId === 'string'
+            ? (candidate as any).spatial.parentNodeId.trim()
+            : '';
+        if (parentId === current.name) {
+          enqueue(candidate);
+        }
+      }
+    }
+
+    return Array.from(collected);
+  }
+
+  private detachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
+    const index = scene.entities.indexOf(entity);
+    if (index === -1) return;
+    scene.entities.splice(index, 1);
+    scene.revealedHiddenEntities.delete(entity.name);
+    scene.subsceneEntities.delete(entity);
+    if (scene.player === entity) {
+      scene.player = null;
+    }
+  }
+
+  private attachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
+    scene.addEntity(entity);
+  }
+
+  private findFirstEntryId(scene: Scene): string | null {
+    const entry = scene
+      .getAllSceneObjects()
+      .find((object) => object.components?.some((component) => component.type === 'Entry'));
+    return entry?.name || null;
+  }
+
+  private applyEntryPlacement(
+    scene: Scene,
+    actor: Actor,
+    entryId: string | null
+  ): SceneObject | null {
+    if (!entryId) return null;
+    const entryObj = scene.getObjectByName(entryId);
+    if (!entryObj) return null;
+    const entryComp = entryObj.components?.find((c) => c.type === 'Entry') as
+      | EntryTrigger
+      | undefined;
+    if (!entryComp) return null;
+
+    let targetX: number | null = null;
+    let targetY: number | null = null;
+
+    if (entryObj.type === 'Triggerbox' || (entryObj as any).poly) {
+      const poly = (entryObj as any).poly as { x: number; y: number }[];
+      if (poly && poly.length > 0) {
+        let cx = 0;
+        let cy = 0;
+        poly.forEach((p) => {
+          cx += p.x;
+          cy += p.y;
+        });
+        targetX = cx / poly.length;
+        targetY = cy / poly.length;
+      }
+    } else if ('x' in entryObj && 'y' in entryObj) {
+      targetX = (entryObj as any).x;
+      targetY = (entryObj as any).y;
+    }
+
+    if (targetX === null || targetY === null) return entryObj;
+    actor.layer = entryObj.layer;
+    actor.parallax = entryObj.parallax;
+    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    actor.x = walkableTarget.x;
+    actor.y = walkableTarget.y;
+    if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
+      (actor as any).setDirection(entryComp.direction);
+    }
+    actor.update(0);
+    return entryObj;
+  }
+
+  private findNearestWalkableEntryPosition(
+    scene: Scene,
+    actor: Actor,
+    targetX: number,
+    targetY: number
+  ): { x: number; y: number } {
+    if (scene.isWalkable(targetX, targetY, actor)) {
+      return { x: targetX, y: targetY };
+    }
+
+    const step = 4;
+    const maxRadius = Math.max(128, actor.colliderWidth * 2, actor.colliderHeight * 8);
+    let best: { x: number; y: number; distanceSq: number } | null = null;
+
+    for (let radius = step; radius <= maxRadius; radius += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
+        for (let dy = -radius; dy <= radius; dy += step) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const x = targetX + dx;
+          const y = targetY + dy;
+          if (!scene.isWalkable(x, y, actor)) continue;
+          const distanceSq = dx * dx + dy * dy;
+          if (!best || distanceSq < best.distanceSq) {
+            best = { x, y, distanceSq };
+          }
+        }
+      }
+      const nearest = best;
+      if (nearest !== null) {
+        return { x: nearest.x, y: nearest.y };
+      }
+    }
+
+    console.warn(
+      `[SceneManager] Entry placement for ${actor.name} at ${targetX},${targetY} is not walkable.`
+    );
+    return { x: targetX, y: targetY };
+  }
+
+  private finalizeSceneActivation(oldScene: Scene | null, scene: Scene): void {
+    this.currentScene = scene;
+    SoundManager.getInstance().setEnvironment(scene.soundEnv);
+    if (oldScene !== scene) {
+      scene.clearParserRecentTurns();
+    }
+    this.touchScene(scene.id);
+    this.pinCurrentScene();
+    this.syncAssetCacheState();
+    this.game.inventoryManager?.handleSceneChange?.();
+    StateEventSystem.dispatchSceneStateEvents(this.game, scene, 'scene-load');
+    (this.game as any).parser?.prepareLlmStaticPromptForCurrentScene?.();
+    this.exposeEntitiesToWindow();
+    if (this.game.onSceneChange) {
+      this.game.onSceneChange(scene.name);
+    }
+    this.evictScenesIfNeeded();
+  }
+
+  transferActorToScene(
+    actor: Actor,
+    targetSceneId: string,
+    options: ActorSceneTransferOptions = {}
+  ): Scene | null {
+    const sourceScene = this.currentScene;
+    const targetScene = this.ensureSceneLoaded(targetSceneId);
+    if (!targetScene) {
+      console.error(`Scene ${targetSceneId} not found!`);
+      return null;
+    }
+
+    const removeExistingPlayer = options.removeExistingPlayer ?? !!(actor as any).isPlayer;
+    const setAsScenePlayer = options.setAsScenePlayer ?? !!(actor as any).isPlayer;
+    const transfersPlayerActor =
+      setAsScenePlayer || !!(actor as any).isPlayer || sourceScene?.player === actor;
+    const preserveSpatialChildren = options.preserveSpatialChildren ?? true;
+    const activateScene = options.activateScene ?? setAsScenePlayer;
+    const transferEntities = preserveSpatialChildren
+      ? this.collectActorTransferEntities(actor, sourceScene)
+      : [actor];
+
+    if (removeExistingPlayer) {
+      const existingPlayer = targetScene.entities.find((e) => (e as any).isPlayer && e !== actor);
+      if (existingPlayer) {
+        targetScene.removeEntity(existingPlayer);
+      }
+    }
+
+    if (sourceScene && sourceScene !== targetScene) {
+      for (const entity of transferEntities) {
+        this.detachEntityForSceneTransfer(sourceScene, entity);
+      }
+      for (const entity of transferEntities) {
+        this.attachEntityForSceneTransfer(targetScene, entity);
+        entity.applySceneCorrectionalScale?.(targetScene);
+      }
+    } else if (!targetScene.entities.includes(actor)) {
+      this.attachEntityForSceneTransfer(targetScene, actor);
+    }
+
+    if (setAsScenePlayer) {
+      targetScene.player = actor;
+    }
+    const targetEntryId =
+      options.targetEntryId ??
+      (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
+    this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    if (transfersPlayerActor && sourceScene !== targetScene && targetScene.defaultCamera) {
+      targetScene.camera.zoom = targetScene.defaultCamera.zoom;
+    }
+    if (setAsScenePlayer && targetScene.autoCenter) {
+      targetScene.snapCameraToPlayer();
+    }
+    if (activateScene) {
+      this.finalizeSceneActivation(sourceScene, targetScene);
+    }
+
+    return targetScene;
+  }
+
+  switchTo(sceneId: string, activator?: Actor): void {
+    const oldScene = this.currentScene;
     const scene = this.ensureSceneLoaded(sceneId);
     if (!scene) {
       console.error(`Scene ${sceneId} not found!`);
       return;
     }
 
-    this.currentScene = scene;
-    this.touchScene(scene.id);
-    this.pinCurrentScene();
-    this.syncAssetCacheState();
-    this.exposeEntitiesToWindow();
-    if (this.game.onSceneChange) {
-      this.game.onSceneChange(scene.name);
+    if (activator) {
+      this.transferActorToScene(activator, sceneId, {
+        targetEntryId: this.pendingEntryId,
+        activateScene: false,
+      });
+    } else {
+      this.pendingEntryId = null;
     }
-    this.evictScenesIfNeeded();
+    this.pendingEntryId = null;
+    this.finalizeSceneActivation(oldScene, scene);
   }
 
   exposeEntitiesToWindow(): void {
@@ -149,9 +406,16 @@ export class SceneManager {
   async loadScene(filename: string): Promise<void> {
     try {
       const idFromPath = filename.replace('.json', '').replace(/\//g, '\\');
-      const response = await fetch(`/scenes/${filename}?t=${Date.now()}`);
-      if (!response.ok) throw new Error('File not found');
-      const data = await response.json();
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      let data: any = null;
+      if (isTauriRuntime()) {
+        const content = await readProjectFileExisting(`public/scenes/${filename}`);
+        data = JSON.parse(content);
+      } else {
+        const response = await fetch(`/scenes/${filename}?t=${Date.now()}`);
+        if (!response.ok) throw new Error('File not found');
+        data = await response.json();
+      }
       await this.loadSceneData(data, idFromPath, filename);
     } catch (e) {
       console.error(e);
@@ -162,13 +426,21 @@ export class SceneManager {
   async loadSceneData(data: any, filename?: string, explicitPath?: string): Promise<void> {
     try {
       const sceneId = filename || data.id || 'loaded_scene';
+
+      // If we are hot-reloading or entirely replacing this scene, clean up any old scripts bound to it
+      if (this.scenes.has(sceneId)) {
+        ScriptRegistry.stopSceneScripts(sceneId);
+      }
+
       const pathValue = explicitPath || `${sceneId.replace(/\\/g, '/')}.json`;
       const newScene = this.instantiateScene(sceneId, data, pathValue);
 
       this.syncSceneRegistration(newScene, undefined, data);
       this.cacheScene(newScene, false);
       this.switchTo(newScene.id);
+      await this.preloadSwitchSounds(newScene);
       await this.game.textAssets.preloadScene(newScene);
+      StateEventSystem.syncSceneStateParserNotes(this.game, newScene);
       this.syncSceneRegistration(newScene, undefined, newScene.toJSON());
       await this.refreshSceneFootprint(newScene.id);
 
@@ -179,6 +451,27 @@ export class SceneManager {
       console.error('Failed to load scene:', e);
       if (this.game.showNotification) this.game.showNotification('Error loading JSON');
     }
+  }
+
+  private async preloadSwitchSounds(scene: Scene): Promise<void> {
+    const promises: Promise<void>[] = [];
+    const allObjects = [...scene.entities, ...scene.triggerboxes];
+    const soundManager = SoundManager.getInstance();
+
+    allObjects.forEach((obj) => {
+      if (obj.components) {
+        obj.components.forEach((comp: any) => {
+          if (comp.type === 'Switch') {
+            if (comp.sound1)
+              promises.push(soundManager.loadSound(comp.sound1, `/sounds/${comp.sound1}`));
+            if (comp.sound2)
+              promises.push(soundManager.loadSound(comp.sound2, `/sounds/${comp.sound2}`));
+          }
+        });
+      }
+    });
+
+    await Promise.all(promises);
   }
 
   syncSceneRegistration(scene: Scene, previousId?: string, sourceData?: any): void {
@@ -416,34 +709,52 @@ export class SceneManager {
     if (data.camMaxX !== undefined) newScene.camMaxX = data.camMaxX;
     if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
     if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
-    if (data.scaling) newScene.scaling = data.scaling;
+    if (data.scaling) newScene.scaling = { ...newScene.scaling, ...data.scaling };
+
+    if (data.soundEnv) {
+      newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
+    }
+
+    if (data.sceneLog) {
+      newScene.sceneLog.load(data.sceneLog);
+    }
 
     if (data.walkbox) {
-      newScene.walkbox = (data.walkbox || []).map((wb: any) => {
+      (data.walkbox || []).forEach((wb: any) => {
         const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
         const w = new Walkbox(poly, wb.name || 'Walkbox');
         w.load(wb);
-        return w;
+        newScene.addWalkbox(w);
       });
     }
 
     if (data.triggerboxes) {
-      newScene.triggerboxes = (data.triggerboxes || []).map((t: any) => {
+      (data.triggerboxes || []).forEach((t: any) => {
         const poly = t.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
         const tb = new Triggerbox(poly, t.name || 'Triggerbox', t.script || '');
         tb.load(t);
-        return tb;
+        newScene.addTriggerbox(tb);
       });
     }
 
     if (data.entities) {
       data.entities.forEach((entityData: any) => {
+        if (entityData.type === 'Folder') {
+          const folder = Folder.fromData(this.game, entityData);
+          newScene.addFolder(folder);
+          return;
+        }
+
         let entity: Entity;
+
+        const hasActorComponent = Array.isArray(entityData.components)
+          ? entityData.components.some((component: any) => component?.type === 'Actor')
+          : false;
 
         if (entityData.type === 'Player') {
           entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
-        } else if (entityData.type === 'Actor') {
-          entity = Actor.fromJSON(this.game, entityData);
+        } else if (entityData.type === 'Actor' || hasActorComponent) {
+          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
         } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
           entity = QuadObject.fromJSON(this.game, entityData);
         } else {
@@ -452,6 +763,17 @@ export class SceneManager {
 
         newScene.addEntity(entity);
       });
+    }
+
+    if (data.folders) {
+      data.folders.forEach((folderData: any) => {
+        const folder = Folder.fromData(this.game, folderData);
+        newScene.addFolder(folder);
+      });
+    }
+
+    if (Array.isArray(data.displayOrder)) {
+      newScene.displayOrder = data.displayOrder.filter((n: any) => typeof n === 'string');
     }
 
     return newScene;
@@ -466,7 +788,9 @@ export class SceneManager {
 
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
     this.cacheScene(scene, false);
-    void this.game.textAssets.preloadScene(scene);
+    void this.game.textAssets
+      .preloadScene(scene)
+      .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
     void this.refreshSceneFootprint(scene.id);
     return scene;
   }
@@ -603,19 +927,9 @@ export class SceneManager {
   }
 
   private async listSceneFiles(relativeDir: string): Promise<string[]> {
-    const response = await fetch('/api/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: relativeDir }),
-    });
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    const payload = (await response.json()) as { files?: Array<{ name: string; isDir: boolean }> };
     const files: string[] = [];
 
-    for (const item of payload.files || []) {
+    for (const item of await listProjectFiles(relativeDir)) {
       const joined = `${relativeDir}/${item.name}`.replace(/\\/g, '/');
       if (item.isDir) {
         const nested = await this.listSceneFiles(joined);
@@ -631,9 +945,16 @@ export class SceneManager {
   private async readSceneTitle(sceneId: string): Promise<string | null> {
     try {
       const scenePath = sceneId.replace(/\\/g, '/');
-      const response = await fetch(`/text/scenes/${scenePath}.json?t=${Date.now()}`);
-      if (!response.ok) return null;
-      const data = (await response.json()) as Record<string, unknown>;
+      const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      let data: any = null;
+      if (isTauriRuntime()) {
+        const content = await readProjectFileExisting(`public/text/scenes/${scenePath}.json`);
+        data = JSON.parse(content);
+      } else {
+        const response = await fetch(`/text/scenes/${scenePath}.json?t=${Date.now()}`);
+        if (!response.ok) return null;
+        data = await response.json();
+      }
       return typeof data.title === 'string' ? data.title : null;
     } catch {
       return null;

@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "lint": "eslint .",
     "test": "vitest run",
+    "check:anthropic": "node scripts/check-anthropic.mjs",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "prepare": "husky",
     "format": "prettier --write .",
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

@@ -8,7 +8,7 @@ describe('Parser core contracts', () => {
 
     const result = await fixture.run('sing a song');
 
-    expect(result.messages.at(-1)).toBe("I don't understand.");
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
   });
 
   it('returns the generic unknown response on post-API escalation', async () => {
@@ -24,7 +24,7 @@ describe('Parser core contracts', () => {
 
     const result = await fixture.run('examine mystery');
 
-    expect(result.messages.at(-1)).toBe("I don't understand.");
+    expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
   });
 
   it('stops a linear plan after a failed validation step', async () => {

@@ -1,5 +1,6 @@
 {
-  "title": "Someone ID card",
-  "description": "You see someone's ID",
-  "synonyms": []
+  "title": "Compact cassette",
+  "description": "You see a compact cassette",
+  "synonyms": ["tape", "cassette", "cassete", "record"],
+  "semanticTags": ["media", "audio_media", "cassette"]
 }

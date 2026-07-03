@@ -46,6 +46,7 @@ export class EditorSelectionManager {
     if (obj === null || obj === undefined) return { type: null, id: null, key: null };
     if (obj === 'SCENE') return { type: 'SCENE', id: 'SCENE', key: 'SCENE' };
     if (obj === 'SETTINGS') return { type: 'SETTINGS', id: 'SETTINGS', key: 'SETTINGS' };
+    if (obj.type === 'Folder') return { type: 'Folder', id: obj.name, key: `Folder:${obj.name}` };
     if (obj.type === 'Quad') return { type: 'Quad', id: obj.name, key: `Quad:${obj.name}` };
     if (obj instanceof Actor) return { type: 'Actor', id: obj.name, key: `Actor:${obj.name}` };
     if (obj instanceof Entity) return { type: 'Entity', id: obj.name, key: `Entity:${obj.name}` };
@@ -334,9 +335,36 @@ export class EditorSelectionManager {
   }
 
   private getCurrentSelectionForSerialization(): SceneObject[] {
-    if (this.hasMultiSelection()) return this.getSelectedObjects();
-    if (this.editor.selectedObject instanceof SceneObject) return [this.editor.selectedObject];
-    return [];
+    let selected: SceneObject[] = [];
+    if (this.hasMultiSelection()) selected = this.getSelectedObjects();
+    else if (this.editor.selectedObject instanceof SceneObject)
+      selected = [this.editor.selectedObject];
+    if (selected.length === 0) return [];
+
+    // If selection includes folders, also include their contents
+    const scene = this.editor.game.sceneManager.currentScene;
+    if (!scene) return selected;
+
+    const result = new Set<SceneObject>(selected);
+    const folderIds = selected
+      .filter((obj) => obj.type === 'Folder')
+      .map((obj) => (obj as any).folderId)
+      .filter(Boolean);
+
+    if (folderIds.length > 0) {
+      const allObjects: SceneObject[] = [
+        ...scene.entities,
+        ...scene.walkbox,
+        ...scene.triggerboxes,
+      ];
+      for (const obj of allObjects) {
+        if ((obj as any).folder && folderIds.includes((obj as any).folder)) {
+          result.add(obj);
+        }
+      }
+    }
+
+    return Array.from(result);
   }
 
   private getSerializedObjectKey(data: any): string {
@@ -427,11 +455,14 @@ export class EditorSelectionManager {
     const names = new Set<string>();
     if (!scene) return names;
 
-    [...(scene.entities || []), ...(scene.walkbox || []), ...(scene.triggerboxes || [])].forEach(
-      (obj: any) => {
-        if (obj?.name) names.add(obj.name);
-      }
-    );
+    [
+      ...(scene.entities || []),
+      ...(scene.folders || []),
+      ...(scene.walkbox || []),
+      ...(scene.triggerboxes || []),
+    ].forEach((obj: any) => {
+      if (obj?.name) names.add(obj.name);
+    });
     return names;
   }
 
@@ -491,11 +522,15 @@ export class EditorSelectionManager {
     return this.getDefaultInsertionPoint();
   }
 
-  private remapReferencesForPastedObject(node: any, nameMap: Map<string, string>): void {
+  private remapReferencesForPastedObject(
+    node: any,
+    nameMap: Map<string, string>,
+    folderIdMap?: Map<string, string>
+  ): void {
     if (!node || typeof node !== 'object') return;
 
     if (Array.isArray(node)) {
-      node.forEach((item) => this.remapReferencesForPastedObject(item, nameMap));
+      node.forEach((item) => this.remapReferencesForPastedObject(item, nameMap, folderIdMap));
       return;
     }
 
@@ -511,9 +546,11 @@ export class EditorSelectionManager {
             .filter(Boolean)
             .map((part) => nameMap.get(part) || part);
           node[key] = parts.join(', ');
+        } else if ((key === 'folderId' || key === 'folder') && folderIdMap) {
+          if (folderIdMap.has(value)) node[key] = folderIdMap.get(value);
         }
       } else {
-        this.remapReferencesForPastedObject(value, nameMap);
+        this.remapReferencesForPastedObject(value, nameMap, folderIdMap);
       }
     });
   }
@@ -556,6 +593,14 @@ export class EditorSelectionManager {
       nameMap.set(originalName, uniqueName);
     });
 
+    const folderIdMap = new Map<string, string>();
+    orderedItems.forEach((item) => {
+      if (item?.type === 'Folder' && item.folderId) {
+        const newId = `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        folderIdMap.set(item.folderId, newId);
+      }
+    });
+
     const created: SceneObject[] = [];
     const preserveQuadBindings = payload.items.length > 1;
     orderedItems.forEach((item, index) => {
@@ -565,7 +610,7 @@ export class EditorSelectionManager {
       const overrideX = insertionPoint.x + (sourcePoint.x - anchorSourcePoint.x);
       const overrideY = insertionPoint.y + (sourcePoint.y - anchorSourcePoint.y);
 
-      this.remapReferencesForPastedObject(item, nameMap);
+      this.remapReferencesForPastedObject(item, nameMap, folderIdMap);
       if (item.name && nameMap.has(item.name)) {
         item.name = nameMap.get(item.name);
       }
