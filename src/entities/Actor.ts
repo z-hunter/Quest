@@ -162,6 +162,11 @@ export class Actor extends Entity {
 
   moveTo(x: number, y: number): ActorMoveResult {
     const target = { x, y };
+    if (Math.abs(x - this.x) < 1.0 && Math.abs(y - this.y) < 1.0) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return this.lastMoveResult;
+    }
+
     const route = this.planRouteTo(target);
 
     if (!route) {

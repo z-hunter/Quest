@@ -116,7 +116,7 @@ export interface IGame {
   showInventory(): GameActionOutcome;
   goToSceneTarget(target: string): GameActionOutcome;
   goToScene(sceneId: string): GameActionOutcome;
-  goToEntity(entity: Entity): GameActionOutcome;
+  goToEntity(entity: Entity, options?: { traverseExit?: boolean }): GameActionOutcome;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;

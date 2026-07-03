@@ -364,15 +364,7 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Exit",
-          "targetSceneId": "test_room",
-          "targetEntryId": "E1",
-          "collider": false,
-          "portal": true
-        }
-      ],
+      "components": [],
       "layer": 0,
       "visible": true,
       "hidden": false,
@@ -836,38 +828,38 @@
       "name": "shadow",
       "type": "Quad",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": -579.4249791894666,
-      "y": -137.4859788371506,
+      "x": -858.4177876206309,
+      "y": 33.893054238510274,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -579.4249791894666,
-          "y": -137.4859788371506,
+          "x": -858.4177876206309,
+          "y": 33.893054238510274,
           "p": 1.0431424643929696
         },
         {
-          "x": -549.724821042877,
-          "y": -137.72285166714204,
+          "x": -773.0451096473188,
+          "y": 32.89190963852991,
           "p": 1.0424314168264899
         },
         {
-          "x": -451.8361730933692,
-          "y": -128.81826276268637,
+          "x": -485.7849808653811,
+          "y": 60.589924025289434,
           "p": 1.0467476902559403
         },
         {
-          "x": -474.196882097767,
-          "y": -128.51972985060326,
+          "x": -555.9957757574186,
+          "y": 58.71158289091356,
           "p": 1.0405613305364574
         }
       ],
@@ -1009,7 +1001,9 @@
         {
           "type": "Exit",
           "targetSceneId": "test_room",
-          "targetEntryId": "E1"
+          "targetEntryId": "E1",
+          "portal": true,
+          "collider": false
         }
       ],
       "layer": 0,
@@ -1059,38 +1053,38 @@
       "name": "shadow2",
       "type": "Quad",
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": true,
+      "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": 1599.5963349728288,
-      "y": 122.08966502711482,
+      "x": 1543.0164787694057,
+      "y": 202.6695212305376,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1599.5963349728288,
-          "y": 122.08966502711482,
+          "x": 1543.0164787694057,
+          "y": 202.6695212305376,
           "p": 1
         },
         {
-          "x": 1629.6806431225493,
-          "y": 124.29501106343758,
+          "x": 1573.1007869191262,
+          "y": 204.87486726686038,
           "p": 1
         },
         {
-          "x": 1607.5825009249054,
-          "y": 188.8700745827364,
+          "x": 1551.0026447214823,
+          "y": 269.4499307861592,
           "p": 1
         },
         {
-          "x": 1503.710654696175,
-          "y": 240.9940428167701,
+          "x": 1447.1307984927519,
+          "y": 321.5738990201929,
           "p": 1
         }
       ],
@@ -1148,15 +1142,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1610.6843349728288,
-      "y": 135.02566502711483,
-      "width": 136.752,
-      "height": 327.096,
+      "x": -775.8019102270001,
+      "y": 54.195232150361875,
+      "width": 108.46772855415196,
+      "height": 260.17597051840505,
       "baseWidth": 148,
-      "baseHeight": 354,
-      "spriteName": "miles2_ds-idle-down.json",
+      "baseHeight": 355,
+      "spriteName": "miles2_ds-idle-left.json",
       "color": "#00ffff",
-      "scale": 0.924,
+      "scale": 0.7328900577983241,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -1167,7 +1161,7 @@
       "isPlayer": true,
       "speed": 0.24,
       "perceptionRadius": 600,
-      "direction": "down",
+      "direction": "left",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1217,15 +1211,15 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 1610.6843349728288,
-      "y": 135.02566502711483,
-      "width": 18.13186813186813,
-      "height": 18.13186813186813,
+      "x": -775.8019102270001,
+      "y": 54.195232150361875,
+      "width": 14.381673033719073,
+      "height": 14.381673033719073,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
       "spriteName": null,
       "color": "#d66e29",
-      "scale": 1.1,
+      "scale": 0.8724881640456239,
       "refScale": 1,
       "modelScale": 1,
       "ignoreScaling": false,
@@ -1266,15 +1260,15 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 1610.6843349728288,
-      "y": 135.02566502711483,
-      "width": 18.13186813186813,
-      "height": 18.13186813186813,
+      "x": -775.8019102270001,
+      "y": 54.195232150361875,
+      "width": 14.381673033719073,
+      "height": 14.381673033719073,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
       "spriteName": null,
       "color": "#d0cb39",
-      "scale": 1.1,
+      "scale": 0.8724881640456239,
       "refScale": 1,
       "modelScale": 1,
       "ignoreScaling": false,
@@ -1414,135 +1408,9 @@
   "sceneLog": {
     "entries": [
       {
-        "id": "1783031140699-1",
+        "id": "1783101489194-11",
         "kind": "action",
-        "timestamp": 1783031140699,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031161499-2",
-        "kind": "action",
-        "timestamp": 1783031161499,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031215232-3",
-        "kind": "action",
-        "timestamp": 1783031215232,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031221199-4",
-        "kind": "action",
-        "timestamp": 1783031221199,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031229582-5",
-        "kind": "action",
-        "timestamp": 1783031229582,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031245315-6",
-        "kind": "action",
-        "timestamp": 1783031245315,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031366466-7",
-        "kind": "action",
-        "timestamp": 1783031366466,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031387533-8",
-        "kind": "action",
-        "timestamp": 1783031387533,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031403566-9",
-        "kind": "action",
-        "timestamp": 1783031403566,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783031443233-10",
-        "kind": "action",
-        "timestamp": 1783031443233,
+        "timestamp": 1783101489194,
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "[ Hero_1 goes through Ex3 ]",

@@ -2066,7 +2066,7 @@ export class GameSemanticAPI {
     };
   }
 
-  goToEntity(entity: SceneObject): GameActionOutcome {
+  goToEntity(entity: SceneObject, options?: { traverseExit?: boolean }): GameActionOutcome {
     const currentScene = this.game.sceneManager.currentScene;
     if (currentScene?.player && 'x' in entity && 'y' in entity) {
       const entityTitle = this.getPlayerFacingObjectTitle(entity);
@@ -2103,14 +2103,17 @@ export class GameSemanticAPI {
           recoverable: true,
         };
       }
-      const exit = entity.components?.find((component: any) => component?.type === 'Exit') as
-        | { portal?: boolean; collider?: boolean }
-        | undefined;
-      if (exit && (exit.portal === true || exit.collider !== false)) {
-        if (moveResult.status === 'arrived') {
-          currentScene.activateObject(entity, 0, currentScene.player);
-        } else if (exit.portal === true) {
-          this.activateExitAfterArrival(currentScene.player, entity);
+      const traverseExit = options?.traverseExit ?? false;
+      if (traverseExit) {
+        const exit = entity.components?.find((component: any) => component?.type === 'Exit') as
+          | { portal?: boolean; collider?: boolean }
+          | undefined;
+        if (exit && (exit.portal === true || exit.collider !== false)) {
+          if (moveResult.status === 'arrived') {
+            currentScene.activateObject(entity, 0, currentScene.player);
+          } else {
+            this.activateExitAfterArrival(currentScene.player, entity);
+          }
         }
       }
       return {

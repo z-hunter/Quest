@@ -4062,7 +4062,10 @@ export class Parser {
       };
     }
 
-    const normalizedDestination = rawTarget.trim().toUpperCase();
+    const startsWithThrough = /^\s*through\s+/i.test(rawTarget);
+    const cleanTarget = rawTarget.replace(/^\s*through\s+/i, '');
+
+    const normalizedDestination = cleanTarget.trim().toUpperCase();
     const destinationExit = this.getScopeCandidates(['visible']).find((candidate) => {
       const exit = candidate.components?.find((component: any) => component?.type === 'Exit') as
         | { targetSceneId?: string }
@@ -4082,15 +4085,16 @@ export class Parser {
           .toUpperCase() === normalizedDestination
       );
     });
-    if (destinationExit) return this.game.goToEntity(destinationExit);
+    if (destinationExit)
+      return this.game.goToEntity(destinationExit, { traverseExit: startsWithThrough });
 
-    const sceneOutcome = this.game.goToSceneTarget(rawTarget);
+    const sceneOutcome = this.game.goToSceneTarget(cleanTarget);
     if (sceneOutcome.status === 'ok') {
       return sceneOutcome;
     }
 
     const resolved = this.resolveEntityTargetInCandidates(
-      rawTarget,
+      cleanTarget,
       this.getScopeCandidates(['visible']),
       'parser.go_to_which_one'
     );
@@ -4103,7 +4107,7 @@ export class Parser {
         code: 'ambiguous_destination',
         message: resolved.message,
         data: {
-          target: rawTarget,
+          target: cleanTarget,
           options: resolved.options,
           clarificationOptions: resolved.clarificationOptions,
         },
@@ -4111,13 +4115,13 @@ export class Parser {
       };
     }
     if (resolved.status === 'found') {
-      return this.game.goToEntity(resolved.entity as any);
+      return this.game.goToEntity(resolved.entity as any, { traverseExit: startsWithThrough });
     }
     return {
       status: 'failed',
       code: 'destination_not_found',
-      message: this.game.text('parser.go_to_not_found', { target: rawTarget }),
-      data: { target: rawTarget },
+      message: this.game.text('parser.go_to_not_found', { target: cleanTarget }),
+      data: { target: cleanTarget },
       recoverable: true,
     };
   }
@@ -4127,7 +4131,7 @@ export class Parser {
       candidate.components?.some((component: any) => component?.type === 'Exit')
     );
     if (!rawTarget) {
-      if (exits.length === 1) return this.game.goToEntity(exits[0]);
+      if (exits.length === 1) return this.game.goToEntity(exits[0], { traverseExit: true });
       return exits.length > 1
         ? {
             status: 'needs_clarification',
@@ -4147,7 +4151,8 @@ export class Parser {
       exits,
       'parser.go_to_which_one'
     );
-    if (resolved.status === 'found') return this.game.goToEntity(resolved.entity);
+    if (resolved.status === 'found')
+      return this.game.goToEntity(resolved.entity, { traverseExit: true });
     if (resolved.status === 'ambiguous') {
       return {
         status: 'needs_clarification',

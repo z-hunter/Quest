@@ -1090,8 +1090,8 @@ export class Game implements IGame {
     };
   }
 
-  goToEntity(entity: Entity): GameActionOutcome {
-    return this.semantic.goToEntity(entity);
+  goToEntity(entity: Entity, options?: { traverseExit?: boolean }): GameActionOutcome {
+    return this.semantic.goToEntity(entity, options);
   }
 
   showNotification(text: string): void {
