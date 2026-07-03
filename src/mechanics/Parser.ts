@@ -65,6 +65,7 @@ type ParserTimingEntry = {
 const USE_LOCAL_LLM = false;
 
 export class Parser {
+  private allowAutoApproachForCurrentPlan = true;
   game: any;
   inputField: HTMLInputElement | null;
   pendingState: ParserPendingState | null;
@@ -1589,19 +1590,25 @@ export class Parser {
     planState: ParserPlanState
   ): GameActionOutcome[] {
     const outcomes: GameActionOutcome[] = [];
+    const previousAutoApproach = this.allowAutoApproachForCurrentPlan;
+    this.allowAutoApproachForCurrentPlan = actions.length === 1;
 
-    for (const action of actions) {
-      const outcome = this.executeParserAction(action, planState);
-      executedActions.push(this.getExecutedActionName(action));
-      this.markTouchedParserNotesNeedCheck(action, outcome);
-      outcomes.push(outcome);
+    try {
+      for (const action of actions) {
+        const outcome = this.executeParserAction(action, planState);
+        executedActions.push(this.getExecutedActionName(action));
+        this.markTouchedParserNotesNeedCheck(action, outcome);
+        outcomes.push(outcome);
 
-      if (outcome.status !== 'ok') {
-        break;
+        if (outcome.status !== 'ok') {
+          break;
+        }
+        if (outcome.effects?.length) {
+          this.refreshActiveWorldModel();
+        }
       }
-      if (outcome.effects?.length) {
-        this.refreshActiveWorldModel();
-      }
+    } finally {
+      this.allowAutoApproachForCurrentPlan = previousAutoApproach;
     }
 
     return outcomes;
@@ -2802,16 +2809,20 @@ export class Parser {
         };
       }
       if (broadResolved?.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(broadResolved.entity as any),
-          broadResolved.entity
+        return this.executePlayerActionWithApproach(broadResolved.entity, () =>
+          this.withEntityLookExtras(
+            this.game.examineEntity(broadResolved.entity as any),
+            broadResolved.entity
+          )
         );
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(inactiveSwitchResolved.entity as any),
-          inactiveSwitchResolved.entity
+        return this.executePlayerActionWithApproach(inactiveSwitchResolved.entity, () =>
+          this.withEntityLookExtras(
+            this.game.examineEntity(inactiveSwitchResolved.entity as any),
+            inactiveSwitchResolved.entity
+          )
         );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
@@ -2835,9 +2846,11 @@ export class Parser {
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(hiddenGatedResolved.entity as any),
-          hiddenGatedResolved.entity
+        return this.executePlayerActionWithApproach(hiddenGatedResolved.entity, () =>
+          this.withEntityLookExtras(
+            this.game.examineEntity(hiddenGatedResolved.entity as any),
+            hiddenGatedResolved.entity
+          )
         );
       }
       if (hiddenGatedResolved.status === 'ambiguous') {
@@ -2886,10 +2899,59 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.withEntityLookExtras(
-      this.game.examineEntity(resolved.entity as any),
-      resolved.entity
+    return this.executePlayerActionWithApproach(resolved.entity, () =>
+      this.withEntityLookExtras(this.game.examineEntity(resolved.entity as any), resolved.entity)
     );
+  }
+
+  private executePlayerActionWithApproach(
+    target: SceneObject,
+    action: () => GameActionOutcome
+  ): GameActionOutcome {
+    if (!this.allowAutoApproachForCurrentPlan) return action();
+    const scene = this.game.sceneManager.currentScene;
+    const player = scene?.player || null;
+    if (!scene || !player) return action();
+    if (scene.activeSubscene) return action();
+
+    const perception = this.game.actorWorld.getObjectPerception(player, target);
+    if (
+      perception.interaction === 'held' ||
+      perception.interaction === 'reachable' ||
+      perception.approach === 'already_reachable'
+    ) {
+      return action();
+    }
+
+    const approach = this.game.actorNavigation.planApproach(player, target);
+    if (approach.status !== 'route_available' || !approach.point) return action();
+
+    const moveResult = player.moveTo(approach.point.x, approach.point.y);
+    if (moveResult.status !== 'started') return action();
+
+    const sourceScene = scene;
+    const poll = () => {
+      const result = player.getMoveResult();
+      if (result.status === 'started' && player.state === 'walk') {
+        globalThis.setTimeout(poll, 50);
+        return;
+      }
+      const currentScene = this.game.sceneManager.currentScene;
+      if (result.status === 'arrived' && currentScene === sourceScene) {
+        const outcome = action();
+        if (outcome.message) this.game.showMessage(outcome.message);
+        return;
+      }
+      this.game.showMessage(this.game.text('engine.too_far_generic'));
+    };
+    globalThis.setTimeout(poll, 50);
+
+    return {
+      status: 'ok',
+      code: 'player_approaching_for_action',
+      data: { targetType: 'entity', entityId: target.name },
+      effects: ['player_move_started', 'action_scheduled_after_arrival'],
+    };
   }
 
   private withEntityLookExtras(outcome: GameActionOutcome, entity: SceneObject): GameActionOutcome {
@@ -3276,18 +3338,21 @@ export class Parser {
         };
       }
       if (scopedResolved.status === 'found') {
-        return this.game.takeEntity(scopedResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(scopedResolved.entity, () =>
+          this.game.takeEntity(scopedResolved.entity as Entity)
+        );
       }
       if (scopedResolved.status === 'not_found') {
         if (broadScopedResolved?.status === 'ambiguous') {
           const failure = this.resolveFailedTakeDiagnostic(
             rawTarget,
-            scopedTakeDiagnosticCandidates
+            scopedTakeDiagnosticCandidates,
+            true
           );
           if (failure) return failure;
         }
         if (broadScopedResolved?.status === 'found') {
-          return this.resolveTakeFailureForKnownEntity(broadScopedResolved.entity as Entity);
+          return this.resolveTakeFailureForKnownEntity(broadScopedResolved.entity as Entity, true);
         }
         if (broadScopedResolved?.status === 'escalate') {
           return {
@@ -3341,15 +3406,17 @@ export class Parser {
     }
     if (resolved.status === 'not_found') {
       if (broadResolved?.status === 'ambiguous') {
-        const failure = this.resolveFailedTakeDiagnostic(rawTarget, takeDiagnosticCandidates);
+        const failure = this.resolveFailedTakeDiagnostic(rawTarget, takeDiagnosticCandidates, true);
         if (failure) return failure;
       }
       if (broadResolved?.status === 'found') {
-        return this.resolveTakeFailureForKnownEntity(broadResolved.entity as Entity);
+        return this.resolveTakeFailureForKnownEntity(broadResolved.entity as Entity, true);
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.game.takeEntity(inactiveSwitchResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(inactiveSwitchResolved.entity, () =>
+          this.game.takeEntity(inactiveSwitchResolved.entity as Entity)
+        );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
         return {
@@ -3372,7 +3439,9 @@ export class Parser {
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
-        return this.game.takeEntity(hiddenGatedResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(hiddenGatedResolved.entity, () =>
+          this.game.takeEntity(hiddenGatedResolved.entity as Entity)
+        );
       }
       if (hiddenGatedResolved.status === 'ambiguous') {
         return {
@@ -3417,7 +3486,9 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.takeEntity(resolved.entity as Entity);
+    return this.executePlayerActionWithApproach(resolved.entity, () =>
+      this.game.takeEntity(resolved.entity as Entity)
+    );
   }
 
   private findResolutionMatchesInCandidates(
@@ -3442,7 +3513,8 @@ export class Parser {
 
   private resolveFailedTakeDiagnostic(
     rawTarget: string,
-    candidates: SceneObject[]
+    candidates: SceneObject[],
+    autoApproach: boolean = false
   ): GameActionOutcome | null {
     const matches = this.findResolutionMatchesInCandidates(rawTarget, candidates).filter(
       (candidate): candidate is Entity =>
@@ -3451,12 +3523,21 @@ export class Parser {
     if (!matches.length) return null;
 
     const preferred = (this.choosePreferredObject(matches) || matches[0]) as Entity;
-    return this.resolveTakeFailureForKnownEntity(preferred);
+    return this.resolveTakeFailureForKnownEntity(preferred, autoApproach);
   }
 
-  private resolveTakeFailureForKnownEntity(entity: Entity): GameActionOutcome {
+  private resolveTakeFailureForKnownEntity(
+    entity: Entity,
+    autoApproach: boolean = false
+  ): GameActionOutcome {
     const canTakeOutcome = (this.game as any).canTakeEntity?.(entity);
-    if (canTakeOutcome) return canTakeOutcome;
+    if (canTakeOutcome) {
+      if (!autoApproach) return canTakeOutcome;
+      const player = this.game.sceneManager.currentScene?.player;
+      if (!player) return canTakeOutcome;
+      const approach = this.game.actorNavigation.planApproach(player, entity);
+      if (approach.status !== 'route_available') return canTakeOutcome;
+    }
 
     if (this.isEntityHeldForTake(entity)) {
       return {
@@ -3470,7 +3551,7 @@ export class Parser {
       };
     }
 
-    return this.game.takeEntity(entity);
+    return this.executePlayerActionWithApproach(entity, () => this.game.takeEntity(entity));
   }
 
   private resolvePutSourceFailureForKnownEntity(entity: Entity): GameActionOutcome | null {
@@ -3958,12 +4039,20 @@ export class Parser {
         recoverable: true,
       };
     }
-    return intent === 'open'
-      ? this.game.openEntity(entity as any)
-      : this.game.closeEntity(entity as any);
+    return this.executePlayerActionWithApproach(entity, () =>
+      intent === 'open' ? this.game.openEntity(entity as any) : this.game.closeEntity(entity as any)
+    );
   }
 
   private resolveGoToTarget(rawTarget: string | null): GameActionOutcome {
+    if (this.game.sceneManager?.currentScene?.activeSubscene) {
+      return {
+        status: 'failed',
+        code: 'movement_blocked_by_active_subscene',
+        message: this.game.text('engine.close_subscene_before_moving'),
+        recoverable: true,
+      };
+    }
     if (!rawTarget) {
       return {
         status: 'needs_clarification',

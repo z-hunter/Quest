@@ -751,7 +751,7 @@ export class ComponentSystem {
     // A zero collider disables collision, but must not grant interaction range
     // based on an arbitrarily large visual sprite.
     const interactionWidth = player.colliderWidth === 0 ? 30 : player.width || 30;
-    const allowedDist = interactionWidth * 3.3;
+    const allowedDist = interactionWidth * 2.3;
 
     if (dist > allowedDist) {
       const title = this.getPlayerFacingTitle(game, entity);

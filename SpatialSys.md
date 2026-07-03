@@ -402,6 +402,8 @@ Distance - runtime actionability check, а не visibility check.
 
 Далёкий titled object может быть visible, но не reachable.
 
+Текущий interaction threshold равен `1.65 * interactionWidth` Actor-а (раньше использовался двойной запас `3.3`). Геометрическая проверка считает расстояние до реальной границы объекта, поэтому дополнительный запас на ошибочную вершину больше не нужен.
+
 Для parser это означает:
 
 - `LOOK` может работать на далёком объекте;
@@ -412,6 +414,8 @@ Distance - runtime actionability check, а не visibility check.
 Для предметов на `Surface` distance считается по actual surface placement coordinates из `Surface.items`, если они есть. Нельзя полагаться только на `entity.x/y`, потому что item position может быть stored в surface placement.
 
 Для polygon-объектов distance нельзя считать до среднего центра вершин. Большие или асимметричные полигоны, особенно `Walkbox`/floor surfaces, могут иметь centroid далеко от текущей позиции игрока, хотя игрок стоит внутри того же walkbox. Runtime должен считать distance до polygon как `0`, если player point внутри polygon, иначе как расстояние до ближайшего ребра polygon.
+
+Для одиночных direct-команд player `EXAMINE`, `TAKE`, `OPEN` и `CLOSE` видимый, но пока далёкий target автоматически передаётся в `ActorNavigationService`: если существует route до interaction-точки, player подходит и действие исполняется после прибытия. При отсутствии route сохраняется обычный distance failure. Group/batch-команды не запускают несколько конкурирующих auto-approach перемещений.
 
 ## ParserWorldModel
 

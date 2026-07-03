@@ -88,6 +88,11 @@ describe('observed Actor actions', () => {
     Game.prototype.emitActorAction.call(fixture.game, npc, 'take', null, {
       itemId: cassette.name,
     });
+    Game.prototype.emitActorAction.call(fixture.game, npc, 'put', null, {
+      itemId: cassette.name,
+      targetId: null,
+      relation: 'on',
+    });
     Game.prototype.emitActorAction.call(fixture.game, npc, 'put', recorder, {
       itemId: cassette.name,
       targetId: recorder.name,
@@ -103,6 +108,7 @@ describe('observed Actor actions', () => {
 
     expect(log.mock.calls.map(([text]) => text)).toEqual([
       '[ Linda takes Cassette ]',
+      '[ Linda puts down Cassette ]',
       '[ Linda puts Cassette in Recorder ]',
       '[ Linda uses Cassette on Recorder ]',
       '[ Linda goes through Door ]',

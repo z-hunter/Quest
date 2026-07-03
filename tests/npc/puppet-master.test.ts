@@ -2247,7 +2247,7 @@ describe('NpcPuppetMaster', () => {
     const npc = addNpc(fixture, 'guard');
     const tv = fixture.addEntity('tv', { title: 'TV' });
     tv.x = 50;
-    tv.y = 80;
+    tv.y = 55;
     npc.x = 20;
     npc.y = 30;
     npc.colliderWidth = 4;
@@ -2274,7 +2274,7 @@ describe('NpcPuppetMaster', () => {
 
     const target = npc.getMoveResult().target;
     expect(npc.getMoveResult().status).toBe('started');
-    expect(target).not.toEqual({ x: 50, y: 80 });
+    expect(target).not.toEqual({ x: 50, y: 55 });
     expect(target).not.toBeNull();
     expect(fixture.scene.isWalkable(target!.x, target!.y, npc)).toBe(true);
   });

@@ -84,8 +84,12 @@ export class ActorNavigationService {
         }
       | undefined;
 
+    const MAX_PATHFINDING_ATTEMPTS = 30;
+    let attempts = 0;
+
     for (const step of [16, 4]) {
       for (let radius = 0; radius <= maxRadius; radius += step) {
+        let foundAtCurrentRadius = false;
         for (let dx = -radius; dx <= radius; dx += step) {
           for (let dy = -radius; dy <= radius; dy += step) {
             if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
@@ -99,15 +103,23 @@ export class ActorNavigationService {
               probe
             );
             if (distanceError) continue;
+
+            if (attempts >= MAX_PATHFINDING_ATTEMPTS) {
+              break;
+            }
+            attempts++;
+
             const route = actor.previewRouteTo(point.x, point.y);
             if (!route) continue;
             const distanceSq = (point.x - actor.x) ** 2 + (point.y - actor.y) ** 2;
             if (!best || distanceSq < best.distanceSq) {
               best = { point, route, distanceSq };
+              foundAtCurrentRadius = true;
             }
           }
+          if (attempts >= MAX_PATHFINDING_ATTEMPTS) break;
         }
-        if (best) break;
+        if (foundAtCurrentRadius || attempts >= MAX_PATHFINDING_ATTEMPTS) break;
       }
       if (best) break;
     }

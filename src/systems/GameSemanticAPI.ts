@@ -1710,7 +1710,7 @@ export class GameSemanticAPI {
   ): GameActionOutcome {
     const outcome = this.executePutEntityForActor(actor, entity, target, options);
     if (outcome.status === 'ok' && actor) {
-      this.game.emitActorAction?.(actor, 'put', target || entity, {
+      this.game.emitActorAction?.(actor, 'put', target || null, {
         itemId: entity.name,
         targetId: target?.name || null,
         relation: options?.relation || null,

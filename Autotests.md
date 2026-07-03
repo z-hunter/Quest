@@ -254,6 +254,7 @@ Covers:
   - inventory first;
   - nearest scene object when titles are indistinguishable.
 - container-aware TAKE/PUT target resolution edge cases.
+- automatic player approach before single-target `EXAMINE`, `TAKE`, `OPEN` and `CLOSE`, including the reduced reachable threshold;
 
 #### `tests/parser/commands.test.ts`
 

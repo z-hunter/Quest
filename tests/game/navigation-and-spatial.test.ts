@@ -10,7 +10,7 @@ import { ComponentSystem } from '../../src/systems/ComponentSystem';
 describe('Game navigation and spatial API', () => {
   it('measures interaction distance to Quad vertices instead of its editor anchor', () => {
     const fixture = createGameSemanticFixture();
-    const actor = fixture.addPlayer('Hero', 0, 50);
+    const actor = fixture.addPlayer('Hero', 1, 50);
     actor.width = 40;
     const door = new QuadObject(fixture.game, 'door');
     door.x = 1000;
@@ -859,5 +859,49 @@ describe('Game navigation and spatial API', () => {
     expect(fixture.scene.isWalkable(197, 50, actor)).toBe(true);
     // Actor at x = 198 has collider right at 202. Should be blocked.
     expect(fixture.scene.isWalkable(198, 50, actor)).toBe(false);
+  });
+
+  it('planApproach returns unreachable quickly without hanging when target is in a disconnected walkbox', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 50);
+    actor.colliderWidth = 8;
+    actor.colliderHeight = 8;
+
+    // Room 1 (Player is here)
+    const floor1 = new Walkbox(
+      [
+        { x: -50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: -50, y: 100 },
+      ],
+      'Floor1'
+    );
+    floor1.mode = 'Add';
+    fixture.scene.addWalkbox(floor1);
+
+    // Room 2 (Target is here, disconnected)
+    const floor2 = new Walkbox(
+      [
+        { x: 200, y: 0 },
+        { x: 400, y: 0 },
+        { x: 400, y: 100 },
+        { x: 200, y: 100 },
+      ],
+      'Floor2'
+    );
+    floor2.mode = 'Add';
+    fixture.scene.addWalkbox(floor2);
+
+    const target = fixture.addEntity('target', { title: 'Target' });
+    target.x = 300;
+    target.y = 50;
+
+    const startTime = Date.now();
+    const plan = fixture.game.actorNavigation.planApproach(actor, target);
+    const duration = Date.now() - startTime;
+
+    expect(plan.status).toBe('unreachable');
+    expect(duration).toBeLessThan(1000);
   });
 });

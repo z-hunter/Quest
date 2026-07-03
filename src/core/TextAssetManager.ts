@@ -121,7 +121,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     observed_take: '[ {actor} takes {item} ]',
     observed_put_relation: '[ {actor} puts {item} {relation} {target} ]',
     observed_put_target: '[ {actor} puts {item} on {target} ]',
-    observed_drop: '[ {actor} drops {item} ]',
+    observed_drop: '[ {actor} puts down {item} ]',
     observed_use: '[ {actor} uses {item} on {target} ]',
     observed_command: '[ {actor} operates {subject} ]',
     observed_traverse_exit: '[ {actor} goes through {subject} ]',
