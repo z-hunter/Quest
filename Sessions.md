@@ -3073,3 +3073,61 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - Все тесты навигации и пространственной логики успешно пройдены.
 - Полный Vitest run: 526 passed, 4 pre-existing puppet-master failures.
 - Проведено локальное тестирование в сцене `wt`: эффект "резинки" устранен, коллайдер игрока строго удерживается внутри Walkbox в любой момент движения.
+
+## Session Entry - 2026-07-03 15:14 +02:00
+
+### Session Goals
+
+- Разобрать и исправить зависание PM на ложных воспоминаниях и несостыковках между памятью, физическим планом и фактическим миром.
+- Убрать потерю безопасных `SAY`/`MEMORY_SET` шагов, если физический хвост плана оказывается невалидным.
+- Стабилизировать навигацию NPC к частично доступным целям и остановить бесконечные `MOVE_TO -> route_unreachable` циклы.
+- Исправить кросс-сценную видимость предметов после успешного подбора игроком.
+- Завершить сессию аккуратным wrap-up и сохранить durable context для следующего захода.
+
+### What Was Implemented
+
+- В `src/mechanics/NpcPuppetMaster.ts` добавлен авто-`MOVE_TO` перед явным `TAKE`, если цель известна, но ещё не достижима, и цель имеет route-aware `approach`.
+- Там же добавлен защитный механизм для rejected plan: безопасный префикс из `SAY`/`MEMORY_SET` сохраняется при отклонении плана, чтобы NPC не терял полезную речь и обновления памяти из-за невалидного физического хвоста.
+- Введён лимит повторов для `MOVE_TO target -> route_unreachable`: допускается до трёх подряд неуспешных попыток, а LLM получает предупреждение со счётчиком оставшихся попыток.
+- `src/systems/ActorNavigationService.ts` переведён на route-aware selection подходящей точки, чтобы fast status и полноценный план опирались на реальный маршрут, а не на формально walkable, но недостижимую точку.
+- В `src/systems/InventoryManager.ts` исправлена опорная reference-point логика для Quad/vertices, чтобы точки подхода строились от фактической формы объекта.
+- В `src/systems/GameSemanticAPI.ts` успешный actor-aware `TAKE` теперь сбрасывает `hidden` у предмета, чтобы предмет не исчезал снова после переноса между сценами.
+- `src/mechanics/npcTypes.ts` расширен полями для лимита повторных попыток движения.
+- Обновлены документы `GDD.md`, `NPCsys.md` и `public/text/system/npc-pm-system.md`.
+- Добавлены/обновлены тесты в `tests/npc/puppet-master.test.ts`, `tests/game/navigation-and-spatial.test.ts`, `tests/game/semantic-api.test.ts`.
+- В репозиторий вошли scene/object data updates для `public/scenes/Corridor.json` и новых object text files, использованных в воспроизведении и проверке.
+
+### Important Architecture and Runtime Decisions
+
+- PM теперь опирается на отдельный защитный слой для безопасных речевых и memory-only шагов: полезная семантика не должна пропадать только потому, что физический хвост плана сломан.
+- `MOVE_TO` retry guard сделан конечным и прозрачным для LLM, чтобы не маскировать проблему навигации бесконечным повтором одного и того же шага.
+- `ActorNavigationService` должен оставаться общей точкой принятия решений о достижимости для player/NPC, иначе parser, клики и PM расходятся в оценке пространства.
+- Для кросс-сценных предметов выбран простой runtime-подход: после успешного подбора игроком предмет больше не должен снова становиться hidden только из-за смены сцены.
+
+### Mechanics, Navigation, Inventory
+
+- Исправлен путь `TAKE` для NPC: если предмет видим, но ещё не reachable, PM сначала получает подход к цели, затем уже пытается взять предмет.
+- Навигация к объектам теперь учитывает реальную маршрутизируемость к target interaction point.
+- Улучшена диагностика и устойчивость к объектам, которые внешне выглядят доступными, но фактически могут быть заблокированы геометрией или неправильной reference point.
+- Исправление `hidden = false` после actor pickup устранило случай, когда предмет, уже взятый в одну сцену, исчезал из perception в другой.
+
+### Tests and Validation
+
+- Прогонялись focused tests по PM, навигации и semantic API, а также `npm run typecheck`.
+- Локально подтверждено, что изменения закрывают регрессии по route-unreachable циклам, TAKE auto-approach и cross-scene item visibility.
+- Полный `npm test` ранее всё ещё имел один известный pre-existing failure в `tests/integration/parser-game.test.ts` из-за `result` being undefined в самом тесте, а не в коде движка.
+
+### Commit
+
+- `9ab960b` - `PM fixes & improvements`
+
+### Remaining Work / Next Steps
+
+- Разобрать и отдельно починить pre-existing integration test bug в `tests/integration/parser-game.test.ts`.
+- При необходимости отдельно донастроить PM safe-prefix handling, если в будущем появятся случаи, где `MEMORY_SET` должен проверяться на согласованность с failed physical plan.
+- Следующий практический прогон: убедиться, что NPC действительно не зацикливается на unreachable targets и корректно продолжает план после нескольких неудачных `MOVE_TO`.
+
+### Risks and Caveats
+
+- В репозитории были также user-owned scene/object edits, и мы их не откатывали; часть из них вошла в общий commit как рабочий контекст для текущих исправлений.
+- Корневые Markdown-файлы синхронизируются в NotebookLM только не рекурсивно, поэтому документы из подкаталогов в wrap-up не попадают.

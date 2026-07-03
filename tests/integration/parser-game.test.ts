@@ -258,7 +258,7 @@ describe('Parser + game integration smoke', () => {
     });
     cassette.x = 200;
 
-    await fixture.run('take cassette');
+    const result = await fixture.run('take cassette');
     expect(result.messages).toEqual([]);
 
     await finishAutoApproach(fixture);
