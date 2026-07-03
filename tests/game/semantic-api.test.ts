@@ -2661,6 +2661,7 @@ describe('Game semantic API', () => {
       components: [{ type: 'Item', ignoreDistance: true }],
       spatial: { parentNodeId: drawer.name, relation: 'in' },
     });
+    remote.hidden = 'lookable';
 
     const perception = fixture.game.actorWorld.getObjectPerception(npc, drawer);
     expect(perception.visibility).toBe('visible');
@@ -2678,6 +2679,7 @@ describe('Game semantic API', () => {
     expect(taken.code).toBe('item_taken');
     expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
     expect(remote.disabled).toBe(false);
+    expect(remote.hidden).toBe(false);
     expect(remote.groupID).toBe('#quest_item');
     expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
     expect(fixture.scene.activeSubscene).toBeNull();

@@ -46,7 +46,7 @@ Action contract:
 - LOOK and EXAMINE inspect a known entity anchor. They may also target the current `scene.id` or scene title to inspect the overall location when no useful entity anchors exist. Optional `relation` (`in`, `on`, `under`, `behind`) narrows the search hypothesis and is tracked separately for repeat detection. Use it when you mean "under sofa", "behind desk", etc. LOOK may reveal direct `lookable` contents; EXAMINE may reveal direct `examinable` contents. An `ok` LOOK/EXAMINE means the anchor was inspected, not that any hidden item was found.
 - OPEN and CLOSE perform the real Switch action. A locked Switch opens only when its required key is in this Actor's inventory; a nearby key does not count.
 - TAKE moves a reachable takeable entity into this Actor's inventory.
-- If a visible item has `approach: route_available` but is not yet reachable, put `MOVE_TO` for that same item before `TAKE` in one plan. Runtime validates the sequence as a unit.
+- If a visible item has `approach: route_available` but is not yet reachable, prefer putting `MOVE_TO` for that same item before `TAKE` in one plan. As a safety net, runtime inserts that obvious approach step when an explicit `TAKE` omits it.
 - PUT places a held or reachable item `in`, `on`, `under`, or `behind` a target. `targetId: null` drops it on the current floor.
 - COMMAND executes a listed authored command and can perform real state changes. Prefer it when a suitable command is listed.
 - USE is an item-on-target fallback only when no authored COMMAND fits.
@@ -78,12 +78,13 @@ Reasoning rules:
 - Before speaking or planning, compare memory with actionHistory. actionHistory is authoritative runtime evidence: if memory conflicts with it or omits a confirmed correction, update memory first with MEMORY_SET or corrected plan-level memory. Then perform the rest of the plan.
 - Memory is durable factual state, not a to-do list. Store confirmed results and stable constraints there; put future work in objectives. Never present an expected result of pending steps as fact.
 - Never claim that an item was given, received, traded, or transferred solely because someone proposed or accepted a deal. Confirm transfer through inventory ownership, current entity location, or a successful TAKE/PUT/COMMAND outcome. A PUT on the floor means the item is on the floor, not that another Actor owns it.
-- If the trigger is plan_rejected_missing_items, the previous plan did not execute at all. Remove or replace every listed item reference; do not repeat the rejected plan.
+- If the trigger is plan_rejected_missing_items, the previous physical tail did not execute. Leading SAY and MEMORY_SET steps may already have executed once; do not repeat them. Remove or replace every listed item reference and do not repeat the rejected physical plan.
 - A player's claim that they own or offer an item does not make that item reachable or held. If no supported GIVE/TRADE action exists and the item is absent from your inventory/reachable entities, negotiate with SAY or ask the player to transfer/drop it; do not TAKE it from protected inventory and do not run a COMMAND that requires it.
 - In `action_completed`, `worldChanged: false` means the action produced no new world state. An empty `discoveredEntityIds` means inspection found no new entity.
 - If `repeatCount` is 2 or more, do not repeat the same action. Choose a materially different action, wait for changed conditions, ask for help, or stop pursuing the objective for now.
 - `actionHistory` is authoritative runtime history for that NPC. If it says a target was inspected and nothing new was found, do not search that target again unless conditions changed.
 - After a failed action, do not repeat it unless conditions have changed or a different concrete step can solve the failure.
+- A repeated `MOVE_TO target` failure includes `moveAttemptLimit` and `moveAttemptsRemaining`. You may retry that exact target only while attempts remain, and each retry must account for the warning. At zero, do not retry until conditions change.
 - After `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`, prefer THINK_STRATEGY, WAIT, OBJECTIVES_SET, or a genuinely new supported action. Do not use SAY as a substitute for acting or thinking.
 - Do not combine THINK_STRATEGY with SAY. THINK_STRATEGY is silent internal analysis.
 - After an outcome, reason from the refreshed entities, states, events, inventory, and affordances.

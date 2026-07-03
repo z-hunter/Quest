@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
@@ -903,5 +903,111 @@ describe('Game navigation and spatial API', () => {
 
     expect(plan.status).toBe('unreachable');
     expect(duration).toBeLessThan(1000);
+  });
+
+  it('ranks actor-connected approach points ahead of nearer-to-target dead ends', () => {
+    const fixture = createGameSemanticFixture();
+    const actor = fixture.addPlayer('Hero', 0, 50);
+    actor.colliderWidth = 8;
+    actor.colliderHeight = 8;
+
+    const actorFloor = new Walkbox(
+      [
+        { x: -50, y: 0 },
+        { x: 230, y: 0 },
+        { x: 230, y: 100 },
+        { x: -50, y: 100 },
+      ],
+      'ActorFloor'
+    );
+    actorFloor.mode = 'Add';
+    fixture.scene.addWalkbox(actorFloor);
+
+    const target = fixture.addEntity('door', { title: 'Door' });
+    target.x = 200;
+    target.y = 50;
+    target.interactionDistance = 100;
+    vi.spyOn(actor, 'previewRouteTo').mockImplementation((x, y) => (x <= 190 ? [{ x, y }] : null));
+
+    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe(
+      'route_available'
+    );
+    const plan = fixture.game.actorNavigation.planApproach(actor, target);
+    expect(plan.status).toBe('route_available');
+    expect(plan.point?.x).toBeLessThanOrEqual(190);
+  });
+
+  it('routes an NPC from the left test_room walkbox to the door approach', () => {
+    const fixture = createGameSemanticFixture('test_room');
+    const npc = fixture.addPlayer('NPC', -156, 271);
+    npc.isPlayer = false;
+    npc.width = 92.6065;
+    npc.colliderWidth = 44;
+    npc.colliderHeight = 8;
+    npc.parallax = 1.0318;
+
+    for (const [name, poly] of [
+      [
+        'Walk_left',
+        [
+          { x: -79, y: 346 },
+          { x: -81, y: 272 },
+          { x: 153, y: 272 },
+          { x: 153, y: 346 },
+        ],
+      ],
+      [
+        'Walk_main',
+        [
+          { x: 82, y: 192 },
+          { x: 407, y: 195 },
+          { x: 408, y: 203 },
+          { x: 470, y: 207 },
+          { x: 596, y: 220 },
+          { x: 624, y: 211 },
+          { x: 1341, y: 210 },
+          { x: 1405, y: 283 },
+          { x: -234, y: 291 },
+          { x: -210, y: 247 },
+          { x: -111, y: 249 },
+          { x: 77, y: 194 },
+        ],
+      ],
+      [
+        'Walk_door',
+        [
+          { x: 1397, y: 326 },
+          { x: 1402, y: 256 },
+          { x: 1135, y: 261 },
+          { x: 1148, y: 338 },
+          { x: 1377, y: 337 },
+        ],
+      ],
+    ] as const) {
+      const walkbox = new Walkbox(
+        poly.map((point) => ({ ...point })),
+        name
+      );
+      walkbox.mode = 'Add';
+      fixture.scene.addWalkbox(walkbox);
+    }
+
+    const chair = new Entity(fixture.game, 100.56, 249.75, 10, 10, 'Chair');
+    chair.colliderWidth = 78;
+    chair.colliderHeight = 18;
+    fixture.scene.addEntity(chair);
+
+    expect(npc.previewRouteTo(1320, 220)).not.toBeNull();
+    const door = new QuadObject(fixture.game, 'door');
+    door.x = 1402.7035;
+    door.y = -36.0563;
+    door.vertices = [
+      { x: 1352.7035, y: -136.0563, p: 1 },
+      { x: 1396, y: -144, p: 1 },
+      { x: 1396, y: 246, p: 1 },
+      { x: 1354, y: 215, p: 1 },
+    ];
+    fixture.scene.addEntity(door);
+    expect(fixture.game.actorNavigation.planApproach(npc, door).status).toBe('route_available');
   });
 });

@@ -46,9 +46,11 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not store attempted actions as successful facts in memory.',
   'Plan-level memory is committed only after the physical plan completes and discarded after failure or interruption.',
   'Do not record a proposed trade or floor drop as a completed ownership transfer without runtime confirmation.',
-  'If a plan is rejected for missing items, replace the unavailable references and do not repeat the same plan.',
+  'Runtime may insert MOVE_TO before an explicit TAKE when the item has a route_available approach.',
+  'If a plan is rejected for missing items, leading SAY and MEMORY_SET steps may already have executed once; replace unavailable references and do not repeat the same speech or physical plan.',
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
+  'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
   'Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.',
   'Assume entities are visible and in the current scene unless marked otherwise. Assume approach is already_reachable if interaction is reachable or held.',
 ].join('\n');
@@ -448,8 +450,11 @@ export class NpcPuppetMaster {
     const extractedJson = this.extractJson(response.text);
     const parsed = this.parseJson(extractedJson);
     const normalized = this.normalizeResponse(parsed, worldModel);
+    const expandedPlans = normalized.valid
+      ? this.expandImplicitTakeApproaches(normalized.plans, worldModel)
+      : normalized.plans;
     const itemValidation = normalized.valid
-      ? this.validatePlanItems(normalized.plans, worldModel, trigger)
+      ? this.validatePlanItems(expandedPlans, worldModel, trigger)
       : { plans: normalized.plans, rejectedPlans: [] };
     const itemValidatedPlans = itemValidation.plans;
     const acceptedPlans = normalized.valid
@@ -594,6 +599,17 @@ export class NpcPuppetMaster {
       const previousRetryCount = this.getMissingItemRetryCount(trigger, plan.npcId);
       const retryScheduled = !!scene && previousRetryCount < 1;
       rejectedPlans.push({ plan, missingItems: uniqueMissing, retryScheduled });
+      if (previousRetryCount === 0) {
+        const safePrefix = this.getSafeRejectedPlanPrefix(plan);
+        if (safePrefix.length > 0) {
+          acceptedPlans.push({ npcId: plan.npcId, steps: safePrefix });
+          this.traceWake('rejected_plan_safe_prefix_preserved', {
+            sceneId: worldModel.scene.id,
+            npcId: plan.npcId,
+            stepTypes: safePrefix.map((step) => step.type),
+          });
+        }
+      }
       if (retryScheduled && scene) {
         const currentGeneration = this.haltGenerationId;
         const currentScene = scene;
@@ -617,6 +633,51 @@ export class NpcPuppetMaster {
       }
     }
     return { plans: acceptedPlans, rejectedPlans };
+  }
+
+  private expandImplicitTakeApproaches(plans: NpcPlan[], worldModel: NpcWorldModel): NpcPlan[] {
+    return plans.map((plan) => {
+      const npc = worldModel.npcs.find((candidate) => candidate.id === plan.npcId);
+      if (!npc) return plan;
+      const entitiesById = new Map((npc.entities || []).map((entity) => [entity.id, entity]));
+      const steps: NpcPlanStep[] = [];
+      let changed = false;
+
+      for (const step of plan.steps) {
+        if (step.type === 'TAKE') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = steps.some(
+            (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+          );
+          if (
+            target?.interaction !== 'held' &&
+            target?.interaction !== 'reachable' &&
+            target?.approach === 'route_available' &&
+            !hasPriorMove
+          ) {
+            steps.push({ type: 'MOVE_TO', targetId: step.targetId });
+            changed = true;
+            this.traceWake('take_auto_approach_inserted', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              targetId: step.targetId,
+            });
+          }
+        }
+        steps.push(step);
+      }
+
+      return changed ? { ...plan, steps } : plan;
+    });
+  }
+
+  private getSafeRejectedPlanPrefix(plan: NpcPlan): NpcPlanStep[] {
+    const safePrefix: NpcPlanStep[] = [];
+    for (const step of plan.steps) {
+      if (step.type !== 'SAY' && step.type !== 'MEMORY_SET') break;
+      safePrefix.push(step);
+    }
+    return safePrefix;
   }
 
   private shouldPreserveUnreadEventsForRetry(npcId: string): boolean {
@@ -701,7 +762,7 @@ export class NpcPuppetMaster {
       );
     if (!trigger) return false;
 
-    const barrierResult = this.getContinuationBarrierResult(trigger, npcId);
+    let barrierResult = this.getContinuationBarrierResult(trigger, npcId);
     if (trigger.type === 'move_completed' && pending.barrierStep.type === 'MOVE_TO') {
       const targetId = String(pending.barrierStep.targetId || '').trim();
       const didNotMove = trigger.result.status === 'arrived' && trigger.result.route.length === 0;
@@ -747,6 +808,28 @@ export class NpcPuppetMaster {
         }
       } else if (trigger.result.status === 'arrived') {
         this.clearLoopSuppression(scene, npcId);
+      } else if (targetId) {
+        const moveProgress = this.recordActionProgress(scene, npcId, {
+          status: 'failed',
+          code: trigger.result.code || 'route_unreachable',
+          npcId,
+          message: trigger.result.message,
+          targetId,
+          actionType: 'MOVE_TO',
+          worldChanged: false,
+          repeatKey: `MOVE_TO:${targetId}`,
+        });
+        const repeatCount = moveProgress.repeatCount || 1;
+        const moveAttemptsRemaining = Math.max(0, PM_REPEAT_SUPPRESS_COUNT - repeatCount);
+        barrierResult = {
+          ...moveProgress,
+          moveAttemptLimit: PM_REPEAT_SUPPRESS_COUNT,
+          moveAttemptsRemaining,
+          message:
+            moveAttemptsRemaining > 0
+              ? `${trigger.result.message || 'Destination is unreachable.'} MOVE_TO ${targetId} failed ${repeatCount}/${PM_REPEAT_SUPPRESS_COUNT}; ${moveAttemptsRemaining} attempt(s) remain before this loop is stopped.`
+              : `MOVE_TO ${targetId} failed ${repeatCount}/${PM_REPEAT_SUPPRESS_COUNT}; retry limit reached. Do not retry this target without changed conditions.`,
+        };
       }
     }
     const completedSteps =

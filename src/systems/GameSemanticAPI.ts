@@ -1516,6 +1516,7 @@ export class GameSemanticAPI {
       if (moveOutcome.status !== 'ok') {
         return moveOutcome;
       }
+      entity.hidden = false;
       entity.disabled = false;
       scene.subsceneEntities.delete(entity);
       if (pickupAnimationState) {

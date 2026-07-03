@@ -30,29 +30,11 @@ export class ActorNavigationService {
     const scene = this.game.sceneManager.currentScene;
     if (!center || !scene) return 'unreachable';
 
-    const step = 16;
-    const maxRadius = Math.max(
-      240,
-      actor.colliderWidth * 4,
-      actor.colliderHeight * 12,
-      this.getInteractionRange(actor, approachTarget) * 2
-    );
-    for (let radius = 0; radius <= maxRadius; radius += step) {
-      for (let dx = -radius; dx <= radius; dx += step) {
-        for (let dy = -radius; dy <= radius; dy += step) {
-          if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-          const point = { x: center.x + dx, y: center.y + dy };
-          if (!scene.isWalkable(point.x, point.y, actor)) continue;
-          const probe = Object.create(actor) as Actor;
-          Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
-          Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
-          if (!ComponentSystem.getInteractionDistanceError(approachTarget as any, probe)) {
-            return 'route_available';
-          }
-        }
-      }
-    }
-    return 'unreachable';
+    const maxRadius = this.getMaxApproachRadius(actor, approachTarget);
+    return this.findRoutedApproach(actor, approachTarget, center, maxRadius, 16, 12) ||
+      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 4, 12)
+      ? 'route_available'
+      : 'unreachable';
   }
 
   planApproach(actor: Actor, target: SceneObject): ActorApproachPlan {
@@ -70,63 +52,88 @@ export class ActorNavigationService {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return { status: 'unreachable', point: null, route: [] };
 
-    const maxRadius = Math.max(
-      240,
-      actor.colliderWidth * 4,
-      actor.colliderHeight * 12,
-      this.getInteractionRange(actor, approachTarget) * 2
-    );
+    const maxRadius = this.getMaxApproachRadius(actor, approachTarget);
+    const best =
+      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 16, 30) ||
+      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 4, 30);
+
+    return best
+      ? { status: 'route_available', point: best.point, route: best.route }
+      : { status: 'unreachable', point: null, route: [] };
+  }
+
+  private findRoutedApproach(
+    actor: Actor,
+    target: SceneObject,
+    center: { x: number; y: number },
+    maxRadius: number,
+    step: number,
+    maxPathfindingAttempts: number
+  ):
+    | {
+        point: { x: number; y: number };
+        route: { x: number; y: number }[];
+        distanceSq: number;
+      }
+    | undefined {
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return undefined;
+    const candidates: Array<{
+      point: { x: number; y: number };
+      distanceSq: number;
+      targetDistanceSq: number;
+    }> = [];
+
+    for (let radius = 0; radius <= maxRadius; radius += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
+        for (let dy = -radius; dy <= radius; dy += step) {
+          if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const point = { x: center.x + dx, y: center.y + dy };
+          if (!scene.isWalkable(point.x, point.y, actor)) continue;
+          const probe = Object.create(actor) as Actor;
+          Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
+          Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
+          if (ComponentSystem.getInteractionDistanceError(target as any, probe)) continue;
+          candidates.push({
+            point,
+            distanceSq: (point.x - actor.x) ** 2 + (point.y - actor.y) ** 2,
+            targetDistanceSq: (point.x - center.x) ** 2 + (point.y - center.y) ** 2,
+          });
+        }
+      }
+    }
+
+    candidates.sort((a, b) => a.distanceSq - b.distanceSq);
     let best:
       | {
           point: { x: number; y: number };
           route: { x: number; y: number }[];
           distanceSq: number;
+          targetDistanceSq: number;
         }
       | undefined;
-
-    const MAX_PATHFINDING_ATTEMPTS = 30;
-    let attempts = 0;
-
-    for (const step of [16, 4]) {
-      for (let radius = 0; radius <= maxRadius; radius += step) {
-        let foundAtCurrentRadius = false;
-        for (let dx = -radius; dx <= radius; dx += step) {
-          for (let dy = -radius; dy <= radius; dy += step) {
-            if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-            const point = { x: center.x + dx, y: center.y + dy };
-            if (!scene.isWalkable(point.x, point.y, actor)) continue;
-            const probe = Object.create(actor) as Actor;
-            Object.defineProperty(probe, 'x', { value: point.x, configurable: true });
-            Object.defineProperty(probe, 'y', { value: point.y, configurable: true });
-            const distanceError = ComponentSystem.getInteractionDistanceError(
-              approachTarget as any,
-              probe
-            );
-            if (distanceError) continue;
-
-            if (attempts >= MAX_PATHFINDING_ATTEMPTS) {
-              break;
-            }
-            attempts++;
-
-            const route = actor.previewRouteTo(point.x, point.y);
-            if (!route) continue;
-            const distanceSq = (point.x - actor.x) ** 2 + (point.y - actor.y) ** 2;
-            if (!best || distanceSq < best.distanceSq) {
-              best = { point, route, distanceSq };
-              foundAtCurrentRadius = true;
-            }
-          }
-          if (attempts >= MAX_PATHFINDING_ATTEMPTS) break;
-        }
-        if (foundAtCurrentRadius || attempts >= MAX_PATHFINDING_ATTEMPTS) break;
+    for (const candidate of candidates.slice(0, maxPathfindingAttempts)) {
+      const route = actor.previewRouteTo(candidate.point.x, candidate.point.y);
+      if (
+        route &&
+        (!best ||
+          candidate.targetDistanceSq < best.targetDistanceSq ||
+          (candidate.targetDistanceSq === best.targetDistanceSq &&
+            candidate.distanceSq < best.distanceSq))
+      ) {
+        best = { ...candidate, route };
       }
-      if (best) break;
     }
+    return best;
+  }
 
-    return best
-      ? { status: 'route_available', point: best.point, route: best.route }
-      : { status: 'unreachable', point: null, route: [] };
+  private getMaxApproachRadius(actor: Actor, target: SceneObject): number {
+    return Math.max(
+      240,
+      actor.colliderWidth * 4,
+      actor.colliderHeight * 12,
+      this.getInteractionRange(actor, target) * 2
+    );
   }
 
   moveActorToTarget(actor: Actor, target: SceneObject): ActorMoveResult | null {

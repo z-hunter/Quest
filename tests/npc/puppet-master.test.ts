@@ -1115,7 +1115,7 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[1].messages[0].content)).toContain('plan_rejected_missing_items');
   });
 
-  it('rejects missing item references before execution and retries PM once with details', async () => {
+  it('preserves a safe SAY prefix when rejecting a missing-item physical tail', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
@@ -1138,8 +1138,10 @@ describe('NpcPuppetMaster', () => {
           npcId: npc.name,
           steps: [
             { type: 'SAY', text: 'I will use the remote now.' },
+            { type: 'MEMORY_SET', memory: 'Hero offered a remote, but I do not hold it.' },
             { type: 'USE', itemId: 'tv_rc', targetId: tv.name },
           ],
+          memory: 'I used the remote to operate the TV.',
         },
       ],
     });
@@ -1147,8 +1149,19 @@ describe('NpcPuppetMaster', () => {
     const pm = new NpcPuppetMaster(fixture.game, provider);
 
     const plans = await pm.processNpc(fixture.scene, npc.name);
-    expect(plans).toEqual([]);
-    expect(dialogue).toEqual([]);
+    expect(plans).toEqual([
+      {
+        npcId: npc.name,
+        steps: [
+          { type: 'SAY', text: 'I will use the remote now.' },
+          { type: 'MEMORY_SET', memory: 'Hero offered a remote, but I do not hold it.' },
+        ],
+      },
+    ]);
+    expect(dialogue).toEqual(['I will use the remote now.']);
+    expect((npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory).toBe(
+      'Hero offered a remote, but I do not hold it.'
+    );
 
     await vi.advanceTimersByTimeAsync(250);
 
@@ -1160,10 +1173,13 @@ describe('NpcPuppetMaster', () => {
     expect(retryPrompt).toContain('I can trade you the remote.');
     await vi.advanceTimersByTimeAsync(1000);
     expect(provider.calls).toHaveLength(2);
-    expect(dialogue).toEqual([]);
+    expect(dialogue).toEqual(['I will use the remote now.']);
+    expect((npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory).toBe(
+      'Hero offered a remote, but I do not hold it.'
+    );
   });
 
-  it('accepts MOVE_TO then TAKE for a visible route-available item', async () => {
+  it('automatically inserts MOVE_TO before TAKE for a visible route-available item', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 5, 5);
@@ -1192,10 +1208,7 @@ describe('NpcPuppetMaster', () => {
         plans: [
           {
             npcId: npc.name,
-            steps: [
-              { type: 'MOVE_TO', targetId: item.name },
-              { type: 'TAKE', targetId: item.name },
-            ],
+            steps: [{ type: 'TAKE', targetId: item.name }],
             interruptOn: [{ type: 'ACTION_FAILED' }],
           },
         ],
@@ -2618,6 +2631,65 @@ describe('NpcPuppetMaster', () => {
     expect(correctivePrompt).toContain('"repeatKey": "MOVE_TO:sofa"');
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
     expect(component.memory || '').not.toContain('must not be committed');
+  });
+
+  it('stops repeated route_unreachable MOVE_TO failures for the same target', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const plan = {
+      npcId: npc.name,
+      steps: [
+        { type: 'MOVE_TO' as const, targetId: 'door' },
+        { type: 'TRAVERSE_EXIT' as const, targetId: 'door' },
+      ],
+      interruptOn: [{ type: 'ACTION_FAILED' as const }],
+    };
+    const scheduledOutcome = {
+      status: 'scheduled' as const,
+      code: 'move_scheduled',
+      npcId: npc.name,
+      actionType: 'MOVE_TO' as const,
+      targetId: 'door',
+    };
+    const unreachable = {
+      type: 'move_completed' as const,
+      result: {
+        status: 'unreachable' as const,
+        code: 'route_unreachable',
+        message: 'Destination is unreachable.',
+        target: null,
+        route: [],
+      },
+    };
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      (pm as any).storePendingContinuationAfterScheduledOutcome(fixture.scene, plan, [
+        scheduledOutcome,
+      ]);
+      expect(
+        (pm as any).tryExecutePendingContinuation(fixture.scene, npc.name, [unreachable])
+      ).toBe(true);
+      await vi.advanceTimersByTimeAsync(200);
+    }
+
+    expect(provider.calls).toHaveLength(3);
+    expect(String(provider.calls[0].messages[0].content)).toContain('"moveAttemptsRemaining": 2');
+    expect(String(provider.calls[0].messages[0].content)).toContain(
+      '2 attempt(s) remain before this loop is stopped'
+    );
+    expect(String(provider.calls[1].messages[0].content)).toContain('"moveAttemptsRemaining": 1');
+    expect(String(provider.calls[1].messages[0].content)).toContain(
+      '1 attempt(s) remain before this loop is stopped'
+    );
+    const terminalPrompt = String(provider.calls[2].messages[0].content);
+    expect(terminalPrompt).toContain('"code": "repeated_without_progress"');
+    expect(terminalPrompt).toContain('"repeatKey": "MOVE_TO:door"');
+    expect(terminalPrompt).toContain('"repeatCount": 3');
+    expect(terminalPrompt).toContain('"moveAttemptsRemaining": 0');
+    expect(terminalPrompt).toContain('retry limit reached');
   });
 
   it('delivers the terminal repeated_without_progress outcome before suppressing further repeats', async () => {

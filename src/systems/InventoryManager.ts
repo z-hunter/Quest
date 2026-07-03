@@ -1020,7 +1020,9 @@ export class InventoryManager {
   }
 
   getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
-    const polygon = (sceneObject as any).poly;
+    const polygon = Array.isArray((sceneObject as any).poly)
+      ? (sceneObject as any).poly
+      : (sceneObject as any).vertices;
     if (Array.isArray(polygon) && polygon.length) {
       const sum = polygon.reduce(
         (acc: { x: number; y: number }, point: { x: number; y: number }) => ({

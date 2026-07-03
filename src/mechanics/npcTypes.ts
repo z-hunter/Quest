@@ -277,4 +277,6 @@ export type NpcPlanExecutionOutcome = {
   discoveredEntityIds?: string[];
   repeatKey?: string;
   repeatCount?: number;
+  moveAttemptLimit?: number;
+  moveAttemptsRemaining?: number;
 };
