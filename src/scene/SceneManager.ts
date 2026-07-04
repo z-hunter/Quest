@@ -228,7 +228,7 @@ export class SceneManager {
     if (targetX === null || targetY === null) return entryObj;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
-    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    const walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
     actor.x = walkableTarget.x;
     actor.y = walkableTarget.y;
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
@@ -238,7 +238,7 @@ export class SceneManager {
     return entryObj;
   }
 
-  private findNearestWalkableEntryPosition(
+  resolveEntryPlacementPosition(
     scene: Scene,
     actor: Actor,
     targetX: number,

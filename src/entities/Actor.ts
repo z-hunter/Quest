@@ -3,6 +3,7 @@ import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
 import { toWorldPosition } from '../utils/Parallax';
+import type { SceneObject } from './SceneObject';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -58,6 +59,8 @@ export class Actor extends Entity {
   routeIndex: number;
   lastMoveResult: ActorMoveResult;
   readonly type: string = 'Actor';
+  private localTeleportTarget: { x: number; y: number } | null = null;
+  private localTeleportExit: SceneObject | null = null;
 
   isPlayer: boolean = false;
 
@@ -167,7 +170,33 @@ export class Actor extends Entity {
       return this.lastMoveResult;
     }
 
-    const route = this.planRouteTo(target);
+    const walkingRoute = this.planWalkingRouteTo(target);
+    const teleportPlan = walkingRoute
+      ? null
+      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    if (
+      teleportPlan?.firstLeg.status === 'already_reachable' &&
+      teleportPlan.exits[0] &&
+      this.scene
+    ) {
+      const activated = ComponentSystem.handleActivation(
+        teleportPlan.exits[0],
+        this.scene,
+        0,
+        this
+      );
+      if (activated) {
+        const remainingDistance = Math.hypot(target.x - this.x, target.y - this.y);
+        if (remainingDistance <= Math.max(2, this.getRouteGridSize() / 2)) {
+          this.x = target.x;
+          this.y = target.y;
+          this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+          return this.lastMoveResult;
+        }
+        return this.moveTo(target.x, target.y);
+      }
+    }
+    const route = teleportPlan?.firstLeg.route || walkingRoute;
 
     if (!route) {
       this.stopWithMoveResult(
@@ -180,6 +209,8 @@ export class Actor extends Entity {
     this.routeIndex = 0;
     this.target = route[0] || target;
     this.visualTarget = null;
+    this.localTeleportTarget = teleportPlan ? target : null;
+    this.localTeleportExit = teleportPlan?.exits[0] || null;
     this.setState('walk');
     this.overrideAnimSet = null;
     this.lastMoveResult = this.createMoveResult('started', 'route_started', target, route);
@@ -192,7 +223,7 @@ export class Actor extends Entity {
       this.scene?.camera || { x: 0, y: 0 },
       this.parallax !== undefined ? this.parallax : 1.0
     );
-    const route = this.planRouteTo(worldTarget);
+    const route = this.planWalkingRouteTo(worldTarget);
 
     if (!route) {
       this.stopWithMoveResult(
@@ -216,6 +247,8 @@ export class Actor extends Entity {
     this.visualTarget = null;
     this.route = [];
     this.routeIndex = 0;
+    this.localTeleportTarget = null;
+    this.localTeleportExit = null;
     this.setState('idle');
   }
 
@@ -224,7 +257,17 @@ export class Actor extends Entity {
   }
 
   previewRouteTo(x: number, y: number): { x: number; y: number }[] | null {
-    const route = this.planRouteTo({ x, y });
+    const target = { x, y };
+    const walkingRoute = this.planWalkingRouteTo(target);
+    const teleportPlan = walkingRoute
+      ? null
+      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    const route = teleportPlan?.firstLeg.route || walkingRoute;
+    return route ? route.map((point) => ({ ...point })) : null;
+  }
+
+  previewWalkingRouteTo(x: number, y: number): { x: number; y: number }[] | null {
+    const route = this.planWalkingRouteTo({ x, y });
     return route ? route.map((point) => ({ ...point })) : null;
   }
 
@@ -279,6 +322,17 @@ export class Actor extends Entity {
           this.target = this.route[this.routeIndex];
         } else {
           const completedTarget = this.visualTarget || this.target;
+          const teleportExit = this.localTeleportExit;
+          const teleportTarget = this.localTeleportTarget;
+          if (teleportExit && teleportTarget && this.scene) {
+            this.localTeleportExit = null;
+            this.localTeleportTarget = null;
+            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
+            if (activated) {
+              this.moveTo(teleportTarget.x, teleportTarget.y);
+              return;
+            }
+          }
           this.stopWithMoveResult(
             this.createMoveResult('arrived', 'arrived', completedTarget, this.route)
           );
@@ -493,7 +547,7 @@ export class Actor extends Entity {
     this.lastMoveResult = result;
   }
 
-  private planRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
+  private planWalkingRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
     const isWalkable = (x: number, y: number) =>
       !this.scene || typeof this.scene.isWalkable !== 'function'
         ? true
