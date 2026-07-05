@@ -24,6 +24,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'You are the Puppet Master for NPCs in a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
+  'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior.',
   'Each plan must target a real NPC id from context.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
@@ -32,6 +33,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
   'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
+  'EXAMINE is the deeper discovery mode: it may reveal both lookable and examinable contents. LOOK may reveal lookable contents but never examinable contents.',
   'An ok LOOK or EXAMINE means the anchor was inspected, not that any hidden item was found.',
   'Titled objects inside inactive Subscenes may be used through virtual NPC access without opening the player view.',
   'OPEN and CLOSE use real Switch rules, including keys held by the acting NPC.',
@@ -422,6 +424,7 @@ export class NpcPuppetMaster {
     const system = await this.buildSystemPrompt(worldModel);
     const messages = this.buildMessages(worldModel, trigger);
     const staticPrefix = this.getStaticPrefixDebug(system);
+    const dynamicPrompt = this.getDynamicPromptDebug(messages);
     const response = await this.provider.sendMessageStream(system, messages, () => {});
 
     if (this.haltGenerationId !== currentGeneration) {
@@ -442,6 +445,7 @@ export class NpcPuppetMaster {
         cacheCreationInputTokens: response.cacheCreationInputTokens,
         cacheReadInputTokens: response.cacheReadInputTokens,
         staticPrefix,
+        dynamicPrompt,
       };
       this.logPeekDebug();
       return [];
@@ -476,6 +480,7 @@ export class NpcPuppetMaster {
       prompt: { system, messages },
       rawResponse: response.text,
       extractedJson,
+      reasoning: this.normalizeReasoning(parsed),
       acceptedPlans,
       rejectedPlans: itemValidation.rejectedPlans,
       filteredPlans: normalized.filteredPlans,
@@ -486,6 +491,7 @@ export class NpcPuppetMaster {
       cacheCreationInputTokens: response.cacheCreationInputTokens,
       cacheReadInputTokens: response.cacheReadInputTokens,
       staticPrefix,
+      dynamicPrompt,
     };
     this.logPeekDebug();
 
@@ -1546,28 +1552,8 @@ export class NpcPuppetMaster {
     npcId: string,
     reason?: string
   ): LlmProviderMessage[] {
-    const dynamicContext = {
-      reason,
-      npcId,
-      npcs: worldModel.npcs.map((npc) => ({
-        id: npc.id,
-        objectives: npc.objectives,
-        memory: npc.memory,
-        inventory: npc.inventory,
-        actors: npc.actors.map(({ id, lastSeenSceneId }) => ({ id, lastSeenSceneId })),
-        visibleItemIds: npc.visibleItemIds,
-        knownEntities: npc.knownEntities.map((entity) => ({
-          id: entity.id,
-          kind: entity.kind,
-          lastSeenSceneId: entity.lastSeenSceneId,
-          ...(entity.lastSeenSceneId !== worldModel.scene.id ? { title: entity.title } : {}),
-        })),
-        actionHistory: this.getNpcActionHistory(worldModel.scene.id, npc.id),
-        newEvents: npc.newEvents,
-        recentEvents: npc.recentEvents,
-        entities: this.buildDynamicEntities(npc.entities),
-      })),
-    };
+    const baseContext = this.buildDynamicPromptContext(worldModel);
+    const dynamicContext = { reason, npcId, ...baseContext };
     return [
       {
         role: 'user',
@@ -1670,27 +1656,7 @@ export class NpcPuppetMaster {
     worldModel: NpcWorldModel,
     trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): LlmProviderMessage[] {
-    const dynamicContext = {
-      ...(trigger ? { trigger } : {}),
-      npcs: worldModel.npcs.map((npc) => ({
-        id: npc.id,
-        objectives: npc.objectives,
-        memory: npc.memory,
-        inventory: npc.inventory,
-        actors: npc.actors.map(({ id, lastSeenSceneId }) => ({ id, lastSeenSceneId })),
-        visibleItemIds: npc.visibleItemIds,
-        knownEntities: npc.knownEntities.map((entity) => ({
-          id: entity.id,
-          kind: entity.kind,
-          lastSeenSceneId: entity.lastSeenSceneId,
-          ...(entity.lastSeenSceneId !== worldModel.scene.id ? { title: entity.title } : {}),
-        })),
-        actionHistory: this.getNpcActionHistory(worldModel.scene.id, npc.id),
-        newEvents: npc.newEvents,
-        recentEvents: npc.recentEvents,
-        entities: this.buildDynamicEntities(npc.entities),
-      })),
-    };
+    const dynamicContext = this.buildDynamicPromptContext(worldModel, trigger);
 
     const activeNpcIds = worldModel.npcs.map((n) => n.id).join(', ');
     const firstNpcId = worldModel.npcs[0]?.id || 'NPC';
@@ -1711,6 +1677,227 @@ export class NpcPuppetMaster {
         ].join('\n'),
       },
     ];
+  }
+
+  private buildDynamicPromptContext(
+    worldModel: NpcWorldModel,
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): Record<string, unknown> {
+    const compactTrigger = trigger ? this.compactPromptTrigger(trigger) : undefined;
+    return this.compactPromptRecord({
+      trigger: compactTrigger,
+      npcs: worldModel.npcs.map((npc) => {
+        const entities = npc.entities || [];
+        const knownEntities = npc.knownEntities || [];
+        const newEvents = npc.newEvents || [];
+        const recentEvents = npc.recentEvents || [];
+        const currentEntityIds = new Set(entities.map((entity) => entity.id));
+        const npcTrigger =
+          trigger?.type === 'batch' ? trigger.triggersByNpc[npc.id]?.at(-1) : trigger;
+        return this.compactPromptRecord({
+          id: npc.id,
+          objectives: npc.objectives,
+          memory: npc.memory,
+          inventory: npc.inventory,
+          knownEntities: knownEntities.some(
+            (entity) => entity.id !== npc.id && !currentEntityIds.has(entity.id)
+          )
+            ? knownEntities
+                .filter((entity) => entity.id !== npc.id && !currentEntityIds.has(entity.id))
+                .map((entity) =>
+                  this.compactPromptRecord({
+                    id: entity.id,
+                    kind: entity.kind,
+                    lastSeenSceneId: entity.lastSeenSceneId,
+                    title:
+                      entity.lastSeenSceneId !== worldModel.scene.id ? entity.title : undefined,
+                  })
+                )
+            : undefined,
+          actionHistory: this.getPromptActionHistory(worldModel.scene.id, npc.id, npcTrigger),
+          newEvents: newEvents.length
+            ? newEvents.map((event) => this.compactPromptEvent(event))
+            : undefined,
+          recentEvents: recentEvents.some(
+            (event) => !this.eventDuplicatesTrigger(event, npc.id, npcTrigger)
+          )
+            ? recentEvents
+                .filter((event) => !this.eventDuplicatesTrigger(event, npc.id, npcTrigger))
+                .slice(-4)
+                .map((event) => this.compactPromptEvent(event))
+            : undefined,
+          entities: this.buildDynamicEntities(entities),
+        });
+      }),
+    });
+  }
+
+  private compactPromptTrigger(trigger: NpcIndividualTrigger | NpcBatchTrigger): unknown {
+    if (trigger.type === 'batch') {
+      return {
+        type: 'batch',
+        triggersByNpc: Object.fromEntries(
+          Object.entries(trigger.triggersByNpc).map(([npcId, entries]) => [
+            npcId,
+            entries.map((entry) => this.compactPromptTrigger(entry)),
+          ])
+        ),
+      };
+    }
+    if (trigger.type === 'action_completed' || trigger.type === 'move_completed') {
+      const result = trigger.result;
+      return this.compactPromptRecord({
+        type: trigger.type,
+        result: this.compactPromptRecord({
+          status: result.status,
+          code: result.code,
+          message: 'message' in result ? result.message : undefined,
+          actionType: 'actionType' in result ? result.actionType : undefined,
+          targetId: 'targetId' in result ? result.targetId : undefined,
+          itemId: 'itemId' in result ? result.itemId : undefined,
+          commandId: 'commandId' in result ? result.commandId : undefined,
+          relation: 'relation' in result ? result.relation : undefined,
+          worldChanged: 'worldChanged' in result ? result.worldChanged : undefined,
+          discoveredEntityIds:
+            'discoveredEntityIds' in result ? result.discoveredEntityIds : undefined,
+          repeatKey: 'repeatKey' in result ? result.repeatKey : undefined,
+          repeatCount:
+            'repeatCount' in result && result.repeatCount ? result.repeatCount : undefined,
+          moveAttemptLimit: 'moveAttemptLimit' in result ? result.moveAttemptLimit : undefined,
+          moveAttemptsRemaining:
+            'moveAttemptsRemaining' in result ? result.moveAttemptsRemaining : undefined,
+        }),
+      });
+    }
+    if (trigger.type === 'plan_completed') {
+      return {
+        type: trigger.type,
+        results: trigger.results
+          .map((result) => this.compactPromptTrigger({ type: 'action_completed', result }))
+          .map((entry: any) => entry.result),
+      };
+    }
+    if (trigger.type === 'plan_interrupted') {
+      return this.compactPromptRecord({
+        type: trigger.type,
+        reason: trigger.reason,
+        result: (
+          this.compactPromptTrigger({
+            type: 'action_completed',
+            result: trigger.result as NpcPlanExecutionOutcome,
+          }) as any
+        ).result,
+        completedSteps: trigger.completedSteps.map(
+          (result) =>
+            (this.compactPromptTrigger({ type: 'action_completed', result }) as any).result
+        ),
+        remainingSteps: trigger.remainingSteps,
+        itemId: trigger.itemId,
+      });
+    }
+    return this.compactPromptRecord(trigger as unknown as Record<string, unknown>);
+  }
+
+  private compactPromptEvent(event: any): Record<string, unknown> {
+    const payload = event.payload || {};
+    return this.compactPromptRecord({
+      kind: event.kind,
+      actorId: event.actorId,
+      text: event.text,
+      payload: this.compactPromptRecord({
+        action: payload.action,
+        subjectId: payload.subjectId,
+        targetId: payload.targetId,
+        itemId: payload.itemId,
+        commandId: payload.commandId,
+        relation: payload.relation,
+        state: payload.state,
+        previousLocation: payload.previousLocation,
+      }),
+    });
+  }
+
+  private eventDuplicatesTrigger(
+    event: any,
+    npcId: string,
+    trigger?: NpcIndividualTrigger
+  ): boolean {
+    if (!trigger || event.actorId !== npcId) return false;
+    if (trigger.type !== 'action_completed' && trigger.type !== 'move_completed') return false;
+    const result: any = trigger.result;
+    const payload = event.payload || {};
+    return [
+      [payload.targetId, result.targetId],
+      [payload.itemId, result.itemId],
+      [payload.commandId, result.commandId],
+    ].some(([eventValue, resultValue]) => !!eventValue && eventValue === resultValue);
+  }
+
+  private getPromptActionHistory(
+    sceneId: string,
+    npcId: string,
+    trigger?: NpcIndividualTrigger
+  ): string[] | undefined {
+    const history = this.getNpcActionHistory(sceneId, npcId);
+    if (!history || trigger?.type !== 'action_completed') return history;
+    const result = trigger.result;
+    const target = result.targetId || result.itemId || result.commandId;
+    if (!target || !result.actionType) return history;
+    return history.filter((entry) => !entry.startsWith(`${result.actionType} ${target}:`));
+  }
+
+  private compactPromptRecord<T extends Record<string, unknown>>(value: T): T {
+    return Object.fromEntries(
+      Object.entries(value).filter(([, entry]) => {
+        if (entry === undefined || entry === null) return false;
+        if (Array.isArray(entry) && entry.length === 0) return false;
+        if (typeof entry === 'object' && !Array.isArray(entry) && Object.keys(entry).length === 0)
+          return false;
+        return true;
+      })
+    ) as T;
+  }
+
+  private getDynamicPromptDebug(
+    messages: LlmProviderMessage[]
+  ): NonNullable<NpcPuppetMasterDebugInfo['dynamicPrompt']> {
+    const text = messages.map((message) => String(message.content || '')).join('\n');
+    const jsonStart = text.indexOf('{');
+    let jsonEnd = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = jsonStart; index >= 0 && index < text.length; index++) {
+      const char = text[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === '\\') escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === '{') depth++;
+      else if (char === '}' && --depth === 0) {
+        jsonEnd = index;
+        break;
+      }
+    }
+    let sections: Record<string, number> = {};
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      const parsed = this.parseJson(text.slice(jsonStart, jsonEnd + 1)) as any;
+      if (parsed && typeof parsed === 'object') {
+        sections = Object.fromEntries(
+          Object.entries(parsed).map(([key, value]) => [key, JSON.stringify(value).length])
+        );
+      }
+    }
+    return { characters: text.length, estimatedTokens: Math.ceil(text.length / 4), sections };
+  }
+
+  private normalizeReasoning(parsed: unknown): string | undefined {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const value = (parsed as Record<string, unknown>).reasoning;
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
   }
 
   private buildDynamicEntities(
@@ -2398,6 +2585,7 @@ export class NpcPuppetMaster {
         formatFullSection('llm response', {
           rawResponse: debug.rawResponse || '',
           extractedJson: debug.extractedJson,
+          reasoning: debug.reasoning,
           acceptedPlans: debug.acceptedPlans,
           rejectedPlans: debug.rejectedPlans,
           filteredPlans: debug.filteredPlans,
@@ -2448,6 +2636,11 @@ export class NpcPuppetMaster {
         const promptLines: string[] = ['--- PM PROMPT ---'];
         if (debug.staticPrefix) {
           promptLines.push(this.formatStaticPrefixDebug(debug.staticPrefix));
+        }
+        if (debug.dynamicPrompt) {
+          promptLines.push(
+            `Dynamic prompt: ${debug.dynamicPrompt.characters} chars | ~${debug.dynamicPrompt.estimatedTokens} tokens | sections: ${JSON.stringify(debug.dynamicPrompt.sections)}`
+          );
         }
 
         if (dynamicContext) {
@@ -2507,22 +2700,9 @@ export class NpcPuppetMaster {
                   invStr = ` | Inventory: [${itemNames.join(', ')}]`;
                 }
               }
-              let actorsStr = '';
-              if (Array.isArray(npc.actors)) {
-                const actorNames = npc.actors
-                  .filter((a: any) => a.id !== npc.id)
-                  .map((a: any) => a.title || a.id);
-                if (actorNames.length > 0) {
-                  actorsStr = ` | Seen: [${actorNames.join(', ')}]`;
-                }
-              }
               promptLines.push(
-                `  * ${npc.id} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}${actorsStr}`
+                `  * ${npc.id} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}`
               );
-              const visibleItems = Array.isArray(npc.visibleItemIds)
-                ? npc.visibleItemIds.map((id: unknown) => String(id))
-                : [];
-              promptLines.push(`    visibleItemIds: ${JSON.stringify(visibleItems)}`);
               const knownEntities = Array.isArray(npc.knownEntities)
                 ? npc.knownEntities.map((entry: any) => ({
                     id: String(entry.id || ''),
@@ -2549,6 +2729,9 @@ export class NpcPuppetMaster {
         }
       } else {
         responseLines.push('--- PM RESPONSE ---');
+        if (debug.reasoning) {
+          responseLines.push(`Reasoning: ${debug.reasoning}`);
+        }
         const acceptedPlans = debug.acceptedPlans || [];
         const rejectedPlans = debug.rejectedPlans || [];
         const hasAcceptedPlans = acceptedPlans.length > 0;

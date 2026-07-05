@@ -331,9 +331,59 @@ describe('NpcPuppetMaster', () => {
     expect(output).toContain('0.12s');
     expect(output).toContain('Tokens: 456 in, 32 out');
     expect(output).toContain('Cache: 222 read, 111 created');
-    expect(output).toContain('visibleItemIds: ["visible_key"]');
+    expect(output).toContain('Dynamic prompt:');
     expect(output).toContain('knownEntities:');
     expect(output).not.toContain('"lastSeenSceneId"');
+  });
+
+  it('shows optional model reasoning only in Puppet Master diagnostics', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    addNpc(fixture, 'guard');
+    const debugLogs: string[] = [];
+    (fixture.game as any).console = {
+      parserPeekPmEnabled: true,
+      logDebug(text: string) {
+        debugLogs.push(text);
+      },
+    };
+    const pm = new NpcPuppetMaster(
+      fixture.game,
+      new MockProvider(
+        JSON.stringify({
+          kind: 'pm_response',
+          reasoning: 'The guard has no new event requiring action.',
+          plans: [],
+        })
+      )
+    );
+
+    await pm.processNpc(fixture.scene, 'guard');
+
+    expect(pm.getLastDebugInfo()?.reasoning).toBe('The guard has no new event requiring action.');
+    expect(debugLogs.join('\n')).toContain(
+      'Reasoning: The guard has no new event requiring action.'
+    );
+  });
+
+  it('deduplicates current actors and items from the dynamic knowledge index', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    addNpc(fixture, 'guard');
+    fixture.addEntity('visible_key', {
+      title: 'Visible key',
+      components: [{ type: 'Item' }],
+    });
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, 'guard');
+
+    const prompt = getDynamicPmText(provider.calls[0]);
+    expect(prompt).not.toContain('"actors"');
+    expect(prompt).not.toContain('"visibleItemIds"');
+    expect(prompt).not.toContain('"knownEntities"');
+    expect(prompt).toContain('visible_key');
   });
 
   it('prints PM prompt and response debug when the general #PEEKLLM mode is enabled', async () => {

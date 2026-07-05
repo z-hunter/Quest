@@ -2230,6 +2230,35 @@ describe('Game semantic API', () => {
     expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(true);
   });
 
+  it('lets EXAMINE reveal lookable contents and reach nested objects through a nearby ancestor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'guard');
+    npc.components = [{ type: 'Actor' }];
+    fixture.scene.addEntity(npc);
+    const sofa = fixture.addEntity('Sofa', { title: 'Sofa', description: 'A sofa.' });
+    sofa.x = 0;
+    sofa.y = 0;
+    const pillow = fixture.addEntity('Pillow', {
+      title: 'Pillow',
+      description: 'A pillow.',
+      spatial: { parentNodeId: sofa.name, relation: 'on' },
+    });
+    pillow.x = 500;
+    pillow.y = 500;
+    const remote = fixture.addEntity('Remote', {
+      title: 'Remote',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: pillow.name, relation: 'under' },
+    });
+    remote.hidden = 'lookable';
+
+    const outcome = fixture.game.examineEntityForActor(npc, pillow, { relation: 'under' });
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(true);
+  });
+
   it('transparent closed contents use a generic blocked message unless clearly openable is set', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

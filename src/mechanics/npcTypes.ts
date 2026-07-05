@@ -97,6 +97,7 @@ export type NpcPlan = {
 
 export type NpcPuppetMasterResponse = {
   kind: 'pm_response';
+  reasoning?: string;
   plans: NpcPlan[];
 };
 
@@ -217,6 +218,7 @@ export type NpcPuppetMasterDebugInfo = {
   };
   rawResponse?: string;
   extractedJson?: string;
+  reasoning?: string;
   acceptedPlans?: NpcPlan[];
   rejectedPlans?: Array<{
     plan: NpcPlan;
@@ -231,6 +233,11 @@ export type NpcPuppetMasterDebugInfo = {
   cacheCreationInputTokens?: number;
   cacheReadInputTokens?: number;
   staticPrefix?: NpcStaticPrefixDebugInfo;
+  dynamicPrompt?: {
+    characters: number;
+    estimatedTokens: number;
+    sections: Record<string, number>;
+  };
   strategy?: NpcPuppetMasterStrategyDebugInfo;
 };
 

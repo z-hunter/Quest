@@ -603,21 +603,12 @@ export class ActorPlanExecutor {
 
   private completeAction(npcId: string, outcome: NpcPlanExecutionOutcome): NpcPlanExecutionOutcome {
     if (!this.actionCompletionScheduler) return outcome;
-    const timeoutId = globalThis.setTimeout(() => {
-      const timeouts = this.pendingTimeouts.get(npcId);
-      if (timeouts) {
-        timeouts.delete(timeoutId);
-        if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
-      }
-      this.actionCompletionScheduler?.(npcId, outcome);
-    }, 0);
-
-    let timeouts = this.pendingTimeouts.get(npcId);
-    if (!timeouts) {
-      timeouts = new Set();
-      this.pendingTimeouts.set(npcId, timeouts);
-    }
-    timeouts.add(timeoutId);
+    // The semantic action has already completed at this point. Enqueue its
+    // outcome immediately; Puppet Master batching supplies the asynchronous
+    // boundary before the continuation is consumed. Deferring this callback
+    // through a zero-delay timer can strand a stored multi-step continuation
+    // if that timer is throttled or lost by the host runtime.
+    this.actionCompletionScheduler(npcId, outcome);
     return { ...outcome, status: 'scheduled' };
   }
 }

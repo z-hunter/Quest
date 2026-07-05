@@ -716,7 +716,7 @@ export class ComponentSystem {
   static getInteractionDistanceError(
     entity: SceneObject,
     player: Actor | null,
-    options?: { ignoreDistance?: boolean }
+    options?: { ignoreDistance?: boolean; ignoreSpatialAncestors?: boolean }
   ): string | null {
     const game = (entity as any).game as IGame | undefined;
     if (!player || options?.ignoreDistance) return null;
@@ -764,6 +764,28 @@ export class ComponentSystem {
     const allowedDist = interactionWidth * 2;
 
     if (dist > allowedDist) {
+      const isPortableItem = !!entity.components?.some(
+        (component: any) => component?.type === 'Item'
+      );
+      if (!options?.ignoreSpatialAncestors && !isPortableItem) {
+        const scene = game?.sceneManager?.currentScene;
+        const visited = new Set<string>([String(entity.name || '')]);
+        let parentId = String((entity as any).spatial?.parentNodeId || '').trim();
+        for (let depth = 0; scene && parentId && depth < 16; depth++) {
+          if (visited.has(parentId)) break;
+          visited.add(parentId);
+          const parent = scene.getObjectByName(parentId);
+          if (!parent) break;
+          if (
+            !this.getInteractionDistanceError(parent, player, {
+              ignoreSpatialAncestors: true,
+            })
+          ) {
+            return null;
+          }
+          parentId = String((parent as any).spatial?.parentNodeId || '').trim();
+        }
+      }
       const title = this.getPlayerFacingTitle(game, entity);
       if (title) {
         return (

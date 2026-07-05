@@ -422,7 +422,10 @@ export class GameSemanticAPI {
         anchor.name,
         relation,
         { includeHidden: true }
-      ).filter((accessState) => accessState.hiddenReason === 'examinable');
+      ).filter(
+        (accessState) =>
+          accessState.hiddenReason === 'lookable' || accessState.hiddenReason === 'examinable'
+      );
 
       revealableDescendants.forEach((accessState) => {
         scene.revealHiddenEntity(accessState.object);
