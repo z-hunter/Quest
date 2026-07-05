@@ -1626,7 +1626,12 @@ export class NpcPuppetMaster {
     const component =
       actor instanceof Actor
         ? (actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-            | { type: 'NPC'; objectives?: string[]; objectivesInitializedFromTA?: boolean }
+            | {
+                type: 'NPC';
+                objectives?: string[];
+                objectivesInitializedFromTA?: boolean;
+                objectivesTARevision?: string;
+              }
             | undefined)
         : undefined;
     if (!component) return undefined;
@@ -1634,6 +1639,10 @@ export class NpcPuppetMaster {
       .map((objective) => String(objective || '').trim())
       .filter(Boolean);
     component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
+      actor as Actor,
+      'objectives'
+    );
     return component.objectives;
   }
 

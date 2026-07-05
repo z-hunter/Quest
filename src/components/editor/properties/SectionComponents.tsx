@@ -342,16 +342,11 @@ export const SectionComponents: React.FC = () => {
                   triggerId: '',
                 });
               } else if (type === 'NPC') {
-                const initialObjectives = game.textAssets.getResolvedObjectListField(
-                  o,
-                  'objectives'
-                );
                 o.components.push({
                   type: 'NPC',
                   enabled: true,
                   memory: '',
-                  objectives: initialObjectives,
-                  objectivesInitializedFromTA: true,
+                  objectives: [],
                 });
               } else if (type === '3d-parallax') {
                 o.components.push({ type: '3d-parallax' });
@@ -502,13 +497,22 @@ export const SectionComponents: React.FC = () => {
                     rows={3}
                     value={
                       Array.isArray(comp.objectives) &&
-                      (comp.objectives.length > 0 || comp.objectivesInitializedFromTA === true)
+                      (comp.objectives.length > 0 ||
+                        comp.objectivesTARevision ===
+                          game.textAssets.getResolvedObjectListRevision(o, 'objectives'))
                         ? comp.objectives.join('\n')
                         : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
                     }
                     onChange={(e) => {
-                      comp.objectives = e.target.value.split(/\r?\n/);
+                      comp.objectives = e.target.value
+                        .split(/\r?\n/)
+                        .map((objective: string) => objective.trim())
+                        .filter(Boolean);
                       comp.objectivesInitializedFromTA = true;
+                      comp.objectivesTARevision = game.textAssets.getResolvedObjectListRevision(
+                        o,
+                        'objectives'
+                      );
                       incrementObjectVersion();
                     }}
                   />

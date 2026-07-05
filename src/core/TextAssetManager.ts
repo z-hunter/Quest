@@ -803,6 +803,10 @@ export class TextAssetManager {
     return this.resolveListField(asset, field);
   }
 
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string {
+    return JSON.stringify(this.getResolvedObjectListField(obj, field));
+  }
+
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
     field: string,

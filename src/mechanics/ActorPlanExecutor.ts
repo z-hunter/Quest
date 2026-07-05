@@ -204,13 +204,22 @@ export class ActorPlanExecutor {
 
   private setNpcObjectives(actor: Actor, objectives: string[]): void {
     const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-      | { type: 'NPC'; objectives?: string[]; objectivesInitializedFromTA?: boolean }
+      | {
+          type: 'NPC';
+          objectives?: string[];
+          objectivesInitializedFromTA?: boolean;
+          objectivesTARevision?: string;
+        }
       | undefined;
     if (component) {
       component.objectives = objectives
         .map((objective) => String(objective || '').trim())
         .filter(Boolean);
       component.objectivesInitializedFromTA = true;
+      component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
+        actor,
+        'objectives'
+      );
     }
   }
 

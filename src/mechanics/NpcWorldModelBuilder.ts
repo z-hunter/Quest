@@ -361,25 +361,27 @@ export class NpcWorldModelBuilder {
     npc: Actor,
     component: ReturnType<typeof ComponentSystem.getNpcComponent>
   ): string[] {
-    if (
-      component?.objectives &&
-      (component.objectives.length > 0 || component.objectivesInitializedFromTA)
-    ) {
+    if (component?.objectives && component.objectives.length > 0) {
       return component.objectives;
     }
 
     const initialObjectives = this.game.textAssets.getResolvedObjectListField(npc, 'objectives');
+    const taRevision = this.game.textAssets.getResolvedObjectListRevision(npc, 'objectives');
     const mutableComponent = npc.components?.find((candidate: any) => candidate?.type === 'NPC') as
-      | { type: 'NPC'; objectives?: string[]; objectivesInitializedFromTA?: boolean }
+      | {
+          type: 'NPC';
+          objectives?: string[];
+          objectivesInitializedFromTA?: boolean;
+          objectivesTARevision?: string;
+        }
       | undefined;
-    if (
-      mutableComponent &&
-      (!Array.isArray(mutableComponent.objectives) ||
-        mutableComponent.objectives.length === 0 ||
-        mutableComponent.objectivesInitializedFromTA !== true)
-    ) {
+    if (mutableComponent?.objectivesTARevision === taRevision) {
+      return mutableComponent.objectives || [];
+    }
+    if (mutableComponent) {
       mutableComponent.objectives = [...initialObjectives];
       mutableComponent.objectivesInitializedFromTA = true;
+      mutableComponent.objectivesTARevision = taRevision;
     }
     return initialObjectives;
   }

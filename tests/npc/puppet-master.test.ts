@@ -384,6 +384,7 @@ describe('NpcPuppetMaster', () => {
     expect(world.npcs?.[0]?.objectives).toEqual(['Check IDs']);
     expect(component.objectives).toEqual(['Check IDs']);
     expect(component.objectivesInitializedFromTA).toBe(true);
+    expect(component.objectivesTARevision).toBe(JSON.stringify(['Check IDs']));
   });
 
   it('keeps changed runtime NPC objectives instead of re-reading text asset defaults', () => {
@@ -484,12 +485,38 @@ describe('NpcPuppetMaster', () => {
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
     component.objectives = [];
     component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
     expect(world.npcs?.[0]?.objectives).toBeUndefined();
     expect(component.objectives).toEqual([]);
     expect(component.objectivesInitializedFromTA).toBe(true);
+  });
+
+  it('reinitializes empty runtime objectives when TA objectives change', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    fixture.textAssets.setObject('guard', {
+      title: 'Security Guard',
+      objectives: ['Inspect the new delivery'],
+    });
+
+    const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
+
+    expect(world.npcs?.[0]?.objectives).toEqual(['Inspect the new delivery']);
+    expect(component.objectives).toEqual(['Inspect the new delivery']);
+    expect(component.objectivesTARevision).toBe(JSON.stringify(['Inspect the new delivery']));
   });
 
   it('keeps semantically titled objects and fallback floor surfaces in NPC visible entity context', () => {

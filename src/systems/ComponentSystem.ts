@@ -72,6 +72,7 @@ export interface NpcComponent {
   memory?: string;
   objectives?: string[];
   objectivesInitializedFromTA?: boolean;
+  objectivesTARevision?: string;
   knownEntities?: Record<string, NpcKnownEntityMemory>;
 }
 
@@ -269,6 +270,10 @@ export class ComponentSystem {
         ? component.objectives.filter((item): item is string => typeof item === 'string')
         : undefined,
       objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
+      objectivesTARevision:
+        typeof component.objectivesTARevision === 'string'
+          ? component.objectivesTARevision
+          : undefined,
       knownEntities: (() => {
         if (!component.knownEntities || typeof component.knownEntities !== 'object') {
           return undefined;

@@ -8,6 +8,7 @@ type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
   hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string;
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
     field: string,
@@ -374,6 +375,9 @@ export function createTestTextAssets(): TestTextAssets {
       return Array.isArray(value)
         ? value.filter((item): item is string => typeof item === 'string')
         : [];
+    },
+    getResolvedObjectListRevision(obj, field) {
+      return JSON.stringify(this.getResolvedObjectListField(obj, field));
     },
     getResolvedObjectStructuredListField(obj, field, normalize) {
       const asset = objectAssets.get(obj.name);
