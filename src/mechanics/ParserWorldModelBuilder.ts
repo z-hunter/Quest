@@ -98,8 +98,7 @@ export class ParserWorldModelBuilder {
       source: 'inventoryPreview',
       synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
       description: this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
-      // Temporarily keep player-facing TA details out of LLM prompts.
-      // details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+      details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
       lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
       parserNote:
         this.getEntityParserNote(this.game.sceneManager.currentScene, entity.name) || undefined,
@@ -206,9 +205,8 @@ export class ParserWorldModelBuilder {
           description:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
             undefined,
-          // Temporarily keep player-facing TA details out of LLM prompts.
-          // details:
-          //   this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
+          details:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           lore:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
           parserNote: this.getEntityParserNote(scene, sceneObject.name) || undefined,
@@ -297,9 +295,8 @@ export class ParserWorldModelBuilder {
           description:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'description') ||
             undefined,
-          // Temporarily keep player-facing TA details out of LLM prompts.
-          // details:
-          //   this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
+          details:
+            this.game.textAssets.getResolvedObjectField(sceneObject as any, 'details') || undefined,
           lore:
             this.game.textAssets.getResolvedObjectField(sceneObject as any, 'lore') || undefined,
           parserNote: this.getEntityParserNote(scene, sceneObject.name) || undefined,
@@ -325,8 +322,7 @@ export class ParserWorldModelBuilder {
           synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
           description:
             this.game.textAssets.getResolvedObjectField(entity, 'description') || undefined,
-          // Temporarily keep player-facing TA details out of LLM prompts.
-          // details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
+          details: this.game.textAssets.getResolvedObjectField(entity, 'details') || undefined,
           lore: this.game.textAssets.getResolvedObjectField(entity, 'lore') || undefined,
           parserNote:
             this.getEntityParserNote(this.game.sceneManager.currentScene, entity.name) || undefined,

@@ -167,6 +167,8 @@ A good mapping preserves the player's intended result while using the closest gr
 
 A bad mapping changes the result, switches to a different object, assumes an unsupported object relationship, or calls an action only because a word matches. Do not turn an unsupported intent into LOOK, EXAMINE, TAKE, PUT, OPEN, CLOSE, GO, or a custom command unless that action is a faithful executable equivalent of what the player meant.
 
+Reading, looking, examining, inspecting, studying, checking, and searching are observational intents. Map reading visible writing to EXAMINE or grounded narration. Never add TAKE merely to bring an object into inventory or make it easier to inspect; changing ownership is not a faithful part of an observational request.
+
 Player-facing prose may be more expressive than the low-level action, but every successful inventory, containment, device, state, group, script, or persistent world change described in that prose must have a real action in the same plan. If no real action should change the world, use `final_response` or `showText` only for no-result flavor, refusal, conversation, or atmosphere.
 
 ## Response Format
@@ -204,6 +206,8 @@ For a game-command ambiguity, include the action you are trying to complete:
 ```
 
 Use structured `clarification` with `pendingAction` when you know the intended action but need the player to choose an entity, source, target, container, relation, or authored command argument. The parser core will use that pending action to produce the standard numbered clarification and keep the original command pending. Do not ask free-form entity-choice questions without `pendingAction`.
+
+Do not ask the player to choose between an object and performing the requested action on that same object. If the command already identifies one real target, return the action plan directly. Clarification is only for a genuinely unresolved argument with multiple possible matches; the parser core, not your prose, presents the numbered choices and preserves the pending action.
 
 In `pendingAction`, keep the ambiguous field as the player's ambiguous phrase. Do not choose one option inside `pendingAction` while asking the player which option they meant. For example, if the player says `load cassette` and there are multiple cassette matches, use `"item": "cassette"`, not `"item": "Cassette 'Music'"`.
 

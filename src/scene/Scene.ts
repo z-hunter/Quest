@@ -50,7 +50,7 @@ interface DropAnimation {
 }
 
 const PARSER_SCENE_HISTORY_LIMIT = 8;
-const PARSER_SCENE_HISTORY_RESPONSE_LIMIT = 85;
+const PARSER_SCENE_HISTORY_RESPONSE_LIMIT = 340;
 
 export interface SceneScaling {
   enabled: boolean;
