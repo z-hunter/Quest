@@ -4,6 +4,7 @@ import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
 import { normalizeGroupIdList } from '../../../utils/GroupIds';
 import { findDuplicateSceneObjectName } from './SectionIdentityUtils';
+import { useFileWatcher } from '../../../hooks/useFileWatcher';
 
 interface SectionIdentityData {
   id?: string;
@@ -23,7 +24,6 @@ interface SectionIdentityProps {
   resolvedTitle: string;
   textAssetPath: string;
   hasTextAsset: boolean;
-  isReadingTA: boolean;
   onOpenTA: () => void;
   onReadTA: () => void;
   onDeleteTA: () => void;
@@ -39,7 +39,6 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
   resolvedTitle,
   textAssetPath,
   hasTextAsset,
-  isReadingTA,
   onOpenTA,
   onReadTA,
   onDeleteTA,
@@ -61,6 +60,17 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
   React.useEffect(() => {
     setIdentityDraft(identityValue);
   }, [identityValue]);
+
+  const handleFileChanged = React.useCallback(
+    (eventType: string) => {
+      if (eventType === 'change' || eventType === 'add') {
+        onReadTA();
+      }
+    },
+    [onReadTA]
+  );
+
+  useFileWatcher(textAssetPath, handleFileChanged);
 
   return (
     <div ref={setSectionRef(0)} className="properties-section-block" data-section={0}>
@@ -137,9 +147,6 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                 <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                   <button className="e-btn" onClick={onOpenTA}>
                     {hasTextAsset ? 'Open TA' : 'Create TA'}
-                  </button>
-                  <button className="e-btn" onClick={onReadTA} disabled={isReadingTA}>
-                    {isReadingTA ? 'Syncing...' : 'Sync TA'}
                   </button>
                   {hasTextAsset && (
                     <button className="e-btn" onClick={onDeleteTA}>

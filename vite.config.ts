@@ -62,6 +62,20 @@ export default defineConfig({
           }
         });
 
+        // WATCHER
+        server.watcher.on('all', (event, file, stats) => {
+          const relativePath = path.relative(__dirname, file).replace(/\\/g, '/');
+          server.ws.send({
+            type: 'custom',
+            event: 'file-event',
+            data: {
+              eventType: event,
+              path: relativePath,
+              modifiedTime: stats ? Math.floor(stats.mtimeMs) : Date.now(),
+            },
+          });
+        });
+
         server.middlewares.use('/api/ensure-file', (req, res, next) => {
           if (req.method === 'POST') {
             let body = '';
@@ -110,6 +124,8 @@ export default defineConfig({
                   return {
                     name: file,
                     isDir: stats.isDirectory(),
+                    createdTime: stats.birthtimeMs,
+                    modifiedTime: stats.mtimeMs,
                   };
                 });
 
@@ -143,8 +159,16 @@ export default defineConfig({
                 const targetPath = path.resolve(__dirname, relativePath);
                 ensureFile(targetPath, content || '{}');
                 const fileContent = fs.readFileSync(targetPath, 'utf-8');
+                const stats = fs.statSync(targetPath);
                 res.statusCode = 200;
-                res.end(JSON.stringify({ success: true, content: fileContent }));
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    content: fileContent,
+                    createdTime: stats.birthtimeMs,
+                    modifiedTime: stats.mtimeMs,
+                  })
+                );
               } catch (err) {
                 console.error('[Vite] Read file error:', err);
                 res.statusCode = 500;

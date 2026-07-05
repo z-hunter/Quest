@@ -227,6 +227,10 @@ The Scanline Engine can be compiled into a standalone native application using T
 
 - **Tauri Shell**: The application is a Vite/React project running inside a Tauri webview shell.
 - **File System Adapter**: All editor file operations (read, save, delete, list) are abstracted through `src/platform/fileApi.ts`. This adapter dynamically switches between Vite's dev middleware and Tauri's native Rust commands.
+- **Automatic File Monitoring**: The engine automatically watches for file changes (e.g., external edits to Text Assets) and updates the UI instantly. This is handled seamlessly in both environments:
+  - **Vite**: Uses its built-in `chokidar` file watcher, relaying events via WebSocket (`import.meta.hot.on('file-event')`).
+  - **Tauri**: Runs a background thread using the Rust `notify` crate, emitting native events to the frontend (`@tauri-apps/api/event`).
+  - **Frontend Integration**: Both pipelines converge into a unified `FileEventEmitter` within `fileApi.ts`, which React components can subscribe to via the `useFileWatcher` hook for automatic state synchronization.
 - **Rust Backend**: The `src-tauri` directory implements a Rust backend containing commands for managing project files and opening folders natively in the OS Explorer.
 
 ### 9.2 Path Resolution and Portability

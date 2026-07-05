@@ -50,7 +50,6 @@ export const PropertiesPanel: React.FC = () => {
   const [multiSpatialRelationDraft, setMultiSpatialRelationDraft] = React.useState('');
   const [resolvedTitle, setResolvedTitle] = React.useState('');
   const [textAssetPath, setTextAssetPath] = React.useState('');
-  const [isReadingTA, setIsReadingTA] = React.useState(false);
   const [hasTextAsset, setHasTextAsset] = React.useState(false);
   const [polygonScaleDraft, setPolygonScaleDraft] = React.useState('1');
 
@@ -570,7 +569,6 @@ export const PropertiesPanel: React.FC = () => {
 
   const handleReadTA = async () => {
     if (!game || !obj) return;
-    setIsReadingTA(true);
     try {
       const path =
         selectedObjectType === 'SCENE'
@@ -600,8 +598,6 @@ export const PropertiesPanel: React.FC = () => {
     } catch (err) {
       console.error('Failed to read text asset:', err);
       game.showNotification?.(`Failed to read TA: ${err}`);
-    } finally {
-      setIsReadingTA(false);
     }
   };
 
@@ -865,7 +861,6 @@ export const PropertiesPanel: React.FC = () => {
               resolvedTitle={resolvedTitle}
               textAssetPath={textAssetPath}
               hasTextAsset={hasTextAsset}
-              isReadingTA={isReadingTA}
               onOpenTA={handleOpenTA}
               onReadTA={handleReadTA}
               onDeleteTA={handleDeleteTA}

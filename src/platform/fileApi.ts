@@ -1,6 +1,10 @@
-type FileListItem = {
+import { listen } from '@tauri-apps/api/event';
+
+export type FileListItem = {
   name: string;
   isDir: boolean;
+  createdTime?: number;
+  modifiedTime?: number;
 };
 
 type JsonHeaders = {
@@ -166,3 +170,57 @@ export async function openProjectFolder(path: string): Promise<void> {
 
   await postJson('/api/open-folder', { path });
 }
+
+export type FileEventCallback = (eventType: string, path: string, modifiedTime: number) => void;
+
+class FileEventEmitter {
+  private listeners: Set<FileEventCallback> = new Set();
+
+  subscribe(cb: FileEventCallback) {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+
+  emit(eventType: string, path: string, modifiedTime: number) {
+    this.listeners.forEach((cb) => cb(eventType, path, modifiedTime));
+  }
+}
+
+export const fileEvents = new FileEventEmitter();
+
+let watcherInitialized = false;
+
+export async function initFileWatcher() {
+  if (watcherInitialized) return;
+  watcherInitialized = true;
+
+  if (isTauriRuntime()) {
+    try {
+      await listen<{ eventType: string; path: string; modifiedTime?: number }>(
+        'file-event',
+        (event) => {
+          fileEvents.emit(
+            event.payload.eventType,
+            event.payload.path,
+            event.payload.modifiedTime || Date.now()
+          );
+        }
+      );
+    } catch (err) {
+      console.warn('Failed to listen to Tauri file-event', err);
+    }
+  } else {
+    // Vite HMR
+    if (import.meta.hot) {
+      import.meta.hot.on(
+        'file-event',
+        (payload: { eventType: string; path: string; modifiedTime: number }) => {
+          fileEvents.emit(payload.eventType, payload.path, payload.modifiedTime);
+        }
+      );
+    }
+  }
+}
+
+// Initialize eagerly so events are caught early
+initFileWatcher().catch(console.error);
