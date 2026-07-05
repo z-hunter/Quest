@@ -885,8 +885,6 @@
       "height": 657,
       "baseWidth": 1636.923076923077,
       "baseHeight": 1010.7692307692307,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "window-view.json",
       "color": "#00ff00",
       "scale": 0.65,
@@ -896,7 +894,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "room",
@@ -927,8 +927,6 @@
       "height": 593.5999999999999,
       "baseWidth": 1264,
       "baseHeight": 848,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "room2",
       "color": "#888888",
       "scale": 0.7,
@@ -938,7 +936,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Chair",
@@ -968,8 +968,6 @@
       "height": 198.79999999999998,
       "baseWidth": 167,
       "baseHeight": 284,
-      "colliderWidth": 78,
-      "colliderHeight": 18,
       "spriteName": "chair.json",
       "color": "#00ff00",
       "scale": 0.7,
@@ -979,7 +977,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 78,
+      "colliderHeight": 18
     },
     {
       "name": "Black_1",
@@ -1010,8 +1010,6 @@
       "height": 637.1050459736764,
       "baseWidth": 155.6673312915089,
       "baseHeight": 579.1864054306149,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#000000",
       "scale": 1.1,
@@ -1021,7 +1019,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D_main",
@@ -1047,8 +1047,6 @@
       "height": 484.79999999999995,
       "baseWidth": 1024,
       "baseHeight": 808,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_main",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1058,7 +1056,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D2_body",
@@ -1089,8 +1089,6 @@
       "height": 407.4,
       "baseWidth": 1024,
       "baseHeight": 679,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d2.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1100,7 +1098,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_body",
@@ -1126,8 +1126,6 @@
       "height": 177.6,
       "baseWidth": 1024,
       "baseHeight": 296,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_body.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1137,7 +1135,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_stuff",
@@ -1163,8 +1163,6 @@
       "height": 412,
       "baseWidth": 979,
       "baseHeight": 412,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_items.json",
       "color": "#00ff00",
       "scale": 1,
@@ -1174,7 +1172,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D_main_top",
@@ -1209,8 +1209,6 @@
       "height": 129.6,
       "baseWidth": 1024,
       "baseHeight": 216,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_top.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1220,7 +1218,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_fasade",
@@ -1251,8 +1251,6 @@
       "height": 105.6,
       "baseWidth": 1024,
       "baseHeight": 176,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_facade.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1262,7 +1260,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "floor-parallax",
@@ -1273,11 +1273,7 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "3d-parallax"
-        }
-      ],
+      "components": [],
       "layer": -1,
       "visible": true,
       "hidden": false,
@@ -1317,7 +1313,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Sofa",
@@ -1344,15 +1342,13 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0791811402100033,
-      "x": 223.04286339314518,
-      "y": 306.9389559234049,
+      "parallax": 1.079181140210003,
+      "x": 223.04286339314473,
+      "y": 306.93895592340465,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
       "baseHeight": 112.99999999999999,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sofa",
       "color": "#36d87fff",
       "scale": 0.8,
@@ -1365,8 +1361,11 @@
       "blur": 0,
       "isPlayer": false,
       "speed": 0.1,
+      "perceptionRadius": 600,
       "direction": "down",
-      "animSets": {}
+      "animSets": {},
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "boombox",
@@ -1397,8 +1396,6 @@
       "height": 47,
       "baseWidth": 123.07692307692307,
       "baseHeight": 51.64835164835165,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1408,7 +1405,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "audio_cables",
@@ -1434,8 +1433,6 @@
       "height": 27.3,
       "baseWidth": 30,
       "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1445,7 +1442,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "window1",
@@ -1476,8 +1475,6 @@
       "height": 27.3,
       "baseWidth": 30,
       "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1487,7 +1484,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow",
@@ -1503,29 +1502,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1005.2779727164655,
-      "y": 228.888621257255,
+      "x": 1142.7496650652718,
+      "y": 251.75395995310467,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1005.2779727164655,
-          "y": 228.888621257255,
-          "p": 1.0284991047125032
+          "x": 1142.7496650652718,
+          "y": 251.75395995310467,
+          "p": 1.0284991047125034
         },
         {
-          "x": 1099.9496981696807,
-          "y": 227.69188197423148,
-          "p": 1.027714327370604
+          "x": 1238.2250968803858,
+          "y": 250.5385974175609,
+          "p": 1.0277014172129904
         },
         {
-          "x": 1429.2881663467724,
-          "y": 259.9747452200141,
-          "p": 1.048687004383216
+          "x": 1620.1155992010033,
+          "y": 283.286394245766,
+          "p": 1.0485129785677496
         },
         {
-          "x": 1345.4433259137747,
-          "y": 257.47736046009027,
-          "p": 1.0471544312305519
+          "x": 1530.7007764963307,
+          "y": 280.7478347341566,
+          "p": 1.0468963151083723
         }
       ],
       "color": "#2b019d",
@@ -1538,7 +1537,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 7
+      "blur": 7,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "miles_id",
@@ -1569,8 +1570,6 @@
       "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
       "baseHeight": 102.45528980823099,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
       "scale": 0.1183,
@@ -1580,7 +1579,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_1",
@@ -1610,8 +1611,6 @@
       "height": 14.023026315789474,
       "baseWidth": 26.25,
       "baseHeight": 18.75,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#5e184f",
       "scale": 0.7478947368421053,
@@ -1621,7 +1620,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_2",
@@ -1659,8 +1660,6 @@
       "height": 14.999999999999998,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#d66e29",
       "scale": 0.91,
@@ -1670,7 +1669,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_3",
@@ -1708,8 +1709,6 @@
       "height": 14.999999999999998,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#d0cb39",
       "scale": 0.91,
@@ -1719,7 +1718,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "printer_commodore",
@@ -1741,8 +1742,6 @@
       "height": 34,
       "baseWidth": 61.53846153846153,
       "baseHeight": 37.362637362637365,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1752,7 +1751,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv",
@@ -1789,8 +1790,6 @@
       "height": 74,
       "baseWidth": 94.5054945054945,
       "baseHeight": 81.31868131868131,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1800,7 +1799,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "phone_modem",
@@ -1822,8 +1823,6 @@
       "height": 40,
       "baseWidth": 30.769230769230766,
       "baseHeight": 43.956043956043956,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1833,7 +1832,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sound_test",
@@ -1855,8 +1856,6 @@
       "height": 26,
       "baseWidth": 40.65934065934066,
       "baseHeight": 28.57142857142857,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1866,7 +1865,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sofa_pillow1",
@@ -1892,8 +1893,6 @@
       "height": 56,
       "baseWidth": 141,
       "baseHeight": 56,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#4c2e94",
       "scale": 1,
@@ -1903,7 +1902,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sofa_pillow2",
@@ -1929,8 +1930,6 @@
       "height": 56,
       "baseWidth": 141,
       "baseHeight": 56,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#4c2e94",
       "scale": 1,
@@ -1940,7 +1939,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "room_k",
@@ -1962,8 +1963,6 @@
       "height": 554,
       "baseWidth": 788,
       "baseHeight": 554,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "kitchen",
       "color": "#AAAAAA",
       "scale": 1,
@@ -1973,7 +1972,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_81",
@@ -1995,8 +1996,6 @@
       "height": 210.21054080088066,
       "baseWidth": 466.4373193890188,
       "baseHeight": 210.21054080088066,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "kitchen_table",
       "color": "#AAAAAA",
       "scale": 1,
@@ -2006,7 +2005,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv_anim",
@@ -2032,8 +2033,6 @@
       "height": 63.99999999999999,
       "baseWidth": 84.61538461538461,
       "baseHeight": 70.32967032967032,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "tv_anim",
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -2043,7 +2042,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv_anim_glow_1",
@@ -2095,7 +2096,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 9
+      "blur": 9,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv_anim_glow",
@@ -2147,7 +2150,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 13
+      "blur": 13,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv_aim_glow3",
@@ -2199,7 +2204,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv_rc",
@@ -2213,6 +2220,14 @@
       "components": [
         {
           "type": "Item"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 1,
+          "groups": ["#aaa"],
+          "protected": false,
+          "items": []
         }
       ],
       "layer": 0,
@@ -2229,8 +2244,6 @@
       "height": 38.35,
       "baseWidth": 199.99999999999997,
       "baseHeight": 295,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "tv_rc",
       "color": "#AAAAAA",
       "scale": 0.13,
@@ -2240,7 +2253,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "NPC",
@@ -2274,15 +2289,13 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0318181826731165,
-      "x": 1233.0000273620126,
-      "y": 234.00000131659937,
+      "parallax": 1,
+      "x": 1193.7132748189986,
+      "y": 232.56818309630913,
       "width": 92.60653987734776,
       "height": 278.6731361286087,
       "baseWidth": 217,
       "baseHeight": 653,
-      "colliderWidth": 44,
-      "colliderHeight": 8,
       "spriteName": "linda_idle_right.json",
       "color": "#36d87fff",
       "scale": 0.42675824828270853,
@@ -2312,7 +2325,9 @@
           "left": "linda_walk_left.json",
           "right": null
         }
-      }
+      },
+      "colliderWidth": 67.43161992954968,
+      "colliderHeight": 15.029586483237711
     },
     {
       "name": "door",
@@ -2371,7 +2386,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": false,
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Hero_1",
@@ -2413,17 +2430,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1.0421980367918666,
-      "x": 1080.1585068366549,
-      "y": 249.98497665947454,
-      "width": 121.24102847519698,
-      "height": 290.8146291128036,
+      "x": 1220.9573269588236,
+      "y": 273.370411896676,
+      "width": 124.32,
+      "height": 298.2,
       "baseWidth": 148,
       "baseHeight": 355,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
       "spriteName": "miles2_ds-idle-left.json",
       "color": "#00ffff",
-      "scale": 0.8191961383459255,
+      "scale": 0.84,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -2433,7 +2448,8 @@
       "blur": 0,
       "isPlayer": true,
       "speed": 0.24,
-      "direction": "left",
+      "perceptionRadius": 600,
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -2449,7 +2465,9 @@
           "left": "miles2_ds-walk-left.json",
           "right": ""
         }
-      }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
     },
     {
       "name": "test",
@@ -2479,8 +2497,6 @@
       "height": 21.387807935420106,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.7639991820985838,
@@ -2490,7 +2506,57 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "batteryAAA",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#aaa",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "State",
+          "id": "charge_percent",
+          "valueType": "number",
+          "initialValue": 100,
+          "value": 0
+        },
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": "examinable",
+      "spatial": {
+        "parentNodeId": "tv_rc",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 1019,
+      "y": 344,
+      "width": 16,
+      "height": 14.8,
+      "baseWidth": 80,
+      "baseHeight": 74,
+      "spriteName": "aaa",
+      "color": "#AAAAAA",
+      "scale": 0.2,
+      "refScale": 0.2,
+      "modelScale": 0.2,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [
@@ -2589,7 +2655,7 @@
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "Hello",
-        "knownByNpcIds": ["NPC"]
+        "knownByActorIds": ["NPC"]
       },
       {
         "id": "1780248400642-2",
@@ -2598,7 +2664,7 @@
         "actorId": "NPC",
         "displayName": "Linda",
         "text": "Oh, hi there! I was just about to put on the Muppet Show. Have you seen it?",
-        "knownByNpcIds": []
+        "knownByActorIds": []
       },
       {
         "id": "1780248413407-3",
@@ -2607,7 +2673,7 @@
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "Not Yet",
-        "knownByNpcIds": ["NPC"]
+        "knownByActorIds": ["NPC"]
       },
       {
         "id": "1780248415193-4",
@@ -2616,7 +2682,7 @@
         "actorId": "NPC",
         "displayName": "Linda",
         "text": "Oh, you should really stick around and watch it with me then! It's starting soon.",
-        "knownByNpcIds": []
+        "knownByActorIds": []
       },
       {
         "id": "1780248447688-5",
@@ -2625,7 +2691,7 @@
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "Ok. Come closer to me",
-        "knownByNpcIds": ["NPC"]
+        "knownByActorIds": ["NPC"]
       },
       {
         "id": "1780248449472-6",
@@ -2634,7 +2700,7 @@
         "actorId": "NPC",
         "displayName": "Linda",
         "text": "Sure! Let's sit together and watch the show. It's about to start!",
-        "knownByNpcIds": []
+        "knownByActorIds": []
       },
       {
         "id": "1780248520675-7",
@@ -2643,7 +2709,7 @@
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "Please take the rc and turn tv on",
-        "knownByNpcIds": ["NPC"]
+        "knownByActorIds": ["NPC"]
       },
       {
         "id": "1780248522411-8",
@@ -2652,7 +2718,7 @@
         "actorId": "NPC",
         "displayName": "Linda",
         "text": "Of course! Let me grab that remote for you.",
-        "knownByNpcIds": []
+        "knownByActorIds": []
       }
     ],
     "lastPmProcessedAt": 1780248522411,

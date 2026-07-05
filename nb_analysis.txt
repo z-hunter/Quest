@@ -1,0 +1,1424 @@
+﻿{
+  "answer": "**Most Likely Subsystems Involved**\n*   **Editor UI / Properties Panel**: The specific React component responsible for rendering string arrays (like `Objectives`, which is a `string[]`) in the NPC properties [1].\n*   **Global Keyboard Event Capture**: The global hotkey listener (likely in `src/tools/SceneEditor.ts`) that intercepts keyboard shortcuts for the editor, such as `Space` for \"Select Scene\" and `Ctrl + V` for \"Paste\" [2, 3].\n\n**Known Similar Incidents or Prior Fixes**\n*   **Numeric Hotkey Navigation Bug**: Previously, pressing keys 1-6 accidentally triggered Properties Panel section scrolling while typing. This was fixed by explicitly checking that `document.activeElement.tagName !== 'INPUT'` before executing the hotkey [4].\n*   **Arrow Keys Scrolling the Viewport**: Arrow keys incorrectly triggered panel scrolling while the mouse was over the game screen. This was fixed in `src/tools/SceneEditor.ts`'s `handleGlobalKey` by checking that the focus is not on an `input/textarea/select` before calling `e.preventDefault()` [2, 5]. \n*   **Hypothesis**: The `Memory` field is likely a standard `<textarea>` or `<input>`, which correctly bypasses global hotkeys. The `Objectives` field, being a list, might be implemented using a custom UI element (like a `contenteditable` `div` or an unhandled custom input) that fails the `tagName === 'INPUT' || 'TEXTAREA'` check. As a result, the global editor intercepts `Space` (Select Scene) and `Ctrl + V` (Paste Object) and prevents default typing behavior [3, 4].\n\n**Files and Functions to Inspect First**\n*   `src/tools/SceneEditor.ts`: Inspect `handleGlobalKey` to see how it checks for active text inputs before intercepting `Space` and `Ctrl+V` [2].\n*   `src/components/editor/properties/SectionComponents.tsx`: Inspect how the `Objectives` array is rendered [6]. Check if it uses a standard `<input>` or a custom DOM element.\n*   If a custom array input component exists, check its `onKeyDown` and `onPaste` handlers to see if it is missing `e.stopPropagation()`.\n\n**Tests That Should Reproduce or Protect This Behavior**\n*   **UI/Editor Input Regression Test**: Add a test (e.g., in `tests/editor/section-script-events.test.ts` or a new `tests/editor/npc-properties.test.ts`) that focuses on the `Objectives` input field and dispatches `Space` and `Ctrl+V` `KeyboardEvent`s. Assert that the input's value updates correctly and that the global `SceneEditor` methods (like pasting a prefab or selecting the scene) are not called.\n*   **Global Hotkey Exclusion Test**: Add a unit test verifying that `handleGlobalKey` immediately returns/ignores inputs when `document.activeElement` is a `contenteditable` element, an `input`, or a `textarea`.\n\n**Risks and Rollback Considerations**\n*   **Risk**: If you expand the global hotkey exclusion list in `SceneEditor.ts` too broadly (e.g., by checking for any focused `div`), you risk breaking legitimate editor hotkeys when the user clicks on non-input parts of the Properties Panel.\n*   **Risk**: If you fix this by adding `e.stopPropagation()` directly to the `Objectives` component's `onKeyDown` handler, ensure it does not accidentally block standard React UI behaviors (like form submission or accordion toggles).\n*   **Rollback Plan**: If global hotkey changes cause regressions (e.g., hotkeys stop working in the editor), revert the global exclusion logic and instead force the `Objectives` component to render as a standard `<input type=\"text\">` for each array element, which is already natively protected by the existing `tagName` checks [4].",
+  "conversation_id": "4134a68c-33d4-4145-883b-f7fe0018f2a1",
+  "turn_number": 1,
+  "is_follow_up": true,
+  "references": [
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 1,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "86c8164e-4035-48df-8918-c586e4af14cf"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 2,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "e3e79d90-5a07-45a5-8fc6-0fd0367f853b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 3,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "22b6f6bb-42df-422a-9439-7cae58b3c681"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 4,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "f6c6db5f-555d-4a35-a65e-cbe40b5901a7"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 5,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "a1730075-86ff-4e16-8cad-ead4bf20583e"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 6,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "8945304a-1e40-418b-9ae0-2762a3f90106"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 7,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "cdc36802-e994-4ed9-bbe8-c722832c362e"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 8,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "a803f312-ecfa-46de-b8ab-4b47cabf43bf"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 9,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "470a021a-32cc-4480-aed9-5a73a08e09d1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 10,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "65a0d914-28f2-4d33-a07e-99d34a0840ff"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 11,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "4ffdb7c7-8f11-4bc0-8c22-ff8204fb2fb6"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 12,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "011c5316-8f12-44fd-8abd-6a2bdf6e7427"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 13,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "d4727b0d-d1cd-480d-9de0-14b413f6c3da"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 14,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "ce3d6532-2b23-414f-91ae-c994117d9032"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 15,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "d5ed9397-24ea-4b25-ae6c-181214f59895"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 16,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "37a743bb-f6f1-4b05-b9df-6ffdadc91fe4"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 17,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "d8075cc9-10cf-4ebd-8367-22e8988882ae"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 18,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "d8214c70-af24-45e3-ab85-8ac22f87a352"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 19,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "c90fc672-ad7e-4fe2-83c7-264a7b55cd61"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 20,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "c4383d2c-b11c-4075-8733-484a3051f41c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 21,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "db4811fc-4536-4db0-8e37-7987fece3ae9"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 22,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "5f40b4a5-c520-463c-9fdd-b7881c7e8ac6"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 23,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "fd24803d-0edc-4a22-ae33-47c6aa8d2850"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 24,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "076b6946-9937-4093-90a0-6be41429664d"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 25,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "5bb29164-b1ed-4d6f-b570-5a69fa2c5cae"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 26,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "606e9aca-3467-41be-aecd-a1df525a88ca"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 27,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "1af3a85e-2883-440d-a827-a8a388ab9ba5"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 28,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "9bf94a61-e785-44b7-b14c-25c8904dc032"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 29,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "74b0a018-976f-4381-8b24-3e9f82253697"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 30,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "355d7076-ec79-43f1-89a7-702233aae270"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 31,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "9f26e728-a002-49a0-b661-847695c3f497"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 32,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "b86d6672-ac54-4b1f-9523-9ceedfbcf056"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 33,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "f1b77475-fa37-4a51-be7a-150cc769dd50"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 34,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "e9fd90a4-d346-45e1-9589-3f90018ba9e0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 35,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "0ba6172e-bbf9-4fb2-9a02-fb95bd3c1d26"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 36,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "26a4f004-ae9e-482a-9959-abc7d2bf542b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 37,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "7868c3e8-ae0b-4f84-ae07-db40c822f5dd"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 38,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "6111c9f8-b1d6-493c-8521-63fdaa0c62a1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 39,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "d81e0be5-3759-4f91-9ded-217fc3637c5c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 40,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "fee18d7c-89d1-45a4-bcb7-2bc4a9ae9b78"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 41,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "ca8067c4-68fb-4fdb-b57e-e794ecd25813"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 42,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "5a8bbdae-526b-4fae-8714-d83565fe4e38"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 43,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "d1f33888-977b-4b98-81a7-656877306db1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 44,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "ea50f8fd-32ec-4089-8dd3-31bdc3971353"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 45,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "2cc86db9-e55b-4091-b22e-44ff8bd55c4c"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 46,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "a0f334f6-5849-4fc0-b685-ed2a3f158804"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 47,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "8d6dc251-d49a-44d6-9c5f-4859e670ba69"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 48,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "3529d9b1-6d77-401c-8a2b-ccf79d550392"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 49,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "d5137d9b-5735-4ff5-8ed0-f75792cb51a9"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 50,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "2e57fe1a-9b29-4f99-87a5-4523656d7903"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 51,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "59c2ea11-3afe-4c25-933b-e61cdbd96423"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 52,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "4dfba730-1406-4fee-8650-bc6a017d432b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 53,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "4490819f-6407-413e-9e09-8d9c2885ffcb"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 54,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "58794766-205c-44cd-9d07-800b5f539d39"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 55,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "c1fad2cc-89d5-4293-a584-895657ae102b"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 56,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "61aa8ce7-69e2-47e0-b877-89b3d42cec18"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 57,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "c3a0d3b5-2a83-4e07-951d-e22750c02299"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 58,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "13326052-c7ed-4300-bb3d-290e9aed970f"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 59,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "c7448a04-89cf-4a2d-bb72-63478c6cafee"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 60,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "55b4cbb4-5fac-4c6e-a0df-b5f201b8dbbf"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 61,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "c78eb46f-ed4e-4f90-969a-c20a67282383"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 62,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "de1286d1-b1e8-43c4-a70d-3f0ae6b5abdc"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 63,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "99eab43a-0b33-45c1-b35e-f4efca605440"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 64,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "1409b7cf-2c5d-495b-ac3f-8dfb41769560"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 65,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "5bcc44c0-d7e1-4bc1-91c4-0e033549aeee"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 66,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "cd64e5fa-4018-4126-a93d-9ace4ed0d578"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 67,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "7dd58123-0e52-4354-b22a-f87825380e2b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 68,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "9b132ba2-b046-49d9-8aca-ca7b2625f5e6"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 69,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "38bf0f97-7c70-458f-b79a-291567de3183"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 70,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "d43fd577-aed9-4709-a4ca-2a2cf786806d"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 71,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "7f3fb311-8f47-4187-a775-17f99c6af02b"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 72,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "ceccf02a-5875-4af4-96eb-ee0c6046e12a"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 73,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "24dc674f-f284-41bc-b401-3b5b3b48c0bc"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 74,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "f59083ec-1907-411b-9b85-f3b25da49992"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 75,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "ed85d34b-4418-4cff-a6e5-39f91d421633"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 76,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "bca11ab7-e553-4231-b434-1cef7337bb36"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 77,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "9afcedad-8834-4d12-b0b9-888a21df9fbc"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 78,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "db87714b-dc29-4528-9abe-87c84120d106"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 79,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "0fbb3655-168e-4820-a9ac-1cbc66677296"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 80,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "25778c4b-1187-4cec-a302-bf4e6b6f8d6d"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 81,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "e340947d-cbdd-4f7e-8f91-aa40f79bf540"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 82,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "ac9576ea-f31f-4356-a674-ce4885db8e40"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 83,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "0ef464d8-7c92-4ffb-a181-ecbc40a28be7"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 84,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "f30c0ecd-bc87-48cd-b036-2b0283d66172"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 85,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "2914509e-a3ae-4acc-9315-d117339eedb3"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 86,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "d1343e8e-8491-47ed-acfb-26559131737f"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 87,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "1c1b7836-738f-4bbc-913c-8faa821c5985"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 88,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "4d97f989-6c55-4245-9804-0a20931ab94a"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 89,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "a80d156b-608d-424d-8ca2-0200f011b7ff"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 90,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "aa8c8e55-d32d-47a4-b13d-3a62e2da4cca"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 91,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "79328c41-eb21-4795-9db8-5a96e2f56e16"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 92,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "24841783-4f0b-49d6-a9c2-8ba98fa182c1"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 93,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "07c520d6-3417-4ac0-9a73-a8b59161bdef"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 94,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "4b77d7b5-a98f-4ecd-977e-e059d52a00b6"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 95,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "b08af35c-07d1-4970-ad67-f36f5c969399"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 96,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "cdb4020f-344b-4802-ad3a-4e2c19b99b2c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 97,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "6f1304a2-77cc-4c89-b948-4d20cd611120"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 98,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "bd1011d6-85a7-485e-9bf5-2c615c003098"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 99,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "5748e90c-7338-4a5e-a225-0d60c8842a14"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 100,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "2ec87208-f284-47fd-8687-6461cb477f03"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 101,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "8a1edfa1-abf8-4b34-b1af-ac1455abec56"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 102,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "403bda44-1747-44e0-8d2b-3d7424cd977b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 103,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "447e6f04-7930-4e42-b0a1-36f4348c5f17"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 104,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "3193606a-3444-4737-b4a1-1ca2c97f1c9b"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 105,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "1269aade-3393-4f28-a884-aaf756bc2dc5"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 106,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "4cdb0a01-1427-412e-879e-4e70aea2644e"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 107,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "24d7a853-e72a-4d22-aa46-0a196b0824df"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 108,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "ad89147a-90ba-49b1-a6f2-59144fbc6139"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 109,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "5a6516d8-a6ad-4dc9-8f09-651ba9b37272"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 110,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "3d28b839-e443-41d2-9f4b-6bbce57be537"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 111,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "0e61e17d-9f6f-4c87-900d-d9f6fea873e1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 112,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "e77e9ead-ce7b-4030-85be-a9f4bf6f3e8d"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 113,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "468d7a69-da18-4823-9e8c-b6102e2311b9"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 114,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "aed9de54-a843-4f9e-b8c1-8b339cfedca9"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 115,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "57779a3e-bd87-4f3d-8478-bc2a8e713519"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 116,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "5f5c6b71-edd1-4145-8c47-28026a4c3332"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 117,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "1dde9e13-9d52-47a3-8710-b0f3013321d6"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 118,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "cbc8ce26-9094-429d-bc0f-86f80b7295f1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 119,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "225cab9e-57ff-41ee-8de7-ba2a52fca721"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 120,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "4e31a7ed-d9f9-4d9f-9750-ab39e9f5cd8f"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 121,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "4ed0aae3-2124-4d3b-ae01-3dd53035ad07"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 122,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "851c85cf-78b9-413c-8810-3f54c3d6e7ad"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 123,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "f23b03f6-ef04-4443-9198-26ad35b5a2f6"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 124,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "cac181c4-8295-4c39-8d66-1df6ac274efa"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 125,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "3582afdf-5f29-4f7f-a41d-ecdb86b19521"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 126,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "a0d8f72a-8519-4af2-8e69-dfe9b3e4dd09"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 127,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "1890288b-4322-46bc-ac67-6a5cb86f4475"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 128,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "a866e5b4-dd70-4476-8a71-a879338d0d65"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 129,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "71bd413b-9f66-4a3e-b802-a106636666e0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 130,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "f15b887d-94c6-48cd-aaf6-c7bb5c1433b2"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 131,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "999a097b-fe4c-4cd6-8f5c-3d289728959d"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 132,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "b6de94dc-feb4-4be8-8aee-198c798d0596"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 133,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "72d88870-4b4a-48b5-92d9-73f7bad70a23"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 134,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "16bab69d-594f-401b-9395-056105903248"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 135,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "7f5a1190-7364-4076-a7d5-9ed95e43afff"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 136,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "11d0d891-ca4b-415e-a1ed-adb8b784f39c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 137,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "2f30c274-86dc-4b3e-8386-551b76ce2f9e"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 138,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "1aa9a2d0-501c-4ce3-b252-dcb69e3a03ae"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 139,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "286acedb-43ec-4d1c-ac56-6834836ced5c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 140,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "0099a2e9-7ab3-4327-826c-4e3ab8ffbc0c"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 141,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "86341b45-0089-4b3f-971b-b2d5b074676b"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 142,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "6a227740-474f-4ab9-8b8b-6c10965eac9c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 143,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "c5271350-d8b2-490b-800e-40426d8abadc"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 144,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "0272f1c3-44a8-46b0-a9af-471c0b22e349"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 145,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "cfbb035e-4115-4e95-949d-6ee9e84fd1e0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 146,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "20d19c9c-e35d-496f-b007-0dd2ad991d8b"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 147,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "833eb445-c351-446f-9ca1-5a3159fa0d5a"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 148,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "bcbbbb1c-7a95-4402-a691-81c45658622c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 149,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "89a56154-8b56-46be-9314-e63ef8c45a3e"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 150,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "61430ffd-9d98-460c-bac5-08c42f9f7503"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 151,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "d3ce7c45-505f-40dc-9d91-99abd24da1d1"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 152,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "f1fdc1ac-8e17-4798-8864-3b2a9b73f42b"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 153,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "860814ac-ab7a-4f35-8c17-4f36d29277db"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 154,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "949a8909-3146-4b74-a66a-b788b44d0d62"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 155,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "c1a5e51e-18fa-4ecd-b283-b557229faf97"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 156,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "4f55d002-9930-4c94-88f5-e3d53c8c60e5"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 157,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "79c4f389-4be4-4c4e-aa19-803b5f7fd957"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 158,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "f453832a-3e72-4842-b51c-ae667ad782ab"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 159,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "4ad36e78-e4ef-4f0b-91b4-be04238d4a22"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 160,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "a24f177f-4c1a-40b6-802a-c53fe5f50df0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 161,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "1cb7a43b-5b29-4402-b224-2e09a1590fea"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 162,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "b2fda6d5-21ef-4099-92ac-418142321d77"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 163,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "48ed1b50-fcdf-4612-8c8b-ef6fe67fbe06"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 164,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "20326d1c-16b8-40b5-94ec-3ce40261f709"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 165,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "89367726-d76d-4b74-8920-d91cb647954c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 166,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "a24f177f-4c1a-40b6-802a-c53fe5f50df0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 167,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "1cb7a43b-5b29-4402-b224-2e09a1590fea"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 168,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "b2fda6d5-21ef-4099-92ac-418142321d77"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 169,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "48ed1b50-fcdf-4612-8c8b-ef6fe67fbe06"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 170,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "20326d1c-16b8-40b5-94ec-3ce40261f709"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 171,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "89367726-d76d-4b74-8920-d91cb647954c"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 172,
+      "cited_text": "Raw Metadata",
+      "start_char": 194102,
+      "end_char": 194114,
+      "chunk_id": "a24f177f-4c1a-40b6-802a-c53fe5f50df0"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 173,
+      "cited_text": "Metadata",
+      "start_char": 330090,
+      "end_char": 330098,
+      "chunk_id": "1cb7a43b-5b29-4402-b224-2e09a1590fea"
+    },
+    {
+      "source_id": "ca25c516-2853-4a1c-b33c-c39d4ecc7951",
+      "citation_number": 174,
+      "cited_text": "2. \u0420\u0430\u0431\u043e\u0442\u0430 \u0441 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 (Object Manipulation)",
+      "start_char": 79283,
+      "end_char": 79326,
+      "chunk_id": "b2fda6d5-21ef-4099-92ac-418142321d77"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 175,
+      "cited_text": "Quest properties panel UI rework contract",
+      "start_char": 167574,
+      "end_char": 167615,
+      "chunk_id": "48ed1b50-fcdf-4612-8c8b-ef6fe67fbe06"
+    },
+    {
+      "source_id": "b31670f6-7be5-47f5-a409-f413bb5b888e",
+      "citation_number": 176,
+      "cited_text": "Raw Metadata",
+      "start_char": 329558,
+      "end_char": 329570,
+      "chunk_id": "20326d1c-16b8-40b5-94ec-3ce40261f709"
+    },
+    {
+      "source_id": "a027c91d-32bc-4e14-ad63-c224394512ba",
+      "citation_number": 177,
+      "cited_text": "Commits Created",
+      "start_char": 37099,
+      "end_char": 37114,
+      "chunk_id": "89367726-d76d-4b74-8920-d91cb647954c"
+    }
+  ]
+}

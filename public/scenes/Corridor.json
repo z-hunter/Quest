@@ -828,38 +828,38 @@
       "name": "shadow",
       "type": "Quad",
       "locked": false,
-      "disabled": false,
+      "disabled": true,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": true,
+      "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": -858.4177876206309,
-      "y": 33.893054238510274,
+      "x": -513.4033790719053,
+      "y": -139.56173543959918,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -858.4177876206309,
-          "y": 33.893054238510274,
+          "x": -513.4033790719053,
+          "y": -139.56173543959918,
           "p": 1.0431424643929696
         },
         {
-          "x": -773.0451096473188,
-          "y": 32.89190963852991,
+          "x": -484.52213691352443,
+          "y": -139.78342167335785,
           "p": 1.0424314168264899
         },
         {
-          "x": -485.7849808653811,
-          "y": 60.589924025289434,
+          "x": -382.37424101382476,
+          "y": -131.15210187117847,
           "p": 1.0467476902559403
         },
         {
-          "x": -555.9957757574186,
-          "y": 58.71158289091356,
+          "x": -405.251655805854,
+          "y": -130.77680111614328,
           "p": 1.0405613305364574
         }
       ],
@@ -1053,38 +1053,38 @@
       "name": "shadow2",
       "type": "Quad",
       "locked": false,
-      "disabled": true,
+      "disabled": false,
       "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1543.0164787694057,
-      "y": 202.6695212305376,
+      "x": 1625.3090135746183,
+      "y": 93.72444792754149,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1543.0164787694057,
-          "y": 202.6695212305376,
+          "x": 1625.3090135746183,
+          "y": 93.72444792754149,
           "p": 1
         },
         {
-          "x": 1573.1007869191262,
-          "y": 204.87486726686038,
+          "x": 1653.7860934805226,
+          "y": 95.8119752518857,
           "p": 1
         },
         {
-          "x": 1551.0026447214823,
-          "y": 269.4499307861592,
+          "x": 1632.8685254911725,
+          "y": 156.93717163719802,
           "p": 1
         },
         {
-          "x": 1447.1307984927519,
-          "y": 321.5738990201929,
+          "x": 1534.5459431566062,
+          "y": 206.27646177564134,
           "p": 1
         }
       ],
@@ -1101,85 +1101,6 @@
       "blur": 4,
       "colliderWidth": 0,
       "colliderHeight": 0
-    },
-    {
-      "name": "Hero_1",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 10,
-          "groups": [],
-          "protected": true,
-          "items": ["test_2", "test_3"],
-          "relation": "in"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow2",
-          "offsetX": -12,
-          "offsetY": -14,
-          "triggerId": "#F2"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "x": -775.8019102270001,
-      "y": 54.195232150361875,
-      "width": 108.46772855415196,
-      "height": 260.17597051840505,
-      "baseWidth": 148,
-      "baseHeight": 355,
-      "spriteName": "miles2_ds-idle-left.json",
-      "color": "#00ffff",
-      "scale": 0.7328900577983241,
-      "refScale": 0.84,
-      "modelScale": 0.84,
-      "ignoreScaling": false,
-      "animationSpeed": 53,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "isPlayer": true,
-      "speed": 0.24,
-      "perceptionRadius": 600,
-      "direction": "left",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles2_ds-idle-up.json",
-          "down": "miles2_ds-idle-down.json",
-          "left": "miles2_ds-idle-left.json",
-          "right": ""
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles2_ds-wlk-up.json",
-          "down": "miles2_ds-walk-down.json",
-          "left": "miles2_ds-walk-left.json",
-          "right": ""
-        }
-      },
-      "colliderWidth": 88,
-      "colliderHeight": 4
     },
     {
       "name": "test_2",
@@ -1280,48 +1201,7 @@
       "colliderHeight": 0
     },
     {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 527.9903429541549,
-      "y": 230.99913665961606,
-      "width": 17.335879945429745,
-      "height": 24.635197817189635,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.8800000000000001,
-      "refScale": 0.8,
-      "modelScale": 0.8,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "miles_ds",
+      "name": "npc_Rick",
       "type": "Actor",
       "locked": false,
       "disabled": false,
@@ -1338,7 +1218,23 @@
           "enabled": true,
           "memory": "",
           "objectives": [],
-          "objectivesInitializedFromTA": true
+          "objectivesInitializedFromTA": true,
+          "knownEntities": {
+            "npc_Rick": {
+              "id": "npc_Rick",
+              "title": "Rick",
+              "kind": "actor",
+              "lastSeenSceneId": "Corridor",
+              "lastSeenAt": 1783264260832
+            },
+            "Hero_1": {
+              "id": "Hero_1",
+              "title": "Hero_1",
+              "kind": "actor",
+              "lastSeenSceneId": "Corridor",
+              "lastSeenAt": 1783264260832
+            }
+          }
         }
       ],
       "layer": 0,
@@ -1383,6 +1279,126 @@
       },
       "colliderWidth": 67,
       "colliderHeight": 9
+    },
+    {
+      "name": "Hero_1",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1635.804646727465,
+      "y": 105.96935327252946,
+      "width": 129.44614221844432,
+      "height": 310.49581410505226,
+      "baseWidth": 148,
+      "baseHeight": 355,
+      "spriteName": "miles2_ds-idle-up.json",
+      "color": "#00ffff",
+      "scale": 0.8746360960705697,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "up",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Hero_1",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 527.9903429541549,
+      "y": 230.99913665961606,
+      "width": 17.335879945429745,
+      "height": 24.635197817189635,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.8800000000000001,
+      "refScale": 0.8,
+      "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [],
@@ -1408,9 +1424,9 @@
   "sceneLog": {
     "entries": [
       {
-        "id": "1783101489194-11",
+        "id": "1783264193493-2",
         "kind": "action",
-        "timestamp": 1783101489194,
+        "timestamp": 1783264193493,
         "actorId": "Hero_1",
         "displayName": "Hero_1",
         "text": "[ Hero_1 goes through Ex3 ]",
@@ -1420,9 +1436,61 @@
           "subjectId": "Ex3",
           "targetId": "Ex3"
         }
+      },
+      {
+        "id": "1783264233012-2",
+        "kind": "action",
+        "timestamp": 1783264233012,
+        "actorId": "Hero_1",
+        "displayName": "Hero_1",
+        "text": "[ Hero_1 goes through Ex3 ]",
+        "knownByActorIds": ["npc_Rick"],
+        "payload": {
+          "action": "traverse_exit",
+          "subjectId": "Ex3",
+          "targetId": "Ex3"
+        }
+      },
+      {
+        "id": "1783264244441-3",
+        "kind": "speech",
+        "timestamp": 1783264244441,
+        "actorId": "Hero_1",
+        "displayName": "Hero_1",
+        "text": "hi there",
+        "knownByActorIds": ["npc_Rick"]
+      },
+      {
+        "id": "1783264248141-4",
+        "kind": "speech",
+        "timestamp": 1783264248141,
+        "actorId": "npc_Rick",
+        "displayName": "Rick",
+        "text": "Hey there.",
+        "knownByActorIds": []
+      },
+      {
+        "id": "1783264260430-5",
+        "kind": "speech",
+        "timestamp": 1783264260430,
+        "actorId": "Hero_1",
+        "displayName": "Hero_1",
+        "text": "can I help you?",
+        "knownByActorIds": ["npc_Rick"]
+      },
+      {
+        "id": "1783264262200-6",
+        "kind": "speech",
+        "timestamp": 1783264262200,
+        "actorId": "npc_Rick",
+        "displayName": "Rick",
+        "text": "Yeah, I'm doing alright. Just hanging out here.",
+        "knownByActorIds": []
       }
     ],
     "lastPmProcessedAt": 0,
-    "lastPmProcessedAtByNpc": {}
+    "lastPmProcessedAtByNpc": {
+      "npc_Rick": 1783264260430
+    }
   }
 }

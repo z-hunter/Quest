@@ -1,0 +1,41 @@
+{
+  "name": "batteryAAA",
+  "type": "Entity",
+  "locked": false,
+  "disabled": false,
+  "groupID": null,
+  "customName": "",
+  "textRedirects": {},
+  "interactions": {},
+  "components": [
+    {
+      "type": "State",
+      "id": "charge_percent",
+      "valueType": "number",
+      "initialValue": 100,
+      "value": 100
+    }
+  ],
+  "layer": 0,
+  "visible": true,
+  "hidden": false,
+  "parallax": 1,
+  "x": 1275.1039319491522,
+  "y": 105.13926680599977,
+  "width": 14.560000000000002,
+  "height": 13.468000000000002,
+  "baseWidth": 80,
+  "baseHeight": 74,
+  "spriteName": "aaa",
+  "color": "#AAAAAA",
+  "scale": 0.18200000000000002,
+  "refScale": 0.2,
+  "modelScale": 0.2,
+  "ignoreScaling": false,
+  "animationSpeed": 150,
+  "opacity": 1,
+  "blendMode": "source-over",
+  "blur": 0,
+  "colliderWidth": 0,
+  "colliderHeight": 0
+}

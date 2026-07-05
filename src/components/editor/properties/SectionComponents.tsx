@@ -507,10 +507,7 @@ export const SectionComponents: React.FC = () => {
                         : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
                     }
                     onChange={(e) => {
-                      comp.objectives = e.target.value
-                        .split(/\r?\n/)
-                        .map((line) => line.trim())
-                        .filter(Boolean);
+                      comp.objectives = e.target.value.split(/\r?\n/);
                       comp.objectivesInitializedFromTA = true;
                       incrementObjectVersion();
                     }}
