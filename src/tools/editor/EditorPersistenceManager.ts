@@ -153,9 +153,14 @@ export class EditorPersistenceManager {
     if (!scene) return false;
     const validation = this.reportSceneSpatialValidation('save');
     if (validation && validation.errors.length > 0) {
-      this.editor.game.showNotification(
-        `Scene not saved: fix ${validation.errors.length} spatial validation error(s)`
-      );
+      const errorLines = validation.errors
+        .map((e) => `- ${e.objectId || 'Unknown Object'}: ${e.message}`)
+        .join('\n');
+      const message = `Scene not saved: fix ${validation.errors.length} spatial validation error(s):\n\n${errorLines}`;
+
+      await this.editor.game.requestChoiceDialog('Validation Errors', message, [
+        { id: 'ok', label: 'OK', variant: 'primary' },
+      ]);
       return false;
     }
 

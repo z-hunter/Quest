@@ -727,6 +727,9 @@ input[type='file'] {
   color: #c7d9d1;
   line-height: 1.45;
   margin-bottom: 14px;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .editor-choice-dialog-actions {
