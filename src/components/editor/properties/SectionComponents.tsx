@@ -255,8 +255,10 @@ export const SectionComponents: React.FC = () => {
               if (!o.components) o.components = [];
               const relation = hasTitle ? getNextAvailableContainerRelation() : null;
 
+              sectionRef.current?.classList.remove('collapsed');
+
               if (type === 'Subscene') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Subscene',
                   targetGroupId: '',
                   itemScale: 1,
@@ -264,15 +266,15 @@ export const SectionComponents: React.FC = () => {
                   description: '',
                 });
               } else if (type === 'Subtrigger') {
-                o.components.push({ type: 'Subtrigger', target: '' });
+                o.components.unshift({ type: 'Subtrigger', target: '' });
               } else if (type === 'Exit') {
-                o.components.push({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
+                o.components.unshift({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
               } else if (type === 'Entry') {
-                o.components.push({ type: 'Entry', direction: 'down' });
+                o.components.unshift({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
-                o.components.push({ type: 'Item' });
+                o.components.unshift({ type: 'Item' });
               } else if (type === 'State') {
-                o.components.push({
+                o.components.unshift({
                   type: 'State',
                   id: 'state',
                   valueType: 'boolean',
@@ -284,7 +286,7 @@ export const SectionComponents: React.FC = () => {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Inventory',
                   relation: relation || 'in',
                   capacity: 8,
@@ -297,7 +299,7 @@ export const SectionComponents: React.FC = () => {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Surface',
                   relation: relation || 'in',
                   capacity: 8,
@@ -305,7 +307,7 @@ export const SectionComponents: React.FC = () => {
                   items: [],
                 });
               } else if (type === 'Switch') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Switch',
                   groupId1: '',
                   groupId2: '',
@@ -318,13 +320,13 @@ export const SectionComponents: React.FC = () => {
                   blockedRelation: 'in',
                 });
               } else if (type === 'Blocker') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Blocker',
                   transparent: false,
                   blockedRelation: 'in',
                 });
               } else if (type === 'Backface') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Backface',
                   vertexA: 0,
                   vertexB: 1,
@@ -334,7 +336,7 @@ export const SectionComponents: React.FC = () => {
                   cullingType: 'layer',
                 });
               } else if (type === 'Shadow') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Shadow',
                   shadowQuadId: '',
                   offsetX: 0,
@@ -342,16 +344,16 @@ export const SectionComponents: React.FC = () => {
                   triggerId: '',
                 });
               } else if (type === 'NPC') {
-                o.components.push({
+                o.components.unshift({
                   type: 'NPC',
                   enabled: true,
                   memory: '',
                   objectives: [],
                 });
               } else if (type === '3d-parallax') {
-                o.components.push({ type: '3d-parallax' });
+                o.components.unshift({ type: '3d-parallax' });
               } else if (type === 'WalkBox') {
-                o.components.push({ type: 'WalkBox', mode: 'Invert' });
+                o.components.unshift({ type: 'WalkBox', mode: 'Invert' });
               }
 
               if (game.editor.selectedObject) {
