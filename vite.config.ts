@@ -44,6 +44,8 @@ export default defineConfig({
                   const matches = content.match(/^data:([A-Za-z0-9-+/]+);base64,(.+)$/);
                   if (matches && matches.length === 3) {
                     fileContent = Buffer.from(matches[2], 'base64');
+                  } else {
+                    throw new Error('Invalid base64 data URL');
                   }
                 }
                 fs.writeFileSync(targetPath, fileContent);

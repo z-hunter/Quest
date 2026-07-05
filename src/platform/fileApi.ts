@@ -81,6 +81,9 @@ export function validateSafePath(path: string): void {
   if (path.includes('..') || path.includes('\0')) {
     throw new Error(`Security Error: Path traversal is not allowed (${path})`);
   }
+  if (path.startsWith('/') || path.startsWith('\\') || /^[a-zA-Z]:/.test(path)) {
+    throw new Error(`Security Error: Absolute paths are not allowed (${path})`);
+  }
 }
 
 export async function listProjectFiles(path: string): Promise<FileListItem[]> {

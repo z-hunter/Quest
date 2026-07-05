@@ -168,6 +168,15 @@ export class SpriteEditor {
       this.toggle(false);
       handled = true;
     } else if (e.key === 'F6') {
+      if (this.isDirty) {
+        if (!window.confirm('You have unsaved sprite edits. Are you sure you want to leave?')) {
+          handled = true;
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
       window.location.href = '/vetool.html';
       handled = true;
     }
@@ -486,9 +495,17 @@ export class SpriteEditor {
 
     const data = JSON.stringify(this.sprite, null, 2);
 
+    // Take snapshot of current state
+    const savedData = data;
+
     try {
       await saveProjectFile(filePath, data);
-      this.isDirty = false;
+
+      // Only clear dirty if the sprite hasn't changed since we started saving
+      if (JSON.stringify(this.sprite, null, 2) === savedData) {
+        this.isDirty = false;
+      }
+
       // Use Toast Message instead of Alert
       this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
     } catch (e) {

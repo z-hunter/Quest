@@ -11,9 +11,9 @@ export const ActorProperties: React.FC = () => {
   return (
     <>
       <div ref={setSectionRef(4)} className="properties-section-block" data-section={4}>
-        <div className="properties-section-header properties-section-blue">
+        <div className="properties-section-header properties-section-azure">
           <div className="properties-section-title">
-            <span className="properties-section-number properties-section-blue">4</span>
+            <span className="properties-section-number properties-section-azure">4</span>
             <span className="properties-section-label">ACTOR PROP.</span>
           </div>
         </div>

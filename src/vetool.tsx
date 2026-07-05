@@ -460,31 +460,51 @@ export function VetoolApp() {
           const ob = info.originalBox;
 
           if (info.handle === 'br') {
-            return { ...b, w: Math.max(5, ob.w + dx), h: Math.max(5, ob.h + dy) };
-          }
-          if (info.handle === 'tl') {
+            const newW = Math.max(5, ob.w + dx);
+            const newH = Math.max(5, ob.h + dy);
             return {
               ...b,
-              x: Math.min(ob.x + ob.w - 5, ob.x + dx),
-              y: Math.min(ob.y + ob.h - 5, ob.y + dy),
-              w: Math.max(5, ob.w - dx),
-              h: Math.max(5, ob.h - dy),
+              w: Math.min(newW, videoWidth - ob.x),
+              h: Math.min(newH, videoHeight - ob.y),
+            };
+          }
+          if (info.handle === 'tl') {
+            const newX = Math.min(ob.x + ob.w - 5, ob.x + dx);
+            const newY = Math.min(ob.y + ob.h - 5, ob.y + dy);
+            const newW = Math.max(5, ob.w - dx);
+            const newH = Math.max(5, ob.h - dy);
+            const safeX = Math.max(0, newX);
+            const safeY = Math.max(0, newY);
+            return {
+              ...b,
+              x: safeX,
+              y: safeY,
+              w: Math.min(newW + (newX - safeX), videoWidth - safeX),
+              h: Math.min(newH + (newY - safeY), videoHeight - safeY),
             };
           }
           if (info.handle === 'tr') {
+            const newY = Math.min(ob.y + ob.h - 5, ob.y + dy);
+            const newW = Math.max(5, ob.w + dx);
+            const newH = Math.max(5, ob.h - dy);
+            const safeY = Math.max(0, newY);
             return {
               ...b,
-              y: Math.min(ob.y + ob.h - 5, ob.y + dy),
-              w: Math.max(5, ob.w + dx),
-              h: Math.max(5, ob.h - dy),
+              y: safeY,
+              w: Math.min(newW, videoWidth - ob.x),
+              h: Math.min(newH + (newY - safeY), videoHeight - safeY),
             };
           }
           if (info.handle === 'bl') {
+            const newX = Math.min(ob.x + ob.w - 5, ob.x + dx);
+            const newW = Math.max(5, ob.w - dx);
+            const newH = Math.max(5, ob.h + dy);
+            const safeX = Math.max(0, newX);
             return {
               ...b,
-              x: Math.min(ob.x + ob.w - 5, ob.x + dx),
-              w: Math.max(5, ob.w - dx),
-              h: Math.max(5, ob.h + dy),
+              x: safeX,
+              w: Math.min(newW + (newX - safeX), videoWidth - safeX),
+              h: Math.min(newH, videoHeight - ob.y),
             };
           }
         }
@@ -535,6 +555,9 @@ export function VetoolApp() {
   const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
       const url = URL.createObjectURL(file);
       setVideoUrl(url);
       setVideoFilename(file.name);
@@ -550,6 +573,11 @@ export function VetoolApp() {
       // If there is a pending configuration, apply it now
       if (pendingConfigRef.current) {
         const data = pendingConfigRef.current;
+        if (data.videoFilename && data.videoFilename !== file.name) {
+          showToast(
+            `Warning: Loaded config is for video "${data.videoFilename}", but opened "${file.name}". Configurations may not align.`
+          );
+        }
         pendingConfigRef.current = null;
 
         if (data.fps) setFps(data.fps);
@@ -890,6 +918,11 @@ export function VetoolApp() {
       // Independent Hotkeys (don't require video to be ready)
       if (e.key === 'F1') {
         e.preventDefault();
+        if (videoUrl !== null || boxes.length > 0) {
+          if (!window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+            return;
+          }
+        }
         triggerHotkeyFlash('F1');
         window.location.href = '/';
         return;
@@ -911,6 +944,11 @@ export function VetoolApp() {
       } else if (e.key === 'F5') {
         e.preventDefault();
         e.stopPropagation();
+        if (videoUrl !== null || boxes.length > 0) {
+          if (!window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+            return;
+          }
+        }
         triggerHotkeyFlash('F5');
         window.location.href = '/#sprite-editor';
         return;
@@ -991,6 +1029,8 @@ export function VetoolApp() {
     handleOpenLoadConfig,
     handleNewProject,
     triggerHotkeyFlash,
+    videoUrl,
+    boxes.length,
   ]);
 
   // Draw initial state of canvas if video is not playing

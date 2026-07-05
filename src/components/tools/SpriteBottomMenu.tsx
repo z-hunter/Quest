@@ -60,6 +60,13 @@ export const SpriteBottomMenu: React.FC = () => {
         <button
           className="e-menu-btn"
           onClick={() => {
+            if (spriteEditor.isDirty) {
+              if (
+                !window.confirm('You have unsaved sprite edits. Are you sure you want to leave?')
+              ) {
+                return;
+              }
+            }
             window.location.href = '/vetool.html';
           }}
         >

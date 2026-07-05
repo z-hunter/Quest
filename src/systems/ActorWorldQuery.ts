@@ -56,6 +56,9 @@ export class ActorWorldQuery {
     if (!scene) return [];
     const focus = subject || source;
     const focusPoint = this.game.inventoryManager.getSceneObjectReferencePoint(focus);
+    if (!focusPoint || !Number.isFinite(focusPoint.x) || !Number.isFinite(focusPoint.y)) {
+      return [];
+    }
     return scene.entities.filter((entity): entity is Actor => {
       if (
         !(entity instanceof Actor) ||

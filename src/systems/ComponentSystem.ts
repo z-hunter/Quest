@@ -290,12 +290,19 @@ export class ComponentSystem {
               rawKind === 'item' || rawKind === 'actor' || rawKind === 'object'
                 ? rawKind
                 : 'object';
+
+            const rawSceneId = (entry as any).lastSeenSceneId;
+            const rawAt = (entry as any).lastSeenAt;
+            const lastSeenSceneId = typeof rawSceneId === 'string' ? rawSceneId : '';
+            const lastSeenAt = typeof rawAt === 'number' ? rawAt : 0;
+
             if (id && title) {
               cleaned[key] = {
-                ...(entry as any),
                 id,
                 title,
                 kind,
+                lastSeenSceneId,
+                lastSeenAt,
               };
             }
           }

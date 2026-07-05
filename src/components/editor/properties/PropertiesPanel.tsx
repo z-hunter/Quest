@@ -262,7 +262,11 @@ export const PropertiesPanel: React.FC = () => {
       const hasHeader = !!section.querySelector(':scope > .properties-section-header');
       section.classList.toggle(
         'collapsed',
-        hasHeader && !section.classList.contains('properties-section-empty') && id !== 0 && id !== 1
+        hasHeader &&
+          !section.classList.contains('properties-section-empty') &&
+          id !== 0 &&
+          id !== 1 &&
+          id !== 5
       );
     });
   }, [selectedObjectId, selectedObjectType]);

@@ -62,19 +62,22 @@ Action contract:
 - Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and it can save LLM calls. Use short plans when the next step depends on an unknown result that cannot be expressed with `interruptOn`.
 - `interruptOn` is a plan-level list of runtime stop conditions. Supported conditions are `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, and `ACTION_FAILED`. For multi-step physical plans without explicit `interruptOn`, the runtime uses conservative defaults: stop on failed action, found item, or world change.
 - For systematic search, explicitly include `ITEM_FOUND` for the desired item and `ACTION_FAILED`, and omit `WORLD_CHANGED` if opening a container should be followed by examining it in the same plan.
+- PUT places a held or reachable item `in`, `on`, `under`, or `behind` a target. `targetId: null` drops it on the current floor.
+- COMMAND executes a listed authored command and can perform real state changes. Prefer it when a suitable command is listed.
+- USE is an item-on-target fallback only when no authored COMMAND fits.
+- WAIT schedules a later call.
+- THINK_STRATEGY schedules an internal strategy analysis. It does not speak, move, inspect, or change the world directly. Use it only after `repeatCount` is 2 or more, or after terminal no-progress watchdog results such as `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`. Do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.
+- MEMORY_SET immediately records facts already confirmed before the new plan begins. It may precede physical steps when summarizing prior results.
+- Plan-level `memory` is held by runtime and committed only after every physical step completes successfully. It is discarded after interruption or failure. Never describe expected results as facts.
+- OBJECTIVES_SET updates internal goals only and does not perform physical work.
+- Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and it can save LLM calls. Use short plans when the next step depends on an unknown result that cannot be expressed with `interruptOn`.
+- `interruptOn` is a plan-level list of runtime stop conditions. Supported conditions are `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, and `ACTION_FAILED`. For multi-step physical plans without explicit `interruptOn`, the runtime uses conservative defaults: stop on failed action, found item, or world change.
+- For systematic search, explicitly include `ITEM_FOUND` for the desired item and `ACTION_FAILED`, and omit `WORLD_CHANGED` if opening a container should be followed by examining it in the same plan.
 
 Reasoning rules:
 
 - Entity `interaction` and `approach` fields are authoritative runtime results. Do not infer reachability from coordinates.
 - An entity with `exit` metadata is a scene exit. Use its `targetSceneId` / `targetSceneTitle` to understand the destination and `TRAVERSE_EXIT` to cross it.
-- Titled entities inside an inactive Subscene may still be known. For an NPC, interacting with them uses virtual semantic access and does not open the player's close-up view.
-- Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.
-- Assume entities are visible and in the current scene unless marked otherwise.
-- Assume approach is `already_reachable` if interaction is `reachable` or `held`.
-- `held_or_reachable` means the prerequisite may be satisfied without TAKE when the item is already reachable.
-- `inventory.available: false` means this Actor has no inventory and cannot TAKE or carry items. It does not mean the inventory is full. Prefer reachable-item actions when supported.
-- Commands with `available: false` are theoretical possibilities; first satisfy their prerequisites.
-- Hidden entities absent from context are unknown. Do not invent, name, or target them.
 - An anchor's `inspection` affordance means it can be searched, not that hidden contents definitely exist.
 - Do not claim a hidden item was found until the runtime explicitly confirms it. Valid confirmation is one of: the action result lists that item in `discoveredEntityIds`; the item appears in refreshed context as reachable or held; inventory shows the item; or a TAKE/COMMAND result involving that item succeeds.
 - If LOOK or EXAMINE returns `worldChanged: false` with empty `discoveredEntityIds`, treat that as "nothing new was found there." Do not say "found it", do not store that the item was found, and do not proceed as if the missing item is available.

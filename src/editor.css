@@ -523,7 +523,8 @@
 }
 
 .properties-section-block[data-section='4'] > .properties-section-header,
-.properties-section-block[data-section='4'] .properties-section-number {
+.properties-section-block[data-section='4'] .properties-section-number,
+.properties-section-number.properties-section-azure {
   color: var(--sec-color-4);
 }
 

@@ -1687,6 +1687,14 @@ export class Parser {
           action.commandId,
           argumentsByName
         );
+        if (!outcome) {
+          return {
+            status: 'failed',
+            code: 'command_failed',
+            recoverable: false,
+            message: 'Command execution yielded no outcome.',
+          };
+        }
         return {
           ...outcome,
           message: outcome.message || outcome.displayMessages?.join('\n'),

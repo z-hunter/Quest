@@ -129,11 +129,6 @@
           "type": "Exit",
           "targetSceneId": "",
           "targetEntryId": "E3"
-        },
-        {
-          "type": "Exit",
-          "targetSceneId": "",
-          "targetEntryId": ""
         }
       ],
       "layer": 0,
