@@ -109,12 +109,23 @@ export class ActorWorldQuery {
         : null;
     const held =
       object instanceof Entity &&
-      this.game.inventoryManager.hasInventoryEntity(actor, object, 'in');
+      this.game.inventoryManager.isEntityWithinActorInventory(actor, object);
     if (inventorySlot && inventorySlot.owner !== actor && inventorySlot.component.protected) {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
 
     const accessState = getSceneTextLayerAccessState(scene, this.game, object);
+    const location = this.getLocation(accessState);
+    if (held) {
+      const visibility = accessState.hidden ? 'hidden' : 'visible';
+      return {
+        visibility,
+        interaction: 'held',
+        approach: 'already_reachable',
+        ...(accessState.hiddenReason ? { hiddenReason: accessState.hiddenReason } : {}),
+        ...(location ? { location } : {}),
+      };
+    }
     if (object.disabled && !accessState.inInactiveSubscene) {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
@@ -122,16 +133,6 @@ export class ActorWorldQuery {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
     const visibility = accessState.hidden ? 'hidden' : 'visible';
-    const location = this.getLocation(accessState);
-    if (held) {
-      return {
-        visibility: 'visible',
-        interaction: 'held',
-        approach: 'already_reachable',
-        ...(location ? { location } : {}),
-      };
-    }
-
     if (visibility !== 'visible' || accessState.blocked) {
       return {
         visibility,

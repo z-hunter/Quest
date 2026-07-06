@@ -194,6 +194,10 @@ export class ActorCommandExecutor {
         return this.requireEntityAvailable(actor, command, step, state);
       case 'requireAnyEntityAvailable':
         return this.requireAnyEntityAvailable(actor, command, step, state);
+      case 'requireContainedGroupEntity':
+        return this.requireContainedGroupEntity(command, step, state);
+      case 'requireNumericState':
+        return this.requireNumericState(command, step, state);
       case 'setEntityState':
         return this.setEntityState(command, step);
       case 'setGroupDisabled':
@@ -404,6 +408,75 @@ export class ActorCommandExecutor {
       },
       recoverable: true,
     };
+  }
+
+  private requireContainedGroupEntity(
+    command: ParserCommandSpec,
+    step: Extract<ParserCommandActionSpec, { type: 'requireContainedGroupEntity' }>,
+    state: ActorCommandPlanState
+  ): ActorCommandOutcome {
+    const container = state[step.containerRef];
+    const normalizedGroupId = step.groupId.trim().startsWith('#')
+      ? step.groupId.trim()
+      : `#${step.groupId.trim()}`;
+    const entity =
+      container instanceof Entity
+        ? this.game.sceneManager.currentScene?.entities.find(
+            (candidate) =>
+              candidate.spatial?.parentNodeId === container.name &&
+              candidate.spatial?.relation === 'in' &&
+              String(candidate.groupID || '')
+                .split(',')
+                .map((groupId) => groupId.trim().toLowerCase())
+                .includes(normalizedGroupId.toLowerCase())
+          )
+        : undefined;
+    if (!entity) {
+      return {
+        status: 'failed',
+        code: 'custom_command_required_contained_entity_missing',
+        message:
+          (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
+          step.missingMessage ||
+          this.game.text('parser.command_no_effect'),
+        recoverable: true,
+      };
+    }
+    state[step.saveAs] = entity;
+    return { status: 'ok', code: 'required_contained_entity_available' };
+  }
+
+  private requireNumericState(
+    command: ParserCommandSpec,
+    step: Extract<ParserCommandActionSpec, { type: 'requireNumericState' }>,
+    state: ActorCommandPlanState
+  ): ActorCommandOutcome {
+    const entity = state[step.entityRef];
+    const current =
+      entity instanceof Entity ? ComponentSystem.getStateValue(entity, step.stateId) : null;
+    const matches =
+      typeof current === 'number' &&
+      (
+        {
+          gt: current > step.value,
+          gte: current >= step.value,
+          lt: current < step.value,
+          lte: current <= step.value,
+          eq: current === step.value,
+        } as const
+      )[step.operator];
+    if (!matches) {
+      return {
+        status: 'failed',
+        code: 'custom_command_numeric_state_requirement_failed',
+        message:
+          (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
+          step.missingMessage ||
+          this.game.text('parser.command_no_effect'),
+        recoverable: true,
+      };
+    }
+    return { status: 'ok', code: 'required_numeric_state_matches' };
   }
 
   private getAvailableEntityById(

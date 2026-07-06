@@ -222,6 +222,19 @@ export class InventoryManager {
     return null;
   }
 
+  isEntityWithinActorInventory(actor: Entity, entity: Entity): boolean {
+    const visited = new Set<Entity>();
+    let current: Entity | null = entity;
+
+    while (current && !visited.has(current)) {
+      if (current === actor) return entity !== actor;
+      visited.add(current);
+      current = current.getInventoryPositionOwner();
+    }
+
+    return false;
+  }
+
   private getSurfaceSlotPlacementRelation(slot: SurfaceSlotRef): ContainerRelation {
     return this.hasPlayerFacingTitle(slot.surface)
       ? ComponentSystem.normalizeSurfaceRelation(slot.component)
@@ -481,6 +494,31 @@ export class InventoryManager {
         for (const entity of resolved) {
           this.syncInventoryEntitySceneState(owner, entity, relation);
         }
+      }
+    }
+
+    // Editor-authored inventory placement may exist only as a spatial edge.
+    // Reconcile it back into the owning Inventory component during scene hydration.
+    for (const entity of [...scene.entities]) {
+      if (!(entity instanceof Entity) || entity.disabled || entity.spatial?.relation !== 'in') {
+        continue;
+      }
+      const parentId = String(entity.spatial.parentNodeId || '').trim();
+      const owner = parentId ? scene.getObjectByName(parentId) : null;
+      if (!(owner instanceof Entity) || owner === entity) {
+        this.releaseInventoryEntitySceneState(entity);
+        continue;
+      }
+      const relation = this.getPreferredInventoryRelationForEntity(owner, entity);
+      if (!relation) {
+        this.releaseInventoryEntitySceneState(entity);
+        continue;
+      }
+      const stored = this.getStoredInventoryEntities(owner, relation);
+      if (!stored.includes(entity)) {
+        this.syncInventoryStore(owner, [...stored, entity], relation);
+      } else {
+        this.syncInventoryEntitySceneState(owner, entity, relation);
       }
     }
 
@@ -1020,9 +1058,19 @@ export class InventoryManager {
   }
 
   getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
-    const polygon = Array.isArray((sceneObject as any).poly)
-      ? (sceneObject as any).poly
-      : (sceneObject as any).vertices;
+    let referenceObject = sceneObject;
+    const visited = new Set<Entity>();
+    while (referenceObject instanceof Entity) {
+      if (visited.has(referenceObject)) break;
+      visited.add(referenceObject);
+      const owner = referenceObject.getInventoryPositionOwner();
+      if (!owner) break;
+      referenceObject = owner;
+    }
+
+    const polygon = Array.isArray((referenceObject as any).poly)
+      ? (referenceObject as any).poly
+      : (referenceObject as any).vertices;
     if (Array.isArray(polygon) && polygon.length) {
       const sum = polygon.reduce(
         (acc: { x: number; y: number }, point: { x: number; y: number }) => ({
@@ -1037,8 +1085,8 @@ export class InventoryManager {
       };
     }
     return {
-      x: Number((sceneObject as any).x) || 0,
-      y: Number((sceneObject as any).y) || 0,
+      x: Number((referenceObject as any).x) || 0,
+      y: Number((referenceObject as any).y) || 0,
     };
   }
 

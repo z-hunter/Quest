@@ -185,6 +185,80 @@ describe('LlmCascade', () => {
     );
   });
 
+  it('accepts conditional discovery narration on EXAMINE', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        {
+          type: 'examineTarget',
+          target: 'TV remote',
+          narration: {
+            message: 'You slide the cover aside and find two batteries.',
+            requiresDiscoveredEntityIds: ['batteryAAA'],
+          },
+        },
+      ],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'examineTarget',
+        target: 'TV remote',
+        narration: {
+          message: 'You slide the cover aside and find two batteries.',
+          requiresDiscoveredEntityIds: ['batteryAAA'],
+        },
+      },
+    ]);
+  });
+
+  it('provides a grounded discovery opportunity for named hidden contents and their anchor', async () => {
+    provider.response.text = JSON.stringify({ kind: 'fallback' });
+    const context: ParserContext = {
+      ...mockContext,
+      inventory: [
+        { id: 'tv_rc', title: 'TV remote', synonyms: ['remote', 'remote control', 'rc'] },
+      ],
+      knownEntities: [
+        {
+          id: 'batteryAAA',
+          title: 'AAA batteries',
+          synonyms: ['batteries', 'battery'],
+          visibility: 'hidden',
+          hiddenReason: 'examinable',
+          location: { relation: 'in', parentId: 'tv_rc', parentTitle: 'TV remote' },
+        },
+      ],
+    };
+
+    await cascade.parse('check batterys in rc', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"discoveryOpportunities":[{"hiddenEntityId":"batteryAAA","hiddenTitle":"AAA batteries","anchorId":"tv_rc","anchorTitle":"TV remote","relation":"in"}]'
+    );
+  });
+
+  it.each([
+    { message: 'You find batteries.', requiresDiscoveredEntityIds: [] },
+    { message: 'You find batteries.' },
+    { requiresDiscoveredEntityIds: ['batteryAAA'] },
+  ])('rejects invalid EXAMINE discovery narration: %j', async (narration) => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'examineTarget', target: 'TV remote', narration }],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      expect.objectContaining({ type: 'examineTarget' }),
+    ]);
+  });
+
   it('exposes authored parser commands to the LLM and accepts runCustomCommand', async () => {
     cascade = new LlmCascade(
       provider,
@@ -620,6 +694,25 @@ describe('LlmCascade', () => {
     expect(userMessage).toContain('meeting starts at nine');
     expect(userMessage).not.toContain('remain out of the current prompt');
     expect(userMessage).toContain('"targetDetails"');
+  });
+
+  it('includes runtime action eligibility without guessing from object prose', async () => {
+    provider.response.text = JSON.stringify({ kind: 'plan', actions: [] });
+    const context: ParserContext = {
+      rawInput: 'take batterys',
+      normalizedInput: 'TAKE BATTERYS',
+      scene: { id: 'test_room' },
+      entities: [{ id: 'batteryAAA', title: 'AAA batteries' }],
+      inventory: [{ id: 'tv_rc', title: 'TV remote' }],
+      actionScope: { takable: ['batteryAAA'], putSource: ['batteryAAA'] },
+    };
+
+    await cascade.parse('take batterys', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"actionScope":{"takable":["batteryAAA"],"putSource":["batteryAAA"]}'
+    );
   });
 
   it('adds spoiler protection for hidden known entities and scrubs raw hidden details', async () => {

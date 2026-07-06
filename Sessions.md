@@ -3131,3 +3131,115 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 
 - В репозитории были также user-owned scene/object edits, и мы их не откатывали; часть из них вошла в общий commit как рабочий контекст для текущих исправлений.
 - Корневые Markdown-файлы синхронизируются в NotebookLM только не рекурсивно, поэтому документы из подкаталогов в wrap-up не попадают.
+
+## Session Entry - 2026-07-06 02:34 +02:00
+
+### Session Goals
+
+- Проанализировать промпты Puppet Master и Parser LLM по реальным peek-логам: полнота контекста, форма представления, избыточность и prompt-cache пригодность.
+- Реализовать согласованный рефакторинг промптов без Structured objectives, сохранив scene description/lore в статической части для атмосферы и Anthropic prompt caching.
+- Устранить найденные после рефакторинга регрессии поиска скрытых предметов, наблюдательных команд, Parser Notes, краткой истории и clarification flow.
+- Добавить Reasoning модели в диагностический вывод `#peek-om`.
+
+### What Was Implemented
+
+- PM prompt/context разделён на стабильную сценическую часть и компактную динамическую часть; сокращены повторы, runtime wake context и recovery-контекст, при этом scene description/lore оставлены в cacheable static prompt.
+- В `#peek-om` добавлен вывод поля Reasoning, когда оно присутствует в ответе модели.
+- Исправлена семантика hidden discovery: `EXAMINE` может открывать объекты с `Lookable`, но обратное соответствие не допускается. Это вернуло NPC способность находить TV remote в `test_room` без чрезмерного раскрытия объектов.
+- Parser LLM prompt переведён на компактную static/dynamic модель. Статическая часть содержит атмосферу, каталог сущностей, spoiler rules, authored commands и GM actions; динамическая — текущие состояния, доступность, inventory, pending state, Parser Notes и recent turns.
+- Удалены избыточные динамические `worldFacts`, `spatialNodes`, `spatialRelations` и повторяющиеся описания; recovery context сокращён до данных, необходимых для исправления предыдущей попытки.
+- `details` целевой сущности передаются только при распознавании предмета в команде, чтобы не раздувать каждый запрос и не раскрывать details остальных объектов.
+- Добавлена защита наблюдательных намерений: READ/LOOK/EXAMINE/INSPECT/STUDY/CHECK/SEARCH не могут получить `TAKE` как побочное действие лишь ради доступа к объекту.
+- История текущего посещения сцены сохраняет последние 8 command/response пар; лимит ответа увеличен с 85 до 340 символов, чтобы модель видела ранее придуманное содержимое записок и другую существенную атмосферную прозу.
+- Усилен контракт Parser Notes: если GM придумывает устойчивый малый факт, ответ должен быть plan с `showText` и `setEntityParserNote`/`setSceneParserNote`, а не одиночный `final_response`.
+- Исправлена ложная LLM clarification: если `pendingAction` уже указывает на единственную реальную цель, действие выполняется непосредственно. Настоящая неоднозначность продолжает использовать стандартный parser pending-flow с нумерованными вариантами и сохранением требуемого действия.
+- В system prompt явно запрещено спрашивать игрока, выбирает ли он предмет или выполнение уже запрошенного действия над тем же предметом.
+
+### Important Architecture and Runtime Decisions
+
+- Scene description/lore намеренно остаются в статическом prompt: это одновременно художественный контекст GM и достаточный объём для работы Anthropic cache.
+- Structured objectives из первоначального плана не реализовывались по решению пользователя.
+- Наблюдательная команда не должна менять владение предметом. Это теперь не только prompt rule, но и детерминированная нормализация ответа LLM.
+- `EXAMINE -> Lookable discovery` является допустимым расширением более глубокого осмотра; `LOOK -> Examinable discovery` недопустимо.
+- Short-term recent turns дополняют, но не заменяют Parser Notes. История помогает продолжить ближайший диалог, а устойчивые придуманные факты должны сохраняться на scene/entity.
+- Clarification является engine-owned процедурой: LLM сообщает неоднозначный аргумент через `pendingAction`, а parser строит варианты, нумерацию и продолжение действия.
+
+### Tests and Validation
+
+- Focused Parser suite после prompt refactor: 150/150 passed.
+- Полный Vitest run на этапе Parser refactor: 545/547 passed; два оставшихся сбоя были известными несвязанными `navigation-and-spatial` failures.
+- Финальные focused проверки `tests/parser/llm-cascade.test.ts` и `tests/scene/scene-parser-history.test.ts`: 46/46 passed.
+- `npm run typecheck` passed.
+- `git diff --check` passed; остались только уведомления Git о будущем LF -> CRLF преобразовании.
+- Реальные peek-прогоны подтвердили восстановление поиска TV remote и корректную передачу recent turns до нового лимита.
+- Финальный `codex-doctor -ForceMemoryReview`: 20 health checks passed, typecheck passed; полный Vitest run — 546/548 passed с теми же двумя известными `navigation-and-spatial` failures. Background NotebookLM memory review и maintenance agent успешно запущены.
+
+### Commits
+
+- `c29bd82` - `improvemet: PM LLM Prompts optimisation`.
+- `70983e7` - `Improvement: Parser LLM Prompts optimisation` (включает финальные Parser prompt, recent history и clarification fixes).
+
+### Remaining Work / Next Steps
+
+- Повторить игровой сценарий чтения бумаги без authored `details`: первый придуманный текст должен вернуть `showText + setEntityParserNote`, а повторное чтение — использовать эту заметку последовательно.
+- Если модель всё ещё иногда возвращает persistent invented fact через `final_response`, добавить детерминированную защиту или retry/repair слой; одного prompt contract может оказаться недостаточно.
+- Очистить оставшиеся устаревшие ссылки system prompt на удалённые dynamic fields (`worldFacts`, `contents`, `spatialNodes`, `spatialRelations`), чтобы документация контекста точно соответствовала compact DTO.
+- Отдельно разобрать два известных `navigation-and-spatial` failures, если они ещё воспроизводятся в текущем HEAD.
+
+### Risks and Caveats
+
+- Увеличение recent-turn response limit до 340 повышает dynamic token usage, хотя объём ограничен восемью turns и остаётся существенно меньше статического prompt.
+- Parser Notes всё ещё зависят от соблюдения моделью structured output contract; recent history теперь предотвращает немедленную потерю текста, но не является долговременной заменой notes.
+- Exact-target clarification guard сейчас покрывает простые target actions. Сложные неоднозначности `putTarget`/custom command должны и дальше проходить через стандартный pending-flow.
+- На момент wrap-up рабочее дерево чистое; пользовательские scene/editor изменения в более поздних коммитах не изменялись и не откатывались.
+
+## Session Entry - 2026-07-06 19:43 +02:00
+
+### Session Goals
+
+- Исправить регрессию, из-за которой предметы, лежащие в инвентаре другого объекта, теряли правильный родительский контекст и вызывали лишний `MoveTo` перед взятием.
+- Сделать это поведение общим для `Player` и всех `Actor`.
+- Починить отдельный случай, когда редакторский spatial `IN` без реального `Inventory` у родителя ошибочно скрывал объект как инвентарный.
+- Зафиксировать результат в коммите и собрать wrap-up для следующей сессии.
+
+### What Was Implemented
+
+- В `InventoryManager` добавлено разрешение вложенного owner-chain для inventory-объектов, чтобы координаты и доступность предмета всегда следовали за реальным родителем инвентаря, а не за устаревшей сценовой позицией.
+- В `ActorWorldQuery` и `ComponentSystem` приведено к одному контракту вычисление reachable/interaction distance для вложенных inventory-цепочек.
+- В `InventoryManager.handleSceneChange()` добавлена развязка editor-authored `spatial.in` от реального inventory membership: spatial edge сохраняется, но инвентарная принадлежность создаётся только если у родителя действительно есть `Inventory`.
+- Исправлен случай с `CityView` в `window1`: объект больше не скрывается как inventory item, если родитель не имеет inventory.
+- Добавлены и обновлены тесты для nested inventory, parser take/examine flow и renderability объектов с `spatial IN` без inventory у родителя.
+
+### Important Architecture or Runtime Decisions
+
+- Spatial `in` сам по себе не означает inventory ownership.
+- Реальная инвентарная принадлежность теперь определяется только цепочкой владельцев, где каждый промежуточный объект действительно имеет `Inventory`.
+- Если editor-authored spatial child не принадлежит inventory-родителю, runtime должен восстановить его видимость, а не пытаться интерпретировать его как предмет в инвентаре.
+- Один и тот же контракт должен работать для Player и для любых Actor, чтобы parser и navigation не расходились в поведении.
+
+### Parser / Mechanics / Scene Changes
+
+- Исправлен `take`-поток для предметов, вложенных в inventory другого объекта: больше нет ложного `player_approaching_for_action` из-за старых координат.
+- Исправлена геометрия/interaction lookup для вложенных inventory items, чтобы команды не опирались на устаревшие scene coordinates.
+- Исправлено отображение scene entities, находящихся в `spatial IN` без реального inventory у родителя.
+
+### Tests and Validation
+
+- Прогонялись focused tests по navigation/spatial, parser integration и semantic API.
+- Проверка typecheck завершилась успешно.
+- Локально подтверждено, что `take aaa` для батареек внутри remote больше не вызывает лишний подход игрока.
+- Локально подтверждено, что `CityView` под `window1` снова рендерится, потому что `window1` не является inventory container.
+
+### Commit
+
+- `0e5a65e` - commit in progress at wrap-up time; the working tree still contains the session changes described above.
+
+### Remaining Work / Next Steps
+
+- При следующем касании проверить, не появятся ли ещё scene-authored `spatial in` случаи без `Inventory` в других сценах.
+- Если понадобится, можно отдельно пройтись по визуальным/semantic тестам вокруг `visible=false` для вложенных объектов.
+
+### Risks and Caveats
+
+- В рабочем дереве остаются пользовательские изменения в `public/scenes/*`, `src/mechanics/*`, `src/systems/*`, `tests/*`, `GDD.md` и `Sessions.md`; мы их не откатывали.
+- Правило nested inventory теперь завязано на реальную `Inventory`-цепочку, так что любые будущие сцены с editor-authored `spatial IN` без `Inventory` у родителя должны сохранять видимость по этому же контракту.

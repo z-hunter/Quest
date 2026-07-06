@@ -733,24 +733,37 @@ export class ComponentSystem {
       y: (player.y || 0) - (player.height || 0) / 2,
     };
 
+    let distanceTarget = entity;
+    const visitedInventoryOwners = new Set<Entity>();
+    while (distanceTarget instanceof Entity) {
+      if (visitedInventoryOwners.has(distanceTarget)) break;
+      visitedInventoryOwners.add(distanceTarget);
+      const owner = distanceTarget.getInventoryPositionOwner();
+      if (!owner) break;
+      distanceTarget = owner;
+    }
+
     let targetX = 0;
     let targetY = 0;
     let dist: number | null = null;
-    const surfacePlacement = this.getSurfacePlacementReferencePoint(entity);
+    const surfacePlacement = this.getSurfacePlacementReferencePoint(distanceTarget);
 
     if (surfacePlacement) {
       targetX = surfacePlacement.x;
       targetY = surfacePlacement.y;
     } else if (
-      (Array.isArray((entity as any).poly) && (entity as any).poly.length > 0) ||
-      (Array.isArray((entity as any).vertices) && (entity as any).vertices.length > 0)
+      (Array.isArray((distanceTarget as any).poly) && (distanceTarget as any).poly.length > 0) ||
+      (Array.isArray((distanceTarget as any).vertices) &&
+        (distanceTarget as any).vertices.length > 0)
     ) {
       const rawPoints = (
-        Array.isArray((entity as any).poly) ? (entity as any).poly : (entity as any).vertices
+        Array.isArray((distanceTarget as any).poly)
+          ? (distanceTarget as any).poly
+          : (distanceTarget as any).vertices
       ) as Array<{ x: number; y: number; p?: number }>;
       const camera = game?.sceneManager?.currentScene?.camera;
       const poly = rawPoints.map((vertex) => {
-        const parallax = vertex.p ?? (entity as any).parallax ?? 1;
+        const parallax = vertex.p ?? (distanceTarget as any).parallax ?? 1;
         return camera
           ? toVisualPosition({ x: vertex.x, y: vertex.y }, camera, parallax)
           : { x: vertex.x, y: vertex.y };
@@ -759,7 +772,7 @@ export class ComponentSystem {
       targetX = poly.reduce((sum, point) => sum + point.x, 0) / poly.length;
       targetY = poly.reduce((sum, point) => sum + point.y, 0) / poly.length;
     } else {
-      const e = entity as unknown as { x?: number; y?: number };
+      const e = distanceTarget as unknown as { x?: number; y?: number };
       targetX = e.x || 0;
       targetY = e.y || 0;
     }

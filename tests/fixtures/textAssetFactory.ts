@@ -253,7 +253,23 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
         type: 'requireEntityAvailable',
         entityId: 'tv_rc',
         scopes: ['held', 'reachable'],
+        saveAs: 'remote',
         missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'requireContainedGroupEntity',
+        containerRef: 'remote',
+        groupId: '#aaa',
+        saveAs: 'batteries',
+        missingMessageId: 'missing_batteries',
+      },
+      {
+        type: 'requireNumericState',
+        entityRef: 'batteries',
+        stateId: 'charge_percent',
+        operator: 'gt',
+        value: 0,
+        missingMessageId: 'dead_batteries',
       },
       {
         type: 'setEntityState',
@@ -266,7 +282,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
     ],
     messages: {
       missing_tv: "You don't see the TV here.",
-      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
+      missing_batteries: 'There are no batteries in the remote control.',
+      dead_batteries:
+        'The TV does not respond to the remote. It looks like the batteries are dead.',
       missing_power_state: 'The TV refuses to respond.',
       success: 'The TV clicks on.',
     },

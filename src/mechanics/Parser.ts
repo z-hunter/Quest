@@ -1632,7 +1632,7 @@ export class Parser {
       case 'lookRelationTarget':
         return this.resolveRelationTarget('look', action.relation, action.anchor);
       case 'examineTarget':
-        return this.resolveExamineTarget(action.target);
+        return this.resolveExamineTarget(action.target, action.narration);
       case 'examineRelationTarget':
         return this.resolveRelationTarget('examine', action.relation, action.anchor);
       case 'takeTarget':
@@ -1745,6 +1745,23 @@ export class Parser {
           recoverable: false,
         };
     }
+  }
+
+  private applyExamineNarration(
+    outcome: GameActionOutcome,
+    narration: Extract<ParserToolAction, { type: 'examineTarget' }>['narration']
+  ): GameActionOutcome {
+    if (outcome.status !== 'ok' || !narration) return outcome;
+    const discoveredEntityIds = Array.isArray(outcome.data?.discoveredEntityIds)
+      ? outcome.data.discoveredEntityIds.filter(
+          (entityId): entityId is string => typeof entityId === 'string'
+        )
+      : [];
+    const discovered = new Set(discoveredEntityIds);
+    if (!narration.requiresDiscoveredEntityIds.every((entityId) => discovered.has(entityId))) {
+      return outcome;
+    }
+    return { ...outcome, message: narration.message };
   }
 
   private executeLlmClarification(
@@ -2763,7 +2780,10 @@ export class Parser {
     return this.withEntityLookExtras(this.game.lookEntity(resolved.entity as any), resolved.entity);
   }
 
-  private resolveExamineTarget(rawTarget: string | null): GameActionOutcome {
+  private resolveExamineTarget(
+    rawTarget: string | null,
+    narration?: Extract<ParserToolAction, { type: 'examineTarget' }>['narration']
+  ): GameActionOutcome {
     if (!rawTarget) {
       return {
         status: 'needs_clarification',
@@ -2818,18 +2838,24 @@ export class Parser {
       }
       if (broadResolved?.status === 'found') {
         return this.executePlayerActionWithApproach(broadResolved.entity, () =>
-          this.withEntityLookExtras(
-            this.game.examineEntity(broadResolved.entity as any),
-            broadResolved.entity
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(broadResolved.entity as any),
+              broadResolved.entity
+            ),
+            narration
           )
         );
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
         return this.executePlayerActionWithApproach(inactiveSwitchResolved.entity, () =>
-          this.withEntityLookExtras(
-            this.game.examineEntity(inactiveSwitchResolved.entity as any),
-            inactiveSwitchResolved.entity
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(inactiveSwitchResolved.entity as any),
+              inactiveSwitchResolved.entity
+            ),
+            narration
           )
         );
       }
@@ -2855,9 +2881,12 @@ export class Parser {
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
         return this.executePlayerActionWithApproach(hiddenGatedResolved.entity, () =>
-          this.withEntityLookExtras(
-            this.game.examineEntity(hiddenGatedResolved.entity as any),
-            hiddenGatedResolved.entity
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(hiddenGatedResolved.entity as any),
+              hiddenGatedResolved.entity
+            ),
+            narration
           )
         );
       }
@@ -2908,7 +2937,10 @@ export class Parser {
       };
     }
     return this.executePlayerActionWithApproach(resolved.entity, () =>
-      this.withEntityLookExtras(this.game.examineEntity(resolved.entity as any), resolved.entity)
+      this.applyExamineNarration(
+        this.withEntityLookExtras(this.game.examineEntity(resolved.entity as any), resolved.entity),
+        narration
+      )
     );
   }
 

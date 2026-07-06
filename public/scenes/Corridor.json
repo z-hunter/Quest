@@ -833,28 +833,28 @@
       "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": -505.75219043981497,
-      "y": -137.96318015910083,
+      "x": -509.9381633272064,
+      "y": -137.9792121272862,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -505.75219043981497,
-          "y": -137.96318015910083,
+          "x": -509.9381633272064,
+          "y": -137.9792121272862,
           "p": 1.0431424643929696
         },
         {
-          "x": -476.8519880278913,
-          "y": -138.1979873160969,
+          "x": -481.32455787663685,
+          "y": -138.21215699721654,
           "p": 1.0424314168264899
         },
         {
-          "x": -366.17641035617345,
-          "y": -129.4450845935438,
+          "x": -363.2652092009974,
+          "y": -129.5078250136152,
           "p": 1.0467476902559403
         },
         {
-          "x": -389.9255860735927,
-          "y": -129.1712931924033,
+          "x": -387.55777931339287,
+          "y": -129.2302306456075,
           "p": 1.0405613305364574
         }
       ],
@@ -1058,28 +1058,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1609.1136240136223,
-      "y": 71.53060984211365,
+      "x": 1668.4732539728845,
+      "y": 72.1268468379522,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1609.1136240136223,
-          "y": 71.53060984211365,
+          "x": 1668.4732539728845,
+          "y": 72.1268468379522,
           "p": 1
         },
         {
-          "x": 1634.1220644201444,
-          "y": 73.36386672309831,
+          "x": 1690.481492648923,
+          "y": 73.74017235267235,
           "p": 1
         },
         {
-          "x": 1615.7523525592533,
-          "y": 127.04373264299248,
+          "x": 1674.3155504121128,
+          "y": 120.98019540323686,
           "p": 1
         },
         {
-          "x": 1529.4059136317294,
-          "y": 170.37326998335521,
+          "x": 1598.3278836143336,
+          "y": 159.11159360351513,
           "p": 1
         }
       ],
@@ -1094,104 +1094,6 @@
       "gridColor": "#ffffff",
       "filled": true,
       "blur": 4,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "test_2",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        },
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
-        }
-      ],
-      "layer": 0,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": -775.8019102270001,
-      "y": 54.195232150361875,
-      "width": 14.381673033719073,
-      "height": 14.381673033719073,
-      "baseWidth": 16.483516483516482,
-      "baseHeight": 16.483516483516482,
-      "spriteName": null,
-      "color": "#d66e29",
-      "scale": 0.8724881640456239,
-      "refScale": 1,
-      "modelScale": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "test_3",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        },
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
-        }
-      ],
-      "layer": 0,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Hero_1",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": -775.8019102270001,
-      "y": 54.195232150361875,
-      "width": 14.381673033719073,
-      "height": 14.381673033719073,
-      "baseWidth": 16.483516483516482,
-      "baseHeight": 16.483516483516482,
-      "spriteName": null,
-      "color": "#d0cb39",
-      "scale": 0.8724881640456239,
-      "refScale": 1,
-      "modelScale": 1,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -1237,7 +1139,7 @@
           "capacity": 8,
           "groups": [],
           "protected": false,
-          "items": []
+          "items": ["battery_aaa"]
         }
       ],
       "layer": 0,
@@ -1284,7 +1186,7 @@
       "colliderHeight": 9
     },
     {
-      "name": "Hero_1",
+      "name": "Miles",
       "type": "Actor",
       "locked": false,
       "disabled": false,
@@ -1308,7 +1210,7 @@
           "capacity": 10,
           "groups": [],
           "protected": true,
-          "items": [],
+          "items": ["test"],
           "relation": "in"
         },
         {
@@ -1323,15 +1225,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1618.8510545417441,
-      "y": 82.89094545825586,
-      "width": 120.09497651350343,
-      "height": 288.0656531236062,
+      "x": 1678.2310535986571,
+      "y": 83.51094640135341,
+      "width": 120.34619538452706,
+      "height": 288.6682389291021,
       "baseWidth": 148,
       "baseHeight": 355,
       "spriteName": "miles2_ds-idle-up.json",
       "color": "#00ffff",
-      "scale": 0.8114525440101583,
+      "scale": 0.8131499688143721,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -1380,21 +1282,69 @@
       "visible": false,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Hero_1",
+        "parentNodeId": "Miles",
         "relation": "in"
       },
       "parallax": 1,
-      "x": 527.9903429541549,
-      "y": 230.99913665961606,
-      "width": 17.335879945429745,
-      "height": 24.635197817189635,
+      "x": 1678.2310535986571,
+      "y": 83.51094640135341,
+      "width": 15.256136620125426,
+      "height": 21.679773091757184,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.8800000000000001,
+      "scale": 0.7744285417279735,
       "refScale": 0.8,
       "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "battery_aaa",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        },
+        {
+          "type": "State",
+          "id": "charge_percent",
+          "valueType": "number",
+          "initialValue": 100,
+          "value": 100
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "npc_Rick",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 1759.1025914362363,
+      "y": 36.88014426334833,
+      "width": 13.056860856399794,
+      "height": 12.07759629216981,
+      "baseWidth": 80,
+      "baseHeight": 74,
+      "spriteName": "aaa",
+      "color": "#AAAAAA",
+      "scale": 0.16321076070499743,
+      "refScale": 0.2,
+      "modelScale": 0.2,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,

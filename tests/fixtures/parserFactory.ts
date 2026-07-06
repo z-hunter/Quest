@@ -45,7 +45,8 @@ export function createParserFixture(): ParserFixture {
     return true;
   };
 
-  const revealHiddenDescendantsForExamine = (anchor: Entity): void => {
+  const revealHiddenDescendantsForExamine = (anchor: Entity): string[] => {
+    const revealed: string[] = [];
     for (const relation of ['in', 'on', 'under', 'behind'] as const) {
       const revealableDescendants = getSceneTextRelationDirectAccessStates(
         fixture.scene,
@@ -55,10 +56,12 @@ export function createParserFixture(): ParserFixture {
         { includeHidden: true }
       ).filter((accessState) => accessState.hiddenReason === 'examinable');
 
-      revealableDescendants.forEach((accessState) =>
-        fixture.scene.revealHiddenEntity(accessState.object)
-      );
+      revealableDescendants.forEach((accessState) => {
+        fixture.scene.revealHiddenEntity(accessState.object);
+        revealed.push(accessState.object.name);
+      });
     }
+    return revealed;
   };
 
   const getAccessOutcome = (entity: Entity, _mode: 'look' | 'interact') => {
@@ -150,7 +153,6 @@ export function createParserFixture(): ParserFixture {
   fixture.game.examineEntity = (entity: Entity) => {
     const accessOutcome = getAccessOutcome(entity, 'interact');
     if (accessOutcome) return accessOutcome;
-    revealHiddenDescendantsForExamine(entity);
     const distanceError = ComponentSystem.getInteractionDistanceError(
       entity as any,
       fixture.scene.player
@@ -163,14 +165,21 @@ export function createParserFixture(): ParserFixture {
         recoverable: true,
       };
     }
+    const discoveredEntityIds = revealHiddenDescendantsForExamine(entity);
     const details = fixture.textAssets.getResolvedObjectField(entity, 'details');
     if (details?.trim()) {
-      return okOutcome('entity_details', details, { entityId: entity.name });
+      return okOutcome('entity_details', details, {
+        entityId: entity.name,
+        discoveredEntityIds,
+      });
     }
     const description =
       fixture.textAssets.getResolvedObjectField(entity, 'description') || entity.description;
     if (description?.trim()) {
-      return okOutcome('entity_description_fallback', description, { entityId: entity.name });
+      return okOutcome('entity_description_fallback', description, {
+        entityId: entity.name,
+        discoveredEntityIds,
+      });
     }
     return { status: 'escalate', code: 'missing_details', recoverable: true };
   };

@@ -32,6 +32,50 @@ async function finishAutoApproach(fixture: any): Promise<void> {
 }
 
 describe('Parser + game integration smoke', () => {
+  it('takes revealed contents from a held editor-authored container without auto-approach', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A remote.',
+      details: 'A remote with a battery compartment.',
+      synonyms: ['remote', 'rc'],
+      components: [
+        { type: 'Item' },
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: 1,
+          groups: ['#aaa'],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const batteries = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      description: 'Two AAA batteries.',
+      synonyms: ['aaa', 'batteries'],
+      groupID: '#aaa',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Item' }],
+    } as any);
+    batteries.hidden = 'examinable';
+    batteries.x = 1019;
+    batteries.y = 344;
+
+    fixture.game.inventoryManager.handleSceneChange();
+    expect(fixture.game.addInventoryEntity(player, remote, 'in').status).toBe('ok');
+    const moveTo = vi.spyOn(player, 'moveTo');
+
+    fixture.scene.revealHiddenEntity(batteries);
+    await fixture.run('take aaa');
+
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(fixture.game.inventory).toContain(batteries);
+    expect(fixture.game.getInventoryEntities(remote, 'in')).not.toContain(batteries);
+  });
+
   it('describes direct spatial contents with LOOK UNDER', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();

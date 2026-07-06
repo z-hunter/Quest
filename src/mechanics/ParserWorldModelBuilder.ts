@@ -40,13 +40,18 @@ export class ParserWorldModelBuilder {
   }
 
   build(rawInput: string, pendingState: ParserPendingState | null): ParserWorldModel {
+    const scope = this.buildScope();
     return {
-      context: this.buildContext(rawInput, pendingState),
-      scope: this.buildScope(),
+      context: this.buildContext(rawInput, pendingState, scope),
+      scope,
     };
   }
 
-  private buildContext(rawInput: string, pendingState: ParserPendingState | null): ParserContext {
+  private buildContext(
+    rawInput: string,
+    pendingState: ParserPendingState | null,
+    scope: ParserScope
+  ): ParserContext {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
     const playerContext = scene?.player
@@ -83,6 +88,12 @@ export class ParserWorldModelBuilder {
       worldFacts,
       spatialNodes,
       spatialRelations,
+      actionScope: {
+        takable: scope.takable.map((entity) => entity.name),
+        putSource: scope.putSource.map((entity) => entity.name),
+        reachable: scope.reachable.map((entity) => entity.name),
+        examinable: scope.examinable.map((entity) => entity.name),
+      },
       pending,
     });
   }

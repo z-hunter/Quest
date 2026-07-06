@@ -47,6 +47,132 @@ describe('Game navigation and spatial API', () => {
     expect(fixture.game.actorNavigation.planApproach(actor, door).status).toBe('already_reachable');
   });
 
+  it('resolves nested inventory item geometry through the outer scene owner', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 50);
+    const cabinet = fixture.addEntity('cabinet', {
+      title: 'Cabinet',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    cabinet.x = 20;
+    cabinet.y = 50;
+    const caseEntity = fixture.addEntity('case', {
+      title: 'Case',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    caseEntity.x = 500;
+    caseEntity.y = 500;
+    const item = fixture.addEntity('item', {
+      title: 'Item',
+      components: [{ type: 'Item' }],
+    });
+    item.x = 900;
+    item.y = 900;
+    (item as any).vertices = [
+      { x: 880, y: 880 },
+      { x: 920, y: 880 },
+      { x: 920, y: 920 },
+      { x: 880, y: 920 },
+    ];
+
+    fixture.game.addInventoryEntity(cabinet, caseEntity, 'in');
+    fixture.game.addInventoryEntity(caseEntity, item, 'in');
+
+    expect(item.x).toBe(cabinet.x);
+    expect(item.y).toBe(cabinet.y);
+    expect(fixture.game.inventoryManager.getSceneObjectReferencePoint(item)).toEqual({
+      x: cabinet.x,
+      y: cabinet.y,
+    });
+    expect(ComponentSystem.getInteractionDistanceError(item, player)).toBeNull();
+    expect(fixture.game.actorNavigation.planApproach(player, item).status).toBe(
+      'already_reachable'
+    );
+  });
+
+  it('treats nested inventory contents as held by any owning Actor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 50);
+    const npc = new Actor(fixture.game, 400, 50, 30, 60, 'NPC');
+    npc.components = [
+      { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+    ];
+    fixture.scene.addEntity(npc);
+    const remote = fixture.addEntity('remote', {
+      title: 'Remote',
+      components: [{ type: 'Inventory', capacity: 2, groups: [], protected: false, items: [] }],
+    });
+    const batteries = fixture.addEntity('batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+
+    fixture.game.addInventoryEntity(npc, remote, 'in');
+    fixture.game.addInventoryEntity(remote, batteries, 'in');
+
+    expect(fixture.game.inventoryManager.isEntityWithinActorInventory(npc, batteries)).toBe(true);
+    expect(fixture.game.actorWorld.getObjectPerception(npc, batteries)).toMatchObject({
+      interaction: 'held',
+      approach: 'already_reachable',
+    });
+    expect(
+      fixture.game.inventoryManager.isEntityWithinActorInventory(fixture.scene.player!, batteries)
+    ).toBe(false);
+  });
+
+  it('hydrates editor-authored spatial inventory children when component items are empty', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 50);
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [
+        { type: 'Item' },
+        { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: false, items: [] },
+      ],
+    });
+    const batteries = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      spatial: { parentNodeId: 'tv_rc', relation: 'in' },
+      components: [{ type: 'Item' }],
+    });
+    batteries.x = 1019;
+    batteries.y = 344;
+
+    fixture.game.inventoryManager.handleSceneChange();
+    expect(fixture.game.inventoryManager.getInventoryEntities(remote, 'in')).toContain(batteries);
+    expect(batteries.getInventoryPositionOwner()).toBe(remote);
+
+    fixture.game.addInventoryEntity(player, remote, 'in');
+
+    expect(fixture.game.inventoryManager.isEntityWithinActorInventory(player, batteries)).toBe(
+      true
+    );
+    expect(fixture.game.actorWorld.getObjectPerception(player, batteries)).toMatchObject({
+      interaction: 'held',
+      approach: 'already_reachable',
+    });
+  });
+
+  it('keeps spatial IN children renderable when their parent has no Inventory', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 50);
+    fixture.addEntity('window1', { title: 'Window', components: [] });
+    const cityView = fixture.addEntity('CityView', {
+      title: 'City view',
+      visible: false,
+      spatial: { parentNodeId: 'window1', relation: 'in' },
+      components: [
+        { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: false, items: [] },
+      ],
+    });
+
+    fixture.game.inventoryManager.handleSceneChange();
+
+    expect(cityView.visible).toBe(true);
+    expect(cityView.getInventoryPositionOwner()).toBeNull();
+    expect(cityView.spatial).toEqual({ parentNodeId: 'window1', relation: 'in' });
+  });
+
   it('does not derive interaction reach from visual width when an Actor collider is disabled', () => {
     const fixture = createGameSemanticFixture();
     const actor = fixture.addPlayer('Hero', 0, 50);

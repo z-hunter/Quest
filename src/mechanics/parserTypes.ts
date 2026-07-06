@@ -187,6 +187,23 @@ export type ParserCommandActionSpec =
       missingMessage?: string;
     }
   | {
+      type: 'requireContainedGroupEntity';
+      containerRef: string;
+      groupId: string;
+      saveAs: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireNumericState';
+      entityRef: string;
+      stateId: string;
+      operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+      value: number;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
       type: 'setEntityState';
       entityId: string;
       stateId: string;
@@ -243,6 +260,7 @@ export type ParserContext = {
   worldFacts?: string[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
+  actionScope?: Partial<Record<ParserScopeSlice, string[]>>;
   pending?: ParserPendingState;
 };
 
@@ -279,6 +297,10 @@ export type ParserToolAction =
   | {
       type: 'examineTarget';
       target: string | null;
+      narration?: {
+        message: string;
+        requiresDiscoveredEntityIds: string[];
+      };
     }
   | {
       type: 'examineRelationTarget';
