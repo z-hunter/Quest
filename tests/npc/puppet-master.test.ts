@@ -216,6 +216,21 @@ describe('NpcPuppetMaster', () => {
     expect(dynamicText).not.toContain('"inspection"');
   });
 
+  it('states that the static entity catalog does not prove current physical presence', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const system = JSON.stringify(provider.calls[0].system);
+    const message = String(provider.calls[0].messages[0].content);
+    expect(system).toContain('catalog membership never proves');
+    expect(system).toContain('plan_rejected_missing_items');
+    expect(message).toContain('Static catalog membership is not current presence');
+  });
+
   it('executes valid SAY plans and stores NPC memory', async () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero');
@@ -2099,6 +2114,52 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[1].messages[0].content)).toContain(
       '"code": "actor_command_executed"'
     );
+  });
+
+  it('does not commit plan memory after an asynchronous COMMAND failure', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
+    npcComponent.memory = 'The TV is still off.';
+    (fixture.game as any).sayAsActor = vi.fn();
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    (pm as any).storePendingContinuationAfterScheduledOutcome(
+      fixture.scene,
+      {
+        npcId: npc.name,
+        steps: [
+          { type: 'COMMAND', commandId: 'turn_tv_on' },
+          { type: 'SAY', text: 'The TV is on.' },
+        ],
+        memory: 'I successfully turned on the TV.',
+      },
+      [
+        {
+          status: 'scheduled',
+          code: 'actor_command_scheduled',
+          npcId: npc.name,
+          actionType: 'COMMAND',
+          commandId: 'turn_tv_on',
+        },
+      ]
+    );
+    (pm as any).tryExecutePendingContinuation(fixture.scene, npc.name, [
+      {
+        type: 'action_completed',
+        result: {
+          status: 'failed',
+          code: 'custom_command_numeric_state_requirement_failed',
+          npcId: npc.name,
+          actionType: 'COMMAND',
+          commandId: 'turn_tv_on',
+          worldChanged: false,
+        },
+      },
+    ]);
+
+    expect(npcComponent.memory).toBe('The TV is still off.');
   });
 
   it('rejects unavailable COMMAND item requirements and retries with details', async () => {

@@ -26,6 +26,9 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Return {"kind":"pm_response","plans":[...]}.',
   'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior.',
   'Each plan must target a real NPC id from context.',
+  'The scene-static catalog describes authored identity and affordances only; catalog membership never proves current physical presence. Inventory items can leave with another actor while the catalog remains cached.',
+  'Current presence is confirmed only by this NPC dynamic entities or inventory. knownEntities and lastSeenSceneId are historical knowledge.',
+  'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
@@ -53,8 +56,8 @@ const FALLBACK_SYSTEM_PROMPT = [
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
   'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
-  'Assume all known entities can be inspected (LOOK, EXAMINE) and support relations in, on, under, behind unless explicitly stated otherwise.',
-  'Assume entities are visible and in the current scene unless marked otherwise. Assume approach is already_reachable if interaction is reachable or held.',
+  'Only current dynamic entities can be inspected (LOOK, EXAMINE); their supported relations are in, on, under, behind unless explicitly stated otherwise.',
+  'Assume a dynamic entity approach is already_reachable only if interaction is reachable or held. Never infer presence or reachability from the static catalog.',
 ].join('\n');
 
 const STRATEGY_SYSTEM_PROMPT = [
@@ -911,10 +914,18 @@ export class NpcPuppetMaster {
     }
 
     this.pendingPlanContinuations.delete(stateKey);
+    const barrierFailed = this.isFailedPlanBarrier(trigger, barrierResult);
+    if (barrierFailed && pending.memory !== undefined) {
+      this.traceWake('pending_plan_memory_discarded_after_failure', {
+        sceneId: scene.id,
+        npcId,
+        code: barrierResult.code,
+      });
+    }
     const continuationPlan: NpcPlan = {
       npcId: pending.npcId,
       steps: pending.steps,
-      ...(pending.memory !== undefined ? { memory: pending.memory } : {}),
+      ...(!barrierFailed && pending.memory !== undefined ? { memory: pending.memory } : {}),
       interruptOn: pending.interruptOn,
     };
     const outcomes = this.executor.executePlan(continuationPlan);
@@ -1673,6 +1684,7 @@ export class NpcPuppetMaster {
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
           '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
+          '4. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
       },
