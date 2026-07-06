@@ -115,6 +115,35 @@ export async function saveProjectFile(path: string, content: string): Promise<vo
 
   await postJson('/api/save', { path, content });
 }
+export async function appendProjectFile(path: string, content: string): Promise<void> {
+  validateSafePath(path);
+  const gProcess = (globalThis as any).process;
+  if (typeof gProcess !== 'undefined' && gProcess.versions?.node) {
+    try {
+      const fsName = 'fs';
+      const pathName = 'path';
+      const fs = await import(fsName);
+      const pathModule = await import(pathName);
+      const targetPath = pathModule.resolve(gProcess.cwd(), path);
+      const dir = pathModule.dirname(targetPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(targetPath, content);
+      return;
+    } catch (err) {
+      console.warn('Node fs append failed:', err);
+      return;
+    }
+  }
+  if (isTauriRuntime()) {
+    // If Tauri is used in the future, we could add 'append_project_file' there.
+    // For now, fallback or use invokeTauri if it's implemented
+    // await invokeTauri('append_project_file', { path, content });
+    console.warn('appendProjectFile not fully supported in Tauri yet');
+    return;
+  }
+
+  await postJson('/api/append-file', { path, content });
+}
 
 export async function readProjectFile(path: string, content: string): Promise<string> {
   validateSafePath(path);

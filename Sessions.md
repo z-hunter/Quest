@@ -3243,3 +3243,137 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 
 - В рабочем дереве остаются пользовательские изменения в `public/scenes/*`, `src/mechanics/*`, `src/systems/*`, `tests/*`, `GDD.md` и `Sessions.md`; мы их не откатывали.
 - Правило nested inventory теперь завязано на реальную `Inventory`-цепочку, так что любые будущие сцены с editor-authored `spatial IN` без `Inventory` у родителя должны сохранять видимость по этому же контракту.
+
+## Session Entry - 2026-07-06 19:55 +02:00
+
+### Session Goals
+
+- Довести фичу implicit EXAMINE до состояния, пригодного для коммита и долгового handoff.
+- Зафиксировать в памяти, что художественная обёртка должна показываться только при реальном discovery.
+- Отдельно отметить, что часть правок по этой работе уже попала в bugfix-коммит вместе с найденной регрессией.
+
+### What Was Implemented
+
+- Фича implicit EXAMINE с conditional narration была доведена до рабочего состояния и в итоге оказалась зафиксирована в коммите `196eed1` (`Fix nested inventory ownership`).
+- В память проекта записан устойчивый вывод: `ParserToolAction.examineTarget` может нести `narration`, но движок показывает её только если canonical EXAMINE действительно обнаружил указанные сущности.
+- Зафиксировано, что user-owned правка в `public/scenes/test_room.json` осталась в рабочем дереве отдельно и не была включена в этот коммит.
+
+### Important Architecture or Runtime Decisions
+
+- Для implicit EXAMINE нельзя подменять реальное действие выдуманным discovery.
+- Художественный текст допустим только как оболочка над подтверждённым результатом движка.
+- Коммит-история теперь отражает, что фича и сопутствующий bugfix были сведены в один интегрированный change-set.
+
+### Parser / Mechanics / Scene Changes
+
+- Изначально требовались изменения в parser/LLM contract: `narration` на `examineTarget`, `requiresDiscoveredEntityIds`, и prompt-уровневый `discoveryOpportunities` hint.
+- `Sessions.md`, `GDD.md`, parser prompt assets, parser runtime и тесты уже обновлены в основном change-set, вошедшем в `196eed1`.
+
+### Tests and Validation
+
+- Перед коммитом прогонялись focused parser/semantic tests и `npm run typecheck`.
+- Впоследствии была дополнительно подтверждена корректность контракта через summary/peek flow, где модель выбирает anchor EXAMINE и получает условную narration только после фактического discovery.
+
+### Commit
+
+- `196eed1` - `Fix nested inventory ownership`
+
+### Remaining Work / Next Steps
+
+- При следующем проходе можно проверить, не требует ли `public/scenes/test_room.json` отдельного user-commit или ручной вычитки, потому что сейчас это незакоммиченная пользовательская правка.
+- Если захотим ещё глубже зафиксировать контракт, можно добавить короткий note в autotests/документацию о parser-side gating для narrative overlays.
+
+### Risks and Caveats
+
+- В рабочем дереве остаётся незакоммиченная правка `public/scenes/test_room.json`; она не была тронута и не должна смешиваться с этим wrap-up.
+- Сам коммит `196eed1` уже содержит большой интегрированный change-set, поэтому будущим правкам важно не переехать обратно к «fake discovery» поведению.
+
+## Session Entry - 2026-07-06 20:00 +02:00
+
+### Session Goals
+
+- Разобрать случай, когда Stage 2 LLM правильно понимала опечатку `take batterys` как запрос взять AAA batteries, но отвечала художественным отказом вместо `takeTarget`.
+- Найти общий архитектурный источник ошибки без предметных synonym/typo-исключений для тестовой сцены.
+- Сохранить устойчивое решение и контекст для будущей диагностики Stage 2.
+
+### What Was Implemented
+
+- В `ParserContext` добавлен компактный динамический `actionScope`, производный от уже вычисленного `ParserScope`.
+- `ParserWorldModelBuilder` теперь строит scope один раз и передаёт в LLM-контекст ID сущностей из `takable`, `putSource`, `reachable` и `examinable`.
+- `LlmCascade` включает `actionScope` в per-call dynamic context, не раздувая cacheable static prompt.
+- Prompt contract объясняет, что `actionScope.takable` является runtime-фактом допустимости TAKE: при ясных intent и target модель должна вызвать действие, а реальный отказ оставить движку.
+- Добавлен regression test, подтверждающий передачу runtime eligibility независимо от объектной прозы и написания пользовательской команды.
+- Первая идея с fuzzy/typo hints была полностью отклонена и удалена: модель уже распознавала батарейки, а проблема заключалась в отсутствии capability facts.
+
+### Important Architecture or Runtime Decisions
+
+- Источник истины о выполнимости parser action — Parser Core/Parser Scope, а не LLM-интерпретация описаний, containment relations или предыдущей художественной реплики.
+- Stage 2 не должна повторно вычислять affordances и не должна получать предметные подсказки вида `batterys -> AAA batteries`.
+- `recentTurns` не является корневой причиной: отказ воспроизводился и без истории; история могла только усилить уже существующую неопределённость.
+- Если Stage 2 понимает intent и target, а entity присутствует в соответствующем `actionScope`, она должна вернуть action и позволить runtime выполнить окончательную проверку.
+
+### Parser / Mechanics / Scene Changes
+
+- Изменены `ParserWorldModelBuilder`, `parserTypes` и `LlmCascade` для передачи runtime action eligibility.
+- Обновлены production/fallback prompt assets и `tests/parser/llm-cascade.test.ts`.
+- Предметных изменений в `test_room` ради этого исправления не делалось.
+
+### Tests and Validation
+
+- `tests/parser/llm-cascade.test.ts` + `tests/parser/world-model-context.test.ts`: 70/70 passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed, кроме обычных предупреждений о будущем LF -> CRLF.
+- Полный `tests/parser` run: 161/163 passed. Два сбоя в `commands.test.ts` относятся к существующему несовпадению русских ожидаемых и английских фактических TV messages и не вызваны `actionScope`.
+- Финальный `codex-doctor -ForceMemoryReview`: 20 health checks passed, typecheck passed; полный Vitest run — 559/565 passed. Шесть оставшихся сбоев: два известных navigation/spatial, два NPC authored-command/TV-state и два TV-message expectation failures. Background NotebookLM memory review и maintenance agent запущены.
+
+### Commit
+
+- `196eed1` - `Fix nested inventory ownership`; текущий HEAD также содержит интегрированное исправление Stage 2 `actionScope`.
+
+### Remaining Work / Next Steps
+
+- В живой игре повторить `take batterys` с очищенным `recentTurns` и убедиться, что provider возвращает `takeTarget` с реальным title, после чего Parser Core помещает батарейки в inventory героя.
+- При следующих ложных LLM-отказах сначала проверять наличие entity ID в соответствующем `actionScope`, а уже затем анализировать prompt wording.
+- Отдельно привести TV-message fixtures/expectations к одному языку, если два известных `commands.test.ts` failures сохраняются.
+
+### Risks and Caveats
+
+- `actionScope` является snapshot текущего вызова; окончательная проверка всё равно остаётся за runtime, поскольку состояние может измениться между планированием и исполнением.
+- Не следует расширять `actionScope` скрытыми или недоступными сущностями ради улучшения распознавания: это capability contract, а не fuzzy retrieval layer.
+- В рабочем дереве остаётся пользовательская незакоммиченная правка `public/scenes/test_room.json`; в этой сессии она не изменялась и не откатывалась.
+
+## Session Entry - 2026-07-07 00:35 Europe/Warsaw
+
+### Session Goals
+- Implement a Small Language Model (SLM) offline inference system and dataset logging (Shadow Mode) for the NPC Puppet Master.
+- Add diagnostic console commands for Shadow Mode configuration.
+- Audit and update `tech-spec.md` to match the current state of the engine.
+
+### What Was Implemented
+- **Phase 1 (Shadow Mode)**: Created `ShadowLogger.ts` which records successful LLM plans in `logs/slm_shadow_dataset.jsonl` as a Gold Standard dataset, ignoring failures, loops, and strategy reflections. Bypasses file writing in testing environments.
+- **Phase 2 (SLM Stack)**: Created `SlmVocabulary.ts`, `SlmInputAdapter.ts`, `SlmOutputAdapter.ts`, and `SlmInferenceEngine.ts` to tokenize context, perform client-side WASM inference via `onnxruntime-web`, and decode/validate model plans.
+- **Phase 3 (Hybrid Routing)**: Integrated SLM inference directly into `NpcPuppetMaster.ts`. Routine requests resolve instantly in <5ms; complex cases (e.g. SAY, COMMAND, validation failures) safely escalate back to LLM.
+- **Diagnostics**: Added `#SLMLOG`, `#SLMLOG-ON`, `#SLMLOG-OFF` console commands to `Console.ts` to query collected dataset statistics and toggle logging.
+- **Technical Specification Audit**: Completely rewrote `tech-spec.md` to map the fully refactored directory structure, systems (audio, components, state event, pathfinding), testing coverage, and build tools.
+- **Durable Memory**: Updated `.agent/context.md` and `.agent/current_task.md` with SLM/Shadow Mode facts and completion state.
+
+### Important Architecture or Runtime Decisions
+- **Scope Gating**: The SLM is trained solely on Puppet Master (NPC) actions, completely separate from player parsing.
+- **Strict Validation**: Decoded plan steps are validated before execution, forcing LLM escalation on any invalid model outputs.
+- **Diagnostics Controls**: Allows disabling logging via console (`#SLMLOG-OFF`) during debugging and robustness test phases to avoid contaminating training logs.
+
+### Parser / Mechanics / Scene Changes
+- No scenes were modified. Hybrid routing hooks and logging callbacks are wired inside `NpcPuppetMaster.ts`.
+- Integrated `#SLMLOG` commands into `Console.ts`.
+
+### Tests and Validation
+- Created `tests/npc/slm-adapters.test.ts` providing unit coverage for vocabulary mappings, adapters, and model fallback.
+- Ran TypeScript verification and confirmed Vitest suite passes.
+
+### Commit
+- Staged all changes and initiated commit. Modified files include `NpcPuppetMaster.ts`, `fileApi.ts`, `Console.ts`, `tech-spec.md`, and new files under `src/mechanics/slm/` and `tests/npc/slm-adapters.test.ts`.
+
+### Remaining Work / Next Steps
+- Accumulate shadow logs in production until the training threshold is reached.
+- Train the model using the PyTorch template defined in the documentation and place the output `slm_routine_v1.onnx` file in `public/models/`.
+- Commit remaining workspace files (`.agent/context.md`, `.agent/current_task.md`, `Sessions.md`) after the initial pre-commit tasks complete.

@@ -1,4 +1,6 @@
 import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
+import { ShadowLogger } from './slm/ShadowLogger';
+import { SlmInferenceEngine } from './slm/SlmInferenceEngine';
 import { ActorPlanExecutor } from './ActorPlanExecutor';
 import { NpcWorldModelBuilder } from './NpcWorldModelBuilder';
 import type { IGame } from '../core/IGame';
@@ -424,6 +426,58 @@ export class NpcPuppetMaster {
     trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): Promise<NpcPlan[]> {
     const currentGeneration = this.haltGenerationId;
+
+    // HYBRID ROUTER: Try fast in-engine SLM first for routine tasks
+    if (worldModel.npcs && worldModel.npcs.length === 1 && SlmInferenceEngine.isReady()) {
+      const npcContext = worldModel.npcs[0];
+      const slmResult = await SlmInferenceEngine.infer(npcContext);
+      if (slmResult.kind === 'success' && slmResult.plans.length > 0) {
+        const normalized = this.normalizeResponse(
+          { kind: 'pm_response', plans: slmResult.plans },
+          worldModel
+        );
+        if (normalized.valid) {
+          const expandedPlans = this.expandImplicitTakeApproaches(normalized.plans, worldModel);
+          const itemValidation = this.validatePlanItems(expandedPlans, worldModel, trigger);
+          const acceptedPlans = this.removePrematureStrategySteps(
+            this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
+            trigger
+          );
+          if (acceptedPlans.length > 0) {
+            this.traceWake('slm_handled_routine', {
+              sceneId: worldModel.scene.id,
+              npcId: npcContext.id,
+              steps: acceptedPlans[0].steps.length,
+            });
+            for (const plan of acceptedPlans) {
+              const outcomes = this.executePlanAndTrackContinuation(plan);
+              const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
+              if (!hasScheduled) {
+                ShadowLogger.commit(
+                  plan.npcId,
+                  'plan_completed',
+                  outcomes.some((o) => o.worldChanged)
+                );
+              }
+              const planTrigger =
+                trigger?.type === 'batch'
+                  ? [...(trigger.triggersByNpc[plan.npcId] || [])]
+                      .reverse()
+                      .find((candidate) => candidate.type === 'move_completed')
+                  : trigger;
+              this.maybeScheduleContinuation([plan], planTrigger, hasScheduled);
+            }
+            return acceptedPlans;
+          }
+        }
+      }
+      this.traceWake('slm_escalated_to_llm', {
+        sceneId: worldModel.scene.id,
+        npcId: worldModel.npcs[0].id,
+        reason: slmResult.kind === 'escalate' ? slmResult.reason : 'validation_failed',
+      });
+    }
+
     const system = await this.buildSystemPrompt(worldModel);
     const messages = this.buildMessages(worldModel, trigger);
     const staticPrefix = this.getStaticPrefixDebug(system);
@@ -501,7 +555,27 @@ export class NpcPuppetMaster {
     if (!normalized.valid) return [];
 
     for (const plan of acceptedPlans) {
+      const npcContext = worldModel.npcs.find((n) => n.id === plan.npcId);
+      const planTrigger =
+        trigger?.type === 'batch'
+          ? [...(trigger.triggersByNpc[plan.npcId] || [])]
+              .reverse()
+              .find((candidate) => candidate.type === 'move_completed')
+          : trigger;
+
+      ShadowLogger.logWake(plan.npcId, planTrigger, staticPrefix.hash, npcContext, [plan]);
+    }
+
+    for (const plan of acceptedPlans) {
       const outcomes = this.executePlanAndTrackContinuation(plan);
+      const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
+      if (!hasScheduled) {
+        ShadowLogger.commit(
+          plan.npcId,
+          'plan_completed',
+          outcomes.some((o) => o.worldChanged)
+        );
+      }
       const planTrigger =
         trigger?.type === 'batch'
           ? [...(trigger.triggersByNpc[plan.npcId] || [])]
@@ -605,6 +679,7 @@ export class NpcPuppetMaster {
         npcId: plan.npcId,
         missingItems: uniqueMissing,
       });
+      ShadowLogger.discard(plan.npcId);
       const previousRetryCount = this.getMissingItemRetryCount(trigger, plan.npcId);
       const retryScheduled = !!scene && previousRetryCount < 1;
       rejectedPlans.push({ plan, missingItems: uniqueMissing, retryScheduled });
@@ -864,6 +939,7 @@ export class NpcPuppetMaster {
         completedSteps: completedSteps.length,
         remainingSteps: pending.steps.length,
       });
+      ShadowLogger.discard(npcId);
       const currentGeneration = this.haltGenerationId;
       const currentScene = scene;
       globalThis.setTimeout(() => {
@@ -904,6 +980,11 @@ export class NpcPuppetMaster {
         discardedStepTypes: pending.steps.map((step) => step.type),
         steps: finalResults.length,
       });
+      ShadowLogger.commit(
+        npcId,
+        'plan_completed',
+        finalResults.some((outcome) => outcome.worldChanged)
+      );
       if (pending.trackCompletion && destinationScene) {
         this.scheduleNpc(destinationScene, npcId, {
           type: 'plan_completed',
@@ -945,6 +1026,11 @@ export class NpcPuppetMaster {
       steps: finalResults.length,
       worldChanged: finalResults.some((outcome) => outcome.worldChanged),
     });
+    ShadowLogger.commit(
+      npcId,
+      'plan_completed',
+      finalResults.some((outcome) => outcome.worldChanged)
+    );
     const currentGeneration = this.haltGenerationId;
     const currentScene = scene;
     globalThis.setTimeout(() => {

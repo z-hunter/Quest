@@ -102,6 +102,36 @@ export default defineConfig({
           }
         });
 
+        server.middlewares.use('/api/append-file', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath, content } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+
+                const dir = path.dirname(targetPath);
+                if (!fs.existsSync(dir)) {
+                  fs.mkdirSync(dir, { recursive: true });
+                }
+
+                fs.appendFileSync(targetPath, content);
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true }));
+              } catch (err) {
+                console.error('[Vite] Append file error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
+
         // LIST FILES ENDPOINT
         server.middlewares.use('/api/list', (req, res, next) => {
           if (req.method === 'POST') {

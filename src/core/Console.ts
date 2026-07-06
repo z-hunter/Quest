@@ -182,6 +182,11 @@ export class Console {
         '*   #VALIDATE-SPATIAL — Runs topological checks on the current scene for cyclic or invalid references.',
         'info'
       );
+      this.log('*   #SLMLOG — Displays statistics about Shadow Mode data collection.', 'info');
+      this.log(
+        '*   #SLMLOG-ON/OFF — Toggles Shadow Mode logging (training data collection).',
+        'info'
+      );
 
       const hardcoded = new Set([
         '#HELP',
@@ -208,6 +213,9 @@ export class Console {
         '#С1-ON',
         '#С1-OFF',
         '#VALIDATE-SPATIAL',
+        '#SLMLOG',
+        '#SLMLOG-ON',
+        '#SLMLOG-OFF',
       ]);
 
       for (const cmd of this.commands.keys()) {
@@ -356,6 +364,27 @@ export class Console {
           issue.severity === 'error' ? 'error' : 'info'
         );
       }
+    });
+
+    this.registerCommand('#SLMLOG', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      const stats = await ShadowLogger.getStats();
+      this.log(`SLM Shadow Mode Log Statistics:`, 'info');
+      this.log(`* Status: ${stats.enabled ? 'ENABLED' : 'DISABLED'}`, 'info');
+      this.log(`* Records gathered this session: ${stats.sessionCount}`, 'info');
+      this.log(`* Total records in dataset: ${stats.totalCount}`, 'info');
+    });
+
+    this.registerCommand('#SLMLOG-ON', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      ShadowLogger.isLoggingEnabled = true;
+      this.log('SLM Shadow Mode logging ENABLED.', 'info');
+    });
+
+    this.registerCommand('#SLMLOG-OFF', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      ShadowLogger.isLoggingEnabled = false;
+      this.log('SLM Shadow Mode logging DISABLED. (Tests/Diagnostics mode)', 'info');
     });
   }
 
