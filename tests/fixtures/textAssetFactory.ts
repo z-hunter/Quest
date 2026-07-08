@@ -8,6 +8,7 @@ type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
   hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string;
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
     field: string,
@@ -32,12 +33,25 @@ const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
   'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
+  'engine.close_subscene_before_moving': 'Close the current view before moving.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
   'engine.cant_reach_generic': "You can't reach it.",
   'engine.blocked_inside_closed': "You can't reach that while it is inside something closed.",
   'engine.closed_container': 'The {target} is closed.',
   'engine.locked_needs': 'Locked. Needs {item}',
   'engine.locked_generic': 'Locked.',
+  'engine.observed_look': '[ {actor} is looking at {subject} ]',
+  'engine.observed_examine': '[ {actor} is examining {subject} ]',
+  'engine.observed_look_relation': '[ {actor} is looking {relation} {subject} ]',
+  'engine.observed_open': '[ {actor} opens {subject} ]',
+  'engine.observed_close': '[ {actor} closes {subject} ]',
+  'engine.observed_take': '[ {actor} takes {item} ]',
+  'engine.observed_put_relation': '[ {actor} puts {item} {relation} {target} ]',
+  'engine.observed_put_target': '[ {actor} puts {item} on {target} ]',
+  'engine.observed_drop': '[ {actor} puts down {item} ]',
+  'engine.observed_use': '[ {actor} uses {item} on {target} ]',
+  'engine.observed_command': '[ {actor} operates {subject} ]',
+  'engine.observed_traverse_exit': '[ {actor} goes through {subject} ]',
   'parser.look_default_scene': 'You are in {scene}.',
   'parser.look_default_object': 'You see nothing special about the {target}.',
   'parser.look_not_found': "You don't see any {target} here.",
@@ -239,7 +253,23 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
         type: 'requireEntityAvailable',
         entityId: 'tv_rc',
         scopes: ['held', 'reachable'],
+        saveAs: 'remote',
         missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'requireContainedGroupEntity',
+        containerRef: 'remote',
+        groupId: '#aaa',
+        saveAs: 'batteries',
+        missingMessageId: 'missing_batteries',
+      },
+      {
+        type: 'requireNumericState',
+        entityRef: 'batteries',
+        stateId: 'charge_percent',
+        operator: 'gt',
+        value: 0,
+        missingMessageId: 'dead_batteries',
       },
       {
         type: 'setEntityState',
@@ -252,7 +282,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
     ],
     messages: {
       missing_tv: "You don't see the TV here.",
-      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
+      missing_batteries: 'There are no batteries in the remote control.',
+      dead_batteries:
+        'The TV does not respond to the remote. It looks like the batteries are dead.',
       missing_power_state: 'The TV refuses to respond.',
       success: 'The TV clicks on.',
     },
@@ -361,6 +394,9 @@ export function createTestTextAssets(): TestTextAssets {
       return Array.isArray(value)
         ? value.filter((item): item is string => typeof item === 'string')
         : [];
+    },
+    getResolvedObjectListRevision(obj, field) {
+      return JSON.stringify(this.getResolvedObjectListField(obj, field));
     },
     getResolvedObjectStructuredListField(obj, field, normalize) {
       const asset = objectAssets.get(obj.name);

@@ -37,11 +37,13 @@ describe('Scene Transitions (Exit/Entry)', () => {
       { x: 0, y: 20 },
     ];
 
-    // 3. Add Actor to Scene A
+    // 3. Add Actor to Scene A (as player so exit triggers scene switch)
     const actor = new Actor(game, 50, 50);
     (actor as any).game = game;
     actor.name = 'hero';
+    actor.isPlayer = true;
     sceneA.entities.push(actor);
+    sceneA.player = actor;
 
     // 4. Move Actor into Exit trigger
     actor.x = 10;
@@ -127,7 +129,9 @@ describe('Scene Transitions (Exit/Entry)', () => {
 
     const actor = new Actor(game, 50, 50);
     (actor as any).game = game;
+    actor.isPlayer = true;
     sceneA.entities.push(actor);
+    sceneA.player = actor;
 
     // Collision
     actor.x = 10;
@@ -177,10 +181,12 @@ describe('Scene Transitions (Exit/Entry)', () => {
 
     const actor = new Actor(game, -40, 10);
     actor.name = 'hero';
+    actor.isPlayer = true;
     actor.parallax = 1.5;
     actor.colliderWidth = 4;
     actor.colliderHeight = 4;
     sceneA.addEntity(actor);
+    sceneA.player = actor;
 
     sceneA.update(16);
     expect(sceneManager.currentScene?.id).toBe(sceneA.id);

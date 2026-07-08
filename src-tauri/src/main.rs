@@ -3,6 +3,15 @@
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use tauri::Emitter;
+use notify::{Watcher, RecursiveMode, Event as NotifyEvent};
+
+#[derive(Serialize, Clone)]
+struct FileEventPayload {
+  #[serde(rename = "eventType")]
+  event_type: String,
+  path: String,
+}
 
 #[derive(Serialize)]
 struct FileListItem {
@@ -221,8 +230,56 @@ fn read_project_file_base64(app: tauri::AppHandle, path: String) -> Result<Strin
   Ok(STANDARD.encode(&bytes))
 }
 
+fn setup_file_watcher(app_handle: tauri::AppHandle) {
+  let root = match project_root(&app_handle) {
+    Ok(r) => r,
+    Err(e) => {
+      eprintln!("Failed to get project root for watcher: {}", e);
+      return;
+    }
+  };
+
+  std::thread::spawn(move || {
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<NotifyEvent>| {
+      match res {
+        Ok(event) => {
+          let event_type = match event.kind {
+            notify::EventKind::Create(_) => "add",
+            notify::EventKind::Modify(_) => "change",
+            notify::EventKind::Remove(_) => "unlink",
+            _ => return, // ignore others
+          };
+
+          for path in event.paths {
+            if let Ok(relative_path) = path.strip_prefix(&root) {
+              let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+              let payload = FileEventPayload {
+                event_type: event_type.to_string(),
+                path: relative_str,
+              };
+              let _ = app_handle.emit("file-event", payload);
+            }
+          }
+        }
+        Err(e) => eprintln!("watch error: {:?}", e),
+      }
+    }).unwrap();
+
+    watcher.watch(&root, RecursiveMode::Recursive).unwrap();
+    
+    // keep thread alive
+    loop {
+      std::thread::park();
+    }
+  });
+}
+
 fn main() {
   tauri::Builder::default()
+    .setup(|app| {
+      setup_file_watcher(app.handle().clone());
+      Ok(())
+    })
     .invoke_handler(tauri::generate_handler![
       list_project_files,
       ensure_project_file,

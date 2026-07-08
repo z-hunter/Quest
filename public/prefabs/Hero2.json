@@ -1,0 +1,71 @@
+{
+  "name": "Hero_1",
+  "type": "Actor",
+  "locked": false,
+  "disabled": false,
+  "groupID": null,
+  "customName": "",
+  "textRedirects": {},
+  "interactions": {},
+  "components": [
+    {
+      "type": "Actor"
+    },
+    {
+      "type": "Shadow",
+      "shadowQuadId": "shadow",
+      "offsetX": -70,
+      "offsetY": -25,
+      "triggerId": "#f"
+    },
+    {
+      "type": "Inventory",
+      "capacity": 10,
+      "groups": [],
+      "protected": true,
+      "items": [],
+      "relation": "in"
+    }
+  ],
+  "layer": 0,
+  "visible": true,
+  "hidden": false,
+  "parallax": 1.030164714125378,
+  "x": 975.2582703876601,
+  "y": 231.453659753082,
+  "width": 124.32,
+  "height": 298.2,
+  "baseWidth": 148,
+  "baseHeight": 355,
+  "colliderWidth": 88,
+  "colliderHeight": 4,
+  "spriteName": "miles2_ds-idle-left.json",
+  "color": "#00ffff",
+  "scale": 0.84,
+  "refScale": 0.84,
+  "modelScale": 0.84,
+  "ignoreScaling": true,
+  "animationSpeed": 53,
+  "opacity": 1,
+  "blendMode": "source-over",
+  "blur": 0,
+  "isPlayer": true,
+  "speed": 0.24,
+  "direction": "left",
+  "animSets": {
+    "idle": {
+      "id": "idle",
+      "up": "miles2_ds-idle-up.json",
+      "down": "miles2_ds-idle-down.json",
+      "left": "miles2_ds-idle-left.json",
+      "right": ""
+    },
+    "walk": {
+      "id": "walk",
+      "up": "miles2_ds-wlk-up.json",
+      "down": "miles2_ds-walk-down.json",
+      "left": "miles2_ds-walk-left.json",
+      "right": ""
+    }
+  }
+}

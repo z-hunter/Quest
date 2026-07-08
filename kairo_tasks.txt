@@ -1,0 +1,1273 @@
+﻿{
+  "success": true,
+  "data": [
+    {
+      "id": "aaaaaaabtximf5yw4nja65vutce44qtw",
+      "title": "Prepare Kotlin workshop #2",
+      "description": "I need to conduct a practical workshop on Kotlin for students. 2 groups. \n* 23HR: 13:20-14:50\n* 23LR: 17:00-18:30",
+      "tags": [
+        "ehu",
+        "owner:z-hunter"
+      ],
+      "priority": 1,
+      "status": "done",
+      "deadline": "2026-05-06T03:06:00Z",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000008"
+    },
+    {
+      "id": "aaaaaaabt4vf5sgfc4dqttk62a7i6grw",
+      "title": "[Quest] Prevent GO TO freeze in scenes with local teleports",
+      "description": "Owner: codex\nFinal live reproduction: Corridor Hero at E2/right region, `go to door` requiring Ex3 -\u003e E3. Exact route previously took 21.6s and blocked UI.\nFinal resolution: fast world context no longer runs A* per object in local-teleport scenes; teleport approach evaluates each Exit once and destination candidates from its Entry; nearby Exits are ordered first; the exact plan is cached per Actor/target and consumed by Actor.moveTo instead of recomputed; already-reachable Exit activates immediately and near-Entry destination completes directly.\nLive validation: GameSemanticAPI GO TO completed in ~946ms and placed Hero at the door approach; typed `go to door` completed and browser remained responsive. Focused parser/navigation/NPC tests 223/223, typecheck, and diff check passed.\nSource: user correction 2026-07-04",
+      "tags": [
+        "area:movement",
+        "area:navigation",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-04",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-03T23:44:42Z",
+      "updated_at": "2026-07-04T00:03:44Z",
+      "open_issue_id": "OI000065"
+    },
+    {
+      "id": "aaaaaaabt4vflug6kejectoczk7f5fp2",
+      "title": "[Quest] Route Actor pathfinding through same-scene Exit/Entry teleports",
+      "description": "Owner: codex\nOutcome: Actor pathfinding now evaluates valid same-scene Exit -\u003e Entry links as teleport alternatives, chooses them when cheaper/requisite, walks to and actor-activates the Exit, then resumes toward the original destination from the resolved walkable Entry placement. Cross-scene Exit remains explicit. NPC fast/full approach queries see the same route availability.\nFiles: src/entities/Actor.ts, src/systems/ActorNavigationService.ts, src/scene/SceneManager.ts, tests/entities/actor-movement.test.ts, GDD.md.\nValidation: focused Actor + scene-transition tests 11/11; typecheck; git diff --check. Full suite 539/540; sole failure is an unrelated pre-existing interaction-distance expectation in tests/game/navigation-and-spatial.test.ts:27, reproducible alone.\nSource: user 2026-07-04",
+      "tags": [
+        "area:movement",
+        "area:navigation",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-04",
+        "source:user",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-03T23:34:54Z",
+      "updated_at": "2026-07-03T23:40:15Z",
+      "open_issue_id": "OI000064"
+    },
+    {
+      "id": "aaaaaaabt4utydohgruwyjw6dizift7l",
+      "title": "separate descriptions for NPC",
+      "tags": [
+        "feature"
+      ],
+      "priority": 3,
+      "status": "todo",
+      "recurrence": "none",
+      "created_at": "2026-07-03T18:27:09Z",
+      "updated_at": "2026-07-03T18:27:40Z",
+      "open_issue_id": "OI000063"
+    },
+    {
+      "id": "aaaaaaabt4t3yyycoi4m3kml7zll4eaj",
+      "title": "Possibility to obtain results of LOOK/EXAMINE for inventory items",
+      "description": "╨Х╤Б╨╗╨╕ ╨┐╤А╨╡╨┤╨╝╨╡╤В ╨╜╨╡ ╨▓ ╨╕╨╜╨▓╨╡╨╜╤В╨░╤А╨╡, LOOK ╨╕ EXAMINE ╨▓╤Л╨┤╨░╤О╤В ╨┤╨╛╨┐. ╨╕╨╜╤Д╨╛ ╨╛ ╨╜╤С╨╝, ╨▓ ╤В.╤З. Parser Notes. ╨Ъ ╤Б╨╛╨╢╨░╨╗╨╡╨╜╨╕╤О, ╨╡╤Б╨╗╨╕ ╨┐╤А╨╡╨┤╨╝╨╡╤В ╨▓ ╨╕╨╜╨▓╨╡╨╜╤В╨░╤А╨╡ ╨╕╨│╤А╨╛╨║╨░, ╤В╨╛╤В ╨╗╨╕╤И╨░╨╡╤В╤Б╤П ╨▓╨╛╨╖╨╝╨╛╨╢╨╜╨╛╤Б╤В╨╕ ╨▓╨╕╨┤╨╡╤В╤М ╤Н╤В╤Г ╨╕╨╜╤Д╨╛╤А╨╝╨░╤Ж╨╕╤О.",
+      "tags": [
+        "feature"
+      ],
+      "priority": 3,
+      "status": "todo",
+      "recurrence": "none",
+      "created_at": "2026-07-03T11:28:05Z",
+      "updated_at": "2026-07-03T17:53:12Z",
+      "open_issue_id": "OI000060"
+    },
+    {
+      "id": "aaaaaaabt4t5zdcaqsho3zzm4uiahuse",
+      "title": "[Quest] Prevent false NPC route availability and unreachable MOVE_TO loops",
+      "description": "Owner: Codex\nCompleted navigation and follow-up perception fixes. Route-aware approach search, Quad vertices reference points, exact test_room door regression, and three-attempt MOVE_TO warnings are implemented. Cross-scene tv_rc floor-drop root cause was per-scene hidden reveal state: taken item retained hidden=lookable and became hidden again in Corridor. Successful Actor TAKE now clears entity.hidden permanently; focused actor-aware test covers it.\nValidation: semantic/navigation/PM focused tests 196/196; typecheck and diff check pass; full suite 537/538 with sole unrelated existing tests/integration/parser-game.test.ts:262 `result` ReferenceError.",
+      "tags": [
+        "area:navigation",
+        "area:npc",
+        "area:puppet-master",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-03",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-03T12:03:13Z",
+      "updated_at": "2026-07-03T13:08:57Z",
+      "open_issue_id": "OI000062"
+    },
+    {
+      "id": "aaaaaaabt4t5a3ax2kajp4lu3ulxg2i5",
+      "title": "[Quest] Auto-approach explicit NPC TAKE and preserve safe rejected-plan prefix",
+      "description": "Owner: Codex\nImplemented: explicit NPC TAKE now auto-inserts MOVE_TO for known route_available items before validation. Missing-item rejection preserves only the leading contiguous SAY/MEMORY_SET prefix on the first attempt, does not repeat it on corrective retry, and does not commit rejected plan-level memory. Updated PM prompt/fallback, GDD.md, and NPCsys.md.\nValidation: tests/npc/puppet-master.test.ts 74/74 passed; npm run typecheck passed; git diff --check passed. Full npm test: 534 passed, 1 unrelated failure in user-edited tests/integration/parser-game.test.ts:262 (`result` is undefined).",
+      "tags": [
+        "area:npc",
+        "area:puppet-master",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-03",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-03T11:49:58Z",
+      "updated_at": "2026-07-03T11:53:16Z",
+      "open_issue_id": "OI000061"
+    },
+    {
+      "id": "aaaaaaabt4sndfl3ioiarskh7rqb3k7p",
+      "title": "[Quest] Style debug console output",
+      "description": "Style debug console",
+      "priority": 0,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T21:52:22Z",
+      "updated_at": "2026-07-02T22:06:33Z",
+      "open_issue_id": "OI000059"
+    },
+    {
+      "id": "aaaaaaabt4sghyf7zx35u5wf54sdza2l",
+      "title": "[Quest] Make observed Actor actions passive scene-log events",
+      "description": "Owner: Codex\nCompleted actor-wide passive action observation. Actor owns perceptionRadius; SceneLog uses knownByActorIds with legacy migration; PM is not woken by observed actions; player receives localized bracketed console messages; PM trace and docs/tests updated.\nValidation: typecheck/build pass; focused 15 tests pass; full suite 525 passed with only the same 4 pre-existing PM failures. Browser client blocked by missing playwright package.",
+      "tags": [
+        "area:actor",
+        "area:npc",
+        "area:scene-log",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-02",
+        "source:user",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T19:52:33Z",
+      "updated_at": "2026-07-02T20:05:53Z",
+      "open_issue_id": "OI000058"
+    },
+    {
+      "id": "aaaaaaabt4sdfa6aoei6yi6uh7orthux",
+      "title": "[Quest] Fix Entity collider scaling",
+      "description": "Owner: codex",
+      "priority": 0,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T18:58:38Z",
+      "updated_at": "2026-07-02T19:05:45Z",
+      "open_issue_id": "OI000057"
+    },
+    {
+      "id": "aaaaaaabt4r6dyy3mmrci7l4fomw2aik",
+      "title": "[Quest] Fix live PM Exit prompt and unify auto-approach activation",
+      "description": "Follow-up 2026-07-02: live PM trace showed model never emitted TRAVERSE_EXIT because production uses public/text/system/npc-pm-system.md and dynamic CRITICAL RULES, while only fallback prompt had been updated. Updated both real prompt layers with TRAVERSE_EXIT and Exit metadata instructions. Unified player click activation for Portal Exit and Subscene through activateOrApproachPlayer: activate immediately when reachable, otherwise plan shared approach, move, activate after arrival, or show engine.too_far_generic on route failure. Player parser GO Exit uses the same too-far failure message. ActorNavigationService now retries failed coarse 16px approach sampling at 4px precision for narrow valid interaction positions such as test_room door. Typecheck and 246 relevant tests pass; same four pre-existing PM tests remain failing.",
+      "tags": [
+        "area:movement",
+        "area:npc",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-02",
+        "source:user",
+        "type:bug",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T17:30:34Z",
+      "updated_at": "2026-07-02T17:30:34Z",
+      "open_issue_id": "OI000056"
+    },
+    {
+      "id": "aaaaaaabt4rqn6k2jwabnox3uvp3msko",
+      "title": "[Quest] Implement actor-aware Exit traversal and shared GO TO navigation",
+      "description": "Implemented accepted Quest Exit/GO navigation contract on 2026-07-02. Player GameSemanticAPI.goToEntity now accepts SceneObject and routes through ActorNavigationService.moveActorToTarget, propagating unreachable outcomes instead of targeting raw object centers. Parser GO resolves Entity/Quad/Triggerbox and prefers visible Exit objects whose target scene id/title matches the command; QUIT closes focused views or resolves a unique/named visible Exit. Parser and PM contexts expose Exit targetSceneId/targetEntryId/targetSceneTitle/portal/collider. PM gained TRAVERSE_EXIT; reachable NPCs activate Exit actor-aware and transfer in background without switching currentScene. GDD and focused tests updated. Validation: typecheck passed; 512/516 full tests passed. The four failures are pre-existing PM failures reproduced before implementation (static prefix authored metadata x2, EXAMINE discoveredEntityIds, authored command projection). git diff --check passed.",
+      "tags": [
+        "area:movement",
+        "area:npc",
+        "area:parser",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-02",
+        "source:user",
+        "type:bug",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T13:31:27Z",
+      "updated_at": "2026-07-02T13:31:27Z",
+      "open_issue_id": "OI000055"
+    },
+    {
+      "id": "aaaaaaabt4rpybh46fupojj37pkevfmn",
+      "title": "[Quest] Investigate GO TO object movement regression",
+      "description": "Owner: codex\nContext: User reports GO TO CHAIR no longer moves the player and asks whether NPC MOVE_TO has the same problem.\n\nFindings:\n- Parser resolves CHAIR correctly through resolveGoToTarget.\n- GameSemanticAPI.goToEntity directly calls player.moveTo(entity.x, entity.y) and ignores ActorMoveResult.\n- test_room Chair is an Entity at (100.562, 249.753) with a 78x18 collider. Actor.moveTo plans to its exact center; Scene.isWalkable rejects collision with Chair, producing route_unreachable while API still reports player_moving.\n- NPC MOVE_TO targetId is a different path: ActorPlanExecutor calls ActorNavigationService.planApproach and moves to a nearby walkable interaction point.\n- Focused NPC physical-target test passes.\n- Existing goToEntity player test also passes but is insufficient: it asserts only that raw target coordinates were assigned and does not use a colliding destination or inspect ActorMoveResult.\n\nExpected follow-up:\n- Route player GO TO object through shared ActorNavigationService.moveActorToTarget/planApproach.\n- Return an honest failed/unreachable outcome when no approach exists.\n- Generalize target type from Entity to SceneObject if Exit Quad/Triggerbox support is required.\n- Add real-collider regression tests for player GO TO CHAIR and parity tests comparing player/NPC approach behavior.\nSource: user chat 2026-07-02",
+      "tags": [
+        "area:movement",
+        "area:npc",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-02",
+        "source:user",
+        "type:bug",
+        "type:research"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T13:19:29Z",
+      "updated_at": "2026-07-02T13:20:24Z",
+      "open_issue_id": "OI000054"
+    },
+    {
+      "id": "aaaaaaabt4rpbt3q7v5xvz42bdyqonmm",
+      "title": "[Quest] Investigate NPC perception and use of Exit entities",
+      "description": "Owner: codex\nContext: NPC Puppet Master does not include an Exit-bearing door in visibleItemIds/knownEntities, emits MOVE_TO door, and receives route_unreachable instead of traversing the Exit.\n\nFindings:\n- visibleItemIds/knownEntities intentionally contain only Items/Actors; the door is present in the general entities projection.\n- PM entity projection has no Exit affordance or target scene metadata.\n- ActorPlanExecutor supports MOVE_TO but has no Exit activation/traverse step; MOVE_TO only reaches interaction range and never calls Scene.activateObject.\n- test_room door is a Quad with portal=true, collider=false, so collision activation is disabled and MOVE_TO cannot activate it.\n- parser GO entity resolution filters to Entity and GameSemanticAPI.goToEntity only moves to coordinates; the Quad door cannot be resolved/activated. QUIT only closes views and otherwise escalates.\n- PM fast context can report route_available while full execution planApproach returns route_unreachable; this is because fast mode does not validate walkability/routes.\nValidation state: no edits made. Current user worktree typecheck fails at SceneInteraction Actor|null arguments. Focused suite: 121 passed, 7 failed (3 Exit transition, 4 existing PM expectations).\n\nExpected follow-up: implement explicit Exit affordance/context plus actor-aware Exit traversal semantics for PM and parser, with tests for Entity/Quad/Triggerbox, portal/collider combinations, NPC non-current-scene transfer, destination title, GO/QUIT, and test_room geometry.\nSource: user chat 2026-07-02",
+      "tags": [
+        "area:movement",
+        "area:npc",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-07-02",
+        "source:user",
+        "type:bug",
+        "type:research"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-07-02T13:07:14Z",
+      "updated_at": "2026-07-02T13:09:10Z",
+      "open_issue_id": "OI000053"
+    },
+    {
+      "id": "aaaaaaabt4k6yqjppufwh4ysw77so4st",
+      "title": "[Quest] Implement Video Export Tool (vetool)",
+      "description": "Owner: antigravity\\nContext: Build a batch frame export tool (vetool) for extracting animation frames from video files into spritesheets/atlases compatible with Scanline.\\nExpected outcome: A browser-based React application using a backend file server for sprite frame exports.",
+      "priority": 0,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-06-30T00:27:12Z",
+      "updated_at": "2026-06-30T00:38:33Z",
+      "open_issue_id": "OI000052"
+    },
+    {
+      "id": "aaaaaaabt4e2x53veiixzlxu2b33i4e5",
+      "title": "Redundant inspection tags in LLM prompt",
+      "description": "[\\\"look\\\",\\\"examine\\\",\\\"in\\\",\\\"on\\\",\\\"under\\\",\\\"behind\\\"],\\\"title\\\":\\\"TV\\\"},{\\\"description\\\":\\\"A rectangular Sony remote control.\\\",\\\"id\\\":\\\"tv_rc\\\",\\\"inspection\\\":[\\\"look\\\",\\\"examine\\\",\\\"in\\\",\\\"on\\\",\\\"under\\\",\\\"behind\\\"],\\\"item\\\":true,\\\"title\\\":\\\"TV remote\\\"},{\\\"id\\\":\\\"Walk_main\\\",\\\"inspection\\\":[\\\"look\\\",\\\"examine\\\",\\\"in\\\",\\\"on\\\",\\\"under\\\",\\\"behind\\\"],\\\"title\\\":\\\"floor\\\"},{\\\"description\\\":\\\"The walls here are covered with wood paneling. You like it.\\\",\\\"id\\\":\\\"wall\\\",\\\"inspection\\\":[\\\"look\\\",\\\"examine\\\",\\\"in\\\",\\\"on\\\",\\\"under\\\",\\\"behind\\\"],\\\"title\\\":\\\"the wall\\\"},{\\\"description\\\":\\\"The windows in this building are large, as was fashionable in the mid-century. They are rarely opened due to smog, noise, and the heavy steel frames that often jam.\\\",\\\"id\\\":\\\"window1\\\",\\\"inspection\\\":",
+      "tags": [
+        "bug"
+      ],
+      "priority": 3,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-06-27T15:21:32Z",
+      "updated_at": "2026-06-27T20:05:47Z",
+      "open_issue_id": "OI000051"
+    },
+    {
+      "id": "aaaaaaabt4eyuqstyl76yawpworset5d",
+      "title": "[Quest] Split Puppet Master static and dynamic prompt context",
+      "description": "Owner: codex\nOutcome: Split PM authored scene-static and runtime dynamic entity projections; deterministic compact serialization, projection version/hash/size/eligibility diagnostics, automatic authored invalidation, no unnecessary duplicated entity prose, and cache_control/usage coverage. Updated NPCsys.md.\nValidation: PM + Anthropic tests 110/110; typecheck passed; eslint passed; git diff --check passed. Live test_room prefix: 17,672 chars / ~4,418 estimated tokens, hash fnv1a32:e2ed5439, cache eligible; Anthropic cacheReadInputTokens 4,482 on reuse.\nSource: user chat 2026-06-27",
+      "tags": [
+        "area:llm",
+        "area:npc",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-06-27",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-06-27T14:44:43Z",
+      "updated_at": "2026-06-27T15:22:53Z",
+      "open_issue_id": "OI000050"
+    },
+    {
+      "id": "aaaaaaabtxit666h7474as3fskx4npg2",
+      "title": "design NPC AI System",
+      "description": "* Dialogue system - the lines begins with \"- \", NPC can \"hear it\"\n* NPC can react with answers\n* NPC can just do their business, controlled by AI",
+      "tags": [
+        "quest"
+      ],
+      "priority": 3,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-06-27T14:46:39Z",
+      "open_issue_id": "OI000009"
+    },
+    {
+      "id": "aaaaaaabtz3c2izdzakpr5kc7w3d4w2j",
+      "title": "LLM reveal \"hidden\" objects",
+      "priority": 3,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-29T23:58:50Z",
+      "updated_at": "2026-06-27T14:46:02Z",
+      "open_issue_id": "OI000048"
+    },
+    {
+      "id": "aaaaaaabt4c6gtmyfjlojwbxatyg2dl7",
+      "title": "[Quest] Unify NPC discovery, scene-aware knowledge, and TAKE visibility semantics",
+      "description": "Implemented and validated, including 2026-06-27 follow-up: runtime continuations bypass PM rate budgets; relation-scoped LOOK/EXAMINE report explicit contents/empty text; plan memory prompt forbids pending intentions; knownEntities and visibleItemIds are now passed to normal/strategy prompts and shown by #PEEKPM. Validation: 185 focused tests passed; npm run typecheck passed.",
+      "tags": [
+        "area:npc",
+        "area:runtime",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-06-26",
+        "source:user",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-06-26T21:43:30Z",
+      "updated_at": "2026-06-26T22:44:38Z",
+      "open_issue_id": "OI000049"
+    },
+    {
+      "id": "aaaaaaabty4by45ot5i6rge5qj2jrh6h",
+      "title": "[Quest] Fix Entry spawn blocking movement at walkbox edge",
+      "description": "Owner: codex\n\nContext: User reported entering `test_room` through an Entry and being unable to move despite visually standing on a Walkbox.\n\nRoot cause:\n- `test_room` Entry center is inside `Walk_main` as a point, but Hero collider width extends outside the walkbox at that position.\n- `Scene.isWalkable` validates the actor collider rectangle, not just the foot point, so movement route planning starts from a non-walkable placement.\n\nOutcome:\n- `SceneManager.applyEntryPlacement` now sets Entry layer/parallax, then verifies the target with `scene.isWalkable(x, y, actor)`.\n- If the Entry center is not walkable for the actor collider, it nudges to the nearest nearby walkable point in 4px rings.\n- Test fixture mirrors production behavior.\n- Added regression coverage for Entry placement at a walkbox edge.\n\nValidation:\n- `npm run typecheck` passed.\n- `npm test -- tests/game/navigation-and-spatial.test.ts -- --runInBand` passed.\n- `git diff --check -- src/scene/SceneManager.ts tests/fixtures/gameFactory.ts tests/game/navigation-and-spatial.test.ts src/components/editor/properties/SceneProperties.tsx` passed with only CRLF warnings.\n\nSource: chat 2026-05-18",
+      "tags": [
+        "area:movement",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-18",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-17T22:44:09Z",
+      "updated_at": "2026-05-17T22:44:09Z",
+      "open_issue_id": "OI000047"
+    },
+    {
+      "id": "aaaaaaabty3v2mgqhi5g46a267k4phxf",
+      "title": "[Quest] Fix player transfer camera default zoom reset",
+      "description": "Owner: codex\n\nContext: User clarified the real bug: opening Quad5 in the editor, setting Default Zoom to `0.35`, and saving still wrote `camera.zoom: 1` to the scene JSON.\n\nOutcome:\n- Kept the earlier transfer-side zoom reset regression fix.\n- Reverted the temporary startup-scene change; startup remains `test_room.json` because the user enters Quad5 via `GO quad5`.\n- Fixed the Scene Properties `Def Zoom` field to use a draft-aware numeric input, avoiding controlled-input reformatting while typing fractional values.\n- Changed Def Zoom step to `0.01`, so values like `0.35` are first-class editor input.\n- The committed value updates `scene.defaultCamera.zoom`, which `Scene.toJSON()` serializes as `camera.zoom`.\n\nValidation:\n- `npm run typecheck` passed.\n- `npm test -- tests/game/navigation-and-spatial.test.ts -- --runInBand` passed.\n- `git diff --check -- src/components/editor/properties/SceneProperties.tsx src/scene/SceneManager.ts tests/fixtures/gameFactory.ts tests/game/navigation-and-spatial.test.ts` passed with only CRLF warnings.\n- Dev server already listening at http://localhost:5173.\n\nSource: chat 2026-05-17",
+      "tags": [
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-17",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-17T19:15:14Z",
+      "updated_at": "2026-05-17T20:14:25Z",
+      "open_issue_id": "OI000046"
+    },
+    {
+      "id": "aaaaaaabtyzkkvd3tydxwksujrkb5zke",
+      "title": "[Codex] Audit workstation setup path portability",
+      "description": "Completed. Audited workstation setup repo for hardcoded local paths, made Proxima guidance use %USERPROFILE%, changed MCP template launchers to use cmd.exe env expansion for %USERPROFILE%/%LOCALAPPDATA%, added Proxima to the portable template, and validated with rg, TOML parse, git diff --check, codex-mcp-health. Commit: 96d72bc Improve MCP template portability.",
+      "tags": [
+        "area:infra",
+        "area:mcp",
+        "owner:codex",
+        "proj:codex-workstation",
+        "session:2026-05-16",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T21:15:56Z",
+      "updated_at": "2026-05-16T21:22:23Z",
+      "open_issue_id": "OI000045"
+    },
+    {
+      "id": "aaaaaaabtyzkku6jrw5d5jmgiueca5wh",
+      "title": "[Codex] Treat missing Figma token as optional in MCP health",
+      "description": "Owner: codex\n\nContext: `codex-mcp-health` warned when `FIGMA_OAUTH_TOKEN` was missing, but user clarified Figma is optional and not critical.\n\nOutcome:\n- Added `Test-OptionalEnvVar` to `tools/codex-mcp-health.ps1`.\n- Changed Figma token check from WARN to SKIP when `FIGMA_OAUTH_TOKEN` is absent.\n- Copied the updated script to active `C:\\Users\\Professional\\.codex\\tools\\codex-mcp-health.ps1`.\n\nValidation:\n- `codex-mcp-health` now reports `[SKIP] Figma token: optional env var is not set`.\n- Summary is now `22 pass, 0 warn, 0 fail, 3 skip`.\n- JSON mode returns `pass=22 warn=0 fail=0 skip=3`.",
+      "tags": [
+        "area:mcp",
+        "owner:codex",
+        "proj:codex-workstation",
+        "session:2026-05-16",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T21:15:56Z",
+      "updated_at": "2026-05-16T21:18:14Z",
+      "open_issue_id": "OI000044"
+    },
+    {
+      "id": "aaaaaaabtyzkkutcynuwxj7ui3fab4y4",
+      "title": "[Codex] Commit workstation setup hardening changes",
+      "description": "Owner: codex\n\nContext: Workstation setup repo had uncommitted changes from Proxima policy, `codex-mcp-health`, installer/README updates, and previous hardening. These needed to be reviewed and committed so the setup is reproducible.\n\nOutcome:\n- Reviewed staged changes in `C:\\Users\\Professional\\codex-workstation-setup`.\n- Committed Proxima guidance in AGENTS.md.\n- Committed `tools/codex-mcp-health.ps1` and `.cmd`.\n- Committed README verification update and `install.ps1` shim installation for `codex-doctor.cmd` / `codex-mcp-health.cmd` into Kairo programs dir when available.\n\nValidation:\n- `codex-mcp-health` passed: `22 pass, 1 warn, 0 fail, 2 skip` before the later optional-Figma adjustment.\n- `codex-doctor -Fast` passed: `17 pass, 0 warn, 0 fail`.\n- `git diff --cached --check` passed.\n- Git worktree clean after commit.\n\nCommit: `44d6943 Add MCP health check and Proxima guidance`.",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:codex-workstation",
+        "session:2026-05-16",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T21:15:55Z",
+      "updated_at": "2026-05-16T21:17:04Z",
+      "open_issue_id": "OI000043"
+    },
+    {
+      "id": "aaaaaaabtyzjse6fuvc6ttdrrnbjid4b",
+      "title": "[Codex] Diagnose `codex mcp list` vs runtime MCP split-brain",
+      "description": "Owner: codex\n\nContext: During workstation hardening, `codex mcp list` initially reported no configured MCP servers while Codex runtime logs showed active MCP loading and tools like agent_memory/proxima worked from the session. This created diagnostic confusion.\n\nOutcome:\n- Re-ran `codex mcp list` after Codex restart/config reload; it now reports all configured servers from `C:\\Users\\Professional\\.codex\\config.toml`.\n- Current CLI version: `codex-cli 0.130.0`.\n- Current `codex mcp list` includes 9 servers: local stdio (`fibery`, `kairo`, `local_rag`, `notebooklm`, `playwright`, `proxima`) and remote HTTP (`agent_memory`, `figma`, `github`).\n- Runtime logs previously showed `enabled_mcp_server_count=10` during the transient period after Proxima/codex_apps changes; current config inventory has 9 `[mcp_servers.*]` entries. The earlier zero-server output no longer reproduces.\n- Added a guardrail to `codex-mcp-health`: it now runs `codex mcp list` and compares CLI output against parsed `[mcp_servers.*]` config inventory. If CLI ever reports `No MCP servers configured` or misses configured servers, the health check emits WARN with details.\n\nLikely root cause:\n- Transient stale process/config reload state around the Codex restart or app-server/session lifecycle, not a persistent config path/schema issue. The CLI and runtime now agree.\n\nValidation:\n- `codex mcp list` currently lists all 9 configured servers.\n- `codex-mcp-health` now reports `codex mcp list: matches configured server inventory` and summary `22 pass, 1 warn, 0 fail, 2 skip`.\n- `codex-mcp-health -Json` returned summary `pass=22 warn=1 fail=0 skip=2`.\n- `git diff --check` passed with only CRLF normalization warnings.",
+      "tags": [
+        "area:mcp",
+        "owner:codex",
+        "proj:codex-workstation",
+        "session:2026-05-16",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T21:02:33Z",
+      "updated_at": "2026-05-16T21:12:39Z",
+      "open_issue_id": "OI000041"
+    },
+    {
+      "id": "aaaaaaabtyzjsfclmmgjt75dffdwd7wu",
+      "title": "[Codex] Add MCP health check script to workstation setup",
+      "description": "Owner: codex\n\nContext: Gemini audit recommended a single health panel for the local MCP ecosystem. Current `codex-doctor` verifies many files and services but live MCP/tool readiness was scattered across manual checks and Codex-session-only behavior.\n\nOutcome:\n- Added `tools/codex-mcp-health.ps1` and `tools/codex-mcp-health.cmd` to `C:\\Users\\Professional\\codex-workstation-setup`.\n- Copied the active tool to `C:\\Users\\Professional\\.codex\\tools\\codex-mcp-health.ps1/.cmd`.\n- Added an immediate PATH shim at `C:\\Users\\Professional\\AppData\\Local\\Programs\\kairo\\codex-mcp-health.cmd` because this workstation currently has the Kairo programs dir on PATH, not `.codex\\tools`.\n- Updated `install.ps1` to copy both `codex-doctor.cmd` and `codex-mcp-health.cmd` into the Kairo programs dir when available.\n- Updated README verification command list to include `codex-mcp-health`.\n\nChecks covered:\n- Codex config presence and TOML parse.\n- MCP server inventory from `[mcp_servers.*]` sections.\n- Node/npm/npx/Kairo CLI presence.\n- agent_memory env var presence without printing secrets.\n- local_rag launcher, agent-memory MCP binary, local RAG data.\n- NotebookLM wrapper presence; auth smoke intentionally skipped with guidance.\n- Kairo DB/sync repo.\n- Figma/GitHub env var presence.\n- Fibery launcher.\n- Playwright npx availability.\n- Proxima entrypoint, Proxima MCP JSON-RPC tools/list smoke, Agent Hub port 19222, Proxima settings.\n\nValidation:\n- `codex-mcp-health` passed with `Summary: 21 pass, 1 warn, 0 fail, 2 skip`; only warning was missing `FIGMA_OAUTH_TOKEN`.\n- `codex-mcp-health -Json` returned summary `pass=21 warn=1 fail=0 skip=2`.\n- `codex-doctor -Fast` passed with `17 pass, 0 warn, 0 fail`.\n- `git diff --check` passed with only CRLF normalization warnings.",
+      "tags": [
+        "area:infra",
+        "area:mcp",
+        "owner:codex",
+        "proj:codex-workstation",
+        "session:2026-05-16",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T21:02:33Z",
+      "updated_at": "2026-05-16T21:09:41Z",
+      "open_issue_id": "OI000042"
+    },
+    {
+      "id": "aaaaaaabtyy6di36ztoedvbqufyxod6w",
+      "title": "[Quest] Add Entry depth and refScale correction for Actor scene transfers",
+      "description": "Owner: codex\n\nContext: User requested transfer polish after centralized Actor scene transfer: player scene travel should use target default camera zoom; Actor entering through Entry should inherit Entry parallax/layer; Scene Properties Scaling should split into Depth Scaling and Correction with Correctional Scale; Entity should gain Ref. Scale serialized through scenes/prefabs; transferred objects should apply refScale * correctionalScale.\n\nOutcome:\n- SceneManager.transferActorToScene now applies target default camera zoom for player cross-scene transfers, Entry layer/parallax for entering Actor, and correctional scale to transferred live Entities.\n- Entity has refScale serialization and legacy fallback from modelScale/scale; modelScale is used as scene-adjusted basis.\n- Scene scaling includes correctionalScale with default 1 and merged load defaults.\n- Editor SceneProperties has Depth Scaling and Correction subsections plus Correctional Scale tooltip; EntityProperties exposes Ref. Scale and recalculates scene correction on edit.\n- Tests added/updated for refScale serialization/correction and GO transfer Entry layer/parallax/camera zoom/scale.\n- GDD and SpatialSys updated.\n\nValidation: npm run typecheck passed; focused entity/navigation/scene/parser/semantic tests passed; full npm test passed (29 files / 354 tests); git diff --check passed with only CRLF warnings.",
+      "tags": [
+        "area:editor",
+        "area:entity",
+        "area:scene",
+        "area:spatial",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-16",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T17:42:11Z",
+      "updated_at": "2026-05-16T17:42:11Z",
+      "open_issue_id": "OI000040"
+    },
+    {
+      "id": "aaaaaaabtyyvjs4tmq65wye7jjzr2bgi",
+      "title": "[Quest] Implement centralized Actor scene transfer API",
+      "description": "Owner: codex\n\nContext: User requested a central SceneManager transfer path for moving an Actor between scenes together with inventory-owned/spatial-owned live Entity descendants, replacing raw oldScene.removeEntity(actor) / targetScene.addEntity(actor) behavior in Exit/Entry, teleport-style flows, and script API.\n\nOutcome:\n- Added SceneManager.transferActorToScene(actor, targetSceneId, options?) with transfer closure collection for actor, actor inventory contents, spatial descendants, and nested carried descendants.\n- SceneManager.switchTo delegates activator movement through the transfer API.\n- ComponentSystem.handleExit calls the centralized transfer path with targetEntryId instead of manually staging pendingEntryId.\n- Added ScriptAPI.transferActor(actorName, targetSceneId, targetEntryId?).\n- Updated gameFactory test fixture to mirror centralized transfer semantics.\n- Added navigation/spatial regressions for player inventory transfer, nested carried descendants, target player replacement, same-scene Entry teleport, Exit activation, and NPC inventory transfer without becoming scene.player.\n- Documented the contract in SpatialSys.md and GDD.md.\n\nValidation: npm run typecheck passed; focused navigation/spatial tests passed; scene transition tests passed; combined navigation/spatial + semantic API + parser-game integration tests passed; full npm test passed (28 files / 351 tests); git diff --check passed with only CRLF warnings.",
+      "tags": [
+        "area:inventory",
+        "area:scene",
+        "area:scripting",
+        "area:spatial",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-16",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T15:08:21Z",
+      "updated_at": "2026-05-16T15:08:21Z",
+      "open_issue_id": "OI000039"
+    },
+    {
+      "id": "aaaaaaabtyym5bpzajelatddw4dznnvf",
+      "title": "[Quest] Remove legacy TAKE inventory scene-removal assumptions",
+      "description": "Owner: codex\n\nContext: User asked to verify that old TAKE behavior (inventory copy plus hidden original / removed scene original) is no longer implemented. Runtime already moved the same entity, but GameSemanticAPI still manually pushed into game.inventory and parser fixtures still removed entities from the scene.\n\nOutcome: GameSemanticAPI.takeEntity now routes the move through InventoryManager.addInventoryEntity(player, entity, 'in'), preserving the existing scene entity as hidden inventory-owned scene object. Parser fixture TAKE now mirrors scene-preserving inventory storage instead of scene.removeEntity + inventory.push. Updated parser resolution expectation and added integration regression that TAKE keeps the entity in scene with spatial parent Hero/in.\n\nValidation: codex-doctor -Fast passed; npm run typecheck passed; focused semantic/parser tests passed; full npm test passed (28 files / 345 tests).",
+      "tags": [
+        "area:inventory",
+        "area:parser",
+        "area:spatial",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-16",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-16T12:41:41Z",
+      "updated_at": "2026-05-16T12:41:41Z",
+      "open_issue_id": "OI000038"
+    },
+    {
+      "id": "aaaaaaabtyvsxewe6iirhvo65slyicux",
+      "title": "[Quest] Fix LOOK/EXAMINE first-level spatial reveal contract",
+      "description": "Owner: codex\n\nContext: LOOK/EXAMINE was recursively describing/revealing nested contents, so LOOK SOFA could reveal tv_rc hidden under a pillow. Expected behavior is to describe/reveal only first-level titled semantic children; LOOK RIGHT PILLOW can reveal the remote.\n\nOutcome: implemented direct semantic descendant helpers and switched LOOK/EXAMINE description/reveal paths to them while preserving recursive TAKE FROM behavior. Added/updated tests for sofa/pillow/remote and nested cabinet semantics.\n\nValidation: focused parser-game test passed, navigation/spatial + semantic-api + parser-game tests passed, typecheck passed, full npm test passed, codex-doctor -Fast passed.",
+      "tags": [
+        "area:parser",
+        "area:spatial",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-15",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-15T10:25:36Z",
+      "updated_at": "2026-05-15T10:25:36Z",
+      "open_issue_id": "OI000037"
+    },
+    {
+      "id": "aaaaaaabtyvonhthsrldi3t6ftbzwxbm",
+      "title": "[Quest] Diagnose inventory objects losing scene ownership in test_room",
+      "description": "Owner: codex\n\nUser report: `test_room` had inventory/object data confusion. Compact cassette (`id: test`) appeared held by spatial data but PUT reported too far; editor selection highlighted old coordinates. Inventory also had a phantom invisible object.\n\nCorrected root cause/model:\n- Being spatially `in` something is not the same as being stored in an Inventory. `spatial.parentNodeId + relation: in` is just scene/spatial relationship.\n- Inventory storage is canonical only when the entity is listed in an Inventory component/items store.\n- The malformed data was `Hero_1` Inventory.items drifting to `test_` while the intended held item is `test`; `test_` was a phantom duplicate.\n- Editor delete could worsen this class of bugs because `Scene.removeEntity()` did not clear inventory/surface storage references before removing an Entity.\n\nFinal changes:\n- Repaired `public/scenes/test_room.json`: Hero inventory references `test`; phantom `test_` removed.\n- `Scene.removeEntity()` now clears inventory/surface storage before removing an entity, so deleting held items does not leave storage phantoms.\n- Added semantic-api regression for deleting a held scene entity and cleaning Inventory.items.\n\nImportant correction: a temporary broad fallback that inferred inventory from `spatial: in` was removed because it hid normal scene children like `CityView` inside `window1`.\n\nValidation:\n- `npm test -- tests/game/semantic-api.test.ts -- --runInBand` passed (83 tests).\n- `npm run typecheck` passed.\n- `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts -- --runInBand` passed (177 tests).\n- `git diff --check -- src/systems/InventoryManager.ts src/scene/Scene.ts tests/game/semantic-api.test.ts public/scenes/test_room.json` passed with only CRLF warnings.\n\nNote: unrelated pre-existing parser prompt/test files and kitchen assets were not part of this fix.",
+      "tags": [
+        "area:scene",
+        "area:systems",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-15",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-15T09:10:17Z",
+      "updated_at": "2026-05-15T09:20:03Z",
+      "open_issue_id": "OI000036"
+    },
+    {
+      "id": "aaaaaaabtyqlbvhtbp7mb2gvifzjhtan",
+      "title": "[Quest] Fix LLM Parser Notes regression for listen radio",
+      "description": "Owner: codex\n\nBug report: During testing, LLM appeared to stop using Parser Notes. Repro log for `listen radio` showed Anthropic/Haiku returned a markdown-fenced JSON plan with `showText` plus `setEntityParserNote` for boombox.\n\nInvestigation result:\n- Current `LlmCascade` already extracts fenced JSON and accepts `showText + setEntityParserNote` PN plans.\n- Parser integration already executes the PN write and includes the note in the next LLM dynamic context.\n- The provided `#PEEKLLM`-style log was incomplete for diagnosis because it only showed `rawResponse` and token/provider metadata, not `extractedJson`, `acceptedActions`, `filteredActions`, or actual Parser Note mutations.\n\nChanges:\n- Added regression test for fenced provider PN plan acceptance in `tests/parser/llm-cascade.test.ts`.\n- Added integration regression proving fenced provider PN plans are executed, stored, and exposed on the next LLM prompt in `tests/parser/llm-parser.test.ts`.\n- Expanded `#PEEKLLM` response debug in `src/mechanics/Parser.ts` with `extractedJson`, `acceptedActions`, `filteredActions`, and `parserNoteMutations`.\n\nValidation:\n- `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts -- --runInBand` passed: 47 tests.\n- `npm run typecheck` passed.\n- `npm test -- tests/parser tests/integration/parser-game.test.ts -- --runInBand` passed: 178 tests.\n- Full `npm test` passed: 28 files, 336 tests.\n- `codex-doctor -Fast` passed: 17/17.",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-13",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-13T09:35:20Z",
+      "updated_at": "2026-05-13T09:44:23Z",
+      "open_issue_id": "OI000035"
+    },
+    {
+      "id": "aaaaaaabtypb3sxji7rpyjhmzi56ge4l",
+      "title": "[Quest] Fix live default reverb IR switching",
+      "description": "Owner: codex\n\nBug: UI Default Reverb IR changes in SceneProperties should immediately update all active spatial sounds using scene default reverb. Clearing the field should make them dry without stopping playback.\n\nRoot cause/follow-ups:\n- `setEnvironment()` updated default listeners by calling `setEffects(..., { reverbIR }, true)`, so `setEffects()` treated the scene default as a custom IR and set `usingDefaultIR = false`.\n- Critical routing bug: helper `disconnect(active.gain, active.reverbNode)` was called while `active.reverbNode` could be undefined. The helper then called `gain.disconnect()` with no destination, disconnecting all gain outputs, including the dry path.\n- Clearing the scene IR only set wet gain toward 0, leaving stale reverb branch for proximity mixing.\n- SceneProperties picker could save `/room_drum_medium.wav` instead of `/sounds/ir/room_drum_medium.wav`.\n- Sounds started before any default IR had `baseReverbAmount = 0`, so late IR attachment had no wet level.\n- Dry/wet formula is aligned with SoundSys.md: exponent 1.5, `Reverb Min %` is wet at zero total distance, `Reverb Drown Dist` reaches full wet/dry=0.\n- `ConvolverNode.normalize` default could strongly normalize/boost IR output, masking dry.\n- Raw convolution output can still exceed source level and clip, so wet mix ratio must not be used as absolute wet output gain.\n- Stale async IR loads could reconnect reverb after the UI field had already been cleared.\n- New IR attach could briefly expose wet gain at a stale/default value before proximity update reached the target, causing a short loud pop/surge.\n- Reverb proportion increased correctly with distance, but reflected sound absolute level did not fall enough with distance.\n- Dry-only sounds after clearing/no default reverb were forced back to dryGain=1 every proximity update, so distance attenuation was too weak/absent beyond panner behavior.\n\nFix:\n- Scene default IR changes call `setEffects(playbackId, {}, true)`, preserving `usingDefaultIR`.\n- SoundManager tracks active `reverbIR`, safely disconnects/rebuilds ConvolverNode edges, and removes wet branch on empty IR/load failure while restoring dry gain to 1.\n- Gain node is only disconnected from a reverb node when that reverb node actually exists, preserving the dry path.\n- Added `reverbRequestId` guard to ignore stale IR loads after a newer IR change/clear.\n- Late scene-default IR attachment sets `baseReverbAmount = 1.0` for default-listening sounds with no explicit amount.\n- `setProximityEQ()` uses SoundSys.md crossfade: `wetMix = reverbMinPercent + pow(norm, 1.5) * (1 - reverbMinPercent)`, `wetMixAmount = baseWet * wetMix`, `dry = 1 - wetMixAmount`.\n- `REVERB_WET_OUTPUT_GAIN = 0.025`; wet output gain is `wetMixAmount * REVERB_WET_OUTPUT_GAIN`.\n- `REVERB_DISTANCE_MIN_LEVEL = 0.3`; wet output is additionally multiplied by `0.3 + (1 - norm) * 0.7`, so reflected sound remains reverb-only at drown distance but its absolute level falls with distance.\n- `DRY_ONLY_DISTANCE_MIN_LEVEL = 0.3`; when no reverb branch exists, dry-only attached sounds attenuate from 1.0 near the listener to 0.3 at/after `Reverb Drown Dist` instead of staying at dryGain=1.\n- New/reconnected wet gain is muted to 0 before connecting and then raised with `REVERB_WET_FADE_IN_SECONDS = 0.12`.\n- `reverbMinPercent` is clamped to [0, 1].\n- New ConvolverNodes set `normalize = false` before assigning `buffer`.\n- SoundManager normalizes IR values and SceneProperties prefixes basename selections with `sounds/ir/`.\n- Tests assert dry path remains connected across first IR attach, IR swap, and clearing default IR, plus stale async clear, SoundSys mix contracts, wet trim, reverb distance wet attenuation, and dry-only distance attenuation.\n\nValidation:\n- `npm test -- tests/systems/sound-manager.test.ts -- --runInBand` passed: 8 tests.\n- `npm run typecheck` passed.\n- Full `npm test` passed: 28 files, 331 tests.\n- `git diff --check -- src/systems/SoundManager.ts src/components/editor/properties/SceneProperties.tsx tests/systems/sound-manager.test.ts` passed.\n\nNote: unrelated pre-existing dirty files/assets remained untouched.",
+      "tags": [
+        "area:systems",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-13",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-12T21:35:29Z",
+      "updated_at": "2026-05-12T22:47:08Z",
+      "open_issue_id": "OI000034"
+    },
+    {
+      "id": "aaaaaaabtyo7w3uwnw6fsfym4rtf7yyl",
+      "title": "[Quest] Fix LLM plan open-then-take hidden switch item",
+      "description": "Owner: codex\n\nBug: In `test_room`, LLM plan for `open drawer and take id` executes `openTarget upper drawer` then `takeTarget ID card`, but second action failed with `You don't see any ID card here` even though opening the drawer makes the ID visible/takeable.\n\nRoot cause: Parser Core executes actions sequentially, but `resolveTakeTarget()` used `this.activeScope`, which was built once before the whole plan. After `openTarget` changed switch state, the second action still resolved against stale `takable: []` / visible scope. The hidden-switch fallback did not rescue it because the live scene now had the switch open, so the item was no longer `hiddenReason: switch`.\n\nFix:\n- After each successful plan action with `effects`, Parser refreshes `activeWorldModel` and `activeScope` from the current scene before executing the next action.\n- Added focused integration regression that executes an llm-v3-style plan: `openTarget upper drawer` then `takeTarget ID card`; it now returns `switch_opened` then `item_taken`.\n\nCommit: `0abbdb6` (`Fix parser take clarification and plan scope refresh`).\n\nValidation:\n- `npm test -- tests/integration/parser-game.test.ts -- --runInBand` passed (72 tests).\n- `npm test -- tests/parser/resolution.test.ts tests/parser/llm-parser.test.ts -- --runInBand` passed (29 tests).\n- Combined pre-commit check: `npm test -- tests/integration/parser-game.test.ts tests/parser/resolution.test.ts tests/parser/llm-parser.test.ts -- --runInBand` passed (101 tests).\n- `npm run typecheck` passed before commit.\n- `git diff --cached --check` passed.\n- Commit hook ran prettier/eslint on staged files.\n\nNote: unrelated unstaged user changes remained untouched.",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "area:systems",
+        "commit:0abbdb6",
+        "owner:codex",
+        "proj:quest",
+        "project:quest",
+        "session:2026-05-12",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-12T20:57:57Z",
+      "updated_at": "2026-05-12T21:09:25Z",
+      "open_issue_id": "OI000033"
+    },
+    {
+      "id": "aaaaaaabtyo67zjthgdk2x5urul5lviq",
+      "title": "[Quest] Fix TAKE FROM numbered container clarification loop",
+      "description": "Owner: codex\n\nBug: `take id card from the drawer` asks `Which container do you mean: 1: upper drawer, 2: middle drawer?`; replying `1` repeated the same clarification indefinitely instead of resolving the selected container.\n\nRoot cause: pending clarification resolution patched every `takeTarget` selection into `action.target`. For `TAKE \u003citem\u003e FROM \u003ccontainer\u003e`, a container clarification has `scope: target` but the selected option must replace `action.anchor`, not the item target. The old behavior effectively turned the pending action into `take \u003cselected drawer\u003e from drawer`, leaving the original ambiguous anchor text in place and re-triggering the same prompt.\n\nFix:\n- `Parser.patchPendingActionWithSelections()` now patches `takeTarget.anchor` when the pending take action has `anchor + relation` and the clarification scope is `target`.\n- Item/source clarifications for TAKE still patch `target`.\n- Added integration regression: `take id card from drawer` prompts for drawer clarification; reply `1` takes the ID card and clears pending state.\n\nCommit: `0abbdb6` (`Fix parser take clarification and plan scope refresh`).\n\nValidation:\n- `npm test -- tests/integration/parser-game.test.ts -- --runInBand` passed (71 tests pre-plan-fix, 72 after combined changes).\n- `npm test -- tests/parser/resolution.test.ts -- --runInBand` passed (11 tests).\n- Combined pre-commit check: `npm test -- tests/integration/parser-game.test.ts tests/parser/resolution.test.ts tests/parser/llm-parser.test.ts -- --runInBand` passed (101 tests).\n- `npm run typecheck` passed before commit.\n- `git diff --cached --check` passed.\n- Commit hook ran prettier/eslint on staged files.\n\nNote: unrelated unstaged user changes remained untouched.",
+      "tags": [
+        "area:parser",
+        "commit:0abbdb6",
+        "owner:codex",
+        "proj:quest",
+        "project:quest",
+        "session:2026-05-12",
+        "source:user",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-12T20:45:21Z",
+      "updated_at": "2026-05-12T21:09:25Z",
+      "open_issue_id": "OI000032"
+    },
+    {
+      "id": "aaaaaaabtymwedkdcf7edlsu2jpgynqg",
+      "title": "PUT .. IN ...  ╨▓ subscene ╤Г╤З╨╕╤В╤Л╨▓╨░╨╡╤В ╤А╨░╤Б╤Б╤В╨╛╤П╨╜╨╕╨╡ ╤Ж╨╡╨╗╨╡╨▓╨╛╨│╨╛ ╨║╨╛╨╜╤В╨╡╨╣╨╜╨╡╤А╨░ ╨┤╨╛ ╨╕╨│╤А╨╛╨║╨░",
+      "description": "Owner: codex\n\nBug: If a subscene is open, simple PUT/TAKE ignore player distance as intended, but explicit `PUT \u003citem\u003e IN/ON \u003ctarget\u003e` could still fail with `engine.too_far_from_entity` for a target container/surface inside the subscene. User repro: `PUT CASSETE IN UPPER DRAWER` in `test_room`, especially after trying the closed drawer.\n\nRoot cause: `GameSemanticAPI.putEntity()` performs an explicit target-distance check after resolving compatible storage. That check used `getPutDistanceFailure(target, target)` and did not account for active subscene membership, unlike TAKE and InventoryManager accessibility helpers.\n\nFix:\n- `GameSemanticAPI.getPutDistanceFailure()` now returns no distance failure if the probe/target or resolved storage object is inside the active subscene via `InventoryManager.isObjectInsideActiveSubscene()`.\n- Added semantic API regression for direct `putEntity` onto a far subscene target.\n- Added parser integration regression for `put key on tray` where tray is far away but inside active subscene.\n\nCommit: `d4b6647` (`Fix PUT target distance in subscenes`).\n\nValidation:\n- `npm test -- tests/game/semantic-api.test.ts -- --runInBand` passed (82 tests).\n- `npm test -- tests/integration/parser-game.test.ts -- --runInBand` passed (70 tests).\n- Combined pre-commit check: `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts -- --runInBand` passed (152 tests).\n- `npm run typecheck` passed before commit.\n- `git diff --cached --check` passed.\n- Commit hook ran prettier/eslint on staged files.\n\nNote: unrelated unstaged user changes remained untouched, including `src/systems/SoundManager.ts` and `src/core/ScriptAPI.ts`. Full `git diff --check` still has pre-existing trailing whitespace in dirty `SoundManager.ts`, unrelated to this fix.",
+      "tags": [
+        "area:parser",
+        "area:scene",
+        "area:systems",
+        "commit:d4b6647",
+        "owner:codex",
+        "proj:quest",
+        "project:quest",
+        "session:2026-05-12",
+        "typ:bug",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-12T20:40:26Z",
+      "open_issue_id": "OI000031"
+    },
+    {
+      "id": "aaaaaaabtyje756jexrbcvp2ao6elp44",
+      "title": "[Quest] Implement LLM static prompt split and Anthropic cache debug",
+      "description": "Owner: codex\nContext: User accepted plan to split Stage 2 LLM prompt into provider-agnostic scene-static and per-call dynamic parts, with Anthropic explicit prompt caching and #PEEKLLM cache eligibility/usage logging.\nOutcome:\n- Added provider-agnostic structured prompt content blocks and cache metadata to `ILlmProvider`.\n- `LlmCascade` now builds scene-static cached system blocks and per-call dynamic user context, with static prompt hash/token estimate/cache eligibility debug.\n- `SceneManager.switchTo` triggers fire-and-forget static prompt preparation through `Parser.prepareLlmStaticPromptForCurrentScene()`; Anthropic cache is still filled lazily on first real request.\n- `AnthropicProvider` maps cache metadata to Anthropic `cache_control` and parses cache creation/read token usage from SSE.\n- `#PEEKLLM` response debug includes input/cache usage fields and static prompt cache eligibility, including below-minimum logs.\n- Docs updated in `Parser.md` and `GDD.md`.\nCommit: `f38dcbe` (`Add LLM prompt cache split`).\nValidation: `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts tests/parser/world-model-context.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (27 files, 319 tests); `git diff --check`; `codex-doctor -Fast` passed 17/17; commit hook prettier/eslint passed.\nSource: chat 2026-05-10",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-10",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000030"
+    },
+    {
+      "id": "aaaaaaabtyix7ikxm2yqgvwcnjzhesct",
+      "title": "[Quest] Make codex-doctor launch NotebookLM auth repair in parallel",
+      "description": "Owner: codex\nContext: User requested codex-doctor to not only check whether NotebookLM authorization is fresh, but also start a parallel recovery process when it is expired.\nOutcome:\n- Updated installed `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.ps1` so non-fast NotebookLM readiness first runs a real check without repair.\n- If readiness fails and auto-repair is enabled, codex-doctor starts a hidden parallel PowerShell repair process running `notebooklm-ready.ps1 -AutoLogin`, reports PID and log path, and continues remaining checks.\n- Fixed NotebookLM CLI `ready.ps1` auto-login on Windows PowerShell by using `ProcessStartInfo.Arguments` instead of nullable `.ArgumentList` and avoiding stdout/stderr redirection while sending auto-Enter.\n- Updated local AGENTS/runbook text and synced portable files into `z-hunter/codex-workstation-setup`.\nCommit: `86fef94` (`Start NotebookLM auth repair in parallel`), pushed to origin.\nValidation: PowerShell parse checks; expired-auth `codex-doctor -Json` produced WARN with background repair PID/log and continued through typecheck + tests; `notebooklm-ready.ps1 -AutoLogin -LoginWaitSeconds 3` restored auth and smoke ask passed; final `codex-doctor -Json` passed 19/19 including typecheck and 310 tests; repo copy `codex-doctor.ps1 -Fast -Json` passed 17/17; `git diff --check`; final `codex-doctor -Fast` passed 17/17.\nSource: chat 2026-05-10",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-10",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000029"
+    },
+    {
+      "id": "aaaaaaabtyhquhekivqn3ab2vumddxof",
+      "title": "[Quest] Add scene-local parser mini-history to LLM context",
+      "description": "Owner: codex\nContext: User wants LLM parser scene context to include mini-history of user commands and parser responses for the current scene only.\nOutcome:\n- Added runtime-only per-scene parser recent turns on `Scene`.\n- Parser records player-facing command/response turns after response construction, excluding debug commands beginning with `#` and binding a turn to the scene where parsing began.\n- History stores last 8 turns, normalizes whitespace, truncates responses to 85 characters, and is not serialized to scene JSON.\n- `SceneManager.switchTo` clears the target scene history only when entering a different scene, so revisiting a cached scene starts fresh while same-scene teleports do not wipe history.\n- `ParserWorldModelBuilder` exposes history as `context.scene.recentTurns`.\n- LLM prompt assets/system prompt now explain how to use `context.scene.recentTurns` without overriding current world model.\n- Docs updated in `Parser.md` and `GDD.md`.\nCommit: `c2ace62` (`Add scene-local parser history to LLM context`).\nValidation: NotebookLM auth/list/smoke restored; NotebookLM implementation brief consulted; `npm test -- tests/scene/scene-parser-history.test.ts tests/parser/world-model-context.test.ts tests/parser/llm-parser.test.ts tests/parser/llm-cascade.test.ts`; `npm test -- tests/parser tests/integration/parser-game.test.ts tests/scene/scene-parser-history.test.ts`; `npm run typecheck`; full `npm test` (27 files, 305 tests); `git diff --check`; pre-commit hook ran prettier/eslint.\nSource: chat 2026-05-10",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-10",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000028"
+    },
+    {
+      "id": "aaaaaaabtyhpniywnbksuxjmbsgyvhvg",
+      "title": "[Quest] Fix duplicate object id blocking scene save",
+      "description": "Owner: codex\nContext: User reports editor save blocked by SceneSpatialValidator duplicate_object_id for object id `test` in `Test Room`.\nOutcome:\n- Root cause: SectionIdentity ID input mutated `object.name` on every keystroke, before blur validation. If the user typed an existing name, validation rejected it after the selected object had already been renamed, leaving duplicate runtime ids.\n- Fixed SectionIdentity to keep ID edits in local React draft state and commit to the real object only after successful blur validation.\n- Duplicate check now covers entities, walkbox, and triggerboxes, matching SceneSpatialValidator's object set.\n- Added focused test for duplicate detection across these categories.\nValidation: `npm test -- tests/editor/section-identity.test.ts tests/scene/scene-spatial-validator.test.ts`; `npm run typecheck`; `git diff --check`.\nSource: chat 2026-05-10",
+      "tags": [
+        "area:scene",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-10",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000027"
+    },
+    {
+      "id": "aaaaaaabtygxtsx6twjntuapipxm7zbg",
+      "title": "[Quest] Strengthen LLM world model prompt against spatial hallucination",
+      "description": "Owner: codex\nContext: User reported LLM narrating a device using an inventory item that is not spatially connected to it. Requested a general fix, not a situation-specific patch: strengthen World Model / worldFacts prompt guidance so spatial containment, inventory separation, and explicit relations override word matches.\nOutcome:\n- Added a `World Model Discipline` section to `parser-llm-system.md`.\n- Replaced/strengthened `world_fact_instructions` in `parser-llm.json` so worldFacts, contents/location, spatialNodes, and spatialRelations are the physical model.\n- Added explicit prompt rules that logical association, matching nouns, compatible types, and inventory do not create object relationships.\n- Added focused LLM cascade prompt tests for the new contract.\nValidation: `npm test -- tests/parser/llm-cascade.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000026"
+    },
+    {
+      "id": "aaaaaaabtygwned2pmux3wftptrqp4o5",
+      "title": "[Quest] Block LISTEN-to-EXAMINE LLM coercion",
+      "description": "Owner: codex\nContext: Live LLM prompt shows no hidden prompt; explicit system prompt still biased the model toward mapping creative phrasing to concrete actions before GM narration.\nOutcome: Reverted the brief LISTEN/HEAR-specific prompt hack. Updated `parser-llm-system.md` generally so the first responsibility is generating atmospheric GM responses when narration/reaction/refusal/flavor/no-result is needed, and only secondarily mapping phrasing to concrete actions when the action clearly preserves the player's intent.\nValidation: `rg` confirmed no sensory-specific prompt lines remain; `npm test -- tests/parser/llm-cascade.test.ts`; `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000025"
+    },
+    {
+      "id": "aaaaaaabtygwcv5veuevw5cop6mr5ecr",
+      "title": "[Quest] Prevent PN-only LLM plans from falling through to EXAMINE",
+      "description": "Owner: codex\nContext: LLM wrote plausible PN for listen radio but returned EXAMINE boombox as the player-facing action, causing stock examine text instead of GM narration.\nOutcome:\n- `LlmCascade.normalizeResponse` now requires PN plans to include `showText`.\n- PN plans without `showText` are rejected with debug reason `parser_note_plan_requires_showText`.\n- PN plans with `showText` filter ordinary world actions like `examineTarget`, keeping only PN actions + `showText` and recording `parser_note_plan_omits_world_actions`.\n- Prompt assets now state PN actions must be paired with showText and not ordinary world actions.\n- Added LLM cascade regressions for PN+examine-only and PN+showText+examine.\nValidation: `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (25 files, 295 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000024"
+    },
+    {
+      "id": "aaaaaaabtygvrtkuberghhes4zix3vx3",
+      "title": "[Quest] Tighten LLM prompt and PN guardrails",
+      "description": "Owner: codex\nContext: LLM exposed parser mechanics in responses/Parser Notes for `listen radio`, including phrases like no listening action and treat as examine.\nOutcome:\n- Tightened `parser-llm-system.md` and `parser-llm.json` to avoid implementation-framing phrases and forbid parser/action availability leakage in player-facing text and PN.\n- Added good in-world PN/response examples without dangerous prompt phrases.\n- Added runtime PN rejection for obvious implementation-detail notes while allowing later showText actions to continue.\n- Added prompt guard and PN rejection tests.\nValidation: `rg` found no dangerous phrases in prompt assets; `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (25 files, 293 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000023"
+    },
+    {
+      "id": "aaaaaaabtygv2tiatw3inms3i6brjsbv",
+      "title": "[Quest] Remove Parser Notes runtime censorship",
+      "description": "Owner: codex\nContext: User clarified PN should preserve LLM mistakes for diagnosis; runtime censorship hides symptoms.\nOutcome: Removed PN implementation-detail rejection from Parser runtime. Prompt guidance remains, but Parser Core now stores any PN text that passes target validation and trim/600-char cap. Updated test to assert implementation-detail PN is preserved for debugging visibility.\nValidation: `npm test -- tests/parser/llm-parser.test.ts tests/parser/llm-cascade.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000022"
+    },
+    {
+      "id": "aaaaaaabtyguf4tbhxurgcjp4wzxmq73",
+      "title": "[Quest] Implement Parser Notes for LLM cascade",
+      "description": "Owner: codex\nContext: Implemented runtime-only Parser Notes for scene/entity LLM GM memory, structured PN actions, parser context injection, prompt guidance, #PEEK visibility, docs and tests.\nOutcome:\n- Added runtime scene/entity PN storage and parser context fields.\n- Added `setSceneParserNote` / `setEntityParserNote` structured actions with validation, trim/600-char cap, clear-on-empty behavior, and ok outcomes without player-facing messages.\n- Added full `--- PARSER NOTES ---` #PEEK-ON debug section for PN effects.\n- Updated English-only/story-neutral LLM prompts to avoid forcing unsupported intents into unrelated actions.\n- Updated Parser.md, GDD.md, and TextAssets.md.\nValidation: `npm test -- tests/parser/llm-cascade.test.ts tests/parser/world-model-context.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (25 files, 289 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:docs",
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000021"
+    },
+    {
+      "id": "aaaaaaabtygkftv3plhtk6f6fdalnp4o",
+      "title": "UI: Group selection panel haven't Fill checkmark for Quads",
+      "description": "Owner: codex\nContext: Multi-selection Properties panel showed Quad `Retro Grid` and `Fill Color`, but not the `Fill` checkbox, so selected Quads could not have fill enabled/disabled in bulk.\nResolution: Added a tri-state shared `filled` control for selected Quad objects in `MultiSelectionProperties`. The checkbox writes `filled` only to Quad objects and supports mixed state like the existing Retro Grid control.\nFiles: `src/components/editor/properties/MultiSelectionProperties.tsx`.\nValidation: `npm run typecheck`; full `npm test` (25 files, 283 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "type:ui"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000020"
+    },
+    {
+      "id": "aaaaaaabtygjtno4h6oollz2pau32h7t",
+      "title": "Bug: Sometimes Retro-Grid can disappear on Quad objects",
+      "description": "Owner: codex\nContext: Retro-Grid could appear to disappear on Quad objects, especially with copied objects using `blendMode: \"screen\"` and black grid lines.\nRoot cause: QuadObject applied the Quad `blendMode` to both fill and grid strokes. With Canvas `screen`, black strokes over a filled Quad have no visible effect, so grid lines were drawn but invisible.\nResolution: `QuadObject.render()` now applies `blendMode` to the fill pass and resets `globalCompositeOperation` to `source-over` before drawing the Retro-Grid outline/internal lines, keeping the grid visibly overlaid on the fill.\nFiles: `src/entities/QuadObject.ts`, `tests/entities/quad-object.test.ts`.\nValidation: `npm test -- tests/entities/quad-object.test.ts`; `npm run typecheck`; full `npm test` (25 files, 283 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:scene",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "quest",
+        "session:2026-05-09",
+        "type:bug"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000019"
+    },
+    {
+      "id": "aaaaaaabtyg2gp6e7y4trfw7gbukvewz",
+      "title": "[Quest] Add Parser Notes needsCheck stale-state flag",
+      "description": "Owner: codex\nContext: User accepted design for Parser Notes stale checking. Runtime world mutations should mark relevant PN as needsCheck instead of deleting/censoring them; LLM prompt should require checking flagged notes against current world model and updating/clearing them if stale.\nOutcome:\n- Added runtime PN needs-check metadata to `Scene` for scene/entity notes.\n- Added `parserNoteNeedsCheck?: true` to parser context types and context builder for scene/entities/knownEntities/inventory/focusedTarget.\n- Parser marks existing entity PN as `needsCheck` after successful mutating actions touching items, containers, surfaces, or switches.\n- PN writes/clears reset the flag.\n- #PEEK/#PEEKPN parse and display `operation: \"needsCheck\"` plus `needsCheck: true`.\n- LLM prompt assets now require checking flagged PN against current world model and updating/clearing stale notes.\n- Docs updated in `Parser.md`, `GDD.md`, and `TextAssets.md`.\nValidation: `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-parser.test.ts tests/parser/llm-cascade.test.ts`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; `npm run typecheck`; full `npm test` (25 files, 300 tests); `git diff --check`.\nSource: chat 2026-05-09",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-09",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000018"
+    },
+    {
+      "id": "aaaaaaabtycixjvbybkjokvywrlocxdn",
+      "title": "[Quest] Reveal examinable hidden descendants when examining their anchor",
+      "description": "Owner: codex\nContext: User reported `hidden: \"examinable\"` on `audio_cables` behind `boombox` is not revealed by `EXAMINE BOOMBOX`; expected behavior is that examining the anchor/place reveals examinable hidden contents.\nOutcome: Added `GameSemanticAPI.revealHiddenDescendantsForExamine()`, called from `examineEntity()` after access checks. It scans anchor-relative `in/on/under/behind` descendants with `getSceneTextRelationAccessStates(..., { includeHidden: true })` and reveals those with `hiddenReason === \"examinable\"`. Updated parser fixture to mirror production behavior. Added semantic API and parser integration regressions for `audio_cables` behind `boombox`: `LOOK CABLES` is not found before `EXAMINE BOOMBOX`, then succeeds after reveal. LOOK behavior remains unchanged.\nFiles: `src/systems/GameSemanticAPI.ts`, `tests/fixtures/parserFactory.ts`, `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts`; full `npm test` (24 files, 277 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000017"
+    },
+    {
+      "id": "aaaaaaabtyci6gogzeob6lz7al7m7e4g",
+      "title": "[Quest] Prevent direct EXAMINE from revealing hidden semantic targets",
+      "description": "Owner: codex\nContext: User clarified that `EXAMINE \u003chidden item\u003e` should not reveal hidden semantic objects, because the player does not know the object exists. `EXAMINE` reveal should happen through a visible parent/anchor such as `EXAMINE BOOMBOX` revealing examinable `audio_cables` behind it.\nOutcome: Removed parser direct semantic-hidden target resolution for EXAMINE and deleted now-unused `resolveSemanticHiddenTarget()`. `GameSemanticAPI.examineEntity()` no longer reveals the target before access checks, so direct API calls on unrevealed hidden targets fail with `hidden_semantic_target`. Anchor EXAMINE reveal remains: after a visible anchor passes access checks, it reveals `examinable` descendants in `in/on/under/behind`. Updated parser fixture and regression tests: direct `LOOK CACHE`/`EXAMINE CACHE` both not-found and unrevealed; `EXAMINE BOOMBOX` reveals hidden examinable `audio_cables`, after which `LOOK CABLES` succeeds.\nFiles: `src/mechanics/Parser.ts`, `src/systems/GameSemanticAPI.ts`, `tests/fixtures/parserFactory.ts`, `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm run typecheck`; `npm test -- tests/game/semantic-api.test.ts tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm test -- tests/parser tests/integration/parser-game.test.ts tests/game/semantic-api.test.ts`; full `npm test` (24 files, 277 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000016"
+    },
+    {
+      "id": "aaaaaaabtychrxvgbhyp7xhxadx7fy7n",
+      "title": "[Quest] Fix hidden titled objects leaking into LOOK scope",
+      "description": "Owner: codex\nContext: User reported hidden `audio_cables` behind `boombox` in `test_room` are returned by `LOOK CABLES` before discovery.\nOutcome: Confirmed root cause in `Parser.resolveLookTarget()`: direct LOOK fell back to hidden lookable semantic resolution and then `lookEntity()` revealed/described the object. Removed that fallback so direct LOOK only sees visible/held targets (plus existing inactive-subscene switch exception). Relation LOOK remains the reveal path. Updated parser fixture relation LOOK to mirror production hidden lookable reveal behavior. Added regression coverage including `audio_cables` behind `boombox`: direct `LOOK CABLES` returns not-found before `LOOK BEHIND BOOMBOX`, then succeeds after reveal.\nFiles: `src/mechanics/Parser.ts`, `tests/fixtures/parserFactory.ts`, `tests/integration/parser-game.test.ts`.\nValidation: `npm test -- tests/integration/parser-game.test.ts tests/parser/world-model-context.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (24 files, 275 tests); `git diff --check`.\nSource: chat 2026-05-08",
+      "tags": [
+        "area:parser",
+        "area:scene",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-08",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000015"
+    },
+    {
+      "id": "aaaaaaabtyceqiy4q5q6mpyaj4ibemcy",
+      "title": "[Quest] Make codex-doctor auto-repair NotebookLM CLI auth",
+      "description": "Owner: codex\nContext: User requested codex-doctor to automatically detect expired NotebookLM auth and try the light auto-recovery path without user intervention.\nOutcome: Updated `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.ps1` so non-Fast NotebookLM readiness forwards `-AutoLogin` by default. Added `-NoNotebookAutoLogin` to opt out for a single run. `-ManualFallback` remains explicit only, so the default path does not require user involvement.\nValidation: PowerShell parse check; direct `notebooklm-ready.ps1 -AutoLogin -LoginWaitSeconds 3` caught expired `list`, auto-login repaired auth, and smoke ask passed; `codex-doctor -Fast -Json` passed 17/17; full `codex-doctor` passed 19/19 including `npm run typecheck` and full `npm test` (24 files, 274 tests).\nSource: chat 2026-05-07",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000014"
+    },
+    {
+      "id": "aaaaaaabtybw5vlgykm2eqvhskfqu6ra",
+      "title": "[Quest] Add TA override for non-takeable objects",
+      "description": "Owner: codex\nContext: User requested a new standard object Text Asset field that replaces the generic `You cannot take...` message when the player tries to take a non-takeable object. Follow-up requested JSON-friendly multiline text support for TA.\nOutcome: Added standard object TA field `takeFailure`; default object TA generation includes it. `GameSemanticAPI.takeEntity` and `canTakeEntity` now use resolved non-empty `takeFailure` for generic `cannot_take`/`not_takeable` TAKE failures and mark those outcomes `recoverable: false`, which short-circuits Parser post-API LLM recovery. Test fixtures understand the field. Fixed `public/text/objects/boombox.json` from invalid backtick syntax to valid JSON, added/kept boombox `takeFailure`, and converted `boombox.details` to the new string-array multiline format. `TextAssetManager` now resolves string arrays as multiline text for object/scene/service text APIs while list APIs preserve `synonyms`/semantic list semantics. Docs updated in `GDD.md`, `TextAssets.md`, and `Parser.md`.\nValidation: `npm test -- tests/core/text-asset-manager.test.ts tests/game/semantic-api.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test`; `git diff --check`.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:gdd",
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000013"
+    },
+    {
+      "id": "aaaaaaabtybovqouo5bfcrh3gru6asfb",
+      "title": "[Quest] Implement closed-console modal multiline output",
+      "description": "Owner: codex\nContext: User requested GDD-described closed console modal state for parser responses longer than two wrapped screen lines, word wrapping in closed console, and forced newline support in text resources. Follow-up found real `LOOK CITY` in `test_room` did not stay modal.\nOutcome: `Console` computes closed-console display lines with word wrapping and forced newline preservation; `Console.logResponse` now evaluates modal threshold over the full parser response batch. `Parser.parse` sends player-facing responses through `Game.logResponse`, while `Game.logResponse` falls back safely for tests/stubs. Low-res `Game.renderUI` expands the console with `[Continue]`, input is blocked while modal, and `UIOverlay` stops parser-submit Enter from bubbling to global input and immediately dismissing the modal.\nAcceptance criteria: `LOOK CITY` in real browser enters closed modal, disables input, and canvas click dismisses to last two wrapped lines. Focused tests cover wrapping, modal dismissal, forced newlines, and multi-message parser responses.\nValidation: `codex-doctor -Fast`; `npm test -- tests/parser/preprocessor.test.ts tests/parser/commands.test.ts tests/integration/parser-game.test.ts`; `npm run typecheck`; Playwright real input smoke for `LOOK CITY`; `npm test`; `git diff --check`.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:parser",
+        "area:ui",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "source:gdd",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000012"
+    },
+    {
+      "id": "aaaaaaabtxiuxl33noumpd3tq4thyvfe",
+      "title": "design way to implement \"darkness\" for LOOK",
+      "tags": [
+        "quest"
+      ],
+      "priority": 3,
+      "status": "todo",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000011"
+    },
+    {
+      "id": "aaaaaaabtxiumqevnvpofcwfg7gbyvl3",
+      "title": "Improve MoveTo",
+      "description": "Better path-founding with multi-point way and interrupt sys\nConnected to NPC AI sys",
+      "tags": [
+        "feature",
+        "minor",
+        "quest"
+      ],
+      "priority": 3,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000010"
+    },
+    {
+      "id": "aaaaaaabtxifnl2hsdrxgilimr4th54w",
+      "title": "[Quest] Seed Kairo tag taxonomy",
+      "description": "Owner: codex\nProject: Quest\nContext: Service task used to initialize the current Quest tag taxonomy in Kairo. Kairo stores tags on tasks rather than through a separate tag-management API.\nExpected outcome: Standard tags are available/discoverable through task filtering and future task creation.\nAcceptance criteria: The seed task is marked done and carries the baseline Quest TaskOps tags.\nSource: chat\nNotes: Do not reopen unless changing the taxonomy.",
+      "tags": [
+        "area:core",
+        "area:docs",
+        "area:gdd",
+        "area:mechanics",
+        "area:parser",
+        "area:scene",
+        "area:systems",
+        "area:ui",
+        "owner:codex",
+        "owner:gemini",
+        "owner:user",
+        "proj:quest",
+        "session:2026-04-27",
+        "source:chat",
+        "source:gdd",
+        "source:memory",
+        "source:notebooklm",
+        "source:review",
+        "source:test",
+        "source:user",
+        "status-meta:blocked",
+        "status-meta:delegated",
+        "status-meta:needs-acceptance",
+        "status-meta:needs-user",
+        "status-meta:waiting",
+        "type:bug",
+        "type:chore",
+        "type:decision",
+        "type:docs",
+        "type:feature",
+        "type:followup",
+        "type:research",
+        "type:review",
+        "type:test"
+      ],
+      "priority": 3,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000007"
+    },
+    {
+      "id": "aaaaaaabtx7vs4jszpcqxbuwowbeep3j",
+      "title": "[Quest] Fix Quad shadow zones to use polygon hitTest",
+      "description": "Owner: codex\nContext: Investigated Quad4 lightspot1 #lightSpots bug where Hero shadow toggled off inside parts of the visible Quad.\nOutcome: ShadowSystem now uses QuadObject.hitTest for Quad trigger targets instead of inherited Entity.containsPoint AABB; non-Quad targets still use containsPoint. Added regression coverage using a lightspot1-shaped Quad where hitTest is true but containsPoint is false.\nValidation: `npm test -- tests/scene/shadow-system.test.ts`; `npm test -- tests/scene`.\nNote: `npm run typecheck` currently fails on unrelated dirty spatial relation `near` errors in SceneSpatialValidator/GameSemanticAPI.\nSource: chat 2026-05-07",
+      "tags": [
+        "area:scene",
+        "area:systems",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-07",
+        "source:chat",
+        "type:bug"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000006"
+    },
+    {
+      "id": "aaaaaaabtx5ixylx5tpg5nq3qygv5tss",
+      "title": "[Quest] Make parser LLM context expose explicit containment",
+      "description": "Implemented TA-driven semantic world facts for the LLM parser context.\n\nOutcome:\n- Object Text Assets can carry `semanticTags` and `relationFacts`.\n- ParserWorldModelBuilder generates generic semantic `worldFacts` from parent relation rules and child tags.\n- Removed the hardcoded loaded-media heuristic from world model construction.\n- LLM prompt assets now use generic world fact authority instructions, not PLAY/cassette-specific wording.\n- Current Boombox/cassette assets define the loaded-media fact through Text Assets.\n- Documentation updated in `TextAssets.md` and `Parser.md`.\n\nCommit:\n- `51e64b6 Add TA-driven semantic facts for LLM parser context`\n\nValidation:\n- `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`\n- `npm test -- tests/parser tests/integration/parser-game.test.ts`\n- `npm run typecheck`\n- `git diff --check`\n- `npm test`",
+      "tags": [
+        "area:llm",
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-06",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000005"
+    },
+    {
+      "id": "aaaaaaabtx5eenwrgq6uxydwnc44evan",
+      "title": "[Quest] Add LLM recovery for parser failed outcomes",
+      "description": "Owner: codex\nContext: Implemented LLM post-API recovery for parser recoverable failures like cannot_take/not_takeable while keeping retry prompts in Text Assets instead of hardcoded code strings.\nOutcome: Added `post_api_recovery` previousAttempt kind; parser now retries selected recoverable failed outcomes through LLM when #LLM-ON is active; LLM can return corrected plans, atmospheric final_response/showText, or explicit `{ kind: \"fallback\" }` to preserve the original parser response. Added `public/text/system/parser-llm.json` for retry prompt fragments and updated `parser-llm-system.md` for fallback.\nAcceptance criteria: Focused LLM/parser tests added and passing; parser integration suite passing; full tests passing; typecheck passing.\nValidation: `npm test -- tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`; `npm run typecheck`; `npm test -- tests/parser tests/integration/parser-game.test.ts`; full `npm test` (23 files, 259 tests).\nSource: chat",
+      "tags": [
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-06",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000004"
+    },
+    {
+      "id": "aaaaaaabtx4yd3f45sovk3pbwhktwukd",
+      "title": "[Quest] Fix duplicate held item leaking into parser takable scope",
+      "description": "Owner: codex\nContext: Full `npm test` on 2026-05-05 failed independently of Actor MoveTo route planning.\nFailure: `tests/parser/world-model-context.test.ts` \u003e `omits scene duplicates whose stable id is already held from takable scope` asserted takable scope should not include `compact_cassette`, but actual takable list included it.\nResolution: `ParserWorldModelBuilder` now filters `takable` and external takable candidates through stable inventory identity (`inventoryManager.hasEntityIdInInventory`) before consulting `canTakeEntity`; the test fixture `canTakeEntity` now mirrors runtime semantics by using `hasEntityIdInInventory` instead of object identity.\nValidation: `npm test -- tests/parser/world-model-context.test.ts`; `npm test -- tests/integration/parser-game.test.ts`; `npm test -- tests/game/semantic-api.test.ts`; `npm run typecheck`; full `npm test` all passed.\nSource: validation during Actor MoveTo route planning session.",
+      "tags": [
+        "area:parser",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:test",
+        "type:bug",
+        "type:test"
+      ],
+      "priority": 2,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000003"
+    },
+    {
+      "id": "aaaaaaabtx4xsjhyh7s4h5cacq32fdlg",
+      "title": "[Quest] Implement Actor MoveTo route planning",
+      "description": "Owner: codex\nContext: Improved Actor MoveTo so it plans a route around obstacles, reports impossible destinations immediately, and reports route invalidation when movement is blocked mid-route.\nOutcome: `Actor.moveTo` now returns `ActorMoveResult`; `Actor.getMoveResult()` exposes arrived/blocked/unreachable states for AI polling; grid A* route planning uses `Scene.isWalkable` as the single collision/walkbox oracle; GDD and focused tests were added.\nValidation: `npm test -- tests/entities/actor-movement.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-interaction.test.ts` passed; `npm run typecheck` passed. Full `npm test` has an unrelated existing parser duplicate held-item failure tracked separately.\nSource: chat 2026-05-05",
+      "tags": [
+        "area:movement",
+        "area:pathfinding",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:chat",
+        "type:feature"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000002"
+    },
+    {
+      "id": "aaaaaaabtx46sp2xtaegqja6tfwk76ez",
+      "title": "[Quest] Add global codex-doctor health check wrapper",
+      "description": "Owner: codex\nContext: Built a global workstation health-check wrapper for Quest/Scanline Engine using AGENTS.md and notebooklm-cli rules.\nOutcome: Added canonical script `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.ps1`, helper shim `C:\\Users\\Professional\\.codex\\tools\\codex-doctor.cmd`, and PATH shim `C:\\Users\\Professional\\AppData\\Local\\Programs\\kairo\\codex-doctor.cmd` so `codex-doctor` is globally callable.\nChecks covered: NotebookLM readiness, Kairo executable/database/sync repo/git status, agent_memory MCP binary/database, local RAG data/docs/index, Quest git status, Node/npm, package-lock/node_modules, `npm run typecheck`, `npm test`, plus `-Deep` extras for Kairo sync/lint/build/check:anthropic.\nValidation: `codex-doctor -Fast` passed 17/17; normal `codex-doctor` passed typecheck and full tests (23 files, 255 tests) with one NotebookLM readiness warning because CLI auth is expired.\nSource: chat",
+      "tags": [
+        "area:infra",
+        "owner:codex",
+        "proj:quest",
+        "session:2026-05-05",
+        "source:chat",
+        "type:chore"
+      ],
+      "priority": 1,
+      "status": "done",
+      "recurrence": "none",
+      "created_at": "2026-05-11T23:32:01Z",
+      "updated_at": "2026-05-11T23:32:01Z",
+      "open_issue_id": "OI000001"
+    }
+  ]
+}

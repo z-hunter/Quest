@@ -256,8 +256,8 @@ export class SceneEditor {
       return;
     }
 
-    // Insert: Assign Sprite (Static/Actor)
-    if (this.enabled && e.key === 'Insert') {
+    // Alt-S: Assign Sprite (Static/Actor)
+    if (this.enabled && e.altKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
       e.preventDefault();
       if (
         this.selectedObject &&

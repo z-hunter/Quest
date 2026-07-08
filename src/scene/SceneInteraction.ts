@@ -191,8 +191,10 @@ function canActivateOnClick(obj: SceneObject): boolean {
   if (ComponentSystem.hasClickInteractionKeys(obj)) return true;
   if (!obj.components || obj.components.length === 0) return false;
 
-  return obj.components.some((component: any) =>
-    ['Subtrigger', 'Subscene', 'Switch'].includes(component?.type)
+  return obj.components.some(
+    (component: any) =>
+      ['Subtrigger', 'Subscene', 'Switch'].includes(component?.type) ||
+      (component?.type === 'Exit' && component?.portal)
   );
 }
 
@@ -271,6 +273,11 @@ function getHoverCursorForObject(scene: Scene, obj: SceneObject): HoverCursor | 
         return null;
       }
       return 'eye';
+    }
+
+    const exitComp = obj.components.find((c) => c.type === 'Exit') as any;
+    if (exitComp && exitComp.portal) {
+      return 'back';
     }
 
     const hasHandTriggerComponent = obj.components.some((c) =>
@@ -387,6 +394,50 @@ export function activateSceneObject(
   return false;
 }
 
+function activateOrApproachPlayer(scene: Scene, obj: SceneObject): boolean {
+  const player = scene.player;
+  const autoApproach = obj.components?.some(
+    (component: any) =>
+      component?.type === 'Subscene' || (component?.type === 'Exit' && component?.portal === true)
+  );
+  if (!player || !autoApproach) {
+    return activateSceneObject(scene, obj, 0, player ?? undefined);
+  }
+
+  const approach = scene.game.actorNavigation.planApproach(player, obj);
+  if (approach.status === 'already_reachable') {
+    return activateSceneObject(scene, obj, 0, player);
+  }
+  if (!approach.point) {
+    scene.game.showMessage(scene.game.text('engine.too_far_generic'));
+    return true;
+  }
+
+  const result = player.moveTo(approach.point.x, approach.point.y);
+  if (result.status !== 'started') {
+    scene.game.showMessage(scene.game.text('engine.too_far_generic'));
+    return true;
+  }
+  const poll = () => {
+    const moveResult = player.getMoveResult();
+    if (moveResult.status === 'started' && player.state === 'walk') {
+      globalThis.setTimeout(poll, 50);
+      return;
+    }
+    if (
+      moveResult.status === 'arrived' &&
+      scene.game.actorNavigation.isReachable(player, obj) &&
+      scene.getObjectByName(obj.name) === obj
+    ) {
+      activateSceneObject(scene, obj, 0, player);
+      return;
+    }
+    scene.game.showMessage(scene.game.text('engine.too_far_generic'));
+  };
+  globalThis.setTimeout(poll, 50);
+  return true;
+}
+
 export function handleSceneClick(scene: Scene, x: number, y: number): void {
   if (scene.activeSubscene) {
     const subsceneCandidates = getSubsceneClickCandidates(scene);
@@ -415,7 +466,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
       } else if (title && title.trim()) {
         scene.game.log(scene.game.text('engine.click_you_see', { title }));
       }
-      activateSceneObject(scene, subsceneHit);
+      activateOrApproachPlayer(scene, subsceneHit);
       return;
     }
 
@@ -443,7 +494,7 @@ export function handleSceneClick(scene: Scene, x: number, y: number): void {
     const title = shouldSuppressTitleByHiddenState(scene, hitObj)
       ? null
       : scene.game.textAssets.getResolvedObjectField(hitObj, 'title');
-    const activated = activateSceneObject(scene, hitObj);
+    const activated = activateOrApproachPlayer(scene, hitObj);
 
     if (seeMessage) {
       scene.game.log(seeMessage);

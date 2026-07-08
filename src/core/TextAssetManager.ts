@@ -113,6 +113,18 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     closed_container: 'The {target} is closed.',
     locked_needs: 'Locked. Needs {item}',
     locked_generic: 'Locked.',
+    observed_look: '[ {actor} is looking at {subject} ]',
+    observed_examine: '[ {actor} is examining {subject} ]',
+    observed_look_relation: '[ {actor} is looking {relation} {subject} ]',
+    observed_open: '[ {actor} opens {subject} ]',
+    observed_close: '[ {actor} closes {subject} ]',
+    observed_take: '[ {actor} takes {item} ]',
+    observed_put_relation: '[ {actor} puts {item} {relation} {target} ]',
+    observed_put_target: '[ {actor} puts {item} on {target} ]',
+    observed_drop: '[ {actor} puts down {item} ]',
+    observed_use: '[ {actor} uses {item} on {target} ]',
+    observed_command: '[ {actor} operates {subject} ]',
+    observed_traverse_exit: '[ {actor} goes through {subject} ]',
   },
   scripts: {
     pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',
@@ -789,6 +801,10 @@ export class TextAssetManager {
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     return this.resolveListField(asset, field);
+  }
+
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string {
+    return JSON.stringify(this.getResolvedObjectListField(obj, field));
   }
 
   getResolvedObjectStructuredListField<T>(

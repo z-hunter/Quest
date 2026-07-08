@@ -1,0 +1,20 @@
+{
+  "_isVetoolConfig": true,
+  "videoFilename": "Untitled.mp4",
+  "loopStart": 3.6666666666666665,
+  "loopEnd": 4.933333333333331,
+  "fps": 30,
+  "stepSize": 2,
+  "boxes": [
+    {
+      "id": "box_1782819304609",
+      "spriteId": "linda_walk_down",
+      "targetPng": "public/assets/linda.png",
+      "colIndex": 0,
+      "x": 345,
+      "y": 32,
+      "w": 219,
+      "h": 664
+    }
+  ]
+}

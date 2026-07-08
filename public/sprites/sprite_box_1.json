@@ -1,0 +1,9 @@
+{
+  "id": "sprite_box_1",
+  "imageFile": "public/sprites/exported_sprites.png",
+  "x": 214,
+  "y": 0,
+  "width": 319,
+  "height": 661,
+  "frames": 39
+}

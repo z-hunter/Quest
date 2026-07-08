@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ScriptRegistry } from '../../src/core/ScriptRegistry';
 import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
@@ -35,15 +35,41 @@ function addRemote(fixture: ReturnType<typeof createParserFixture>) {
   return fixture.addEntity('tv_rc', {
     title: 'TV remote',
     description: 'A remote control.',
-    components: [{ type: 'Item', ignoreDistance: true }],
+    components: [
+      { type: 'Item', ignoreDistance: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: ['#aaa'], items: [] },
+    ],
   });
 }
 
-function holdRemote(fixture: ReturnType<typeof createParserFixture>) {
+function holdRemote(fixture: ReturnType<typeof createParserFixture>, withBatteries = true) {
   const remote = addRemote(fixture);
   fixture.scene.removeEntity(remote);
   fixture.game.inventory.push(remote);
+  if (withBatteries) addRemoteBatteries(fixture, remote);
   return remote;
+}
+
+function addRemoteBatteries(
+  fixture: ReturnType<typeof createParserFixture>,
+  remote: ReturnType<typeof addRemote>,
+  charge = 100
+) {
+  return fixture.addEntity('batteryAAA', {
+    title: 'AAA batteries',
+    groupID: '#aaa',
+    spatial: { parentNodeId: remote.name, relation: 'in' },
+    components: [
+      { type: 'Item' },
+      {
+        type: 'State',
+        id: 'charge_percent',
+        valueType: 'number',
+        initialValue: 100,
+        value: charge,
+      },
+    ],
+  });
 }
 
 function setupTvCommandFixture(options: { heldRemote?: boolean; reachableRemote?: boolean } = {}) {
@@ -53,7 +79,8 @@ function setupTvCommandFixture(options: { heldRemote?: boolean; reachableRemote?
   if (options.heldRemote) {
     holdRemote(fixture);
   } else if (options.reachableRemote) {
-    addRemote(fixture);
+    const remote = addRemote(fixture);
+    addRemoteBatteries(fixture, remote);
   }
   return fixture;
 }
@@ -598,6 +625,28 @@ describe('Parser custom commands', () => {
     expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe('on');
   });
 
+  it('checks authored command requirements by id without route-planning the whole scene', async () => {
+    const fixture = setupTvCommandFixture({ heldRemote: true });
+    fixture.addTriggerbox('DeskCloseup', {
+      title: 'Desk close-up',
+      disabled: false,
+      components: [{ type: 'Subscene' }],
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Desk note',
+      description: 'A disabled inactive-subscene object that should not be route-planned.',
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'in' },
+    });
+
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('The TV clicks on.');
+    expect(planApproach).not.toHaveBeenCalled();
+  });
+
   it('appends State-driven Parser Notes to LOOK after a command changes the State', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
@@ -641,6 +690,37 @@ describe('Parser custom commands', () => {
     const result = await fixture.run('turn on tv');
 
     expect(result.messages.at(-1)).toBe(MISSING_REMOTE_MESSAGE);
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+  });
+
+  it('reports missing batteries when the remote contains no #aaa item', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    addTv(fixture);
+    holdRemote(fixture, false);
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe('There are no batteries in the remote control.');
+    expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
+      'off'
+    );
+  });
+
+  it('reports dead batteries when charge_percent is zero', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    addTv(fixture);
+    const remote = holdRemote(fixture, false);
+    addRemoteBatteries(fixture, remote, 0);
+
+    const result = await fixture.run('turn on tv');
+
+    expect(result.messages.at(-1)).toBe(
+      'The TV does not respond to the remote. It looks like the batteries are dead.'
+    );
     expect(ComponentSystem.getStateValue(fixture.scene.getObjectByName('tv')!, 'power')).toBe(
       'off'
     );

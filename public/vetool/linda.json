@@ -1,0 +1,30 @@
+{
+  "_isVetoolConfig": true,
+  "videoFilename": "Анимируй_ходьбу_этих_персонаже.mp4",
+  "loopStart": 0.39999999999999997,
+  "loopEnd": 1.627009,
+  "fps": 30,
+  "stepSize": 2,
+  "boxes": [
+    {
+      "id": "box_1782819304609",
+      "spriteId": "linda_walk_down",
+      "targetPng": "public/assets/linda.png",
+      "colIndex": 0,
+      "x": 282,
+      "y": 30,
+      "w": 225,
+      "h": 664
+    },
+    {
+      "id": "box_1782822132213",
+      "spriteId": "linda_walk_left",
+      "targetPng": "public/assets/linda.png",
+      "colIndex": 1,
+      "x": 718,
+      "y": 32,
+      "w": 318,
+      "h": 655
+    }
+  ]
+}

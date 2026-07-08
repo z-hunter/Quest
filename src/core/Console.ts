@@ -39,6 +39,7 @@ export class Console {
   parserCascade1ForceLlm: boolean = false;
   isClosedModal: boolean = false;
   private closedModalDisplayLines: ConsoleDisplayLine[] = [];
+  private lastPmDebugTimestamp: number | null = null;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -135,7 +136,94 @@ export class Console {
     this.registerCommand('#CLS', () => this.clear());
     this.registerCommand('#HELP', () => {
       this.log('Available commands:', 'info');
-      this.log(Array.from(this.commands.keys()).join(', '), 'info');
+      this.log('*   #HELP — Displays a list of all available developer console commands.', 'info');
+      this.log('*   #CLS — Clears the text buffer of the in-game console.', 'info');
+      this.log(
+        '*   #RUN <script_id> [args...] — Executes a specified script from the script registry.',
+        'info'
+      );
+      this.log(
+        '*   #HALT [script_id] — Stops all currently running scripts in the scene, or a specific script.',
+        'info'
+      );
+      this.log(
+        '*   #HALTNPC — Halts all NPCs under Puppet Master control, resetting them to idle.',
+        'info'
+      );
+      this.log(
+        '*   #PEEK-ON/OFF — Toggles parser debug mode showing context, scope, action, and result JSONs.',
+        'info'
+      );
+      this.log(
+        '*   #PEEKLLM-ON/OFF — Toggles general LLM debug logging (prompts, responses, and cache metrics).',
+        'info'
+      );
+      this.log(
+        '*   #PEEKPN-ON/OFF — Toggles parser notes debug mode showing creations, updates, clears, and stale markers.',
+        'info'
+      );
+      this.log(
+        '*   #PEEKPM-ON/OFF — Toggles detailed debug logging for the NPC Puppet Master.',
+        'info'
+      );
+      this.log(
+        '*   #STAGE1-ON/OFF — Toggles the Stage 1 Regex processing stage of the text parser.',
+        'info'
+      );
+      this.log(
+        '*   #STAGE2-ON/OFF — Toggles the Stage 2 NLP.js processing stage of the text parser.',
+        'info'
+      );
+      this.log(
+        '*   #LLM-ON/OFF — Toggles the Stage 2 LLM cascade for handling complex or unsupported player commands.',
+        'info'
+      );
+      this.log('*   #C1-ON/OFF — Toggles forced LLM cascade for Stage 1 Regex commands.', 'info');
+      this.log(
+        '*   #VALIDATE-SPATIAL — Runs topological checks on the current scene for cyclic or invalid references.',
+        'info'
+      );
+      this.log('*   #SLMLOG — Displays statistics about Shadow Mode data collection.', 'info');
+      this.log(
+        '*   #SLMLOG-ON/OFF — Toggles Shadow Mode logging (training data collection).',
+        'info'
+      );
+
+      const hardcoded = new Set([
+        '#HELP',
+        '#CLS',
+        '#RUN',
+        '#HALT',
+        '#HALTNPC',
+        '#PEEK-ON',
+        '#PEEK-OFF',
+        '#PEEKLLM-ON',
+        '#PEEKLLM-OFF',
+        '#PEEKPN-ON',
+        '#PEEKPN-OFF',
+        '#PEEKPM-ON',
+        '#PEEKPM-OFF',
+        '#STAGE1-ON',
+        '#STAGE1-OFF',
+        '#STAGE2-ON',
+        '#STAGE2-OFF',
+        '#LLM-ON',
+        '#LLM-OFF',
+        '#C1-ON',
+        '#C1-OFF',
+        '#С1-ON',
+        '#С1-OFF',
+        '#VALIDATE-SPATIAL',
+        '#SLMLOG',
+        '#SLMLOG-ON',
+        '#SLMLOG-OFF',
+      ]);
+
+      for (const cmd of this.commands.keys()) {
+        if (!hardcoded.has(cmd)) {
+          this.log(`*   ${cmd} — (Dynamically registered command)`, 'info');
+        }
+      }
     });
 
     this.registerCommand('#RUN', (args) => {
@@ -158,6 +246,15 @@ export class Console {
         const scriptId = args[0];
         ScriptRegistry.stop(scriptId);
         this.log(`Stopped script '${scriptId}'.`, 'info');
+      }
+    });
+
+    this.registerCommand('#HALTNPC', () => {
+      if (this.game?.npcPuppetMaster) {
+        this.game.npcPuppetMaster.haltAllNpcs();
+        this.log('Halted all NPCs under Puppet Master control.', 'info');
+      } else {
+        this.log('Puppet Master is not initialized.', 'error');
       }
     });
 
@@ -193,11 +290,13 @@ export class Console {
 
     this.registerCommand('#PEEKPM-ON', () => {
       this.parserPeekPmEnabled = true;
+      this.lastPmDebugTimestamp = null;
       this.log('Puppet Master peek enabled.', 'info');
     });
 
     this.registerCommand('#PEEKPM-OFF', () => {
       this.parserPeekPmEnabled = false;
+      this.lastPmDebugTimestamp = null;
       this.log('Puppet Master peek disabled.', 'info');
     });
 
@@ -269,6 +368,27 @@ export class Console {
         );
       }
     });
+
+    this.registerCommand('#SLMLOG', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      const stats = await ShadowLogger.getStats();
+      this.log(`SLM Shadow Mode Log Statistics:`, 'info');
+      this.log(`* Status: ${stats.enabled ? 'ENABLED' : 'DISABLED'}`, 'info');
+      this.log(`* Records gathered this session: ${stats.sessionCount}`, 'info');
+      this.log(`* Total records in dataset: ${stats.totalCount}`, 'info');
+    });
+
+    this.registerCommand('#SLMLOG-ON', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      ShadowLogger.isLoggingEnabled = true;
+      this.log('SLM Shadow Mode logging ENABLED.', 'info');
+    });
+
+    this.registerCommand('#SLMLOG-OFF', async () => {
+      const { ShadowLogger } = await import('../mechanics/slm/ShadowLogger');
+      ShadowLogger.isLoggingEnabled = false;
+      this.log('SLM Shadow Mode logging DISABLED. (Tests/Diagnostics mode)', 'info');
+    });
   }
 
   private runScript(id: string, args: string[]) {
@@ -331,6 +451,29 @@ export class Console {
 
     this.notifyListeners();
     return this.buffer.length - 1;
+  }
+
+  logDebug(text: string): number | undefined {
+    const isAnyPeekEnabled =
+      this.parserPeekEnabled ||
+      this.parserPeekLlmEnabled ||
+      this.parserPeekPnEnabled ||
+      this.parserPeekPmEnabled;
+
+    if (!this.isOpen && !isAnyPeekEnabled) return undefined;
+    return this.log(this.withPmDebugDelta(text), 'info', { showInClosed: false });
+  }
+
+  private withPmDebugDelta(text: string): string {
+    if (!text.startsWith('--- PM')) return text;
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const delta = this.lastPmDebugTimestamp === null ? 0 : now - this.lastPmDebugTimestamp;
+    this.lastPmDebugTimestamp = now;
+    const roundedDelta = Math.round(delta * 10) / 10;
+    return text.replace(/^--- PM ([^-]+) ---/, `--- PM $1 (+${roundedDelta}ms) ---`);
   }
 
   logResponse(

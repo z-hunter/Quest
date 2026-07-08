@@ -42,6 +42,13 @@ export type ParserEntityContext = {
   parserNoteNeedsCheck?: true;
   interactions?: string[];
   states?: ParserStateContext[];
+  exit?: {
+    targetSceneId: string;
+    targetEntryId: string | null;
+    targetSceneTitle: string | null;
+    portal: boolean;
+    collider: boolean;
+  };
 };
 
 export type ParserInventoryItemContext = {
@@ -180,6 +187,23 @@ export type ParserCommandActionSpec =
       missingMessage?: string;
     }
   | {
+      type: 'requireContainedGroupEntity';
+      containerRef: string;
+      groupId: string;
+      saveAs: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireNumericState';
+      entityRef: string;
+      stateId: string;
+      operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+      value: number;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
       type: 'setEntityState';
       entityId: string;
       stateId: string;
@@ -236,6 +260,7 @@ export type ParserContext = {
   worldFacts?: string[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
+  actionScope?: Partial<Record<ParserScopeSlice, string[]>>;
   pending?: ParserPendingState;
 };
 
@@ -272,6 +297,10 @@ export type ParserToolAction =
   | {
       type: 'examineTarget';
       target: string | null;
+      narration?: {
+        message: string;
+        requiresDiscoveredEntityIds: string[];
+      };
     }
   | {
       type: 'examineRelationTarget';
@@ -310,6 +339,7 @@ export type ParserToolAction =
     }
   | {
       type: 'quitCurrentView';
+      target?: string | null;
     }
   | {
       type: 'showInventory';
@@ -372,6 +402,7 @@ export type ParserToolAction =
       type: 'runCustomCommand';
       commandId: string;
       arguments?: Record<string, string | null>;
+      argumentRefs?: Record<string, string>;
     }
   | {
       type: 'requireEntityAvailable';

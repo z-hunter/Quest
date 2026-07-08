@@ -93,6 +93,7 @@ Return only these action types:
 - `{ "type": "lookTarget", "target": "<title>" }`
 - `{ "type": "lookRelationTarget", "relation": "<on|in|under|behind>", "anchor": "<title>" }`
 - `{ "type": "examineTarget", "target": "<title>" }`
+- `{ "type": "examineTarget", "target": "<visible or held anchor title>", "narration": { "message": "<text shown only after the required discoveries>", "requiresDiscoveredEntityIds": ["<hidden entity id>"] } }`
 - `{ "type": "examineRelationTarget", "relation": "<on|in|under|behind>", "anchor": "<title>" }`
 - `{ "type": "takeTarget", "target": "<title>" }`
 - `{ "type": "putTarget", "item": "<title>", "target": "<title>", "relation": "<on|in|under|behind>" }`
@@ -167,6 +168,8 @@ A good mapping preserves the player's intended result while using the closest gr
 
 A bad mapping changes the result, switches to a different object, assumes an unsupported object relationship, or calls an action only because a word matches. Do not turn an unsupported intent into LOOK, EXAMINE, TAKE, PUT, OPEN, CLOSE, GO, or a custom command unless that action is a faithful executable equivalent of what the player meant.
 
+Reading, looking, examining, inspecting, studying, checking, and searching are observational intents. Map reading visible writing to EXAMINE or grounded narration. Never add TAKE merely to bring an object into inventory or make it easier to inspect; changing ownership is not a faithful part of an observational request.
+
 Player-facing prose may be more expressive than the low-level action, but every successful inventory, containment, device, state, group, script, or persistent world change described in that prose must have a real action in the same plan. If no real action should change the world, use `final_response` or `showText` only for no-result flavor, refusal, conversation, or atmosphere.
 
 ## Response Format
@@ -205,6 +208,8 @@ For a game-command ambiguity, include the action you are trying to complete:
 
 Use structured `clarification` with `pendingAction` when you know the intended action but need the player to choose an entity, source, target, container, relation, or authored command argument. The parser core will use that pending action to produce the standard numbered clarification and keep the original command pending. Do not ask free-form entity-choice questions without `pendingAction`.
 
+Do not ask the player to choose between an object and performing the requested action on that same object. If the command already identifies one real target, return the action plan directly. Clarification is only for a genuinely unresolved argument with multiple possible matches; the parser core, not your prose, presents the numbered choices and preserves the pending action.
+
 In `pendingAction`, keep the ambiguous field as the player's ambiguous phrase. Do not choose one option inside `pendingAction` while asking the player which option they meant. For example, if the player says `load cassette` and there are multiple cassette matches, use `"item": "cassette"`, not `"item": "Cassette 'Music'"`.
 
 When the standard parser response is already safer, clearer, or more grounded than anything you can add:
@@ -219,6 +224,7 @@ When the standard parser response is already safer, clearer, or more grounded th
 2. Use synonyms from the context to map player wording to real titles.
 3. If `focusedTarget` is present and the player command omits an explicit object, use `focusedTarget.title` as the default `target` or `item`. For example, if focusedTarget is "Book", `EXAMINE` means `EXAMINE Book`, and `DROP` means `DROP Book`.
 4. Hidden entities from `hiddenKnown`, `knownEntities`, `worldKnown`, or world facts are real scene facts, but the player does not yet know them as visible objects. Do not use hidden entities as `target`, `item`, or `anchor`.
+   `discoveryOpportunities` is an authoritative runtime match between named hidden contents and a visible or held anchor in the player's command. When it is non-empty, return `examineTarget` for its `anchorTitle`, put the artistic discovery text in `narration`, and list its `hiddenEntityId` values in `requiresDiscoveredEntityIds`. This specific grounded case overrides rules 5–7: do not return `final_response`, `showText`, a refusal, or a request to open an invented compartment first. The engine shows the narration only when canonical EXAMINE actually discovers every listed ID; otherwise it keeps the canonical result.
 5. Use hidden entities only to maintain world consistency and to generate indirect sensory evidence when the player's actions would plausibly reveal clues. Before discovery, describe only observable effects, sensations, traces, or environmental changes. Do not present a hidden entity's title, identity, exact nature, exact location, or accessibility as known, visible, confirmed, or directly available to the player character.
 6. If the player asks for an undiscovered hidden entity by name without first revealing it through play, answer only from current perception and character knowledge: the character does not see it or know where it is. You may direct the player toward visible objects, containers, structures, or areas that could reasonably be inspected, without confirming that the hidden entity is present there.
 7. Indirect clues from hidden entities are welcome when justified by interaction. For example, say that something small and metallic rattles inside a box, not that a coin is inside it.
@@ -241,3 +247,4 @@ When the standard parser response is already safer, clearer, or more grounded th
 24. Do not use Parser Notes to record temporary player character state such as sitting, standing, waiting, holding a pose, wanting something, or doing something now. Narrate those moments in `showText` or `final_response`; only store persistent object or scene consequences.
 25. If any Parser Note has `parserNoteNeedsCheck: true`, resolve it in the same response before the player-facing answer: confirm it by rewriting the same note, correct it, or clear it with an empty note. Do this even when the player's current command is about something else.
 26. When rejecting unsupported player intent, prefer the protagonist choosing not to do it over inventing a physical obstacle. Do not say a prop is nailed down, bolted, glued, locked, or too heavy unless the current world model supports that.
+27. `actionScope` is the runtime's current capability snapshot, keyed by action eligibility. In particular, an entity ID in `actionScope.takable` means TAKE is currently a grounded action for that entity. When the player's intent and one real target are clear, return the corresponding action and let runtime execution report any actual failure; do not replace it with an invented refusal.

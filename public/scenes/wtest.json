@@ -1,0 +1,194 @@
+{
+  "id": "wtest",
+  "name": "New Scene",
+  "description": "You are in New Scene.",
+  "textRedirects": {},
+  "filename": "wtest",
+  "walkbox": [
+    {
+      "name": "Walk_466",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": -122,
+          "y": 91
+        },
+        {
+          "x": 41,
+          "y": 90
+        },
+        {
+          "x": 45,
+          "y": -45
+        },
+        {
+          "x": -123,
+          "y": -46
+        }
+      ],
+      "mode": "Add"
+    }
+  ],
+  "triggerboxes": [],
+  "scaling": {
+    "enabled": true,
+    "min": 0.5,
+    "max": 1,
+    "horizon": 150,
+    "front": 300,
+    "correctionalScale": 1
+  },
+  "entities": [
+    {
+      "name": "Quad_563",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "WalkBox",
+          "mode": "Add"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 81.9115539244072,
+      "y": 74.43037974620671,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 31.9115539244072,
+          "y": -25.56962025379329,
+          "p": 1
+        },
+        {
+          "x": 131.9115539244072,
+          "y": -25.56962025379329,
+          "p": 1
+        },
+        {
+          "x": 131.9115539244072,
+          "y": 74.43037974620671,
+          "p": 1
+        },
+        {
+          "x": 31.9115539244072,
+          "y": 74.43037974620671,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "miles_ds",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 0.764594605028325,
+      "x": 53,
+      "y": 39,
+      "width": 35.04,
+      "height": 143.07999999999998,
+      "baseWidth": 96,
+      "baseHeight": 391.99999999999994,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.365,
+      "refScale": 0.73,
+      "modelScale": 0.73,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      },
+      "colliderWidth": 67,
+      "colliderHeight": 9
+    }
+  ],
+  "folders": [],
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "autoCenter": true,
+  "cameraSpeed": 5,
+  "camDeadzoneX": 50,
+  "camDeadzoneY": 30,
+  "soundEnv": {
+    "audioMaxDistance": 10000,
+    "reverbMaxDist": 1750,
+    "reverbMinPercent": 0.2,
+    "zoomSensitivity": 0.7,
+    "pannerRefDistance": 100,
+    "pannerRolloffFactor": 0.7,
+    "panningModel": "HRTF",
+    "distanceModel": "linear"
+  },
+  "sceneLog": {
+    "entries": [],
+    "lastPmProcessedAt": 0,
+    "lastPmProcessedAtByNpc": {}
+  }
+}

@@ -1829,6 +1829,39 @@ describe('Game semantic API', () => {
     expect((cassette as any).spatial).toEqual({ parentNodeId: player.name, relation: 'in' });
   });
 
+  it('takeEntityForActor uses the same protected inventory contract for NPCs and players', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'guard');
+    npc.components = [
+      { type: 'Actor' },
+      { type: 'Inventory', relation: 'in', capacity: 2, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(npc);
+    fixture.textAssets.setObject(npc.name, {
+      title: 'Guard',
+      description: 'A guard.',
+    });
+    npc.x = 0;
+    npc.y = 0;
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(npc, key);
+
+    const playerAttempt = fixture.game.takeEntity(key);
+    expect(playerAttempt.code).toBe('inventory_not_accessible');
+    expect(fixture.game.hasInventoryEntity(npc, key, 'in')).toBe(true);
+
+    const ownerAttempt = fixture.game.takeEntityForActor(npc, key);
+    expect(ownerAttempt.code).toBe('item_already_held');
+    expect(fixture.game.hasInventoryEntity(npc, key, 'in')).toBe(true);
+    expect(fixture.game.inventory).not.toContain(key);
+    expect(player).toBe(fixture.scene.player);
+  });
+
   it('takeEntity keeps the old success message for untitled technical parents', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -2135,6 +2168,95 @@ describe('Game semantic API', () => {
     expect(closed.message).toBe(fixture.game.text('parser.close_success', { target: 'Drawer' }));
     expect((drawer.components[0] as { state: number }).state).toBe(1);
     expect(fixture.sounds).toContain('close.wav');
+  });
+
+  it('uses the acting Actor inventory for locked Switch OPEN', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'guard');
+    npc.components = [
+      { type: 'Actor' },
+      { type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] },
+    ];
+    fixture.scene.addEntity(npc);
+    fixture.textAssets.setObject(npc.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('drawer_key', {
+      title: 'Drawer key',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      components: [{ type: 'Switch', state: 1, idKey: key.name }],
+    });
+    fixture.game.addInventoryEntity(npc, key);
+
+    expect(fixture.game.openEntity(drawer).code).toBe('switch_locked');
+    expect(fixture.game.openEntityForActor(npc, drawer).code).toBe('switch_opened');
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+
+    fixture.game.closeEntityForActor(npc, drawer);
+    fixture.game.addInventoryEntity(player, key);
+    expect(fixture.game.openEntity(drawer).code).toBe('switch_opened');
+  });
+
+  it('reveals hidden descendants through the same LOOK and EXAMINE runtime for NPC actors', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'guard');
+    npc.components = [{ type: 'Actor' }];
+    fixture.scene.addEntity(npc);
+    const desk = fixture.addEntity('Desk', { title: 'Desk', description: 'A desk.' });
+    const lookable = fixture.addEntity('note', {
+      title: 'Note',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: desk.name, relation: 'on' },
+    });
+    lookable.hidden = 'lookable';
+    const examinable = fixture.addEntity('key', {
+      title: 'Key',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: desk.name, relation: 'under' },
+    });
+    examinable.hidden = 'examinable';
+
+    expect(fixture.game.actorWorld.getObjectPerception(npc, lookable).visibility).toBe('hidden');
+    expect(fixture.game.actorWorld.getObjectPerception(npc, examinable).visibility).toBe('hidden');
+
+    expect(fixture.game.lookEntityForActor(npc, desk).status).toBe('ok');
+    expect(fixture.scene.isHiddenEntityRevealed(lookable)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(false);
+
+    expect(fixture.game.examineEntityForActor(npc, desk).status).toBe('ok');
+    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(true);
+  });
+
+  it('lets EXAMINE reveal lookable contents and reach nested objects through a nearby ancestor', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'guard');
+    npc.components = [{ type: 'Actor' }];
+    fixture.scene.addEntity(npc);
+    const sofa = fixture.addEntity('Sofa', { title: 'Sofa', description: 'A sofa.' });
+    sofa.x = 0;
+    sofa.y = 0;
+    const pillow = fixture.addEntity('Pillow', {
+      title: 'Pillow',
+      description: 'A pillow.',
+      spatial: { parentNodeId: sofa.name, relation: 'on' },
+    });
+    pillow.x = 500;
+    pillow.y = 500;
+    const remote = fixture.addEntity('Remote', {
+      title: 'Remote',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: pillow.name, relation: 'under' },
+    });
+    remote.hidden = 'lookable';
+
+    const outcome = fixture.game.examineEntityForActor(npc, pillow, { relation: 'under' });
+
+    expect(outcome.status).toBe('ok');
+    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(true);
   });
 
   it('transparent closed contents use a generic blocked message unless clearly openable is set', () => {
@@ -2542,5 +2664,53 @@ describe('Game semantic API', () => {
 
     expect(outcome.status).toBe('ok');
     expect(note.groupID).toBe('#quest_item');
+  });
+
+  it('lets an NPC operate an inactive Subscene logically without opening it for the player', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = new Actor(fixture.game, 0, 0, 10, 10, 'npc');
+    fixture.scene.addEntity(npc);
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    const drawerZone = fixture.addTriggerbox('DrawerZone', {
+      title: 'Desk close-up',
+      components: [{ type: 'Subscene', targetGroupId: '#drawer_zone' }],
+    });
+    const drawer = fixture.addTriggerbox('Drawer', {
+      title: 'Upper drawer',
+      disabled: true,
+      groupID: '#drawer_zone',
+      components: [{ type: 'Switch', state: 1, groupId1: 'nil', groupId2: '#drawer_open' }],
+      spatial: { parentNodeId: drawerZone.name, relation: 'in' },
+    });
+    const remote = fixture.addEntity('remote', {
+      title: 'Remote',
+      disabled: true,
+      groupID: '#drawer_open,#quest_item',
+      components: [{ type: 'Item', ignoreDistance: true }],
+      spatial: { parentNodeId: drawer.name, relation: 'in' },
+    });
+    remote.hidden = 'lookable';
+
+    const perception = fixture.game.actorWorld.getObjectPerception(npc, drawer);
+    expect(perception.visibility).toBe('visible');
+    expect(perception.interaction).toBe('reachable');
+
+    const opened = fixture.game.openEntityForActor(npc, drawer);
+
+    expect(opened.code).toBe('switch_opened');
+    expect(fixture.scene.activeSubscene).toBeNull();
+    expect(drawer.disabled).toBe(true);
+    expect(remote.disabled).toBe(true);
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+
+    const taken = fixture.game.takeEntityForActor(npc, remote);
+    expect(taken.code).toBe('item_taken');
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, remote, 'in')).toBe(true);
+    expect(remote.disabled).toBe(false);
+    expect(remote.hidden).toBe(false);
+    expect(remote.groupID).toBe('#quest_item');
+    expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
+    expect(fixture.scene.activeSubscene).toBeNull();
   });
 });

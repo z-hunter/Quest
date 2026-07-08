@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
 import { HierarchyPanel } from './components/editor/HierarchyPanel';
@@ -14,9 +14,43 @@ import './editor.css';
 
 function App() {
   const [game, setGame] = useState<Game | null>(null);
-  const { enabled: editorEnabled, spriteEditorEnabled } = useEditorStore();
+  const { enabled: editorEnabled, spriteEditorEnabled, toggleSpriteEditor } = useEditorStore();
 
-  const showLayout = editorEnabled || spriteEditorEnabled;
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#sprite-editor') {
+        toggleSpriteEditor(true);
+      } else {
+        toggleSpriteEditor(false);
+      }
+    };
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [toggleSpriteEditor]);
+
+  useEffect(() => {
+    if (!spriteEditorEnabled && window.location.hash === '#sprite-editor') {
+      window.location.hash = '';
+    }
+  }, [spriteEditorEnabled]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const isSceneDirty = Game.instance?.editor?.persistenceManager?.isCurrentSceneDirty?.();
+      const isSpriteDirty = Game.instance?.spriteEditor?.isDirty;
+
+      if (isSceneDirty || isSpriteDirty) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  const showLayout = (editorEnabled || spriteEditorEnabled) && game !== null;
 
   return (
     <div className="app-container">
