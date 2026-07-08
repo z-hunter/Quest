@@ -39,6 +39,7 @@ export class Console {
   parserCascade1ForceLlm: boolean = false;
   isClosedModal: boolean = false;
   private closedModalDisplayLines: ConsoleDisplayLine[] = [];
+  private lastPmDebugTimestamp: number | null = null;
 
   // Configuration
   readonly MAX_BUFFER_LINES = 2000; // Approx 150KB of text depending on length
@@ -289,11 +290,13 @@ export class Console {
 
     this.registerCommand('#PEEKPM-ON', () => {
       this.parserPeekPmEnabled = true;
+      this.lastPmDebugTimestamp = null;
       this.log('Puppet Master peek enabled.', 'info');
     });
 
     this.registerCommand('#PEEKPM-OFF', () => {
       this.parserPeekPmEnabled = false;
+      this.lastPmDebugTimestamp = null;
       this.log('Puppet Master peek disabled.', 'info');
     });
 
@@ -458,7 +461,19 @@ export class Console {
       this.parserPeekPmEnabled;
 
     if (!this.isOpen && !isAnyPeekEnabled) return undefined;
-    return this.log(text, 'info', { showInClosed: false });
+    return this.log(this.withPmDebugDelta(text), 'info', { showInClosed: false });
+  }
+
+  private withPmDebugDelta(text: string): string {
+    if (!text.startsWith('--- PM')) return text;
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const delta = this.lastPmDebugTimestamp === null ? 0 : now - this.lastPmDebugTimestamp;
+    this.lastPmDebugTimestamp = now;
+    const roundedDelta = Math.round(delta * 10) / 10;
+    return text.replace(/^--- PM ([^-]+) ---/, `--- PM $1 (+${roundedDelta}ms) ---`);
   }
 
   logResponse(

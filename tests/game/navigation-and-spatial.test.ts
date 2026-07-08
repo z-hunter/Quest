@@ -615,6 +615,12 @@ describe('Game navigation and spatial API', () => {
     const stalePlayer = new Actor(fixture.game as any, 50, 50, 10, 10, 'OldHero');
     stalePlayer.isPlayer = true;
     target.addEntity(stalePlayer);
+    fixture.game.inventoryManager.ensureInventoryComponent(stalePlayer, 'in');
+    const staleCassette = new Entity(fixture.game as any, 0, 0, 10, 10, 'stale_cassette');
+    staleCassette.components = [{ type: 'Item' }];
+    staleCassette.spatial = { parentNodeId: stalePlayer.name, relation: 'in' };
+    target.addEntity(staleCassette);
+    fixture.game.inventoryManager.addInventoryEntity(stalePlayer, staleCassette, 'in');
 
     const cassette = fixture.addEntity('cassette', {
       title: 'Cassette',
@@ -639,10 +645,12 @@ describe('Game navigation and spatial API', () => {
     expect(target.entities).toContain(cassette);
     expect(target.entities).toContain(label);
     expect(target.entities).not.toContain(stalePlayer);
+    expect(target.entities).not.toContain(staleCassette);
     expect(target.player).toBe(player);
     fixture.game.sceneManager.currentScene = target;
     fixture.game.inventoryManager.handleSceneChange();
     expect(fixture.game.inventory).toContain(cassette);
+    expect(fixture.game.inventory).not.toContain(staleCassette);
     expect(cassette.visible).toBe(false);
     expect((cassette as any).spatial).toEqual({ parentNodeId: 'Hero', relation: 'in' });
     expect((label as any).spatial).toEqual({ parentNodeId: 'cassette', relation: 'on' });

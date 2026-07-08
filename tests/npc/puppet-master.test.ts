@@ -665,6 +665,70 @@ describe('NpcPuppetMaster', () => {
     expect(component.knownEntities?.stale_object).toBeUndefined();
   });
 
+  it('updates remembered item location when an observed actor takes it', () => {
+    const fixture = createSceneFixture();
+    const observer = addNpc(fixture, 'guard');
+    const taker = addNpc(fixture, 'linda');
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      components: [{ type: 'Item' }],
+    });
+    new NpcWorldModelBuilder(fixture.game).build(fixture.scene, { npcIds: [observer.name] });
+
+    fixture.scene.sceneLog.appendAction({
+      actorId: taker.name,
+      displayName: 'Linda',
+      text: '[ Linda takes Compact cassette ]',
+      knownByActorIds: [observer.name],
+      timestamp: 2000,
+      payload: { action: 'take', itemId: cassette.name },
+    });
+    const context = new NpcWorldModelBuilder(fixture.game).build(fixture.scene, {
+      npcIds: [observer.name],
+    }).npcs[0];
+    const remembered = context.knownEntities.find((entry) => entry.id === cassette.name);
+
+    expect(remembered?.lastSeenLocation).toEqual({
+      sceneId: fixture.scene.id,
+      relation: 'in',
+      targetId: taker.name,
+      targetTitle: 'Security Guard',
+    });
+  });
+
+  it('updates remembered item location when an observed actor puts it into another inventory', () => {
+    const fixture = createSceneFixture();
+    const observer = addNpc(fixture, 'guard');
+    const giver = addNpc(fixture, 'linda');
+    const receiver = addNpc(fixture, 'rick');
+    fixture.game.inventoryManager.ensureInventoryComponent(receiver, 'in');
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      components: [{ type: 'Item' }],
+    });
+    new NpcWorldModelBuilder(fixture.game).build(fixture.scene, { npcIds: [observer.name] });
+
+    fixture.scene.sceneLog.appendAction({
+      actorId: giver.name,
+      displayName: 'Linda',
+      text: '[ Linda puts Compact cassette on Rick ]',
+      knownByActorIds: [observer.name],
+      timestamp: 2000,
+      payload: { action: 'put', itemId: cassette.name, targetId: receiver.name },
+    });
+    const context = new NpcWorldModelBuilder(fixture.game).build(fixture.scene, {
+      npcIds: [observer.name],
+    }).npcs[0];
+    const remembered = context.knownEntities.find((entry) => entry.id === cassette.name);
+
+    expect(remembered?.lastSeenLocation).toEqual({
+      sceneId: fixture.scene.id,
+      relation: 'in',
+      targetId: receiver.name,
+      targetTitle: 'Security Guard',
+    });
+  });
+
   it('projects Exit affordances and lets a reachable NPC traverse the Exit', () => {
     const fixture = createGameSemanticFixture('start');
     fixture.addPlayer('Hero', 0, 0);
@@ -727,6 +791,45 @@ describe('NpcPuppetMaster', () => {
       expect.objectContaining({ status: 'ok', code: 'npc_memory_updated' }),
     ]);
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
+  });
+
+  it('inserts MOVE_TO before route-available TRAVERSE_EXIT plans', async () => {
+    const fixture = createGameSemanticFixture('start');
+    fixture.addPlayer('Hero', 0, 0);
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: -20, y: -20 },
+      { x: 120, y: -20 },
+      { x: 120, y: 80 },
+      { x: -20, y: 80 },
+    ];
+    const npc = new Actor(fixture.game as any, 0, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    fixture.scene.addEntity(npc);
+    const targetScene = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      components: [{ type: 'Exit', targetSceneId: targetScene.id, portal: true }],
+    });
+    door.x = 90;
+    door.y = 20;
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'TRAVERSE_EXIT', targetId: door.name }] }],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name);
+
+    expect(plans[0].steps).toEqual([
+      { type: 'MOVE_TO', targetId: door.name },
+      { type: 'TRAVERSE_EXIT', targetId: door.name },
+    ]);
+    expect(npc.getMoveResult().status).toBe('started');
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
   });
 
   it('lets an NPC inspect the current scene as a read-only LOOK anchor', () => {
@@ -793,6 +896,95 @@ describe('NpcPuppetMaster', () => {
     vi.useRealTimers();
   });
 
+  it('builds PM batch context only for selected NPCs', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const guard = addNpc(fixture, 'guard');
+    addNpc(fixture, 'bystander');
+    const getKnownObjects = vi.spyOn(fixture.game.actorWorld, 'getKnownObjects');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    void (pm as any).enqueueNpc(fixture.scene, guard.name, { type: 'manual' });
+    await vi.runAllTimersAsync();
+
+    expect(provider.calls).toHaveLength(1);
+    expect(getKnownObjects.mock.calls.map(([actor]) => actor.name)).toEqual([guard.name]);
+  });
+
+  it('defers same-scene batch requeues while a provider call is still running', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const guard = addNpc(fixture, 'guard');
+    const bystander = addNpc(fixture, 'bystander');
+    let resolveFirst: (() => void) | null = null;
+    class SlowProvider extends MockProvider {
+      async sendMessage(
+        system: LlmProviderContent,
+        messages: LlmProviderMessage[]
+      ): Promise<LlmProviderResponse> {
+        this.lastSystem = system;
+        this.lastMessages = messages;
+        this.calls.push({ system, messages });
+        if (this.calls.length === 1) {
+          await new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+        }
+        return {
+          ok: true,
+          text: '{"kind":"pm_response","plans":[]}',
+          durationMs: 0,
+        };
+      }
+    }
+    const provider = new SlowProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    void (pm as any).enqueueNpc(fixture.scene, guard.name, { type: 'manual' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(provider.calls).toHaveLength(1);
+
+    void (pm as any).enqueueNpc(fixture.scene, bystander.name, { type: 'manual' });
+    await vi.advanceTimersByTimeAsync(900);
+    expect(provider.calls).toHaveLength(1);
+
+    resolveFirst?.();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain(bystander.name);
+  });
+
+  it('includes authoritative current scene for each active NPC in dynamic prompt', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = ComponentSystem.getNpcComponent(npc);
+    if (component) component.memory = 'I just went to the corridor.';
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const content = String(provider.calls[0].messages[0].content);
+    const jsonStart = content.indexOf('{');
+    let jsonEnd = -1;
+    let depth = 0;
+    for (let index = jsonStart; index < content.length; index++) {
+      if (content[index] === '{') depth++;
+      if (content[index] === '}' && --depth === 0) {
+        jsonEnd = index;
+        break;
+      }
+    }
+    const dynamic = JSON.parse(content.slice(jsonStart, jsonEnd + 1));
+    expect(dynamic.scene.id).toBe(fixture.scene.id);
+    expect(dynamic.npcs[0].currentSceneId).toBe(fixture.scene.id);
+  });
+
   it('executes a source-scene Exit continuation after the active scene has changed', async () => {
     vi.useFakeTimers();
     const fixture = createGameSemanticFixture('start');
@@ -826,9 +1018,89 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.runAllTimersAsync();
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
+      'Reached the corridor. Arrived in Corridor.'
+    );
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     vi.useRealTimers();
+  });
+
+  it('treats a successful Exit traversal as completion before WORLD_CHANGED interrupts', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    destination.addEntity(npc);
+    fixture.game.sceneManager.currentScene = destination;
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    (pm as any).pendingPlanContinuations.set('start:guard', {
+      npcId: 'guard',
+      barrierStep: { type: 'TRAVERSE_EXIT', targetId: 'door' },
+      steps: [],
+      memory: 'Reached the corridor.',
+      interruptOn: [{ type: 'WORLD_CHANGED' }],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+
+    void (pm as any).enqueueNpc(fixture.scene, 'guard', {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'exit_traversed',
+        npcId: 'guard',
+        targetId: 'door',
+        actionType: 'TRAVERSE_EXIT',
+        worldChanged: true,
+      },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
+      'Reached the corridor. Arrived in Corridor.'
+    );
+    expect(JSON.stringify(provider.calls.map((call) => call.messages))).toContain('plan_completed');
+    expect(JSON.stringify(provider.calls.map((call) => call.messages))).not.toContain(
+      'plan_interrupted'
+    );
+  });
+
+  it('records destination arrival memory after Exit traversal without plan memory', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    destination.addEntity(npc);
+    fixture.game.sceneManager.currentScene = destination;
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    (pm as any).pendingPlanContinuations.set('start:guard', {
+      npcId: 'guard',
+      barrierStep: { type: 'TRAVERSE_EXIT', targetId: 'door' },
+      steps: [],
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+
+    void (pm as any).enqueueNpc(fixture.scene, 'guard', {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'exit_traversed',
+        npcId: 'guard',
+        targetId: 'door',
+        actionType: 'TRAVERSE_EXIT',
+        worldChanged: true,
+      },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Arrived in Corridor.');
   });
 
   it('returns visible open-container contents in an NPC EXAMINE outcome', async () => {
@@ -1818,6 +2090,41 @@ describe('NpcPuppetMaster', () => {
     expect(dynamicCommand.requires[0]).not.toHaveProperty('scope');
   });
 
+  it('does not expose item presence in the PM static catalog', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 5, 5);
+    const playerInventory = ComponentSystem.getInventoryComponent(player, 'in');
+    if (playerInventory) playerInventory.protected = true;
+    addNpc(fixture, 'guard');
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      components: [{ type: 'Item' }],
+    });
+    expect(fixture.game.addInventoryEntity(player, cassette, 'in').status).toBe('ok');
+
+    const builder = new NpcWorldModelBuilder(fixture.game);
+    const hiddenStaticIds = builder
+      .buildStaticEntityProjection(fixture.scene)
+      .map((entity) => entity.id);
+    const hiddenWorld = builder.build(fixture.scene);
+    const guardContext = hiddenWorld.npcs.find((npc) => npc.id === 'guard');
+
+    expect(hiddenStaticIds).not.toContain('cassette');
+    expect(guardContext?.entities.some((entity) => entity.id === 'cassette')).toBe(false);
+
+    expect(fixture.game.removeEntityFromInventory(player, cassette, 'in').status).toBe('ok');
+    cassette.visible = true;
+    cassette.spatial = {};
+    const droppedStaticIds = builder
+      .buildStaticEntityProjection(fixture.scene)
+      .map((entity) => entity.id);
+    const droppedWorld = builder.build(fixture.scene);
+    const droppedGuardContext = droppedWorld.npcs.find((npc) => npc.id === 'guard');
+
+    expect(droppedStaticIds).not.toContain('cassette');
+    expect(droppedGuardContext?.entities.some((entity) => entity.id === 'cassette')).toBe(true);
+  });
+
   it('does not run route planning while summarizing command affordances', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 5, 5);
@@ -2076,6 +2383,16 @@ describe('NpcPuppetMaster', () => {
       title: 'TV remote',
       components: [{ type: 'Item', ignoreDistance: true }],
     });
+    const battery = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      components: [
+        { type: 'Item' },
+        { type: 'State', id: 'charge_percent', valueType: 'number', initialValue: 100, value: 100 },
+      ],
+    });
+    battery.groupID = '#aaa';
+    fixture.game.inventoryManager.ensureInventoryComponent(remote, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(remote, battery, 'in');
     fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
     fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in');
     (fixture.game as any).sayAsActor = () => {};
@@ -2237,6 +2554,17 @@ describe('NpcPuppetMaster', () => {
       components: [{ type: 'Item' }],
       spatial: { parentNodeId: drawer.name, relation: 'in' },
     });
+    const battery = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      groupID: '#aaa',
+      components: [
+        { type: 'Item' },
+        { type: 'State', id: 'charge_percent', valueType: 'number', initialValue: 100, value: 100 },
+      ],
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(remote, 'in');
+    fixture.game.inventoryManager.addInventoryEntity(remote, battery, 'in');
     const tv = fixture.addEntity('tv', {
       title: 'TV',
       components: [

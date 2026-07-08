@@ -82,6 +82,12 @@ export interface NpcKnownEntityMemory {
   kind: 'item' | 'actor' | 'object';
   lastSeenSceneId: string;
   lastSeenAt: number;
+  lastSeenLocation?: {
+    sceneId: string;
+    relation: Exclude<SpatialRelationType, 'near'>;
+    targetId: string;
+    targetTitle?: string;
+  };
 }
 
 export interface InventoryComponent {
@@ -295,6 +301,31 @@ export class ComponentSystem {
             const rawAt = (entry as any).lastSeenAt;
             const lastSeenSceneId = typeof rawSceneId === 'string' ? rawSceneId : '';
             const lastSeenAt = typeof rawAt === 'number' ? rawAt : 0;
+            const rawLocation = (entry as any).lastSeenLocation;
+            const relation = rawLocation?.relation;
+            const targetId =
+              typeof rawLocation?.targetId === 'string' ? rawLocation.targetId.trim() : '';
+            const locationSceneId =
+              typeof rawLocation?.sceneId === 'string'
+                ? rawLocation.sceneId.trim()
+                : lastSeenSceneId;
+            const targetTitle =
+              typeof rawLocation?.targetTitle === 'string' ? rawLocation.targetTitle.trim() : '';
+            const lastSeenLocation =
+              rawLocation &&
+              (relation === 'in' ||
+                relation === 'on' ||
+                relation === 'under' ||
+                relation === 'behind') &&
+              targetId &&
+              locationSceneId
+                ? {
+                    sceneId: locationSceneId,
+                    relation,
+                    targetId,
+                    ...(targetTitle ? { targetTitle } : {}),
+                  }
+                : undefined;
 
             if (id && title) {
               cleaned[key] = {
@@ -303,6 +334,7 @@ export class ComponentSystem {
                 kind,
                 lastSeenSceneId,
                 lastSeenAt,
+                ...(lastSeenLocation ? { lastSeenLocation } : {}),
               };
             }
           }

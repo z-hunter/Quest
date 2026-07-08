@@ -112,7 +112,35 @@ export function createTestGame(): TestGameHarness {
           (entity: any) => entity.isPlayer && entity !== actor
         );
         if (existingPlayer) {
-          targetScene.removeEntity(existingPlayer);
+          const discard = new Set<any>();
+          const queue = [existingPlayer];
+          while (queue.length > 0) {
+            const current = queue.shift();
+            if (!current || discard.has(current)) continue;
+            discard.add(current);
+            for (const candidate of targetScene.entities) {
+              const parentId =
+                typeof (candidate as any).spatial?.parentNodeId === 'string'
+                  ? (candidate as any).spatial.parentNodeId.trim()
+                  : '';
+              if (
+                parentId === current.name ||
+                (typeof (candidate as any).getInventoryPositionOwner === 'function' &&
+                  (candidate as any).getInventoryPositionOwner() === current)
+              ) {
+                queue.push(candidate);
+              }
+            }
+          }
+          targetScene.entities = targetScene.entities.filter((entity: any) => !discard.has(entity));
+          for (const entity of discard) {
+            targetScene.subsceneEntities.delete(entity);
+            if (targetScene.player === entity) targetScene.player = null;
+            if (typeof entity.setInventoryPositionOwner === 'function') {
+              entity.setInventoryPositionOwner(null);
+            }
+            delete entity.__inventoryRelation;
+          }
         }
       }
 

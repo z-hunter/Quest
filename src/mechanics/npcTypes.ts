@@ -118,6 +118,12 @@ export type NpcActorContext = {
     title: string;
     kind: 'item' | 'actor' | 'object';
     lastSeenSceneId?: string;
+    lastSeenLocation?: {
+      sceneId: string;
+      relation: string;
+      targetId: string;
+      targetTitle?: string;
+    };
   }>;
   newEvents: SceneLogEntry[];
   recentEvents: SceneLogEntry[];

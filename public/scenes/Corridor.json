@@ -228,6 +228,13 @@
       "interactions": {},
       "components": [
         {
+          "type": "Surface",
+          "relation": "on",
+          "capacity": 8,
+          "groups": [],
+          "items": []
+        },
+        {
           "type": "WalkBox",
           "mode": "Add"
         }
@@ -833,28 +840,28 @@
       "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": -509.9381633272064,
-      "y": -137.9792121272862,
+      "x": -550.6457352112014,
+      "y": -139.79715935854634,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -509.9381633272064,
-          "y": -137.9792121272862,
+          "x": -550.6457352112014,
+          "y": -139.79715935854634,
           "p": 1.0431424643929696
         },
         {
-          "x": -481.32455787663685,
-          "y": -138.21215699721654,
+          "x": -522.9013512835288,
+          "y": -140.0055142061039,
           "p": 1.0424314168264899
         },
         {
-          "x": -363.2652092009974,
-          "y": -129.5078250136152,
+          "x": -391.5258070795587,
+          "y": -131.67931926909367,
           "p": 1.0467476902559403
         },
         {
-          "x": -387.55777931339287,
-          "y": -129.2302306456075,
+          "x": -416.4691613474825,
+          "y": -131.26263919107012,
           "p": 1.0405613305364574
         }
       ],
@@ -1058,28 +1065,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1668.4732539728845,
-      "y": 72.1268468379522,
+      "x": 1646.9214689253608,
+      "y": 81.06503356313719,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1668.4732539728845,
-          "y": 72.1268468379522,
+          "x": 1646.9214689253608,
+          "y": 81.06503356313719,
           "p": 1
         },
         {
-          "x": 1690.481492648923,
-          "y": 73.74017235267235,
+          "x": 1666.3416895886883,
+          "y": 82.48864305587472,
           "p": 1
         },
         {
-          "x": 1674.3155504121128,
-          "y": 120.98019540323686,
+          "x": 1652.0767513493884,
+          "y": 124.17356320268614,
           "p": 1
         },
         {
-          "x": 1598.3278836143336,
-          "y": 159.11159360351513,
+          "x": 1585.0247133091552,
+          "y": 157.82097034648677,
           "p": 1
         }
       ],
@@ -1107,6 +1114,13 @@
       "textRedirects": {},
       "interactions": {},
       "components": [
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": 0,
+          "offsetY": 0,
+          "triggerId": "#F2"
+        },
         {
           "type": "Actor"
         },
@@ -1138,7 +1152,7 @@
           "relation": "in",
           "capacity": 8,
           "groups": [],
-          "protected": false,
+          "protected": true,
           "items": ["battery_aaa"]
         }
       ],
@@ -1184,126 +1198,6 @@
       },
       "colliderWidth": 67,
       "colliderHeight": 9
-    },
-    {
-      "name": "Miles",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 10,
-          "groups": [],
-          "protected": true,
-          "items": ["test"],
-          "relation": "in"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow2",
-          "offsetX": -12,
-          "offsetY": -14,
-          "triggerId": "#F2"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "x": 1678.2310535986571,
-      "y": 83.51094640135341,
-      "width": 120.34619538452706,
-      "height": 288.6682389291021,
-      "baseWidth": 148,
-      "baseHeight": 355,
-      "spriteName": "miles2_ds-idle-up.json",
-      "color": "#00ffff",
-      "scale": 0.8131499688143721,
-      "refScale": 0.84,
-      "modelScale": 0.84,
-      "ignoreScaling": false,
-      "animationSpeed": 53,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "isPlayer": true,
-      "speed": 0.24,
-      "perceptionRadius": 600,
-      "direction": "up",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles2_ds-idle-up.json",
-          "down": "miles2_ds-idle-down.json",
-          "left": "miles2_ds-idle-left.json",
-          "right": ""
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles2_ds-wlk-up.json",
-          "down": "miles2_ds-walk-down.json",
-          "left": "miles2_ds-walk-left.json",
-          "right": ""
-        }
-      },
-      "colliderWidth": 88,
-      "colliderHeight": 4
-    },
-    {
-      "name": "test",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#compact_cassete",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Miles",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 1678.2310535986571,
-      "y": 83.51094640135341,
-      "width": 15.256136620125426,
-      "height": 21.679773091757184,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.7744285417279735,
-      "refScale": 0.8,
-      "modelScale": 0.8,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
     },
     {
       "name": "battery_aaa",
@@ -1352,6 +1246,126 @@
       "blur": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
+    },
+    {
+      "name": "Miles",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": ["test"],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1656.984621622974,
+      "y": 92.80537837701903,
+      "width": 124.11221660389366,
+      "height": 296.8630045795835,
+      "baseWidth": 148,
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
+      "color": "#00ffff",
+      "scale": 0.8385960581344166,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "down",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
+    },
+    {
+      "name": "test",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#compact_cassete",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 4,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Miles",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 1656.984621622974,
+      "y": 92.80537837701903,
+      "width": 15.733550418321286,
+      "height": 22.35820322603551,
+      "baseWidth": 19.69986357435198,
+      "baseHeight": 27.994542974079128,
+      "spriteName": null,
+      "color": "#AAAAAA",
+      "scale": 0.7986629125089683,
+      "refScale": 0.8,
+      "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [],
@@ -1377,26 +1391,12 @@
   "sceneLog": {
     "entries": [
       {
-        "id": "1783264193493-2",
+        "id": "1783380368175-2",
         "kind": "action",
-        "timestamp": 1783264193493,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
-        "knownByActorIds": ["miles_ds"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783264233012-2",
-        "kind": "action",
-        "timestamp": 1783264233012,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "[ Hero_1 goes through Ex3 ]",
+        "timestamp": 1783380368175,
+        "actorId": "Miles",
+        "displayName": "Miles",
+        "text": "[ Miles goes through Ex3 ]",
         "knownByActorIds": ["npc_Rick"],
         "payload": {
           "action": "traverse_exit",
@@ -1405,40 +1405,32 @@
         }
       },
       {
-        "id": "1783264244441-3",
-        "kind": "speech",
-        "timestamp": 1783264244441,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "hi there",
-        "knownByActorIds": ["npc_Rick"]
+        "id": "1783380377091-2",
+        "kind": "action",
+        "timestamp": 1783380377091,
+        "actorId": "Miles",
+        "displayName": "Miles",
+        "text": "[ Miles goes through Ex3 ]",
+        "knownByActorIds": ["npc_Rick"],
+        "payload": {
+          "action": "traverse_exit",
+          "subjectId": "Ex3",
+          "targetId": "Ex3"
+        }
       },
       {
-        "id": "1783264248141-4",
-        "kind": "speech",
-        "timestamp": 1783264248141,
-        "actorId": "npc_Rick",
-        "displayName": "Rick",
-        "text": "Hey there.",
-        "knownByActorIds": []
-      },
-      {
-        "id": "1783264260430-5",
-        "kind": "speech",
-        "timestamp": 1783264260430,
-        "actorId": "Hero_1",
-        "displayName": "Hero_1",
-        "text": "can I help you?",
-        "knownByActorIds": ["npc_Rick"]
-      },
-      {
-        "id": "1783264262200-6",
-        "kind": "speech",
-        "timestamp": 1783264262200,
-        "actorId": "npc_Rick",
-        "displayName": "Rick",
-        "text": "Yeah, I'm doing alright. Just hanging out here.",
-        "knownByActorIds": []
+        "id": "1783380430710-3",
+        "kind": "action",
+        "timestamp": 1783380430710,
+        "actorId": "Miles",
+        "displayName": "Miles",
+        "text": "[ Miles goes through Ex3 ]",
+        "knownByActorIds": ["npc_Rick"],
+        "payload": {
+          "action": "traverse_exit",
+          "subjectId": "Ex3",
+          "targetId": "Ex3"
+        }
       }
     ],
     "lastPmProcessedAt": 0,

@@ -29,7 +29,8 @@ const FALLBACK_SYSTEM_PROMPT = [
   'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior.',
   'Each plan must target a real NPC id from context.',
   'The scene-static catalog describes authored identity and affordances only; catalog membership never proves current physical presence. Inventory items can leave with another actor while the catalog remains cached.',
-  'Current presence is confirmed only by this NPC dynamic entities or inventory. knownEntities and lastSeenSceneId are historical knowledge.',
+  'Current presence is confirmed only by this NPC visible dynamic entities or visible inventory. knownEntities and lastSeenSceneId are historical knowledge.',
+  'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
@@ -58,7 +59,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
   'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
-  'Only current dynamic entities can be inspected (LOOK, EXAMINE); their supported relations are in, on, under, behind unless explicitly stated otherwise.',
+  'Only current visible dynamic entities can be inspected (LOOK, EXAMINE); their supported relations are in, on, under, behind unless explicitly stated otherwise.',
   'Assume a dynamic entity approach is already_reachable only if interaction is reachable or held. Never infer presence or reachability from the static catalog.',
 ].join('\n');
 
@@ -404,11 +405,7 @@ export class NpcPuppetMaster {
     const currentGeneration = this.haltGenerationId;
     this.processingScenes.add(processingKey);
     try {
-      const fullWorldModel = this.worldModelBuilder.build(scene);
-      const worldModel = {
-        ...fullWorldModel,
-        npcs: fullWorldModel.npcs.filter((npc) => npc.id === npcId),
-      };
+      const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
       if (!worldModel.npcs.length) return [];
       const plans = await this.processWorldModel(worldModel, trigger);
       if (this.haltGenerationId !== currentGeneration) return [];
@@ -437,7 +434,7 @@ export class NpcPuppetMaster {
           worldModel
         );
         if (normalized.valid) {
-          const expandedPlans = this.expandImplicitTakeApproaches(normalized.plans, worldModel);
+          const expandedPlans = this.expandImplicitApproaches(normalized.plans, worldModel);
           const itemValidation = this.validatePlanItems(expandedPlans, worldModel, trigger);
           const acceptedPlans = this.removePrematureStrategySteps(
             this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
@@ -512,7 +509,7 @@ export class NpcPuppetMaster {
     const parsed = this.parseJson(extractedJson);
     const normalized = this.normalizeResponse(parsed, worldModel);
     const expandedPlans = normalized.valid
-      ? this.expandImplicitTakeApproaches(normalized.plans, worldModel)
+      ? this.expandImplicitApproaches(normalized.plans, worldModel)
       : normalized.plans;
     const itemValidation = normalized.valid
       ? this.validatePlanItems(expandedPlans, worldModel, trigger)
@@ -719,7 +716,7 @@ export class NpcPuppetMaster {
     return { plans: acceptedPlans, rejectedPlans };
   }
 
-  private expandImplicitTakeApproaches(plans: NpcPlan[], worldModel: NpcWorldModel): NpcPlan[] {
+  private expandImplicitApproaches(plans: NpcPlan[], worldModel: NpcWorldModel): NpcPlan[] {
     return plans.map((plan) => {
       const npc = worldModel.npcs.find((candidate) => candidate.id === plan.npcId);
       if (!npc) return plan;
@@ -742,6 +739,25 @@ export class NpcPuppetMaster {
             steps.push({ type: 'MOVE_TO', targetId: step.targetId });
             changed = true;
             this.traceWake('take_auto_approach_inserted', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              targetId: step.targetId,
+            });
+          }
+        }
+        if (step.type === 'TRAVERSE_EXIT') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = steps.some(
+            (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+          );
+          if (
+            target?.interaction !== 'reachable' &&
+            target?.approach === 'route_available' &&
+            !hasPriorMove
+          ) {
+            steps.push({ type: 'MOVE_TO', targetId: step.targetId });
+            changed = true;
+            this.traceWake('exit_auto_approach_inserted', {
               sceneId: worldModel.scene.id,
               npcId: plan.npcId,
               targetId: step.targetId,
@@ -920,6 +936,42 @@ export class NpcPuppetMaster {
       trigger.type === 'action_completed' || trigger.type === 'wait_elapsed'
         ? [...pending.completedSteps, barrierResult as NpcPlanExecutionOutcome]
         : pending.completedSteps;
+
+    if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
+      this.pendingPlanContinuations.delete(stateKey);
+      const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
+        (candidate) => candidate.getObjectByName(npcId)
+      );
+      const memory = destinationScene
+        ? this.buildSceneArrivalMemory(destinationScene, pending.memory)
+        : pending.memory;
+      const completionOutcomes = this.executor.executePlan({
+        npcId: pending.npcId,
+        steps: [],
+        ...(memory !== undefined ? { memory } : {}),
+      });
+      const finalResults = [...completedSteps, ...completionOutcomes];
+      this.traceWake('plan_completed_after_scene_transfer', {
+        sourceSceneId: scene.id,
+        destinationSceneId: destinationScene?.id,
+        npcId,
+        discardedStepTypes: pending.steps.map((step) => step.type),
+        steps: finalResults.length,
+      });
+      ShadowLogger.commit(
+        npcId,
+        'plan_completed',
+        finalResults.some((outcome) => outcome.worldChanged)
+      );
+      if (pending.trackCompletion && destinationScene) {
+        this.scheduleNpc(destinationScene, npcId, {
+          type: 'plan_completed',
+          results: finalResults,
+        });
+      }
+      return true;
+    }
+
     const interrupt = this.getPlanInterrupt(scene, pending, trigger, barrierResult);
     this.traceWake('plan_interrupt_check', {
       sceneId: scene.id,
@@ -959,38 +1011,6 @@ export class NpcPuppetMaster {
             : {}),
         });
       }, 0);
-      return true;
-    }
-
-    if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
-      this.pendingPlanContinuations.delete(stateKey);
-      const completionOutcomes = this.executor.executePlan({
-        npcId: pending.npcId,
-        steps: [],
-        ...(pending.memory !== undefined ? { memory: pending.memory } : {}),
-      });
-      const finalResults = [...completedSteps, ...completionOutcomes];
-      const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
-        (candidate) => candidate.getObjectByName(npcId)
-      );
-      this.traceWake('plan_completed_after_scene_transfer', {
-        sourceSceneId: scene.id,
-        destinationSceneId: destinationScene?.id,
-        npcId,
-        discardedStepTypes: pending.steps.map((step) => step.type),
-        steps: finalResults.length,
-      });
-      ShadowLogger.commit(
-        npcId,
-        'plan_completed',
-        finalResults.some((outcome) => outcome.worldChanged)
-      );
-      if (pending.trackCompletion && destinationScene) {
-        this.scheduleNpc(destinationScene, npcId, {
-          type: 'plan_completed',
-          results: finalResults,
-        });
-      }
       return true;
     }
 
@@ -1045,6 +1065,16 @@ export class NpcPuppetMaster {
       });
     }, 0);
     return true;
+  }
+
+  private buildSceneArrivalMemory(scene: Scene, existing?: string): string {
+    const title = this.game.textAssets.getResolvedSceneField(scene, 'title')?.trim();
+    const location = title || scene.id;
+    const arrival = `Arrived in ${location}.`;
+    const base = typeof existing === 'string' ? existing.trim() : '';
+    if (!base) return arrival;
+    if (base.toLowerCase().includes(arrival.toLowerCase())) return base;
+    return `${base} ${arrival}`;
   }
 
   private getContinuationBarrierResult(
@@ -1163,7 +1193,7 @@ export class NpcPuppetMaster {
       return result.targetId;
     }
 
-    const worldModel = this.worldModelBuilder.build(scene);
+    const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
     const npc = worldModel.npcs.find((candidate) => candidate.id === npcId);
     if (!npc) return null;
     if (itemId && Array.isArray(npc.inventory?.itemIds) && npc.inventory.itemIds.includes(itemId)) {
@@ -1519,11 +1549,7 @@ export class NpcPuppetMaster {
     const currentGeneration = this.haltGenerationId;
     this.processingScenes.add(processingKey);
     try {
-      const fullWorldModel = this.worldModelBuilder.build(scene);
-      const worldModel = {
-        ...fullWorldModel,
-        npcs: fullWorldModel.npcs.filter((npc) => npc.id === npcId),
-      };
+      const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
       if (!worldModel.npcs.length) return;
 
       this.traceWake('strategy_request_start', {
@@ -1770,7 +1796,8 @@ export class NpcPuppetMaster {
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
           '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
-          '4. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
+          '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
+          '5. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
       },
@@ -1783,6 +1810,7 @@ export class NpcPuppetMaster {
   ): Record<string, unknown> {
     const compactTrigger = trigger ? this.compactPromptTrigger(trigger) : undefined;
     return this.compactPromptRecord({
+      scene: worldModel.scene,
       trigger: compactTrigger,
       npcs: worldModel.npcs.map((npc) => {
         const entities = npc.entities || [];
@@ -1794,6 +1822,8 @@ export class NpcPuppetMaster {
           trigger?.type === 'batch' ? trigger.triggersByNpc[npc.id]?.at(-1) : trigger;
         return this.compactPromptRecord({
           id: npc.id,
+          currentSceneId: worldModel.scene.id,
+          currentSceneTitle: worldModel.scene.title,
           objectives: npc.objectives,
           memory: npc.memory,
           inventory: npc.inventory,
@@ -1807,6 +1837,7 @@ export class NpcPuppetMaster {
                     id: entity.id,
                     kind: entity.kind,
                     lastSeenSceneId: entity.lastSeenSceneId,
+                    lastSeenLocation: entity.lastSeenLocation,
                     title:
                       entity.lastSeenSceneId !== worldModel.scene.id ? entity.title : undefined,
                   })
@@ -2208,22 +2239,14 @@ export class NpcPuppetMaster {
         reason: 'scene_batch_already_processing',
         npcIds: providerNpcIds,
       });
-      for (const npcId of providerNpcIds) {
-        for (const trigger of batch.triggersByNpc.get(npcId) || []) {
-          void this.enqueueNpc(scene, npcId, trigger);
-        }
-      }
+      this.deferBatch(batch, providerNpcIds);
       batch.completionResolvers.forEach((resolve) => resolve());
       return;
     }
 
     this.processingScenes.add(processingKey);
     try {
-      const fullWorldModel = this.worldModelBuilder.build(scene);
-      const worldModel = {
-        ...fullWorldModel,
-        npcs: fullWorldModel.npcs.filter((npc) => providerNpcIds.includes(npc.id)),
-      };
+      const worldModel = this.worldModelBuilder.build(scene, { npcIds: providerNpcIds });
       if (!worldModel.npcs.length) {
         this.traceWake('batch_stopped', {
           sceneId,
@@ -2742,6 +2765,9 @@ export class NpcPuppetMaster {
         }
 
         if (dynamicContext) {
+          if (dynamicContext.scene) {
+            promptLines.push(`Scene: ${JSON.stringify(dynamicContext.scene)}`);
+          }
           // Format Trigger
           let triggerStr = 'None';
           if (dynamicContext.trigger) {
@@ -2799,7 +2825,7 @@ export class NpcPuppetMaster {
                 }
               }
               promptLines.push(
-                `  * ${npc.id} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}`
+                `  * ${npc.id} @ ${npc.currentSceneId || dynamicContext.scene?.id || 'unknown'} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}`
               );
               const knownEntities = Array.isArray(npc.knownEntities)
                 ? npc.knownEntities.map((entry: any) => ({
