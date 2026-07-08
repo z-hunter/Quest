@@ -36,6 +36,32 @@ To run the game on a Linux web server (e.g., Nginx or Apache):
 
 > **Note**: The integrated **Scene Editor** and **Sprite Editor** features rely on a local backend to save files directly to local disk. These features will **not** work when hosted as a static site. The game itself can be played if all necessary assets are pre-built.
 
+## Desktop Build (Tauri)
+
+You can build and run the game as a native desktop application using Tauri.
+
+### Prerequisites
+
+1. Install [Rust and Cargo](https://www.rust-lang.org/tools/install).
+2. Install the Tauri CLI (if not already installed):
+   ```bash
+   npm install -D @tauri-apps/cli
+   ```
+
+### Development
+
+To run the desktop application in development mode:
+```bash
+npm run tauri:dev
+```
+
+### Production Build
+
+To build a standalone desktop package:
+```bash
+npm run tauri:build
+```
+
 ## Project Structure
 
 - `src/` - Source code (React, TypeScript).
