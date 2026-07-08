@@ -1,48 +1,131 @@
-# Scanline Engine Technical Specification
+﻿# Scanline Engine вЂ” Technical Specification
 
-## 1. Architecture Overview
-
-The Scanline Engine is built on a modern web stack designed to emulate retro aesthetics while maintaining high performance, developer ergonomics, and supporting complex semantic text-parsing gameplay.
-
-### 1.1 Core Stack
-
-- **Framework**: React + Vite
-- **Language**: TypeScript
-- **Rendering**: Hybrid approach
-  - **Game View**: HTML5 Canvas for performance (pixel manipulation, CRT shader effects).
-  - **Editor UI**: React components overlaying the canvas (simulating retro UI).
-- **State Management**:
-  - **Engine**: Direct manipulation of a `Game` singleton (recently decomposed to delegate logic to specialized systems).
-  - **UI**: Local React state + Zustand for ephemeral editor state.
-
-### 1.2 Design Patterns
-
-- **System Decomposition**: Core logic is split from the `Game` monolith into domain-specific managers (`GameSemanticAPI`, `InventoryManager`, `Parser`).
-- **Semantic-Driven**: The world model is driven by Text Assets (TA) that define semantic tags and relations, decoupled from raw visual representation.
-- **Facade Pattern**: The `SceneEditor` acts as a central facade, delegating operations to specialized managers.
-- **Descriptive Renderer**: `SceneRenderer` is a stateless function that receives a `Scene` and `Context` to draw a frame, decoupling state from presentation.
+> **Last audited**: 2026-07-07. Reflects current `src/` directory structure and implemented subsystems.
 
 ---
 
-## 2. Codebase Map (Entry Points)
+## 1. Architecture Overview
 
-For new developers or AI agents, here is the functional map of the `src/` directory to quickly locate relevant subsystems:
+The Scanline Engine is a 2.5D retro-style adventure game engine built on a modern web stack. It emulates the aesthetics of early Sierra / LucasArts games while supporting complex semantic gameplay, AI-driven NPC behaviour, and an integrated visual editor.
 
-- **`src/mechanics/`**: Text Parser, LLM Integration cascade (`Parser.ts`, LLM prompt builders).
-- **`src/systems/`**: High-level gameplay logic.
-  - `GameSemanticAPI.ts`: Handles all interaction semantics (`look`, `examine`, `take`, `put`, `open`/`close`).
-  - `InventoryManager.ts`: Player inventory and container logic.
-  - `ShadowSystem.ts`: Handles dynamic shadows.
-- **`src/scene/`**: Spatial hierarchy, scene loading, and geometry.
-  - `Scene.ts`: The main scene data structure and walkbox checks.
-  - `SceneSpatialValidator.ts`: Enforces spatial relation rules (e.g., forbidding "near" in storage containers).
-  - `SceneLoader.ts`: Loading logic for `.json` scenes.
-- **`src/core/`**: Fundamental engine loops, Console UI, Text Assets, and Asset loading.
-  - `Game.ts`: The central loop and state holder.
-  - `Console.ts`: The in-game text console UI.
-  - `TextAssetManager.ts`: Loads and caches `.json` text assets.
-- **`src/entities/`**: Visual game objects (`Entity.ts`, `Actor.ts`, `QuadObject.ts`) and movement logic (`ActorMovement.ts`).
-- **`src/editor/` / `src/components/`**: React-based Scene and Sprite editor UI.
+### 1.1 Core Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | **React 19 + Vite 7** |
+| Language | **TypeScript ~5.9** |
+| Rendering | HTML5 Canvas (game) + React DOM (editor UI) |
+| State вЂ” Engine | Direct mutation of `Game` singleton + domain-specific service singletons |
+| State вЂ” UI | Local React state + **Zustand 5** for ephemeral editor state |
+| Styling | Vanilla CSS (no Tailwind) |
+| Local ML Inference | **onnxruntime-web 1.27** (WASM backend) |
+| NLP helpers | **@nlpjs** (noun phrase extraction, language detection) |
+| Build output | Vite SPA в†’ `/dist`; optional Tauri native shell |
+| Tests | **Vitest 4** |
+
+### 1.2 Design Patterns
+
+- **Domain Service Decomposition**: Core logic extracted from the `Game` monolith into dedicated services (`GameSemanticAPI`, `InventoryManager`, `ActorNavigationService`, `ComponentSystem`, `StateEventSystem`, `SoundManager`, etc.).
+- **IGame Interface**: All runtime services depend on `src/core/IGame.ts`, not the concrete `Game` class, enabling isolated unit testing without a full engine context.
+- **Semantic-Driven World Model**: The game world's behaviour is driven by Text Assets (TA) вЂ” external `.json` files that define descriptions, synonyms, tags, relation facts, authored commands, and failure messages. Engine code is decoupled from authored text.
+- **Facade Pattern**: `SceneEditor` / `vetool.tsx` acts as a central editor facade, delegating operations to specialized managers.
+- **Descriptive Renderer**: `SceneRenderer` is a stateless function that receives `Scene + Context`, fully decoupling rendering from state.
+- **Platform Adapter**: `src/platform/fileApi.ts` transparently routes file I/O to either the Vite dev middleware or Tauri's native Rust commands.
+
+---
+
+## 2. Source Map (`src/`)
+
+For new developers or AI agents вЂ” functional map of the `src/` directory:
+
+### `src/core/` вЂ” Engine Core
+
+| File | Role |
+|------|------|
+| `Game.ts` | Central game loop, systems wiring, global state holder |
+| `IGame.ts` | Interface contract consumed by all services (enables testability) |
+| `Console.ts` | In-game text console UI and message queue |
+| `TextAssetManager.ts` | Loads and caches `.json` text assets; drives TA-Driven world model |
+| `ScriptAPI.ts` | Public scripting surface for authored event scripts |
+| `ScriptRegistry.ts` | Registers and invokes authored game scripts |
+| `AssetLoader.ts` | Image, audio, and scene asset loading pipeline |
+| `AudioManager.ts` | High-level audio manager facade |
+| `Input.ts` | Keyboard, mouse, pointer input abstraction |
+
+### `src/mechanics/` вЂ” Parser, LLM, NPC
+
+| File / Dir | Role |
+|------------|------|
+| `Parser.ts` | Stage-1 deterministic text parser; rule-based verb + NLP cascade |
+| `NlpCascade.ts` | NLP.js integration (noun phrase extraction, synonym matching) |
+| `LlmCascade.ts` | Stage-2 LLM Game Master cascade (parser fallback, post-API recovery) |
+| `ParserWorldModelBuilder.ts` | Builds the semantic world model snapshot for the LLM parser prompt |
+| `NpcPuppetMaster.ts` | Autonomous NPC planning system (batch + individual wake triggers, multi-step plans, strategy, hybrid SLM routing) |
+| `NpcWorldModelBuilder.ts` | Builds `NpcWorldModel` / `NpcActorContext` for each NPC |
+| `ActorPlanExecutor.ts` | Executes typed `NpcPlanStep[]` (MOVE_TO, TAKE, PUT, COMMAND, SAY, вЂ¦) |
+| `ActorCommandExecutor.ts` | Runs authored commands defined in Text Assets |
+| `parserTypes.ts` | Parser DSL type definitions |
+| `npcTypes.ts` | NPC plan, world model, and trigger type definitions |
+| `llm/ILlmProvider.ts` | LLM provider abstraction interface |
+| `llm/AnthropicProvider.ts` | Claude API via `/api/llm` proxy |
+| `llm/OllamaProvider.ts` | Local Ollama OpenAI-compatible endpoint |
+| `slm/` | **Hybrid SLM subsystem** вЂ” see В§4.3 and `docs/npc-pm-slm.md` |
+
+### `src/systems/` вЂ” Gameplay Services
+
+| File | Role |
+|------|------|
+| `GameSemanticAPI.ts` | Actor-aware semantic verbs: `look`, `examine`, `take`, `put`, `open`, `close`, `use` |
+| `InventoryManager.ts` | Player + NPC inventory, container logic, spatial rules |
+| `ActorNavigationService.ts` | A* approach planning, reachability checks, teleport plans |
+| `ActorWorldQuery.ts` | Read-only spatial queries used by NPC and parser world models |
+| `ComponentSystem.ts` | Component lifecycle: State, Switch, Subscene, InventoryContainer, Exit |
+| `StateEventSystem.ts` | Type-safe state mutation + script dispatch on state change |
+| `SoundManager.ts` | Spatial audio pipeline (Web Audio API, reverb, proximity EQ) |
+| `ShadowSystem.ts` | Actor shadow depth-scaling and shape caching |
+| `ThreeDParallaxSystem.ts` | 2.5D в†’ 3D coordinate mapping for audio spatialization |
+| `BackfaceSystem.ts` | Sprite backface flipping for directional actors |
+
+### `src/scene/` вЂ” Scene & Spatial Hierarchy
+
+| File | Role |
+|------|------|
+| `Scene.ts` | Main scene data structure; `isWalkable` вЂ” the single collision oracle |
+| `SceneManager.ts` | Scene transitions, cross-scene continuations, active scene lifecycle |
+| `SceneInteraction.ts` | Interaction distance checks and entity picking |
+| `SceneSpatialValidator.ts` | Topology enforcement (no recursive containment, relation rules) |
+| `SceneLog.ts` | Per-scene event log (speech + action entries); NPC read cursor per actor |
+| `SceneTextLayer.ts` | Subscene hierarchy resolution and text layer access |
+| `SceneCamera.ts` | Camera position and viewport math |
+| `SceneSubscene.ts` | Subscene open/close lifecycle |
+
+### `src/entities/` вЂ” Visual Objects
+
+| File | Role |
+|------|------|
+| `Entity.ts` | Base class: Transform, Visuals, Parallax, serialization |
+| `Actor.ts` | `Entity` + pathfinding (`moveTo`), animation sets, directional sprites |
+| `QuadObject.ts` | Perspective polygon objects (walls, floors) with per-vertex parallax |
+| `Walkbox.ts` | Walkable floor area polygon |
+| `Triggerbox.ts` | Script-triggering overlap zone |
+| `Folder.ts` | Logical grouping entity |
+
+### `src/platform/` вЂ” Platform Abstraction
+
+| File | Role |
+|------|------|
+| `fileApi.ts` | Unified file I/O: routes to Vite dev middleware or Tauri Rust commands; `FileEventEmitter` + `useFileWatcher` hook for live reload |
+
+### `src/editor/`, `src/components/`, `vetool.tsx` вЂ” Editor UI
+
+React-based visual editor: scene tree (HierarchyPanel), properties inspector (PropertiesPanel), sprite sheet editor, walkbox/triggerbox painting tools.
+
+### `src/platform/` вЂ” Platform Abstraction
+
+`fileApi.ts` transparently routes to:
+- **Vite dev mode**: Express middleware (`/api/*` endpoints in `vite.config.ts`)
+- **Node.js tests**: native `fs` module (bypass fetch)
+- **Tauri production**: native Rust IPC commands
 
 ---
 
@@ -50,85 +133,183 @@ For new developers or AI agents, here is the functional map of the `src/` direct
 
 ### 3.1 Navigation & Pathfinding
 
-Actor movement (via `Actor.moveTo`) utilizes **A* (A-Star) Pathfinding** to navigate around obstacles.
+Actor movement (`Actor.moveTo`) uses **A\* grid pathfinding** via `ActorNavigationService`.
 
-- **Single Source of Truth**: The `Scene.isWalkable` method acts as the definitive collision and walkbox oracle for the grid.
-- **Behavior**: It reports impossible destinations immediately and gracefully invalidates routes if movement is blocked mid-transit.
+- **Single Collision Oracle**: `Scene.isWalkable(x, y)` вЂ” the only source of truth for walkbox and obstacle checks.
+- **Approach Planning**: `planApproach(actor, target)` returns `already_reachable | route_available | unreachable` before committing movement.
+- **Teleport Plans**: `planLocalTeleport` finds the nearest scene Exit and pre-plans a two-leg route (approach в†’ traverse) for cross-scene NPC movement.
+- **Failure Reporting**: Impossible destinations are reported immediately; mid-route blockage is detected and reported as `route_invalidated`.
 
 ### 3.2 Rendering Pipeline
 
-Rendering logic is isolated in `SceneRenderer.ts`.
+`SceneRenderer.ts` (stateless function):
 
-1. **Parallax Layers Setup**: Prepares context for different depth scales.
-2. **Sorting**: Entities sorted by **Layer** and **Visual Y** (Screen Space Depth) for stable ordering.
-3. **Render Pass**: Normal Layer -> Subscene Layer -> CRT Shader (Post-processing).
-4. **Debug Overlays**: Walkboxes, Triggerboxes & Selection Handles.
+1. **Parallax Layers Setup** вЂ” depth scale contexts
+2. **Entity Sort** вЂ” by Layer, then Visual Y (screen-space depth)
+3. **Render Pass** вЂ” Normal Layer в†’ Subscene Layer в†’ CRT shader post-processing
+4. **Debug Overlays** вЂ” Walkboxes, Triggerboxes, selection handles, NPC debug info
 
-### 3.3 Parallax & Coordinate Systems
+### 3.3 Parallax & Coordinate System (2.5D)
 
-The engine uses a **2.5D displacement model**. Objects share World Coordinates (X,Y) but appear at different screen locations based on their Parallax Factor (`p`) and Camera Position.
+Objects share World Coordinates (X, Y) but render at different screen positions based on their Parallax Factor (`p`) and Camera Position:
 
-- **Formula**: `VisualPos = RawPos - Camera * (P - 1)`
-- **Interaction Alignment**: Snapping and interaction vectors are calculated in **Visual Space** (Screen Space) for WYSIWYG editing.
+```
+VisualPos = RawPos - Camera Г— (P - 1)
+```
 
-### 3.4 Shadow System
+Interaction alignment and snapping are calculated in **Visual Space** (Screen Space) for WYSIWYG editing.
 
-The Shadow System manages `Actor` shadows, handling depth scaling and floor slopes.
+### 3.4 Component System
 
-- **Shape Caching**: Captures the "Base Visual Shape" when a shadow is assigned, preventing "Parallax Drift" (skewing/leaning) while maintaining user-designed shapes.
+`ComponentSystem` manages typed components attached to scene objects:
 
-### 3.5 3D Audio System
+| Component | Purpose |
+|-----------|---------|
+| `State` | Named state slot (string, number, boolean) with typed initial/current value |
+| `Switch` | Toggleable state machine; supports key requirements and locking |
+| `Subscene` | Modal close-up view with its own entity hierarchy |
+| `InventoryContainer` | Capacity, spatial relation rules, access control for item storage |
+| `Exit` | Scene transition trigger; used by `TRAVERSE_EXIT` NPC steps |
+| `TriggerBox` | Script-executing overlap zone |
+| `NPC` | NPC metadata, objectives, memory, and history |
 
-The engine features a robust spatial audio pipeline built on the Web Audio API, mapping 2.5D parallax to a 3D coordinate system.
+### 3.5 State Event System
 
-- **Coordinate Mapping**: `Parallax 1.1` represents Z=0 (listener plane). Higher values move sources behind/above the listener (+Z), while lower values move them toward infinity (-Z).
-- **Proximity EQ**: A dynamic peaking filter (+6dB at 250Hz) applies when sources are within a 100-pixel radius of the camera at parallax 1.1.
-- **Convolution Reverb**:
-  - **Scene Default**: Scenes can specify a global Impulse Response (IR). Attached sounds automatically inherit this acoustics unless bypassed.
-  - **Dynamic Routing**: The graph (`Gain -> Convolver -> WetGain -> Master`) is dynamically rebuilt during IR hot-swaps to bypass Web Audio API's immutable buffer limitation.
-  - **Distance Mix**: Dry/Wet balance is calculated frame-by-frame based on the `Reverb Drown Dist` and `Reverb Min %` settings.
-- **Gain Staging**: Convolution output is trimmed by a constant factor (`REVERB_WET_OUTPUT_GAIN`) and features a brief fade-in (120ms) to avoid clipping and surges during attachment.
+`StateEventSystem.setState(game, entity, stateId, value, source)` provides:
+- **Type-safe mutation** вЂ” validates value type against `State` component's `valueType`.
+- **Script dispatch** вЂ” automatically fires authored scripts attached to state transitions.
+- **Source tracking** вЂ” `source: 'parser' | 'script-api' | 'llm' | 'custom-command'` for diagnostics.
+
+### 3.6 Scene Log
+
+`SceneLog` is the engine's shared event bus for NPC awareness:
+
+- Records `speech` and `action` entries with `knownByActorIds` visibility.
+- Maintains per-NPC read cursors (`lastPmProcessedAtByNpc`) so each NPC independently processes unread events.
+- Entries expire after `SCENE_LOG_RETENTION_MS` (10 minutes).
+
+### 3.7 Shadow System
+
+`ShadowSystem` manages `Actor` drop shadows:
+
+- **Shape Caching**: Captures the "Base Visual Shape" on assignment вЂ” prevents Parallax Drift (skewing) while maintaining authored shapes.
+- Handles depth scaling and floor slope distortion.
+
+### 3.8 3D Spatial Audio
+
+Built on the Web Audio API, mapping 2.5D parallax to 3D coordinates:
+
+- **Coordinate Mapping**: Parallax 1.1 = Z=0 (listener plane); higher parallax в†’ behind listener (+Z).
+- **Proximity EQ**: Dynamic peaking filter (+6 dB at 250 Hz) within 100 px radius.
+- **Convolution Reverb**: Scene-default IR; dynamic graph rebuild during IR hot-swap; distance-based dry/wet mix.
+- **Gain Staging**: `REVERB_WET_OUTPUT_GAIN` trim + 120 ms fade-in on attachment.
 
 ---
 
-## 4. Gameplay & Semantic Systems
+## 4. Gameplay & AI Systems
 
-### 4.1 Text Parser & LLM Cascade
+### 4.1 Text Parser вЂ” Stage 1 (Deterministic)
 
-The game features a hybrid parser system:
+`Parser.ts` is the primary player input processor:
 
-- **Stage 1 (Deterministic)**: A fast, rule-based text parser (`Parser.ts`) handles exact matches, standard verbs, and direct interactions based on the active semantic world model.
-- **Stage 2 (LLM Game Master)**: A fallback AI cascade (using Claude Haiku via API) processes complex, creative, or out-of-bounds player inputs, providing atmospheric flavor while strictly separating language interpretation from game state execution.
+- **Rule-based verb cascade**: Exact match в†’ NLP synonym в†’ multi-verb compound detection.
+- **NLP.js integration** (`NlpCascade.ts`): Noun phrase extraction, stemming, and language-aware lemmatization for robust input parsing on standard CPU hardware.
+- **Semantic World Model**: `ParserWorldModelBuilder` constructs a JSON snapshot of the current scene (takable items, openable containers, known entities, relation facts from Text Assets) and passes it to the LLM cascade.
+- **Authored Commands**: Text Assets define `parserCommands` вЂ” structured command definitions with `requires`, `effects`, and `plan` steps that directly execute engine actions.
 
-### 4.2 Spatial Model & Semantic API
+### 4.2 LLM Cascade вЂ” Stage 2 (AI Game Master)
 
-- **`GameSemanticAPI`**: Extracted from the `Game` monolith, this system handles the gameplay outcome of actor-aware semantic actions. Parser commands are one source of these actions, but the same runtime layer is also used by other actors and orchestration layers. It manages access states, reveal mechanics (e.g., examining a desk reveals hidden items inside), and item manipulation.
-- **Spatial Relations**: Objects have distinct spatial relations (`in`, `on`, `under`, `behind`). The `SceneSpatialValidator` strictly enforces topology (e.g., no recursive containment, rejecting invalid `near` relations in storage configurations).
+`LlmCascade.ts` activates when Stage 1 cannot handle the input:
 
-### 4.3 Text Assets (TA-Driven Model)
+- **Parser GM Prompt**: Constructed from static prefix (cached, sent with `cache_control`) + dynamic player context.
+- **Post-API Recovery**: On recoverable parser failures (e.g., `cannot_take`, `not_takeable`), the LLM can retry with a corrected plan, return atmospheric text, or explicitly fall back to the original parser response.
+- **Provider switching**: Seamless toggle between `AnthropicProvider` (Claude) and `OllamaProvider` (local Ollama).
 
-Descriptions, synonyms, and failure messages (e.g., `takeFailure`) are loaded from external JSON files via `TextAssetManager`. This removes hardcoded text from the engine and allows the LLM, the Parser, and other actor-aware planners to build a robust contextual world model dynamically.
+#### LLM Providers
+
+| Provider | Class | Endpoint | Typical use |
+|----------|-------|----------|------------|
+| **Anthropic Claude** | `AnthropicProvider` | `/api/llm` proxy | Cloud / dev with API key |
+| **Ollama (local)** | `OllamaProvider` | `http://localhost:11434/v1/...` | Offline play on CPU hardware |
+
+**OllamaProvider optimizations** (CPU-targeted):
+- Grammar-constrained JSON mode (`response_format: { type: 'json_object' }`)
+- `num_ctx: 4096` вЂ” minimizes KV-cache memory pressure
+- `keep_alive: -1` вЂ” model permanently loaded in RAM
+- 600 s request timeout for cold prefill
+- Recommended model: `qwen2.5:3b`
+
+### 4.3 NPC Puppet Master
+
+`NpcPuppetMaster.ts` drives fully autonomous NPC behaviour:
+
+- **World Model**: `NpcWorldModelBuilder` builds a per-NPC context: position, visible entities (with interaction flags, approach status, switch state, commands), inventory, scene events (unread delta + recent history), known entities, action history, objectives, memory.
+- **Scene Log Integration**: NPCs wake on unread `SceneLog` entries. Each NPC tracks its own cursor; `markProcessed` advances it after plan generation.
+- **Plan DSL**: Typed `NpcPlanStep[]` covering `SAY`, `MOVE_TO`, `TRAVERSE_EXIT`, `LOOK`, `EXAMINE`, `OPEN`, `CLOSE`, `TAKE`, `PUT`, `COMMAND`, `USE`, `WAIT`, `THINK_STRATEGY`, `MEMORY_SET`, `OBJECTIVES_SET`.
+- **Multi-step Plans with `interruptOn`**: Plans execute step-by-step; conditions `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, `ACTION_FAILED` can abort the chain.
+- **Continuation System**: Asynchronous steps (MOVE_TO, WAIT) schedule wakeups; NPC resumes with `move_completed` / `action_completed` / `wait_elapsed` triggers.
+- **Strategy Pass** (`THINK_STRATEGY`): Scheduled internal reflection that rewrites memory and objectives without producing speech or physical actions. Rate-limited to prevent premature triggering.
+- **Rate Limiting**: Per-NPC and per-scene call budgets; player speech always bypasses autonomous rate limits.
+- **Loop Watchdog**: Detects `repeated_without_progress` and `pattern_without_progress` loops; applies escalating sleep penalties.
+- **Batch Processing**: NPCs waking within 50 ms are batched into a single LLM request.
+- **Hybrid SLM Router**: If `SlmInferenceEngine.isReady()`, routine plans are served in < 5 ms locally. See В§4.4 and `docs/npc-pm-slm.md`.
+
+### 4.4 Hybrid SLM вЂ” Offline NPC Inference
+
+Located in `src/mechanics/slm/`:
+
+| Module | Role |
+|--------|------|
+| `ShadowLogger.ts` | Captures Gold Standard dataset (successful LLM plans в†’ `logs/slm_shadow_dataset.jsonl`) |
+| `SlmVocabulary.ts` | Static integer token vocabulary (actions, flags, special tokens; dynamic entities в‰Ґ 100) |
+| `SlmInputAdapter.ts` | Encodes `NpcActorContext` в†’ `Int32Array` token sequence for ONNX inference |
+| `SlmOutputAdapter.ts` | Decodes ONNX output tokens в†’ `NpcPlan[]`; escalates to LLM on structural failures |
+| `SlmInferenceEngine.ts` | Singleton ONNX session manager; lazy model load; `isReady()` / `setEnabled()` / `infer()` |
+
+**Status**: Phase 1вЂ“3 complete (infrastructure, adapters, hybrid router). Model (`slm_routine_v1.onnx`) requires training before activation. System gracefully escalates all requests to LLM when model is absent.
+
+Full reference: [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md)
+
+### 4.5 Text Asset System (TA-Driven Model)
+
+`TextAssetManager` loads external `.json` files from `public/text/` that define:
+
+- Object titles, descriptions, synonyms, and failure messages
+- `semanticTags` and `relationFacts` for LLM world model enrichment
+- `parserCommands` вЂ” authored command definitions with `requires`, `effects`, and step plans
+- NPC `objectives` and character lore
+- Scene-level event scripts
+
+Decouples authored text from engine code. Supports hot-reload in dev and Tauri environments.
+
+### 4.6 Spatial Model & Semantic API
+
+- **`GameSemanticAPI`**: Handles gameplay outcomes of actor-aware semantic actions (`lookEntityForActor`, `examineEntityForActor`, `takeEntityForActor`, `putEntityForActor`, `openEntityForActor`, `closeEntityForActor`). Manages reveal mechanics, access states, item manipulation.
+- **Spatial Relations**: `in`, `on`, `under`, `behind`. `SceneSpatialValidator` enforces topology rules вЂ” no recursive containment, correct relation semantics per container type.
+- **`ActorWorldQuery`**: Read-only spatial queries (visibility, reachability, containment lookups) shared by the NPC and parser world model builders.
 
 ---
 
 ## 5. Entities & Components
 
-### 5.1 Entity Model
+### 5.1 Entity Hierarchy
 
-- **`Entity`**: Base class for all scene objects. Supports Transform, Visuals, and Parallax.
-- **`Actor`**: Entities capable of pathfinding, animation sets, and directional sprites. Note: The engine supports treating static entities as actors via "Actor Markers" in the editor without strict inheritance breaking.
-- **`QuadObject`**: Polygon objects for perspective geometry (walls, floors) with per-vertex parallax.
+```
+SceneObject (base)
+в”њв”Ђв”Ђ Entity           в†ђ most scene objects; Transform + Visuals + Parallax
+в”‚   в”њв”Ђв”Ђ Actor        в†ђ Entity + pathfinding + animation sets + NPC component
+в”‚   в”њв”Ђв”Ђ QuadObject   в†ђ Perspective polygon (walls, floors)
+в”‚   в”њв”Ђв”Ђ Walkbox      в†ђ Floor polygon
+в”‚   в”њв”Ђв”Ђ Triggerbox   в†ђ Overlap trigger zone
+в”‚   в””в”Ђв”Ђ Folder       в†ђ Logical group
+в””в”Ђв”Ђ ...
+```
 
-### 5.2 Component System
+### 5.2 Component Architecture
 
-Objects can attach functional execution components.
+`ComponentSystem` uses a strict `AnyComponent` discriminated union (no `any[]`), eliminating runtime type errors. Components are serialised as part of the entity's JSON.
 
-- **Type Safety**: The `ComponentSystem` utilizes a strict `AnyComponent` union type instead of `any[]`, significantly reducing runtime errors.
-- **Standard Components**:
-  - `Subscene`: Modal "close-up" view.
-  - `Switch`: Toggles state based on requirements.
-  - `TriggerBox`: Executes scripts on overlap.
-  - `InventoryContainer`: Defines capacity and spatial rules for item storage.
+Standard components: `State`, `Switch`, `Subscene`, `InventoryContainer`, `Exit`, `TriggerBox`, `NPC`.
 
 ---
 
@@ -136,85 +317,140 @@ Objects can attach functional execution components.
 
 ### 6.1 UI Structure
 
-- **Technology**: React + Zustand.
-- **Components**: HierarchyPanel (reactive scene tree), PropertiesPanel (two-way binding), SpriteEditor.
-- **Tools**: Object Locking (`Alt+L`), Snapping (Grid edges, Entity corners).
+- **Technology**: React + Zustand; CSS custom properties design system (retro green palette).
+- **Main panels**: `HierarchyPanel` (reactive scene tree), `PropertiesPanel` (two-way binding to engine state), `SpriteEditor`.
+- **Tools**: Object locking (`Alt+L`), grid and entity-corner snapping, walkbox/triggerbox polygon painting.
 
-### 6.2. Dynamic Tooltip System
+### 6.2 Dynamic Tooltip System
 
-The Editor's Properties Panel uses a centralized, dynamic tooltip injection system to maintain consistency and allow for easy global updates of field descriptions.
+Centralized tooltip injection in `PropertiesPanel`:
 
-- **Registry**: All tooltips are defined in `src/components/editor/properties/propertiesConstants.ts` within the `PROPERTIES_LABEL_TOOLTIPS` record.
-- **Injection**: The `PropertiesPanel.tsx` component runs a side-effect that scans all `label.e-label` elements. It matches their text content against the registry and injects the corresponding `title` attribute.
-- **Convention**: Developers should **not** manually add `title` attributes to labels in specific property components (like `SceneProperties.tsx`). Instead, the label text must match an entry in the registry to receive a tooltip and the associated `e-tooltip-label` CSS styles (help cursor, hover color).
-- **Normalization**: The system includes a `normalizeTooltipLabelText` helper to handle common variations and prefixes (e.g., stripping "Mode:" or handling "Opacity").
+- **Registry**: All field tooltips defined in `propertiesConstants.ts` в†’ `PROPERTIES_LABEL_TOOLTIPS`.
+- **Injection**: Side-effect scans `label.e-label` elements and injects `title` attributes by matching text content.
+- **Convention**: Add to the registry, never hardcode `title` in specific property components.
+- **Helper**: `normalizeTooltipLabelText` strips prefixes like "Mode:" for fuzzy matching.
+
+### 6.3 Standard Buttons & Hotkey Styling (`.e-btn`)
+
+- Convex 3D bevel: `box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 3px rgba(0,0,0,0.6)`
+- Muted border variable: `var(--ui-btn-border-muted, #387d60)`
+- Embedded hotkey badges: `<span class="hotkey-accent">[</span>` вЂ” automatically styled dark green inside button, resets to black on `.active-press`
+- Keypress feedback: `.active-press` class applied for 150 ms on keyboard trigger
 
 ---
 
-## 7. Coding Standards & Flows
+## 7. Coding Standards
 
-### 7.1 Serialization Standard
+### 7.1 Serialization
 
-- **Single Source of Truth**: `fromJSON` / `toJSON` methods in the Class definition.
-- **Adding Properties**: Define the property, add to `SERIALIZABLE_PROPS`, and implement logic in `load(data)` if side effects are required.
+- `fromJSON` / `toJSON` in each class definition вЂ” single source of truth.
+- Add property в†’ define field в†’ add to `SERIALIZABLE_PROPS` в†’ add `load(data)` side-effect if needed.
 
 ### 7.2 State Management
 
-- **Engine State**: Mutable. Modifications verify `game.editor.enabled` to trigger UI sync.
-- **UI State**: Immutable (React/Zustand). Updates react to Engine triggers.
+- **Engine state**: Mutable; modifications check `game.editor.enabled` to trigger UI sync.
+- **UI state**: Immutable (React/Zustand); reacts to engine events.
+
+### 7.3 IGame Contract
+
+All services accept `IGame` (interface), not `Game` (class). This is the primary enabler of unit testing without a full engine context вЂ” tests construct minimal `IGame` mocks.
 
 ---
 
-## 8. Scripting API
+## 8. Testing
 
-The engine supports a hot-reloadable scripting system for gameplay logic and debug tools.
-For a complete beginner's tutorial (including "How to Create Your First Script") and the full API Reference, see the dedicated document:
-
-**[Read the Scripting System Guide](ScriptSys.md)**
-
----
-
-## 9. Native Application Build (Tauri)
-
-The Scanline Engine can be compiled into a standalone native application using Tauri, allowing it to run without a separate web backend.
-
-### 9.1 Architecture and Interaction
-
-- **Tauri Shell**: The application is a Vite/React project running inside a Tauri webview shell.
-- **File System Adapter**: All editor file operations (read, save, delete, list) are abstracted through `src/platform/fileApi.ts`. This adapter dynamically switches between Vite's dev middleware and Tauri's native Rust commands.
-- **Rust Backend**: The `src-tauri` directory implements a Rust backend containing commands for managing project files and opening folders natively in the OS Explorer.
-
-### 9.2 Path Resolution and Portability
-
-- **Executable-Relative Paths**: In release builds, path resolution in `src-tauri/src/main.rs` is specifically modified to use `std::env::current_exe()` rather than development-time macros like `CARGO_MANIFEST_DIR`.
-- **Autonomy**: This ensures the packaged editor/game can read and write files (e.g., the `public/` directory) relative to the final `.exe` location, guaranteeing true portability across systems.
-
-### 9.3 Windows Build Specifics
-
-- **Icon Configuration**: To successfully generate MSVC installers on Windows, the icon array must be explicitly defined in `tauri.conf.json` within the bundle block (e.g., `"icon": ["icons/icon.ico"]`). Omitting this will cause a `failed to bundle project` error.
-- **Build Artifacts**: Running `npm run tauri:build` generates `.msi` installers and `.exe` (NSIS) standalone executables located in `src-tauri\target\release\bundle\`.
-
-### How to build
-
-``bash
-npm install -D @tauri-apps/cli
-
-```
-
-3. Then run:
+Tests live in `tests/`, mirroring `src/` structure. Runner: **Vitest 4**.
 
 ```bash
+npm test              # full suite
+npx vitest run tests/npc/    # NPC subsystem only
+npx vitest run tests/parser/ # Parser subsystem only
+npm run typecheck     # TypeScript type check (no emit)
+```
+
+### Test Coverage Areas (41 test files)
+
+| Area | Test files (examples) |
+|------|-----------------------|
+| Parser + LLM cascade | `llm-cascade`, `llm-parser`, `world-model-context`, `preprocessor` |
+| NPC Puppet Master | `puppet-master`, `observed-actor-actions`, `slm-adapters` |
+| Semantic API | `semantic-api`, `scene-interaction`, `subscene-*` |
+| Inventory | `commands`, `section-script-events` |
+| Navigation / Spatial | `navigation-and-spatial`, `actor-movement`, `spatial-index` |
+| Component System | `component-system-state`, `state-event-system`, `scene-log` |
+| Text Assets | `text-asset-manager`, `section-identity` |
+| Scene | `scene-spatial-validator`, `scene-transition`, `scene-parser-history` |
+| Audio | `sound-manager` |
+| Editor | `vetool`, `scene-editor-object-creation`, `editor-snapping-system` |
+| Rendering | `quad-object`, `scene-correctional-scale`, `entity-ref-scale`, `shadow-system` |
+| Provider | `ollama-provider`, `nlp-cache` |
+
+---
+
+## 9. Scripting API
+
+The engine supports a hot-reloadable authored scripting system. Scripts are triggered by state changes, TriggerBox overlaps, and scene events.
+
+Full reference: **[ScriptSys.md](ScriptSys.md)**
+
+---
+
+## 10. Native Application Build (Tauri)
+
+### 10.1 Architecture
+
+- **Tauri Shell**: Vite/React project inside a Tauri WebView shell.
+- **File System Adapter**: `src/platform/fileApi.ts` вЂ” dynamically switches between Vite dev middleware and Tauri native Rust commands based on `isTauriRuntime()`.
+- **File Monitoring**:
+  - **Vite**: `chokidar` watcher в†’ WebSocket (`import.meta.hot.on('file-event')`)
+  - **Tauri**: Rust `notify` crate в†’ `@tauri-apps/api/event`
+  - Both pipelines converge in `FileEventEmitter`; subscribed via `useFileWatcher` hook.
+- **Rust Backend**: `src-tauri/` implements file management and native OS Explorer commands.
+
+### 10.2 Path Resolution & Portability
+
+In release builds, `src-tauri/src/main.rs` uses `std::env::current_exe()` (not `CARGO_MANIFEST_DIR`) for path resolution вЂ” ensures the packaged app reads/writes relative to the `.exe` location.
+
+### 10.3 Windows Build
+
+- **Icon**: `tauri.conf.json` must declare `"icon": ["icons/icon.ico"]` in `bundle`; omitting causes `failed to bundle project`.
+- **Artifacts**: `src-tauri\target\release\bundle\` вЂ” `.msi` and `.exe` (NSIS).
+
+### 10.4 Build Commands
+
+```bash
+# Development with Tauri shell
 npm run tauri:dev
-```
 
-For a desktop package:
-
-```bash
+# Production bundle (generates .msi / .exe)
 npm run tauri:build
 ```
 
-### 9.4 Requirements & Limitations
+### 10.5 Requirements & Limitations
 
-- **Tooling**: Requires Node.js, Rust/Cargo, and the Tauri CLI.
-- **Workspace Model**: It is recommended to transition from the current implicit root directory logic to an explicit **workspace model** to robustly handle paths in the packaged player and editor.
-- **Static Hosting**: The advanced Editor features (Scene & Sprite editing) require a local backend (Vite middleware or Tauri) to save files. They will be disabled or non-functional if hosted on a standard static web server.
+- **Tooling**: Node.js, Rust/Cargo, Tauri CLI (`@tauri-apps/cli ^2.10`).
+- **Static Hosting**: Scene and Sprite editor features require a local backend. Non-functional on static web hosts.
+- **Workspace Model**: Recommended to adopt an explicit workspace model for robust path handling in packaged player vs. editor builds.
+
+---
+
+## 11. Documentation Index
+
+| Document | Subject |
+|----------|---------|
+| [`README.md`](README.md) | Quick start, installation, hosting |
+| [`GDD.md`](GDD.md) | Game Design Document вЂ” source of truth for gameplay |
+| [`tech-spec.md`](tech-spec.md) | **This file** вЂ” technical architecture reference |
+| [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md) | Hybrid SLM subsystem вЂ” architecture, adapters, training pipeline |
+| [`Parser.md`](Parser.md) | Parser system deep dive |
+| [`NPCsys.md`](NPCsys.md) | NPC system design |
+| [`TextAssets.md`](TextAssets.md) | Text Asset schema and authoring guide |
+| [`ScriptSys.md`](ScriptSys.md) | Scripting API reference |
+| [`InventorySys.md`](InventorySys.md) | Inventory system |
+| [`SpatialSys.md`](SpatialSys.md) | Spatial relation system |
+| [`SoundSys.md`](SoundSys.md) | Audio system |
+| [`Commands.md`](Commands.md) | Authored parser command format |
+| [`Autotests.md`](Autotests.md) | Autotest harness and coverage |
+| [`Sessions.md`](Sessions.md) | Development session log |
+| [`Tauri.md`](Tauri.md) | Tauri build notes |
+

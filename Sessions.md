@@ -1560,6 +1560,7 @@ During the session the following checks were run successfully:
 
 - Not all components have associated SVG icons yet; the UI implementation handles missing icons gracefully by simply rendering the text.
 - Static hosting of the game will break Editor features; testing via the native Tauri build or the development environment is recommended.
+
 ## Session Entry - 2026-05-09 19:37 Europe/Warsaw
 
 ### 1. Session Goals
@@ -1850,61 +1851,74 @@ Commit scope:
 # Session Summary
 
 ## Session Goal
+
 Refining 3D Spatial Audio for the engine, ensuring that sound triggering, panning, and environmental effects respond naturally to camera zoom and entity movement.
 
 ## What Was Implemented
 
 ### 1. SoundManager Architecture
+
 - Implemented `SoundManager.ts` using Web Audio API.
 - Support for 3D Spatial Audio (HRTF panning), Convolution Reverb, and Delay effects.
 - Dynamic Proximity EQ (+6dB bass boost at 250Hz) and Reverb Scaling.
 
 ### 2. 2.5D Spatial Logic
+
 - Developed a physically grounded 2.5D sound model:
-    * Parallax 1.1 = Head Level (Z=0).
-    * Parallax 1.0 = Foreground (Z=-400).
-    * Parallax 0.0 = Infinity (Z=-10000).
-    * Parallax < 0 = Behind Listener (+Z).
+  - Parallax 1.1 = Head Level (Z=0).
+  - Parallax 1.0 = Foreground (Z=-400).
+  - Parallax 0.0 = Infinity (Z=-10000).
+  - Parallax < 0 = Behind Listener (+Z).
 - Integrated Camera Zoom scaling: Z-depth is attenuated by 1/zoom.
 
 ### 3. Engine Integration
+
 - Synchronized SoundManager update loop in `Game.ts`.
 - Exposed complete Audio API through `ScriptAPI.ts` (`api.playSoundAttached`, `api.loadReverbIR`, etc.).
 - Created a demo script and scene for visual/auditory validation.
 
 ### 4. Documentation & Memory
+
 - Wrote comprehensive technical documentation in `SoundSys.md`.
 - Persisted architectural facts in `agent_memory`.
 
 ## Important Architecture / Runtime Decisions
+
 - Piecewise non-linear mapping for parallax (1.1 = head, 1.0 = front, 0.0 = infinity).
 - Fixed listener at Z=0 to prevent panning artifacts.
 - Exponential dry/wet scaling (power of 1.5) for natural transition.
 - Global constants for world scale (AUDIO_MAX_DISTANCE = 10000).
 
 ## Tests Run
+
 - `npm run typecheck`: Passed.
 - Manual auditory checks via `test_3d_sound.ts` confirmed correct panning and attenuation.
 
 ## Commits Created
+
 - `fa9fcbc` вЂ” `Feature: Sound Manager with 3d spatial system and dynamic reverb/delay FX`
 
 ## Current State
+
 - Sound system is fully integrated, calibrated, and documented. Ready for production asset population.
 
 ## Remaining Work / Next Steps
+
 1. Performance Tuning: Monitor `ConvolverNode` overhead in high-density scenes.
 2. SFX Library: Start populating the `/public/sounds/` directory with production assets.
 3. Gameplay Mechanics: Integrate sound triggers into common object prefabs (Doors, Switches).
+
 ## Session Entry - 2026-05-13 01:02 Europe/Warsaw
 
 ### Session Goals
+
 - Stabilize Scanline Engine's scene-wide Default Reverb IR workflow for live 3D attached sounds.
 - Make `SceneProperties` -> `SoundManager` hot-swapping work without stopping sounds.
 - Restore the documented `SoundSys.md` dry/wet behavior for 3D SOUND ENV.
 - Calibrate reverb gain staging and distance behavior enough for `#run test_3d_sound2` in `test_room` to be usable.
 
 ### What Was Implemented
+
 - Fixed live Default Reverb IR updates for active attached sounds:
   - Scene-default IR changes now call `setEffects(playbackId, {}, true)` instead of passing scene default IR as a custom `reverbIR`.
   - This preserves `usingDefaultIR`, so active sounds keep listening to later scene default changes.
@@ -1934,6 +1948,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - `DRY_ONLY_DISTANCE_MIN_LEVEL = 0.3` makes attached sounds attenuate with distance even when no scene reverb IR is active.
 
 ### Important Architecture / Runtime Decisions
+
 - Scene-level default reverb and per-sound custom reverb must remain distinct:
   - Scene default updates must never mark a sound as custom.
   - Custom `reverbIR` still clears `usingDefaultIR`.
@@ -1943,6 +1958,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - When no reverb branch exists, proximity update should still attenuate dry-only attached sounds by distance, but not make them silent near the listener.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - No parser, mechanics, inventory, or subscene behavior was changed.
 - Scene/editor/runtime sound environment behavior changed through:
   - `src/systems/SoundManager.ts`
@@ -1951,6 +1967,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Existing dirty/user work around scene/audio assets was preserved during the investigation; final repo status later showed clean after commit.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/systems/sound-manager.test.ts -- --runInBand`
   - Passed, 8 tests.
   - Covers default IR hot-swap, basename normalization, late default IR enablement, zero-min-at-listener, SoundSys dry/wet crossfade, clear-to-dry, stale async clear, and dry-only distance attenuation.
@@ -1962,9 +1979,11 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed.
 
 ### Commits Created
+
 - `98a7069` - `feat(audio): implement comprehensive 3D sound environment and scene-wide default reverb`
 
 ### Remaining Work / Next Recommended Steps
+
 - Consider promoting the hardcoded sound calibration constants to scene/editor controls if more scene-specific tuning is needed:
   - `REVERB_WET_OUTPUT_GAIN`
   - `REVERB_DISTANCE_MIN_LEVEL`
@@ -1978,6 +1997,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - If authored scene defaults should persist in `test_room`, verify `public/scenes/test_room.json` after manual editor saves.
 
 ### Risks / Caveats / Open Questions
+
 - Convolution reverb loudness remains inherently IR-dependent; the current output trim is calibrated empirically for the tested IRs.
 - `Reverb Min % = 0` only guarantees no wet at true zero total distance. `test_3d_sound2` often still has nonzero X/Z distance, so some reverb can remain by design.
 - NotebookLM source upload for this wrap-up required CLI re-auth because `python -m notebooklm source list` reported expired authentication.
@@ -1985,12 +2005,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-15 12:33 +02:00
 
 ### Session Goals
+
 - Diagnose corrupted `test_room` scene/inventory state where a held cassette had lost its usable connection to the scene object.
 - Fix editor/runtime cleanup so deleted scene entities cannot remain as phantom Inventory/Surface entries.
 - Correct parser/runtime visibility behavior around `LOOK` / `EXAMINE` nested spatial contents.
 - Commit the complete current working tree as a single `Fixes` commit and leave a durable handoff.
 
 ### What Was Implemented
+
 - Fixed the broken cassette state in `public/scenes/test_room.json`:
   - The held `Compact cassette` now points at the real scene entity `test`.
   - The stale phantom `test_` entry was removed from the player inventory data.
@@ -2013,6 +2035,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Included the current workspace's scene, prompt, LLM cascade, and kitchen asset changes in the all-in `Fixes` commit as requested.
 
 ### Important Architecture / Runtime Decisions
+
 - Inventory state must be derived from Inventory/Surface component storage, not from spatial `relation: "in"`.
 - Spatial `IN` means world containment; it does not imply the object is carried by the player.
 - `LOOK` and `EXAMINE` are descriptive/reveal commands and should expose only the first semantic level below the target.
@@ -2021,6 +2044,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Recursive spatial traversal remains valid for targeted gameplay mechanics where the command explicitly scopes through a container.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - `Scene.removeEntity()` now clears current inventory/storage ownership before scene deletion.
 - `SceneTextLayer` now exposes direct relation helpers alongside existing recursive helpers.
 - `GameSemanticAPI` uses direct helpers for `describeSpatialRelation()` and hidden descendant reveal during examine/look flows.
@@ -2033,6 +2057,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - nested `TAKE FROM` still reaching deeper candidates where intended.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/game/semantic-api.test.ts -- --runInBand`
   - Passed.
 - `npm test -- tests/integration/parser-game.test.ts -- --runInBand`
@@ -2050,10 +2075,12 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - First attempt caught one unused fixture import; it was removed and the second commit attempt passed.
 
 ### Commits Created
+
 - `6102beb` - `Fixes`
   - Includes inventory/entity deletion cleanup, `LOOK` / `EXAMINE` direct semantic reveal behavior, parser/game regression tests, current scene/prompt/LLM-cascade updates, and kitchen assets.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify in the running editor/game that:
   - `LOOK SOFA` reports only the sofa's first-level pillows.
   - `LOOK RIGHT PILLOW` reveals the `TV remote`.
@@ -2063,6 +2090,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - If UX needs it, add an editor validation warning for Inventory/Surface references that point to deleted scene entities.
 
 ### Risks / Caveats / Open Questions
+
 - The `Fixes` commit intentionally includes all current workspace changes, including scene data, prompt/LLM cascade files, and kitchen assets, per user request.
 - The parser's lower regex cascade correctly does not resolve `rc` while `tv_rc` is hidden and unrevealed; this was confirmed as intended behavior during the session.
 - Direct semantic content behavior is now narrower by design; any previous tests expecting recursive `LOOK` disclosure were updated to the new contract.
@@ -2070,6 +2098,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-17 21:09 +02:00
 
 ### Session Goals
+
 - Continue from the previous wrap-up without repeating the `Fixes` work.
 - Introduce a centralized Actor scene-transfer path that moves a live Actor together with inventory/spatial-owned entities.
 - Fix scene travel through `GO`, `Exit`/`Entry`, and script API so player/NPC transfers preserve live objects and inventory state.
@@ -2078,6 +2107,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Improve text-console cursor/focus behavior in game mode.
 
 ### What Was Implemented
+
 - Added `SceneManager.transferActorToScene(actor, targetSceneId, options?)` as the central transfer API.
   - Collects the Actor itself.
   - Collects Entity descendants spatially owned by the Actor.
@@ -2104,6 +2134,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Same-scene teleport uses the same transfer API but skips detach/add and only applies Entry placement.
 
 ### Scaling And Editor Changes
+
 - Added `Scene.scaling.correctionalScale` with default `1`.
 - Added internal `Entity.refScale` serialization as the stored reference/prefab scale.
   - The editor-facing field remains the normal `Scale` field.
@@ -2128,12 +2159,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - The field edits `refScale` internally while preserving the old UI concept.
 
 ### Text Console / Input Changes
+
 - Improved text console cursor behavior.
 - Added Ctrl+Left / Ctrl+Right command-line navigation.
 - Added protection against losing command-line focus in game mode.
 - The latest related commits are separate from the scene-transfer commit.
 
 ### Important Architecture / Runtime Decisions
+
 - Actor scene movement must use `SceneManager.transferActorToScene()` rather than raw `oldScene.removeEntity(actor)` / `targetScene.addEntity(actor)`.
 - Direct scene removal is unsafe for carried objects because normal entity removal clears inventory/storage ownership.
 - Inventory contents are live scene entities and should travel with their owning Actor.
@@ -2143,6 +2176,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Object `Scale` remains portable; scene normalization should mutate the authored scene layout, not objects entering that scene.
 
 ### Parser / Mechanics / Scene / Inventory Changes
+
 - Parser `GO` scene changes now preserve the live player Actor and its inventory.
 - `Exit`/`Entry`, semantic `GO`, and script transfer all share the same central Actor-transfer path.
 - Inventory-owned items remain hidden and spatially owned by the Actor after transfer.
@@ -2151,6 +2185,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Parser static prompt preparation, scene exposure, and scene-change hooks remain part of scene activation.
 
 ### Tests Run And Outcomes
+
 - Focused scene transfer and scale tests:
   - `npm test -- tests/entities/entity-ref-scale.test.ts tests/game/navigation-and-spatial.test.ts tests/scene/scene-transition.test.ts -- --runInBand`
   - Passed.
@@ -2174,6 +2209,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed with only CRLF warnings.
 
 ### Commits Created
+
 - `758e5ce` - `Feature: Centralized Actor Scene Transfer API`
   - Central Actor transfer API, GO/Exit/script transfer integration, Entry fallback, camera zoom reset, Entry parallax/layer, Scale/Correctional Scale model, scene correction tests, docs, and scene/text additions including `quad5`.
 - `0e546e5` - `Fixed and improved cursor in text console. Added Ctrl+ left/right arrows for navigation`
@@ -2182,6 +2218,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Focus protection around game canvas/UI overlay so the command line does not lose focus unexpectedly.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify in the editor:
   - `GO quad4` places the transferred player on the target `Triggerbox` Entry.
   - The transferred player keeps inventory contents.
@@ -2193,6 +2230,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Consider a small UI hint that `Correctional Scale` is a destructive authored-layout normalization, not a temporary runtime multiplier.
 
 ### Risks / Caveats / Open Questions
+
 - The current working tree is clean at wrap-up time.
 - The previous memory decision that described transfer-time object correction was superseded by the later decision: `Correctional Scale` is editor-only scene normalization.
 - Scene correction intentionally affects locked objects. This differs from normal transform editing, where locked objects are protected from accidental manual manipulation.
@@ -2201,12 +2239,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-29 10:23 +02:00
 
 ### Session Goals
+
 - Generalize authored `State` changes into a reusable runtime event path instead of a TV-specific parser hack.
 - Keep `ScriptAPI`, parser commands, and LLM direct actions on the same mutation path.
 - Make Script Events UI represent state-driven interactions in a reusable way for any authored `State`.
 - Finish the wrap-up by recording durable notes, refreshing notebook sources, and preserving the feature in git.
 
 ### What Was Implemented
+
 - Added `StateEventSystem` as the shared runtime helper for authored State mutation side effects.
 - Routed `ScriptAPI.setState` and parser `setEntityState` through the new State event helper so real changes dispatch script events.
 - Removed the parser-specific `tv/power` side effect and moved TV glow behavior into an authored `tv_power_changed` script event.
@@ -2216,6 +2256,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Updated parser/LLM guidance so direct world actions can set State without pretending the runtime has a TV-only path.
 
 ### Important Architecture / Runtime Decisions
+
 - `ComponentSystem.setStateValue` remains a low-level helper without script side effects.
 - Runtime State changes now flow through `StateEventSystem.setState(game, entity, stateId, value, source)`.
 - Matching `interactions` keys are `state:<stateId>` and `state:<stateId>=<value>`.
@@ -2224,12 +2265,14 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The Script Events editor only creates `State Changed` when the selected object already has authored State components.
 
 ### Parser / Mechanics / Editor Changes
+
 - Parser and LLM direct actions now report State mutations via the same common path, which keeps command, script, and Game Master behavior aligned.
 - The `turn_tv_on` / `turn_tv_off` command assets now focus on state mutation plus text; they no longer own glow toggling.
 - The `tv_power_changed` script handles enabling/disabling `#tv_glow` and starting/stopping `tv_glow`.
 - The Script Events editor now shows readable `STATE` rows, supports State id selection, and preserves legacy state keys.
 
 ### Tests Run And Outcomes
+
 - Focused tests:
   - `npm test -- tests/systems/state-event-system.test.ts tests/core/script-api-state.test.ts tests/parser/commands.test.ts tests/parser/llm-cascade.test.ts tests/parser/llm-parser.test.ts`
   - Passed.
@@ -2244,14 +2287,17 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - Passed, 34 files / 405 tests.
 
 ### Commits Created
+
 - `bb15d13` - `Major Feature: Improved Commands System, integrated with "States" component + expanded Script Events for states changes.`
   - State runtime event system, TV command rewrite, authored TV glow event, parser/LLM runtime alignment, editor Script Events UX, tests, docs, and related scene/text assets.
 
 ### Remaining Work / Next Recommended Steps
+
 - Manually verify any additional authored objects with multiple State components use the new `State Changed` selector cleanly in the editor.
 - If more gameplay systems need state-driven reactions, add authored `state:<id>` interactions rather than new parser-specific branches.
 
 ### Risks / Caveats / Open Questions
+
 - Value-specific state events are runtime-supported but still hand-authored; the current UI does not create them automatically.
 - The current scene asset for `tv` now relies on `state:power -> tv_power_changed`; if future scenes copy the TV pattern, they must author the interaction explicitly.
 - `StateEventSystem` only dispatches when the value truly changes, which keeps event scripts idempotent but means same-value writes will not retrigger side effects.
@@ -2259,11 +2305,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-30 01:58 +02:00
 
 ### Session Goals
+
 - Wrap up the state/parser-notes work with a durable handoff in repo and NotebookLM.
 - Keep the authored `State` UI refinements, runtime state hydration fixes, and hover/cursor contract changes documented for the next session.
 - Preserve the latest session context in `Sessions.md` and refresh the curated `AgentMemory.md` export used by NotebookLM.
 
 ### What Was Implemented
+
 - Added optional `parserNoteTextAssets` support to authored `State` components so a state value can point at a Text Asset field whose content becomes the object's Parser Note.
 - Kept the authored `State` UI compact and editable:
   - `ID / Type` share one row.
@@ -2277,6 +2325,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Involved content changes in `public/scenes/test_room.json` and related object text assets so the `tv` example exercises the new path end to end.
 
 ### Important Architecture / Runtime Decisions
+
 - `state:*` bindings are script/state events only, not click/hover interactions.
 - Parser-note text is sourced from authored object Text Assets at runtime and overwrites existing Parser Notes when a matching state is active.
 - Scene activation now replays authored State side effects so load-time state matches in-game state mutation behavior.
@@ -2284,27 +2333,32 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - User-authored content changes in `test_room` were intentionally included in the feature commit because they are part of the example and regression surface.
 
 ### Parser / Mechanics / Scene / Editor Changes
+
 - Parser `LOOK` now includes Parser Notes produced from state-linked Text Asset fields.
 - Scene activation dispatches authored State events so objects like the TV can start their state-driven scripts when the level loads.
 - Hover handling no longer turns pure `state:*` bindings into a hand cursor.
 - State editor layout is denser and easier to scan during authoring.
 
 ### Tests Run And Outcomes
+
 - Focused regression checks around state events, parser context, command handling, and scene interaction passed during implementation.
 - TypeScript checks passed with `npm run typecheck`.
 - Earlier state/parser/scenario test runs also passed during the feature work, including the `tv` load-time regression path.
 
 ### Commits Created
+
 - `d3acf1e` - `Add State-driven parser notes and scene-load state hydration`
   - Core runtime, parser-note, scene-load hydration, `tv` fix, and content updates.
 - `4b26284` - `Added UI tips for previously commited State component`
   - Tooltip polish for the State editor labels and row fields.
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep an eye on future authored `State` components that use parser-note mappings; the authoring pattern is now simple, but it still depends on the object text asset being valid.
 - If more authored state-driven objects appear, reuse the same `state:<id> -> script event` model instead of adding special-case parser behavior.
 
 ### Risks / Caveats / Open Questions
+
 - The current worktree was clean before this wrap-up entry was written.
 - The NotebookLM notebook already contained older `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources, so the wrap-up process needs to replace those rather than add duplicates.
 - `tv` remains the canonical regression example for state-driven parser notes and scene-load hydration.
@@ -2312,11 +2366,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-05-30 16:28 +02:00
 
 ### Session Goals
+
 - Stop LLM hidden-object leakage in the Game Master path without turning hidden items into ordinary world facts.
 - Keep hidden diagnostics for the parser/engine intact while giving the LLM a spoiler-aware prompt surface.
 - Preserve indirect clueing so the model can still act like a good GM when the player physically explores the scene.
 
 ### What Was Implemented
+
 - Added a plain-text `Hidden Objects / Spoiler Protection` section to the LLM prompt assembly.
 - Listed hidden scene objects by `id`, player-facing title, and synonyms only.
 - Scrubbed hidden `knownEntities` so the LLM no longer receives raw `location`, `contents`, `description`, `details`, `lore`, or `interactions` for hidden entities.
@@ -2324,17 +2380,20 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Kept the parser diagnostics contract untouched for hidden entity awareness.
 
 ### Important Architecture / Runtime Decisions
+
 - `knownEntities` continues to mean diagnostics data for the parser/engine, not player-visible facts.
 - LLM-facing hidden data is now a safe projection, not the raw diagnostics record.
 - Hidden objects are treated as spoiler-protected gameplay content whose direct reveal would spoil discovery.
 - Indirect sensory or environmental hints remain allowed when they follow from visible scene logic or physically plausible player actions.
 
 ### Parser / Mechanics / Scene / Editor Changes
+
 - `LlmCascade` now appends the spoiler section to the dynamic user prompt.
 - Hidden `knownEntities` now lose raw location/details fields before reaching the LLM.
 - No scene or parser discovery behavior was changed; the fix is prompt/context shaping only.
 
 ### Tests Run And Outcomes
+
 - `npm test -- tests/parser/llm-cascade.test.ts`
 - `npm test -- tests/parser/world-model-context.test.ts tests/parser/llm-cascade.test.ts`
 - `npm run typecheck`
@@ -2342,14 +2401,17 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - All passed.
 
 ### Commits Created
+
 - `c67d83f` - `Harden hidden-object spoiler protection for LLM GM`
   - Added spoiler-protection prompt text, hidden entity scrubbing for the LLM projection, and regression coverage.
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep an eye out for any future prompt regressions that reintroduce raw hidden locations into the LLM context.
 - If new hidden-object patterns appear, extend the spoiler section with more safe clue examples rather than exposing hidden facts.
 
 ### Risks, Caveats, Open Questions
+
 - `Sessions.md` already had unrelated pre-existing content before this entry.
 - `public/scenes/home/room.json` also has unrelated pre-existing edits and was intentionally left out of the commit.
 - The fix is ingress-based; if prompt regressions continue, a second output-repair guard may still be worth considering later.
@@ -2359,6 +2421,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-02 11:39 +02:00
 
 ### Session Goals
+
 - Implement the major Puppet Master / Actor Actions feature slice so NPCs can do real world actions instead of only narrating intent.
 - Make NPC movement respect the same walkability/collider constraints as the player while still allowing zero-collider objects to remain nonblocking.
 - Let NPCs approach reachable positions near target objects instead of trying to walk onto object centers outside walkboxes.
@@ -2367,6 +2430,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Update the documentation and durable knowledge sources after the architecture changed.
 
 ### What Was Implemented
+
 - Added real Puppet Master action execution for NPC plans beyond speech/objective updates, including movement completion and action completion loops.
 - Added `TAKE` support for NPCs so they can actually pick up takeable visible entities into their own inventory.
 - Added `COMMAND` support for PM plans, allowing NPCs to execute authored command plans by `commandId`.
@@ -2380,6 +2444,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Kept zero-collider objects intentionally nonblocking, while nonzero colliders block NPC movement the same way they block the player.
 
 ### Important Architecture / Runtime Decisions
+
 - Authored command execution is now shared actor-aware runtime behavior, not a parser-only concern.
 - NPCs must not send natural-language `RUN_COMMAND` text into the real parser pipeline. PM emits structured DSL steps such as `COMMAND` and `USE`; the engine executes already-authored command plans as data.
 - `COMMAND` is preferred when a visible entity exposes a suitable authored command affordance because it can perform real state changes and side effects.
@@ -2390,6 +2455,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Actor-aware `PUT` was identified as the next required PM action after the test NPC tried to place the TV remote on the desk but could only narrate intent or mistakenly retry `TAKE`.
 
 ### Parser / Mechanics / Scene / NPC Changes
+
 - `ActorCommandExecutor` / actor-facing command runtime became the shared place for authored command execution and fallback use behavior.
 - `ActorPlanExecutor` was extended to handle PM `COMMAND` and `USE` action steps.
 - `NpcWorldModelBuilder` now exposes compact command affordances on visible semantic entities.
@@ -2399,6 +2465,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - The TV test path became the canonical validation scenario: Linda can take the remote, turn the TV on, turn it off, and understand command affordances on `tv`.
 
 ### Documentation / Session-Handoff Work
+
 - Ran a Gemini-assisted audit to find documentation that still described authored commands and semantic execution as player/parser-only.
 - Updated `Commands.md` so authored commands are described as shared runtime content rather than parser-only assets.
 - Updated `Parser.md` to clarify that `Game API` has actor-aware clients, including Puppet Master-style runtime execution.
@@ -2411,6 +2478,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Synced the shared memory mirror, regenerated curated `AgentMemory.md`, and replaced stale NotebookLM `Sessions.md`, `GDD.md`, and `AgentMemory.md` sources.
 
 ### Tests / Validation
+
 - Focused NPC Puppet Master and parser command tests passed during the actor actions implementation.
 - Full test suite passed after the actor-actions code slice: `37 files`, `450 tests passed`.
 - TypeScript validation passed with `npm run typecheck`.
@@ -2421,11 +2489,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - The missing `PUT` action is now visible as a real capability gap rather than a command-execution failure.
 
 ### Commits
+
 - `b584cda` - `feat: let NPCs run authored actor commands`
   - Added shared actor-aware command execution, PM `COMMAND`/`USE`, per-object command affordances, player `USE` regression preservation, and tests.
 - No new commit was created during the final documentation/wrap-up step; the documentation refresh is still in the working tree.
 
 ### Remaining Work / Next Steps
+
 - Commit the documentation refresh and updated session entry as part of the actor actions feature handoff.
 - Implement actor-aware `PUT` so NPCs can place/drop/give items instead of only taking and using them.
 - Update PM prompt and tests once `PUT` lands so NPCs do not overpromise item placement.
@@ -2433,6 +2503,7 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Continue broadening actor parity so player and NPC actions converge on the same semantic runtime contracts.
 
 ### Risks / Caveats
+
 - Actor-aware `PUT` is now implemented for PM plans; future placement work should build on this shared semantic runtime path.
 - The documentation refresh is not yet committed, so the working tree contains expected modified docs and the updated `Sessions.md`.
 - `public/text/system/parser-llm-system.md` is the canonical source; `dist/` should remain a generated build artifact only.
@@ -2441,11 +2512,13 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 ## Session Entry - 2026-06-19 02:22 +02:00
 
 ### Session Goals
+
 - Rework the right-side editor properties UI to match the new mock-ups more closely without changing the layout structure or the number of visible controls.
 - Fix button colors, section behavior, spacing, dropdown styling, checkbox label styling, and slider appearance so the panel reads like the new UI rather than the old one.
 - Preserve existing editor behavior while tightening visual consistency across Actor, Quad, and shared property sections.
 
 ### What Was Implemented
+
 - Updated the properties panel styling to the new darker palette and applied the mock-up-inspired treatment to the right panel background, section headers, nested blocks, and control surfaces.
 - Reworked section behavior so empty sections do not show collapse/expand affordances, cannot be toggled, and auto-open again when a new item appears.
 - Fixed the `TRANSFORM`/`SCRIPT EVENTS`/`COMPONENTS` style edge cases so the section headers and empty-state behavior now match the intended semantics.
@@ -2457,17 +2530,20 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
 - Restored the missing lower section content area so the hidden miscellaneous controls such as `LOCKED`, `DISABLED`, and related fields are visible again with proper padding.
 
 ### Important Architecture / Runtime Decisions
+
 - The properties panel now treats empty sections as a distinct UI state rather than as collapsible content.
 - When a section gains content, it should be allowed to open automatically so the user does not have to discover newly added items inside a closed empty shell.
 - Shared styling for nested property items is preferable to one-off per-section hacks, especially for repeated affordances like add/remove buttons and compact dropdowns.
 - Visual changes were intentionally kept UI-only; the layout and control count were preserved.
 
 ### Parser / Mechanics / Scene / UI Changes
+
 - No parser or gameplay mechanics logic changed in this session.
 - The work was concentrated in the editor properties UI, especially Actor, Quad, and shared property panel components.
 - The most visible changes landed in section headers, nested blocks, select controls, checkbox labels, and slider styling.
 
 ### Tests / Validation
+
 - `npm run typecheck` passed after the UI changes.
 - Playwright smoke checks confirmed the key visual fixes, including:
   - centered dropdown caret alignment;
@@ -2478,17 +2554,826 @@ Refining 3D Spatial Audio for the engine, ensuring that sound triggering, pannin
   - improved vertical spacing between headers, labels, and inputs.
 
 ### Commits
+
 - `770d799` - `ui minor tweaks`
 - `f6d35b7` - `minor, UI: removed all caps from checkmarks labels`
 - `28d0940` - `fixes`
 - `59f6ed2` - `fixed many broken UI elements, paddings, alignements, etc`
 
 ### Remaining Work / Next Recommended Steps
+
 - Keep a quick eye on any remaining panel spacing outliers that show up only on narrower or taller editor states.
 - If the mock-up set changes again, re-run the same visual pass against the right panel so the nested controls stay consistent.
 - Future UI work should continue reusing the shared add/remove/select styling instead of introducing new local variants.
 
 ### Risks / Caveats
+
 - The work is visually broad, so a later style tweak in one shared class can affect multiple property sections at once.
 - No functional editor logic was changed, so the main risk is only visual regression rather than data loss or runtime breakage.
 - The session left the repository clean at wrap-up time, with no pending local edits beyond the committed UI work.
+
+## Session Entry - 2026-06-25 19:48 +02:00
+
+# Session Summary
+
+## Session Goal
+
+Реализовать единый actor-aware runtime для Puppet Master (PM) и Player. PM-функциональность должна быть реализована исключительно в виде клиентов общих actor-aware API для запросов и действий (видимость, навигация, инвентарь, переключатели и т.д.). Оба компонента (Parser и Puppet Master) должны использовать общий runtime.
+
+## What Was Implemented
+
+### 1. Общие perception-запросы (ActorWorldQuery)
+
+- Добавлен единый read-only слой восприятия `ActorWorldQuery`.
+- Реализованы общие методы определения видимости, доступности взаимодействия и навигационного подхода (`getObjectPerception`, `getInteractionAccess`, `getApproachAccess` и др.).
+- Удален `NpcWorldModelBuilder.isVisibleToActor` и другие дублирующие PM-эвристики.
+
+### 2. Общие навигационные запросы (ActorNavigationService)
+
+- Вынесен поиск позиции подхода из `ActorPlanExecutor` в общий `ActorNavigationService` (методы `findInteractionPosition`, `planApproach`, `moveActorToTarget`).
+- Убран дублирующий поиск точек кольцами со стороны PM.
+
+### 3. Общие семантические действия (GameSemanticAPI)
+
+- LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND и USE переведены на контракт `*ForActor(actor, target)`.
+- Player API и PM адаптеры теперь являются тонкими обертками вокруг этих общих методов.
+
+### 4. Централизация переключателей (Switch) и ключей
+
+- Проверка ключей вынесена в общий runtime (`getSwitchLockOutcome`). Ключ проверяется только в инвентаре действующего актора.
+
+### 5. Общие authored-команды
+
+- Выполнение authored plans переведено на единый `ActorCommandExecutor` для Player и NPC. Parser теперь отвечает только за разбор текста и аргументов.
+
+### 6. События восприятия и NPC-курсоры в SceneLog
+
+- Добавлено свойство `perceptionRadius` для NPC.
+- Семантические действия теперь публикуют структурированные события.
+- Внедрены индивидуальные NPC-курсоры для чтения лога `SceneLog` во избежание проглатывания событий при наличии нескольких наблюдателей.
+
+## Important Architecture / Runtime Decisions
+
+- **Единый Executor**: authored-команды Player и NPC выполняются через один `ActorCommandExecutor`, чтобы исключить рассинхронизацию между планированием и исполнением.
+- **Отказ от локальных эвристик PM**: координаты не передаются в контекст PM; вместо этого используются общие affordances и approach-статусы.
+- **Индивидуальные курсоры логов**: SceneLog поддерживает чтение событий по индивидуальным курсорам для каждого NPC, решая проблему конкурентного доступа.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Созданы новые сервисы: `ActorWorldQuery` и `ActorNavigationService`.
+- Удален класс `NpcWorldModelBuilder` с локальными эвристиками.
+- Обновлены и адаптированы `GameSemanticAPI`, `ActorPlanExecutor`, `NpcPuppetMaster` и `Parser`.
+
+## Documentation Updated
+
+Обновлены следующие файлы:
+
+- [GDD.md](file:///D:/GAMES/New%20folder/Quest/GDD.md)
+- [NPCsys.md](file:///D:/GAMES/New%20folder/Quest/NPCsys.md)
+- `npc-pm-system.md` (документация по PM-архитектуре)
+
+## Tests Run
+
+- Запущен typecheck (`npm run typecheck`): успешно.
+- Добавлены parity-тесты для сравнения правил Player и NPC.
+- Прогнан полный тестовый набор: **463/463 тестов успешно пройдены**.
+
+## Commits Created During the Session
+
+- *Изменения в рабочей копии на момент завершения сессии не закоммичены*. Всего изменено 24 файла (+1369 строк, -477 строк).
+
+## Remaining Work / Next Recommended Steps
+
+1. Закоммитить текущие изменения из worktree в репозиторий.
+2. Проверить предупреждения и провести рефакторинг неиспользуемого или устаревшего кода в общих путях.
+
+## Risks / Caveats / Open Questions
+
+- Все изменения находятся в незакоммиченном состоянии в рабочем дереве (worktree).
+- Необходимо убедиться, что логика SceneLog не вызывает переполнения при длительных сессиях из-за ведения множественных курсоров.
+
+## Session Entry - 2026-06-25 22:00 +02:00
+
+### 1. Session Goals
+
+- Fix regression where Puppet Master debug logs (`#PEEKPM-ON`) did not show in the console (closed console state filtering).
+- Optimize the Puppet Master (`#PEEKPM-ON`) and Parser (`#PEEK-ON`) logs by eliminating raw JSON "noise" and replacing them with compact, clean, human-readable summaries.
+- Separate `#PEEKLLM-ON` (for raw LLM prompt/response inspection) and `#PEEKPM-ON` (for compact PM plans/triggers tracking) so they do not duplicate each other.
+- Update autotests to align with the new log formats and ensure full test suite success.
+
+### 2. What Was Implemented
+
+- **Console Bypass (Closed State)**: Modified `Console.logDebug` to bypass the `!this.isOpen` check, ensuring that peek/debug commands successfully append logs to the buffer with `showInClosed: false`.
+- **Puppet Master Log Optimization**: Refactored PM peek logging to display trigger source, new speech events, active NPCs (including objectives, memory, inventory contents, and perceived actors), target plans, and provider token/time metrics.
+- **Parser Log Optimization**: Replaced the 8 separate JSON-block dumps of `#PEEK-ON` with a single unified `--- PARSER PEEK ---` output listing input command, active scene, inventory, visible/held scope, match stage (regex, NLP, LLM), mutated parser notes, outcomes, and LLM metrics.
+- **PEEKLLM / PEEKPM Separation**: Separated `#PEEKLLM-ON` and `#PEEKPM-ON` for Puppet Master. `#PEEKPM-ON` is now strictly compact, while `#PEEKLLM-ON` outputs the full raw LLM prompt and response.
+- **Test Compliance**: Updated test expectations in `puppet-master.test.ts` and `llm-parser.test.ts` to assert the new formats.
+
+### 3. Important Decisions
+
+- Keep raw LLM prompts/responses in `#PEEKLLM-ON` completely raw for precision, but keep general peeks (`#PEEK-ON`, `#PEEKPM-ON`) highly readable and noise-free.
+- Include key context facts like inventory and seen actors in the active NPC list to maintain debugging utility.
+
+### 4. Tests Run and Outcomes
+
+- `npm test`: Passed (464/464 tests).
+- `npm run typecheck`: Passed.
+
+### 5. Remaining Work / Next Recommended Steps
+
+- Verify the in-game display of the new consolidated parser and PM logs.
+- Explore similar cleanup for other console debug logs.
+
+## Session Entry - 2026-06-27 15:33 +02:00
+
+### 1. Session Goals
+
+- Implemented local LLM inference on CPU (`OllamaProvider` / `qwen2.5:3b`).
+- Resolve timeouts and JSON parsing errors when running 3B models locally.
+- Prevent NPC hallucinations (e.g., treating inventory items as NPCs or generating empty loops).
+- Document local LLM setup, architecture, and provider switching instructions in `tech-spec.md`.
+
+### 2. What Was Implemented
+
+- **OllamaProvider Integration**: Created `src/mechanics/llm/OllamaProvider.ts` implementing `ILlmProvider` over OpenAI-compatible endpoints (`http://localhost:11434/v1/chat/completions`).
+- **Hardware & CPU Tuning**: Configured context window to `num_ctx: 4096` to minimize quadratic Attention KV-cache overhead on CPU bus, enabled `keep_alive: -1` to keep weights loaded in RAM, and increased timeout to 600s.
+- **Grammar-Constrained JSON Mode**: Enforced `response_format: { type: 'json_object' }` and injected strict JSON schema examples into prompts, ensuring 100% syntactic validity without markdown block wrapper issues.
+- **Prompt Engineering**: Explicitly enumerated `activeNpcIds` and added rules forbidding item IDs in place of NPC IDs.
+- **Provider Switcher**: Added a clean `const USE_LOCAL_LLM = false;` toggle in `Parser.ts` and `Game.ts` to easily switch between cloud and local inference without triggering linter warnings.
+- **Documentation**: Updated `tech-spec.md` with detailed local inference architecture and setup guide.
+
+### 3. Important Decisions
+
+- Kept the engine's "sanitizer" logic (`isConsequentialPlanStep`) intact per user feedback, ensuring NPCs must take physical action rather than looping in internal thoughts.
+- Used a constant boolean toggle (`USE_LOCAL_LLM`) so both providers remain referenced in code, keeping ESLint happy (`--max-warnings=0`).
+
+### 4. Tests Run and Outcomes
+
+- `npm test`: Passed (465/465 tests, including new `ollama-provider.test.ts`).
+- Git commit `591db6a`: *feat(llm): implement OllamaProvider for local CPU inference and update docs*.
+
+### 5. Remaining Work / Known Problems
+
+The small local model used was unable to produce an adequate output in  the test scene, where Cloud Haiku works without problems.
+
+## Session Entry - 2026-06-27 16:32 +02:00
+
+### 1. Session Goals
+
+- Make Puppet Master plans factual, efficient, and resistant to repeated no-progress behavior.
+- Let PM execute coherent multi-step procedures without an LLM call after every small action.
+- Improve NPC perception, scene-aware entity knowledge, inventory/subscene parity, memory correctness, and PM debugging.
+- Diagnose Anthropic prompt caching and leave a concrete implementation target for the next session.
+
+### 2. What Was Implemented
+
+- Added generic multi-step PM plans with plan-level `interruptOn` conditions (`ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, `ACTION_FAILED`). Runtime stores and executes the remaining chain without intermediate provider calls, then reports `plan_interrupted` or `plan_completed` with confirmed outcomes.
+- Added `THINK_STRATEGY`, a silent strategy-only LLM pass for terminal no-progress situations. It may correct memory/objectives and schedules a bounded wait, but cannot speak or perform physical actions.
+- Added a sliding-window action-pattern watchdog and authoritative `actionHistory`. Literal and mixed no-progress loops now warn, suppress repeated physical signatures, or briefly sleep the NPC instead of spending unbounded LLM calls.
+- Added plan prevalidation for item references and one corrective retry with `plan_rejected_missing_items`. Sequential plans may establish item availability through `MOVE_TO`/`TAKE` before later `PUT`, `USE`, or `COMMAND` steps.
+- Restored ordinary plan-level memory semantics while strengthening the prompt: `actionHistory` is authoritative and conflicting memory must be corrected before other planning. Runtime still discards speculative plan memory when a physical plan is interrupted or fails.
+- `LOOK`/`EXAMINE` outcomes now report visible contents and `discoveredEntityIds`, including relation-aware inspection. Newly observed items and actors are recorded with `lastSeenSceneId`; durable `knownEntities` is limited to Items and Actors, while `visibleItemIds` lists currently visible scene items.
+- NPC `TAKE` now normalizes items taken from Subscenes like player `TAKE`: clears disabled state and temporary Subscene/group ownership. Disabled entities outside Subscenes remain invisible.
+- Expanded `#PEEKPM` and `#PEEKLLM` for entity knowledge, visible items, accepted chains, continuation storage, interrupt checks, strategy flow, raw prompts/responses, and cache metrics.
+- Added a terminal guard for repeated no-op movement: a second `MOVE_TO` to the same target that returns `arrived` with `route: []` becomes `repeated_without_progress`, drops the pending tail and speculative memory, and asks PM to change action, wait, think strategically, or stop.
+- Updated `NPCsys.md` with the resulting contracts, debug traces, and the measured prompt-caching limitation.
+
+### 3. Important Architecture and Runtime Decisions
+
+- Runtime outcomes, `actionHistory`, inventory, and refreshed world context are authoritative; model intention and prose are not evidence that an action succeeded.
+- Long plans are preferred only for one coherent procedure. Unknown-dependent branches are handled by runtime interrupts and a subsequent PM call.
+- The first empty-route arrival remains valid because it may be the barrier before a useful tail such as `MOVE_TO -> TAKE`. Only repetition to the same target is terminal no-progress.
+- NPC knowledge is scene-aware in preparation for future cross-scene movement, but only Items and Actors accumulate in `knownEntities` to control token use.
+- Prompt caching remains provider-specific. The current cacheable PM prefix measured about 12,140 characters / roughly 3,035 tokens, below the approximately 4,096-token Haiku 4.5 minimum.
+
+### 4. Tests and Validation
+
+- `npm test -- tests/npc/puppet-master.test.ts`: 66/66 tests passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed; only expected LF-to-CRLF worktree warnings were reported.
+- Commit hooks ran Prettier and ESLint successfully.
+
+### 5. Commits Created
+
+- `052bafc` - `fix(npc): stop repeated no-op movement plans` (includes the current PM/runtime, prompt, test-scene, test, and documentation state).
+
+### 6. Remaining Work / Next Recommended Steps
+
+1. Split stable authored entity data into the scene-static PM prefix: `id`, `title`, descriptions, inspection affordances, command definitions, and static Switch capabilities.
+2. Keep current state, visibility, location, reachability, inventory ownership, and prerequisite availability in the dynamic suffix.
+3. Build the static projection deterministically, invalidate it when authored scene structure changes, and expose estimated/cacheable prefix metrics in debug output.
+4. Re-run the same `#PEEKLLM-ON` scenario twice within five minutes and verify nonzero `cacheCreationInputTokens` followed by `cacheReadInputTokens`.
+
+### 7. Risks and Caveats
+
+- A minimal static entity projection from the observed 22 entities adds only about 826 estimated tokens, putting the prefix near but possibly still below the cache threshold. Include useful stable descriptions and target approximately 4,300-4,500 estimated prefix tokens for margin.
+- Prompt cache reuse requires an identical prefix through the cache breakpoint; deterministic ordering and serialization are therefore part of the contract.
+- The test scene was intentionally included in commit `052bafc`; its formatting and authored fixture changes should be preserved unless explicitly revised.
+
+## Session Entry - 2026-06-27 18:05 +02:00
+
+### 1. Session Goals
+
+- Optimize the input prompt for the LLM module "Puppet Master".
+- Remove redundancy in JSON fields such as `inspection`, `visibility`, `lastSeenSceneId`, and `approach`.
+- Minify JSON payload to save tokens.
+
+### 2. What Was Implemented
+
+- Changed `NpcWorldModelBuilder.ts` to omit `inspection` if it matches default capabilities (`look, examine, in, on, under, behind`).
+- Omitted `lastSeenSceneId` when it matches the current scene.
+- Omitted `visibility` when it matches the default `"visible"`.
+- Omitted `approach` when it is `"already_reachable"` and the object is currently `"reachable"` or `"held"`.
+- Updated `FALLBACK_SYSTEM_PROMPT` in `NpcPuppetMaster.ts` and `public/text/system/npc-pm-system.md` with explicit rule assumptions to replace these omitted fields.
+- Made fields `lastSeenSceneId`, `visibility`, and `approach` optional in `npcTypes.ts`.
+- Disabled JSON pretty-printing (`JSON.stringify(..., null, 2)`) for the prompt context in `NpcPuppetMaster.ts` to minify payload size and conserve tokens significantly.
+- Enabled triggerPuppetMaster in `ActorPlanExecutor.ts` for NPC speech: now NPC speech triggers the Puppet Master scheduling loop identically to player speech, waking listener NPCs after the `PM_BATCH_DEBOUNCE_MS` debounce time (while excluding the speaker to avoid infinite conversational loops).
+- Configured dynamic `PM_BATCH_DEBOUNCE_MS` (150ms in Vitest environment to keep tests fast, 400ms in production as configured by the user).
+- Fixed mock test assertions in `puppet-master.test.ts` to align with the new minified JSON, optimized fields, and triggerPuppetMaster logic.
+
+### 3. Important Architecture and Runtime Decisions
+
+- Token economy matters. Omitting default context fields and utilizing minified JSON yields noticeable token savings.
+- Re-stated defaults explicitly in the LLM system prompt so the model is fully aware of implicit capabilities even if the keys are absent.
+
+### 4. Tests and Validation
+
+- `npm run typecheck`: Passed successfully after resolving optional types in `npcTypes.ts`.
+
+### 5. Commits Created
+
+- `575b618` - `perf(npc): optimize PM LLM prompt by minifying JSON and omitting default properties`
+
+### 6. Remaining Work / Next Recommended Steps
+
+- Run the game and test Puppet Master's new prompt in a real scene.
+
+## Session Entry - 2026-06-30 03:10 +02:00
+
+### 1. Session Goals
+
+- Implement the Video Export Tool (vetool) for batch frame exporting from video to animation atlases.
+- Style the UI matching the Scanline Engine design language.
+- Re-use the existing Vite dev server backend for file list and save operations.
+
+### 2. What Was Implemented
+
+- **Vite Backend Middleware Patch**: Modified `vite.config.ts` `/api/save` endpoint to detect Base64 image data URLs and save them as binary buffers.
+- **Entry Points**: Added `vetool.html` in the project root and `src/vetool.tsx` / `src/vetool.css` for the separate application.
+- **Video Handling**: Implemented frame-by-frame seeking on hidden `<video>` element, loop playback within custom loop bounds, and interactive seek timeline showing frame index and time.
+- **Box Drawing Overlay**: Enabled interactive canvas on top of the video workspace supporting up to 10 rectangular bounding boxes. Users can drag to create boxes, and move/resize them with mouse handles or edit precise coordinates in the sidebar.
+- **Exporter**: Implemented column-based packing layout. Columns are sorted by index and packed side-by-side. The exporter crops video frames, renders the packed layout on a temporary canvas, and saves the final PNG spritesheet alongside sprite `.json` configuration files via standard `/api/save` endpoints.
+- **Unit Tests**: Created `tests/editor/vetool.test.ts` to test the coordinate packing and spritesheet layout calculation logic. All tests passed.
+- **Typecheck & Build**: Validated with `npm run typecheck` and `npm run build` (both finished successfully without errors).
+
+### 3. Important Architecture and Runtime Decisions
+
+- Kept vetool as a separate single-page web app to ensure zero runtime impact/conflict with Scanline engine.
+- Used original video resolution as canvas drawing buffer size, making mouse event coords map 1-to-1 without scaling calculations.
+- Added base64 image decoding in dev server `/api/save` to enable standard browser canvas image exports without a dedicated upload server.
+
+### 4. Tests and Validation
+
+- `npm test -- tests/editor/vetool.test.ts` (3 tests passed).
+- `npm run typecheck` (Passed).
+- `npm run build` (Passed, outputting index.html and vetool.html bundles).
+- Full `npm test` (512 tests passed).
+
+### 5. Commits Created
+
+- `c542210` - `Implement Video Export Tool (vetool) with layout utility and unit tests`
+
+### 6. Remaining Work / Next Recommended Steps
+
+1. Verify and test the tool with real MP4 animation assets in a web browser at `/vetool.html`.
+2. Integrate a link/button inside Scanline Sprite Editor (F5) to open the Video Export Tool in a new tab if desired.
+
+
+
+## Session Entry - 2026-06-30 23:45 +02:00
+
+### Session Goals
+
+- Доработать функционал и стабильность VETOOL (Video Export Tool).
+- Наладить переходы между Sprite Editor и VETOOL в обе стороны (F6 для перехода в VETOOL, F5 для возврата в редактор спрайтов).
+- Сделать воспроизведение видео в VETOOL с учетом STEP SIZE плавным и визуально наглядным.
+- Исправить баги воспроизведения, загрузки файлов и конфигураций в VETOOL.
+- Улучшить стилистику и интерактивный отклик кнопок интерфейса.
+
+### What Was Implemented
+
+#### 1. Стабильность воспроизведения и рендеринга VETOOL
+
+- **Предотвращение артефактов при поиске:** Заблокировано рисование кадров на холсте и кэширование, если `video.seeking === true`, убирая мерцание и пустые кадры.
+- **Поддержка stepSize во время воспроизведения:** Шаг воспроизведения `stepDuration` теперь масштабируется как `frameDuration * stepSize`, позволяя воспроизводить видео с пропуском кадров на физической скорости 1x. Playhead-кадры привязываются (snap) к ближайшим кратным stepSize кадрам относительно `loopStart`.
+- **Разблокирование выбора файлов:** Предупреждающий попап при несовпадении видеофайла в конфигурации заменен на Toast-уведомление. Это позволило сохранить контекст пользовательского жеста (user gesture) и предотвратить блокировку окна выбора файлов браузером.
+- **Сброс кэша при смене файла:** При загрузке нового локального видео мгновенно сбрасываются границы, длительность и очищается кэш кадров во избежание рендеринга старых данных. Добавлен эффект `.load()` при смене `videoUrl`.
+- **Устранение дрожания seek-рендеринга:** Добавлен 40-мс debounce на отрисовку кадра по событию `onSeeked`, давая GPU декодировать новый кадр до попытки его отрисовки.
+
+#### 2. Двусторонняя интеграция Sprite Editor и VETOOL
+
+- **Переход из Sprite Editor (F6):** В Sprite Editor добавлены горячая клавиша `F6` и пункт меню `F6 VETOOL` для перехода на страницу `/vetool.html`. Для браузерной версии (вне Tauri) добавлена поддержка `Ctrl+F6` для открытия VETOOL в новой вкладке.
+- **Возврат из VETOOL по F5:** 
+  - На главной странице (`App.tsx`) реализовано чтение хэша URL (`#sprite-editor`) на mount и событии `hashchange` с переключением в режим редактора спрайтов.
+  - Устранена критическая ошибка рендеринга (White Screen of Death) при загрузке страницы: рендер боковых панелей и меню редактора теперь откладывается до полной инициализации синглтона `Game`.
+  - В VETOOL обработчик клавиш переведен на фазу перехвата (`useCapture = true`) с вызовом `e.stopPropagation()` для надежной блокировки дефолтной перезагрузки страницы браузером при нажатии `F5`.
+  - Горячие клавиши `F1`-`F5` в `handleKeyDown` перенесены выше проверки существования видео, гарантируя их работоспособность при незагруженном видеофайле.
+
+#### 3. Улучшение стилей и визуального отклика
+
+- **3D-выпуклость кнопок (.e-btn):** Для всех стандартных кнопок добавлена легкая тень снизу и внутренний блик сверху:
+  `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 3px rgba(0, 0, 0, 0.6);`
+  Эта тень сохраняется и в состоянии `:hover` / `.active-press`.
+- **Приглушенные рамки кнопок:** Введена переменная `--ui-btn-border-muted: #387d60`, делая рамку кнопок мягче основного ярко-зеленого акцента, но оставляя её ярче неактивных полей ввода.
+- **Интерактивные вспышки хоткеев:** При нажатии клавиш быстрого вызова (F1-F6, F8, `[`, `]`) соответствующим кнопкам на 150 мс присваивается класс `.active-press`, визуально имитируя нажатие.
+- **Очистка и хоткеи границ цикла:** Удалены избыточные кнопки `F7 Set Start` и `F9 Set End` из нижнего меню VETOOL. Кнопки в боковой панели переведены на новый стиль отображения хоткеев `[` и `]` с левой стороны текста с затемнением цвета хоткея для улучшения читаемости.
+
+### Tests Run
+
+- `npm run typecheck` — успешно.
+- `npx vitest run tests/editor/vetool.test.ts` — 3 теста успешно пройдены.
+- Полный набор автотестов (`npm test`) — 512 тестов успешно пройдены.
+
+### Commits Created
+
+- `a7abbfb` — `fix(editor): parse window.location.hash to open sprite editor when returning from VETOOL`
+- `f795208` — `fix(editor): prevent rendering SpriteBottomMenu before Game is initialized to avoid app startup crash`
+- `82cb71e` — `fix(vetool): use capture phase to intercept F5 key event to prevent browser reload`
+- `87785d3` — `fix(vetool): process independent keys in handleKeyDown before checking for active video element`
+- `e1017e9` — `style(editor): add subtle drop-shadow and top-highlight bevel to e-btn class`
+- `1b5c00b` — `style(editor): preserve convex bottom shadow on button hover state`
+- `6329cb7` — `style(editor): slightly mute standard button border using new color variable`
+- `9967220` — `feat(vetool): remove redundant F7/F9 loop set buttons, support F-key style hotkeys inside standard e-btn`
+- `2d7304d` — `feat(vetool): darken e-btn hotkeys for better contrast, flash buttons on hotkey press`
+
+
+## Session Entry - 2026-07-02 20:48 +02:00
+
+### Session Goal
+
+Реализация компонента Exit для Scanline Engine: добавление двух режимов активации (Collider и Portal), телепортация Actor-а в целевой Entry, кнопка Check для валидации целевой сцены/Entry в редакторе.
+
+### What Was Implemented
+
+**Exit component — два режима активации:**
+
+- **Collider** (чекбокс в SectionComponents.tsx): активируется автоматически каждый кадр через ComponentSystem.checkTriggerboxCollisions(), когда коллайдер Actor-а пересекает область объекта с компонентом Exit. Работает для Triggerbox, Quad (через визуальный полигон с parallax) и Entity (через визуальный прямоугольник). Каждый кадр при коллизии вызывается scene.activateObject(exitObject, 0, actor).
+- **Portal** (чекбокс): активируется кликом мышью (handleSceneClick) или через semantic API. Над объектом показывается курсор ack. Для player активируется немедленно; для NPC — тихий перенос без смены активной сцены.
+
+**Логика handleExit в ComponentSystem.ts:**
+
+- 	ransferActorToScene(activator, targetSceneId, { targetEntryId, activateScene: activator === currentScene.player })
+- Пустой 	argetSceneId → локальная телепортация внутри текущей сцены (scene.id как fallback)
+- Флаг ctivateScene = true только если активатор это scene.player; NPC переносится молча
+
+**Передача activator из handleSceneClick:**
+
+- Исправлена критическая ошибка: клики по порталу не передавали ctivator в ctivateSceneObject(), из-за чего handleExit делал switchTo() без переноса Actor-а. Добавлено scene.player ?? undefined в оба вызова ctivateSceneObject() в handleSceneClick (строки 425 и 453, SceneInteraction.ts).
+
+**Кнопка Check в редакторе (SectionComponents.tsx):**
+
+- Проверяет 	argetSceneId → targetEntryId с поддержкой незагруженных сцен (sceneRegistry)
+- Нормализует ID сцены: обрезает .json, понимает пустой ID как текущую сцену
+- Ищет Entry-объект по 
+ame во всех объектах: entities, 	riggerboxes (и Quad через entities)
+
+**ParserWorldModelBuilder.ts:**
+
+- Добавлено поле exit в ParserEntityContext: { targetSceneId, targetEntryId, targetSceneTitle }
+- 	argetSceneTitle берётся из загруженной сцены или из sceneRegistry.descriptor.title
+- Пустой 	argetSceneId раскрывается до currentScene.id для корректного отображения в LLM-контексте
+
+**Тесты (	ests/scene/scene-transition.test.ts):**
+
+- Создан новый тестовый файл с 4 сценариями: обычный переход, локальный (пустой targetSceneId), Exit на Entity, Exit на Quad с parallax
+- В тестах actor корректно назначен как scene.player (isPlayer = true), что соответствует семантике — ctivateScene срабатывает только для player
+
+### Architecture/Runtime Decisions
+
+- **ctivateScene: actor === currentScene.player** вместо ctivateScene: true — ключевое решение: NPC должен переноситься в фон без переключения камеры/сцены. Параметр передаётся в 	ransferActorToScene в ComponentSystem.handleExit и в ActorCommandExecutor.goToScene использовался аналогичный паттерн.
+- **Entry — это имя объекта, а не свойство компонента** — Entry может быть на Triggerbox, Entity или Quad; идентифицируется по 
+ame объекта.
+- **SceneManager scene keys без .json** — ID сцен хранятся без расширения; входной 	argetSceneId нужно нормализовать перед любым lookup.
+- **Два источника данных о сценах**: sceneManager.scenes (загруженные) и sceneManager.sceneRegistry (все), оба нужно проверять.
+
+### Tests Run
+
+- 
+pm run typecheck — чисто (исправлены 2 ошибки Actor | null vs Actor | undefined через ?? undefined)
+- 
+px vitest run tests/scene/scene-transition.test.ts — 4/4 pass
+- 
+px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, не связаны с этой сессией)
+
+### Files Changed
+
+- src/systems/ComponentSystem.ts — handleExit, checkTriggerboxCollisions, флаг ctivateScene
+- src/scene/SceneInteraction.ts — передача scene.player ?? undefined в ctivateSceneObject при кликах
+- src/components/editor/properties/SectionComponents.tsx — UI чекбоксов Collider/Portal, кнопка Check
+- src/mechanics/ParserWorldModelBuilder.ts — поле exit в entity context, нормализация targetSceneId
+- 	ests/scene/scene-transition.test.ts — новый тестовый файл (4 теста)
+- GDD.md — обновлено описание компонента Exit с полной спецификацией
+
+### Remaining Work / Next Steps
+
+- Pre-existing 4 фейла в puppet-master.test.ts требуют отдельного разбора
+- Collider-режим для NPC не тестируется автоматически — потенциальная зона для дополнительных тестов
+- Поддержка GO TO <exit-object> через parser (Portal + автоподход) — описана в GDD как планируемая функциональность
+
+
+## Session Entry - 2026-07-02 21:21 +02:00
+
+### Session Goals
+
+- Завершить actor-aware механику Exit для player и NPC.
+- Перевести player `GO TO` на общий `ActorNavigationService`.
+- Унифицировать дальнюю активацию Exit и Subscene через автоматический физический подход.
+- Исправить PM-продолжения после фонового переноса NPC между сценами.
+- Синхронизировать техническую документацию и расширить wrap-up загрузкой всех корневых Markdown-файлов.
+
+### What Was Implemented
+
+- NPC world context теперь включает usable Exit даже без authored Title, используя object id как fallback, и передаёт `targetSceneId`, `targetEntryId`, `targetSceneTitle`, `portal`, `collider`.
+- В PM DSL добавлен `TRAVERSE_EXIT`. NPC должен выполнить `MOVE_TO`, если Exit ещё не reachable, затем терминальный `TRAVERSE_EXIT`; один `MOVE_TO` больше не считается переходом между сценами.
+- Успешный переход завершает исходный план, отбрасывает stale tail, применяет post-plan memory только после подтверждённого transfer и планирует `plan_completed` в фактической целевой сцене NPC.
+- Исправлено динамическое PM-батчирование при смене сцен: runtime continuation не теряется из-за того, что source scene перестала быть current; provider request выполняется только для актуальной сцены NPC.
+- Player `GO TO <object>` использует общий `ActorNavigationService` и ближайшую walkable interaction-точку вместо попытки идти в заблокированный центр объекта.
+- Portal Exit активируется сразу, если reachable; иначе player автоматически подходит и активирует его после прибытия. При невозможном маршруте используется стандартное сообщение Subscene о слишком большой дистанции.
+- Дальняя Subscene переведена на тот же activate-or-approach flow.
+- Parser разрешает Exit по id/Title объекта и по id/name/Title целевой сцены; `GO TO/THROUGH` и `QUIT [THROUGH ...]` используют единый Exit runtime path.
+- NPC perception исключает объекты с `visible: false`; сохранено специальное исключение для disabled authored content неактивной Subscene.
+- Геометрия Quad и быстрый `approach` status теперь используют фактическую форму/walkable interaction position.
+- Исправлено пропорциональное масштабирование Entity collider и добавлены проверки навигации.
+
+### Architecture and Runtime Decisions
+
+- `ActorNavigationService` является общей точкой физического подхода для player и NPC world-query, чтобы parser, клики и PM не расходились в оценке достижимости.
+- `TRAVERSE_EXIT` всегда является последним физическим шагом PM-плана: межсценовый transfer меняет authoritative scene context, поэтому старый хвост нельзя продолжать автоматически.
+- Untitled Exit является семантически значимым исключением из общего правила authored Title: без этого NPC видит маршрут до двери в диагностике, но не получает адресуемую сущность в prompt.
+- Background transfer NPC не должен переключать active player scene, но обязан сохранить live Actor, inventory ownership и последующие PM wake events.
+
+### Documentation
+
+- Обновлены `GDD.md`, `NPCsys.md`, `Parser.md`, `SpatialSys.md` и `Autotests.md` в соответствии с текущим Exit/navigation/PM контрактом.
+- Skill `wrap-up-session` изменён: теперь Scanline Engine получает все `*.md` непосредственно из корня проекта (без рекурсии) и дополнительный curated `AgentMemory.md`; старые источники заменяются по точному basename.
+
+### Tests and Validation
+
+- Focused Exit/navigation/PM tests прошли.
+- `npm run typecheck` прошёл.
+- Полный Vitest run: 511 passed, 4 pre-existing failures в `tests/npc/puppet-master.test.ts` на момент проверки.
+- Markdown изменения прошли `git diff --check`.
+- Обе обнаруженные копии `wrap-up-session` прошли `quick_validate.py`.
+
+### Commits
+
+- `9cda3f6` — `Improvements to the Exit component for Scanline Engine`: Exit/NPC/parser/navigation runtime, тесты, сцены и документация.
+- `f29c585` — `Fix Entity collider proportional scaling and add verification tests`.
+- `583ce24` — `upd`: удалён временный `temp_output.txt`.
+
+### Current State and Remaining Work
+
+- Рабочее дерево чистое; ветка `puppet-master2` синхронизирована с `origin/puppet-master2`.
+- Рекомендуется отдельно разобрать четыре ранее наблюдавшихся PM test failures и подтвердить, остаются ли они воспроизводимыми после текущих изменений.
+- Полезен ручной end-to-end прогон: player просит NPC пройти через дверь, NPC отвечает после перехода уже из Corridor, а player отдельно проверяет дальние `GO TO Chair`, Exit и Subscene.
+
+### Caveats
+
+- Изменения самого skill `wrap-up-session` находятся в пользовательском каталоге Codex, а не в репозитории Quest, поэтому не входят в перечисленные git commits.
+- Корневые Markdown-файлы при wrap-up синхронизируются не рекурсивно; документы из подкаталогов намеренно не загружаются.
+
+## Session Entry - 2026-07-02 23:25 +02:00
+
+### Session Goal
+
+Исправление багов переходов Actor-а через стыки смежных Walkbox областей (обычных Walkbox-ов сцены и компонентов WalkBox на объектах Quad) и предотвращение выхода за внешние границы игровой области.
+
+### Outstanding User Requests
+
+- **Fix Quad Walkbox transitions from the "outside"**: Исправлена ситуация, когда Actor не мог переходить между граничащими Walkbox-ами.
+- **Strict Boundaries**: Исправлен баг, при котором Actor мог выскочить за внешние границы (exterior edges) и застрять.
+
+### Work Accomplished
+
+- **Strict Boundary and Gap Bridging Logic**:
+  - Реализован метод `Geometry.isPointInsideUnionOfPolygons` в `src/utils/Geometry.ts`.
+  - При нахождении точки за пределами всех полигонов проверяется, находится ли она в микро-зазоре стыка: для этого она должна быть в радиусе `epsilon` (2.0 пикселя) как минимум от **двух разных** Walkbox-ов. Если рядом только один Walkbox, точка классифицируется как внешнее пространство, и движение за границу блокируется.
+  - Первым этапом проверяется строгое попадание точки внутрь любого Walkbox с микро-допуском `0.001` пикселя (для компенсации погрешности float-вычислений на стыках внешних границ).
+- **Point Mode strictness**:
+  - В `Scene.isWalkable` Point Mode проверки заменены на `isPointInPolygonWithEpsilon` со строгим допуском `0.001`, исключая выход клика за пределы зон.
+- **Camera Smoothing Lag Decoupling ("Rubber Band" Fix)**:
+  - Устранена проблема, при которой коллайдер выходил за рамки Walkbox при движении из-за отставания плавной камеры, а затем втягивался обратно ("эффект резинки").
+  - Добавлено свойство `scene.collisionCamera` в `Scene.ts`, хранящее мгновенные целевые координаты камеры без сглаживания (рассчитывается в `SceneCamera.ts`).
+  - Все проекции в методе `isWalkable` переведены на использование `collisionCamera` вместо отстающей `camera`. Теперь проверка столкновений полностью независима от лага отрисовки камеры.
+- **Test Coverage**:
+  - В `tests/game/navigation-and-spatial.test.ts` расширен тест `allows an Actor to walk between bordering Walkbox objects and Quad Walkboxes`. Добавлены явный 1-пиксельный зазор и строгие проверки недопустимости выхода за внешние границы (слева и справа). Тест успешно проходит.
+
+### Tests and Validation
+
+- Все тесты навигации и пространственной логики успешно пройдены.
+- Полный Vitest run: 526 passed, 4 pre-existing puppet-master failures.
+- Проведено локальное тестирование в сцене `wt`: эффект "резинки" устранен, коллайдер игрока строго удерживается внутри Walkbox в любой момент движения.
+
+## Session Entry - 2026-07-03 15:14 +02:00
+
+### Session Goals
+
+- Разобрать и исправить зависание PM на ложных воспоминаниях и несостыковках между памятью, физическим планом и фактическим миром.
+- Убрать потерю безопасных `SAY`/`MEMORY_SET` шагов, если физический хвост плана оказывается невалидным.
+- Стабилизировать навигацию NPC к частично доступным целям и остановить бесконечные `MOVE_TO -> route_unreachable` циклы.
+- Исправить кросс-сценную видимость предметов после успешного подбора игроком.
+- Завершить сессию аккуратным wrap-up и сохранить durable context для следующего захода.
+
+### What Was Implemented
+
+- В `src/mechanics/NpcPuppetMaster.ts` добавлен авто-`MOVE_TO` перед явным `TAKE`, если цель известна, но ещё не достижима, и цель имеет route-aware `approach`.
+- Там же добавлен защитный механизм для rejected plan: безопасный префикс из `SAY`/`MEMORY_SET` сохраняется при отклонении плана, чтобы NPC не терял полезную речь и обновления памяти из-за невалидного физического хвоста.
+- Введён лимит повторов для `MOVE_TO target -> route_unreachable`: допускается до трёх подряд неуспешных попыток, а LLM получает предупреждение со счётчиком оставшихся попыток.
+- `src/systems/ActorNavigationService.ts` переведён на route-aware selection подходящей точки, чтобы fast status и полноценный план опирались на реальный маршрут, а не на формально walkable, но недостижимую точку.
+- В `src/systems/InventoryManager.ts` исправлена опорная reference-point логика для Quad/vertices, чтобы точки подхода строились от фактической формы объекта.
+- В `src/systems/GameSemanticAPI.ts` успешный actor-aware `TAKE` теперь сбрасывает `hidden` у предмета, чтобы предмет не исчезал снова после переноса между сценами.
+- `src/mechanics/npcTypes.ts` расширен полями для лимита повторных попыток движения.
+- Обновлены документы `GDD.md`, `NPCsys.md` и `public/text/system/npc-pm-system.md`.
+- Добавлены/обновлены тесты в `tests/npc/puppet-master.test.ts`, `tests/game/navigation-and-spatial.test.ts`, `tests/game/semantic-api.test.ts`.
+- В репозиторий вошли scene/object data updates для `public/scenes/Corridor.json` и новых object text files, использованных в воспроизведении и проверке.
+
+### Important Architecture and Runtime Decisions
+
+- PM теперь опирается на отдельный защитный слой для безопасных речевых и memory-only шагов: полезная семантика не должна пропадать только потому, что физический хвост плана сломан.
+- `MOVE_TO` retry guard сделан конечным и прозрачным для LLM, чтобы не маскировать проблему навигации бесконечным повтором одного и того же шага.
+- `ActorNavigationService` должен оставаться общей точкой принятия решений о достижимости для player/NPC, иначе parser, клики и PM расходятся в оценке пространства.
+- Для кросс-сценных предметов выбран простой runtime-подход: после успешного подбора игроком предмет больше не должен снова становиться hidden только из-за смены сцены.
+
+### Mechanics, Navigation, Inventory
+
+- Исправлен путь `TAKE` для NPC: если предмет видим, но ещё не reachable, PM сначала получает подход к цели, затем уже пытается взять предмет.
+- Навигация к объектам теперь учитывает реальную маршрутизируемость к target interaction point.
+- Улучшена диагностика и устойчивость к объектам, которые внешне выглядят доступными, но фактически могут быть заблокированы геометрией или неправильной reference point.
+- Исправление `hidden = false` после actor pickup устранило случай, когда предмет, уже взятый в одну сцену, исчезал из perception в другой.
+
+### Tests and Validation
+
+- Прогонялись focused tests по PM, навигации и semantic API, а также `npm run typecheck`.
+- Локально подтверждено, что изменения закрывают регрессии по route-unreachable циклам, TAKE auto-approach и cross-scene item visibility.
+- Полный `npm test` ранее всё ещё имел один известный pre-existing failure в `tests/integration/parser-game.test.ts` из-за `result` being undefined в самом тесте, а не в коде движка.
+
+### Commit
+
+- `9ab960b` - `PM fixes & improvements`
+
+### Remaining Work / Next Steps
+
+- Разобрать и отдельно починить pre-existing integration test bug в `tests/integration/parser-game.test.ts`.
+- При необходимости отдельно донастроить PM safe-prefix handling, если в будущем появятся случаи, где `MEMORY_SET` должен проверяться на согласованность с failed physical plan.
+- Следующий практический прогон: убедиться, что NPC действительно не зацикливается на unreachable targets и корректно продолжает план после нескольких неудачных `MOVE_TO`.
+
+### Risks and Caveats
+
+- В репозитории были также user-owned scene/object edits, и мы их не откатывали; часть из них вошла в общий commit как рабочий контекст для текущих исправлений.
+- Корневые Markdown-файлы синхронизируются в NotebookLM только не рекурсивно, поэтому документы из подкаталогов в wrap-up не попадают.
+
+## Session Entry - 2026-07-06 02:34 +02:00
+
+### Session Goals
+
+- Проанализировать промпты Puppet Master и Parser LLM по реальным peek-логам: полнота контекста, форма представления, избыточность и prompt-cache пригодность.
+- Реализовать согласованный рефакторинг промптов без Structured objectives, сохранив scene description/lore в статической части для атмосферы и Anthropic prompt caching.
+- Устранить найденные после рефакторинга регрессии поиска скрытых предметов, наблюдательных команд, Parser Notes, краткой истории и clarification flow.
+- Добавить Reasoning модели в диагностический вывод `#peek-om`.
+
+### What Was Implemented
+
+- PM prompt/context разделён на стабильную сценическую часть и компактную динамическую часть; сокращены повторы, runtime wake context и recovery-контекст, при этом scene description/lore оставлены в cacheable static prompt.
+- В `#peek-om` добавлен вывод поля Reasoning, когда оно присутствует в ответе модели.
+- Исправлена семантика hidden discovery: `EXAMINE` может открывать объекты с `Lookable`, но обратное соответствие не допускается. Это вернуло NPC способность находить TV remote в `test_room` без чрезмерного раскрытия объектов.
+- Parser LLM prompt переведён на компактную static/dynamic модель. Статическая часть содержит атмосферу, каталог сущностей, spoiler rules, authored commands и GM actions; динамическая — текущие состояния, доступность, inventory, pending state, Parser Notes и recent turns.
+- Удалены избыточные динамические `worldFacts`, `spatialNodes`, `spatialRelations` и повторяющиеся описания; recovery context сокращён до данных, необходимых для исправления предыдущей попытки.
+- `details` целевой сущности передаются только при распознавании предмета в команде, чтобы не раздувать каждый запрос и не раскрывать details остальных объектов.
+- Добавлена защита наблюдательных намерений: READ/LOOK/EXAMINE/INSPECT/STUDY/CHECK/SEARCH не могут получить `TAKE` как побочное действие лишь ради доступа к объекту.
+- История текущего посещения сцены сохраняет последние 8 command/response пар; лимит ответа увеличен с 85 до 340 символов, чтобы модель видела ранее придуманное содержимое записок и другую существенную атмосферную прозу.
+- Усилен контракт Parser Notes: если GM придумывает устойчивый малый факт, ответ должен быть plan с `showText` и `setEntityParserNote`/`setSceneParserNote`, а не одиночный `final_response`.
+- Исправлена ложная LLM clarification: если `pendingAction` уже указывает на единственную реальную цель, действие выполняется непосредственно. Настоящая неоднозначность продолжает использовать стандартный parser pending-flow с нумерованными вариантами и сохранением требуемого действия.
+- В system prompt явно запрещено спрашивать игрока, выбирает ли он предмет или выполнение уже запрошенного действия над тем же предметом.
+
+### Important Architecture and Runtime Decisions
+
+- Scene description/lore намеренно остаются в статическом prompt: это одновременно художественный контекст GM и достаточный объём для работы Anthropic cache.
+- Structured objectives из первоначального плана не реализовывались по решению пользователя.
+- Наблюдательная команда не должна менять владение предметом. Это теперь не только prompt rule, но и детерминированная нормализация ответа LLM.
+- `EXAMINE -> Lookable discovery` является допустимым расширением более глубокого осмотра; `LOOK -> Examinable discovery` недопустимо.
+- Short-term recent turns дополняют, но не заменяют Parser Notes. История помогает продолжить ближайший диалог, а устойчивые придуманные факты должны сохраняться на scene/entity.
+- Clarification является engine-owned процедурой: LLM сообщает неоднозначный аргумент через `pendingAction`, а parser строит варианты, нумерацию и продолжение действия.
+
+### Tests and Validation
+
+- Focused Parser suite после prompt refactor: 150/150 passed.
+- Полный Vitest run на этапе Parser refactor: 545/547 passed; два оставшихся сбоя были известными несвязанными `navigation-and-spatial` failures.
+- Финальные focused проверки `tests/parser/llm-cascade.test.ts` и `tests/scene/scene-parser-history.test.ts`: 46/46 passed.
+- `npm run typecheck` passed.
+- `git diff --check` passed; остались только уведомления Git о будущем LF -> CRLF преобразовании.
+- Реальные peek-прогоны подтвердили восстановление поиска TV remote и корректную передачу recent turns до нового лимита.
+- Финальный `codex-doctor -ForceMemoryReview`: 20 health checks passed, typecheck passed; полный Vitest run — 546/548 passed с теми же двумя известными `navigation-and-spatial` failures. Background NotebookLM memory review и maintenance agent успешно запущены.
+
+### Commits
+
+- `c29bd82` - `improvemet: PM LLM Prompts optimisation`.
+- `70983e7` - `Improvement: Parser LLM Prompts optimisation` (включает финальные Parser prompt, recent history и clarification fixes).
+
+### Remaining Work / Next Steps
+
+- Повторить игровой сценарий чтения бумаги без authored `details`: первый придуманный текст должен вернуть `showText + setEntityParserNote`, а повторное чтение — использовать эту заметку последовательно.
+- Если модель всё ещё иногда возвращает persistent invented fact через `final_response`, добавить детерминированную защиту или retry/repair слой; одного prompt contract может оказаться недостаточно.
+- Очистить оставшиеся устаревшие ссылки system prompt на удалённые dynamic fields (`worldFacts`, `contents`, `spatialNodes`, `spatialRelations`), чтобы документация контекста точно соответствовала compact DTO.
+- Отдельно разобрать два известных `navigation-and-spatial` failures, если они ещё воспроизводятся в текущем HEAD.
+
+### Risks and Caveats
+
+- Увеличение recent-turn response limit до 340 повышает dynamic token usage, хотя объём ограничен восемью turns и остаётся существенно меньше статического prompt.
+- Parser Notes всё ещё зависят от соблюдения моделью structured output contract; recent history теперь предотвращает немедленную потерю текста, но не является долговременной заменой notes.
+- Exact-target clarification guard сейчас покрывает простые target actions. Сложные неоднозначности `putTarget`/custom command должны и дальше проходить через стандартный pending-flow.
+- На момент wrap-up рабочее дерево чистое; пользовательские scene/editor изменения в более поздних коммитах не изменялись и не откатывались.
+
+## Session Entry - 2026-07-06 19:43 +02:00
+
+### Session Goals
+
+- Исправить регрессию, из-за которой предметы, лежащие в инвентаре другого объекта, теряли правильный родительский контекст и вызывали лишний `MoveTo` перед взятием.
+- Сделать это поведение общим для `Player` и всех `Actor`.
+- Починить отдельный случай, когда редакторский spatial `IN` без реального `Inventory` у родителя ошибочно скрывал объект как инвентарный.
+- Зафиксировать результат в коммите и собрать wrap-up для следующей сессии.
+
+### What Was Implemented
+
+- В `InventoryManager` добавлено разрешение вложенного owner-chain для inventory-объектов, чтобы координаты и доступность предмета всегда следовали за реальным родителем инвентаря, а не за устаревшей сценовой позицией.
+- В `ActorWorldQuery` и `ComponentSystem` приведено к одному контракту вычисление reachable/interaction distance для вложенных inventory-цепочек.
+- В `InventoryManager.handleSceneChange()` добавлена развязка editor-authored `spatial.in` от реального inventory membership: spatial edge сохраняется, но инвентарная принадлежность создаётся только если у родителя действительно есть `Inventory`.
+- Исправлен случай с `CityView` в `window1`: объект больше не скрывается как inventory item, если родитель не имеет inventory.
+- Добавлены и обновлены тесты для nested inventory, parser take/examine flow и renderability объектов с `spatial IN` без inventory у родителя.
+
+### Important Architecture or Runtime Decisions
+
+- Spatial `in` сам по себе не означает inventory ownership.
+- Реальная инвентарная принадлежность теперь определяется только цепочкой владельцев, где каждый промежуточный объект действительно имеет `Inventory`.
+- Если editor-authored spatial child не принадлежит inventory-родителю, runtime должен восстановить его видимость, а не пытаться интерпретировать его как предмет в инвентаре.
+- Один и тот же контракт должен работать для Player и для любых Actor, чтобы parser и navigation не расходились в поведении.
+
+### Parser / Mechanics / Scene Changes
+
+- Исправлен `take`-поток для предметов, вложенных в inventory другого объекта: больше нет ложного `player_approaching_for_action` из-за старых координат.
+- Исправлена геометрия/interaction lookup для вложенных inventory items, чтобы команды не опирались на устаревшие scene coordinates.
+- Исправлено отображение scene entities, находящихся в `spatial IN` без реального inventory у родителя.
+
+### Tests and Validation
+
+- Прогонялись focused tests по navigation/spatial, parser integration и semantic API.
+- Проверка typecheck завершилась успешно.
+- Локально подтверждено, что `take aaa` для батареек внутри remote больше не вызывает лишний подход игрока.
+- Локально подтверждено, что `CityView` под `window1` снова рендерится, потому что `window1` не является inventory container.
+
+### Commit
+
+- `0e5a65e` - commit in progress at wrap-up time; the working tree still contains the session changes described above.
+
+### Remaining Work / Next Steps
+
+- При следующем касании проверить, не появятся ли ещё scene-authored `spatial in` случаи без `Inventory` в других сценах.
+- Если понадобится, можно отдельно пройтись по визуальным/semantic тестам вокруг `visible=false` для вложенных объектов.
+
+### Risks and Caveats
+
+- В рабочем дереве остаются пользовательские изменения в `public/scenes/*`, `src/mechanics/*`, `src/systems/*`, `tests/*`, `GDD.md` и `Sessions.md`; мы их не откатывали.
+- Правило nested inventory теперь завязано на реальную `Inventory`-цепочку, так что любые будущие сцены с editor-authored `spatial IN` без `Inventory` у родителя должны сохранять видимость по этому же контракту.
+
+## Session Entry - 2026-07-06 19:55 +02:00
+
+### Session Goals
+
+- Довести фичу implicit EXAMINE до состояния, пригодного для коммита и долгового handoff.
+- Зафиксировать в памяти, что художественная обёртка должна показываться только при реальном discovery.
+- Отдельно отметить, что часть правок по этой работе уже попала в bugfix-коммит вместе с найденной регрессией.
+
+### What Was Implemented
+
+- Фича implicit EXAMINE с conditional narration была доведена до рабочего состояния и в итоге оказалась зафиксирована в коммите `196eed1` (`Fix nested inventory ownership`).
+- В память проекта записан устойчивый вывод: `ParserToolAction.examineTarget` может нести `narration`, но движок показывает её только если canonical EXAMINE действительно обнаружил указанные сущности.
+- Зафиксировано, что user-owned правка в `public/scenes/test_room.json` осталась в рабочем дереве отдельно и не была включена в этот коммит.
+
+### Important Architecture or Runtime Decisions
+
+- Для implicit EXAMINE нельзя подменять реальное действие выдуманным discovery.
+- Художественный текст допустим только как оболочка над подтверждённым результатом движка.
+- Коммит-история теперь отражает, что фича и сопутствующий bugfix были сведены в один интегрированный change-set.
+
+### Parser / Mechanics / Scene Changes
+
+- Изначально требовались изменения в parser/LLM contract: `narration` на `examineTarget`, `requiresDiscoveredEntityIds`, и prompt-уровневый `discoveryOpportunities` hint.
+- `Sessions.md`, `GDD.md`, parser prompt assets, parser runtime и тесты уже обновлены в основном change-set, вошедшем в `196eed1`.
+
+### Tests and Validation
+
+- Перед коммитом прогонялись focused parser/semantic tests и `npm run typecheck`.
+- Впоследствии была дополнительно подтверждена корректность контракта через summary/peek flow, где модель выбирает anchor EXAMINE и получает условную narration только после фактического discovery.
+
+### Commit
+
+- `196eed1` - `Fix nested inventory ownership`
+
+### Remaining Work / Next Steps
+
+- При следующем проходе можно проверить, не требует ли `public/scenes/test_room.json` отдельного user-commit или ручной вычитки, потому что сейчас это незакоммиченная пользовательская правка.
+- Если захотим ещё глубже зафиксировать контракт, можно добавить короткий note в autotests/документацию о parser-side gating для narrative overlays.
+
+### Risks and Caveats
+
+- В рабочем дереве остаётся незакоммиченная правка `public/scenes/test_room.json`; она не была тронута и не должна смешиваться с этим wrap-up.
+- Сам коммит `196eed1` уже содержит большой интегрированный change-set, поэтому будущим правкам важно не переехать обратно к «fake discovery» поведению.
+
+## Session Entry - 2026-07-06 20:00 +02:00
+
+### Session Goals
+
+- Разобрать случай, когда Stage 2 LLM правильно понимала опечатку `take batterys` как запрос взять AAA batteries, но отвечала художественным отказом вместо `takeTarget`.
+- Найти общий архитектурный источник ошибки без предметных synonym/typo-исключений для тестовой сцены.
+- Сохранить устойчивое решение и контекст для будущей диагностики Stage 2.
+
+### What Was Implemented
+
+- В `ParserContext` добавлен компактный динамический `actionScope`, производный от уже вычисленного `ParserScope`.
+- `ParserWorldModelBuilder` теперь строит scope один раз и передаёт в LLM-контекст ID сущностей из `takable`, `putSource`, `reachable` и `examinable`.
+- `LlmCascade` включает `actionScope` в per-call dynamic context, не раздувая cacheable static prompt.
+- Prompt contract объясняет, что `actionScope.takable` является runtime-фактом допустимости TAKE: при ясных intent и target модель должна вызвать действие, а реальный отказ оставить движку.
+- Добавлен regression test, подтверждающий передачу runtime eligibility независимо от объектной прозы и написания пользовательской команды.
+- Первая идея с fuzzy/typo hints была полностью отклонена и удалена: модель уже распознавала батарейки, а проблема заключалась в отсутствии capability facts.
+
+### Important Architecture or Runtime Decisions
+
+- Источник истины о выполнимости parser action — Parser Core/Parser Scope, а не LLM-интерпретация описаний, containment relations или предыдущей художественной реплики.
+- Stage 2 не должна повторно вычислять affordances и не должна получать предметные подсказки вида `batterys -> AAA batteries`.
+- `recentTurns` не является корневой причиной: отказ воспроизводился и без истории; история могла только усилить уже существующую неопределённость.
+- Если Stage 2 понимает intent и target, а entity присутствует в соответствующем `actionScope`, она должна вернуть action и позволить runtime выполнить окончательную проверку.
+
+### Parser / Mechanics / Scene Changes
+
+- Изменены `ParserWorldModelBuilder`, `parserTypes` и `LlmCascade` для передачи runtime action eligibility.
+- Обновлены production/fallback prompt assets и `tests/parser/llm-cascade.test.ts`.
+- Предметных изменений в `test_room` ради этого исправления не делалось.
+
+### Tests and Validation
+
+- `tests/parser/llm-cascade.test.ts` + `tests/parser/world-model-context.test.ts`: 70/70 passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed, кроме обычных предупреждений о будущем LF -> CRLF.
+- Полный `tests/parser` run: 161/163 passed. Два сбоя в `commands.test.ts` относятся к существующему несовпадению русских ожидаемых и английских фактических TV messages и не вызваны `actionScope`.
+- Финальный `codex-doctor -ForceMemoryReview`: 20 health checks passed, typecheck passed; полный Vitest run — 559/565 passed. Шесть оставшихся сбоев: два известных navigation/spatial, два NPC authored-command/TV-state и два TV-message expectation failures. Background NotebookLM memory review и maintenance agent запущены.
+
+### Commit
+
+- `196eed1` - `Fix nested inventory ownership`; текущий HEAD также содержит интегрированное исправление Stage 2 `actionScope`.
+
+### Remaining Work / Next Steps
+
+- В живой игре повторить `take batterys` с очищенным `recentTurns` и убедиться, что provider возвращает `takeTarget` с реальным title, после чего Parser Core помещает батарейки в inventory героя.
+- При следующих ложных LLM-отказах сначала проверять наличие entity ID в соответствующем `actionScope`, а уже затем анализировать prompt wording.
+- Отдельно привести TV-message fixtures/expectations к одному языку, если два известных `commands.test.ts` failures сохраняются.
+
+### Risks and Caveats
+
+- `actionScope` является snapshot текущего вызова; окончательная проверка всё равно остаётся за runtime, поскольку состояние может измениться между планированием и исполнением.
+- Не следует расширять `actionScope` скрытыми или недоступными сущностями ради улучшения распознавания: это capability contract, а не fuzzy retrieval layer.
+- В рабочем дереве остаётся пользовательская незакоммиченная правка `public/scenes/test_room.json`; в этой сессии она не изменялась и не откатывалась.
+
+## Session Entry - 2026-07-07 00:35 Europe/Warsaw
+
+### Session Goals
+- Implement a Small Language Model (SLM) offline inference system and dataset logging (Shadow Mode) for the NPC Puppet Master.
+- Add diagnostic console commands for Shadow Mode configuration.
+- Audit and update `tech-spec.md` to match the current state of the engine.
+
+### What Was Implemented
+- **Phase 1 (Shadow Mode)**: Created `ShadowLogger.ts` which records successful LLM plans in `logs/slm_shadow_dataset.jsonl` as a Gold Standard dataset, ignoring failures, loops, and strategy reflections. Bypasses file writing in testing environments.
+- **Phase 2 (SLM Stack)**: Created `SlmVocabulary.ts`, `SlmInputAdapter.ts`, `SlmOutputAdapter.ts`, and `SlmInferenceEngine.ts` to tokenize context, perform client-side WASM inference via `onnxruntime-web`, and decode/validate model plans.
+- **Phase 3 (Hybrid Routing)**: Integrated SLM inference directly into `NpcPuppetMaster.ts`. Routine requests resolve instantly in <5ms; complex cases (e.g. SAY, COMMAND, validation failures) safely escalate back to LLM.
+- **Diagnostics**: Added `#SLMLOG`, `#SLMLOG-ON`, `#SLMLOG-OFF` console commands to `Console.ts` to query collected dataset statistics and toggle logging.
+- **Technical Specification Audit**: Completely rewrote `tech-spec.md` to map the fully refactored directory structure, systems (audio, components, state event, pathfinding), testing coverage, and build tools.
+- **Durable Memory**: Updated `.agent/context.md` and `.agent/current_task.md` with SLM/Shadow Mode facts and completion state.
+
+### Important Architecture or Runtime Decisions
+- **Scope Gating**: The SLM is trained solely on Puppet Master (NPC) actions, completely separate from player parsing.
+- **Strict Validation**: Decoded plan steps are validated before execution, forcing LLM escalation on any invalid model outputs.
+- **Diagnostics Controls**: Allows disabling logging via console (`#SLMLOG-OFF`) during debugging and robustness test phases to avoid contaminating training logs.
+
+### Parser / Mechanics / Scene Changes
+- No scenes were modified. Hybrid routing hooks and logging callbacks are wired inside `NpcPuppetMaster.ts`.
+- Integrated `#SLMLOG` commands into `Console.ts`.
+
+### Tests and Validation
+- Created `tests/npc/slm-adapters.test.ts` providing unit coverage for vocabulary mappings, adapters, and model fallback.
+- Ran TypeScript verification and confirmed Vitest suite passes.
+
+### Commit
+- Staged all changes and initiated commit. Modified files include `NpcPuppetMaster.ts`, `fileApi.ts`, `Console.ts`, `tech-spec.md`, and new files under `src/mechanics/slm/` and `tests/npc/slm-adapters.test.ts`.
+
+### Remaining Work / Next Steps
+- Accumulate shadow logs in production until the training threshold is reached.
+- Train the model using the PyTorch template defined in the documentation and place the output `slm_routine_v1.onnx` file in `public/models/`.
+- Commit remaining workspace files (`.agent/context.md`, `.agent/current_task.md`, `Sessions.md`) after the initial pre-commit tasks complete.

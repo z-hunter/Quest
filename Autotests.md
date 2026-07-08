@@ -174,6 +174,25 @@ This is the preferred entry point for parser-side tests.
 
 ### Scene Runtime
 
+#### `tests/game/observed-actor-actions.test.ts`
+
+Covers:
+
+- actor-wide perception radius and observer filtering;
+- passive action logging without Puppet Master wake-up;
+- immediate player console messages for observed foreign actions;
+- delayed NPC consumption through `newEvents` / `recentEvents`;
+- migration from legacy `NPC.perceptionRadius`.
+
+#### `tests/scene/scene-transition.test.ts`
+
+Covers:
+
+- Exit/Entry transfer between scenes and within one scene;
+- Exit components on Triggerbox, Entity and Quad;
+- actor-aware collider activation and Entry placement;
+- visual collider/parallax handling for Quad exits.
+
 #### `tests/scene/spatial-index.test.ts`
 
 Covers:
@@ -235,6 +254,7 @@ Covers:
   - inventory first;
   - nearest scene object when titles are indistinguishable.
 - container-aware TAKE/PUT target resolution edge cases.
+- automatic player approach before single-target `EXAMINE`, `TAKE`, `OPEN` and `CLOSE`, including the reduced reachable threshold;
 
 #### `tests/parser/commands.test.ts`
 

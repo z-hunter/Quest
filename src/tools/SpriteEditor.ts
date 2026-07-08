@@ -2,7 +2,7 @@ import type { IGame } from '../core/IGame';
 import { useEditorStore } from '../store/editorStore';
 import { Theme } from '../utils/Theme';
 import { Game } from '../core/Game';
-import { saveProjectFile } from '../platform/fileApi';
+import { saveProjectFile, isTauriRuntime } from '../platform/fileApi';
 
 export interface SpriteData {
   id: string; // Filename without extension
@@ -27,6 +27,7 @@ export class SpriteEditor {
 
   // Data State
   sprite: SpriteData;
+  isDirty: boolean = false;
   sourceImage: HTMLImageElement | null = null;
 
   // Rendering State
@@ -135,6 +136,16 @@ export class SpriteEditor {
       return;
     }
 
+    if (e.ctrlKey && e.key === 'F6') {
+      if (!isTauriRuntime()) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        window.open('/vetool.html', '_blank');
+        return;
+      }
+    }
+
     let handled = false;
 
     if (e.key === 'F1') {
@@ -155,6 +166,18 @@ export class SpriteEditor {
       handled = true;
     } else if (e.key === 'F5') {
       this.toggle(false);
+      handled = true;
+    } else if (e.key === 'F6') {
+      if (this.isDirty) {
+        if (!window.confirm('You have unsaved sprite edits. Are you sure you want to leave?')) {
+          handled = true;
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
+      window.location.href = '/vetool.html';
       handled = true;
     }
 
@@ -380,6 +403,9 @@ export class SpriteEditor {
     }
 
     this.sprite.imageFile = path; // Keep original path in data
+    if (!keepDimensions) {
+      this.isDirty = true;
+    }
     this.sourceImage = new Image();
     this.sourceImage.src = src;
     this.sourceImage.onload = () => {
@@ -469,8 +495,17 @@ export class SpriteEditor {
 
     const data = JSON.stringify(this.sprite, null, 2);
 
+    // Take snapshot of current state
+    const savedData = data;
+
     try {
       await saveProjectFile(filePath, data);
+
+      // Only clear dirty if the sprite hasn't changed since we started saving
+      if (JSON.stringify(this.sprite, null, 2) === savedData) {
+        this.isDirty = false;
+      }
+
       // Use Toast Message instead of Alert
       this.game.showNotification?.(`Sprite saved as ${normalizedFilename}`);
     } catch (e) {
@@ -492,6 +527,7 @@ export class SpriteEditor {
         })
         .then((data) => {
           this.sprite = data;
+          this.isDirty = false;
 
           // Sync ID with filename path (sub/file -> sub\file)
           const id = file.replace('.json', '').replace(/\//g, '\\');
@@ -520,6 +556,7 @@ export class SpriteEditor {
       height: 32,
       frames: 1,
     };
+    this.isDirty = false;
     this.sourceImage = null;
     this.updateUI();
   }

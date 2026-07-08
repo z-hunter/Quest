@@ -1,0 +1,329 @@
+/* Vetool CSS - Video Export Tool Styles (Unified with Scanline Engine) */
+
+.vetool-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--ui-bg-color, #050a07);
+  color: var(--ui-main-color, #4aa07f);
+  font-family: var(--ui-mono-font), monospace;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.vetool-header {
+  background: var(--ui-panel-header-bg, #111a14);
+  padding: 0.6em 1.2em;
+  border-bottom: 2px solid var(--ui-main-color, #4aa07f);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vetool-title {
+  font-family: var(--ui-display-font), sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  font-size: 1.25em;
+}
+
+.vetool-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.vetool-center-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+.vetool-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.vetool-viewport-card {
+  flex: 1;
+  background-color: #000;
+  border: 1px solid var(--ui-input-border, #2a523d);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.vetool-video-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.vetool-checkerboard {
+  background-image:
+    linear-gradient(45deg, #111 25%, transparent 25%),
+    linear-gradient(-45deg, #111 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #111 75%),
+    linear-gradient(-45deg, transparent 75%, #111 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0px;
+}
+
+.vetool-viewport-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.vetool-timeline-panel {
+  background: var(--ui-panel-header-bg, #111a14);
+  border: 1px solid var(--ui-input-border, #2a523d);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vetool-timeline-container {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  background: #000;
+  border: 1px solid var(--ui-input-border, #2a523d);
+  display: flex;
+  align-items: center;
+}
+
+.vetool-loop-range-bar {
+  position: absolute;
+  height: 100%;
+  background: rgba(74, 160, 127, 0.25);
+  border-left: 2px solid #52c966;
+  border-right: 2px solid #ff4a4a;
+}
+
+.vetool-timeline-slider {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.vetool-timeline-slider::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.vetool-timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 24px;
+  background: var(--ui-input-focus-border, #79efa4);
+  border: 1px solid #000;
+}
+
+.vetool-timeline-slider::-moz-range-thumb {
+  width: 8px;
+  height: 24px;
+  background: var(--ui-input-focus-border, #79efa4);
+  border: 1px solid #000;
+}
+
+.vetool-timeline-readout {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--ui-label-color, #888);
+}
+
+.vetool-sidebar {
+  width: 26rem;
+  background: var(--ui-panel-header-bg, #111a14);
+  border-left: 2px solid var(--ui-main-color, #4aa07f);
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vetool-sidebar-section {
+  border-bottom: 1px dashed var(--ui-input-border, #2a523d);
+  padding-bottom: 12px;
+}
+
+.vetool-sidebar-section h3 {
+  margin: 0 0 10px 0;
+  font-family: var(--ui-display-font), sans-serif;
+  color: #fff;
+  font-size: 0.95em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px dashed var(--ui-main-color, #4aa07f);
+  padding-bottom: 4px;
+}
+
+.vetool-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vetool-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.vetool-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.vetool-form-group label {
+  font-size: 0.75em;
+  color: var(--ui-label-color, #888);
+  text-transform: uppercase;
+}
+
+.vetool-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vetool-box-list-item {
+  border: 1px solid var(--ui-input-border, #2a523d);
+  background: #050a07;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.8em;
+}
+
+.vetool-box-list-item.active {
+  border-color: var(--ui-input-focus-border, #79efa4);
+  background: #0c1811;
+}
+
+.vetool-box-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vetool-box-title {
+  color: #fff;
+  font-weight: bold;
+}
+
+.vetool-box-meta {
+  color: var(--ui-label-color, #888);
+  font-size: 0.7em;
+}
+
+/* Modals & Dialogs */
+.vetool-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.vetool-modal {
+  width: min(32rem, 90vw);
+  background: #000;
+  border: 2px solid var(--ui-main-color, #4aa07f);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 0 20px rgba(74, 160, 127, 0.4);
+}
+
+.vetool-modal-header {
+  border-bottom: 1px solid var(--ui-main-color, #4aa07f);
+  padding-bottom: 6px;
+  font-family: var(--ui-display-font), sans-serif;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vetool-modal-body {
+  max-height: 400px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.vetool-file-list-item {
+  padding: 6px;
+  cursor: pointer;
+  border-bottom: 1px solid #111;
+}
+
+.vetool-file-list-item:hover {
+  background: var(--ui-panel-header-bg, #111a14);
+  color: #fff;
+}
+
+.vetool-progress-bar-container {
+  width: 100%;
+  height: 16px;
+  background: #111;
+  border: 1px solid var(--ui-input-border, #2a523d);
+  position: relative;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.vetool-progress-bar {
+  height: 100%;
+  background: var(--ui-main-color, #4aa07f);
+  transition: width 100ms ease;
+}
+
+/* Hotkey cheatsheet */
+.vetool-cheatsheet {
+  font-size: 0.75em;
+  color: var(--ui-label-color, #888);
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.vetool-cheatsheet span {
+  color: var(--ui-input-focus-border, #79efa4);
+}

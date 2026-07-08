@@ -9,13 +9,11 @@ export const ActorProperties: React.FC = () => {
   const actor = obj;
 
   return (
-    <>
-      <div ref={setSectionRef(4)} className="properties-section-block" data-section={4}>
-        <div className="properties-section-header properties-section-blue">
-          <div className="properties-section-title">
-            <span className="properties-section-number properties-section-blue">4</span>
-            <span className="properties-section-label">ACTOR PROP.</span>
-          </div>
+    <div ref={setSectionRef(4)} className="properties-section-block" data-section={4}>
+      <div className="properties-section-header properties-section-azure">
+        <div className="properties-section-title">
+          <span className="properties-section-number properties-section-azure">4</span>
+          <span className="properties-section-label">ACTOR PROP.</span>
         </div>
       </div>
 
@@ -63,6 +61,23 @@ export const ActorProperties: React.FC = () => {
           className="e-input"
           value={formatPanelNumber(actor.speed !== undefined ? actor.speed : 0.1)}
           onChange={(e) => handleChange('speed', e.target.value, true)}
+        />
+      </div>
+
+      {/* Perception Radius */}
+      <div className="e-row">
+        <label className="e-label">Perception Radius</label>
+        <input
+          type="number"
+          min="0"
+          step="10"
+          className="e-input"
+          value={formatPanelNumber(actor.perceptionRadius ?? 600)}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            actor.perceptionRadius = Number.isFinite(value) ? Math.max(0, value) : 600;
+            incrementObjectVersion();
+          }}
         />
       </div>
 
@@ -198,7 +213,17 @@ export const ActorProperties: React.FC = () => {
                     className="e-input"
                     style={{ flex: 1, fontSize: '10px', padding: '1px' }}
                     value={set[dir] || ''}
-                    readOnly
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      set[dir] = val;
+                      const selectedActor = game.editor.selectedObject as Actor;
+                      if (selectedActor && selectedActor.animSets) {
+                        const realSet = selectedActor.animSets[setId];
+                        if (realSet) realSet[dir] = val;
+                        selectedActor.updateSpriteForState();
+                      }
+                      incrementObjectVersion();
+                    }}
                   />
                   <button
                     className="e-btn"
@@ -223,6 +248,6 @@ export const ActorProperties: React.FC = () => {
             </div>
           );
         })}
-    </>
+    </div>
   );
 };

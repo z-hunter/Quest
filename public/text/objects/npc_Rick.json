@@ -1,0 +1,11 @@
+{
+  "title": "Rick",
+  "description": "You see a guy who reminds you of someone.",
+  "details": "You are not a doctor to examine him.",
+  "lore": "Rick is the guy who officially rents the apartment where Miles lives as a sublet. Rick can't enter other people's apartments without permission. ",
+  "objectives": [
+    "Rick wants to copy a music album from a record, and for this he urgently needs a blank compact cassette."
+  ],
+  "takeFailure": "",
+  "synonyms": []
+}

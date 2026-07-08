@@ -1,9 +1,9 @@
 {
-  "id": "new_sprite",
+  "id": "miles-walk-down",
   "imageFile": "public/assets/miles.png",
   "x": 0,
   "y": 0,
-  "width": 245,
-  "height": 600,
-  "frames": 27
+  "width": 297,
+  "height": 703,
+  "frames": 15
 }

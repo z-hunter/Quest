@@ -185,6 +185,33 @@ export class SceneManager {
     scene.addEntity(entity);
   }
 
+  private discardReplacedPlayer(scene: Scene, player: Entity): void {
+    const discard = new Set<Entity>();
+    const queue: Entity[] = [player];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || discard.has(current)) continue;
+      discard.add(current);
+      for (const candidate of scene.entities) {
+        if (!(candidate instanceof Entity) || discard.has(candidate)) continue;
+        const parentId =
+          typeof candidate.spatial?.parentNodeId === 'string'
+            ? candidate.spatial.parentNodeId.trim()
+            : '';
+        if (parentId === current.name || candidate.getInventoryPositionOwner() === current) {
+          queue.push(candidate);
+        }
+      }
+    }
+
+    for (const entity of discard) {
+      this.detachEntityForSceneTransfer(scene, entity);
+      entity.setInventoryPositionOwner(null);
+      delete (entity as any).__inventoryRelation;
+    }
+  }
+
   private findFirstEntryId(scene: Scene): string | null {
     const entry = scene
       .getAllSceneObjects()
@@ -228,7 +255,7 @@ export class SceneManager {
     if (targetX === null || targetY === null) return entryObj;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
-    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    const walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
     actor.x = walkableTarget.x;
     actor.y = walkableTarget.y;
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
@@ -238,7 +265,7 @@ export class SceneManager {
     return entryObj;
   }
 
-  private findNearestWalkableEntryPosition(
+  resolveEntryPlacementPosition(
     scene: Scene,
     actor: Actor,
     targetX: number,
@@ -321,7 +348,7 @@ export class SceneManager {
     if (removeExistingPlayer) {
       const existingPlayer = targetScene.entities.find((e) => (e as any).isPlayer && e !== actor);
       if (existingPlayer) {
-        targetScene.removeEntity(existingPlayer);
+        this.discardReplacedPlayer(targetScene, existingPlayer);
       }
     }
 

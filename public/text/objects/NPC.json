@@ -1,7 +1,7 @@
 {
   "title": "Linda",
   "description": "You see a young woman.",
-  "details": "She has short, messy brown hair. She is wearing a t-shirt with a faded band logo and jeans. A worn-looking messenger bag is slung over her shoulder. She appears to be waiting for someone or something.",
+  "details": "She has short, messy brown hair. She is wearing a t-shirt with a faded band logo and jeans. She appears to be waiting for someone or something.",
   "lore": "Linda wants to watch her favorite TV show -- Muppet show.",
   "objectives": ["TV is ON"],
   "takeFailure": "Linda is quite heavy. Besides, what would you do with her?",

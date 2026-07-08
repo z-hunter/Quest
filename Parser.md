@@ -130,6 +130,7 @@ flowchart TD
 - текущую сцену (`id`, `name`, `title`, `description`, `activeSubscene`);
 - `context.scene.recentTurns`: до 8 последних player-facing команд/ответов текущего визита в сцену;
 - список текстово значимых объектов сцены;
+- metadata объектов с `Exit`: целевая сцена/Entry, Title целевой сцены и режимы `portal`/`collider`; Exit остаётся адресуемым по object id даже без authored Title;
 - отдельный список `knownEntities` для объектов, известных движку, но не раскрытых player-facing текстовому слою;
 - инвентарь игрока;
 - `worldFacts`: краткие авторитетные факты о переноске, containment/location и TA-driven semantic relations;
@@ -223,7 +224,9 @@ Parser не должен самостоятельно обходить raw `.spa
 - `LOOK floor` / `EXAMINE floor` имеют специальную floor-chain: сначала current walkbox pseudo-floor под player с нужным текстовым полем (`description` для `LOOK`, `details` для `EXAMINE`), затем обычные visible/held targets с настоящим Title/Synonym `Floor`, затем `parser.look_default_object`;
 - `TAKE` использует только берущиеся объекты сцены;
 - `EXAMINE` использует инвентарь, объекты активной subscene и объекты в пределах допустимой дистанции;
-- `GO TO` использует сценовые цели и достижимые сценовые объекты.
+- одиночные direct `EXAMINE`, `TAKE`, `OPEN` и `CLOSE` автоматически вызывают общий actor navigation к видимому target, если он ещё не reachable, но route до interaction-точки существует; действие выполняется после прибытия, а невозможный маршрут сохраняет прежнее сообщение о дистанции. При открытой Subscene implicit approach полностью отключён; group/batch plans также его не используют;
+- при открытой Subscene `GO TO` не запускает движение и не активирует Exit: player должен сначала закрыть текущий вид;
+- `GO TO` использует сценовые цели и сценовые объекты. Для обычного объекта движение строится общей `ActorNavigationService` до ближайшей walkable interaction-точки. Для `Exit` parser также сопоставляет object id/Title и id/name/Title целевой сцены; reachable Exit активируется сразу, дальний — после автоматического подхода, а невозможный маршрут возвращает стандартное сообщение «слишком далеко». `QUIT [THROUGH ...]` использует тот же Exit-путь.
 
 Для direct `LOOK <target>` и `EXAMINE <target>` parser после основного описания добавляет spatial-summary видимых titled-потомков target по relations `in`, `on`, `under`, `behind`. Сводка строится через runtime text layer, поэтому безымянные технические узлы схлопываются, hidden unrevealed объекты не попадают в обычную видимость, а relation определяется относительно выбранного semantic anchor.
 

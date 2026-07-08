@@ -21,6 +21,8 @@
     "@nlpjs/core": "^5.0.0-alpha.5",
     "@nlpjs/lang-en-min": "^5.0.0-alpha.5",
     "@nlpjs/nlp": "^5.0.0-alpha.5",
+    "@tauri-apps/api": "^2.11.1",
+    "onnxruntime-web": "^1.27.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zustand": "^5.0.9"

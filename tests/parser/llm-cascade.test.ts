@@ -168,6 +168,97 @@ describe('LlmCascade', () => {
     ]);
   });
 
+  it('removes TAKE from an observational reading plan while preserving EXAMINE', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'takeTarget', target: 'Orange paper' },
+        { type: 'examineTarget', target: 'Orange paper' },
+      ],
+    });
+
+    const result = await cascade.parse('read orange paper', mockContext);
+
+    expect(result?.output.actions).toEqual([{ type: 'examineTarget', target: 'Orange paper' }]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toContainEqual(
+      expect.objectContaining({ reason: 'observational_intent_omits_take' })
+    );
+  });
+
+  it('accepts conditional discovery narration on EXAMINE', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        {
+          type: 'examineTarget',
+          target: 'TV remote',
+          narration: {
+            message: 'You slide the cover aside and find two batteries.',
+            requiresDiscoveredEntityIds: ['batteryAAA'],
+          },
+        },
+      ],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'examineTarget',
+        target: 'TV remote',
+        narration: {
+          message: 'You slide the cover aside and find two batteries.',
+          requiresDiscoveredEntityIds: ['batteryAAA'],
+        },
+      },
+    ]);
+  });
+
+  it('provides a grounded discovery opportunity for named hidden contents and their anchor', async () => {
+    provider.response.text = JSON.stringify({ kind: 'fallback' });
+    const context: ParserContext = {
+      ...mockContext,
+      inventory: [
+        { id: 'tv_rc', title: 'TV remote', synonyms: ['remote', 'remote control', 'rc'] },
+      ],
+      knownEntities: [
+        {
+          id: 'batteryAAA',
+          title: 'AAA batteries',
+          synonyms: ['batteries', 'battery'],
+          visibility: 'hidden',
+          hiddenReason: 'examinable',
+          location: { relation: 'in', parentId: 'tv_rc', parentTitle: 'TV remote' },
+        },
+      ],
+    };
+
+    await cascade.parse('check batterys in rc', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"discoveryOpportunities":[{"hiddenEntityId":"batteryAAA","hiddenTitle":"AAA batteries","anchorId":"tv_rc","anchorTitle":"TV remote","relation":"in"}]'
+    );
+  });
+
+  it.each([
+    { message: 'You find batteries.', requiresDiscoveredEntityIds: [] },
+    { message: 'You find batteries.' },
+    { requiresDiscoveredEntityIds: ['batteryAAA'] },
+  ])('rejects invalid EXAMINE discovery narration: %j', async (narration) => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'examineTarget', target: 'TV remote', narration }],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      expect.objectContaining({ type: 'examineTarget' }),
+    ]);
+  });
+
   it('exposes authored parser commands to the LLM and accepts runCustomCommand', async () => {
     cascade = new LlmCascade(
       provider,
@@ -196,8 +287,8 @@ describe('LlmCascade', () => {
     expect(result?.output.actions).toEqual([
       { type: 'runCustomCommand', commandId: 'turn_tv_on', arguments: {} },
     ]);
-    expect(String(provider.messages[0]?.content)).toContain('Available authored parser commands');
-    expect(String(provider.messages[0]?.content)).toContain('"commandId": "turn_tv_on"');
+    expect(JSON.stringify(provider.system)).toContain('Available Authored Parser Commands');
+    expect(JSON.stringify(provider.system)).toContain('turn_tv_on');
   });
 
   it('filters runCustomCommand for unknown authored command ids', async () => {
@@ -236,7 +327,7 @@ describe('LlmCascade', () => {
       { type: 'runScript', scriptId: 'tv_glow', restart: true },
       { type: 'showText', message: 'The TV clicks on.' },
     ]);
-    expect(String(provider.messages[0]?.content)).toContain('Direct Game Master world actions');
+    expect(JSON.stringify(provider.system)).toContain('Direct Game Master World Actions');
   });
 
   it('accepts direct Game Master world actions with a fields wrapper for compatibility', async () => {
@@ -569,7 +660,59 @@ describe('LlmCascade', () => {
     expect(userMessage).toContain('Per-call dynamic game world context');
     expect(userMessage).toContain('The radio hisses.');
     expect(userMessage).toContain('Reception is static.');
-    expect(userMessage).toContain('Boombox contains Compact cassette.');
+    expect(userMessage).not.toContain('Boombox contains Compact cassette.');
+    expect(userMessage).not.toContain('worldFacts');
+  });
+
+  it('includes details only for an entity recognized in the player command', async () => {
+    provider.response.text = JSON.stringify({ kind: 'plan', actions: [] });
+    const context: ParserContext = {
+      rawInput: 'read notes on orange paper',
+      normalizedInput: 'READ NOTES ON ORANGE PAPER',
+      scene: { id: 'test_room', description: 'A room.' },
+      entities: [
+        {
+          id: 'test_2',
+          title: 'Orange paper',
+          description: 'An orange sheet.',
+          details: 'The note says the meeting starts at nine.',
+        },
+        {
+          id: 'test_3',
+          title: 'Yellow paper',
+          description: 'A yellow sheet.',
+          details: 'This note must remain out of the current prompt.',
+        },
+      ],
+    };
+
+    await cascade.parse('read notes on orange paper', context);
+
+    const systemText = JSON.stringify(provider.system);
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(systemText).not.toContain('meeting starts at nine');
+    expect(userMessage).toContain('meeting starts at nine');
+    expect(userMessage).not.toContain('remain out of the current prompt');
+    expect(userMessage).toContain('"targetDetails"');
+  });
+
+  it('includes runtime action eligibility without guessing from object prose', async () => {
+    provider.response.text = JSON.stringify({ kind: 'plan', actions: [] });
+    const context: ParserContext = {
+      rawInput: 'take batterys',
+      normalizedInput: 'TAKE BATTERYS',
+      scene: { id: 'test_room' },
+      entities: [{ id: 'batteryAAA', title: 'AAA batteries' }],
+      inventory: [{ id: 'tv_rc', title: 'TV remote' }],
+      actionScope: { takable: ['batteryAAA'], putSource: ['batteryAAA'] },
+    };
+
+    await cascade.parse('take batterys', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"actionScope":{"takable":["batteryAAA"],"putSource":["batteryAAA"]}'
+    );
   });
 
   it('adds spoiler protection for hidden known entities and scrubs raw hidden details', async () => {
@@ -640,10 +783,15 @@ describe('LlmCascade', () => {
     const userMessage = String(provider.messages[0]?.content || '');
     const dynamicContextText = userMessage
       .split('Per-call dynamic game world context:\n')[1]
-      .split('\n\nHidden Objects / Spoiler Protection:')[0];
+      .split('\n\n')[0];
     const dynamicContext = JSON.parse(dynamicContextText);
-    const dynamicHidden = dynamicContext.knownEntities[0];
-    expect(dynamicHidden).toEqual(staticHidden);
+    const dynamicHidden = dynamicContext.hiddenUnknown[0];
+    expect(dynamicHidden).toMatchObject({
+      id: 'audio_cables',
+      title: 'audio cables',
+      hiddenReason: 'examinable',
+      synonyms: ['cables', 'wires'],
+    });
     expect(JSON.stringify(dynamicContext)).not.toContain('Hidden behind the boombox');
     expect(dynamicHidden).not.toHaveProperty('location');
     expect(dynamicHidden).not.toHaveProperty('contents');
@@ -651,18 +799,9 @@ describe('LlmCascade', () => {
     expect(dynamicHidden).not.toHaveProperty('details');
     expect(dynamicHidden).not.toHaveProperty('lore');
 
-    expect(userMessage).toContain('Hidden Objects / Spoiler Protection:');
-    expect(userMessage).toContain('- audio_cables: "audio cables" (also: "cables", "wires")');
-    expect(userMessage).toContain('This is an adventure game');
-    expect(userMessage).toContain('spoil the game');
-    expect(userMessage).toContain('blind guess');
-    expect(userMessage).toContain('Indirect, non-spoiling hints are allowed');
-    expect(userMessage).toContain(
-      'audio equipment is a reasonable thing to inspect when looking for cables'
-    );
-    expect(userMessage).toContain(
-      'Direct reveals are forbidden, such as saying that the cables are behind the boombox.'
-    );
+    expect(userMessage).not.toContain('Hidden behind the boombox');
+    expect(JSON.stringify(provider.system)).toContain('Hidden Object Spoiler Protection');
+    expect(JSON.stringify(provider.system)).toContain('blind guess');
   });
 
   it('converts final_response to a showText action', async () => {
@@ -743,6 +882,28 @@ describe('LlmCascade', () => {
           relation: 'in',
         },
       },
+    ]);
+  });
+
+  it('executes a clarification pendingAction directly when its target is already unique', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Do you mean the orange paper, or examine it?',
+      pendingAction: {
+        type: 'examineTarget',
+        target: 'Orange paper',
+      },
+    });
+    const context: ParserContext = {
+      ...mockContext,
+      entities: [{ id: 'test_2', title: 'Orange paper', synonyms: ['paper'] }],
+    };
+
+    const result = await cascade.parse('read note on orange paper', context);
+
+    expect(result?.output.actions).toEqual([{ type: 'examineTarget', target: 'Orange paper' }]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      expect.objectContaining({ reason: 'llm_clarification_target_already_resolved' }),
     ]);
   });
 

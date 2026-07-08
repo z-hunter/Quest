@@ -97,6 +97,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Vert B (0-3)': 'Second quad vertex index used by this link or rule.',
   Direction: 'Default facing direction for the actor.',
   'Move Speed': 'Actor movement speed in scene units per step.',
+  'Perception Radius': 'Maximum distance at which this Actor observes other Actors actions.',
   'Anim Speed (ms)': 'Frame duration for sprite animation playback, in milliseconds.',
   'Cam X': 'Current camera X position in scene space.',
   'Cam Y': 'Current camera Y position in scene space.',

@@ -1,11 +1,39 @@
 import React from 'react';
 import { useGame } from '../../hooks/useGame';
 import { useEditorStore } from '../../store/editorStore';
+import { isTauriRuntime } from '../../platform/fileApi';
 
 export const SpriteBottomMenu: React.FC = () => {
   const { toggleSpriteEditor } = useEditorStore();
   const game = useGame();
   const spriteEditor = game.spriteEditor;
+  const [ctrlPressed, setCtrlPressed] = React.useState(false);
+  const isBrowser = !isTauriRuntime();
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        setCtrlPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        setCtrlPressed(false);
+      }
+    };
+    const handleBlur = () => {
+      setCtrlPressed(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   return (
     <div className="editor-bottom-menu">
@@ -24,6 +52,27 @@ export const SpriteBottomMenu: React.FC = () => {
       <button className="e-menu-btn" onClick={() => toggleSpriteEditor(false)}>
         <span className="hotkey-accent">F5</span> Close
       </button>
+      {ctrlPressed && isBrowser ? (
+        <button className="e-menu-btn" onClick={() => window.open('/vetool.html', '_blank')}>
+          <span className="hotkey-accent">F6</span> VETOOL TAB
+        </button>
+      ) : (
+        <button
+          className="e-menu-btn"
+          onClick={() => {
+            if (spriteEditor.isDirty) {
+              if (
+                !window.confirm('You have unsaved sprite edits. Are you sure you want to leave?')
+              ) {
+                return;
+              }
+            }
+            window.location.href = '/vetool.html';
+          }}
+        >
+          <span className="hotkey-accent">F6</span> VETOOL
+        </button>
+      )}
     </div>
   );
 };

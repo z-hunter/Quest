@@ -1,8 +1,8 @@
 import type { Scene } from './Scene';
 
 export interface CameraCenteringState {
-  isCenteringX: boolean;
-  isCenteringY: boolean;
+  centeringDirX: number;
+  centeringDirY: number;
 }
 
 export function updateSceneCamera(
@@ -10,7 +10,10 @@ export function updateSceneCamera(
   deltaTime: number,
   state: CameraCenteringState
 ): CameraCenteringState {
-  if (!scene.player || !scene.autoCenter) return state;
+  if (!scene.player || !scene.autoCenter) {
+    scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+    return state;
+  }
 
   const pHeight = scene.player.height || 0;
   const playerCenterX = scene.player.x;
@@ -22,25 +25,40 @@ export function updateSceneCamera(
   const dx = playerCenterX - scene.camera.x;
   const dy = playerCenterY - scene.camera.y;
 
-  let isCenteringX = state.isCenteringX;
-  let isCenteringY = state.isCenteringY;
+  let dirX = state.centeringDirX;
+  let dirY = state.centeringDirY;
 
-  if (Math.abs(dx) > scene.camDeadzoneX) isCenteringX = true;
-  if (isCenteringX) {
-    targetX = playerCenterX;
-    if (Math.abs(dx) < 2) isCenteringX = false;
+  if (Math.abs(dx) > scene.camDeadzoneX) {
+    dirX = Math.sign(dx);
   }
 
-  if (Math.abs(dy) > scene.camDeadzoneY) isCenteringY = true;
-  if (isCenteringY) {
-    targetY = playerCenterY;
-    if (Math.abs(dy) < 2) isCenteringY = false;
+  if (dirX !== 0) {
+    targetX = playerCenterX + dirX * scene.camDeadzoneX;
+    if (Math.abs(targetX - scene.camera.x) < 2) {
+      dirX = 0;
+      scene.camera.x = targetX;
+    }
+  }
+
+  if (Math.abs(dy) > scene.camDeadzoneY) {
+    dirY = Math.sign(dy);
+  }
+
+  if (dirY !== 0) {
+    targetY = playerCenterY + dirY * scene.camDeadzoneY;
+    if (Math.abs(targetY - scene.camera.y) < 2) {
+      dirY = 0;
+      scene.camera.y = targetY;
+    }
   }
 
   if (scene.camMinX !== undefined) targetX = Math.max(scene.camMinX, targetX);
   if (scene.camMaxX !== undefined) targetX = Math.min(scene.camMaxX, targetX);
   if (scene.camMinY !== undefined) targetY = Math.max(scene.camMinY, targetY);
   if (scene.camMaxY !== undefined) targetY = Math.min(scene.camMaxY, targetY);
+
+  // Store the unsmoothed target camera position for deterministic collision checks
+  scene.collisionCamera = { x: targetX, y: targetY };
 
   const dt = deltaTime / 1000;
   const speed = scene.cameraSpeed || 5.0;
@@ -51,5 +69,5 @@ export function updateSceneCamera(
   if (Math.abs(targetY - scene.camera.y) < 0.5) scene.camera.y = targetY;
   else scene.camera.y += (targetY - scene.camera.y) * speed * dt;
 
-  return { isCenteringX, isCenteringY };
+  return { centeringDirX: dirX, centeringDirY: dirY };
 }

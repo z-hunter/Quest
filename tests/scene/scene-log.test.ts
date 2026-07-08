@@ -1,8 +1,57 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SceneLog } from '../../src/scene/SceneLog';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('SceneLog', () => {
+  it('assigns monotonically increasing timestamps to same-tick runtime events', () => {
+    const log = new SceneLog();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+
+    try {
+      const first = log.appendSpeech({
+        actorId: 'Hero',
+        displayName: 'Hero',
+        text: 'First',
+        knownByNpcIds: ['NPC'],
+      });
+      log.markProcessed(undefined, 'NPC');
+      const second = log.appendSpeech({
+        actorId: 'Hero',
+        displayName: 'Hero',
+        text: 'Second',
+        knownByNpcIds: ['NPC'],
+      });
+
+      expect(first?.timestamp).toBe(1000);
+      expect(second?.timestamp).toBe(1001);
+      expect(log.getUnreadEntries('NPC').map((entry) => entry.text)).toEqual(['Second']);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('does not advance an NPC cursor over events unknown to that NPC', () => {
+    const log = new SceneLog();
+    log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'For Linda',
+      knownByNpcIds: ['Linda'],
+      timestamp: 1000,
+    });
+    log.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Hero',
+      text: 'For Bob',
+      knownByNpcIds: ['Bob'],
+      timestamp: 2000,
+    });
+
+    log.markProcessed(undefined, 'Linda');
+
+    expect(log.lastPmProcessedAtByNpc.Linda).toBe(1000);
+  });
+
   it('stores speech entries with listener knowledge and unread cursor filtering', () => {
     const log = new SceneLog();
     const first = log.appendSpeech({
@@ -35,7 +84,7 @@ describe('SceneLog', () => {
       actorId: 'Hero',
       displayName: 'Miles',
       text: '[Miles opens the locker]',
-      knownByNpcIds: ['guard'],
+      knownByActorIds: ['guard'],
       timestamp: 1,
     });
     log.appendSpeech({
@@ -65,5 +114,26 @@ describe('SceneLog', () => {
     });
 
     expect(fixture.scene.toJSON().sceneLog?.entries?.[0].text).toBe('Anyone here?');
+  });
+
+  it('loads legacy knownByNpcIds as actor-aware recipients', () => {
+    const log = new SceneLog();
+    log.load({
+      entries: [
+        {
+          id: 'legacy-action',
+          kind: 'action',
+          timestamp: 1000,
+          actorId: 'Hero',
+          displayName: 'Hero',
+          text: '[ Hero opens Locker ]',
+          knownByNpcIds: ['guard'],
+        },
+      ],
+    });
+
+    expect(log.entries[0].knownByActorIds).toEqual(['guard']);
+    expect(log.getUnreadEntries('guard')).toHaveLength(1);
+    expect((log.toJSON().entries?.[0] as any).knownByNpcIds).toBeUndefined();
   });
 });

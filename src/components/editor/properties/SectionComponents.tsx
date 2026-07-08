@@ -255,8 +255,10 @@ export const SectionComponents: React.FC = () => {
               if (!o.components) o.components = [];
               const relation = hasTitle ? getNextAvailableContainerRelation() : null;
 
+              sectionRef.current?.classList.remove('collapsed');
+
               if (type === 'Subscene') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Subscene',
                   targetGroupId: '',
                   itemScale: 1,
@@ -264,15 +266,15 @@ export const SectionComponents: React.FC = () => {
                   description: '',
                 });
               } else if (type === 'Subtrigger') {
-                o.components.push({ type: 'Subtrigger', target: '' });
+                o.components.unshift({ type: 'Subtrigger', target: '' });
               } else if (type === 'Exit') {
-                o.components.push({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
+                o.components.unshift({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
               } else if (type === 'Entry') {
-                o.components.push({ type: 'Entry', direction: 'down' });
+                o.components.unshift({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
-                o.components.push({ type: 'Item' });
+                o.components.unshift({ type: 'Item' });
               } else if (type === 'State') {
-                o.components.push({
+                o.components.unshift({
                   type: 'State',
                   id: 'state',
                   valueType: 'boolean',
@@ -284,7 +286,7 @@ export const SectionComponents: React.FC = () => {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Inventory',
                   relation: relation || 'in',
                   capacity: 8,
@@ -297,7 +299,7 @@ export const SectionComponents: React.FC = () => {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Surface',
                   relation: relation || 'in',
                   capacity: 8,
@@ -305,7 +307,7 @@ export const SectionComponents: React.FC = () => {
                   items: [],
                 });
               } else if (type === 'Switch') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Switch',
                   groupId1: '',
                   groupId2: '',
@@ -318,13 +320,13 @@ export const SectionComponents: React.FC = () => {
                   blockedRelation: 'in',
                 });
               } else if (type === 'Blocker') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Blocker',
                   transparent: false,
                   blockedRelation: 'in',
                 });
               } else if (type === 'Backface') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Backface',
                   vertexA: 0,
                   vertexB: 1,
@@ -334,7 +336,7 @@ export const SectionComponents: React.FC = () => {
                   cullingType: 'layer',
                 });
               } else if (type === 'Shadow') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Shadow',
                   shadowQuadId: '',
                   offsetX: 0,
@@ -342,21 +344,16 @@ export const SectionComponents: React.FC = () => {
                   triggerId: '',
                 });
               } else if (type === 'NPC') {
-                const initialObjectives = game.textAssets.getResolvedObjectListField(
-                  o,
-                  'objectives'
-                );
-                o.components.push({
+                o.components.unshift({
                   type: 'NPC',
                   enabled: true,
                   memory: '',
-                  objectives: initialObjectives,
-                  objectivesInitializedFromTA: true,
+                  objectives: [],
                 });
               } else if (type === '3d-parallax') {
-                o.components.push({ type: '3d-parallax' });
+                o.components.unshift({ type: '3d-parallax' });
               } else if (type === 'WalkBox') {
-                o.components.push({ type: 'WalkBox', mode: 'Invert' });
+                o.components.unshift({ type: 'WalkBox', mode: 'Invert' });
               }
 
               if (game.editor.selectedObject) {
@@ -502,16 +499,22 @@ export const SectionComponents: React.FC = () => {
                     rows={3}
                     value={
                       Array.isArray(comp.objectives) &&
-                      (comp.objectives.length > 0 || comp.objectivesInitializedFromTA === true)
+                      (comp.objectives.length > 0 ||
+                        comp.objectivesTARevision ===
+                          game.textAssets.getResolvedObjectListRevision(o, 'objectives'))
                         ? comp.objectives.join('\n')
                         : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
                     }
                     onChange={(e) => {
                       comp.objectives = e.target.value
                         .split(/\r?\n/)
-                        .map((line) => line.trim())
+                        .map((objective: string) => objective.trim())
                         .filter(Boolean);
                       comp.objectivesInitializedFromTA = true;
+                      comp.objectivesTARevision = game.textAssets.getResolvedObjectListRevision(
+                        o,
+                        'objectives'
+                      );
                       incrementObjectVersion();
                     }}
                   />
@@ -1155,6 +1158,119 @@ export const SectionComponents: React.FC = () => {
                       incrementObjectVersion();
                     }}
                   />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Trigger Options
+                  </label>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      fontSize: '10px',
+                      color: 'var(--ui-label-color)',
+                    }}
+                  >
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={comp.collider !== false}
+                        onChange={(e) => {
+                          comp.collider = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Collider
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!comp.portal}
+                        onChange={(e) => {
+                          comp.portal = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Portal
+                    </label>
+                  </div>
+                </div>
+                <div className="e-row">
+                  <button
+                    className="e-button"
+                    style={{ marginTop: '4px' }}
+                    onClick={() => {
+                      let sceneId = comp.targetSceneId?.trim() || '';
+                      if (sceneId.toLowerCase().endsWith('.json')) {
+                        sceneId = sceneId.slice(0, -5);
+                      }
+
+                      const entryId = comp.targetEntryId?.trim();
+                      if (!sceneId) {
+                        sceneId = game.sceneManager.currentScene?.id || '';
+                      }
+                      if (!sceneId) {
+                        game.onMessage?.(
+                          'Error: Target Scene ID is empty and no current scene loaded.'
+                        );
+                        return;
+                      }
+
+                      const targetScene = game.sceneManager.scenes.get(sceneId);
+                      const descriptor = game.sceneManager.sceneRegistry.get(sceneId);
+
+                      if (!targetScene && !descriptor) {
+                        game.onMessage?.(`Error: Scene "${sceneId}" not found in registry.`);
+                        return;
+                      }
+
+                      let msg = `Scene "${sceneId}" found.`;
+
+                      const targetTitle = targetScene?.name || descriptor?.title;
+
+                      if (!targetTitle?.trim()) {
+                        msg += ' Warning: Target scene has no Title.';
+                      } else {
+                        msg += ` Title: "${targetTitle}".`;
+                      }
+
+                      if (entryId) {
+                        if (targetScene) {
+                          const targetObj = targetScene.getObjectByName(entryId);
+                          const hasEntry =
+                            targetObj && targetObj.components?.some((c: any) => c.type === 'Entry');
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in loaded scene.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else if (descriptor?.sourceData) {
+                          const sd = descriptor.sourceData;
+                          const allObjects = [...(sd.entities || []), ...(sd.triggerboxes || [])];
+                          const hasEntry = allObjects.some(
+                            (e: any) =>
+                              String(e.name || '').trim() === entryId &&
+                              (e.components || []).some((c: any) => c.type === 'Entry')
+                          );
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in scene data.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else {
+                          msg += ` (Scene not loaded, entry check skipped).`;
+                        }
+                      }
+
+                      game.onMessage?.(msg);
+                    }}
+                  >
+                    Check
+                  </button>
                 </div>
               </>
             )}

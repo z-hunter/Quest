@@ -1,0 +1,9 @@
+{
+  "id": "miles_walk_left",
+  "imageFile": "public/assets/miles.png",
+  "x": 297,
+  "y": 0,
+  "width": 329,
+  "height": 695,
+  "frames": 15
+}

@@ -34,3 +34,8 @@ Original prompt: Давай временно переключимся с пар�
 - Implemented universal Exit and Entry components: works on any object, supports same-scene teleport, automated collision-based actor transfer.
 - Implemented instant camera snap: camera now perfectly follows player during transitions without smoothing delay.
 - Infrastructure: Manually installed Playwright MCP and skill to .gemini directory (requires session restart to activate).
+
+- 2026-07-02: implemented passive observed-Actor action events. `perceptionRadius` moved from NPC component to Actor, player sees nearby foreign actions as bracketed console lines, and observed actions no longer wake PM.
+- Added structured/localized LOOK/EXAMINE, OPEN/CLOSE, TAKE/PUT, USE/COMMAND and Exit observation messages; SceneLog now stores `knownByActorIds` with legacy migration.
+- Validation: typecheck passes; focused observed-action/SceneLog/Exit tests pass; full suite is 525 passed with the same 4 pre-existing PM failures.
+- Browser loop caveat: Vite started successfully, but the required skill client could not launch because package `playwright` is not installed; the app also exposes neither `window.render_game_to_text` nor `window.advanceTime`, so deterministic parser-scene verification still needs dedicated instrumentation.

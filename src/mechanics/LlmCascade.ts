@@ -18,6 +18,8 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Respond with exactly one JSON object and no extra text.',
   'Return either {"kind":"plan","actions":[...]}, {"kind":"final_response","message":"..."}, {"kind":"clarification","question":"...","pendingAction":{...}}, or {"kind":"fallback"}.',
   'Use only real titles from the provided context and only safe parser action types.',
+  'Reading, looking, examining, inspecting, or studying are observational intents. Never add TAKE merely to make an object easier to inspect.',
+  'A named hidden thing may be sought by examining its visible or held anchor with conditional narration and requiresDiscoveredEntityIds; never target the hidden thing directly.',
 ].join('\n');
 
 const ALLOWED_ACTION_TYPES = new Set([
@@ -177,7 +179,7 @@ export class LlmCascade {
       return null;
     }
 
-    const normalized = this.normalizeResponse(parsed, input);
+    const normalized = this.normalizeResponse(parsed, input, context);
     this.lastDebugInfo = {
       ...baseDebug,
       prompt,
@@ -379,6 +381,16 @@ export class LlmCascade {
         'Post-API Recovery Instructions',
         this.promptList(promptAssets, 'post_api_recovery_instructions')
       ),
+      '',
+      '### Hidden Object Spoiler Protection',
+      '- `hiddenUnknown` lists objects the character has not discovered. Treat a named hidden object as a blind guess; never confirm its existence or location.',
+      '- Broad non-spoiling hints may follow from visible scenery, but direct reveals are forbidden.',
+      '',
+      '### Direct Game Master World Actions',
+      JSON.stringify(this.buildDirectGameMasterActions()),
+      '',
+      '### Available Authored Parser Commands',
+      JSON.stringify(this.buildAvailableCustomCommands()),
     ]
       .filter(Boolean)
       .join('\n');
@@ -399,14 +411,7 @@ export class LlmCascade {
       `Player command: "${input}"`,
       '',
       'Per-call dynamic game world context:',
-      JSON.stringify(this.buildDynamicContext(context), null, 2),
-      ...this.buildHiddenObjectsSpoilerSection(context),
-      '',
-      'Direct Game Master world actions:',
-      JSON.stringify(this.buildDirectGameMasterActions(), null, 2),
-      '',
-      'Available authored parser commands:',
-      JSON.stringify(this.buildAvailableCustomCommands(), null, 2),
+      JSON.stringify(this.buildDynamicContext(input, context)),
       ...(previousAttempt
         ? [
             '',
@@ -416,7 +421,7 @@ export class LlmCascade {
                 ? 'forced_handoff_label'
                 : 'previous_attempt_label'
             ),
-            JSON.stringify(previousAttempt, null, 2),
+            JSON.stringify(this.compactPreviousAttempt(previousAttempt)),
           ]
         : []),
       '',
@@ -455,7 +460,6 @@ export class LlmCascade {
       synonyms: entity.synonyms,
       semanticTags: entity.semanticTags,
       description: entity.description,
-      details: entity.details,
       lore: entity.lore,
       interactions: entity.interactions,
     });
@@ -477,11 +481,9 @@ export class LlmCascade {
     });
   }
 
-  private buildDynamicContext(context: ParserContext): ParserContext {
+  private buildDynamicContext(input: string, context: ParserContext): Record<string, unknown> {
     return this.compactRecord({
-      rawInput: context.rawInput,
-      normalizedInput: context.normalizedInput,
-      focusedTarget: context.focusedTarget,
+      focusedTarget: this.dynamicEntityContext(context.focusedTarget),
       player: context.player,
       scene: context.scene
         ? {
@@ -492,49 +494,158 @@ export class LlmCascade {
             recentTurns: context.scene.recentTurns,
           }
         : undefined,
-      entities: context.entities,
-      knownEntities: (context.knownEntities || []).map((entity) =>
-        this.llmKnownEntityContext(entity)
-      ),
-      inventory: context.inventory,
-      worldFacts: context.worldFacts,
-      spatialNodes: context.spatialNodes,
-      spatialRelations: context.spatialRelations,
+      entities: (context.entities || []).map((entity) => this.dynamicEntityContext(entity)),
+      knownEntities: (context.knownEntities || [])
+        .filter((entity) => entity.visibility !== 'hidden')
+        .map((entity) => this.dynamicEntityContext(entity)),
+      inventory: (context.inventory || []).map((entity) => this.dynamicEntityContext(entity)),
+      hiddenUnknown: (context.knownEntities || [])
+        .filter((entity) => entity.visibility === 'hidden')
+        .map((entity) =>
+          this.compactRecord({
+            id: entity.id,
+            title: entity.title,
+            hiddenReason: entity.hiddenReason,
+            synonyms: entity.synonyms,
+          })
+        ),
+      discoveryOpportunities: this.buildDiscoveryOpportunities(input, context),
+      actionScope: context.actionScope,
+      targetDetails: this.buildRecognizedTargetDetails(input, context),
       pending: context.pending,
-    }) as ParserContext;
-  }
-
-  private buildHiddenObjectsSpoilerSection(context: ParserContext): string[] {
-    const hiddenEntities = (context.knownEntities || []).filter(
-      (entity) => entity?.visibility === 'hidden' && entity?.id && entity?.title
-    );
-    if (!hiddenEntities.length) return [];
-
-    const lines = hiddenEntities.map((entity) => {
-      const title = this.quoteSpoilerText(entity.title || '');
-      const synonyms = (entity.synonyms || [])
-        .filter((synonym): synonym is string => typeof synonym === 'string' && !!synonym.trim())
-        .map((synonym) => synonym.trim());
-      const also = synonyms.length
-        ? ` (also: ${synonyms.map((synonym) => this.quoteSpoilerText(synonym)).join(', ')})`
-        : '';
-      return `- ${entity.id}: ${title}${also}`;
     });
-
-    return [
-      '',
-      'Hidden Objects / Spoiler Protection:',
-      'The following scene objects are hidden from the player character and have not been discovered yet:',
-      ...lines,
-      'This is an adventure game: finding hidden objects is part of the gameplay. Directly revealing these objects, confirming that they exist here, naming their exact location, or saying how to get them would spoil the game and would be unhelpful to the player.',
-      'If the player directly names or searches for one of these hidden objects before discovery, treat it as a blind guess. Answer only from what the character can currently perceive: the character does not see it and does not know where it is.',
-      'Indirect, non-spoiling hints are allowed when they follow from the visible scene or from the player character physically interacting with something. Broad hints are allowed, such as suggesting that audio equipment is a reasonable thing to inspect when looking for cables.',
-      'Direct reveals are forbidden, such as saying that the cables are behind the boombox.',
-    ];
   }
 
-  private quoteSpoilerText(value: string): string {
-    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  private buildDiscoveryOpportunities(
+    input: string,
+    context: ParserContext
+  ): Array<{
+    hiddenEntityId: string;
+    hiddenTitle: string;
+    anchorId: string;
+    anchorTitle: string;
+    relation: ParserRelationType;
+  }> {
+    const normalizedInput = this.normalizeMatchText(input);
+    const availableAnchors = [...(context.entities || []), ...(context.inventory || [])];
+    const anchorById = new Map(availableAnchors.map((entity) => [entity.id, entity]));
+
+    return (context.knownEntities || [])
+      .filter(
+        (entity) =>
+          entity.visibility === 'hidden' &&
+          (entity.hiddenReason === 'lookable' || entity.hiddenReason === 'examinable') &&
+          !!entity.location?.parentId
+      )
+      .flatMap((entity) => {
+        const anchor = anchorById.get(entity.location!.parentId);
+        if (!anchor) return [];
+        const hiddenNames = [entity.title, ...(entity.synonyms || [])];
+        const anchorNames = [anchor.title, ...(anchor.synonyms || [])];
+        const mentionsHidden = hiddenNames.some((name) =>
+          this.inputMentionsName(normalizedInput, name)
+        );
+        const mentionsAnchor = anchorNames.some((name) =>
+          this.inputMentionsName(normalizedInput, name)
+        );
+        if (!mentionsHidden || !mentionsAnchor) return [];
+        return [
+          {
+            hiddenEntityId: entity.id,
+            hiddenTitle: entity.title,
+            anchorId: anchor.id,
+            anchorTitle: anchor.title,
+            relation: entity.location!.relation,
+          },
+        ];
+      });
+  }
+
+  private inputMentionsName(normalizedInput: string, name: string): boolean {
+    const normalizedName = this.normalizeMatchText(name);
+    if (!normalizedName) return false;
+    if (normalizedInput.includes(normalizedName)) return true;
+    const singularName = normalizedName.replace(/(?:ies|s)$/u, (ending) =>
+      ending === 'ies' ? 'y' : ''
+    );
+    const singularInputWords = normalizedInput
+      .split(' ')
+      .map((word) => word.replace(/(?:ies|s)$/u, (ending) => (ending === 'ies' ? 'y' : '')));
+    return singularInputWords.includes(singularName);
+  }
+
+  private dynamicEntityContext(entity: any): Record<string, unknown> | undefined {
+    if (!entity) return undefined;
+    return this.compactRecord({
+      id: entity.id,
+      location: entity.location,
+      reachable: entity.reachable,
+      visibility: entity.visibility,
+      accessibility: entity.accessibility,
+      parserNote: entity.parserNote,
+      parserNoteNeedsCheck: entity.parserNoteNeedsCheck,
+      states: entity.states,
+      exit: entity.exit,
+    });
+  }
+
+  private buildRecognizedTargetDetails(
+    input: string,
+    context: ParserContext
+  ): Array<Record<string, unknown>> | undefined {
+    const normalizedInput = this.normalizeMatchText(input);
+    const candidates = [
+      ...(context.focusedTarget ? [context.focusedTarget] : []),
+      ...(context.entities || []),
+      ...(context.inventory || []),
+    ];
+    const matches = candidates
+      .filter((entity) => {
+        if (!entity?.details) return false;
+        return [entity.id, entity.title, ...(entity.synonyms || [])]
+          .map((value) => this.normalizeMatchText(String(value || '')))
+          .filter((value) => value.length >= 2)
+          .some((value) => normalizedInput.includes(value));
+      })
+      .map((entity) => ({ id: entity.id, title: entity.title, details: entity.details }));
+    return matches.length ? matches : undefined;
+  }
+
+  private normalizeMatchText(value: string): string {
+    return value
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  }
+
+  private compactPreviousAttempt(
+    previousAttempt: LlmCascadePreviousAttempt
+  ): Record<string, unknown> {
+    const envelope = previousAttempt.envelope;
+    const result = previousAttempt.result as any;
+    return this.compactRecord({
+      kind: previousAttempt.kind,
+      previous: this.compactRecord({
+        stage: envelope.stage,
+        output: envelope.output,
+        interpretation: envelope.debug
+          ? this.compactRecord({
+              verb: envelope.debug.verb,
+              noun: envelope.debug.noun,
+              intent: envelope.debug.intent,
+              score: envelope.debug.score,
+            })
+          : undefined,
+      }),
+      result: result
+        ? this.compactRecord({
+            type: result.type,
+            handled: result.handled,
+            outcomes: result.outcomes,
+            reason: result.reason,
+          })
+        : undefined,
+    });
   }
 
   private describeStaticPrompt(sceneId: string | undefined, text: string): StaticPromptInfo {
@@ -634,7 +745,8 @@ export class LlmCascade {
 
   private normalizeResponse(
     parsed: unknown,
-    input: string = ''
+    input: string = '',
+    context?: ParserContext
   ): {
     actions: ParserToolAction[];
     filteredActions: unknown[];
@@ -669,6 +781,22 @@ export class LlmCascade {
           pendingAction,
           input
         );
+        if (
+          context &&
+          this.isClarificationActionAlreadyResolved(normalizedPendingAction, context)
+        ) {
+          return {
+            actions: [normalizedPendingAction],
+            filteredActions: [
+              {
+                reason: 'llm_clarification_target_already_resolved',
+                response: parsed,
+                normalizedAction: normalizedPendingAction,
+              },
+            ],
+            fallback: false,
+          };
+        }
         const question =
           typeof parsed.question === 'string' && parsed.question.trim()
             ? parsed.question.trim()
@@ -716,6 +844,19 @@ export class LlmCascade {
         actions.push(validated);
       } else {
         filteredActions.push(action);
+      }
+    }
+
+    if (this.isObservationalIntent(input)) {
+      const ownershipChanges = actions.filter((action) => action.type === 'takeTarget');
+      if (ownershipChanges.length) {
+        filteredActions.push({
+          reason: 'observational_intent_omits_take',
+          actions: ownershipChanges,
+        });
+        for (let index = actions.length - 1; index >= 0; index--) {
+          if (actions[index].type === 'takeTarget') actions.splice(index, 1);
+        }
       }
     }
 
@@ -778,6 +919,30 @@ export class LlmCascade {
     return { actions, filteredActions, fallback: false };
   }
 
+  private isObservationalIntent(input: string): boolean {
+    const firstWord = input
+      .toLocaleLowerCase()
+      .trim()
+      .match(/[\p{L}\p{N}]+/u)?.[0];
+    return (
+      !!firstWord &&
+      new Set([
+        'read',
+        'look',
+        'examine',
+        'inspect',
+        'study',
+        'check',
+        'search',
+        'читать',
+        'прочитать',
+        'осмотреть',
+        'изучить',
+        'посмотреть',
+      ]).has(firstWord)
+    );
+  }
+
   private normalizeClarificationPendingAction(
     action: ParserToolAction,
     input: string
@@ -789,6 +954,43 @@ export class LlmCascade {
       ...action,
       item: loadItem,
     };
+  }
+
+  private isClarificationActionAlreadyResolved(
+    action: ParserToolAction,
+    context: ParserContext
+  ): boolean {
+    let reference: string | null | undefined;
+    switch (action.type) {
+      case 'lookTarget':
+      case 'examineTarget':
+      case 'takeTarget':
+      case 'openTarget':
+      case 'closeTarget':
+      case 'goToTarget':
+        reference = action.target;
+        break;
+      default:
+        return false;
+    }
+
+    const normalizedReference = this.normalizeMatchText(reference || '');
+    if (!normalizedReference) return false;
+    const candidates = [
+      ...(context.focusedTarget ? [context.focusedTarget] : []),
+      ...(context.entities || []),
+      ...(context.inventory || []),
+    ];
+    const matchingIds = new Set(
+      candidates
+        .filter((entity) =>
+          [entity.id, entity.title, ...(entity.synonyms || [])]
+            .map((value) => this.normalizeMatchText(String(value || '')))
+            .some((value) => value === normalizedReference)
+        )
+        .map((entity) => entity.id)
+    );
+    return matchingIds.size === 1;
   }
 
   private extractLoadLikeItem(input: string): string | null {
@@ -852,11 +1054,15 @@ export class LlmCascade {
           anchor: this.asNullableString(action.anchor),
         };
       }
-      case 'examineTarget':
+      case 'examineTarget': {
+        const narration = this.asExamineNarration(action.narration);
+        if (action.narration !== undefined && !narration) return null;
         return {
           type: 'examineTarget',
           target: this.asNullableString(action.target),
+          ...(narration ? { narration } : {}),
         };
+      }
       case 'examineRelationTarget': {
         const relation = this.asRelation(action.relation);
         if (!relation) return null;
@@ -1124,6 +1330,27 @@ export class LlmCascade {
     return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
       ? value
       : undefined;
+  }
+
+  private asExamineNarration(
+    value: unknown
+  ): Extract<ParserToolAction, { type: 'examineTarget' }>['narration'] | null {
+    if (!this.isRecord(value)) return null;
+    const message = this.asString(value.message);
+    if (!message || !Array.isArray(value.requiresDiscoveredEntityIds)) return null;
+    const requiresDiscoveredEntityIds = value.requiresDiscoveredEntityIds
+      .map((entityId) => this.asString(entityId))
+      .filter((entityId): entityId is string => !!entityId);
+    if (
+      requiresDiscoveredEntityIds.length === 0 ||
+      requiresDiscoveredEntityIds.length !== value.requiresDiscoveredEntityIds.length
+    ) {
+      return null;
+    }
+    return {
+      message,
+      requiresDiscoveredEntityIds: [...new Set(requiresDiscoveredEntityIds)],
+    };
   }
 
   private asScopeArray(value: unknown): ParserScopeSlice[] {

@@ -2,39 +2,66 @@ import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
-import type { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
-import { ActorCommandExecutor } from './ActorCommandExecutor';
 import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
 export type NpcMoveCompletionScheduler = (npcId: string, result: ActorMoveResult) => void;
 export type NpcActionCompletionScheduler = (npcId: string, result: NpcPlanExecutionOutcome) => void;
+export type NpcStrategyScheduler = (npcId: string, reason?: string) => void;
 
 export class ActorPlanExecutor {
   private readonly game: IGame;
   private readonly waitScheduler?: NpcWaitScheduler;
   private readonly moveCompletionScheduler?: NpcMoveCompletionScheduler;
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
-  private readonly commandExecutor: ActorCommandExecutor;
+  private readonly strategyScheduler?: NpcStrategyScheduler;
   private moveWatchTokens = new Map<string, number>();
+  private pendingTimeouts = new Map<string, Set<any>>();
+
+  clearState(npcId: string): void {
+    const current = this.moveWatchTokens.get(npcId) || 0;
+    this.moveWatchTokens.set(npcId, current + 1);
+    const timeouts = this.pendingTimeouts.get(npcId);
+    if (timeouts) {
+      for (const timeoutId of timeouts) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      this.pendingTimeouts.delete(npcId);
+    }
+  }
+
+  clearAllPending(): void {
+    this.moveWatchTokens.clear();
+    for (const timeouts of this.pendingTimeouts.values()) {
+      for (const timeoutId of timeouts) {
+        globalThis.clearTimeout(timeoutId);
+      }
+    }
+    this.pendingTimeouts.clear();
+  }
 
   constructor(
     game: IGame,
     waitScheduler?: NpcWaitScheduler,
     moveCompletionScheduler?: NpcMoveCompletionScheduler,
-    actionCompletionScheduler?: NpcActionCompletionScheduler
+    actionCompletionScheduler?: NpcActionCompletionScheduler,
+    strategyScheduler?: NpcStrategyScheduler
   ) {
     this.game = game;
     this.waitScheduler = waitScheduler;
     this.moveCompletionScheduler = moveCompletionScheduler;
     this.actionCompletionScheduler = actionCompletionScheduler;
-    this.commandExecutor = new ActorCommandExecutor(game);
+    this.strategyScheduler = strategyScheduler;
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
-    const scene = this.game.sceneManager.currentScene;
-    const actor = scene?.getObjectByName(plan.npcId);
+    const currentScene = this.game.sceneManager.currentScene;
+    const actor =
+      currentScene?.getObjectByName(plan.npcId) ||
+      Array.from(this.game.sceneManager.scenes.values())
+        .map((scene) => scene.getObjectByName(plan.npcId))
+        .find((candidate) => candidate instanceof Actor);
     if (!(actor instanceof Actor) || !ComponentSystem.isNpc(actor)) {
       return [
         {
@@ -46,11 +73,17 @@ export class ActorPlanExecutor {
     }
 
     const outcomes: NpcPlanExecutionOutcome[] = [];
+    let completedSynchronously = true;
     for (const step of plan.steps) {
-      outcomes.push(this.executeStep(actor, step));
+      const outcome = this.executeStep(actor, step);
+      outcomes.push(outcome);
+      if (outcome.status !== 'ok') {
+        completedSynchronously = false;
+        break;
+      }
     }
 
-    if (typeof plan.memory === 'string') {
+    if (completedSynchronously && typeof plan.memory === 'string') {
       this.setNpcMemory(actor, plan.memory);
       outcomes.push({
         status: 'ok',
@@ -70,7 +103,7 @@ export class ActorPlanExecutor {
       }
       const sayAsActor = (this.game as any).sayAsActor;
       if (typeof sayAsActor === 'function') {
-        sayAsActor.call(this.game, actor, text, { triggerPuppetMaster: false });
+        sayAsActor.call(this.game, actor, text, { triggerPuppetMaster: true });
         return { status: 'ok', code: 'npc_said', npcId: actor.name, message: text };
       }
       return { status: 'failed', code: 'say_unavailable', npcId: actor.name };
@@ -99,8 +132,42 @@ export class ActorPlanExecutor {
       };
     }
 
+    if (step.type === 'THINK_STRATEGY') {
+      if (!this.strategyScheduler) {
+        return { status: 'failed', code: 'strategy_unavailable', npcId: actor.name };
+      }
+      this.strategyScheduler(actor.name, step.reason);
+      return {
+        status: 'scheduled',
+        code: 'npc_strategy_think_scheduled',
+        npcId: actor.name,
+        message: step.reason,
+        actionType: 'THINK_STRATEGY',
+      };
+    }
+
     if (step.type === 'MOVE_TO') {
       return this.moveActor(actor, step);
+    }
+
+    if (step.type === 'TRAVERSE_EXIT') {
+      return this.traverseExit(actor, step.targetId);
+    }
+
+    if (step.type === 'LOOK') {
+      return this.executeTargetAction(actor, step.targetId, 'LOOK', step.relation);
+    }
+
+    if (step.type === 'EXAMINE') {
+      return this.executeTargetAction(actor, step.targetId, 'EXAMINE', step.relation);
+    }
+
+    if (step.type === 'OPEN') {
+      return this.executeTargetAction(actor, step.targetId, 'OPEN');
+    }
+
+    if (step.type === 'CLOSE') {
+      return this.executeTargetAction(actor, step.targetId, 'CLOSE');
     }
 
     if (step.type === 'TAKE') {
@@ -137,13 +204,22 @@ export class ActorPlanExecutor {
 
   private setNpcObjectives(actor: Actor, objectives: string[]): void {
     const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-      | { type: 'NPC'; objectives?: string[]; objectivesInitializedFromTA?: boolean }
+      | {
+          type: 'NPC';
+          objectives?: string[];
+          objectivesInitializedFromTA?: boolean;
+          objectivesTARevision?: string;
+        }
       | undefined;
     if (component) {
       component.objectives = objectives
         .map((objective) => String(objective || '').trim())
         .filter(Boolean);
       component.objectivesInitializedFromTA = true;
+      component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
+        actor,
+        'objectives'
+      );
     }
   }
 
@@ -151,12 +227,99 @@ export class ActorPlanExecutor {
     actor: Actor,
     step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>
   ): NpcPlanExecutionOutcome {
-    const target = this.resolveMoveTarget(actor, step);
+    if (typeof step.x === 'number' && typeof step.y === 'number') {
+      return this.startMove(actor, actor.moveTo(step.x, step.y));
+    }
+
+    const targetId = String(step.targetId || '').trim();
+    const target = this.game.sceneManager.currentScene?.getObjectByName(targetId);
     if (!target) {
       return { status: 'failed', code: 'move_target_not_found', npcId: actor.name };
     }
 
-    const result = actor.moveTo(target.x, target.y);
+    const approach = this.game.actorNavigation.planApproach(actor, target);
+    if (approach.status === 'already_reachable') {
+      const result: ActorMoveResult = {
+        status: 'arrived',
+        code: 'arrived',
+        message: 'Already close enough to interact.',
+        target: { x: actor.x, y: actor.y },
+        route: [],
+      };
+      this.scheduleMoveCompletion(actor.name, result, 0);
+      return {
+        status: 'scheduled',
+        code: 'npc_already_reachable',
+        npcId: actor.name,
+        message: result.message,
+      };
+    }
+    if (!approach.point) {
+      const result: ActorMoveResult = {
+        status: 'unreachable',
+        code: 'route_unreachable',
+        message: 'Destination is unreachable.',
+        target: null,
+        route: [],
+      };
+      this.scheduleMoveCompletion(actor.name, result, 0);
+      return {
+        status: 'scheduled',
+        code: result.code,
+        npcId: actor.name,
+        message: result.message,
+      };
+    }
+
+    return this.startMove(actor, actor.moveTo(approach.point.x, approach.point.y));
+  }
+
+  private traverseExit(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
+    const normalizedTargetId = String(targetId || '').trim();
+    const scene = this.game.sceneManager.currentScene;
+    const target = scene?.getObjectByName(normalizedTargetId);
+    const exit = target?.components?.find((component: any) => component?.type === 'Exit') as
+      | { portal?: boolean; collider?: boolean }
+      | undefined;
+    if (!scene || !target || !exit) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_target_not_found',
+        npcId: actor.name,
+        targetId: normalizedTargetId,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    if (!this.game.actorNavigation.isReachable(actor, target)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_not_reachable',
+        npcId: actor.name,
+        targetId: target.name,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    if (exit.portal !== true && exit.collider === false) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'exit_disabled',
+        npcId: actor.name,
+        targetId: target.name,
+        actionType: 'TRAVERSE_EXIT',
+      });
+    }
+    scene.activateObject(target, 0, actor);
+    return this.completeAction(actor.name, {
+      status: 'ok',
+      code: 'exit_traversed',
+      npcId: actor.name,
+      targetId: target.name,
+      actionType: 'TRAVERSE_EXIT',
+      worldChanged: true,
+    });
+  }
+
+  private startMove(actor: Actor, result: ActorMoveResult): NpcPlanExecutionOutcome {
     if (result.status === 'started') {
       this.watchMoveCompletion(actor);
       return {
@@ -173,43 +336,6 @@ export class ActorPlanExecutor {
       code: result.code,
       npcId: actor.name,
       message: result.message,
-    };
-  }
-
-  private resolveMoveTarget(
-    actor: Actor,
-    step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>
-  ): { x: number; y: number } | null {
-    if (typeof step.x === 'number' && typeof step.y === 'number') {
-      return { x: step.x, y: step.y };
-    }
-
-    const targetId = String(step.targetId || '').trim();
-    if (!targetId) return null;
-    const object = this.game.sceneManager.currentScene?.getObjectByName(targetId) as
-      | SceneObject
-      | undefined;
-    if (!object) return null;
-    const center = this.getObjectCenter(object);
-    return center ? this.findNearestWalkableTarget(actor, center.x, center.y) : null;
-  }
-
-  private getObjectCenter(object: SceneObject): { x: number; y: number } | null {
-    const record = object as unknown as {
-      x?: number;
-      y?: number;
-      poly?: Array<{ x: number; y: number }>;
-      vertices?: Array<{ x: number; y: number }>;
-    };
-    if (typeof record.x === 'number' && typeof record.y === 'number') {
-      return { x: record.x, y: record.y };
-    }
-
-    const points = Array.isArray(record.poly) && record.poly.length ? record.poly : record.vertices;
-    if (!Array.isArray(points) || !points.length) return null;
-    return {
-      x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-      y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
     };
   }
 
@@ -232,42 +358,121 @@ export class ActorPlanExecutor {
     globalThis.setTimeout(poll, 50);
   }
 
-  private findNearestWalkableTarget(
+  private executeTargetAction(
     actor: Actor,
-    targetX: number,
-    targetY: number
-  ): { x: number; y: number } | null {
+    targetId: string,
+    action: 'LOOK' | 'EXAMINE' | 'OPEN' | 'CLOSE',
+    relation?: 'in' | 'on' | 'under' | 'behind' | null
+  ): NpcPlanExecutionOutcome {
+    const normalizedTargetId = String(targetId || '').trim();
     const scene = this.game.sceneManager.currentScene;
-    if (!scene || typeof scene.isWalkable !== 'function') return { x: targetX, y: targetY };
-    if (scene.isWalkable(targetX, targetY, actor)) return { x: targetX, y: targetY };
-
-    const step = 4;
-    const maxRadius = Math.max(160, actor.colliderWidth * 2, actor.colliderHeight * 8);
-    let best: { x: number; y: number; distanceSq: number } | null = null;
-
-    for (let radius = step; radius <= maxRadius; radius += step) {
-      for (let dx = -radius; dx <= radius; dx += step) {
-        for (let dy = -radius; dy <= radius; dy += step) {
-          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-          const x = targetX + dx;
-          const y = targetY + dy;
-          if (!scene.isWalkable(x, y, actor)) continue;
-          const distanceSq = dx * dx + dy * dy;
-          if (!best || distanceSq < best.distanceSq) {
-            best = { x, y, distanceSq };
-          }
-        }
+    const target = scene?.getObjectByName(normalizedTargetId);
+    if (!target) {
+      const sceneTitle = scene
+        ? this.game.textAssets.getResolvedSceneField(scene, 'title')?.trim()
+        : '';
+      const targetsScene =
+        !!scene &&
+        (normalizedTargetId.toLowerCase() === scene.id.toLowerCase() ||
+          (!!sceneTitle && normalizedTargetId.toLowerCase() === sceneTitle.toLowerCase()));
+      if (targetsScene && (action === 'LOOK' || action === 'EXAMINE')) {
+        const description = this.game.textAssets.getResolvedSceneField(scene, 'description') || '';
+        return this.completeAction(actor.name, {
+          status: 'ok',
+          code: action === 'LOOK' ? 'scene_looked' : 'scene_examined',
+          npcId: actor.name,
+          targetId: scene.id,
+          message: description,
+          actionType: action,
+          relation: relation || undefined,
+          worldChanged: false,
+          discoveredEntityIds: [],
+          repeatKey: `${action}:SCENE:${scene.id}:${relation || '*'}`,
+        });
       }
-      const nearest = best;
-      if (nearest !== null) return { x: nearest.x, y: nearest.y };
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: `${action.toLowerCase()}_target_not_found`,
+        npcId: actor.name,
+        targetId: normalizedTargetId,
+      });
     }
-
-    return null;
+    const relationOptions = relation ? { relation } : undefined;
+    const outcome =
+      action === 'LOOK'
+        ? this.game.lookEntityForActor(actor, target, relationOptions)
+        : action === 'EXAMINE'
+          ? this.game.examineEntityForActor(actor, target, relationOptions)
+          : action === 'OPEN'
+            ? this.game.openEntityForActor(actor, target)
+            : this.game.closeEntityForActor(actor, target);
+    const relationOutcomes =
+      (action === 'LOOK' || action === 'EXAMINE') && outcome.status === 'ok'
+        ? (relation
+            ? [relation]
+            : action === 'EXAMINE'
+              ? (['in', 'on', 'under', 'behind'] as const)
+              : []
+          )
+            .map((candidate) => this.game.describeSpatialRelation(target.name, candidate))
+            .filter(
+              (candidate) =>
+                candidate.status === 'ok' &&
+                (candidate.code === 'relation_contents' ||
+                  (relation && candidate.code === 'relation_empty'))
+            )
+        : [];
+    const discoveredFromContents = relationOutcomes.flatMap((candidate) =>
+      Array.isArray(candidate.data?.discoveredEntityIds)
+        ? candidate.data.discoveredEntityIds.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : []
+    );
+    const messages = [
+      outcome.message,
+      ...relationOutcomes.map((candidate) => candidate.message),
+    ].filter((value): value is string => typeof value === 'string' && !!value.trim());
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      targetId: target.name,
+      message: messages.join('\n'),
+      actionType: action,
+      relation: relation || undefined,
+      worldChanged: outcome.data?.worldChanged === true || (outcome.effects?.length || 0) > 0,
+      discoveredEntityIds: Array.from(
+        new Set([
+          ...(Array.isArray(outcome.data?.discoveredEntityIds)
+            ? outcome.data.discoveredEntityIds.filter(
+                (value): value is string => typeof value === 'string'
+              )
+            : []),
+          ...discoveredFromContents,
+        ])
+      ),
+      repeatKey: relation ? `${action}:${target.name}:${relation}` : `${action}:${target.name}`,
+    });
   }
 
   private scheduleMoveCompletion(npcId: string, result: ActorMoveResult, delayMs: number): void {
     if (!this.moveCompletionScheduler) return;
-    globalThis.setTimeout(() => this.moveCompletionScheduler?.(npcId, result), delayMs);
+    const timeoutId = globalThis.setTimeout(() => {
+      const timeouts = this.pendingTimeouts.get(npcId);
+      if (timeouts) {
+        timeouts.delete(timeoutId);
+        if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
+      }
+      this.moveCompletionScheduler?.(npcId, result);
+    }, delayMs);
+
+    let timeouts = this.pendingTimeouts.get(npcId);
+    if (!timeouts) {
+      timeouts = new Set();
+      this.pendingTimeouts.set(npcId, timeouts);
+    }
+    timeouts.add(timeoutId);
   }
 
   private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
@@ -292,64 +497,16 @@ export class ActorPlanExecutor {
       });
     }
 
-    if (this.game.inventoryManager.hasInventoryEntity(actor, target, 'in')) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_already_held',
-        npcId: actor.name,
-        targetId: target.name,
-      });
-    }
-
-    const isItem =
-      target.isTakeable || target.components?.some((component: any) => component?.type === 'Item');
-    if (!isItem) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_not_takeable',
-        npcId: actor.name,
-        targetId: target.name,
-      });
-    }
-
-    const distanceError = ComponentSystem.canTakeItem(target, actor);
-    if (distanceError) {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: 'take_unreachable',
-        npcId: actor.name,
-        targetId: target.name,
-        message: distanceError,
-      });
-    }
-
-    scene?.finishDropAnimation(target);
-    this.game.inventoryManager.ensureInventoryComponent(actor, 'in');
-    this.game.inventoryManager.clearInheritedSurfaceSwitchGroups(target);
-    this.game.inventoryManager.clearActiveContainerSwitchGroups(
-      target,
-      this.game.getSwitchComponent.bind(this.game)
-    );
-    const outcome = this.game.inventoryManager.addInventoryEntity(actor, target, 'in');
-    if (outcome.status !== 'ok') {
-      return this.completeAction(actor.name, {
-        status: 'failed',
-        code: outcome.code,
-        npcId: actor.name,
-        targetId: target.name,
-        message: outcome.message,
-      });
-    }
-
-    target.subsceneItemScale = 1;
-    target.update(0);
-    this.game.inventoryManager.notifyInventoryUiChange();
+    const outcome = this.game.takeEntityForActor(actor, target);
     return this.completeAction(actor.name, {
-      status: 'ok',
-      code: 'item_taken',
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
       npcId: actor.name,
       targetId: target.name,
       message: outcome.message,
+      actionType: 'TAKE',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `TAKE:${target.name}`,
     });
   }
 
@@ -358,13 +515,16 @@ export class ActorPlanExecutor {
     commandId: string,
     argumentsByName: Record<string, string | null> = {}
   ): NpcPlanExecutionOutcome {
-    const outcome = this.commandExecutor.executeCommand(actor, commandId, argumentsByName);
+    const outcome = this.game.actorCommands.executeCommand(actor, commandId, argumentsByName);
     return this.completeAction(actor.name, {
       status: outcome.status === 'ok' ? 'ok' : 'failed',
       code: outcome.code,
       npcId: actor.name,
       commandId,
       message: outcome.message || outcome.displayMessages?.join('\n'),
+      actionType: 'COMMAND',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `COMMAND:${commandId}`,
     });
   }
 
@@ -420,11 +580,14 @@ export class ActorPlanExecutor {
       itemId: item.name,
       targetId: target?.name,
       message: outcome.message,
+      actionType: 'PUT',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `PUT:${normalizedItemId}:${normalizedTargetId || 'floor'}:${relation || ''}`,
     });
   }
 
   private useItemOn(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
-    const outcome = this.commandExecutor.useItemOn(actor, itemId, targetId);
+    const outcome = this.game.actorCommands.useItemOn(actor, itemId, targetId);
     return this.completeAction(actor.name, {
       status: outcome.status === 'ok' ? 'ok' : 'failed',
       code: outcome.code,
@@ -432,12 +595,20 @@ export class ActorPlanExecutor {
       itemId,
       targetId,
       message: outcome.message,
+      actionType: 'USE',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `USE:${itemId}:${targetId}`,
     });
   }
 
   private completeAction(npcId: string, outcome: NpcPlanExecutionOutcome): NpcPlanExecutionOutcome {
     if (!this.actionCompletionScheduler) return outcome;
-    globalThis.setTimeout(() => this.actionCompletionScheduler?.(npcId, outcome), 0);
+    // The semantic action has already completed at this point. Enqueue its
+    // outcome immediately; Puppet Master batching supplies the asynchronous
+    // boundary before the continuation is consumed. Deferring this callback
+    // through a zero-delay timer can strand a stored multi-step continuation
+    // if that timer is throttled or lost by the host runtime.
+    this.actionCompletionScheduler(npcId, outcome);
     return { ...outcome, status: 'scheduled' };
   }
 }

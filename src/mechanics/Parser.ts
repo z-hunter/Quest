@@ -1,4 +1,5 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
+import { OllamaProvider } from './llm/OllamaProvider';
 import { AnthropicProvider } from './llm/AnthropicProvider';
 import type { LlmCascadePreviousAttempt } from './LlmCascade';
 import { LlmCascade } from './LlmCascade';
@@ -14,7 +15,6 @@ import {
   normalizeTargetForIntent,
 } from './parserLanguage';
 import { ParserWorldModelBuilder } from './ParserWorldModelBuilder';
-import { ActorCommandExecutor } from './ActorCommandExecutor';
 import { Entity } from '../entities/Entity';
 import { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
@@ -34,7 +34,6 @@ import type {
   ParserCascadeEnvelope,
   ParserClarificationOption,
   ParserClarificationScope,
-  ParserCommandActionSpec,
   ParserCommandArgumentValidation,
   ParserCommandSpec,
   ParserCoreDecision,
@@ -57,14 +56,22 @@ type ParserNoteDebugEntry = {
   needsCheck?: boolean;
 };
 
+type ParserTimingEntry = {
+  label: string;
+  ms: number;
+};
+
+// Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
+const USE_LOCAL_LLM = false;
+
 export class Parser {
+  private allowAutoApproachForCurrentPlan = true;
   game: any;
   inputField: HTMLInputElement | null;
   pendingState: ParserPendingState | null;
   nlpCascade: NlpCascade;
   llmCascade: LlmCascade;
   worldModelBuilder: ParserWorldModelBuilder;
-  actorCommandExecutor: ActorCommandExecutor;
   activeWorldModel: ParserWorldModel | null;
   activeScope: ParserScope | null;
   pendingClarificationRetryMessage: string | null;
@@ -79,12 +86,11 @@ export class Parser {
       () => this.game.console
     );
     this.llmCascade = new LlmCascade(
-      new AnthropicProvider(),
+      USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider(),
       () => this.game.textAssets,
       () => this.game.console
     );
     this.worldModelBuilder = new ParserWorldModelBuilder(this.game);
-    this.actorCommandExecutor = new ActorCommandExecutor(this.game);
     this.activeWorldModel = null;
     this.activeScope = null;
     this.pendingClarificationRetryMessage = null;
@@ -113,9 +119,19 @@ export class Parser {
     }
     const originScene = this.game.sceneManager.currentScene;
     try {
+      const parseStartedAt = this.now();
+      const timings: ParserTimingEntry[] = [];
+      const measure = <T>(label: string, fn: () => T): T => {
+        const startedAt = this.now();
+        try {
+          return fn();
+        } finally {
+          timings.push({ label, ms: this.now() - startedAt });
+        }
+      };
       this.nlpCascade.clearLastDebugInfo();
       this.llmCascade.clearLastDebugInfo();
-      const actionEnvelope = this.resolvePendingAction(trimmed);
+      const actionEnvelope = measure('pending', () => this.resolvePendingAction(trimmed));
       if (this.pendingClarificationCancelMessage) {
         const cancelMessage = this.pendingClarificationCancelMessage;
         this.pendingClarificationCancelMessage = null;
@@ -128,26 +144,34 @@ export class Parser {
         this.game.log(retryMessage);
         return;
       }
-      const worldModel = this.worldModelBuilder.build(trimmed, this.pendingState);
+      const worldModel = measure('worldModel', () =>
+        this.worldModelBuilder.build(trimmed, this.pendingState)
+      );
       this.activeWorldModel = worldModel;
       const context = worldModel.context;
       this.activeScope = worldModel.scope;
-      const contextJson = JSON.stringify(context);
+      const contextJson = measure('contextJson', () => JSON.stringify(context));
       let envelope =
         actionEnvelope ||
-        (this.game.console?.parserStage1Enabled === false
-          ? this.buildStage1BypassAction(trimmed)
-          : this.runStage1(trimmed));
-      envelope = this.applyFocusedDefaultTargets(envelope);
+        measure('stage1', () =>
+          this.game.console?.parserStage1Enabled === false
+            ? this.buildStage1BypassAction(trimmed)
+            : this.runStage1(trimmed)
+        );
+      envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(envelope));
 
       if (
         !actionEnvelope &&
         this.game.console?.parserStage2Enabled !== false &&
         this.isHandoffEnvelope(envelope)
       ) {
+        const stage2StartedAt = this.now();
         const stage2Envelope = await this.nlpCascade.parse(trimmed, context);
+        timings.push({ label: 'stage2', ms: this.now() - stage2StartedAt });
         if (stage2Envelope) {
-          envelope = this.applyFocusedDefaultTargets(stage2Envelope);
+          envelope = measure('focusedDefaults', () =>
+            this.applyFocusedDefaultTargets(stage2Envelope)
+          );
         }
       }
 
@@ -160,6 +184,7 @@ export class Parser {
       if (forceCascade1ToLlm) {
         llmAttempted = true;
         const cascade1Envelope = envelope;
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
           kind: 'forced_cascade_handoff',
           envelope: cascade1Envelope,
@@ -168,8 +193,11 @@ export class Parser {
             reason: 'c1_off',
           },
         });
-        envelope = this.applyFocusedDefaultTargets(
-          llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope)
+        timings.push({ label: 'llm', ms: this.now() - llmStartedAt });
+        envelope = measure('focusedDefaults', () =>
+          this.applyFocusedDefaultTargets(
+            llmEnvelope || this.buildForcedLlmHandoff(trimmed, cascade1Envelope)
+          )
         );
       }
 
@@ -180,14 +208,18 @@ export class Parser {
         this.isHandoffEnvelope(envelope)
       ) {
         llmAttempted = true;
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context);
+        timings.push({ label: 'llm', ms: this.now() - llmStartedAt });
         if (llmEnvelope) {
-          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
+          envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(llmEnvelope));
         }
       }
 
-      const scopeJson = JSON.stringify(this.buildPeekScopeSummary(worldModel.scope));
-      let resultJson = this.runParserCore(envelope);
+      const scopeJson = measure('scopeJson', () =>
+        JSON.stringify(this.buildPeekScopeSummary(worldModel.scope))
+      );
+      let resultJson = measure('core', () => this.runParserCore(envelope));
 
       if (
         !actionEnvelope &&
@@ -196,24 +228,37 @@ export class Parser {
         this.resultShouldRetryWithLlm(resultJson)
       ) {
         llmAttempted = true;
-        const parsedResult = this.safeParseJson(resultJson);
+        const parsedResult = measure('parseResult', () => this.safeParseJson(resultJson));
+        const llmStartedAt = this.now();
         const llmEnvelope = await this.runLlmCascade(trimmed, context, {
           kind: this.getPostApiLlmRetryKind(parsedResult),
           envelope,
           result: parsedResult,
         });
+        timings.push({ label: 'llmRetry', ms: this.now() - llmStartedAt });
         if (llmEnvelope) {
-          envelope = this.applyFocusedDefaultTargets(llmEnvelope);
-          resultJson = this.runParserCore(envelope);
+          envelope = measure('focusedDefaults', () => this.applyFocusedDefaultTargets(llmEnvelope));
+          resultJson = measure('coreRetry', () => this.runParserCore(envelope));
         }
       }
 
-      const envelopeJson = JSON.stringify(envelope);
-      const response = this.buildResponse(resultJson, envelopeJson, contextJson, scopeJson);
+      const envelopeJson = measure('envelopeJson', () => JSON.stringify(envelope));
+      timings.push({ label: 'totalBeforeResponse', ms: this.now() - parseStartedAt });
+      const response = this.buildResponse(
+        resultJson,
+        envelopeJson,
+        contextJson,
+        scopeJson,
+        timings
+      );
 
       if (response.debugMessages?.length) {
         for (const message of response.debugMessages) {
-          this.game.console?.log(message, 'info', { showInClosed: false });
+          if (typeof this.game.console?.logDebug === 'function') {
+            this.game.console.logDebug(message);
+          } else if (this.game.console?.isOpen !== false) {
+            this.game.console?.log(message, 'info', { showInClosed: false });
+          }
         }
       }
 
@@ -251,6 +296,12 @@ export class Parser {
   private extractSayText(input: string): string {
     if (/^\s*-/.test(input)) return input.replace(/^\s*-\s*/, '').trim();
     return input.replace(/^\s*SAY\s*/i, '').trim();
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
   }
 
   private recordSceneParserTurn(scene: any, command: string, playerMessages: string[]): void {
@@ -1222,29 +1273,11 @@ export class Parser {
           },
         };
       case 'quit':
-        if (!this.hasClosableView()) {
-          return {
-            stage: 'regex-v1',
-            output: {
-              kind: 'handoff_up',
-              reason: 'quit_not_applicable',
-              verb,
-              noun,
-              rawInput: input,
-            },
-            debug: {
-              rawInput: input,
-              normalizedInput: input.trim().toUpperCase(),
-              verb,
-              noun,
-            },
-          };
-        }
         return {
           stage: 'regex-v1',
           output: {
             kind: 'plan',
-            actions: [{ type: 'quitCurrentView' }],
+            actions: [{ type: 'quitCurrentView', target: match?.remainder || noun || null }],
           },
           debug: {
             rawInput: input,
@@ -1557,19 +1590,25 @@ export class Parser {
     planState: ParserPlanState
   ): GameActionOutcome[] {
     const outcomes: GameActionOutcome[] = [];
+    const previousAutoApproach = this.allowAutoApproachForCurrentPlan;
+    this.allowAutoApproachForCurrentPlan = actions.length === 1;
 
-    for (const action of actions) {
-      const outcome = this.executeParserAction(action, planState);
-      executedActions.push(this.getExecutedActionName(action));
-      this.markTouchedParserNotesNeedCheck(action, outcome);
-      outcomes.push(outcome);
+    try {
+      for (const action of actions) {
+        const outcome = this.executeParserAction(action, planState);
+        executedActions.push(this.getExecutedActionName(action));
+        this.markTouchedParserNotesNeedCheck(action, outcome);
+        outcomes.push(outcome);
 
-      if (outcome.status !== 'ok') {
-        break;
+        if (outcome.status !== 'ok') {
+          break;
+        }
+        if (outcome.effects?.length) {
+          this.refreshActiveWorldModel();
+        }
       }
-      if (outcome.effects?.length) {
-        this.refreshActiveWorldModel();
-      }
+    } finally {
+      this.allowAutoApproachForCurrentPlan = previousAutoApproach;
     }
 
     return outcomes;
@@ -1593,7 +1632,7 @@ export class Parser {
       case 'lookRelationTarget':
         return this.resolveRelationTarget('look', action.relation, action.anchor);
       case 'examineTarget':
-        return this.resolveExamineTarget(action.target);
+        return this.resolveExamineTarget(action.target, action.narration);
       case 'examineRelationTarget':
         return this.resolveRelationTarget('examine', action.relation, action.anchor);
       case 'takeTarget':
@@ -1618,7 +1657,9 @@ export class Parser {
       case 'closeTarget':
         return this.resolveOpenCloseTarget('close', action.target);
       case 'quitCurrentView':
-        return this.game.closeFocusedView();
+        return this.hasClosableView()
+          ? this.game.closeFocusedView()
+          : this.resolveQuitTarget(action.target || null);
       case 'showInventory':
         return this.game.showInventory();
       case 'setSceneParserNote':
@@ -1627,6 +1668,38 @@ export class Parser {
         return this.executeSetEntityParserNote(action.entityId, action.note);
       case 'goToTarget':
         return this.resolveGoToTarget(action.target);
+      case 'runCustomCommand': {
+        const player = this.game.sceneManager.currentScene?.player;
+        if (!player) {
+          return {
+            status: 'failed',
+            code: 'actor_not_found',
+            recoverable: false,
+          };
+        }
+        const argumentsByName = { ...(action.arguments || {}) };
+        for (const [argumentName, ref] of Object.entries(action.argumentRefs || {})) {
+          const value = planState[ref];
+          argumentsByName[argumentName] = value instanceof Entity ? value.name : null;
+        }
+        const outcome = this.game.actorCommands.executeCommand(
+          player,
+          action.commandId,
+          argumentsByName
+        );
+        if (!outcome) {
+          return {
+            status: 'failed',
+            code: 'command_failed',
+            recoverable: false,
+            message: 'Command execution yielded no outcome.',
+          };
+        }
+        return {
+          ...outcome,
+          message: outcome.message || outcome.displayMessages?.join('\n'),
+        };
+      }
       case 'resolveArgumentEntity':
         return this.executeResolveArgumentEntity(action, planState);
       case 'ensureHeldEntity':
@@ -1672,6 +1745,23 @@ export class Parser {
           recoverable: false,
         };
     }
+  }
+
+  private applyExamineNarration(
+    outcome: GameActionOutcome,
+    narration: Extract<ParserToolAction, { type: 'examineTarget' }>['narration']
+  ): GameActionOutcome {
+    if (outcome.status !== 'ok' || !narration) return outcome;
+    const discoveredEntityIds = Array.isArray(outcome.data?.discoveredEntityIds)
+      ? outcome.data.discoveredEntityIds.filter(
+          (entityId): entityId is string => typeof entityId === 'string'
+        )
+      : [];
+    const discovered = new Set(discoveredEntityIds);
+    if (!narration.requiresDiscoveredEntityIds.every((entityId) => discovered.has(entityId))) {
+      return outcome;
+    }
+    return { ...outcome, message: narration.message };
   }
 
   private executeLlmClarification(
@@ -2690,7 +2780,10 @@ export class Parser {
     return this.withEntityLookExtras(this.game.lookEntity(resolved.entity as any), resolved.entity);
   }
 
-  private resolveExamineTarget(rawTarget: string | null): GameActionOutcome {
+  private resolveExamineTarget(
+    rawTarget: string | null,
+    narration?: Extract<ParserToolAction, { type: 'examineTarget' }>['narration']
+  ): GameActionOutcome {
     if (!rawTarget) {
       return {
         status: 'needs_clarification',
@@ -2744,16 +2837,26 @@ export class Parser {
         };
       }
       if (broadResolved?.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(broadResolved.entity as any),
-          broadResolved.entity
+        return this.executePlayerActionWithApproach(broadResolved.entity, () =>
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(broadResolved.entity as any),
+              broadResolved.entity
+            ),
+            narration
+          )
         );
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(inactiveSwitchResolved.entity as any),
-          inactiveSwitchResolved.entity
+        return this.executePlayerActionWithApproach(inactiveSwitchResolved.entity, () =>
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(inactiveSwitchResolved.entity as any),
+              inactiveSwitchResolved.entity
+            ),
+            narration
+          )
         );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
@@ -2777,9 +2880,14 @@ export class Parser {
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
-        return this.withEntityLookExtras(
-          this.game.examineEntity(hiddenGatedResolved.entity as any),
-          hiddenGatedResolved.entity
+        return this.executePlayerActionWithApproach(hiddenGatedResolved.entity, () =>
+          this.applyExamineNarration(
+            this.withEntityLookExtras(
+              this.game.examineEntity(hiddenGatedResolved.entity as any),
+              hiddenGatedResolved.entity
+            ),
+            narration
+          )
         );
       }
       if (hiddenGatedResolved.status === 'ambiguous') {
@@ -2828,10 +2936,62 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.withEntityLookExtras(
-      this.game.examineEntity(resolved.entity as any),
-      resolved.entity
+    return this.executePlayerActionWithApproach(resolved.entity, () =>
+      this.applyExamineNarration(
+        this.withEntityLookExtras(this.game.examineEntity(resolved.entity as any), resolved.entity),
+        narration
+      )
     );
+  }
+
+  private executePlayerActionWithApproach(
+    target: SceneObject,
+    action: () => GameActionOutcome
+  ): GameActionOutcome {
+    if (!this.allowAutoApproachForCurrentPlan) return action();
+    const scene = this.game.sceneManager.currentScene;
+    const player = scene?.player || null;
+    if (!scene || !player) return action();
+    if (scene.activeSubscene) return action();
+
+    const perception = this.game.actorWorld.getObjectPerception(player, target);
+    if (
+      perception.interaction === 'held' ||
+      perception.interaction === 'reachable' ||
+      perception.approach === 'already_reachable'
+    ) {
+      return action();
+    }
+
+    const approach = this.game.actorNavigation.planApproach(player, target);
+    if (approach.status !== 'route_available' || !approach.point) return action();
+
+    const moveResult = player.moveTo(approach.point.x, approach.point.y);
+    if (moveResult.status !== 'started') return action();
+
+    const sourceScene = scene;
+    const poll = () => {
+      const result = player.getMoveResult();
+      if (result.status === 'started' && player.state === 'walk') {
+        globalThis.setTimeout(poll, 50);
+        return;
+      }
+      const currentScene = this.game.sceneManager.currentScene;
+      if (result.status === 'arrived' && currentScene === sourceScene) {
+        const outcome = action();
+        if (outcome.message) this.game.showMessage(outcome.message);
+        return;
+      }
+      this.game.showMessage(this.game.text('engine.too_far_generic'));
+    };
+    globalThis.setTimeout(poll, 50);
+
+    return {
+      status: 'ok',
+      code: 'player_approaching_for_action',
+      data: { targetType: 'entity', entityId: target.name },
+      effects: ['player_move_started', 'action_scheduled_after_arrival'],
+    };
   }
 
   private withEntityLookExtras(outcome: GameActionOutcome, entity: SceneObject): GameActionOutcome {
@@ -3006,7 +3166,16 @@ export class Parser {
       };
     }
 
-    return this.game.describeSpatialRelation(resolved.node.id, relation);
+    const outcome = this.game.describeSpatialRelation(resolved.node.id, relation);
+    const actor = this.game.sceneManager.currentScene?.player || null;
+    const anchorObject = this.game.sceneManager.currentScene?.getObjectByName(resolved.node.id);
+    if (outcome.status === 'ok' && actor && anchorObject) {
+      this.game.emitActorAction?.(actor, intent, anchorObject, {
+        targetId: anchorObject.name,
+        relation,
+      });
+    }
+    return outcome;
   }
 
   private resolveContainerAnchor(
@@ -3209,18 +3378,21 @@ export class Parser {
         };
       }
       if (scopedResolved.status === 'found') {
-        return this.game.takeEntity(scopedResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(scopedResolved.entity, () =>
+          this.game.takeEntity(scopedResolved.entity as Entity)
+        );
       }
       if (scopedResolved.status === 'not_found') {
         if (broadScopedResolved?.status === 'ambiguous') {
           const failure = this.resolveFailedTakeDiagnostic(
             rawTarget,
-            scopedTakeDiagnosticCandidates
+            scopedTakeDiagnosticCandidates,
+            true
           );
           if (failure) return failure;
         }
         if (broadScopedResolved?.status === 'found') {
-          return this.resolveTakeFailureForKnownEntity(broadScopedResolved.entity as Entity);
+          return this.resolveTakeFailureForKnownEntity(broadScopedResolved.entity as Entity, true);
         }
         if (broadScopedResolved?.status === 'escalate') {
           return {
@@ -3274,15 +3446,17 @@ export class Parser {
     }
     if (resolved.status === 'not_found') {
       if (broadResolved?.status === 'ambiguous') {
-        const failure = this.resolveFailedTakeDiagnostic(rawTarget, takeDiagnosticCandidates);
+        const failure = this.resolveFailedTakeDiagnostic(rawTarget, takeDiagnosticCandidates, true);
         if (failure) return failure;
       }
       if (broadResolved?.status === 'found') {
-        return this.resolveTakeFailureForKnownEntity(broadResolved.entity as Entity);
+        return this.resolveTakeFailureForKnownEntity(broadResolved.entity as Entity, true);
       }
       const inactiveSwitchResolved = this.resolveInactiveSubsceneSwitchTarget(rawTarget);
       if (inactiveSwitchResolved.status === 'found') {
-        return this.game.takeEntity(inactiveSwitchResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(inactiveSwitchResolved.entity, () =>
+          this.game.takeEntity(inactiveSwitchResolved.entity as Entity)
+        );
       }
       if (inactiveSwitchResolved.status === 'ambiguous') {
         return {
@@ -3305,7 +3479,9 @@ export class Parser {
       }
       const hiddenGatedResolved = this.resolveHiddenSwitchGatedTarget(rawTarget);
       if (hiddenGatedResolved.status === 'found') {
-        return this.game.takeEntity(hiddenGatedResolved.entity as Entity);
+        return this.executePlayerActionWithApproach(hiddenGatedResolved.entity, () =>
+          this.game.takeEntity(hiddenGatedResolved.entity as Entity)
+        );
       }
       if (hiddenGatedResolved.status === 'ambiguous') {
         return {
@@ -3350,7 +3526,9 @@ export class Parser {
         recoverable: true,
       };
     }
-    return this.game.takeEntity(resolved.entity as Entity);
+    return this.executePlayerActionWithApproach(resolved.entity, () =>
+      this.game.takeEntity(resolved.entity as Entity)
+    );
   }
 
   private findResolutionMatchesInCandidates(
@@ -3375,7 +3553,8 @@ export class Parser {
 
   private resolveFailedTakeDiagnostic(
     rawTarget: string,
-    candidates: SceneObject[]
+    candidates: SceneObject[],
+    autoApproach: boolean = false
   ): GameActionOutcome | null {
     const matches = this.findResolutionMatchesInCandidates(rawTarget, candidates).filter(
       (candidate): candidate is Entity =>
@@ -3384,12 +3563,21 @@ export class Parser {
     if (!matches.length) return null;
 
     const preferred = (this.choosePreferredObject(matches) || matches[0]) as Entity;
-    return this.resolveTakeFailureForKnownEntity(preferred);
+    return this.resolveTakeFailureForKnownEntity(preferred, autoApproach);
   }
 
-  private resolveTakeFailureForKnownEntity(entity: Entity): GameActionOutcome {
+  private resolveTakeFailureForKnownEntity(
+    entity: Entity,
+    autoApproach: boolean = false
+  ): GameActionOutcome {
     const canTakeOutcome = (this.game as any).canTakeEntity?.(entity);
-    if (canTakeOutcome) return canTakeOutcome;
+    if (canTakeOutcome) {
+      if (!autoApproach) return canTakeOutcome;
+      const player = this.game.sceneManager.currentScene?.player;
+      if (!player) return canTakeOutcome;
+      const approach = this.game.actorNavigation.planApproach(player, entity);
+      if (approach.status !== 'route_available') return canTakeOutcome;
+    }
 
     if (this.isEntityHeldForTake(entity)) {
       return {
@@ -3403,7 +3591,7 @@ export class Parser {
       };
     }
 
-    return this.game.takeEntity(entity);
+    return this.executePlayerActionWithApproach(entity, () => this.game.takeEntity(entity));
   }
 
   private resolvePutSourceFailureForKnownEntity(entity: Entity): GameActionOutcome | null {
@@ -3891,12 +4079,20 @@ export class Parser {
         recoverable: true,
       };
     }
-    return intent === 'open'
-      ? this.game.openEntity(entity as any)
-      : this.game.closeEntity(entity as any);
+    return this.executePlayerActionWithApproach(entity, () =>
+      intent === 'open' ? this.game.openEntity(entity as any) : this.game.closeEntity(entity as any)
+    );
   }
 
   private resolveGoToTarget(rawTarget: string | null): GameActionOutcome {
+    if (this.game.sceneManager?.currentScene?.activeSubscene) {
+      return {
+        status: 'failed',
+        code: 'movement_blocked_by_active_subscene',
+        message: this.game.text('engine.close_subscene_before_moving'),
+        recoverable: true,
+      };
+    }
     if (!rawTarget) {
       return {
         status: 'needs_clarification',
@@ -3906,16 +4102,40 @@ export class Parser {
       };
     }
 
-    const sceneOutcome = this.game.goToSceneTarget(rawTarget);
+    const startsWithThrough = /^\s*through\s+/i.test(rawTarget);
+    const cleanTarget = rawTarget.replace(/^\s*through\s+/i, '');
+
+    const normalizedDestination = cleanTarget.trim().toUpperCase();
+    const destinationExit = this.getScopeCandidates(['visible']).find((candidate) => {
+      const exit = candidate.components?.find((component: any) => component?.type === 'Exit') as
+        | { targetSceneId?: string }
+        | undefined;
+      if (!exit) return false;
+      const targetSceneId = String(exit.targetSceneId || '')
+        .trim()
+        .replace(/\.json$/i, '');
+      const scene = this.game.sceneManager.scenes.get(targetSceneId);
+      const descriptor = this.game.sceneManager.sceneRegistry.get(targetSceneId);
+      const title =
+        (scene && this.game.textAssets.getResolvedSceneField(scene, 'title')) || descriptor?.title;
+      return (
+        targetSceneId.toUpperCase() === normalizedDestination ||
+        String(title || '')
+          .trim()
+          .toUpperCase() === normalizedDestination
+      );
+    });
+    if (destinationExit)
+      return this.game.goToEntity(destinationExit, { traverseExit: startsWithThrough });
+
+    const sceneOutcome = this.game.goToSceneTarget(cleanTarget);
     if (sceneOutcome.status === 'ok') {
       return sceneOutcome;
     }
 
     const resolved = this.resolveEntityTargetInCandidates(
-      rawTarget,
-      this.getScopeCandidates(['visible']).filter(
-        (candidate): candidate is Entity => candidate instanceof Entity
-      ),
+      cleanTarget,
+      this.getScopeCandidates(['visible']),
       'parser.go_to_which_one'
     );
     if (resolved.status === 'escalate') {
@@ -3927,7 +4147,7 @@ export class Parser {
         code: 'ambiguous_destination',
         message: resolved.message,
         data: {
-          target: rawTarget,
+          target: cleanTarget,
           options: resolved.options,
           clarificationOptions: resolved.clarificationOptions,
         },
@@ -3935,15 +4155,54 @@ export class Parser {
       };
     }
     if (resolved.status === 'found') {
-      return this.game.goToEntity(resolved.entity as any);
+      return this.game.goToEntity(resolved.entity as any, { traverseExit: startsWithThrough });
     }
     return {
       status: 'failed',
       code: 'destination_not_found',
-      message: this.game.text('parser.go_to_not_found', { target: rawTarget }),
-      data: { target: rawTarget },
+      message: this.game.text('parser.go_to_not_found', { target: cleanTarget }),
+      data: { target: cleanTarget },
       recoverable: true,
     };
+  }
+
+  private resolveQuitTarget(rawTarget: string | null): GameActionOutcome {
+    const exits = this.getScopeCandidates(['visible']).filter((candidate) =>
+      candidate.components?.some((component: any) => component?.type === 'Exit')
+    );
+    if (!rawTarget) {
+      if (exits.length === 1) return this.game.goToEntity(exits[0], { traverseExit: true });
+      return exits.length > 1
+        ? {
+            status: 'needs_clarification',
+            code: 'ambiguous_destination',
+            message: this.game.text('parser.go_to_prompt'),
+            data: { options: exits.map((exit) => exit.name) },
+            recoverable: true,
+          }
+        : {
+            status: 'failed',
+            code: 'quit_not_applicable',
+            recoverable: true,
+          };
+    }
+    const resolved = this.resolveEntityTargetInCandidates(
+      rawTarget.replace(/^THROUGH\s+/i, ''),
+      exits,
+      'parser.go_to_which_one'
+    );
+    if (resolved.status === 'found')
+      return this.game.goToEntity(resolved.entity, { traverseExit: true });
+    if (resolved.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_destination',
+        message: resolved.message,
+        data: { options: resolved.options, clarificationOptions: resolved.clarificationOptions },
+        recoverable: true,
+      };
+    }
+    return { status: 'failed', code: 'destination_not_found', recoverable: true };
   }
 
   private executeResolveArgumentEntity(
@@ -4134,7 +4393,7 @@ export class Parser {
       };
     }
 
-    const outcome = this.actorCommandExecutor.useItemOn(player, item.name, target.name);
+    const outcome = this.game.actorCommands.useItemOn(player, item.name, target.name);
     if (outcome.status === 'ok') return outcome;
 
     const message = action.noEffectMessage
@@ -4387,15 +4646,39 @@ export class Parser {
     command: ParserCommandSpec,
     argumentValues: Record<string, string | null>
   ): ParserCascadeEnvelope {
-    const actions = command.plan
-      .map((step) => this.mapCommandPlanStep(command, step, argumentValues))
-      .filter((action): action is ParserToolAction => !!action);
+    const argumentRefs: Record<string, string> = {};
+    const resolutionActions = command.plan.flatMap((step): ParserToolAction[] => {
+      if (step.type !== 'resolveArgumentEntity') return [];
+      const argSpec = command.arguments.find((arg) => arg.name === step.arg);
+      if (!argSpec) return [];
+      argumentRefs[step.arg] = step.saveAs;
+      return [
+        {
+          type: 'resolveArgumentEntity',
+          commandId: command.id,
+          arg: step.arg,
+          query: argumentValues[step.arg] || null,
+          scopes: argSpec.scopes,
+          saveAs: step.saveAs,
+          validation: argSpec.validation,
+          messages: argSpec.messages,
+        },
+      ];
+    });
 
     return {
       stage: 'regex-v1',
       output: {
         kind: 'plan',
-        actions,
+        actions: [
+          ...resolutionActions,
+          {
+            type: 'runCustomCommand',
+            commandId: command.id,
+            arguments: argumentValues,
+            argumentRefs,
+          },
+        ],
       },
       debug: {
         rawInput: input,
@@ -4409,150 +4692,7 @@ export class Parser {
   }
 
   private expandCustomCommandActions(actions: ParserToolAction[]): ParserToolAction[] {
-    return actions.flatMap((action) => {
-      if (action.type !== 'runCustomCommand') return [action];
-      const command = this.game.textAssets
-        .getParserCommands()
-        .find((candidate: ParserCommandSpec) => candidate.id === action.commandId);
-      if (!command) {
-        return [
-          {
-            type: 'parserFailure',
-            code: 'custom_command_not_found',
-            message: this.game.text('parser.command_no_effect'),
-          } satisfies ParserToolAction,
-        ];
-      }
-      const argumentValues = action.arguments || {};
-      const commandSpec = command as ParserCommandSpec;
-      return commandSpec.plan
-        .map((step: ParserCommandActionSpec) =>
-          this.mapCommandPlanStep(commandSpec, step, argumentValues)
-        )
-        .filter((mapped): mapped is ParserToolAction => !!mapped);
-    });
-  }
-
-  private mapCommandPlanStep(
-    command: ParserCommandSpec,
-    step: ParserCommandActionSpec,
-    argumentValues: Record<string, string | null>
-  ): ParserToolAction | null {
-    switch (step.type) {
-      case 'resolveArgumentEntity': {
-        const argSpec = command.arguments.find((arg) => arg.name === step.arg);
-        if (!argSpec) return null;
-        return {
-          type: 'resolveArgumentEntity',
-          commandId: command.id,
-          arg: step.arg,
-          query: argumentValues[step.arg] || null,
-          scopes: argSpec.scopes,
-          saveAs: step.saveAs,
-          validation: argSpec.validation,
-          messages: argSpec.messages,
-        };
-      }
-      case 'ensureHeldEntity':
-        return {
-          type: 'ensureHeldEntity',
-          ref: step.ref,
-          noEffectMessage:
-            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
-            command.arguments[0]?.messages?.noEffect,
-        };
-      case 'goToSceneById':
-        return {
-          type: 'goToSceneById',
-          sceneId: step.sceneId,
-        };
-      case 'removeInventoryEntity':
-        return {
-          type: 'removeInventoryEntity',
-          ref: step.ref,
-        };
-      case 'actorUseOn':
-        return {
-          type: 'actorUseOn',
-          itemRef: step.itemRef,
-          targetRef: step.targetRef,
-          noEffectMessage:
-            (step.noEffectMessageId && command.messages?.[step.noEffectMessageId]) ||
-            step.noEffectMessage,
-        };
-      case 'showText':
-        return {
-          type: 'showText',
-          message: step.messageId ? command.messages?.[step.messageId] : step.text,
-          messageByRef: step.messageIdByRef
-            ? {
-                ref: step.messageIdByRef.ref,
-                values: Object.fromEntries(
-                  Object.entries(step.messageIdByRef.values).map(([value, messageId]) => [
-                    value,
-                    command.messages?.[messageId] || messageId,
-                  ])
-                ),
-                fallback: step.messageIdByRef.fallbackMessageId
-                  ? command.messages?.[step.messageIdByRef.fallbackMessageId]
-                  : undefined,
-              }
-            : undefined,
-          params: step.params,
-          paramsFromRefs: step.paramsFromRefs,
-        };
-      case 'requireEntityAvailable':
-        return {
-          type: 'requireEntityAvailable',
-          commandId: command.id,
-          entityId: step.entityId,
-          scopes: step.scopes,
-          saveAs: step.saveAs,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-        };
-      case 'requireAnyEntityAvailable':
-        return {
-          type: 'requireAnyEntityAvailable',
-          commandId: command.id,
-          options: step.options,
-          saveAs: step.saveAs,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-        };
-      case 'setEntityState':
-        return {
-          type: 'setEntityState',
-          entityId: step.entityId,
-          stateId: step.stateId,
-          value: step.value,
-          missingMessage:
-            (step.missingMessageId && command.messages?.[step.missingMessageId]) ||
-            step.missingMessage,
-          source: 'custom-command',
-        };
-      case 'setGroupDisabled':
-        return {
-          type: 'setGroupDisabled',
-          groupId: step.groupId,
-          disabled: step.disabled,
-        };
-      case 'runScript':
-        return {
-          type: 'runScript',
-          scriptId: step.scriptId,
-          restart: step.restart,
-        };
-      case 'stopScript':
-        return {
-          type: 'stopScript',
-          scriptId: step.scriptId,
-        };
-      default:
-        return null;
-    }
+    return actions;
   }
 
   private parseClarificationOptionsFromData(
@@ -4625,7 +4765,8 @@ export class Parser {
     resultJson: string,
     envelopeJson: string,
     contextJson: string,
-    scopeJson: string
+    scopeJson: string,
+    timings: ParserTimingEntry[] = []
   ): ParserResponse {
     const result = JSON.parse(resultJson) as ParserResult;
     const nlpDebug = this.nlpCascade.getLastDebugInfo();
@@ -4654,18 +4795,121 @@ export class Parser {
       formatFullSection(title, entries);
 
     const peekMessages = this.game.console?.parserPeekEnabled
-      ? [
-          formatSection('context', contextJson),
-          formatSection('scope', scopeJson),
-          formatSection('envelope', envelopeJson),
-          ...(coreDecision ? [formatSection('core', coreDecision)] : []),
-          formatSection('result', resultJson),
-          ...(parserNoteMutations.length
-            ? [formatParserNoteSection('parser notes', parserNoteMutations)]
-            : []),
-          ...(nlpDebug ? [formatSection('nlp', nlpDebug)] : []),
-          ...(llmDebug ? [formatSection('llm', llmDebug)] : []),
-        ]
+      ? (() => {
+          let rawInput = '';
+          let stage = '';
+          try {
+            const envelope = JSON.parse(envelopeJson);
+            rawInput = envelope.debug?.rawInput || '';
+            stage = envelope.stage || '';
+          } catch (e) {
+            // ignore
+          }
+
+          let sceneId = '';
+          let inventoryItems: string[] = [];
+          try {
+            const context = JSON.parse(contextJson);
+            sceneId = context.scene?.id || '';
+            if (Array.isArray(context.inventory)) {
+              inventoryItems = context.inventory.map((i: any) => i.title || i.id);
+            }
+            if (!rawInput && context.rawInput) {
+              rawInput = context.rawInput;
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          let scopeItems: string[] = [];
+          let heldItems: string[] = [];
+          try {
+            const scope = JSON.parse(scopeJson);
+            if (Array.isArray(scope.visible)) {
+              scopeItems = scope.visible;
+            }
+            if (Array.isArray(scope.held)) {
+              heldItems = scope.held;
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          const peekLines: string[] = ['--- PARSER PEEK ---'];
+          peekLines.push(`Input: "${rawInput}"`);
+
+          const activeStr = `Active: ${sceneId || 'none'}`;
+          const invStr = inventoryItems.length
+            ? ` | Inventory: [${inventoryItems.join(', ')}]`
+            : '';
+          peekLines.push(`${activeStr}${invStr}`);
+
+          const scopeStr = scopeItems.length ? `Scope: [${scopeItems.join(', ')}]` : 'Scope: []';
+          const heldStr = heldItems.length ? ` | Held: [${heldItems.join(', ')}]` : '';
+          peekLines.push(`${scopeStr}${heldStr}`);
+
+          let stageStr = `Stage: ${stage || 'unknown'}`;
+          if (nlpDebug && nlpDebug.matched) {
+            stageStr += ` (NLP Match: ${nlpDebug.rawIntent} | score: ${nlpDebug.score.toFixed(2)})`;
+          }
+          peekLines.push(stageStr);
+
+          const visibleTimings = timings.filter((entry) => entry.ms >= 0.05);
+          if (visibleTimings.length) {
+            const timingStr = visibleTimings
+              .map((entry) => `${entry.label} ${entry.ms.toFixed(1)}ms`)
+              .join(' | ');
+            peekLines.push(`Timing: ${timingStr}`);
+          }
+
+          if (parserNoteMutations.length > 0) {
+            for (const mut of parserNoteMutations) {
+              peekLines.push(
+                `Parser Note: ${mut.operation} ${mut.targetType} ${mut.id} -> "${mut.note}"`
+              );
+            }
+          }
+
+          try {
+            const res = JSON.parse(resultJson) as ParserResult;
+            if (res.type === 'handoff') {
+              peekLines.push(`Result: Handoff -> ${res.reason || 'unhandled'}`);
+            } else {
+              const outcomesStr = Array.isArray(res.outcomes)
+                ? res.outcomes
+                    .map((o: any) => {
+                      const parts: string[] = [o.code || o.status];
+                      if (o.data) {
+                        const dataKeys = Object.keys(o.data);
+                        if (dataKeys.length > 0) {
+                          parts.push(JSON.stringify(o.data));
+                        }
+                      }
+                      return parts.join(' ');
+                    })
+                    .join(', ')
+                : '';
+              peekLines.push(
+                `Result: ${res.handled ? 'Success' : 'Unhandled'} -> ${outcomesStr || 'no outcomes'}`
+              );
+            }
+          } catch (e) {
+            peekLines.push(`Result: error parsing result`);
+          }
+
+          if (llmDebug) {
+            const durationSec =
+              llmDebug.durationMs !== undefined ? (llmDebug.durationMs / 1000).toFixed(2) : '?';
+            const cacheCreationStr = llmDebug.cacheCreationInputTokens
+              ? `, ${llmDebug.cacheCreationInputTokens} created`
+              : '';
+            peekLines.push(
+              `[${llmDebug.model || 'unknown'} (${llmDebug.provider || 'unknown'}) | ${durationSec}s | Tokens: ${llmDebug.inputTokens ?? '?'} in, ${llmDebug.tokensGenerated ?? '?'} out (Cache: ${llmDebug.cacheReadInputTokens ? llmDebug.cacheReadInputTokens + ' read' : '0 read'}${cacheCreationStr})]`
+            );
+          }
+
+          return [peekLines.join('\n')];
+        })()
       : undefined;
 
     const peekLlmMessages =

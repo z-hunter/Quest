@@ -50,7 +50,6 @@ export const PropertiesPanel: React.FC = () => {
   const [multiSpatialRelationDraft, setMultiSpatialRelationDraft] = React.useState('');
   const [resolvedTitle, setResolvedTitle] = React.useState('');
   const [textAssetPath, setTextAssetPath] = React.useState('');
-  const [isReadingTA, setIsReadingTA] = React.useState(false);
   const [hasTextAsset, setHasTextAsset] = React.useState(false);
   const [polygonScaleDraft, setPolygonScaleDraft] = React.useState('1');
 
@@ -204,11 +203,18 @@ export const PropertiesPanel: React.FC = () => {
     window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
   }, []);
 
-  const isPanelTextEntryFocused = React.useCallback(() => {
+  const shouldIgnoreKeyboardShortcuts = React.useCallback(() => {
+    // If a modal like the file browser is open, yield key events to it
+    if (document.querySelector('.file-browser-modal, .modal-overlay, .e-modal, .e-modal-overlay'))
+      return true;
+
     const active = document.activeElement as HTMLElement | null;
-    if (!active || !panelRef.current || !panelRef.current.contains(active)) return false;
+    if (!active) return false;
+
+    // Check if any text entry is focused globally
     if (active.matches('input, textarea, select, [contenteditable="true"]')) return true;
     if (active.closest('.custom-select-container')) return true;
+
     return false;
   }, []);
 
@@ -217,7 +223,7 @@ export const PropertiesPanel: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!panelRef.current) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      if (isPanelTextEntryFocused()) return;
+      if (shouldIgnoreKeyboardShortcuts()) return;
       const key = e.key;
       if (!/^[0-6]$/.test(key)) return;
       e.preventDefault();
@@ -227,7 +233,7 @@ export const PropertiesPanel: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPanelTextEntryFocused, openSection, scrollToSection]);
+  }, [shouldIgnoreKeyboardShortcuts, openSection, scrollToSection]);
 
   React.useEffect(() => {
     const panel = panelRef.current;
@@ -256,7 +262,11 @@ export const PropertiesPanel: React.FC = () => {
       const hasHeader = !!section.querySelector(':scope > .properties-section-header');
       section.classList.toggle(
         'collapsed',
-        hasHeader && !section.classList.contains('properties-section-empty') && id !== 0 && id !== 1
+        hasHeader &&
+          !section.classList.contains('properties-section-empty') &&
+          id !== 0 &&
+          id !== 1 &&
+          id !== 5
       );
     });
   }, [selectedObjectId, selectedObjectType]);
@@ -563,7 +573,6 @@ export const PropertiesPanel: React.FC = () => {
 
   const handleReadTA = async () => {
     if (!game || !obj) return;
-    setIsReadingTA(true);
     try {
       const path =
         selectedObjectType === 'SCENE'
@@ -593,8 +602,6 @@ export const PropertiesPanel: React.FC = () => {
     } catch (err) {
       console.error('Failed to read text asset:', err);
       game.showNotification?.(`Failed to read TA: ${err}`);
-    } finally {
-      setIsReadingTA(false);
     }
   };
 
@@ -652,6 +659,23 @@ export const PropertiesPanel: React.FC = () => {
       incrementObjectVersion();
 
       if (field === 'name') incrementHierarchyVersion();
+      if (field === 'isPlayer') {
+        const scene = game?.sceneManager?.currentScene;
+        if (scene && obj && (obj as any).type === 'Actor') {
+          if (finalVal) {
+            scene.entities.forEach((ent) => {
+              if ((ent as any).type === 'Actor' && ent !== obj && (ent as any).isPlayer) {
+                (ent as any).isPlayer = false;
+              }
+            });
+            scene.player = obj as any;
+          } else {
+            if (scene.player === obj) {
+              scene.player = null;
+            }
+          }
+        }
+      }
       if (field === 'spriteName') {
         if (obj.setSprite) obj.setSprite(finalVal);
       }
@@ -841,7 +865,6 @@ export const PropertiesPanel: React.FC = () => {
               resolvedTitle={resolvedTitle}
               textAssetPath={textAssetPath}
               hasTextAsset={hasTextAsset}
-              isReadingTA={isReadingTA}
               onOpenTA={handleOpenTA}
               onReadTA={handleReadTA}
               onDeleteTA={handleDeleteTA}

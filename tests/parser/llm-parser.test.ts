@@ -141,6 +141,100 @@ describe('Parser LLM Integration', () => {
     expect(fixture.messages).toContain('LLM Result');
   });
 
+  it('uses conditional EXAMINE narration only when the canonical action discovers its claims', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    } as any);
+    fixture.textAssets.setObject('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    });
+    const batteries = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      description: 'Two AAA batteries.',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+    });
+    batteries.hidden = 'examinable';
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'examineTarget',
+            target: 'TV remote',
+            narration: {
+              message: 'You find the battery compartment, open it, and discover two AAA batteries.',
+              requiresDiscoveredEntityIds: ['batteryAAA'],
+            },
+          },
+        ],
+      },
+      debug: {
+        rawInput: 'check batterys in remote control',
+        normalizedInput: 'CHECK BATTERYS IN REMOTE CONTROL',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+
+    await fixture.parser.parse('check batterys in remote control');
+
+    expect(fixture.scene.isHiddenEntityRevealed(batteries)).toBe(true);
+    expect(fixture.messages.at(-1)).toBe(
+      'You find the battery compartment, open it, and discover two AAA batteries.'
+    );
+    expect(fixture.messages).not.toContain('A solid remote control.');
+  });
+
+  it('keeps canonical EXAMINE text when the required discovery was not produced', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    } as any);
+    fixture.textAssets.setObject('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'examineTarget',
+            target: 'TV remote',
+            narration: {
+              message: 'You find batteries that are not really there.',
+              requiresDiscoveredEntityIds: ['batteryAAA'],
+            },
+          },
+        ],
+      },
+      debug: { rawInput: 'check batteries', normalizedInput: 'CHECK BATTERIES' },
+    });
+
+    await fixture.parser.parse('check batterys in remote control');
+
+    expect(fixture.messages.at(-1)).toBe('A solid remote control.');
+    expect(fixture.messages).not.toContain('You find batteries that are not really there.');
+  });
+
   it('expands LLM runCustomCommand actions through authored command plans', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
@@ -156,6 +250,20 @@ describe('Parser LLM Integration', () => {
     });
     fixture.scene.removeEntity(remote);
     fixture.game.inventory.push(remote);
+    fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      groupID: '#aaa',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [
+        {
+          type: 'State',
+          id: 'charge_percent',
+          valueType: 'number',
+          initialValue: 100,
+          value: 100,
+        },
+      ],
+    });
     fixture.game.console.parserLlmEnabled = true;
     if (!ScriptRegistry.has('tv_glow')) {
       ScriptRegistry.register('tv_glow', ({ api }) => {
@@ -740,10 +848,8 @@ describe('Parser LLM Integration', () => {
 
     await fixture.parser.parse('listen radio');
 
-    expect(debugLogs.join('\n')).toContain('"operation": "created"');
-    expect(debugLogs.join('\n')).toContain('"id": "boombox"');
     expect(debugLogs.join('\n')).toContain(
-      '"note": "Radio reception currently produces only static."'
+      'Parser Note: created entity boombox -> "Radio reception currently produces only static."'
     );
   });
 

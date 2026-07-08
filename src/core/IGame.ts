@@ -10,6 +10,9 @@ import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 import type { InventoryManager } from '../systems/InventoryManager';
+import type { ActorNavigationService } from '../systems/ActorNavigationService';
+import type { ActorWorldQuery } from '../systems/ActorWorldQuery';
+import type { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 
 export interface IGame {
   assets: AssetLoader;
@@ -19,6 +22,9 @@ export interface IGame {
   editor: SceneEditor;
   inventory: Entity[];
   inventoryManager: InventoryManager;
+  actorNavigation: ActorNavigationService;
+  actorWorld: ActorWorldQuery;
+  actorCommands: ActorCommandExecutor;
   getInventoryPreviewEntity(): Entity | null;
   getInventoryPreviewText(): string | null;
   openInventoryPreview(entity: Entity, previewText?: string | null): void;
@@ -33,6 +39,11 @@ export interface IGame {
   getBlockedAccessOutcome(entity: SceneObject): GameActionOutcome | null;
   lookScene(scene?: Scene | null): GameActionOutcome;
   lookEntity(entity: SceneObject): GameActionOutcome;
+  lookEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
   describeSpatialRelation(anchorNodeId: string, relation: SpatialRelationType): GameActionOutcome;
   getRelationScopedTakeCandidates?(
     anchor: SceneObject,
@@ -44,10 +55,18 @@ export interface IGame {
     relation: SpatialRelationType | 'near' | null
   ): boolean;
   examineEntity(entity: SceneObject): GameActionOutcome;
+  examineEntityForActor(
+    actor: Actor | null,
+    entity: SceneObject,
+    options?: { relation?: SpatialRelationType | null }
+  ): GameActionOutcome;
   openEntity(entity: SceneObject): GameActionOutcome;
+  openEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
   closeEntity(entity: SceneObject): GameActionOutcome;
+  closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
   closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
+  takeEntityForActor(actor: Actor | null, entity: Entity): GameActionOutcome;
   getSurfacePutMessage(
     surface: SceneObject,
     item: Entity,
@@ -97,10 +116,16 @@ export interface IGame {
   showInventory(): GameActionOutcome;
   goToSceneTarget(target: string): GameActionOutcome;
   goToScene(sceneId: string): GameActionOutcome;
-  goToEntity(entity: Entity): GameActionOutcome;
+  goToEntity(entity: Entity, options?: { traverseExit?: boolean }): GameActionOutcome;
   showNotification?(text: string): void; // Optional
   onSceneChange?(sceneName: string): void;
   playSound(name: string): void;
+  emitActorAction?(
+    actor: Actor,
+    action: ObservedActorActionCode,
+    subject?: SceneObject | null,
+    payload?: Record<string, unknown>
+  ): void;
   openFileBrowser(
     mode: 'load' | 'save',
     dir: string,
@@ -121,3 +146,13 @@ export interface IGame {
   ctx: CanvasRenderingContext2D | null;
   bufferCanvas: HTMLCanvasElement;
 }
+export type ObservedActorActionCode =
+  | 'look'
+  | 'examine'
+  | 'open'
+  | 'close'
+  | 'take'
+  | 'put'
+  | 'use'
+  | 'command'
+  | 'traverse_exit';

@@ -1,0 +1,9 @@
+{
+  "id": "linda_walk_left",
+  "imageFile": "public/assets/linda.png",
+  "x": 225,
+  "y": 0,
+  "width": 318,
+  "height": 655,
+  "frames": 19
+}

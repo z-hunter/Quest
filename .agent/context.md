@@ -28,6 +28,15 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - Event-based triggers: `LOOK`, `TAKE`, `USE`, `USE <ITEMID>`.
   - Global `ScriptRegistry` for user-defined logic.
 
+- **AI & Local LLM Parser:**
+  - Migrated from cloud providers to local CPU inference (Ollama / `qwen2.5:3b`) optimized for 16 GB RAM machines.
+  - Hardware-enforced JSON Mode (`response_format: { type: 'json_object' }`) ensures 100% valid DSL plans without parsing errors.
+- **Hybrid SLM & Shadow Mode (NPC Puppet Master):**
+  - **Shadow Mode:** `ShadowLogger` captures successful NPC LLM plans into `logs/slm_shadow_dataset.jsonl` formatted as a Gold Standard dataset.
+  - **SLM Inference:** Uses `onnxruntime-web` (WASM) to run a small custom neural network (`slm_routine_v1.onnx`) completely offline inside the browser/Tauri.
+  - **Hybrid Routing:** Routine tasks (navigation, item pickup) bypass the LLM and are instantly resolved by the SLM. If SLM validation fails or complex scenarios arise (conversations, authored commands), execution cleanly escalates back to the heavy LLM cascade.
+  - **Diagnostics:** Console commands `#SLMLOG`, `#SLMLOG-ON`, `#SLMLOG-OFF` control data collection and display dataset statistics.
+
 ## Features Implemented
 
 - **Game Engine Core:** Basic loop, canvas rendering, CRT shader simulation. Optimized rendering context management to prevent stack leaks.
@@ -36,7 +45,7 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - **Editor Decoupling:** File I/O operations (Save/Load) are handled by `EditorPersistenceManager` to keep `SceneEditor` focused on interaction.
   - **Advanced Snapping:** Zoom-aware (20px) threshold. Support for horizontal grid edges and Entity corners (with automatic parallax adoption).
   - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
-  - **Walkbox Modes:** Invert (Standard), Add (Bridge), Subtract (Hole).
+  - **Walkbox Transitions:** Seamless transitions between bordering or contiguous positive walkboxes (such as regular Walkbox objects and Quad Walkbox components) are supported via union checks.
   - **Quad Objects:** 4-vertex primitives with vertex-specific Parallax, Retro-Grid mode, and Sorting modes.
   - **Unified Y-Sorting:** Stable Z-ordering between Quads and Entities via consistent Visual Y calculation (Screen Space Depth).
   - **Auto-Center Fix:** Player keyboard input no longer blocked by UI hover states while Auto-Center is active.
@@ -58,6 +67,12 @@ We have successfully implemented **Actor Animation Sets**, **Directional Sprites
   - Ability to lock/unlock objects via `Alt+L` (hotkey) or Property Panel (checkbox).
   - Locked objects are transparent to mouse clicks in the Scene Editor but selectble in Hierarchy.
   - Locking only affects the editor; objects behave normally in-game.
+- **Video Export Tool (vetool):**
+  - Independent web application served via `vetool.html` at `/vetool.html`.
+  - Frame-by-frame navigation, timeline playback loops, and customizable frame steps.
+  - Interactive bounding boxes drawn directly on the video viewport with resize handles and sidebar inputs.
+  - Automatic column-based grid spritesheet packaging and batch saving of PNG assets and sprite JSON configs.
+  - Reuses Scanline's Vite dev server backend endpoints by adding Base64 binary decoding support to `/api/save`.
 
 ## Known Issues / Technical Debt
 

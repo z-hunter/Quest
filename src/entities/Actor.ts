@@ -3,6 +3,7 @@ import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
 import { toWorldPosition } from '../utils/Parallax';
+import type { SceneObject } from './SceneObject';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -39,6 +40,7 @@ import { ComponentSystem } from '../systems/ComponentSystem';
 export interface ActorData extends EntityData {
   direction: ActorDirection;
   animSets: Record<string, AnimationSet>;
+  perceptionRadius?: number;
 }
 
 export class Actor extends Entity {
@@ -50,12 +52,15 @@ export class Actor extends Entity {
   overrideAnimSet: string | null;
 
   speed: number;
+  perceptionRadius: number;
   target: { x: number; y: number } | null;
   visualTarget: { x: number; y: number } | null;
   route: { x: number; y: number }[];
   routeIndex: number;
   lastMoveResult: ActorMoveResult;
   readonly type: string = 'Actor';
+  private localTeleportTarget: { x: number; y: number } | null = null;
+  private localTeleportExit: SceneObject | null = null;
 
   isPlayer: boolean = false;
 
@@ -67,6 +72,7 @@ export class Actor extends Entity {
     ...Entity.SERIALIZABLE_PROPS,
     'isPlayer',
     'speed',
+    'perceptionRadius',
     'direction',
     'animSets',
   ];
@@ -83,6 +89,7 @@ export class Actor extends Entity {
     this.direction = 'down';
     this.state = 'idle';
     this.speed = 0.1;
+    this.perceptionRadius = 600;
     this.target = null;
     this.visualTarget = null;
     this.route = [];
@@ -158,7 +165,38 @@ export class Actor extends Entity {
 
   moveTo(x: number, y: number): ActorMoveResult {
     const target = { x, y };
-    const route = this.planRouteTo(target);
+    if (Math.abs(x - this.x) < 1.0 && Math.abs(y - this.y) < 1.0) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return this.lastMoveResult;
+    }
+
+    const walkingRoute = this.planWalkingRouteTo(target);
+    const teleportPlan = walkingRoute
+      ? null
+      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    if (
+      teleportPlan?.firstLeg.status === 'already_reachable' &&
+      teleportPlan.exits[0] &&
+      this.scene
+    ) {
+      const activated = ComponentSystem.handleActivation(
+        teleportPlan.exits[0],
+        this.scene,
+        0,
+        this
+      );
+      if (activated) {
+        const remainingDistance = Math.hypot(target.x - this.x, target.y - this.y);
+        if (remainingDistance <= Math.max(2, this.getRouteGridSize() / 2)) {
+          this.x = target.x;
+          this.y = target.y;
+          this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+          return this.lastMoveResult;
+        }
+        return this.moveTo(target.x, target.y);
+      }
+    }
+    const route = teleportPlan?.firstLeg.route || walkingRoute;
 
     if (!route) {
       this.stopWithMoveResult(
@@ -171,6 +209,8 @@ export class Actor extends Entity {
     this.routeIndex = 0;
     this.target = route[0] || target;
     this.visualTarget = null;
+    this.localTeleportTarget = teleportPlan ? target : null;
+    this.localTeleportExit = teleportPlan?.exits[0] || null;
     this.setState('walk');
     this.overrideAnimSet = null;
     this.lastMoveResult = this.createMoveResult('started', 'route_started', target, route);
@@ -183,7 +223,7 @@ export class Actor extends Entity {
       this.scene?.camera || { x: 0, y: 0 },
       this.parallax !== undefined ? this.parallax : 1.0
     );
-    const route = this.planRouteTo(worldTarget);
+    const route = this.planWalkingRouteTo(worldTarget);
 
     if (!route) {
       this.stopWithMoveResult(
@@ -207,11 +247,28 @@ export class Actor extends Entity {
     this.visualTarget = null;
     this.route = [];
     this.routeIndex = 0;
+    this.localTeleportTarget = null;
+    this.localTeleportExit = null;
     this.setState('idle');
   }
 
   getMoveResult(): ActorMoveResult {
     return this.lastMoveResult;
+  }
+
+  previewRouteTo(x: number, y: number): { x: number; y: number }[] | null {
+    const target = { x, y };
+    const walkingRoute = this.planWalkingRouteTo(target);
+    const teleportPlan = walkingRoute
+      ? null
+      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    const route = teleportPlan?.firstLeg.route || walkingRoute;
+    return route ? route.map((point) => ({ ...point })) : null;
+  }
+
+  previewWalkingRouteTo(x: number, y: number): { x: number; y: number }[] | null {
+    const route = this.planWalkingRouteTo({ x, y });
+    return route ? route.map((point) => ({ ...point })) : null;
   }
 
   setState(state: ActorState) {
@@ -265,6 +322,17 @@ export class Actor extends Entity {
           this.target = this.route[this.routeIndex];
         } else {
           const completedTarget = this.visualTarget || this.target;
+          const teleportExit = this.localTeleportExit;
+          const teleportTarget = this.localTeleportTarget;
+          if (teleportExit && teleportTarget && this.scene) {
+            this.localTeleportExit = null;
+            this.localTeleportTarget = null;
+            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
+            if (activated) {
+              this.moveTo(teleportTarget.x, teleportTarget.y);
+              return;
+            }
+          }
           this.stopWithMoveResult(
             this.createMoveResult('arrived', 'arrived', completedTarget, this.route)
           );
@@ -389,35 +457,40 @@ export class Actor extends Entity {
     if (!set) return;
 
     let spriteName = set[this.direction];
+    let doFlip = false;
 
-    // Fallback: Use idle's direction sprite?
-    if (!spriteName && set.id !== 'idle' && this.animSets['idle']) {
-      spriteName = this.animSets['idle'][this.direction];
-    }
-
-    // Implicit Flip: If Left missing, use Right + Flip
-    if (!spriteName && this.direction === 'left' && set['right']) {
+    if (spriteName) {
+      // 1. Current set has explicit direction
+      doFlip = false;
+    } else if (this.direction === 'left' && set['right']) {
+      // 2. Current set has opposite direction (right -> left)
       spriteName = set['right'];
-      this.flipX = true;
-    } else if (
-      !spriteName &&
-      this.direction === 'left' &&
-      this.animSets['idle'] &&
-      this.animSets['idle']['right']
-    ) {
-      // Fallback to idle right flipped
-      spriteName = this.animSets['idle']['right'];
-      this.flipX = true;
-    } else if (this.direction === 'left' && spriteName) {
-      // Have explicit left, don't flip
-      this.flipX = false;
-    } else {
-      this.flipX = false;
+      doFlip = true;
+    } else if (this.direction === 'right' && set['left']) {
+      // 2. Current set has opposite direction (left -> right)
+      spriteName = set['left'];
+      doFlip = true;
+    } else if (set.id !== 'idle' && this.animSets['idle']) {
+      const idleSet = this.animSets['idle'];
+      if (idleSet[this.direction]) {
+        // 3. Fallback to idle's explicit direction
+        spriteName = idleSet[this.direction];
+        doFlip = false;
+      } else if (this.direction === 'left' && idleSet['right']) {
+        // 4. Fallback to idle's opposite direction (right -> left)
+        spriteName = idleSet['right'];
+        doFlip = true;
+      } else if (this.direction === 'right' && idleSet['left']) {
+        // 4. Fallback to idle's opposite direction (left -> right)
+        spriteName = idleSet['left'];
+        doFlip = true;
+      }
     }
 
     // If still nothing, we might be empty (invisible or red box)
 
     if (spriteName) {
+      this.flipX = doFlip;
       let normalized = spriteName;
       if (!normalized.toLowerCase().endsWith('.json')) normalized += '.json';
 
@@ -474,7 +547,7 @@ export class Actor extends Entity {
     this.lastMoveResult = result;
   }
 
-  private planRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
+  private planWalkingRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
     const isWalkable = (x: number, y: number) =>
       !this.scene || typeof this.scene.isWalkable !== 'function'
         ? true
@@ -832,6 +905,25 @@ export class Actor extends Entity {
     this.startLoading();
     try {
       super.load(data);
+      if (data.perceptionRadius === undefined) {
+        const legacyNpc = Array.isArray(data.components)
+          ? data.components.find((component: any) => component?.type === 'NPC')
+          : null;
+        if (
+          typeof legacyNpc?.perceptionRadius === 'number' &&
+          Number.isFinite(legacyNpc.perceptionRadius)
+        ) {
+          this.perceptionRadius = Math.max(0, legacyNpc.perceptionRadius);
+        }
+      }
+      this.perceptionRadius = Number.isFinite(this.perceptionRadius)
+        ? Math.max(0, this.perceptionRadius)
+        : 600;
+      for (const component of this.components || []) {
+        if (component?.type === 'NPC' && 'perceptionRadius' in component) {
+          delete (component as any).perceptionRadius;
+        }
+      }
       // Initial sprite update based on loaded state/direction
       this.updateSpriteForState();
     } finally {

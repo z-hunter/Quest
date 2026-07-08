@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Parser world model context', () => {
-  it('includes the inventory preview item as focusedTarget for LLM default target resolution', () => {
+  it('retains details internally for command-targeted prompt projection', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
     const book = fixture.addEntity('book', {
@@ -30,6 +30,9 @@ describe('Parser world model context', () => {
       description: 'A thumbed paperback.',
       details: 'Someone has underlined every pessimistic sentence.',
     });
+    expect(model.context.inventory?.find((entity) => entity.id === 'book')?.details).toBe(
+      'Someone has underlined every pessimistic sentence.'
+    );
   });
 
   it('includes scene and object lore in LLM context without replacing player-facing text', () => {
@@ -539,6 +542,30 @@ describe('Parser world model context', () => {
     expect(model.scope.reachable.map((entity) => entity.name)).not.toContain('DeskLabel');
     expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskNote');
     expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskLabel');
+  });
+
+  it('does not run route planning while summarizing inactive subscene objects for parser context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('DeskCloseup', {
+      title: 'Desk close-up',
+      disabled: false,
+      components: [{ type: 'Subscene' }],
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Desk note',
+      description: 'A note in the close-up.',
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'in' },
+    });
+
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look desk note', null);
+
+    expect(model.context.entities?.some((entity) => entity.id === 'DeskNote')).toBe(true);
+    expect(planApproach).not.toHaveBeenCalled();
   });
 
   it('separates visible knowledge from currently actionable PUT sources', () => {

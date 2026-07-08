@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
   // Ignore build output
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'src-tauri']),
 
   // Node scripts (CI utilities, local tooling)
   {
