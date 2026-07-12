@@ -7,6 +7,9 @@ import type { Entity } from '../../src/entities/Entity';
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { InventoryManager } from '../../src/systems/InventoryManager';
 import { GameSemanticAPI } from '../../src/systems/GameSemanticAPI';
+import { ActorNavigationService } from '../../src/systems/ActorNavigationService';
+import { ActorWorldQuery } from '../../src/systems/ActorWorldQuery';
+import { ActorCommandExecutor } from '../../src/mechanics/ActorCommandExecutor';
 import { createTestTextAssets } from './textAssetFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
@@ -109,7 +112,35 @@ export function createTestGame(): TestGameHarness {
           (entity: any) => entity.isPlayer && entity !== actor
         );
         if (existingPlayer) {
-          targetScene.removeEntity(existingPlayer);
+          const discard = new Set<any>();
+          const queue = [existingPlayer];
+          while (queue.length > 0) {
+            const current = queue.shift();
+            if (!current || discard.has(current)) continue;
+            discard.add(current);
+            for (const candidate of targetScene.entities) {
+              const parentId =
+                typeof (candidate as any).spatial?.parentNodeId === 'string'
+                  ? (candidate as any).spatial.parentNodeId.trim()
+                  : '';
+              if (
+                parentId === current.name ||
+                (typeof (candidate as any).getInventoryPositionOwner === 'function' &&
+                  (candidate as any).getInventoryPositionOwner() === current)
+              ) {
+                queue.push(candidate);
+              }
+            }
+          }
+          targetScene.entities = targetScene.entities.filter((entity: any) => !discard.has(entity));
+          for (const entity of discard) {
+            targetScene.subsceneEntities.delete(entity);
+            if (targetScene.player === entity) targetScene.player = null;
+            if (typeof entity.setInventoryPositionOwner === 'function') {
+              entity.setInventoryPositionOwner(null);
+            }
+            delete entity.__inventoryRelation;
+          }
         }
       }
 
@@ -243,6 +274,9 @@ export function createTestGame(): TestGameHarness {
       },
     } as any,
     inventoryManager: {} as any,
+    actorNavigation: {} as any,
+    actorWorld: {} as any,
+    actorCommands: {} as any,
     semantic: {} as any,
     get inventory() {
       return (this.inventoryManager as any)?.inventory || [];
@@ -295,17 +329,29 @@ export function createTestGame(): TestGameHarness {
     lookEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_look_entity');
     },
+    lookEntityForActor(actor: Actor | null, entity: SceneObject, options?: any) {
+      return (this as any).semantic.lookEntityForActor(actor, entity, options);
+    },
     describeSpatialRelation(_anchorNodeId: string, _relation: SpatialRelationType) {
       return notImplementedOutcome('not_implemented_describe_spatial_relation');
     },
     examineEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_examine_entity');
     },
+    examineEntityForActor(actor: Actor | null, entity: SceneObject, options?: any) {
+      return (this as any).semantic.examineEntityForActor(actor, entity, options);
+    },
     openEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_open_entity');
     },
+    openEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.openEntityForActor(actor, entity);
+    },
     closeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_close_entity');
+    },
+    closeEntityForActor(actor: Actor | null, entity: SceneObject) {
+      return (this as any).semantic.closeEntityForActor(actor, entity);
     },
     closeFocusedView() {
       const previewEntity = (this.inventoryManager as any)?.getInventoryPreviewEntity?.() || null;
@@ -337,26 +383,48 @@ export function createTestGame(): TestGameHarness {
     takeEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_take_entity');
     },
-    putEntity(_entity: Entity, _target?: SceneObject | null) {
-      return notImplementedOutcome('not_implemented_put_entity');
+    takeEntityForActor(actor: Actor | null, entity: Entity) {
+      return (this as any).semantic.takeEntityForActor(actor, entity);
     },
-    addInventoryEntity(_owner: Entity, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_add_inventory_entity');
+    putEntity(entity: Entity, target?: SceneObject | null, options?: any) {
+      return (this as any).semantic.putEntity(entity, target, options);
     },
-    removeEntityFromInventory(_owner: Entity, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_remove_entity_from_inventory');
+    putEntityForActor(
+      actor: Actor | null,
+      entity: Entity,
+      target?: SceneObject | null,
+      options?: any
+    ) {
+      return (this as any).semantic.putEntityForActor(actor, entity, target, options);
     },
-    hasInventoryEntity(_owner: Entity, _entity: Entity) {
-      return false;
+    addInventoryEntity(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.addInventoryEntity(owner, entity, relation);
     },
-    getInventoryEntities(_owner: Entity) {
-      return [];
+    removeEntityFromInventory(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.removeEntityFromInventory(owner, entity, relation);
     },
-    addEntityToSurface(_surface: SceneObject, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_add_entity_to_surface');
+    hasInventoryEntity(owner: Entity, entity: Entity, relation: any = 'in') {
+      return this.inventoryManager.hasInventoryEntity(owner, entity, relation);
     },
-    removeEntityFromSurface(_surface: SceneObject, _entity: Entity) {
-      return notImplementedOutcome('not_implemented_remove_entity_from_surface');
+    getInventoryEntities(owner: Entity, relation: any = 'in') {
+      return this.inventoryManager.getInventoryEntities(owner, relation);
+    },
+    addEntityToSurface(
+      surface: SceneObject,
+      entity: Entity,
+      relation: any = 'on',
+      options: any = {}
+    ) {
+      return this.inventoryManager.addEntityToSurface(
+        surface,
+        entity,
+        relation,
+        this.getSwitchComponent.bind(this),
+        options
+      );
+    },
+    removeEntityFromSurface(surface: SceneObject, entity: Entity, relation: any = 'on') {
+      return this.inventoryManager.removeEntityFromSurface(surface, entity, relation);
     },
     removeInventoryEntity(_entity: Entity) {
       return notImplementedOutcome('not_implemented_remove_inventory_entity');
@@ -409,6 +477,9 @@ export function createTestGame(): TestGameHarness {
     textAssets as any,
     game.text.bind(game)
   );
+  game.actorNavigation = new ActorNavigationService(game);
+  game.actorWorld = new ActorWorldQuery(game);
+  game.actorCommands = new ActorCommandExecutor(game);
   game.semantic = new GameSemanticAPI(game);
 
   (game as any).canTakeEntity = (entity: Entity): GameActionOutcome | null => {

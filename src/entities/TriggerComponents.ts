@@ -1,3 +1,5 @@
+import { ComponentSystem, type StateComponent } from '../systems/ComponentSystem';
+
 export interface TriggerComponent {
   type: string;
 }
@@ -52,6 +54,7 @@ export type AnyTriggerComponent =
   | SubsceneTrigger
   | SwitchTrigger
   | BlockerTrigger
+  | StateComponent
   | Subtrigger
   | ExitTrigger
   | EntryTrigger;
@@ -149,6 +152,10 @@ export function normalizeTriggerComponent(component: any): AnyTriggerComponent |
         ? { blockedRelation: component.blockedRelation }
         : {}),
     };
+  }
+
+  if (component.type === 'State') {
+    return ComponentSystem.normalizeStateComponent(component);
   }
 
   return component as AnyTriggerComponent;

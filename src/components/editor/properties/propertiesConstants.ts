@@ -68,6 +68,18 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Sound 1': 'Sound played when the switch moves into state 1.',
   'Sound 2': 'Sound played when the switch moves into state 2.',
   State: 'Current switch state used as the starting state in the editor and at runtime.',
+  'ID / Type':
+    'State identifier and value type. Scripts, parser commands, and State events address this State by ID; changing Type resets the authored values to the default for that type.',
+  Values:
+    'Authored State values. Initial is the value loaded with the scene; Current is the live editor/runtime value used by scripts, parser context, world facts, and State events.',
+  Initial:
+    'The value this State starts with when the scene is loaded or reset. Changing it also resets Current to the same value in the editor.',
+  Current:
+    'The current live value of this State. Runtime scripts and parser actions change this value through the State event path.',
+  'State Value':
+    'Optional Parser Note mapping: when this State reaches the exact value entered here, the resolved Text Asset field overwrites this object Parser Note. Boolean and number values are matched as text, for example true, false, 1, or 75.',
+  'TA Field':
+    'Optional Parser Note mapping: object Text Asset field to read when the State value matches. For example, power_on reads the power_on field from this object text asset and writes it to this object Parser Note.',
   Transparent:
     'If enabled, closed contents remain visible to LOOK, but stay blocked for interaction until the switch opens.',
   'Clearly Openable':
@@ -85,6 +97,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Vert B (0-3)': 'Second quad vertex index used by this link or rule.',
   Direction: 'Default facing direction for the actor.',
   'Move Speed': 'Actor movement speed in scene units per step.',
+  'Perception Radius': 'Maximum distance at which this Actor observes other Actors actions.',
   'Anim Speed (ms)': 'Frame duration for sprite animation playback, in milliseconds.',
   'Cam X': 'Current camera X position in scene space.',
   'Cam Y': 'Current camera Y position in scene space.',
@@ -153,6 +166,7 @@ export const normalizeTooltipLabelText = (rawText: string): string => {
   if (text.startsWith('Opacity')) return 'Opacity';
   if (text.startsWith('Blur')) return 'Blur';
   if (text.startsWith('UI Scale')) return 'UI Scale';
+  if (text === 'State Value') return 'State Value';
   if (text.startsWith('State')) return 'State';
   if (text.startsWith('Mode:')) return 'Mode';
   if (text === 'Disable Depth Scaling') return 'Disable Depth-scaling';

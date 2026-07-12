@@ -97,8 +97,8 @@
           "y": 210
         },
         {
-          "x": 1409,
-          "y": 264
+          "x": 1405,
+          "y": 283
         },
         {
           "x": -234,
@@ -115,6 +115,44 @@
         {
           "x": 77,
           "y": 194
+        }
+      ],
+      "mode": "Add"
+    },
+    {
+      "name": "Walk_22",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [
+        {
+          "x": 1397,
+          "y": 326
+        },
+        {
+          "x": 1402,
+          "y": 256
+        },
+        {
+          "x": 1135,
+          "y": 261
+        },
+        {
+          "x": 1148,
+          "y": 338
+        },
+        {
+          "x": 1377,
+          "y": 337
         }
       ],
       "mode": "Add"
@@ -753,7 +791,7 @@
       "script": ""
     },
     {
-      "name": "Entry",
+      "name": "E1",
       "type": "Triggerbox",
       "locked": false,
       "disabled": false,
@@ -764,7 +802,7 @@
       "components": [
         {
           "type": "Entry",
-          "direction": "down"
+          "direction": "left"
         }
       ],
       "layer": 0,
@@ -773,18 +811,35 @@
       "parallax": 1,
       "poly": [
         {
-          "x": 1341,
-          "y": 220
+          "x": 1238.8191123637155,
+          "y": 221.41939833717382
         },
         {
-          "x": 1303,
-          "y": 243
+          "x": 1194.8191123637155,
+          "y": 259.41939833717385
         },
         {
-          "x": 1366,
-          "y": 253
+          "x": 1282.8191123637155,
+          "y": 263.41939833717385
         }
       ],
+      "script": ""
+    },
+    {
+      "name": "Trig_520",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
       "script": ""
     }
   ],
@@ -824,14 +879,12 @@
         "relation": "in"
       },
       "parallax": 0.4,
-      "x": 103,
+      "x": 114,
       "y": 284,
       "width": 1064,
       "height": 657,
       "baseWidth": 1636.923076923077,
       "baseHeight": 1010.7692307692307,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "window-view.json",
       "color": "#00ff00",
       "scale": 0.65,
@@ -841,7 +894,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "room",
@@ -872,8 +927,6 @@
       "height": 593.5999999999999,
       "baseWidth": 1264,
       "baseHeight": 848,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "room2",
       "color": "#888888",
       "scale": 0.7,
@@ -883,7 +936,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Chair",
@@ -913,8 +968,6 @@
       "height": 198.79999999999998,
       "baseWidth": 167,
       "baseHeight": 284,
-      "colliderWidth": 78,
-      "colliderHeight": 18,
       "spriteName": "chair.json",
       "color": "#00ff00",
       "scale": 0.7,
@@ -924,78 +977,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "Hero_1",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": ["test"],
-          "relation": "in"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1.040913443385125,
-      "x": 653.2461823654976,
-      "y": 248.0313619847128,
-      "width": 119.88,
-      "height": 289.34,
-      "baseWidth": 162,
-      "baseHeight": 391,
-      "colliderWidth": 88,
-      "colliderHeight": 4,
-      "spriteName": "miles_ds-idle-down.json",
-      "color": "#00ffff",
-      "scale": 0.74,
-      "refScale": 0.74,
-      "modelScale": 0.74,
-      "ignoreScaling": true,
-      "animationSpeed": 30,
-      "opacity": 1,
-      "blendMode": "source-over",
       "blur": 0,
-      "isPlayer": true,
-      "speed": 0.24,
-      "direction": "down",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles_ds-idle-up.json",
-          "down": "miles_ds-idle-down.json",
-          "left": null,
-          "right": "miles_ds-idle-right.json"
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles_ds-walk-up.json",
-          "down": "miles_ds-walk-down.json",
-          "left": null,
-          "right": "miles_ds-walk-right.json"
-        }
-      }
+      "colliderWidth": 78,
+      "colliderHeight": 18
     },
     {
       "name": "Black_1",
@@ -1026,8 +1010,6 @@
       "height": 637.1050459736764,
       "baseWidth": 155.6673312915089,
       "baseHeight": 579.1864054306149,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#000000",
       "scale": 1.1,
@@ -1037,7 +1019,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D_main",
@@ -1063,8 +1047,6 @@
       "height": 484.79999999999995,
       "baseWidth": 1024,
       "baseHeight": 808,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_main",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1074,7 +1056,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D2_body",
@@ -1105,8 +1089,6 @@
       "height": 407.4,
       "baseWidth": 1024,
       "baseHeight": 679,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d2.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1116,7 +1098,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_body",
@@ -1142,8 +1126,6 @@
       "height": 177.6,
       "baseWidth": 1024,
       "baseHeight": 296,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_body.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1153,7 +1135,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_stuff",
@@ -1179,8 +1163,6 @@
       "height": 412,
       "baseWidth": 979,
       "baseHeight": 412,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_items.json",
       "color": "#00ff00",
       "scale": 1,
@@ -1190,7 +1172,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D_main_top",
@@ -1225,8 +1209,6 @@
       "height": 129.6,
       "baseWidth": 1024,
       "baseHeight": 216,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_top.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1236,7 +1218,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sub_D1_fasade",
@@ -1267,8 +1251,6 @@
       "height": 105.6,
       "baseWidth": 1024,
       "baseHeight": 176,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_facade.json",
       "color": "#00ff00",
       "scale": 0.6,
@@ -1278,7 +1260,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "floor-parallax",
@@ -1289,11 +1273,7 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "3d-parallax"
-        }
-      ],
+      "components": [],
       "layer": -1,
       "visible": true,
       "hidden": false,
@@ -1333,7 +1313,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Sofa",
@@ -1360,15 +1342,13 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 1.0791811402100033,
-      "x": 223.04286339314422,
-      "y": 306.938955923405,
+      "parallax": 1.079181140210003,
+      "x": 223.04286339314473,
+      "y": 306.93895592340465,
       "width": 1008.8000000000001,
       "height": 90.39999999999999,
       "baseWidth": 1261,
       "baseHeight": 112.99999999999999,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sofa",
       "color": "#36d87fff",
       "scale": 0.8,
@@ -1381,8 +1361,11 @@
       "blur": 0,
       "isPlayer": false,
       "speed": 0.1,
+      "perceptionRadius": 600,
       "direction": "down",
-      "animSets": {}
+      "animSets": {},
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "boombox",
@@ -1413,8 +1396,6 @@
       "height": 47,
       "baseWidth": 123.07692307692307,
       "baseHeight": 51.64835164835165,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1424,7 +1405,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "audio_cables",
@@ -1450,8 +1433,6 @@
       "height": 27.3,
       "baseWidth": 30,
       "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1461,7 +1442,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "window1",
@@ -1472,16 +1455,7 @@
       "customName": "",
       "textRedirects": {},
       "interactions": {},
-      "components": [
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 9007199254740991,
-          "groups": [],
-          "protected": false,
-          "items": []
-        }
-      ],
+      "components": [],
       "layer": -2,
       "visible": true,
       "hidden": false,
@@ -1492,8 +1466,6 @@
       "height": 27.3,
       "baseWidth": 30,
       "baseHeight": 30,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1503,7 +1475,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "shadow",
@@ -1519,29 +1493,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 593.1052025036854,
-      "y": 228.9545808884336,
+      "x": 371.6527400450954,
+      "y": 228.88862125725504,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 593.1052025036854,
-          "y": 228.9545808884336,
-          "p": 1.0283679059375372
+          "x": 371.6527400450954,
+          "y": 228.88862125725504,
+          "p": 1.0284991047125034
         },
         {
-          "x": 688.2347726051288,
-          "y": 227.8764937219134,
-          "p": 1.0277624950709003
+          "x": 461.9534464530457,
+          "y": 227.73220307070278,
+          "p": 1.0277014172129904
         },
         {
-          "x": 703.4430391453096,
-          "y": 260.3080588874047,
-          "p": 1.0489484925749581
+          "x": 907.7018535379843,
+          "y": 258.91641354364845,
+          "p": 1.0485129785677496
         },
         {
-          "x": 651.4624110015549,
-          "y": 258.8538504273255,
-          "p": 1.0480273728177847
+          "x": 814.8062613016864,
+          "y": 256.4991831943688,
+          "p": 1.0468963151083723
         }
       ],
       "color": "#2b019d",
@@ -1554,7 +1528,9 @@
       "lineWidth": 1,
       "gridColor": "#ffffff",
       "filled": true,
-      "blur": 7
+      "blur": 7,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "miles_id",
@@ -1585,8 +1561,6 @@
       "height": 12.120460784313726,
       "baseWidth": 165.32266630194582,
       "baseHeight": 102.45528980823099,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "sub_drawers_d1_id.json",
       "color": "#AAAAAA",
       "scale": 0.1183,
@@ -1596,7 +1570,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_1",
@@ -1626,8 +1602,6 @@
       "height": 14.023026315789474,
       "baseWidth": 26.25,
       "baseHeight": 18.75,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#5e184f",
       "scale": 0.7478947368421053,
@@ -1637,7 +1611,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_2",
@@ -1675,8 +1651,6 @@
       "height": 14.999999999999998,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#d66e29",
       "scale": 0.91,
@@ -1686,7 +1660,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "test_3",
@@ -1724,8 +1700,6 @@
       "height": 14.999999999999998,
       "baseWidth": 16.483516483516482,
       "baseHeight": 16.483516483516482,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#d0cb39",
       "scale": 0.91,
@@ -1735,7 +1709,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "printer_commodore",
@@ -1757,8 +1733,6 @@
       "height": 34,
       "baseWidth": 61.53846153846153,
       "baseHeight": 37.362637362637365,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1768,7 +1742,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "tv",
@@ -1778,8 +1754,23 @@
       "groupID": null,
       "customName": "",
       "textRedirects": {},
-      "interactions": {},
-      "components": [],
+      "interactions": {
+        "state:power": "tv_power_changed"
+      },
+      "components": [
+        {
+          "type": "State",
+          "id": "power",
+          "valueType": "string",
+          "initialValue": "off",
+          "value": "off",
+          "parserNoteTextAssets": {
+            "off": "power_off",
+            "on": "power_on"
+          }
+        }
+      ],
+      "folder": "f_mppw14fo_1",
       "layer": 0,
       "visible": true,
       "hidden": false,
@@ -1790,8 +1781,6 @@
       "height": 74,
       "baseWidth": 94.5054945054945,
       "baseHeight": 81.31868131868131,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1801,7 +1790,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "phone_modem",
@@ -1823,8 +1814,6 @@
       "height": 40,
       "baseWidth": 30.769230769230766,
       "baseHeight": 43.956043956043956,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1834,7 +1823,9 @@
       "animationSpeed": 150,
       "opacity": 0,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sound_test",
@@ -1856,8 +1847,6 @@
       "height": 26,
       "baseWidth": 40.65934065934066,
       "baseHeight": 28.57142857142857,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
       "scale": 0.91,
@@ -1867,7 +1856,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sofa_pillow1",
@@ -1893,8 +1884,6 @@
       "height": 56,
       "baseWidth": 141,
       "baseHeight": 56,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#4c2e94",
       "scale": 1,
@@ -1904,7 +1893,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "sofa_pillow2",
@@ -1930,8 +1921,6 @@
       "height": 56,
       "baseWidth": 141,
       "baseHeight": 56,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#4c2e94",
       "scale": 1,
@@ -1941,48 +1930,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
-    },
-    {
-      "name": "tv_rc",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": "lookable",
-      "spatial": {
-        "parentNodeId": "sofa_pillow2",
-        "relation": "under"
-      },
-      "parallax": 1,
-      "x": 544,
-      "y": 345,
-      "width": 25.999999999999996,
-      "height": 38.35,
-      "baseWidth": 199.99999999999997,
-      "baseHeight": 295,
+      "blur": 0,
       "colliderWidth": 0,
-      "colliderHeight": 0,
-      "spriteName": "tv_rc",
-      "color": "#AAAAAA",
-      "scale": 0.13,
-      "refScale": 0.13,
-      "modelScale": 0.13,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0
+      "colliderHeight": 0
     },
     {
       "name": "room_k",
@@ -2004,8 +1954,6 @@
       "height": 554,
       "baseWidth": 788,
       "baseHeight": 554,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "kitchen",
       "color": "#AAAAAA",
       "scale": 1,
@@ -2015,7 +1963,9 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     },
     {
       "name": "Static_81",
@@ -2037,8 +1987,6 @@
       "height": 210.21054080088066,
       "baseWidth": 466.4373193890188,
       "baseHeight": 210.21054080088066,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": "kitchen_table",
       "color": "#AAAAAA",
       "scale": 1,
@@ -2048,7 +1996,517 @@
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_anim",
+      "type": "Entity",
+      "locked": false,
+      "disabled": true,
+      "groupID": "#tv_glow",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "tv",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 551,
+      "y": 77,
+      "width": 77,
+      "height": 63.99999999999999,
+      "baseWidth": 84.61538461538461,
+      "baseHeight": 70.32967032967032,
+      "spriteName": "tv_anim",
+      "color": "#AAAAAA",
+      "scale": 0.91,
+      "refScale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_anim_glow_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": true,
+      "groupID": "#tv_glow",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mppw14fo_1",
+      "layer": 1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 162.81698405469103,
+      "y": 91.09680328690241,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 132,
+          "y": 75,
+          "p": 1
+        },
+        {
+          "x": 149,
+          "y": 69,
+          "p": 1
+        },
+        {
+          "x": 147,
+          "y": 104,
+          "p": 1
+        },
+        {
+          "x": 137,
+          "y": 148,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 0.24953602443603395,
+      "blendMode": "lighter",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 9,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_anim_glow",
+      "type": "Quad",
+      "locked": false,
+      "disabled": true,
+      "groupID": "#tv_glow",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mppw14fo_1",
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 505.79628389051675,
+      "y": 321.2636300645006,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 455.7962838905167,
+          "y": 221.2636300645007,
+          "p": 1
+        },
+        {
+          "x": 588,
+          "y": 225,
+          "p": 1
+        },
+        {
+          "x": 579.755773308037,
+          "y": 272.2020607831082,
+          "p": 1
+        },
+        {
+          "x": 185,
+          "y": 263,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 0.24953602443603395,
+      "blendMode": "lighter",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 13,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_aim_glow3",
+      "type": "Quad",
+      "locked": false,
+      "disabled": true,
+      "groupID": "#tv_glow",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "folder": "f_mppw14fo_1",
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 484.92119936636976,
+      "y": 132.6236350460047,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 434.92119936636976,
+          "y": 32.62363504600475,
+          "p": 1
+        },
+        {
+          "x": 437,
+          "y": 34,
+          "p": 1
+        },
+        {
+          "x": 436,
+          "y": 177,
+          "p": 1
+        },
+        {
+          "x": 434.92119936636976,
+          "y": 132.6236350460047,
+          "p": 1
+        }
+      ],
+      "color": "#7c62ac",
+      "sortMode": "ignore",
+      "opacity": 0.24953602443603395,
+      "blendMode": "screen",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_rc",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 1,
+          "groups": ["#aaa"],
+          "protected": false,
+          "items": ["batteryAAA"]
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": "lookable",
+      "spatial": {
+        "parentNodeId": "sofa_pillow2",
+        "relation": "under"
+      },
+      "parallax": 1,
+      "x": 542,
+      "y": 312,
+      "width": 25.999999999999996,
+      "height": 38.35,
+      "baseWidth": 199.99999999999997,
+      "baseHeight": 295,
+      "spriteName": "tv_rc",
+      "color": "#AAAAAA",
+      "scale": 0.13,
+      "refScale": 0.13,
+      "modelScale": 0.13,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "NPC",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "NPC",
+          "enabled": true,
+          "memory": "",
+          "objectives": ["TV is ON"],
+          "objectivesInitializedFromTA": true
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 5,
+          "groups": [],
+          "protected": true,
+          "items": []
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1193.7132748189986,
+      "y": 232.56818309630913,
+      "width": 92.60653987734776,
+      "height": 278.6731361286087,
+      "baseWidth": 217,
+      "baseHeight": 653,
+      "spriteName": "linda_idle_right.json",
+      "color": "#36d87fff",
+      "scale": 0.42675824828270853,
+      "refScale": 0.446,
+      "modelScale": 0.446,
+      "ignoreScaling": false,
+      "animationSpeed": 80,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": false,
+      "speed": 0.23,
+      "perceptionRadius": 800,
+      "direction": "right",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "linda_idle_up.json",
+          "down": "linda_idle_down.json",
+          "left": null,
+          "right": "linda_idle_right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "linda_walk_up.json",
+          "down": "linda_walk_down.json",
+          "left": "linda_walk_left.json",
+          "right": null
+        }
+      },
+      "colliderWidth": 67.43161992954968,
+      "colliderHeight": 15.029586483237711
+    },
+    {
+      "name": "door",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Exit",
+          "targetSceneId": "Corridor",
+          "targetEntryId": "E1",
+          "portal": true,
+          "collider": false
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 1402.7035503655463,
+      "y": -36.05629787211462,
+      "ignoreScaling": false,
+      "vertices": [
+        {
+          "x": 1352.7035503655463,
+          "y": -136.0562978721146,
+          "p": 1
+        },
+        {
+          "x": 1396,
+          "y": -144,
+          "p": 1
+        },
+        {
+          "x": 1396,
+          "y": 246,
+          "p": 1
+        },
+        {
+          "x": 1354,
+          "y": 215,
+          "p": 1
+        }
+      ],
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": false,
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "batteryAAA",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#aaa",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "State",
+          "id": "charge_percent",
+          "valueType": "number",
+          "initialValue": 100,
+          "value": 0
+        },
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": "examinable",
+      "spatial": {
+        "parentNodeId": "tv_rc",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 542,
+      "y": 312,
+      "width": 16,
+      "height": 14.8,
+      "baseWidth": 80,
+      "baseHeight": 74,
+      "spriteName": "aaa",
+      "color": "#AAAAAA",
+      "scale": 0.2,
+      "refScale": 0.2,
+      "modelScale": 0.2,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Miles",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": ["test"],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 422.6511123637017,
+      "y": 248.08606500384053,
+      "width": 121.24102847519698,
+      "height": 290.8146291128036,
+      "baseWidth": 148,
+      "baseHeight": 355,
+      "spriteName": "miles2_ds-idle-left.json",
+      "color": "#00ffff",
+      "scale": 0.8191961383459255,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "right",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
     },
     {
       "name": "test",
@@ -2068,31 +2526,95 @@
       "visible": false,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Hero_1",
+        "parentNodeId": "Miles",
         "relation": "in"
       },
       "parallax": 1,
-      "x": 653.2461823654976,
-      "y": 248.0313619847128,
-      "width": 15.368552567463674,
-      "height": 21.83952206955364,
+      "x": 422.6511123637017,
+      "y": 248.08606500384053,
+      "width": 15.369573491476862,
+      "height": 21.840972856309225,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
-      "colliderWidth": 0,
-      "colliderHeight": 0,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.7801349745118332,
+      "scale": 0.7801867984246911,
       "refScale": 0.8,
       "modelScale": 0.8,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,
       "blendMode": "source-over",
-      "blur": 0
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
-  "folders": [],
+  "folders": [
+    {
+      "name": "TV_",
+      "type": "Folder",
+      "folderId": "f_mppw14fo_1",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "collapsed": false
+    }
+  ],
+  "displayOrder": [
+    "CityView",
+    "room",
+    "Chair",
+    "Hero_1",
+    "Black_1",
+    "sub_D_main",
+    "sub_D2_body",
+    "sub_D1_body",
+    "sub_D1_stuff",
+    "sub_D_main_top",
+    "sub_D1_fasade",
+    "floor-parallax",
+    "Sofa",
+    "boombox",
+    "audio_cables",
+    "window1",
+    "shadow",
+    "miles_id",
+    "test_1",
+    "test_2",
+    "test_3",
+    "printer_commodore",
+    "tv",
+    "phone_modem",
+    "sound_test",
+    "sofa_pillow1",
+    "sofa_pillow2",
+    "room_k",
+    "Static_81",
+    "tv_anim",
+    "tv_anim_glow_1",
+    "tv_anim_glow",
+    "tv_aim_glow3",
+    "test",
+    "tv_rc",
+    "TV_",
+    "Walk_997",
+    "Walk_main",
+    "Trig_sub_D",
+    "Drawer1",
+    "Trig_834",
+    "Drawer2",
+    "Desk",
+    "d1_surface",
+    "desk_surface",
+    "wall",
+    "d2_surface",
+    "floor_lamp",
+    "desk_lamp",
+    "Trig_450",
+    "Entry",
+    "Trig_520"
+  ],
   "camera": {
     "x": 226.41176470588238,
     "y": 52.529411764705884,
@@ -2114,5 +2636,25 @@
     "panningModel": "HRTF",
     "distanceModel": "linear",
     "defaultReverbIR": "/sounds/ir/room_drum_medium.wav"
+  },
+  "sceneLog": {
+    "entries": [
+      {
+        "id": "1783300688773-9",
+        "kind": "action",
+        "timestamp": 1783300688773,
+        "actorId": "Miles",
+        "displayName": "Miles",
+        "text": "[ Miles goes through door ]",
+        "knownByActorIds": ["NPC"],
+        "payload": {
+          "action": "traverse_exit",
+          "subjectId": "door",
+          "targetId": "door"
+        }
+      }
+    ],
+    "lastPmProcessedAt": 1780248522411,
+    "lastPmProcessedAtByNpc": {}
   }
 }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { Console } from '../../src/core/Console';
+import { ScriptRegistry } from '../../src/core/ScriptRegistry';
+import { ComponentSystem } from '../../src/systems/ComponentSystem';
 
 describe('Parser LLM Integration', () => {
   it('#LLM-ON/#LLM-OFF toggle parserLlmEnabled on a real Console instance', () => {
@@ -63,6 +65,26 @@ describe('Parser LLM Integration', () => {
     expect(console.parserPeekPnEnabled).toBe(false);
   });
 
+  it('#PEEKPM-ON/#PEEKPM-OFF toggle parserPeekPmEnabled on a real Console instance', () => {
+    const game = {
+      log: vi.fn(),
+      textAssets: {
+        getParserCommands: () => ({}),
+        getParserLexicon: () => ({}),
+      },
+      sceneManager: { currentScene: null },
+    };
+    const console = new Console(game);
+
+    expect(console.parserPeekPmEnabled).toBe(false);
+
+    console.processCommand('#peekpm-on');
+    expect(console.parserPeekPmEnabled).toBe(true);
+
+    console.processCommand('#peekpm-off');
+    expect(console.parserPeekPmEnabled).toBe(false);
+  });
+
   it('#C1-OFF/#C1-ON toggle forced LLM handoff mode', () => {
     const game = {
       log: vi.fn(),
@@ -117,6 +139,330 @@ describe('Parser LLM Integration', () => {
     expect(mockLlmParse).toHaveBeenCalled();
     // In createParserFixture, game.log pushes to messages
     expect(fixture.messages).toContain('LLM Result');
+  });
+
+  it('uses conditional EXAMINE narration only when the canonical action discovers its claims', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    } as any);
+    fixture.textAssets.setObject('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    });
+    const batteries = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      description: 'Two AAA batteries.',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+    });
+    batteries.hidden = 'examinable';
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'examineTarget',
+            target: 'TV remote',
+            narration: {
+              message: 'You find the battery compartment, open it, and discover two AAA batteries.',
+              requiresDiscoveredEntityIds: ['batteryAAA'],
+            },
+          },
+        ],
+      },
+      debug: {
+        rawInput: 'check batterys in remote control',
+        normalizedInput: 'CHECK BATTERYS IN REMOTE CONTROL',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+
+    await fixture.parser.parse('check batterys in remote control');
+
+    expect(fixture.scene.isHiddenEntityRevealed(batteries)).toBe(true);
+    expect(fixture.messages.at(-1)).toBe(
+      'You find the battery compartment, open it, and discover two AAA batteries.'
+    );
+    expect(fixture.messages).not.toContain('A solid remote control.');
+  });
+
+  it('keeps canonical EXAMINE text when the required discovery was not produced', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    } as any);
+    fixture.textAssets.setObject('tv_rc', {
+      title: 'TV remote',
+      description: 'A rectangular remote control.',
+      details: 'A solid remote control.',
+      synonyms: ['remote', 'remote control'],
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'examineTarget',
+            target: 'TV remote',
+            narration: {
+              message: 'You find batteries that are not really there.',
+              requiresDiscoveredEntityIds: ['batteryAAA'],
+            },
+          },
+        ],
+      },
+      debug: { rawInput: 'check batteries', normalizedInput: 'CHECK BATTERIES' },
+    });
+
+    await fixture.parser.parse('check batterys in remote control');
+
+    expect(fixture.messages.at(-1)).toBe('A solid remote control.');
+    expect(fixture.messages).not.toContain('You find batteries that are not really there.');
+  });
+
+  it('expands LLM runCustomCommand actions through authored command plans', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.scene.removeEntity(remote);
+    fixture.game.inventory.push(remote);
+    fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      groupID: '#aaa',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [
+        {
+          type: 'State',
+          id: 'charge_percent',
+          valueType: 'number',
+          initialValue: 100,
+          value: 100,
+        },
+      ],
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    if (!ScriptRegistry.has('tv_glow')) {
+      ScriptRegistry.register('tv_glow', ({ api }) => {
+        api.setInterval(() => {}, 1000);
+      });
+    }
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: { kind: 'plan', actions: [{ type: 'runCustomCommand', commandId: 'turn_tv_on' }] },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(fixture.messages).toContain('The TV clicks on.');
+    ScriptRegistry.stop('tv_glow');
+  });
+
+  it('executes direct LLM Game Master actions for State, groups, scripts, and text', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    const glow = fixture.addEntity('tv_glow_quad', {
+      groupID: '#tv_glow',
+      disabled: true,
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    if (!ScriptRegistry.has('tv_glow')) {
+      ScriptRegistry.register('tv_glow', ({ api }) => {
+        api.setInterval(() => {}, 1000);
+      });
+    }
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+          { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+          { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+          { type: 'runScript', scriptId: 'tv_glow', restart: true },
+          { type: 'showText', message: 'The TV hums awake.' },
+        ],
+      },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(glow.disabled).toBe(false);
+    expect(ScriptRegistry.isRunning('tv_glow')).toBe(true);
+    expect(fixture.messages).toContain('The TV hums awake.');
+    ScriptRegistry.stop('tv_glow');
+  });
+
+  it('lets LLM action plans use the standard numbered clarification session', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.game.console.parserLlmEnabled = true;
+
+    const heldCassette = fixture.addEntity('held_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('held_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      synonyms: ['cassette', 'tape'],
+    });
+    fixture.scene.removeEntity(heldCassette);
+    fixture.game.inventory.push(heldCassette);
+
+    const musicCassette = fixture.addEntity('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      components: [{ type: 'Item' }],
+    });
+    fixture.textAssets.setObject('music_cassette', {
+      title: "Cassette 'Music'",
+      description: 'A music cassette.',
+      synonyms: ['cassette', 'tape', 'music'],
+    });
+    musicCassette.x = 10;
+    musicCassette.y = 0;
+
+    const boombox = fixture.addEntity('boombox', {
+      title: 'Boombox',
+      description: 'A tape player.',
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    fixture.textAssets.setObject('boombox', {
+      title: 'Boombox',
+      description: 'A tape player.',
+      synonyms: ['player', 'tape player', 'recorder'],
+    });
+    boombox.x = 20;
+    boombox.y = 0;
+
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          {
+            type: 'llmClarification',
+            question: 'Which cassette do you want to load?',
+            pendingActions: [
+              { type: 'putTarget', item: 'cassette', target: 'player', relation: 'in' },
+            ],
+          },
+        ],
+      },
+      debug: {
+        rawInput: 'load cassette into player',
+        normalizedInput: 'LOAD CASSETTE INTO PLAYER',
+        verb: 'LLM',
+        noun: '',
+      },
+    });
+
+    await fixture.parser.parse('load cassette into player');
+
+    expect(fixture.messages.at(-1)).toContain('Which item do you want to put down');
+    expect(fixture.messages.at(-1)).toContain('1: Compact cassette');
+    expect(fixture.messages.at(-1)).toContain("2: Cassette 'Music'");
+    expect(fixture.parser.pendingState?.intent).toBe('put');
+
+    await fixture.parser.parse('1');
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('parser.put_success_inventory', {
+        item: 'held_cassette',
+        target: 'Boombox',
+      })
+    );
+    expect(fixture.game.inventory).not.toContain(heldCassette);
+    expect(fixture.game.inventory).not.toContain(musicCassette);
+    expect(fixture.parser.pendingState).toBeNull();
+  });
+
+  it('runs State event side effects when LLM returns only setEntityState and text', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const tv = fixture.addEntity('tv', {
+      title: 'TV',
+      components: [
+        { type: 'State', id: 'power', valueType: 'string', initialValue: 'off', value: 'off' },
+      ],
+    });
+    tv.interactions = { 'state:power': 'test.llm.tv-power' };
+    const glow = fixture.addEntity('tv_glow_quad', {
+      groupID: '#tv_glow',
+      disabled: true,
+    });
+    fixture.game.console.parserLlmEnabled = true;
+    ScriptRegistry.register('test.llm.tv-glow', ({ api }) => {
+      api.setInterval(() => {}, 1000);
+    });
+    ScriptRegistry.register('test.llm.tv-power', ({ game, args }) => {
+      if (args?.value !== 'on') return;
+      game.sceneManager.currentScene
+        .getAllSceneObjects()
+        .filter((object: any) => object.groupID === '#tv_glow')
+        .forEach((object: any) => {
+          object.disabled = false;
+        });
+      if (ScriptRegistry.isRunning('test.llm.tv-glow')) {
+        ScriptRegistry.stop('test.llm.tv-glow');
+      }
+      ScriptRegistry.execute('test.llm.tv-glow', { game });
+    });
+    fixture.parser.llmCascade.parse = vi.fn().mockResolvedValue({
+      stage: 'llm-v3',
+      output: {
+        kind: 'plan',
+        actions: [
+          { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+          { type: 'showText', message: 'The TV hums awake.' },
+        ],
+      },
+      debug: { rawInput: 'tv on', normalizedInput: 'TV ON', verb: 'LLM', noun: '' },
+    });
+
+    await fixture.parser.parse('tv on');
+
+    expect(ComponentSystem.getStateValue(tv, 'power')).toBe('on');
+    expect(glow.disabled).toBe(false);
+    expect(ScriptRegistry.isRunning('test.llm.tv-glow')).toBe(true);
+    expect(fixture.messages).toContain('The TV hums awake.');
+    ScriptRegistry.stop('test.llm.tv-glow');
+    ScriptRegistry.stop('test.llm.tv-power');
   });
 
   it('passes prior scene-local parser turns to LLM context', async () => {
@@ -502,10 +848,8 @@ describe('Parser LLM Integration', () => {
 
     await fixture.parser.parse('listen radio');
 
-    expect(debugLogs.join('\n')).toContain('"operation": "created"');
-    expect(debugLogs.join('\n')).toContain('"id": "boombox"');
     expect(debugLogs.join('\n')).toContain(
-      '"note": "Radio reception currently produces only static."'
+      'Parser Note: created entity boombox -> "Radio reception currently produces only static."'
     );
   });
 

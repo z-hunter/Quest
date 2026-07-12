@@ -1,0 +1,9 @@
+{
+  "id": "tv_anim",
+  "imageFile": "public/assets/tv_anim.png",
+  "x": 0,
+  "y": 0,
+  "width": 113,
+  "height": 92,
+  "frames": 6
+}

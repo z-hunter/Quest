@@ -1,0 +1,9 @@
+{
+  "id": "linda_walk_up",
+  "imageFile": "public/assets/linda.png",
+  "x": 548,
+  "y": 0,
+  "width": 195,
+  "height": 664,
+  "frames": 19
+}

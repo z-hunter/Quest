@@ -6,7 +6,9 @@ import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 
 type TextAssetLike = {
   getResolvedObjectField(obj: SceneObject, field: string): string | null;
+  hasAuthoredObjectTitle(obj: SceneObject): boolean;
   getResolvedObjectListField(obj: SceneObject, field: string): string[];
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string;
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
     field: string,
@@ -18,6 +20,7 @@ type TextAssetLike = {
   getParserTraining(): ParserTrainingAsset;
   getParserCommands(): ParserCommandSpec[];
   readParserTrainingAsset(): Promise<ParserTrainingAsset>;
+  getServiceList(key: string): string[];
 };
 
 export type TestTextAssets = TextAssetLike & {
@@ -26,16 +29,29 @@ export type TestTextAssets = TextAssetLike & {
   setParserCommands(commands: ParserCommandSpec[]): void;
 };
 
-const DEFAULT_SERVICE_TEXT: Record<string, string> = {
+const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
   'engine.floor_label': 'floor',
   'engine.click_you_see': 'You see {title}',
   'engine.too_far_generic': 'You are too far away.',
+  'engine.close_subscene_before_moving': 'Close the current view before moving.',
   'engine.too_far_from_entity': 'You are too far away from the {target}.',
   'engine.cant_reach_generic': "You can't reach it.",
   'engine.blocked_inside_closed': "You can't reach that while it is inside something closed.",
   'engine.closed_container': 'The {target} is closed.',
   'engine.locked_needs': 'Locked. Needs {item}',
   'engine.locked_generic': 'Locked.',
+  'engine.observed_look': '[ {actor} is looking at {subject} ]',
+  'engine.observed_examine': '[ {actor} is examining {subject} ]',
+  'engine.observed_look_relation': '[ {actor} is looking {relation} {subject} ]',
+  'engine.observed_open': '[ {actor} opens {subject} ]',
+  'engine.observed_close': '[ {actor} closes {subject} ]',
+  'engine.observed_take': '[ {actor} takes {item} ]',
+  'engine.observed_put_relation': '[ {actor} puts {item} {relation} {target} ]',
+  'engine.observed_put_target': '[ {actor} puts {item} on {target} ]',
+  'engine.observed_drop': '[ {actor} puts down {item} ]',
+  'engine.observed_use': '[ {actor} uses {item} on {target} ]',
+  'engine.observed_command': '[ {actor} operates {subject} ]',
+  'engine.observed_traverse_exit': '[ {actor} goes through {subject} ]',
   'parser.look_default_scene': 'You are in {scene}.',
   'parser.look_default_object': 'You see nothing special about the {target}.',
   'parser.look_not_found': "You don't see any {target} here.",
@@ -80,6 +96,8 @@ const DEFAULT_SERVICE_TEXT: Record<string, string> = {
   'parser.go_to_which_one': 'Where exactly do you want to go: {options}?',
   'parser.go_to_not_found': "You can't get to {target} from here.",
   'parser.go_to_success': 'You go to {target}.',
+  'parser.clarification_cancel_replies': ['none', 'cancel'],
+  'parser.clarification_cancelled': 'Command cancelled.',
   'parser.command_no_effect': "That doesn't work.",
   'parser.parse_unknown': "I don't understand.",
   'parser.relation_empty': 'You see nothing {relation} the {target}.',
@@ -92,7 +110,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check', 'x'],
     take: ['take', 'get', 'pickup', 'pick up'],
-    put: ['put', 'drop', 'place'],
+    put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -103,7 +121,17 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look at', 'look', 'tell me about', 'what is that', 'what is', 'describe'],
     examine: ['look closely at', 'take a closer look at', 'examine', 'inspect', 'check'],
     take: ['pick up', 'take', 'get', 'grab'],
-    put: ['put down', 'put', 'drop', 'place'],
+    put: [
+      'put down',
+      'throw away',
+      'toss away',
+      'put',
+      'drop',
+      'place',
+      'throw',
+      'toss',
+      'discard',
+    ],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -126,7 +154,7 @@ const DEFAULT_PARSER_TRAINING: ParserTrainingAsset = {
   look: ['look chair', 'look at the chair', 'describe the chair'],
   examine: ['examine chair', 'inspect the chair', 'check the card'],
   take: ['take key', 'pick up key', 'take key from drawer'],
-  put: ['put key', 'drop key', 'put key on desk', 'put cassette into recorder'],
+  put: ['put key', 'drop key', 'throw key', 'put key on desk', 'put cassette into recorder'],
   open: ['open drawer', 'open cabinet'],
   close: ['close drawer', 'shut cabinet'],
   quit: ['quit', 'exit'],
@@ -200,16 +228,114 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    },
+  },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        saveAs: 'remote',
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'requireContainedGroupEntity',
+        containerRef: 'remote',
+        groupId: '#aaa',
+        saveAs: 'batteries',
+        missingMessageId: 'missing_batteries',
+      },
+      {
+        type: 'requireNumericState',
+        entityRef: 'batteries',
+        stateId: 'charge_percent',
+        operator: 'gt',
+        value: 0,
+        missingMessageId: 'dead_batteries',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
+      missing_batteries: 'There are no batteries in the remote control.',
+      dead_batteries:
+        'The TV does not respond to the remote. It looks like the batteries are dead.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
     },
   },
 ];
@@ -257,12 +383,20 @@ export function createTestTextAssets(): TestTextAssets {
       }
       return null;
     },
+    hasAuthoredObjectTitle(obj) {
+      const asset = objectAssets.get(obj.name);
+      const text = resolveTextValue(asset?.title);
+      return !!text?.trim();
+    },
     getResolvedObjectListField(obj, field) {
       const asset = objectAssets.get(obj.name);
       const value = asset?.[field];
       return Array.isArray(value)
         ? value.filter((item): item is string => typeof item === 'string')
         : [];
+    },
+    getResolvedObjectListRevision(obj, field) {
+      return JSON.stringify(this.getResolvedObjectListField(obj, field));
     },
     getResolvedObjectStructuredListField(obj, field, normalize) {
       const asset = objectAssets.get(obj.name);
@@ -295,7 +429,13 @@ export function createTestTextAssets(): TestTextAssets {
       parserCommands = structuredClone(commands);
     },
     getServiceText(key, params) {
-      return interpolate(DEFAULT_SERVICE_TEXT[key] || key, params);
+      const text = resolveTextValue(DEFAULT_SERVICE_TEXT[key]);
+      return interpolate(text || key, params);
+    },
+    getServiceList(key) {
+      const value = DEFAULT_SERVICE_TEXT[key];
+      if (!Array.isArray(value)) return [];
+      return value.map((item) => String(item).trim()).filter(Boolean);
     },
   };
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Parser } from '../../src/mechanics/Parser';
@@ -24,7 +24,58 @@ async function runSemanticParser(
   return fixture.messages;
 }
 
+async function finishAutoApproach(fixture: any): Promise<void> {
+  for (let index = 0; index < 20 && fixture.scene.player?.state === 'walk'; index += 1) {
+    fixture.scene.update(1000);
+  }
+  await vi.advanceTimersByTimeAsync(100);
+}
+
 describe('Parser + game integration smoke', () => {
+  it('takes revealed contents from a held editor-authored container without auto-approach', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A remote.',
+      details: 'A remote with a battery compartment.',
+      synonyms: ['remote', 'rc'],
+      components: [
+        { type: 'Item' },
+        {
+          type: 'Inventory',
+          relation: 'in',
+          capacity: 1,
+          groups: ['#aaa'],
+          protected: false,
+          items: [],
+        },
+      ],
+    });
+    const batteries = fixture.addEntity('batteryAAA', {
+      title: 'AAA batteries',
+      description: 'Two AAA batteries.',
+      synonyms: ['aaa', 'batteries'],
+      groupID: '#aaa',
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Item' }],
+    } as any);
+    batteries.hidden = 'examinable';
+    batteries.x = 1019;
+    batteries.y = 344;
+
+    fixture.game.inventoryManager.handleSceneChange();
+    expect(fixture.game.addInventoryEntity(player, remote, 'in').status).toBe('ok');
+    const moveTo = vi.spyOn(player, 'moveTo');
+
+    fixture.scene.revealHiddenEntity(batteries);
+    await fixture.run('take aaa');
+
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(fixture.game.inventory).toContain(batteries);
+    expect(fixture.game.getInventoryEntities(remote, 'in')).not.toContain(batteries);
+  });
+
   it('describes direct spatial contents with LOOK UNDER', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
@@ -214,7 +265,8 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.scene.isHiddenEntityRevealed(key)).toBe(true);
   });
 
-  it('surfaces the distance error for a far but visible EXAMINE target', async () => {
+  it('automatically approaches and examines a far reachable target', async () => {
+    vi.useFakeTimers();
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const boombox = fixture.addEntity('boombox', {
@@ -231,13 +283,16 @@ describe('Parser + game integration smoke', () => {
     });
 
     const result = await fixture.run('examine boombox');
+    expect(result.messages).toEqual([]);
 
-    expect(result.messages.at(-1)).toBe(
-      fixture.game.text('engine.too_far_from_entity', { target: 'Boombox' })
-    );
+    await finishAutoApproach(fixture);
+
+    expect(fixture.messages.at(-1)).toBe('A detailed boombox description.');
+    vi.useRealTimers();
   });
 
-  it('surfaces the distance error for a far but visible TAKE target', async () => {
+  it('automatically approaches and takes a far reachable target', async () => {
+    vi.useFakeTimers();
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const cassette = fixture.addEntity('compact_cassette', {
@@ -248,11 +303,77 @@ describe('Parser + game integration smoke', () => {
     cassette.x = 200;
 
     const result = await fixture.run('take cassette');
+    expect(result.messages).toEqual([]);
 
-    expect(result.messages.at(-1)).toBe(
-      fixture.game.text('engine.too_far_from_entity', { target: 'Compact cassette' })
+    await finishAutoApproach(fixture);
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
     );
+    expect(fixture.game.inventory).toContain(cassette);
+    vi.useRealTimers();
+  });
+
+  it('automatically approaches the preferred far TAKE diagnostic match', async () => {
+    vi.useFakeTimers();
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const nearest = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    nearest.x = 200;
+    const farther = fixture.addEntity('backup_cassette', {
+      title: 'Backup cassette',
+      description: 'A backup cassette.',
+      components: [{ type: 'Item' }],
+    });
+    farther.x = 300;
+
+    const result = await fixture.run('take cassette');
+    expect(result.messages).toEqual([]);
+
+    await finishAutoApproach(fixture);
+
+    expect(fixture.game.inventory).toContain(nearest);
+    expect(fixture.game.inventory).not.toContain(farther);
+    vi.useRealTimers();
+  });
+
+  it('does not automatically approach a TAKE target while a Subscene is open', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const cassette = fixture.addEntity('compact_cassette', {
+      title: 'Compact cassette',
+      description: 'A compact cassette.',
+      components: [{ type: 'Item' }],
+    });
+    cassette.x = 200;
+    fixture.scene.activeSubscene = 'desk_closeup';
+
+    await fixture.run('take cassette');
+
+    expect(fixture.messages.at(-1)).toBe('You are too far away from the Compact cassette.');
+    expect(player.getMoveResult().status).toBe('idle');
     expect(fixture.game.inventory).not.toContain(cassette);
+  });
+
+  it('blocks GO TO while a Subscene is open', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    fixture.addEntity('door', {
+      title: 'Door',
+      description: 'A door.',
+      components: [{ type: 'Exit', targetSceneId: 'Corridor' }],
+    });
+    fixture.scene.activeSubscene = 'desk_closeup';
+
+    await fixture.run('go to door');
+
+    expect(fixture.messages.at(-1)).toBe('Close the current view before moving.');
+    expect(player.getMoveResult().status).toBe('idle');
+    expect(fixture.scene.activeSubscene).toBe('desk_closeup');
   });
 
   it('moves a taken item into player inventory without removing the scene entity', async () => {
@@ -264,9 +385,9 @@ describe('Parser + game integration smoke', () => {
       components: [{ type: 'Item' }],
     });
 
-    const result = await fixture.run('take cassette');
+    await fixture.run('take cassette');
 
-    expect(result.messages.at(-1)).toBe(
+    expect(fixture.messages.at(-1)).toBe(
       fixture.game.text('parser.take_pickup_success', { item: 'Compact cassette' })
     );
     expect(fixture.game.inventory).toContain(cassette);
@@ -353,6 +474,7 @@ describe('Parser + game integration smoke', () => {
   });
 
   it('does not ask TAKE clarification between held and unreachable matches', async () => {
+    vi.useFakeTimers();
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
     const heldCassette = fixture.addEntity('compact_cassette', {
@@ -370,10 +492,15 @@ describe('Parser + game integration smoke', () => {
     farCassette.x = 200;
 
     const result = await fixture.run('take cassette');
+    expect(result.messages).toEqual([]);
 
-    expect(result.messages.at(-1)).toBe(
-      fixture.game.text('engine.too_far_from_entity', { target: "Cassette 'Music'" })
+    await finishAutoApproach(fixture);
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('parser.take_pickup_success', { item: "Cassette 'Music'" })
     );
+    expect(fixture.game.inventory).toContain(farCassette);
+    vi.useRealTimers();
   });
 
   it('supports OPEN and CLOSE for reachable switches', async () => {
@@ -394,6 +521,29 @@ describe('Parser + game integration smoke', () => {
     expect(closeResult.messages.at(-1)).toBe(
       fixture.game.text('parser.close_success', { target: 'Drawer' })
     );
+  });
+
+  it('automatically approaches and opens a far reachable switch', async () => {
+    vi.useFakeTimers();
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const drawer = fixture.addEntity('Drawer', {
+      title: 'Drawer',
+      description: 'A drawer.',
+      components: [{ type: 'Switch', state: 1 }],
+    });
+    drawer.x = 200;
+
+    const result = await fixture.run('open drawer');
+    expect(result.messages).toEqual([]);
+
+    await finishAutoApproach(fixture);
+
+    expect(fixture.messages.at(-1)).toBe(
+      fixture.game.text('parser.open_success', { target: 'Drawer' })
+    );
+    expect((drawer.components[0] as any).state).toBe(2);
+    vi.useRealTimers();
   });
 
   it('elevates OPEN on non-switch objects to the next parser cascade', async () => {

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Parser world model context', () => {
-  it('includes the inventory preview item as focusedTarget for LLM default target resolution', () => {
+  it('retains details internally for command-targeted prompt projection', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
     const book = fixture.addEntity('book', {
@@ -30,6 +30,9 @@ describe('Parser world model context', () => {
       description: 'A thumbed paperback.',
       details: 'Someone has underlined every pessimistic sentence.',
     });
+    expect(model.context.inventory?.find((entity) => entity.id === 'book')?.details).toBe(
+      'Someone has underlined every pessimistic sentence.'
+    );
   });
 
   it('includes scene and object lore in LLM context without replacing player-facing text', () => {
@@ -541,6 +544,30 @@ describe('Parser world model context', () => {
     expect(model.scope.examinable.map((entity) => entity.name)).not.toContain('DeskLabel');
   });
 
+  it('does not run route planning while summarizing inactive subscene objects for parser context', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    fixture.addTriggerbox('DeskCloseup', {
+      title: 'Desk close-up',
+      disabled: false,
+      components: [{ type: 'Subscene' }],
+    });
+    fixture.addEntity('DeskNote', {
+      title: 'Desk note',
+      description: 'A note in the close-up.',
+      disabled: true,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: 'DeskCloseup', relation: 'in' },
+    });
+
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('look desk note', null);
+
+    expect(model.context.entities?.some((entity) => entity.id === 'DeskNote')).toBe(true);
+    expect(planApproach).not.toHaveBeenCalled();
+  });
+
   it('separates visible knowledge from currently actionable PUT sources', () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);
@@ -676,6 +703,75 @@ describe('Parser world model context', () => {
           childNodeIds: expect.arrayContaining(['book']),
         }),
       ])
+    );
+  });
+
+  it('includes object State components in parser context and world facts', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      description: 'A metal door.',
+      components: [
+        { type: 'State', id: 'open', valueType: 'boolean', initialValue: false, value: false },
+      ],
+    });
+    const hiddenKey = fixture.addEntity('hidden_key', {
+      title: 'Hidden key',
+      description: 'A concealed key.',
+      components: [
+        { type: 'State', id: 'found', valueType: 'boolean', initialValue: false, value: true },
+      ],
+    });
+    hiddenKey.hidden = 'lookable';
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    let model = builder.build('look door', null);
+
+    expect(model.context.entities?.find((entity) => entity.id === 'door')?.states).toEqual([
+      { id: 'open', type: 'boolean', value: false },
+    ]);
+    expect(
+      model.context.knownEntities?.find((entity) => entity.id === 'hidden_key')?.states
+    ).toEqual([{ id: 'found', type: 'boolean', value: true }]);
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining(['Door state open is false.', 'Hidden key state found is true.'])
+    );
+
+    door.components[0] = { ...door.components[0], value: true } as any;
+    model = builder.build('look door again', null);
+    expect(model.context.entities?.find((entity) => entity.id === 'door')?.states).toEqual([
+      { id: 'open', type: 'boolean', value: true },
+    ]);
+    expect(model.context.worldFacts).toEqual(expect.arrayContaining(['Door state open is true.']));
+  });
+
+  it('includes inventory item State components in parser context and world facts', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const battery = fixture.addEntity('battery', {
+      title: 'Battery',
+      description: 'A small battery.',
+      components: [
+        { type: 'Item' },
+        { type: 'State', id: 'charge', valueType: 'number', initialValue: 0, value: 75 },
+      ],
+    });
+    fixture.scene.removeEntity(battery);
+    fixture.game.inventory.push(battery);
+    fixture.game.openInventoryPreview(battery, null);
+
+    const builder = new ParserWorldModelBuilder(fixture.game as any);
+    const model = builder.build('inspect battery', null);
+
+    expect(model.context.inventory?.find((entity) => entity.id === 'battery')?.states).toEqual([
+      { id: 'charge', type: 'number', value: 75 },
+    ]);
+    expect(model.context.focusedTarget?.states).toEqual([
+      { id: 'charge', type: 'number', value: 75 },
+    ]);
+    expect(model.context.worldFacts).toEqual(
+      expect.arrayContaining(['Battery state charge is 75.'])
     );
   });
 });

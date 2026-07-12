@@ -1,6 +1,10 @@
-type FileListItem = {
+import { listen } from '@tauri-apps/api/event';
+
+export type FileListItem = {
   name: string;
   isDir: boolean;
+  createdTime?: number;
+  modifiedTime?: number;
 };
 
 type JsonHeaders = {
@@ -73,7 +77,17 @@ async function postJson<T>(url: string, payload: Record<string, unknown>): Promi
   return (await response.json()) as T;
 }
 
+export function validateSafePath(path: string): void {
+  if (path.includes('..') || path.includes('\0')) {
+    throw new Error(`Security Error: Path traversal is not allowed (${path})`);
+  }
+  if (path.startsWith('/') || path.startsWith('\\') || /^[a-zA-Z]:/.test(path)) {
+    throw new Error(`Security Error: Absolute paths are not allowed (${path})`);
+  }
+}
+
 export async function listProjectFiles(path: string): Promise<FileListItem[]> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     return await invokeTauri<FileListItem[]>('list_project_files', { path });
   }
@@ -83,6 +97,7 @@ export async function listProjectFiles(path: string): Promise<FileListItem[]> {
 }
 
 export async function ensureProjectFile(path: string, content: string): Promise<void> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     await invokeTauri('ensure_project_file', { path, content });
     return;
@@ -92,6 +107,7 @@ export async function ensureProjectFile(path: string, content: string): Promise<
 }
 
 export async function saveProjectFile(path: string, content: string): Promise<void> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     await invokeTauri('save_project_file', { path, content });
     return;
@@ -99,8 +115,38 @@ export async function saveProjectFile(path: string, content: string): Promise<vo
 
   await postJson('/api/save', { path, content });
 }
+export async function appendProjectFile(path: string, content: string): Promise<void> {
+  validateSafePath(path);
+  const gProcess = (globalThis as any).process;
+  if (typeof gProcess !== 'undefined' && gProcess.versions?.node) {
+    try {
+      const fsName = 'fs';
+      const pathName = 'path';
+      const fs = await import(fsName);
+      const pathModule = await import(pathName);
+      const targetPath = pathModule.resolve(gProcess.cwd(), path);
+      const dir = pathModule.dirname(targetPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(targetPath, content);
+      return;
+    } catch (err) {
+      console.warn('Node fs append failed:', err);
+      return;
+    }
+  }
+  if (isTauriRuntime()) {
+    // If Tauri is used in the future, we could add 'append_project_file' there.
+    // For now, fallback or use invokeTauri if it's implemented
+    // await invokeTauri('append_project_file', { path, content });
+    console.warn('appendProjectFile not fully supported in Tauri yet');
+    return;
+  }
+
+  await postJson('/api/append-file', { path, content });
+}
 
 export async function readProjectFile(path: string, content: string): Promise<string> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     return await invokeTauri<string>('read_project_file', { path, content });
   }
@@ -110,6 +156,7 @@ export async function readProjectFile(path: string, content: string): Promise<st
 }
 
 export async function readProjectFileExisting(path: string): Promise<string> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     return await invokeTauri<string>('read_project_file_existing', { path });
   }
@@ -118,6 +165,7 @@ export async function readProjectFileExisting(path: string): Promise<string> {
 }
 
 export async function readProjectFileBase64(path: string): Promise<string> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     return await invokeTauri<string>('read_project_file_base64', { path });
   }
@@ -126,6 +174,7 @@ export async function readProjectFileBase64(path: string): Promise<string> {
 }
 
 export async function openProjectFile(path: string, content: string): Promise<void> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     await invokeTauri('open_project_file', { path, content });
     return;
@@ -135,6 +184,7 @@ export async function openProjectFile(path: string, content: string): Promise<vo
 }
 
 export async function deleteProjectFile(path: string): Promise<void> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     await invokeTauri('delete_project_file', { path });
     return;
@@ -144,6 +194,7 @@ export async function deleteProjectFile(path: string): Promise<void> {
 }
 
 export async function openProjectFolder(path: string): Promise<void> {
+  validateSafePath(path);
   if (isTauriRuntime()) {
     await invokeTauri('open_project_folder', { path });
     return;
@@ -151,3 +202,57 @@ export async function openProjectFolder(path: string): Promise<void> {
 
   await postJson('/api/open-folder', { path });
 }
+
+export type FileEventCallback = (eventType: string, path: string, modifiedTime: number) => void;
+
+class FileEventEmitter {
+  private listeners: Set<FileEventCallback> = new Set();
+
+  subscribe(cb: FileEventCallback) {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+
+  emit(eventType: string, path: string, modifiedTime: number) {
+    this.listeners.forEach((cb) => cb(eventType, path, modifiedTime));
+  }
+}
+
+export const fileEvents = new FileEventEmitter();
+
+let watcherInitialized = false;
+
+export async function initFileWatcher() {
+  if (watcherInitialized) return;
+  watcherInitialized = true;
+
+  if (isTauriRuntime()) {
+    try {
+      await listen<{ eventType: string; path: string; modifiedTime?: number }>(
+        'file-event',
+        (event) => {
+          fileEvents.emit(
+            event.payload.eventType,
+            event.payload.path,
+            event.payload.modifiedTime || Date.now()
+          );
+        }
+      );
+    } catch (err) {
+      console.warn('Failed to listen to Tauri file-event', err);
+    }
+  } else {
+    // Vite HMR
+    if (import.meta.hot) {
+      import.meta.hot.on(
+        'file-event',
+        (payload: { eventType: string; path: string; modifiedTime: number }) => {
+          fileEvents.emit(payload.eventType, payload.path, payload.modifiedTime);
+        }
+      );
+    }
+  }
+}
+
+// Initialize eagerly so events are caught early
+initFileWatcher().catch(console.error);

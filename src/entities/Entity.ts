@@ -44,6 +44,8 @@ export interface EntityData {
 export class Entity extends SceneObject {
   private _x: number = 0;
   private inventoryPositionOwner: Entity | null = null;
+  private _baseColliderWidth: number = 0;
+  private _baseColliderHeight: number = 0;
 
   get x(): number {
     if (this.inventoryPositionOwner) return this.inventoryPositionOwner.x;
@@ -75,6 +77,7 @@ export class Entity extends SceneObject {
     return this.baseWidth * this.scale;
   }
   set width(value: number) {
+    if (this.isLoading) return;
     const s = this.scale !== 0 ? this.scale : 1;
     this.baseWidth = value / s;
   }
@@ -83,8 +86,27 @@ export class Entity extends SceneObject {
     return this.baseHeight * this.scale;
   }
   set height(value: number) {
+    if (this.isLoading) return;
     const s = this.scale !== 0 ? this.scale : 1;
     this.baseHeight = value / s;
+  }
+
+  get colliderWidth(): number {
+    return this._baseColliderWidth * this.scale;
+  }
+  set colliderWidth(value: number) {
+    if (this.isLoading) return;
+    const s = this.scale !== 0 ? this.scale : 1;
+    this._baseColliderWidth = value / s;
+  }
+
+  get colliderHeight(): number {
+    return this._baseColliderHeight * this.scale;
+  }
+  set colliderHeight(value: number) {
+    if (this.isLoading) return;
+    const s = this.scale !== 0 ? this.scale : 1;
+    this._baseColliderHeight = value / s;
   }
 
   // name: string; // Inherited from SceneObject
@@ -101,8 +123,6 @@ export class Entity extends SceneObject {
   // layer: number; // Inherited
   baseWidth: number;
   baseHeight: number;
-  colliderWidth: number;
-  colliderHeight: number;
   animator: Animator | null;
   flipX: boolean;
 
@@ -189,8 +209,6 @@ export class Entity extends SceneObject {
     'height',
     'baseWidth',
     'baseHeight',
-    'colliderWidth',
-    'colliderHeight',
     'spriteName',
     'color',
     'scale',
@@ -245,8 +263,8 @@ export class Entity extends SceneObject {
 
     // this.baseWidth = this.width; // Handled above
     // this.baseHeight = this.height; // Handled above
-    this.colliderWidth = 0;
-    this.colliderHeight = 0;
+    this._baseColliderWidth = 0;
+    this._baseColliderHeight = 0;
     this.animator = null;
     this.flipX = false;
     this.scene = null;
@@ -497,6 +515,8 @@ export class Entity extends SceneObject {
   toJSON(): any {
     const data = super.toJSON();
     data.type = 'Entity'; // SceneManager expects 'Entity' or 'Actor' etc.
+    data.colliderWidth = this._baseColliderWidth;
+    data.colliderHeight = this._baseColliderHeight;
     return data;
   }
 
@@ -516,6 +536,13 @@ export class Entity extends SceneObject {
       }
 
       super.load(data);
+
+      if (data.colliderWidth !== undefined) {
+        this._baseColliderWidth = data.colliderWidth;
+      }
+      if (data.colliderHeight !== undefined) {
+        this._baseColliderHeight = data.colliderHeight;
+      }
 
       if (!hasAuthoredRefScale) {
         const fallback =

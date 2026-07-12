@@ -40,10 +40,11 @@ body {
 :root {
   /* Main UI Color (Frames, Headers, Labels) */
   --ui-main-color: #4aa07f;
-  --ui-bg-color: #000000;
-  --ui-panel-header-bg: #222222;
+  --ui-bg-color: #050a07;
+  --ui-panel-header-bg: #111a14;
   --ui-label-color: #888888;
   --ui-display-font: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --ui-mono-font: 'Courier New', Courier, monospace;
 
   /* Selection & Active States */
   --ui-selection-bg: #4ca149;
@@ -53,11 +54,11 @@ body {
   /* Input Fields */
   --ui-input-bg: #000000;
   --ui-input-text: #79efa4;
-  --ui-input-border: #444444;
+  --ui-input-border: #2a523d;
   --ui-input-focus-border: #79efa4;
 
   /* Dropdowns */
-  --ui-dropdown-bg: #000000;
+  --ui-dropdown-bg: #050a07;
   --ui-dropdown-text: #79efa4;
   --ui-dropdown-selection-bg: #204638;
   /* Optional specific */
@@ -66,10 +67,19 @@ body {
   --ui-btn-bg: #000000;
   --ui-btn-text: #52c966;
   --ui-btn-border: #79efa4;
+  --ui-btn-border-muted: #387d60;
 
   /* F-Keys */
   --ui-fkey-text: #79efa4;
   --ui-fkey-hotkey: #468a5f;
+
+  --sec-color-0: #7dd3fc;
+  --sec-color-1: #3b82f6;
+  --sec-color-2: #fde047;
+  --sec-color-3: #fca5a5;
+  --sec-color-4: #60a5fa;
+  --sec-color-5: #c4b5fd;
+  --sec-color-6: #9ca3af;
 }
 
 #root {
@@ -191,10 +201,10 @@ canvas {
 
 /* Left Panel - Hierarchy */
 #hierarchy-panel {
-  width: 17em;
-  /* approx 200px at 12px font */
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid rgba(0, 0, 0, 0.8);
+  width: calc(17em + 10px);
+  /* approx 210px at 12px font */
+  background: var(--ui-dropdown-bg);
+  border: 2px solid var(--ui-dropdown-bg);
   color: var(--ui-main-color);
   display: flex;
   flex-direction: column;
@@ -292,7 +302,7 @@ canvas {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--ui-main-color);
-  margin-bottom: 10px;
+  margin-bottom: 0;
   font-family: var(--ui-display-font);
   font-weight: 600;
   text-transform: uppercase;
@@ -323,10 +333,10 @@ canvas {
 
 button {
   background: var(--ui-btn-bg);
-  border: 1px solid var(--ui-btn-border);
-  color: var(--ui-btn-text);
+  border: 1px solid var(--ui-main-color);
+  color: var(--ui-main-color);
   cursor: pointer;
-  padding: 2px 5px;
+  padding: 6px 10px;
   font-family: var(--ui-display-font);
   font-weight: 500;
   text-transform: uppercase;
@@ -336,12 +346,9 @@ button {
 button:hover {
   background: var(--ui-main-color);
   color: #000;
-  box-shadow:
-    0 0 4px rgba(121, 239, 164, 0.24),
-    0 0 8px rgba(121, 239, 164, 0.14);
-  text-shadow:
-    0 0 3px rgba(255, 255, 255, 0.18),
-    0 0 6px rgba(121, 239, 164, 0.14);
+  border-color: var(--ui-main-color);
+  box-shadow: 0 0 8px rgba(121, 239, 164, 0.3);
+  text-shadow: none;
   transition:
     background-color 120ms ease,
     color 120ms ease,
@@ -371,6 +378,7 @@ select {
   color: var(--ui-input-text);
   box-sizing: border-box;
   color-scheme: dark;
+  font-family: var(--ui-mono-font);
 }
 
 input:focus,
@@ -389,6 +397,7 @@ select,
 textarea,
 .e-input {
   font-size: inherit !important;
+  font-family: var(--ui-mono-font);
 }
 
 /* Custom Select Styles */
@@ -578,19 +587,19 @@ input[type='file'] {
 }
 
 .ui-text-dim {
-  color: #666;
+  color: var(--ui-text-dim, #66736b);
 }
 
 .ui-text-accent-blue {
-  color: #aaf !important;
+  color: var(--sec-color-1) !important;
 }
 
 .ui-text-accent-red {
-  color: #faa !important;
+  color: var(--sec-color-3) !important;
 }
 
 .ui-text-accent-yellow {
-  color: #ffaa00 !important;
+  color: var(--sec-color-2) !important;
 }
 
 .ui-text-accent-green {
@@ -602,11 +611,11 @@ input[type='file'] {
 }
 
 .ui-text-accent-purple {
-  color: #f0aaff !important;
+  color: var(--sec-color-5) !important;
 }
 
 .ui-text-light {
-  color: #ccc;
+  color: var(--ui-label-color);
 }
 
 .ui-text-bright {
@@ -659,18 +668,18 @@ input[type='file'] {
 }
 
 .ui-panel-card {
-  background: #222;
+  background: var(--ui-panel-header-bg);
 }
 
 .ui-panel-card-warm {
-  background: #332;
-  border: 1px solid #553;
+  background: #111a14;
+  border: 1px solid var(--ui-input-border);
 }
 
 .ui-button-neutral {
-  background: #444;
-  border: 1px solid #666;
-  color: #fff;
+  background: var(--ui-input-bg);
+  border: 1px solid var(--ui-main-color);
+  color: var(--ui-main-color);
 }
 
 .file-browser-modal {
@@ -718,6 +727,9 @@ input[type='file'] {
   color: #c7d9d1;
   line-height: 1.45;
   margin-bottom: 14px;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .editor-choice-dialog-actions {

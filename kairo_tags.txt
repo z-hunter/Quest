@@ -1,4 +1,0 @@
-﻿{
-  "success": false,
-  "error": "unknown action: list-tags"
-}

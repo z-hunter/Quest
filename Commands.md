@@ -2,7 +2,7 @@
 
 ## Summary
 
-`Commands` in `Scanline` are parser-level action specifications that describe **custom gameplay commands** without hardcoding one-off logic into `Parser.ts`.
+`Commands` in `Scanline` are authored action specifications that describe **custom gameplay commands** without hardcoding one-off logic into `Parser.ts`.
 
 The goal is to let us add commands such as:
 - `TELEPORT WITH ID CARD`
@@ -10,7 +10,7 @@ The goal is to let us add commands such as:
 - `REPAIR BOOMBOX WITH SOLDERING IRON`
 - `USE ITEM ON TARGET`
 
-while reusing the same generic parser systems for:
+while reusing the same generic parser and runtime systems for:
 - target resolution
 - ambiguity clarification
 - missing-argument clarification
@@ -36,15 +36,15 @@ Instead:
 - each custom command is described by data
 - `Parser Core` executes a generic plan
 
-This is also the shared execution foundation for the LLM cascade:
-- lower layers, custom commands, mocked scenarios, and LLM outputs can emit the same plan format
-- `Core` stays the only place where parser plans are executed against gameplay rules
+This is also the shared execution foundation for the LLM cascade and other actor-aware clients:
+- lower layers, custom commands, mocked scenarios, NPC Puppet Master plans, and LLM outputs can emit the same plan format
+- parser-produced plans still execute through `Parser Core`, while non-parser actor plans use the shared actor-aware executor instead of going through text parsing again
 
 ---
 
 ## Position In The Architecture
 
-Custom command assets belong to the **parser layer**, not to `Game`.
+Custom command assets are authored content, not hardcoded `Game` logic. Their execution is shared runtime behavior, even when the initiating client is the parser.
 
 They are:
 - language-aware
@@ -63,8 +63,8 @@ The flow is:
 2. Stage 1 tries built-in parser logic
 3. Stage 1 also checks custom command assets
 4. A matching command asset produces a parser envelope / plan
-5. `Parser Core` resolves arguments and executes the plan
-6. `Game API` performs the actual world operations
+5. `Parser Core` resolves arguments and executes the plan for parser-originated input
+6. `Game API` / shared actor-aware runtime performs the actual world operations
 
 ---
 

@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import type { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from './ComponentSystem';
 import type { InventoryComponent, SurfaceComponent, SurfaceItemPlacement } from './ComponentSystem';
@@ -12,6 +13,7 @@ type ContainerRelation = Exclude<SpatialRelationType, 'near'>;
 
 type SurfacePlacementOptions = {
   preferPlayerPoint?: boolean;
+  preferredPoint?: { x: number; y: number };
 };
 
 export type InventorySlotRef = {
@@ -220,6 +222,19 @@ export class InventoryManager {
     return null;
   }
 
+  isEntityWithinActorInventory(actor: Entity, entity: Entity): boolean {
+    const visited = new Set<Entity>();
+    let current: Entity | null = entity;
+
+    while (current && !visited.has(current)) {
+      if (current === actor) return entity !== actor;
+      visited.add(current);
+      current = current.getInventoryPositionOwner();
+    }
+
+    return false;
+  }
+
   private getSurfaceSlotPlacementRelation(slot: SurfaceSlotRef): ContainerRelation {
     return this.hasPlayerFacingTitle(slot.surface)
       ? ComponentSystem.normalizeSurfaceRelation(slot.component)
@@ -285,13 +300,73 @@ export class InventoryManager {
   ): Entity[] {
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return [];
-    const scene = this.sceneManager.currentScene;
     return (component.items || [])
       .map((id) => {
-        const candidate = scene?.getObjectByName(id);
-        return candidate instanceof Entity ? candidate : null;
+        return this.findInventoryEntityCandidate(owner, String(id || '').trim(), relation);
       })
       .filter((entity): entity is Entity => !!entity);
+  }
+
+  private findInventoryEntityCandidate(
+    owner: Entity,
+    id: string,
+    relation: ContainerRelation
+  ): Entity | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || !id) return null;
+
+    const matches = scene.entities.filter(
+      (candidate): candidate is Entity => candidate instanceof Entity && candidate.name === id
+    );
+    if (!matches.length) return null;
+
+    const spatialMatches = matches.filter(
+      (candidate) =>
+        candidate.spatial?.parentNodeId === owner.name && candidate.spatial?.relation === 'in'
+    );
+    const relationMatches = spatialMatches.filter(
+      (candidate) => (candidate as any).__inventoryRelation === relation
+    );
+
+    return (
+      relationMatches[relationMatches.length - 1] ||
+      spatialMatches[spatialMatches.length - 1] ||
+      matches[matches.length - 1] ||
+      null
+    );
+  }
+
+  private findSurfaceEntityCandidate(surface: SceneObject, id: string): Entity | null {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || !id) return null;
+
+    const matches = scene.entities.filter(
+      (candidate): candidate is Entity => candidate instanceof Entity && candidate.name === id
+    );
+    if (!matches.length) return null;
+
+    const spatialMatches = matches.filter(
+      (candidate) => candidate.spatial?.parentNodeId === surface.name
+    );
+
+    return spatialMatches[spatialMatches.length - 1] || matches[matches.length - 1] || null;
+  }
+
+  private removeDuplicateSceneEntityRefs(entity: Entity): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene) return;
+
+    const duplicateRefs = scene.entities.filter(
+      (candidate) => candidate !== entity && candidate.name === entity.name
+    );
+    if (!duplicateRefs.length) return;
+
+    scene.entities = scene.entities.filter(
+      (candidate) => candidate === entity || candidate.name !== entity.name
+    );
+    for (const duplicate of duplicateRefs) {
+      scene.subsceneEntities.delete(duplicate);
+    }
   }
 
   private getPreferredInventoryRelationForEntity(
@@ -321,9 +396,11 @@ export class InventoryManager {
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
+    this.removeDuplicateSceneEntityRefs(entity);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
+    this.removeDuplicateSceneEntityRefs(entity);
     (entity as any).__inventoryRelation = relation;
     entity.setInventoryPositionOwner(owner);
     entity.visible = false;
@@ -349,9 +426,11 @@ export class InventoryManager {
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
+    this.removeDuplicateSceneEntityRefs(entity);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
+    this.removeDuplicateSceneEntityRefs(entity);
 
     delete (entity as any).__inventoryRelation;
     entity.setInventoryPositionOwner(null);
@@ -418,6 +497,31 @@ export class InventoryManager {
       }
     }
 
+    // Editor-authored inventory placement may exist only as a spatial edge.
+    // Reconcile it back into the owning Inventory component during scene hydration.
+    for (const entity of [...scene.entities]) {
+      if (!(entity instanceof Entity) || entity.disabled || entity.spatial?.relation !== 'in') {
+        continue;
+      }
+      const parentId = String(entity.spatial.parentNodeId || '').trim();
+      const owner = parentId ? scene.getObjectByName(parentId) : null;
+      if (!(owner instanceof Entity) || owner === entity) {
+        this.releaseInventoryEntitySceneState(entity);
+        continue;
+      }
+      const relation = this.getPreferredInventoryRelationForEntity(owner, entity);
+      if (!relation) {
+        this.releaseInventoryEntitySceneState(entity);
+        continue;
+      }
+      const stored = this.getStoredInventoryEntities(owner, relation);
+      if (!stored.includes(entity)) {
+        this.syncInventoryStore(owner, [...stored, entity], relation);
+      } else {
+        this.syncInventoryEntitySceneState(owner, entity, relation);
+      }
+    }
+
     for (const surface of scene.getAllSceneObjects()) {
       if (surface.disabled) continue;
 
@@ -430,7 +534,7 @@ export class InventoryManager {
 
         component.items = component.items.filter((placement) => {
           const entityId = typeof placement?.id === 'string' ? placement.id.trim() : '';
-          const entity = entityId ? scene.getObjectByName(entityId) : null;
+          const entity = entityId ? this.findSurfaceEntityCandidate(surface, entityId) : null;
           if (
             !(entity instanceof Entity) ||
             !Number.isFinite(placement?.x) ||
@@ -759,10 +863,12 @@ export class InventoryManager {
 
   isSurfaceAccessible(
     surface: SceneObject,
-    getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null
+    getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
+    actor?: Actor | null
   ): boolean {
     if (surface.disabled) return false;
-    if (this.isEntityInInventory(surface as Entity)) return true;
+    if (actor && this.hasInventoryEntity(actor, surface as Entity, 'in')) return true;
+    if (!actor && this.isEntityInInventory(surface as Entity)) return true;
     const scene = this.sceneManager.currentScene;
     if (!scene) return false;
     const accessOutcome = getBlockedAccessOutcome(surface);
@@ -770,17 +876,19 @@ export class InventoryManager {
     if (scene.activeSubscene && scene.subsceneEntities.has(surface as any)) {
       return true;
     }
-    return !ComponentSystem.getInteractionDistanceError(surface as any, scene.player);
+    return !ComponentSystem.getInteractionDistanceError(surface as any, actor || scene.player);
   }
 
   isSurfaceAccessibleFromAnchor(
     surface: SceneObject,
     anchor: SceneObject,
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
-    getPlayerFacingObjectTitle: (target: SceneObject) => string | null
+    getPlayerFacingObjectTitle: (target: SceneObject) => string | null,
+    actor?: Actor | null
   ): boolean {
     if (surface.disabled) return false;
-    if (this.isEntityInInventory(surface as Entity)) return true;
+    if (actor && this.hasInventoryEntity(actor, surface as Entity, 'in')) return true;
+    if (!actor && this.isEntityInInventory(surface as Entity)) return true;
 
     const scene = this.sceneManager.currentScene;
     if (!scene) return false;
@@ -792,20 +900,22 @@ export class InventoryManager {
 
     const surfaceTitle = getPlayerFacingObjectTitle(surface);
     if (!surfaceTitle) {
-      return !ComponentSystem.getInteractionDistanceError(anchor as any, scene.player);
+      return !ComponentSystem.getInteractionDistanceError(anchor as any, actor || scene.player);
     }
 
-    return !ComponentSystem.getInteractionDistanceError(surface as any, scene.player);
+    return !ComponentSystem.getInteractionDistanceError(surface as any, actor || scene.player);
   }
 
   isInventoryAccessible(
     owner: Entity,
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    actor?: Actor | null
   ): boolean {
     if (owner.disabled) return false;
-    if (this.isPlayerInventoryOwner(owner) && relation === 'in') return true;
-    if (this.isEntityInInventory(owner)) return true;
+    if (!actor && this.isPlayerInventoryOwner(owner) && relation === 'in') return true;
+    if (actor && this.hasInventoryEntity(actor, owner, 'in')) return true;
+    if (!actor && this.isEntityInInventory(owner)) return true;
 
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component || component.protected) return false;
@@ -817,7 +927,7 @@ export class InventoryManager {
     if (scene.activeSubscene && scene.subsceneEntities.has(owner as any)) {
       return true;
     }
-    return !ComponentSystem.getInteractionDistanceError(owner as any, scene.player);
+    return !ComponentSystem.getInteractionDistanceError(owner as any, actor || scene.player);
   }
 
   isInventoryAccessibleFromAnchor(
@@ -825,11 +935,13 @@ export class InventoryManager {
     anchor: SceneObject,
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
     getPlayerFacingObjectTitle: (target: SceneObject) => string | null,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    actor?: Actor | null
   ): boolean {
     if (owner.disabled) return false;
-    if (this.isPlayerInventoryOwner(owner) && relation === 'in') return true;
-    if (this.isEntityInInventory(owner)) return true;
+    if (!actor && this.isPlayerInventoryOwner(owner) && relation === 'in') return true;
+    if (actor && this.hasInventoryEntity(actor, owner, 'in')) return true;
+    if (!actor && this.isEntityInInventory(owner)) return true;
 
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component || component.protected) return false;
@@ -844,27 +956,29 @@ export class InventoryManager {
 
     const ownerTitle = getPlayerFacingObjectTitle(owner);
     if (!ownerTitle) {
-      return !ComponentSystem.getInteractionDistanceError(anchor as any, scene.player);
+      return !ComponentSystem.getInteractionDistanceError(anchor as any, actor || scene.player);
     }
 
-    return !ComponentSystem.getInteractionDistanceError(owner as any, scene.player);
+    return !ComponentSystem.getInteractionDistanceError(owner as any, actor || scene.player);
   }
 
   getAccessibleSceneSurfaces(
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
-    relation: ContainerRelation | null = null
+    relation: ContainerRelation | null = null,
+    actor?: Actor | null
   ): SceneObject[] {
     const scene = this.sceneManager.currentScene;
     if (!scene) return [];
     return scene
       .getAllSceneObjects()
       .filter((candidate) => !!ComponentSystem.getSurfaceComponent(candidate, relation))
-      .filter((candidate) => this.isSurfaceAccessible(candidate, getBlockedAccessOutcome));
+      .filter((candidate) => this.isSurfaceAccessible(candidate, getBlockedAccessOutcome, actor));
   }
 
   getAccessibleInventoryOwners(
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    actor?: Actor | null
   ): Entity[] {
     const scene = this.sceneManager.currentScene;
     if (!scene) return [];
@@ -872,15 +986,16 @@ export class InventoryManager {
       (candidate): candidate is Entity =>
         candidate instanceof Entity &&
         !!ComponentSystem.getInventoryComponent(candidate, relation) &&
-        this.isInventoryAccessible(candidate, getBlockedAccessOutcome, relation)
+        this.isInventoryAccessible(candidate, getBlockedAccessOutcome, relation, actor)
     );
   }
 
   getAccessibleInventoryItems(
     getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    actor?: Actor | null
   ): Entity[] {
-    return this.getAccessibleInventoryOwners(getBlockedAccessOutcome, relation)
+    return this.getAccessibleInventoryOwners(getBlockedAccessOutcome, relation, actor)
       .filter((owner) => !this.isPlayerInventoryOwner(owner))
       .flatMap((owner) => this.getStoredInventoryEntities(owner, relation))
       .filter((entity) => !entity.disabled);
@@ -943,7 +1058,19 @@ export class InventoryManager {
   }
 
   getSceneObjectReferencePoint(sceneObject: SceneObject): { x: number; y: number } {
-    const polygon = (sceneObject as any).poly;
+    let referenceObject = sceneObject;
+    const visited = new Set<Entity>();
+    while (referenceObject instanceof Entity) {
+      if (visited.has(referenceObject)) break;
+      visited.add(referenceObject);
+      const owner = referenceObject.getInventoryPositionOwner();
+      if (!owner) break;
+      referenceObject = owner;
+    }
+
+    const polygon = Array.isArray((referenceObject as any).poly)
+      ? (referenceObject as any).poly
+      : (referenceObject as any).vertices;
     if (Array.isArray(polygon) && polygon.length) {
       const sum = polygon.reduce(
         (acc: { x: number; y: number }, point: { x: number; y: number }) => ({
@@ -958,8 +1085,8 @@ export class InventoryManager {
       };
     }
     return {
-      x: Number((sceneObject as any).x) || 0,
-      y: Number((sceneObject as any).y) || 0,
+      x: Number((referenceObject as any).x) || 0,
+      y: Number((referenceObject as any).y) || 0,
     };
   }
 
@@ -1236,6 +1363,9 @@ export class InventoryManager {
     };
 
     const player = this.sceneManager.currentScene?.player || null;
+    if (options.preferredPoint) {
+      addSample(options.preferredPoint.x, options.preferredPoint.y, true);
+    }
     if (
       options.preferPlayerPoint &&
       surface.type === 'Walkbox' &&
@@ -1547,13 +1677,14 @@ export class InventoryManager {
   }
 
   getAutoDropSurface(
-    getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null
+    getBlockedAccessOutcome: (entity: SceneObject) => GameActionOutcome | null,
+    actor?: Actor | null
   ): SurfaceSlotRef | null {
     const scene = this.sceneManager.currentScene;
     if (!scene) return null;
 
     const activeSubsceneSurfaces = scene.activeSubscene
-      ? this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, null)
+      ? this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, null, actor)
           .filter(
             (surface) => this.isObjectInsideActiveSubscene(surface) && surface.type !== 'Walkbox'
           )
@@ -1575,7 +1706,7 @@ export class InventoryManager {
       );
     }
 
-    const surfaces = this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, 'on')
+    const surfaces = this.getAccessibleSceneSurfaces(getBlockedAccessOutcome, 'on', actor)
       .map((surface) => {
         const component = ComponentSystem.getSurfaceComponent(surface, 'on');
         if (!component) return null;
@@ -1596,8 +1727,8 @@ export class InventoryManager {
       );
     if (!surfaces.length) return null;
 
-    const player = scene.player;
-    const playerPoint = player ? { x: player.x || 0, y: player.y || 0 } : null;
+    const dropActor = actor || scene.player;
+    const actorPoint = dropActor ? { x: dropActor.x || 0, y: dropActor.y || 0 } : null;
     const subsceneWalkboxes = scene.activeSubscene
       ? surfaces.filter(
           (candidate) =>
@@ -1606,12 +1737,12 @@ export class InventoryManager {
         )
       : [];
     const containingWalkboxes =
-      playerPoint && player
+      actorPoint && dropActor
         ? surfaces.filter(
             (candidate) =>
               candidate.surface.type === 'Walkbox' &&
               Array.isArray((candidate.surface as any).poly) &&
-              Geometry.isPointInPolygon(playerPoint, (candidate.surface as any).poly)
+              Geometry.isPointInPolygon(actorPoint, (candidate.surface as any).poly)
           )
         : [];
 
@@ -1723,7 +1854,7 @@ export class InventoryManager {
     const collected = new Set<Entity>();
     const surfaceComponent = ComponentSystem.getSurfaceComponent(surface, relation);
     for (const candidate of (surfaceComponent?.items || [])
-      .map((item) => scene.getObjectByName(item.id))
+      .map((item) => this.findSurfaceEntityCandidate(surface, String(item.id || '').trim()))
       .filter(
         (candidate): candidate is Entity => candidate instanceof Entity && !candidate.disabled
       )) {

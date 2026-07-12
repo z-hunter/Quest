@@ -28,6 +28,7 @@ import type {
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
 import type { SceneSoundEnv } from '../systems/SoundManager';
+import { SceneLog, type SceneLogData } from './SceneLog';
 
 interface PickupAnimation {
   entity: Entity;
@@ -49,7 +50,7 @@ interface DropAnimation {
 }
 
 const PARSER_SCENE_HISTORY_LIMIT = 8;
-const PARSER_SCENE_HISTORY_RESPONSE_LIMIT = 85;
+const PARSER_SCENE_HISTORY_RESPONSE_LIMIT = 340;
 
 export interface SceneScaling {
   enabled: boolean;
@@ -91,6 +92,7 @@ export interface SceneData {
   camMinY?: number;
   camMaxY?: number;
   soundEnv?: Partial<SceneSoundEnv>;
+  sceneLog?: SceneLogData;
 }
 
 export class Scene {
@@ -114,6 +116,7 @@ export class Scene {
 
   // Runtime Camera (used for rendering)
   camera: { x: number; y: number; zoom: number };
+  collisionCamera: { x: number; y: number } | null;
   autoCenter: boolean;
   cameraSpeed: number;
   camDeadzoneX: number = 50;
@@ -137,8 +140,8 @@ export class Scene {
   camMaxY?: number;
 
   // Internal state for "Smart Deadzone" (Catch-up mode)
-  private _isCenteringX: boolean = false;
-  private _isCenteringY: boolean = false;
+  private _centeringDirX: number = 0;
+  private _centeringDirY: number = 0;
 
   // Default Camera (saved to scene file, restored on load/reset)
   defaultCamera: { x: number; y: number; zoom: number };
@@ -152,6 +155,7 @@ export class Scene {
   public entityParserNotes: Record<string, string> = {};
   public parserNoteNeedsCheck: boolean = false;
   public entityParserNoteNeedsCheck: Record<string, boolean> = {};
+  public sceneLog: SceneLog = new SceneLog();
   private parserRecentTurns: ParserSceneTurnContext[] = [];
 
   get activeSubscene(): string | null {
@@ -196,8 +200,8 @@ export class Scene {
     this.camera.y = targetY;
 
     // Explicitly reset any cached centering state
-    this._isCenteringX = false;
-    this._isCenteringY = false;
+    this._centeringDirX = 0;
+    this._centeringDirY = 0;
   }
 
   private normalizeSpatialPlacement(
@@ -439,6 +443,7 @@ export class Scene {
     };
     this.player = null;
     this.camera = { x: 0, y: 0, zoom: 1.0 };
+    this.collisionCamera = null;
     this.defaultCamera = { x: 0, y: 0, zoom: 1.0 };
     this.renderer = new SceneRenderer(game);
 
@@ -450,6 +455,30 @@ export class Scene {
   }
 
   addEntity(entity: Entity): void {
+    if (this.entities.includes(entity)) {
+      // @ts-ignore
+      entity.scene = this;
+      if ((entity as any).isPlayer) {
+        this.player = entity as Actor;
+      }
+      return;
+    }
+
+    const id = String(entity.name || '').trim();
+    if (id) {
+      const staleEntities = this.entities.filter((candidate) => candidate.name === id);
+      if (staleEntities.length > 0) {
+        this.entities = this.entities.filter((candidate) => candidate.name !== id);
+        for (const stale of staleEntities) {
+          this.revealedHiddenEntities.delete(stale.name);
+          this.subsceneEntities.delete(stale);
+          if (this.player === stale) {
+            this.player = null;
+          }
+        }
+      }
+    }
+
     this.entities.push(entity);
     // @ts-ignore
     entity.scene = this;
@@ -758,12 +787,13 @@ export class Scene {
     }
 
     let sourceRect = null;
+    const cam = this.collisionCamera || this.camera;
     if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
       // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
       const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
       const svOx = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.x : 0;
       const svOy = (sourceEntity as any).visualOffset ? (sourceEntity as any).visualOffset.y : 0;
-      const sourceVisual = toVisualPosition({ x, y }, this.camera, sp, { x: svOx, y: svOy });
+      const sourceVisual = toVisualPosition({ x, y }, cam, sp, { x: svOx, y: svOy });
 
       sourceRect = {
         x: sourceVisual.x - sourceEntity.colliderWidth / 2,
@@ -782,7 +812,7 @@ export class Scene {
         const vOx = (other as any).visualOffset ? (other as any).visualOffset.x : 0;
         const vOy = (other as any).visualOffset ? (other as any).visualOffset.y : 0;
         const p = other.parallax !== undefined ? other.parallax : 1.0;
-        const otherVisual = toVisualPosition({ x: other.x, y: other.y }, this.camera, p, {
+        const otherVisual = toVisualPosition({ x: other.x, y: other.y }, cam, p, {
           x: vOx,
           y: vOy,
         });
@@ -816,9 +846,9 @@ export class Scene {
             const p = v.p !== undefined ? v.p : (entity as any).parallax || 1.0;
             let vx = v.x;
             let vy = v.y;
-            if (this.camera && p !== 1.0) {
-              vx = v.x - this.camera.x * (p - 1.0);
-              vy = v.y - this.camera.y * (p - 1.0);
+            if (cam && p !== 1.0) {
+              vx = v.x - cam.x * (p - 1.0);
+              vy = v.y - cam.y * (p - 1.0);
             }
             return { x: vx, y: vy };
           });
@@ -867,11 +897,21 @@ export class Scene {
         }
 
         if (!safe) {
+          // If not in a single walkbox, check if the collider is inside the union of positive walkboxes
+          if (
+            Geometry.rectInsideUnionOfPolygons(
+              sourceRect,
+              positives.map((wb) => wb.poly)
+            )
+          ) {
+            safe = true;
+          }
+        }
+
+        if (!safe) {
           return false;
         }
       }
-
-      return true;
 
       return true;
     } else {
@@ -880,7 +920,7 @@ export class Scene {
       // 1. Subtract
       for (const wb of activeWalkboxes) {
         if (wb.mode === 'Subtract') {
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             return false;
           }
         }
@@ -889,7 +929,7 @@ export class Scene {
       // 2. Add
       for (const wb of activeWalkboxes) {
         if (wb.mode === 'Add') {
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             return true;
           }
         }
@@ -901,7 +941,7 @@ export class Scene {
       for (const wb of activeWalkboxes) {
         if (!wb.mode || wb.mode === 'Invert') {
           hasInvert = true;
-          if (Geometry.isPointInPolygon({ x, y }, wb.poly)) {
+          if (Geometry.isPointInPolygonWithEpsilon({ x, y }, wb.poly)) {
             inclusionCount++;
           }
         }
@@ -971,7 +1011,7 @@ export class Scene {
         // Note: Triggerboxes with WalkBox ONLY should now NOT block (Fixed)
         const isScriptTrigger = obj instanceof Triggerbox && obj.script && obj.script.length > 0;
 
-        const hasInteractions = obj.interactions && Object.keys(obj.interactions).length > 0;
+        const hasInteractions = ComponentSystem.hasClickInteractionKeys(obj);
         const isInteractive = isComponentInteractive || isScriptTrigger || hasInteractions;
 
         if (isInteractive) {
@@ -1044,11 +1084,11 @@ export class Scene {
     this.syncSubsceneItemScales();
 
     const cameraState = updateSceneCamera(this, deltaTime, {
-      isCenteringX: this._isCenteringX,
-      isCenteringY: this._isCenteringY,
+      centeringDirX: this._centeringDirX,
+      centeringDirY: this._centeringDirY,
     });
-    this._isCenteringX = cameraState.isCenteringX;
-    this._isCenteringY = cameraState.isCenteringY;
+    this._centeringDirX = cameraState.centeringDirX;
+    this._centeringDirY = cameraState.centeringDirY;
 
     this.entities.forEach((entity) => {
       if (entity.disabled) return;
@@ -1141,6 +1181,7 @@ export class Scene {
       camMinY: this.camMinY,
       camMaxY: this.camMaxY,
       soundEnv: this.soundEnv,
+      sceneLog: this.sceneLog.toJSON(),
     };
   }
 }

@@ -9,19 +9,17 @@ export const ActorProperties: React.FC = () => {
   const actor = obj;
 
   return (
-    <>
-      <div ref={setSectionRef(4)} className="properties-section-block" data-section={4}>
-        <div className="properties-section-header properties-section-blue">
-          <div className="properties-section-title">
-            <span className="properties-section-number properties-section-blue">4</span>
-            <span className="properties-section-label">ACTOR PROP.</span>
-          </div>
+    <div ref={setSectionRef(4)} className="properties-section-block" data-section={4}>
+      <div className="properties-section-header properties-section-azure">
+        <div className="properties-section-title">
+          <span className="properties-section-number properties-section-azure">4</span>
+          <span className="properties-section-label">ACTOR PROP.</span>
         </div>
       </div>
 
       {/* Is Player */}
       <div className="e-row">
-        <label className="e-label ui-inline-flex-center ui-text-accent-blue">
+        <label className="e-label ui-inline-flex-center">
           <input
             type="checkbox"
             style={{ marginRight: '5px' }}
@@ -66,6 +64,23 @@ export const ActorProperties: React.FC = () => {
         />
       </div>
 
+      {/* Perception Radius */}
+      <div className="e-row">
+        <label className="e-label">Perception Radius</label>
+        <input
+          type="number"
+          min="0"
+          step="10"
+          className="e-input"
+          value={formatPanelNumber(actor.perceptionRadius ?? 600)}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            actor.perceptionRadius = Number.isFinite(value) ? Math.max(0, value) : 600;
+            incrementObjectVersion();
+          }}
+        />
+      </div>
+
       {/* Anim Speed */}
       <div className="e-row">
         <label className="e-label">Anim Speed (ms)</label>
@@ -82,12 +97,11 @@ export const ActorProperties: React.FC = () => {
       <div className="e-row" style={{ marginTop: '10px' }}>
         <div
           className="e-label ui-text-accent-blue ui-font-bold"
-          style={{ display: 'flex', justifyContent: 'space-between' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <span>ANIMATION SETS</span>
           <button
-            className="e-btn"
-            style={{ padding: '0 5px', fontSize: '10px' }}
+            className="e-btn e-action-add-btn"
             onClick={() => {
               if (!actor.animSets) actor.animSets = {};
               let newId = 'idle';
@@ -121,11 +135,9 @@ export const ActorProperties: React.FC = () => {
           return (
             <div
               key={setId}
+              className="component-block"
               style={{
-                background: '#222',
-                padding: '5px',
                 marginBottom: '5px',
-                borderRadius: '4px',
               }}
             >
               <div
@@ -140,10 +152,10 @@ export const ActorProperties: React.FC = () => {
                   className="e-input"
                   style={{
                     fontWeight: 'bold',
-                    color: '#ddd',
+                    color: 'var(--ui-input-text)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: '1px solid #444',
+                    borderBottom: '1px solid var(--ui-input-border)',
                     maxWidth: '100px',
                   }}
                   defaultValue={setId}
@@ -166,8 +178,7 @@ export const ActorProperties: React.FC = () => {
                   }}
                 />
                 <button
-                  className="e-btn e-btn-red"
-                  style={{ padding: '0 5px' }}
+                  className="e-btn e-btn-red e-action-delete-btn"
                   onClick={() => {
                     if (confirm(`Delete animation set '${setId}'?`)) {
                       delete actor.animSets[setId];
@@ -202,7 +213,17 @@ export const ActorProperties: React.FC = () => {
                     className="e-input"
                     style={{ flex: 1, fontSize: '10px', padding: '1px' }}
                     value={set[dir] || ''}
-                    readOnly
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      set[dir] = val;
+                      const selectedActor = game.editor.selectedObject as Actor;
+                      if (selectedActor && selectedActor.animSets) {
+                        const realSet = selectedActor.animSets[setId];
+                        if (realSet) realSet[dir] = val;
+                        selectedActor.updateSpriteForState();
+                      }
+                      incrementObjectVersion();
+                    }}
                   />
                   <button
                     className="e-btn"
@@ -227,6 +248,6 @@ export const ActorProperties: React.FC = () => {
             </div>
           );
         })}
-    </>
+    </div>
   );
 };

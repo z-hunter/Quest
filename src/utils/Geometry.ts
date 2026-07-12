@@ -109,4 +109,66 @@ export class Geometry {
       return 0 < lambda && lambda < 1 && 0 < gamma && gamma < 1;
     }
   }
+
+  static isPointInPolygonWithEpsilon(
+    point: { x: number; y: number },
+    polygon: { x: number; y: number }[],
+    epsilon = 0.001
+  ): boolean {
+    if (Geometry.isPointInPolygon(point, polygon)) return true;
+    if (Geometry.isPointInPolygon({ x: point.x - epsilon, y: point.y }, polygon)) return true;
+    if (Geometry.isPointInPolygon({ x: point.x + epsilon, y: point.y }, polygon)) return true;
+    if (Geometry.isPointInPolygon({ x: point.x, y: point.y - epsilon }, polygon)) return true;
+    if (Geometry.isPointInPolygon({ x: point.x, y: point.y + epsilon }, polygon)) return true;
+    return false;
+  }
+
+  static isPointInsideUnionOfPolygons(
+    point: { x: number; y: number },
+    polys: { x: number; y: number }[][],
+    epsilon = 2.0
+  ): boolean {
+    // 1. Strictly inside or within a tiny float epsilon (0.001) of at least one polygon
+    // This allows points exactly on or very close to any boundary (including exterior ones).
+    for (const poly of polys) {
+      if (Geometry.isPointInPolygonWithEpsilon(point, poly, 0.001)) {
+        return true;
+      }
+    }
+
+    // 2. Further outside, but in a gap between walkboxes.
+    // It must be close to at least TWO different polygons (within epsilon) to bridge the transition.
+    let closeToCount = 0;
+    for (const poly of polys) {
+      if (Geometry.isPointInPolygonWithEpsilon(point, poly, epsilon)) {
+        closeToCount++;
+        if (closeToCount >= 2) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static rectInsideUnionOfPolygons(
+    rect: { x: number; y: number; w: number; h: number },
+    polys: { x: number; y: number }[][],
+    epsilon = 2.0
+  ): boolean {
+    const stepsX = 4;
+    const stepsY = 4;
+
+    for (let i = 0; i <= stepsX; i++) {
+      const px = rect.x + (rect.w * i) / stepsX;
+      for (let j = 0; j <= stepsY; j++) {
+        const py = rect.y + (rect.h * j) / stepsY;
+        const pt = { x: px, y: py };
+        if (!Geometry.isPointInsideUnionOfPolygons(pt, polys, epsilon)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 }

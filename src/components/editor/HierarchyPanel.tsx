@@ -272,6 +272,8 @@ export const HierarchyPanel: React.FC = () => {
     [hasChildrenByName]
   );
 
+  const anyExpanded = [...hasChildrenByName].some((name) => !collapsedNodes.has(name));
+
   const visibleObjects = React.useMemo(() => {
     if (filterNeedle) return hierarchicalObjects;
     const isAnyAncestorCollapsed = (name: string): boolean => {
@@ -916,8 +918,8 @@ export const HierarchyPanel: React.FC = () => {
             <button
               type="button"
               className="toolbar-icon-btn"
-              title="Collapse all"
-              onClick={collapseAll}
+              title={anyExpanded ? 'Collapse all' : 'Expand all'}
+              onClick={anyExpanded ? collapseAll : expandAll}
               style={{
                 width: '20px',
                 height: '20px',
@@ -926,22 +928,7 @@ export const HierarchyPanel: React.FC = () => {
                 lineHeight: 1,
               }}
             >
-              ▶
-            </button>
-            <button
-              type="button"
-              className="toolbar-icon-btn"
-              title="Expand all"
-              onClick={expandAll}
-              style={{
-                width: '20px',
-                height: '20px',
-                padding: 0,
-                fontSize: '10px',
-                lineHeight: 1,
-              }}
-            >
-              ▼
+              {anyExpanded ? '▶' : '▼'}
             </button>
           </div>
           <Select
@@ -956,10 +943,11 @@ export const HierarchyPanel: React.FC = () => {
             placeholder="+ADD"
             onChange={(value) => handleAdd(value)}
             style={{
-              width: '7.25em',
-              minWidth: '7.25em',
+              width: '6.5em',
+              minWidth: '6.5em',
               fontSize: '12px',
               flexShrink: 0,
+              marginRight: '6px',
             }}
           />
         </div>

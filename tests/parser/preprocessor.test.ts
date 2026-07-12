@@ -136,4 +136,17 @@ describe('Console gameplay preprocessor', () => {
       'You see the city.',
     ]);
   });
+
+  it('writes debug output only while the full console is open', () => {
+    const consoleInstance = new Console({});
+
+    consoleInstance.logDebug('--- LLM PROMPT ---\nclosed');
+    expect(consoleInstance.buffer).toHaveLength(0);
+
+    consoleInstance.setOpen(true);
+    consoleInstance.logDebug('--- LLM PROMPT ---\nopen');
+
+    expect(consoleInstance.buffer.map((line) => line.text)).toEqual(['--- LLM PROMPT ---\nopen']);
+    expect(consoleInstance.buffer[0].showInClosed).toBe(false);
+  });
 });

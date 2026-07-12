@@ -16,6 +16,7 @@ export const SpritePropertiesPanel: React.FC = () => {
 
   const handlePropChange = (field: string, value: any) => {
     (spriteEditor.sprite as any)[field] = value;
+    spriteEditor.isDirty = true;
     spriteEditor.updatePreview();
     incrementSpriteVersion();
   };
@@ -74,8 +75,11 @@ export const SpritePropertiesPanel: React.FC = () => {
             <input
               type="number"
               className="e-input"
-              value={spriteEditor.sprite.x}
-              onChange={(e) => handlePropChange('x', parseInt(e.target.value) || 0)}
+              value={spriteEditor.sprite.x === undefined ? '' : spriteEditor.sprite.x}
+              onChange={(e) => {
+                const val = e.target.value;
+                handlePropChange('x', val === '' || val === '-' ? val : parseInt(val) || 0);
+              }}
             />
           </div>
           <div>
@@ -83,8 +87,11 @@ export const SpritePropertiesPanel: React.FC = () => {
             <input
               type="number"
               className="e-input"
-              value={spriteEditor.sprite.y}
-              onChange={(e) => handlePropChange('y', parseInt(e.target.value) || 0)}
+              value={spriteEditor.sprite.y === undefined ? '' : spriteEditor.sprite.y}
+              onChange={(e) => {
+                const val = e.target.value;
+                handlePropChange('y', val === '' || val === '-' ? val : parseInt(val) || 0);
+              }}
             />
           </div>
         </div>
@@ -98,8 +105,11 @@ export const SpritePropertiesPanel: React.FC = () => {
             <input
               type="number"
               className="e-input"
-              value={spriteEditor.sprite.width}
-              onChange={(e) => handlePropChange('width', parseInt(e.target.value) || 0)}
+              value={spriteEditor.sprite.width === undefined ? '' : spriteEditor.sprite.width}
+              onChange={(e) => {
+                const val = e.target.value;
+                handlePropChange('width', val === '' ? '' : Math.max(0, parseInt(val) || 0));
+              }}
             />
           </div>
           <div>
@@ -107,8 +117,11 @@ export const SpritePropertiesPanel: React.FC = () => {
             <input
               type="number"
               className="e-input"
-              value={spriteEditor.sprite.height}
-              onChange={(e) => handlePropChange('height', parseInt(e.target.value) || 0)}
+              value={spriteEditor.sprite.height === undefined ? '' : spriteEditor.sprite.height}
+              onChange={(e) => {
+                const val = e.target.value;
+                handlePropChange('height', val === '' ? '' : Math.max(0, parseInt(val) || 0));
+              }}
             />
           </div>
         </div>
@@ -118,8 +131,11 @@ export const SpritePropertiesPanel: React.FC = () => {
           <input
             type="number"
             className="e-input"
-            value={spriteEditor.sprite.frames}
-            onChange={(e) => handlePropChange('frames', parseInt(e.target.value) || 1)}
+            value={spriteEditor.sprite.frames === undefined ? '' : spriteEditor.sprite.frames}
+            onChange={(e) => {
+              const val = e.target.value;
+              handlePropChange('frames', val === '' ? '' : Math.max(1, parseInt(val) || 1));
+            }}
           />
         </div>
 

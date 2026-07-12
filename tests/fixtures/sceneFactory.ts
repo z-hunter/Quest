@@ -10,6 +10,7 @@ type EntityOptions = {
   title?: string | null;
   description?: string;
   lore?: string | string[];
+  objectives?: string[];
   takeFailure?: string;
   disabled?: boolean;
   groupID?: string | null;
@@ -100,6 +101,7 @@ export function createSceneFixture(sceneId: string = 'test_scene'): SceneFixture
           : { title: options.title !== undefined ? options.title : name }),
         description: entity.description,
         lore: options.lore,
+        objectives: options.objectives,
         takeFailure: options.takeFailure,
         semanticTags: options.semanticTags,
         relationFacts: options.relationFacts as any,

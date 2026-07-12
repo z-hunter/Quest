@@ -1,0 +1,9 @@
+{
+  "id": "miles_walk_up",
+  "imageFile": "public/assets/miles_n.png",
+  "x": 0,
+  "y": 0,
+  "width": 287,
+  "height": 700,
+  "frames": 20
+}

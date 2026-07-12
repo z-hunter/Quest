@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Entity } from '../../src/entities/Entity';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
@@ -79,6 +79,116 @@ describe('Actor route movement', () => {
     expect(result.code).toBe('route_unreachable');
     expect(actor.state).toBe('idle');
     expect(actor.target).toBeNull();
+  });
+
+  it('routes through a same-scene Exit and Entry between disconnected walkboxes', () => {
+    const fixture = createSceneFixture();
+    const leftFloor = fixture.addWalkbox('LeftFloor');
+    leftFloor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const rightFloor = fixture.addWalkbox('RightFloor');
+    rightFloor.poly = [
+      { x: 200, y: 0 },
+      { x: 300, y: 0 },
+      { x: 300, y: 100 },
+      { x: 200, y: 100 },
+    ];
+    const actor = fixture.addPlayer('Hero', 10, 50);
+    actor.colliderWidth = 4;
+    actor.colliderHeight = 4;
+    actor.speed = 1;
+
+    const entry = fixture.addTriggerbox('RightEntry', {
+      components: [{ type: 'Entry' }],
+    });
+    entry.poly = [
+      { x: 205, y: 45 },
+      { x: 215, y: 45 },
+      { x: 215, y: 55 },
+      { x: 205, y: 55 },
+    ];
+    const exit = fixture.addTriggerbox('LeftExit', {
+      components: [
+        {
+          type: 'Exit',
+          targetSceneId: '',
+          targetEntryId: 'RightEntry',
+          collider: false,
+          portal: true,
+        },
+      ],
+    });
+    exit.poly = [
+      { x: 80, y: 45 },
+      { x: 90, y: 45 },
+      { x: 90, y: 55 },
+      { x: 80, y: 55 },
+    ];
+    const remoteTarget = fixture.addTriggerbox('RemoteTarget');
+    remoteTarget.poly = [
+      { x: 285, y: 45 },
+      { x: 295, y: 45 },
+      { x: 295, y: 55 },
+      { x: 285, y: 55 },
+    ];
+    const teleportPlanning = vi.spyOn(fixture.game.actorNavigation, 'planLocalTeleportRoute');
+    const exactApproachPlanning = vi.spyOn(fixture.game.actorNavigation, 'planApproach');
+    const walkingApproachPlanning = vi.spyOn(fixture.game.actorNavigation, 'planWalkingApproach');
+
+    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, remoteTarget)).toBe(
+      'route_available'
+    );
+    expect(teleportPlanning).not.toHaveBeenCalled();
+    expect(exactApproachPlanning).not.toHaveBeenCalled();
+    expect(walkingApproachPlanning).not.toHaveBeenCalled();
+
+    const exactPlan = fixture.game.actorNavigation.planApproach(actor, remoteTarget);
+    expect(exactPlan.status).toBe('route_available');
+    expect(exactPlan.point).not.toBeNull();
+    const walkingCallsAfterPlan = walkingApproachPlanning.mock.calls.length;
+    const result = actor.moveTo(exactPlan.point!.x, exactPlan.point!.y);
+
+    expect(result.status).toBe('started');
+    expect(teleportPlanning).toHaveBeenCalledTimes(1);
+    expect(walkingApproachPlanning).toHaveBeenCalledTimes(walkingCallsAfterPlan);
+    updateActorUntilIdle(actor);
+    expect(actor.getMoveResult().status).toBe('arrived');
+    expect(actor.x).toBeCloseTo(exactPlan.point!.x);
+    expect(actor.y).toBeCloseTo(exactPlan.point!.y);
+  });
+
+  it('does not expand teleport alternatives for an ordinary walkable approach', () => {
+    const fixture = createSceneFixture();
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: 0, y: 0 },
+      { x: 300, y: 0 },
+      { x: 300, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const actor = fixture.addPlayer('Hero', 10, 50);
+    actor.colliderWidth = 4;
+    actor.colliderHeight = 4;
+    fixture.addTriggerbox('Entry', { components: [{ type: 'Entry' }] });
+    fixture.addTriggerbox('LocalExit', {
+      components: [{ type: 'Exit', targetSceneId: '', targetEntryId: 'Entry' }],
+    });
+    const target = fixture.addTriggerbox('Door');
+    target.poly = [
+      { x: 250, y: 45 },
+      { x: 260, y: 45 },
+      { x: 260, y: 55 },
+      { x: 250, y: 55 },
+    ];
+    const teleportPlanning = vi.spyOn(fixture.game.actorNavigation, 'planLocalTeleportRoute');
+
+    expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('route_available');
+    expect(actor.moveTo(240, 50).status).toBe('started');
+    expect(teleportPlanning).not.toHaveBeenCalled();
   });
 
   it('stops with a blocked result when the planned route becomes obstructed', () => {

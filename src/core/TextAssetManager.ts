@@ -34,6 +34,7 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
   lore?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue[];
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -97,6 +98,8 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     use_missing_item: "You don't have the {item}.",
     use_no_effect_pair: 'Using the {item} on the {target} does nothing.',
     use_no_effect_single: 'You try to use the {target}, but nothing happens.',
+    clarification_cancel_replies: ['none', 'cancel'],
+    clarification_cancelled: 'Command cancelled.',
     command_no_effect: "That doesn't work.",
     parse_unknown: "I don't understand.",
   },
@@ -110,6 +113,18 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     closed_container: 'The {target} is closed.',
     locked_needs: 'Locked. Needs {item}',
     locked_generic: 'Locked.',
+    observed_look: '[ {actor} is looking at {subject} ]',
+    observed_examine: '[ {actor} is examining {subject} ]',
+    observed_look_relation: '[ {actor} is looking {relation} {subject} ]',
+    observed_open: '[ {actor} opens {subject} ]',
+    observed_close: '[ {actor} closes {subject} ]',
+    observed_take: '[ {actor} takes {item} ]',
+    observed_put_relation: '[ {actor} puts {item} {relation} {target} ]',
+    observed_put_target: '[ {actor} puts {item} on {target} ]',
+    observed_drop: '[ {actor} puts down {item} ]',
+    observed_use: '[ {actor} uses {item} on {target} ]',
+    observed_command: '[ {actor} operates {subject} ]',
+    observed_traverse_exit: '[ {actor} goes through {subject} ]',
   },
   scripts: {
     pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',
@@ -124,7 +139,7 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
     look: ['look'],
     examine: ['examine', 'inspect', 'check'],
     take: ['take', 'get', 'pickup', 'pick up'],
-    put: ['put', 'drop', 'place'],
+    put: ['put', 'drop', 'place', 'throw', 'toss', 'discard'],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -144,7 +159,17 @@ const DEFAULT_PARSER_LEXICON: ParserLexiconAsset = {
       'check',
     ],
     take: ['pick up', 'take', 'get', 'grab'],
-    put: ['put down', 'put', 'drop', 'place'],
+    put: [
+      'put down',
+      'throw away',
+      'toss away',
+      'put',
+      'drop',
+      'place',
+      'throw',
+      'toss',
+      'discard',
+    ],
     open: ['open'],
     close: ['close', 'shut'],
     quit: ['quit', 'exit'],
@@ -364,16 +389,95 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
       { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
       { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
       {
-        type: 'showText',
-        messageId: 'no_effect_pair',
-        paramsFromRefs: {
-          item: 'use_item',
-          target: 'use_target',
-        },
+        type: 'actorUseOn',
+        itemRef: 'use_item',
+        targetRef: 'use_target',
+        noEffectMessageId: 'no_effect_pair',
       },
     ],
     messages: {
       no_effect_pair: 'Using the {item} on the {target} does nothing.',
+    },
+  },
+  {
+    id: 'turn_tv_on',
+    phrases: ['turn on tv', 'turn tv on'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv_rc',
+        scopes: ['held', 'reachable'],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'on',
+        missingMessageId: 'missing_power_state',
+      },
+      { type: 'showText', messageId: 'success' },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks on.',
+    },
+  },
+  {
+    id: 'turn_tv_off',
+    phrases: ['turn off tv', 'turn tv off'],
+    arguments: [],
+    plan: [
+      {
+        type: 'requireEntityAvailable',
+        entityId: 'tv',
+        scopes: ['visible'],
+        missingMessageId: 'missing_tv',
+      },
+      {
+        type: 'requireAnyEntityAvailable',
+        saveAs: 'turn_off_method',
+        options: [
+          { entityId: 'tv_rc', scopes: ['held', 'reachable'], saveAsValue: 'remote' },
+          { entityId: 'tv', scopes: ['reachable'], saveAsValue: 'manual' },
+        ],
+        missingMessageId: 'missing_remote',
+      },
+      {
+        type: 'setEntityState',
+        entityId: 'tv',
+        stateId: 'power',
+        value: 'off',
+        missingMessageId: 'missing_power_state',
+      },
+      {
+        type: 'showText',
+        messageId: 'success',
+        messageIdByRef: {
+          ref: 'turn_off_method',
+          values: {
+            manual: 'success_manual',
+            remote: 'success',
+          },
+          fallbackMessageId: 'success',
+        },
+      },
+    ],
+    messages: {
+      missing_tv: "You don't see the TV here.",
+      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_power_state: 'The TV refuses to respond.',
+      success: 'The TV clicks off.',
+      success_manual: 'Fortunately, this thing can be turned off without the remote.',
     },
   },
 ];
@@ -467,6 +571,7 @@ export class TextAssetManager {
       description: fallbackDescription,
       details: '',
       lore: '',
+      objectives: [],
       takeFailure: '',
       synonyms: [],
     };
@@ -685,10 +790,21 @@ export class TextAssetManager {
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
   }
 
+  hasAuthoredObjectTitle(obj: SceneObject): boolean {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
+    return !!title?.trim();
+  }
+
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {
     const objectId = this.normalizeId(obj?.name || '');
     const asset = objectId ? this.objectCache.get(objectId) : null;
     return this.resolveListField(asset, field);
+  }
+
+  getResolvedObjectListRevision(obj: SceneObject, field: string): string {
+    return JSON.stringify(this.getResolvedObjectListField(obj, field));
   }
 
   getResolvedObjectStructuredListField<T>(
@@ -734,6 +850,31 @@ export class TextAssetManager {
     }
 
     return this.interpolate(text, params);
+  }
+
+  getServiceList(key: string): string[] {
+    const rawKey = String(key || '').trim();
+    if (!rawKey) return [];
+
+    const dotIndex = rawKey.indexOf('.');
+    if (dotIndex === -1) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    const domain = rawKey.slice(0, dotIndex).toLowerCase();
+    const entryKey = rawKey.slice(dotIndex + 1);
+    if (!entryKey) {
+      console.warn(`[TextAssetManager] Invalid service list key '${rawKey}'.`);
+      return [];
+    }
+
+    if (!this.serviceCache.has(domain)) {
+      this.serviceCache.set(domain, this.getDefaultServiceDomain(domain));
+      void this.readServiceAsset(domain, true);
+    }
+
+    return this.resolveListField(this.serviceCache.get(domain) || {}, entryKey);
   }
 
   private resolveField(
@@ -847,6 +988,8 @@ export class TextAssetManager {
       normalized.details = asset.details as TextAssetTextValue;
     if (this.resolveTextValue(asset.lore) !== null)
       normalized.lore = asset.lore as TextAssetTextValue;
+    if (Array.isArray(asset.objectives))
+      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');

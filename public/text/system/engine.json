@@ -3,9 +3,22 @@
   "click_you_see": "You see {title}",
   "too_far_generic": "You are too far away.",
   "too_far_from_entity": "You are too far away from the {target}.",
+  "close_subscene_before_moving": "Close the current view before moving.",
   "cant_reach_generic": "You can't reach it.",
   "blocked_inside_closed": "You can't reach that while it is inside something closed.",
   "closed_container": "The {target} is closed.",
   "locked_needs": "Locked. Needs {item}",
-  "locked_generic": "Locked."
+  "locked_generic": "Locked.",
+  "observed_look": "[ {actor} is looking at {subject} ]",
+  "observed_examine": "[ {actor} is examining {subject} ]",
+  "observed_look_relation": "[ {actor} is looking {relation} {subject} ]",
+  "observed_open": "[ {actor} opens {subject} ]",
+  "observed_close": "[ {actor} closes {subject} ]",
+  "observed_take": "[ {actor} takes {item} ]",
+  "observed_put_relation": "[ {actor} puts {item} {relation} {target} ]",
+  "observed_put_target": "[ {actor} puts {item} on {target} ]",
+  "observed_drop": "[ {actor} puts down {item} ]",
+  "observed_use": "[ {actor} uses {item} on {target} ]",
+  "observed_command": "[ {actor} operates {subject} ]",
+  "observed_traverse_exit": "[ {actor} goes through {subject} ]"
 }

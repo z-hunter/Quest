@@ -18,6 +18,9 @@ export const SectionComponents: React.FC = () => {
   const { game, obj, selectedObjectType, setSectionRef, incrementObjectVersion } =
     usePropertiesContext<SceneObject>();
   const o = obj;
+  const [stateParserNoteRows, setStateParserNoteRows] = React.useState<
+    Record<string, Array<{ id: string; value: string; field: string }>>
+  >({});
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
   const hasActorComponent = (o.components || []).some((comp: any) => comp?.type === 'Actor');
@@ -25,6 +28,8 @@ export const SectionComponents: React.FC = () => {
     selectedObjectType === 'Actor' && !hasActorComponent
       ? [{ type: 'Actor', __virtualActorComponent: true }, ...(o.components || [])]
       : o.components || [];
+  const hasRenderedComponents = renderedComponents.length > 0;
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
   const relationOptions = [
     { value: 'in', label: 'IN' },
     { value: 'on', label: 'ON' },
@@ -44,6 +49,83 @@ export const SectionComponents: React.FC = () => {
     { value: 'left', label: 'LEFT' },
     { value: 'right', label: 'RIGHT' },
   ];
+  const stateValueTypeOptions = [
+    { value: 'boolean', label: 'Boolean' },
+    { value: 'number', label: 'Number' },
+    { value: 'string', label: 'String' },
+  ];
+  const getDefaultStateValue = (valueType: string): string | number | boolean => {
+    if (valueType === 'string') return '';
+    if (valueType === 'number') return 0;
+    return false;
+  };
+  const normalizeStateValue = (value: unknown, valueType: string): string | number | boolean => {
+    if (valueType === 'string') return typeof value === 'string' ? value : String(value ?? '');
+    if (valueType === 'number') {
+      const parsed = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return typeof value === 'boolean' ? value : value === 'true';
+  };
+  const getStateParserNoteRowsKey = (idx: number): string => `${o.name || 'object'}:${idx}`;
+  const getStateParserNoteRows = (comp: any, idx: number) => {
+    const key = getStateParserNoteRowsKey(idx);
+    const draft = stateParserNoteRows[key];
+    if (draft) return draft;
+    return Object.entries(comp.parserNoteTextAssets || {}).map(([value, field]) => ({
+      id: `saved:${value}`,
+      value,
+      field: typeof field === 'string' ? field : String(field ?? ''),
+    }));
+  };
+  const commitStateParserNoteRows = (
+    comp: any,
+    idx: number,
+    rows: Array<{ id: string; value: string; field: string }>
+  ) => {
+    const key = getStateParserNoteRowsKey(idx);
+    setStateParserNoteRows((current) => ({ ...current, [key]: rows }));
+
+    const next = rows.reduce<Record<string, string>>((acc, row) => {
+      const value = row.value.trim();
+      const field = row.field.trim();
+      if (value && field) acc[value] = field;
+      return acc;
+    }, {});
+
+    if (Object.keys(next).length > 0) {
+      comp.parserNoteTextAssets = next;
+    } else {
+      delete comp.parserNoteTextAssets;
+    }
+
+    incrementObjectVersion();
+  };
+  const updateStateParserNoteRow = (
+    comp: any,
+    idx: number,
+    rowId: string,
+    patch: Partial<{ value: string; field: string }>
+  ) => {
+    const rows = getStateParserNoteRows(comp, idx).map((row) =>
+      row.id === rowId ? { ...row, ...patch } : row
+    );
+    commitStateParserNoteRows(comp, idx, rows);
+  };
+  const addStateParserNoteRow = (comp: any, idx: number) => {
+    const rows = [
+      ...getStateParserNoteRows(comp, idx),
+      { id: `new:${Date.now()}:${Math.random()}`, value: '', field: '' },
+    ];
+    setStateParserNoteRows((current) => ({
+      ...current,
+      [getStateParserNoteRowsKey(idx)]: rows,
+    }));
+  };
+  const removeStateParserNoteRow = (comp: any, idx: number, rowId: string) => {
+    const rows = getStateParserNoteRows(comp, idx).filter((row) => row.id !== rowId);
+    commitStateParserNoteRows(comp, idx, rows);
+  };
   const normalizeContainerRelation = (comp: any): 'in' | 'on' | 'under' | 'behind' => {
     if (comp?.type === 'Inventory') {
       return comp?.relation === 'on' ||
@@ -108,8 +190,21 @@ export const SectionComponents: React.FC = () => {
     </div>
   );
 
+  React.useEffect(() => {
+    if (hasRenderedComponents) {
+      sectionRef.current?.classList.remove('collapsed');
+    }
+  }, [hasRenderedComponents]);
+
   return (
-    <div ref={setSectionRef(3)} className="properties-section-block" data-section={3}>
+    <div
+      ref={(node) => {
+        sectionRef.current = node;
+        setSectionRef(3)(node);
+      }}
+      className={`properties-section-block ${hasRenderedComponents ? '' : 'properties-section-empty'}`}
+      data-section={3}
+    >
       <div className="properties-section-header properties-section-red">
         <div className="properties-section-title">
           <span className="properties-section-number properties-section-red">3</span>
@@ -117,8 +212,10 @@ export const SectionComponents: React.FC = () => {
         </div>
         <div className="properties-section-actions">
           <Select
+            className="compact-action-select header-dropdown"
             options={[
               { value: 'Item', label: 'Item (Pickup)' },
+              { value: 'State', label: 'State' },
               { value: 'Inventory', label: 'Inventory' },
               { value: 'Surface', label: 'Surface' },
               { value: 'Subscene', label: 'Subscene' },
@@ -137,9 +234,14 @@ export const SectionComponents: React.FC = () => {
                     { value: 'WalkBox', label: 'WalkBox (Collider)' },
                   ]
                 : []),
-              ...(selectedObjectType === 'Actor' ? [{ value: 'Shadow', label: 'Shadow' }] : []),
+              ...(selectedObjectType === 'Actor'
+                ? [
+                    { value: 'NPC', label: 'NPC' },
+                    { value: 'Shadow', label: 'Shadow' },
+                  ]
+                : []),
             ].map((opt) => ({ ...opt, icon: getIconUrl(opt.value) }))}
-            placeholder="+ Add Component"
+            placeholder="+ ADD"
             onChange={(value) => {
               const type = value;
               if (!type) return;
@@ -153,8 +255,10 @@ export const SectionComponents: React.FC = () => {
               if (!o.components) o.components = [];
               const relation = hasTitle ? getNextAvailableContainerRelation() : null;
 
+              sectionRef.current?.classList.remove('collapsed');
+
               if (type === 'Subscene') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Subscene',
                   targetGroupId: '',
                   itemScale: 1,
@@ -162,19 +266,27 @@ export const SectionComponents: React.FC = () => {
                   description: '',
                 });
               } else if (type === 'Subtrigger') {
-                o.components.push({ type: 'Subtrigger', target: '' });
+                o.components.unshift({ type: 'Subtrigger', target: '' });
               } else if (type === 'Exit') {
-                o.components.push({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
+                o.components.unshift({ type: 'Exit', targetSceneId: '', targetEntryId: '' });
               } else if (type === 'Entry') {
-                o.components.push({ type: 'Entry', direction: 'down' });
+                o.components.unshift({ type: 'Entry', direction: 'down' });
               } else if (type === 'Item') {
-                o.components.push({ type: 'Item' });
+                o.components.unshift({ type: 'Item' });
+              } else if (type === 'State') {
+                o.components.unshift({
+                  type: 'State',
+                  id: 'state',
+                  valueType: 'boolean',
+                  initialValue: false,
+                  value: false,
+                });
               } else if (type === 'Inventory') {
                 if (hasTitle && !relation) {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Inventory',
                   relation: relation || 'in',
                   capacity: 8,
@@ -187,7 +299,7 @@ export const SectionComponents: React.FC = () => {
                   game.showNotification?.('This object already has containers for all relations.');
                   return;
                 }
-                o.components.push({
+                o.components.unshift({
                   type: 'Surface',
                   relation: relation || 'in',
                   capacity: 8,
@@ -195,7 +307,7 @@ export const SectionComponents: React.FC = () => {
                   items: [],
                 });
               } else if (type === 'Switch') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Switch',
                   groupId1: '',
                   groupId2: '',
@@ -208,13 +320,13 @@ export const SectionComponents: React.FC = () => {
                   blockedRelation: 'in',
                 });
               } else if (type === 'Blocker') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Blocker',
                   transparent: false,
                   blockedRelation: 'in',
                 });
               } else if (type === 'Backface') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Backface',
                   vertexA: 0,
                   vertexB: 1,
@@ -224,17 +336,24 @@ export const SectionComponents: React.FC = () => {
                   cullingType: 'layer',
                 });
               } else if (type === 'Shadow') {
-                o.components.push({
+                o.components.unshift({
                   type: 'Shadow',
                   shadowQuadId: '',
                   offsetX: 0,
                   offsetY: 0,
                   triggerId: '',
                 });
+              } else if (type === 'NPC') {
+                o.components.unshift({
+                  type: 'NPC',
+                  enabled: true,
+                  memory: '',
+                  objectives: [],
+                });
               } else if (type === '3d-parallax') {
-                o.components.push({ type: '3d-parallax' });
+                o.components.unshift({ type: '3d-parallax' });
               } else if (type === 'WalkBox') {
-                o.components.push({ type: 'WalkBox', mode: 'Invert' });
+                o.components.unshift({ type: 'WalkBox', mode: 'Invert' });
               }
 
               if (game.editor.selectedObject) {
@@ -242,7 +361,7 @@ export const SectionComponents: React.FC = () => {
               }
               incrementObjectVersion();
             }}
-            style={{ width: '100%' }}
+            style={{ width: '8em' }}
             value=""
           />
         </div>
@@ -256,22 +375,20 @@ export const SectionComponents: React.FC = () => {
         return (
           <div
             key={isVirtualActorComponent ? 'actor-component' : idx}
+            className="component-block"
             style={{
-              background: '#332',
-              padding: '5px',
               marginBottom: '5px',
-              borderRadius: '4px',
-              border: '1px solid #553',
             }}
           >
             <div
+              className="component-header"
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 marginBottom: '5px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', color: '#fb8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', color: 'var(--ui-main-color)' }}>
                 {getIconUrl(comp.type) && (
                   <div
                     style={{
@@ -290,8 +407,7 @@ export const SectionComponents: React.FC = () => {
                 <span className="ui-font-bold">{comp.type}</span>
               </div>
               <button
-                className="e-btn e-btn-red"
-                style={{ padding: '0 5px' }}
+                className="e-btn e-btn-red e-action-delete-btn"
                 onClick={async () => {
                   if (comp.type === 'Actor') {
                     if (game.editor.selectedObject instanceof Actor) {
@@ -326,7 +442,7 @@ export const SectionComponents: React.FC = () => {
               <div
                 style={{
                   fontSize: '10px',
-                  color: '#ccc',
+                  color: 'var(--ui-label-color)',
                   fontStyle: 'italic',
                   marginBottom: '4px',
                 }}
@@ -335,12 +451,83 @@ export const SectionComponents: React.FC = () => {
               </div>
             )}
 
+            {comp.type === 'NPC' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--ui-label-color)',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Enables Puppet Master dialogue, NPC memory, and runtime objectives.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    <input
+                      type="checkbox"
+                      checked={comp.enabled !== false}
+                      onChange={(e) => {
+                        comp.enabled = e.target.checked;
+                        incrementObjectVersion();
+                      }}
+                    />{' '}
+                    Enabled
+                  </label>
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Memory
+                  </label>
+                  <textarea
+                    className="e-input"
+                    rows={3}
+                    value={comp.memory || ''}
+                    onChange={(e) => {
+                      comp.memory = e.target.value;
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Current Objectives
+                  </label>
+                  <textarea
+                    className="e-input"
+                    rows={3}
+                    value={
+                      Array.isArray(comp.objectives) &&
+                      (comp.objectives.length > 0 ||
+                        comp.objectivesTARevision ===
+                          game.textAssets.getResolvedObjectListRevision(o, 'objectives'))
+                        ? comp.objectives.join('\n')
+                        : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
+                    }
+                    onChange={(e) => {
+                      comp.objectives = e.target.value
+                        .split(/\r?\n/)
+                        .map((objective: string) => objective.trim())
+                        .filter(Boolean);
+                      comp.objectivesInitializedFromTA = true;
+                      comp.objectivesTARevision = game.textAssets.getResolvedObjectListRevision(
+                        o,
+                        'objectives'
+                      );
+                      incrementObjectVersion();
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
             {comp.type === 'Backface' && (
               <>
                 <div
                   style={{
                     fontSize: '0.8em',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -456,7 +643,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -464,10 +651,7 @@ export const SectionComponents: React.FC = () => {
                   Can be picked up by player.
                 </div>
                 <div className="e-row">
-                  <label
-                    className="e-label ui-text-accent-blue ui-inline-flex-center"
-                    style={{ fontSize: '10px' }}
-                  >
+                  <label className="e-label ui-inline-flex-center" style={{ fontSize: '10px' }}>
                     <input
                       type="checkbox"
                       style={{ marginRight: '5px' }}
@@ -483,12 +667,215 @@ export const SectionComponents: React.FC = () => {
               </>
             )}
 
+            {comp.type === 'State' && (
+              <>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--ui-label-color)',
+                    fontStyle: 'italic',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Script-readable object state.
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    ID / Type
+                  </label>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) 104px',
+                      gap: '6px',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="e-input"
+                      value={comp.id || ''}
+                      onChange={(e) => {
+                        comp.id = e.target.value.trim();
+                        incrementObjectVersion();
+                      }}
+                    />
+                    <Select
+                      value={comp.valueType || 'boolean'}
+                      onChange={(value) => {
+                        comp.valueType = value;
+                        comp.initialValue = getDefaultStateValue(value);
+                        comp.value = comp.initialValue;
+                        incrementObjectVersion();
+                      }}
+                      options={stateValueTypeOptions}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Values
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        Initial
+                      </label>
+                      {comp.valueType === 'boolean' ? (
+                        <Select
+                          value={String(normalizeStateValue(comp.initialValue, 'boolean'))}
+                          onChange={(value) => {
+                            comp.initialValue = value === 'true';
+                            comp.value = comp.initialValue;
+                            incrementObjectVersion();
+                          }}
+                          options={[
+                            { value: 'false', label: 'False' },
+                            { value: 'true', label: 'True' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <input
+                          type={comp.valueType === 'number' ? 'number' : 'text'}
+                          className="e-input"
+                          value={String(
+                            normalizeStateValue(comp.initialValue, comp.valueType || 'boolean')
+                          )}
+                          onChange={(e) => {
+                            comp.initialValue = normalizeStateValue(
+                              e.target.value,
+                              comp.valueType || 'boolean'
+                            );
+                            comp.value = comp.initialValue;
+                            incrementObjectVersion();
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        Current
+                      </label>
+                      {comp.valueType === 'boolean' ? (
+                        <Select
+                          value={String(
+                            normalizeStateValue(
+                              comp.value === undefined ? comp.initialValue : comp.value,
+                              'boolean'
+                            )
+                          )}
+                          onChange={(value) => {
+                            comp.value = value === 'true';
+                            incrementObjectVersion();
+                          }}
+                          options={[
+                            { value: 'false', label: 'False' },
+                            { value: 'true', label: 'True' },
+                          ]}
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <input
+                          type={comp.valueType === 'number' ? 'number' : 'text'}
+                          className="e-input"
+                          value={String(
+                            normalizeStateValue(
+                              comp.value === undefined ? comp.initialValue : comp.value,
+                              comp.valueType || 'boolean'
+                            )
+                          )}
+                          onChange={(e) => {
+                            comp.value = normalizeStateValue(
+                              e.target.value,
+                              comp.valueType || 'boolean'
+                            );
+                            incrementObjectVersion();
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="e-row">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1fr) 28px',
+                        gap: '6px',
+                      }}
+                    >
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        State Value
+                      </label>
+                      <label className="e-label" style={{ fontSize: '9px' }}>
+                        TA Field
+                      </label>
+                    </div>
+                    {getStateParserNoteRows(comp, idx).map((row) => (
+                      <div
+                        key={row.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1fr) 28px',
+                          gap: '6px',
+                        }}
+                      >
+                        <input
+                          className="e-input"
+                          placeholder="state value"
+                          value={row.value}
+                          onChange={(e) =>
+                            updateStateParserNoteRow(comp, idx, row.id, { value: e.target.value })
+                          }
+                        />
+                        <input
+                          type="text"
+                          className="e-input"
+                          placeholder="object TA field"
+                          value={row.field}
+                          onChange={(e) =>
+                            updateStateParserNoteRow(comp, idx, row.id, { field: e.target.value })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="e-button"
+                          title="Remove"
+                          onClick={() => removeStateParserNoteRow(comp, idx, row.id)}
+                          style={{
+                            alignSelf: 'center',
+                            width: '20px',
+                            height: '20px',
+                            minWidth: 0,
+                            padding: 0,
+                            lineHeight: '18px',
+                            fontSize: '10px',
+                          }}
+                        >
+                          X
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="e-button"
+                      onClick={() => addStateParserNoteRow(comp, idx)}
+                    >
+                      Add State Value
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
             {comp.type === 'Inventory' && (
               <>
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -529,10 +916,7 @@ export const SectionComponents: React.FC = () => {
                   />
                 </div>
                 <div className="e-row">
-                  <label
-                    className="e-label ui-text-accent-blue ui-inline-flex-center"
-                    style={{ fontSize: '10px' }}
-                  >
+                  <label className="e-label ui-inline-flex-center" style={{ fontSize: '10px' }}>
                     <input
                       type="checkbox"
                       style={{ marginRight: '5px' }}
@@ -570,7 +954,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -712,7 +1096,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -741,7 +1125,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -775,6 +1159,119 @@ export const SectionComponents: React.FC = () => {
                     }}
                   />
                 </div>
+                <div className="e-row">
+                  <label className="e-label" style={{ fontSize: '10px' }}>
+                    Trigger Options
+                  </label>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      fontSize: '10px',
+                      color: 'var(--ui-label-color)',
+                    }}
+                  >
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={comp.collider !== false}
+                        onChange={(e) => {
+                          comp.collider = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Collider
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!comp.portal}
+                        onChange={(e) => {
+                          comp.portal = e.target.checked;
+                          incrementObjectVersion();
+                        }}
+                      />
+                      Portal
+                    </label>
+                  </div>
+                </div>
+                <div className="e-row">
+                  <button
+                    className="e-button"
+                    style={{ marginTop: '4px' }}
+                    onClick={() => {
+                      let sceneId = comp.targetSceneId?.trim() || '';
+                      if (sceneId.toLowerCase().endsWith('.json')) {
+                        sceneId = sceneId.slice(0, -5);
+                      }
+
+                      const entryId = comp.targetEntryId?.trim();
+                      if (!sceneId) {
+                        sceneId = game.sceneManager.currentScene?.id || '';
+                      }
+                      if (!sceneId) {
+                        game.onMessage?.(
+                          'Error: Target Scene ID is empty and no current scene loaded.'
+                        );
+                        return;
+                      }
+
+                      const targetScene = game.sceneManager.scenes.get(sceneId);
+                      const descriptor = game.sceneManager.sceneRegistry.get(sceneId);
+
+                      if (!targetScene && !descriptor) {
+                        game.onMessage?.(`Error: Scene "${sceneId}" not found in registry.`);
+                        return;
+                      }
+
+                      let msg = `Scene "${sceneId}" found.`;
+
+                      const targetTitle = targetScene?.name || descriptor?.title;
+
+                      if (!targetTitle?.trim()) {
+                        msg += ' Warning: Target scene has no Title.';
+                      } else {
+                        msg += ` Title: "${targetTitle}".`;
+                      }
+
+                      if (entryId) {
+                        if (targetScene) {
+                          const targetObj = targetScene.getObjectByName(entryId);
+                          const hasEntry =
+                            targetObj && targetObj.components?.some((c: any) => c.type === 'Entry');
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in loaded scene.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else if (descriptor?.sourceData) {
+                          const sd = descriptor.sourceData;
+                          const allObjects = [...(sd.entities || []), ...(sd.triggerboxes || [])];
+                          const hasEntry = allObjects.some(
+                            (e: any) =>
+                              String(e.name || '').trim() === entryId &&
+                              (e.components || []).some((c: any) => c.type === 'Entry')
+                          );
+                          if (!hasEntry) {
+                            game.onMessage?.(
+                              msg + ` Error: Entry "${entryId}" not found in scene data.`
+                            );
+                            return;
+                          }
+                          msg += ` Entry "${entryId}" found.`;
+                        } else {
+                          msg += ` (Scene not loaded, entry check skipped).`;
+                        }
+                      }
+
+                      game.onMessage?.(msg);
+                    }}
+                  >
+                    Check
+                  </button>
+                </div>
               </>
             )}
 
@@ -784,7 +1281,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}
@@ -810,7 +1307,13 @@ export const SectionComponents: React.FC = () => {
             {comp.type === '3d-parallax' && (
               <>
                 <div className="e-row">
-                  <div style={{ fontSize: '10px', color: '#ccc', fontStyle: 'italic' }}>
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--ui-label-color)',
+                      fontStyle: 'italic',
+                    }}
+                  >
                     Interpolates Actor Parallax based on Quad's vertexes P.
                   </div>
                 </div>
@@ -823,7 +1326,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '5px',
                     }}
@@ -1053,7 +1556,7 @@ export const SectionComponents: React.FC = () => {
                 <div
                   style={{
                     fontSize: '10px',
-                    color: '#ccc',
+                    color: 'var(--ui-label-color)',
                     fontStyle: 'italic',
                     marginBottom: '4px',
                   }}
@@ -1096,7 +1599,7 @@ export const SectionComponents: React.FC = () => {
                   <div
                     style={{
                       fontSize: '10px',
-                      color: '#ccc',
+                      color: 'var(--ui-label-color)',
                       fontStyle: 'italic',
                       marginBottom: '4px',
                     }}

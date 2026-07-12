@@ -20,7 +20,7 @@ At the start of a new session, before resuming nontrivial work, or before archit
 
 - Codex owns architecture judgment, risk assessment, code review, test selection, final integration, and user-facing recommendations.
 - NotebookLM and `local_rag` provide recall and synthesis, not final truth.
-- Gemini may perform bounded technical work only under explicit scope.
+- Antigravity may perform bounded technical work or orchestrate its own tools/subagents only under explicit scope.
 - The repository and tests are the current source of truth.
 
 ## Knowledge Sources
@@ -190,37 +190,40 @@ Kairo conventions:
 
 - Sync repo: private GitHub repo `z-hunter/kairo-tasks-sync` (`git@github.com:z-hunter/kairo-tasks-sync.git`), local path `C:\Users\Professional\AppData\Roaming\kairo\tasks-sync`.
 - Use `proj:quest`.
-- Prefer tags: `owner:<codex|user|gemini|agent-name>`, `type:<bug|feature|review|test|docs|research|decision|chore|followup>`, `area:<subsystem>`, `source:<chat|review|test|notebooklm|memory|gdd|user>`, `status-meta:<blocked|needs-user|needs-acceptance|waiting|delegated>`, `session:<YYYY-MM-DD>`.
+- Prefer tags: `owner:<codex|user|antigravity|agent-name>`, `type:<bug|feature|review|test|docs|research|decision|chore|followup>`, `area:<subsystem>`, `source:<chat|review|test|notebooklm|memory|gdd|user>`, `status-meta:<blocked|needs-user|needs-acceptance|waiting|delegated>`, `session:<YYYY-MM-DD>`.
 - Priority: `0` blocker/urgent user action/regression risk, `1` important current-session work, `2` normal follow-up, `3` low-priority cleanup or someday.
 - Title: start with `[Quest]`, use an action phrase, and mention owner only when delegated or user-facing.
 - Description: include owner, context, expected outcome, acceptance criteria, relevant files/links, and source when useful.
 
-## Gemini CLI Worker Rule
+## Antigravity CLI Delegation Rule
 
-When Gemini CLI is installed, use it as an external helper for bounded technical tasks where practical and safe. Prefer the `gemini-cli-agent` skill.
+When Antigravity CLI (`agy.exe`) is installed, use it as an external worker or bounded orchestrator for technical tasks where practical and safe. Prefer the `antigravity-cli-agent` skill.
 
-Good Gemini tasks:
+Good Antigravity work packages:
 
-- bounded implementation chores;
-- mechanical edits;
-- small test-writing tasks;
-- focused bug fixes;
-- independent read-only reviews;
+- bounded implementation chores and focused bug fixes;
+- mechanical edits, migrations, and small test-writing tasks;
+- independent read-only reviews or subsystem analysis;
+- several related technical subtasks that Antigravity can decompose across its own tools or subagents;
 - multiple independent tasks with disjoint file ownership.
 
 Do not delegate:
 
-- architecture or product decisions;
-- project-knowledge recall, GDD interpretation, or broad design;
-- open-ended refactors;
-- final integration, test selection, or user-facing recommendations.
+- high-level architecture, product direction, or risk acceptance;
+- project-knowledge recall, GDD interpretation, or design decisions without exact Codex-supplied conclusions;
+- open-ended refactors or authority to expand scope;
+- final integration, test selection, acceptance, or user-facing recommendations.
 
-Gemini rules:
+Antigravity rules:
 
-- Local Gemini has access to `agent_memory` and Kairo. When relevant, create `owner:gemini` tasks and tell Gemini exactly which memory/task context to consult or update.
-- Codex remains responsible for prompt scope, architecture judgment, diff review, test selection, and final integration.
-- Give Gemini strict prompts with allowed write scope, forbidden files, allowed commands, validation expectations, and an instruction to stop if scope is exceeded.
-- After Gemini edits, inspect `git status`/`git diff`, reject out-of-scope changes, and run relevant tests.
+- Local Antigravity may use its available tools, plugins, and subagents within the delegated scope. When relevant, create `owner:antigravity` Kairo tasks and tell it exactly which memory/task context to consult or update.
+- Codex remains responsible for task framing, architecture judgment, write boundaries, diff review, test selection, final integration, and explaining the result independently.
+- Give Antigravity explicit objectives, allowed write scope, forbidden files/changes, validation expectations, deliverables, and stop conditions. Its internal decomposition must preserve those boundaries.
+- Parallel Antigravity work must have disjoint write ownership. Prefer read-only parallel analysis or separate worktrees when overlap is possible.
+- Invoke Antigravity through the `antigravity-cli-agent` ConPTY wrapper. It provides a real Windows pseudoterminal for `agy --print` and captures output headlessly despite the upstream non-TTY stdout bug.
+- Keep delegated work one-shot and explicit. If the captured output contains an interactive permission prompt, stop and retry with narrower scope or an approved permission rule; do not use the shared desktop/TUI as the default control path.
+- After Antigravity edits, inspect `git status`/`git diff`, reject out-of-scope changes, and run the relevant tests locally.
+- ConPTY print sessions terminate automatically after the response. No `/QUIT`, visible terminal cleanup, OCR, or desktop focus handling is needed.
 
 ## Implementation Discipline
 

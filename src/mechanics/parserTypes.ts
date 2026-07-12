@@ -1,6 +1,7 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
+import type { StateValue } from '../systems/ComponentSystem';
 
 export type ParserEntityLocationContext = {
   relation: Exclude<ParserRelationType, 'near'>;
@@ -12,6 +13,12 @@ export type ParserEntityContentContext = {
   relation: Exclude<ParserRelationType, 'near'>;
   id: string;
   title: string;
+};
+
+export type ParserStateContext = {
+  id: string;
+  type: 'string' | 'number' | 'boolean';
+  value: string | number | boolean;
 };
 
 export type ParserEntityContext = {
@@ -34,6 +41,14 @@ export type ParserEntityContext = {
   parserNote?: string;
   parserNoteNeedsCheck?: true;
   interactions?: string[];
+  states?: ParserStateContext[];
+  exit?: {
+    targetSceneId: string;
+    targetEntryId: string | null;
+    targetSceneTitle: string | null;
+    portal: boolean;
+    collider: boolean;
+  };
 };
 
 export type ParserInventoryItemContext = {
@@ -45,6 +60,7 @@ export type ParserInventoryItemContext = {
   lore?: string;
   parserNote?: string;
   parserNoteNeedsCheck?: true;
+  states?: ParserStateContext[];
 };
 
 export type ParserSpatialNodeContext = {
@@ -133,11 +149,81 @@ export type ParserCommandActionSpec =
       ref: string;
     }
   | {
+      type: 'actorUseOn';
+      itemRef: string;
+      targetRef: string;
+      noEffectMessageId?: string;
+      noEffectMessage?: string;
+    }
+  | {
       type: 'showText';
       messageId?: string;
       text?: string;
+      messageIdByRef?: {
+        ref: string;
+        values: Record<string, string>;
+        fallbackMessageId?: string;
+      };
       params?: Record<string, string>;
       paramsFromRefs?: Record<string, string>;
+    }
+  | {
+      type: 'requireEntityAvailable';
+      entityId: string;
+      scopes: ParserScopeSlice[];
+      saveAs?: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireAnyEntityAvailable';
+      options: Array<{
+        entityId: string;
+        scopes: ParserScopeSlice[];
+        saveAsValue?: string;
+      }>;
+      saveAs?: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireContainedGroupEntity';
+      containerRef: string;
+      groupId: string;
+      saveAs: string;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireNumericState';
+      entityRef: string;
+      stateId: string;
+      operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+      value: number;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setEntityState';
+      entityId: string;
+      stateId: string;
+      value: StateValue;
+      missingMessageId?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setGroupDisabled';
+      groupId: string;
+      disabled: boolean;
+    }
+  | {
+      type: 'runScript';
+      scriptId: string;
+      restart?: boolean;
+    }
+  | {
+      type: 'stopScript';
+      scriptId: string;
     };
 
 export type ParserCommandSpec = {
@@ -174,6 +260,7 @@ export type ParserContext = {
   worldFacts?: string[];
   spatialNodes?: ParserSpatialNodeContext[];
   spatialRelations?: ParserSpatialRelationContext[];
+  actionScope?: Partial<Record<ParserScopeSlice, string[]>>;
   pending?: ParserPendingState;
 };
 
@@ -210,6 +297,10 @@ export type ParserToolAction =
   | {
       type: 'examineTarget';
       target: string | null;
+      narration?: {
+        message: string;
+        requiresDiscoveredEntityIds: string[];
+      };
     }
   | {
       type: 'examineRelationTarget';
@@ -234,6 +325,11 @@ export type ParserToolAction =
       relation?: ParserRelationType | null;
     }
   | {
+      type: 'llmClarification';
+      question: string;
+      pendingActions: ParserToolAction[];
+    }
+  | {
       type: 'openTarget';
       target: string | null;
     }
@@ -243,6 +339,7 @@ export type ParserToolAction =
     }
   | {
       type: 'quitCurrentView';
+      target?: string | null;
     }
   | {
       type: 'showInventory';
@@ -284,11 +381,69 @@ export type ParserToolAction =
       ref: string;
     }
   | {
+      type: 'actorUseOn';
+      itemRef: string;
+      targetRef: string;
+      noEffectMessage?: string;
+    }
+  | {
       type: 'showText';
       message?: string;
       textKey?: string;
+      messageByRef?: {
+        ref: string;
+        values: Record<string, string>;
+        fallback?: string;
+      };
       params?: Record<string, string>;
       paramsFromRefs?: Record<string, string>;
+    }
+  | {
+      type: 'runCustomCommand';
+      commandId: string;
+      arguments?: Record<string, string | null>;
+      argumentRefs?: Record<string, string>;
+    }
+  | {
+      type: 'requireEntityAvailable';
+      commandId?: string;
+      entityId: string;
+      scopes: ParserScopeSlice[];
+      saveAs?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'requireAnyEntityAvailable';
+      commandId?: string;
+      options: Array<{
+        entityId: string;
+        scopes: ParserScopeSlice[];
+        saveAsValue?: string;
+      }>;
+      saveAs?: string;
+      missingMessage?: string;
+    }
+  | {
+      type: 'setEntityState';
+      entityId: string;
+      stateId: string;
+      value: StateValue;
+      missingMessage?: string;
+      source?: 'parser' | 'llm' | 'custom-command' | string;
+    }
+  | {
+      type: 'setGroupDisabled';
+      groupId: string;
+      disabled: boolean;
+    }
+  | {
+      type: 'runScript';
+      scriptId: string;
+      restart?: boolean;
+    }
+  | {
+      type: 'stopScript';
+      scriptId: string;
     };
 
 export type ParserCascadeEnvelope = {

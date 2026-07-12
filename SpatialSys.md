@@ -358,7 +358,7 @@ Parser context различает "видно" и "можно действова
 
 ### Disabled
 
-Обычные disabled objects не должны участвовать в gameplay/parser как интерактивные объекты.
+Объекты с `visible: false` и обычные disabled objects не должны участвовать в gameplay/parser/NPC perception как интерактивные объекты.
 
 Исключение: titled objects внутри inactive `Subscene` могут оставаться в semantic visible context, чтобы parser знал о содержимом subscene и мог корректно распознавать команды. Но такие objects не становятся actionable до активации subscene.
 
@@ -402,6 +402,8 @@ Distance - runtime actionability check, а не visibility check.
 
 Далёкий titled object может быть visible, но не reachable.
 
+Текущий interaction threshold равен `1.65 * interactionWidth` Actor-а (раньше использовался двойной запас `3.3`). Геометрическая проверка считает расстояние до реальной границы объекта, поэтому дополнительный запас на ошибочную вершину больше не нужен.
+
 Для parser это означает:
 
 - `LOOK` может работать на далёком объекте;
@@ -412,6 +414,8 @@ Distance - runtime actionability check, а не visibility check.
 Для предметов на `Surface` distance считается по actual surface placement coordinates из `Surface.items`, если они есть. Нельзя полагаться только на `entity.x/y`, потому что item position может быть stored в surface placement.
 
 Для polygon-объектов distance нельзя считать до среднего центра вершин. Большие или асимметричные полигоны, особенно `Walkbox`/floor surfaces, могут иметь centroid далеко от текущей позиции игрока, хотя игрок стоит внутри того же walkbox. Runtime должен считать distance до polygon как `0`, если player point внутри polygon, иначе как расстояние до ближайшего ребра polygon.
+
+Для одиночных direct-команд player `EXAMINE`, `TAKE`, `OPEN` и `CLOSE` видимый, но пока далёкий target автоматически передаётся в `ActorNavigationService`: если существует route до interaction-точки, player подходит и действие исполняется после прибытия. При отсутствии route сохраняется обычный distance failure. Group/batch-команды не запускают несколько конкурирующих auto-approach перемещений.
 
 ## ParserWorldModel
 
@@ -499,6 +503,8 @@ Parser не должен вручную обходить storage через raw 
 У `Entity` обычное editor-facing поле `Scale` хранится как reference size (`refScale`) - prefab/object size, не зависящий от сцены. При переносе live Entity в другую сцену runtime сохраняет этот размер и не умножает его на target scene `Correctional Scale`. Финальный runtime `scale` дальше может учитывать Depth Scaling и временные множители вроде `Subscene.itemScale`. `Correctional Scale` является editor-level инструментом: при его изменении редактор масштабирует все scene objects, включая locked objects, и их абсолютные координаты вокруг общего центра, чтобы соседние объекты оставались соседними.
 
 Если переносится player Actor, target scene получает именно этот live Actor как `scene.player`, а pre-authored placeholder player в target scene удаляется. После финального состояния сцены один раз запускается `InventoryManager.handleSceneChange()`, затем обычные scene-change hooks/parser exposure.
+
+Для NPC перенос не переключает активную сцену игрока. Завершение PM-плана привязывается к фактической целевой сцене NPC: `TRAVERSE_EXIT` является терминальным шагом, stale tail исходной сцены отбрасывается, а следующий provider-вызов строится только из актуального контекста новой сцены.
 
 Пример:
 

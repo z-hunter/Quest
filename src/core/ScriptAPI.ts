@@ -2,6 +2,9 @@ import type { IGame } from './IGame';
 import { QuadObject } from '../entities/QuadObject';
 import { Actor } from '../entities/Actor';
 import { SoundManager, type SoundOptions } from '../systems/SoundManager';
+import { ComponentSystem, type StateValue } from '../systems/ComponentSystem';
+import { StateEventSystem } from '../systems/StateEventSystem';
+import type { SceneObject } from '../entities/SceneObject';
 
 export interface CustomTimer {
   id: number;
@@ -155,6 +158,37 @@ export class ScriptAPI {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
     return scene.findEntity(name) as any;
+  }
+
+  private resolveStateObject(objectIdOrObject: string | SceneObject): SceneObject | null {
+    if (typeof objectIdOrObject !== 'string') {
+      return objectIdOrObject || null;
+    }
+
+    const scene = this.game.sceneManager.currentScene;
+    if (!scene) return null;
+    return scene.getObjectByName(objectIdOrObject);
+  }
+
+  getState(objectIdOrObject: string | SceneObject, stateId: string): StateValue | undefined {
+    return ComponentSystem.getStateValue(this.resolveStateObject(objectIdOrObject), stateId);
+  }
+
+  setState(objectIdOrObject: string | SceneObject, stateId: string, value: StateValue): boolean {
+    const target = this.resolveStateObject(objectIdOrObject);
+    const component = ComponentSystem.getStateComponent(target, stateId);
+    if (!component) {
+      console.warn(`[ScriptAPI] State '${stateId}' not found.`);
+      return false;
+    }
+
+    const result = StateEventSystem.setState(this.game, target, stateId, value, 'script-api');
+    if (!result.ok) {
+      console.warn(
+        `[ScriptAPI] State '${stateId}' expects ${component.valueType}, got ${typeof value}.`
+      );
+    }
+    return result.ok;
   }
 
   transferActor(actorName: string, targetSceneId: string, targetEntryId?: string | null): boolean {

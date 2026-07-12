@@ -92,6 +92,11 @@ export const EditorBottomMenu: React.FC = () => {
     (!!selectedObject && selectedObjectType !== 'SCENE' && selectedObjectType !== 'SETTINGS');
   const hasSingleSelectedObject =
     !!selectedObject && selectedObjectType !== 'SCENE' && selectedObjectType !== 'SETTINGS';
+  const canHaveSprite =
+    hasSingleSelectedObject &&
+    (selectedObjectType === 'Static' ||
+      selectedObjectType === 'Entity' ||
+      selectedObjectType === 'Actor');
   void selectedObjectId;
   void objectVersion;
 
@@ -172,6 +177,16 @@ export const EditorBottomMenu: React.FC = () => {
           useEditorStore.getState().incrementHierarchyVersion();
         }
         break;
+      case 'AssignSprite':
+        if (
+          editor.selectedObject &&
+          (selectedObjectType === 'Static' ||
+            selectedObjectType === 'Entity' ||
+            selectedObjectType === 'Actor')
+        ) {
+          editor.persistenceManager.promptSetSprite();
+        }
+        break;
     }
   };
 
@@ -198,6 +213,12 @@ export const EditorBottomMenu: React.FC = () => {
       text: disableActionText,
       action: 'ToggleDisabled',
       enabled: hasSingleSelectedObject,
+    },
+    {
+      hotkey: 'S',
+      text: 'Sprite',
+      action: 'AssignSprite',
+      enabled: canHaveSprite,
     },
   ];
 

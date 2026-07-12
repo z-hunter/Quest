@@ -15,6 +15,7 @@ import type {
   ParserScope,
   ParserSpatialNodeContext,
   ParserSpatialRelationContext,
+  ParserStateContext,
   ParserWorldModel,
 } from './parserTypes';
 
@@ -39,13 +40,18 @@ export class ParserWorldModelBuilder {
   }
 
   build(rawInput: string, pendingState: ParserPendingState | null): ParserWorldModel {
+    const scope = this.buildScope();
     return {
-      context: this.buildContext(rawInput, pendingState),
-      scope: this.buildScope(),
+      context: this.buildContext(rawInput, pendingState, scope),
+      scope,
     };
   }
 
-  private buildContext(rawInput: string, pendingState: ParserPendingState | null): ParserContext {
+  private buildContext(
+    rawInput: string,
+    pendingState: ParserPendingState | null,
+    scope: ParserScope
+  ): ParserContext {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
     const playerContext = scene?.player
@@ -59,7 +65,7 @@ export class ParserWorldModelBuilder {
     const knownEntities = scene ? this.buildKnownEntityContexts(scene) : [];
     const inventory = this.buildInventoryContexts();
     const focusedTarget = this.buildFocusedTargetContext();
-    const worldFacts = scene ? this.buildWorldFacts(scene, entities, inventory) : [];
+    const worldFacts = scene ? this.buildWorldFacts(scene, entities, knownEntities, inventory) : [];
     const spatialRelations = scene ? this.buildSpatialRelations(scene) : [];
     const spatialNodes = scene ? this.buildSpatialNodes(scene) : [];
     const pending = pendingState
@@ -82,6 +88,12 @@ export class ParserWorldModelBuilder {
       worldFacts,
       spatialNodes,
       spatialRelations,
+      actionScope: {
+        takable: scope.takable.map((entity) => entity.name),
+        putSource: scope.putSource.map((entity) => entity.name),
+        reachable: scope.reachable.map((entity) => entity.name),
+        examinable: scope.examinable.map((entity) => entity.name),
+      },
       pending,
     });
   }
@@ -107,6 +119,7 @@ export class ParserWorldModelBuilder {
       )
         ? true
         : undefined,
+      states: this.buildStateContexts(entity),
     });
   }
 
@@ -157,14 +170,36 @@ export class ParserWorldModelBuilder {
         const coordinates = isDirectSceneObject
           ? this.getSceneObjectCoordinates(sceneObject)
           : undefined;
+        const perception = scene.player
+          ? this.game.actorWorld.getObjectPerception(scene.player, sceneObject, true)
+          : null;
         const reachable =
-          isDirectSceneObject &&
-          !sceneObject.disabled &&
-          !entry.blocked &&
-          !entry.inInactiveSubscene &&
-          !ComponentSystem.getInteractionDistanceError(sceneObject as any, scene.player)
-            ? true
-            : undefined;
+          isDirectSceneObject && perception?.interaction === 'reachable' ? true : undefined;
+
+        const exitComponent = sceneObject.components?.find(
+          (component: any) => component?.type === 'Exit'
+        ) as any;
+        let exitContext = undefined;
+        if (exitComponent) {
+          let sceneId =
+            exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id || '';
+          if (sceneId.toLowerCase().endsWith('.json')) sceneId = sceneId.slice(0, -5);
+
+          const targetScene = this.game.sceneManager.scenes.get(sceneId);
+          const descriptor = this.game.sceneManager.sceneRegistry.get(sceneId);
+          exitContext = {
+            targetSceneId:
+              exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id,
+            targetEntryId: exitComponent.targetEntryId || null,
+            targetSceneTitle:
+              (targetScene && this.game.textAssets.getResolvedSceneField(targetScene, 'title')) ||
+              descriptor?.title ||
+              null,
+            portal: exitComponent.portal === true,
+            collider: exitComponent.collider !== false,
+          };
+        }
+
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title: entry.title,
@@ -190,6 +225,8 @@ export class ParserWorldModelBuilder {
             ? true
             : undefined,
           interactions,
+          states: this.buildStateContexts(sceneObject),
+          exit: exitContext,
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -207,9 +244,37 @@ export class ParserWorldModelBuilder {
         if ((this.game as any).isEntityInInventory?.(sceneObject)) return null;
 
         const accessState = getSceneTextLayerAccessState(scene, this.game, sceneObject);
+        const perception = scene.player
+          ? this.game.actorWorld.getObjectPerception(scene.player, sceneObject, true)
+          : null;
         const isItem = !!sceneObject.components?.find(
           (component: any) => component?.type === 'Item'
         );
+
+        const exitComponent = sceneObject.components?.find(
+          (component: any) => component?.type === 'Exit'
+        ) as any;
+        let exitContext = undefined;
+        if (exitComponent) {
+          let sceneId =
+            exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id || '';
+          if (sceneId.toLowerCase().endsWith('.json')) sceneId = sceneId.slice(0, -5);
+
+          const targetScene = this.game.sceneManager.scenes.get(sceneId);
+          const descriptor = this.game.sceneManager.sceneRegistry.get(sceneId);
+          exitContext = {
+            targetSceneId:
+              exitComponent.targetSceneId?.trim() || this.game.sceneManager.currentScene?.id,
+            targetEntryId: exitComponent.targetEntryId || null,
+            targetSceneTitle:
+              (targetScene && this.game.textAssets.getResolvedSceneField(targetScene, 'title')) ||
+              descriptor?.title ||
+              null,
+            portal: exitComponent.portal === true,
+            collider: exitComponent.collider !== false,
+          };
+        }
+
         return this.compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title,
@@ -220,12 +285,18 @@ export class ParserWorldModelBuilder {
             textLayer
           ),
           contents: this.buildEntityContentsContext(sceneObject.name, textLayer),
-          visibility: accessState.hidden ? 'hidden' : 'visible',
-          accessibility: accessState.blocked
-            ? 'blocked'
-            : accessState.hidden || sceneObject.disabled || accessState.inInactiveSubscene
+          visibility:
+            perception?.visibility === 'unknown'
+              ? 'hidden'
+              : perception?.visibility || (accessState.hidden ? 'hidden' : 'visible'),
+          accessibility:
+            perception?.visibility !== 'visible' ||
+            sceneObject.disabled ||
+            accessState.inInactiveSubscene
               ? 'inaccessible'
-              : undefined,
+              : perception?.interaction === 'blocked'
+                ? 'blocked'
+                : undefined,
           hiddenReason: accessState.hiddenReason || undefined,
           synonyms: this.game.textAssets.getResolvedObjectListField(sceneObject as any, 'synonyms'),
           semanticTags: this.game.textAssets.getResolvedObjectListField(
@@ -244,6 +315,8 @@ export class ParserWorldModelBuilder {
             ? true
             : undefined,
           interactions: Object.keys(sceneObject.interactions || {}),
+          states: this.buildStateContexts(sceneObject),
+          exit: exitContext,
         });
       })
       .filter((entity): entity is ParserEntityContext => !!entity);
@@ -270,9 +343,18 @@ export class ParserWorldModelBuilder {
           )
             ? true
             : undefined,
+          states: this.buildStateContexts(entity),
         });
       })
       .filter((entity): entity is ParserInventoryItemContext => !!entity);
+  }
+
+  private buildStateContexts(sceneObject: SceneObject): ParserStateContext[] {
+    return ComponentSystem.getStateComponents(sceneObject).map((component) => ({
+      id: component.id,
+      type: component.valueType,
+      value: ComponentSystem.getStateValue(sceneObject, component.id) ?? component.initialValue,
+    }));
   }
 
   private getSceneParserNote(scene: Scene | null | undefined): string {
@@ -358,6 +440,7 @@ export class ParserWorldModelBuilder {
   private buildWorldFacts(
     scene: Scene,
     entities: ParserEntityContext[],
+    knownEntities: ParserEntityContext[],
     inventory: ParserInventoryItemContext[]
   ): string[] {
     const facts: string[] = [];
@@ -371,6 +454,10 @@ export class ParserWorldModelBuilder {
     }
 
     for (const entity of entities) {
+      for (const state of entity.states || []) {
+        facts.push(`${entity.title} state ${state.id} is ${String(state.value)}.`);
+      }
+
       if (entity.location?.parentTitle) {
         facts.push(
           this.formatLocationFact(
@@ -403,6 +490,18 @@ export class ParserWorldModelBuilder {
         )) {
           facts.push(semanticFact);
         }
+      }
+    }
+
+    for (const entity of knownEntities) {
+      for (const state of entity.states || []) {
+        facts.push(`${entity.title} state ${state.id} is ${String(state.value)}.`);
+      }
+    }
+
+    for (const item of inventory) {
+      for (const state of item.states || []) {
+        facts.push(`${item.title} state ${state.id} is ${String(state.value)}.`);
       }
     }
 

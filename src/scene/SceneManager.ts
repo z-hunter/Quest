@@ -11,6 +11,7 @@ import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from '../core/ScriptRegistry';
+import { StateEventSystem } from '../systems/StateEventSystem';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -182,11 +183,34 @@ export class SceneManager {
   }
 
   private attachEntityForSceneTransfer(scene: Scene, entity: Entity): void {
-    if (!scene.entities.includes(entity)) {
-      scene.entities.push(entity);
+    scene.addEntity(entity);
+  }
+
+  private discardReplacedPlayer(scene: Scene, player: Entity): void {
+    const discard = new Set<Entity>();
+    const queue: Entity[] = [player];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || discard.has(current)) continue;
+      discard.add(current);
+      for (const candidate of scene.entities) {
+        if (!(candidate instanceof Entity) || discard.has(candidate)) continue;
+        const parentId =
+          typeof candidate.spatial?.parentNodeId === 'string'
+            ? candidate.spatial.parentNodeId.trim()
+            : '';
+        if (parentId === current.name || candidate.getInventoryPositionOwner() === current) {
+          queue.push(candidate);
+        }
+      }
     }
-    // @ts-ignore
-    entity.scene = scene;
+
+    for (const entity of discard) {
+      this.detachEntityForSceneTransfer(scene, entity);
+      entity.setInventoryPositionOwner(null);
+      delete (entity as any).__inventoryRelation;
+    }
   }
 
   private findFirstEntryId(scene: Scene): string | null {
@@ -232,7 +256,7 @@ export class SceneManager {
     if (targetX === null || targetY === null) return entryObj;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
-    const walkableTarget = this.findNearestWalkableEntryPosition(scene, actor, targetX, targetY);
+    const walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
     actor.x = walkableTarget.x;
     actor.y = walkableTarget.y;
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
@@ -242,7 +266,7 @@ export class SceneManager {
     return entryObj;
   }
 
-  private findNearestWalkableEntryPosition(
+  resolveEntryPlacementPosition(
     scene: Scene,
     actor: Actor,
     targetX: number,
@@ -292,6 +316,7 @@ export class SceneManager {
     this.syncAssetCacheState();
     this.game.inventoryManager?.handleSceneChange?.();
     this.onAfterSceneActivated?.(scene);
+    StateEventSystem.dispatchSceneStateEvents(this.game, scene, 'scene-load');
     (this.game as any).parser?.prepareLlmStaticPromptForCurrentScene?.();
     this.exposeEntitiesToWindow();
     if (this.game.onSceneChange) {
@@ -325,7 +350,7 @@ export class SceneManager {
     if (removeExistingPlayer) {
       const existingPlayer = targetScene.entities.find((e) => (e as any).isPlayer && e !== actor);
       if (existingPlayer) {
-        targetScene.removeEntity(existingPlayer);
+        this.discardReplacedPlayer(targetScene, existingPlayer);
       }
     }
 
@@ -444,6 +469,7 @@ export class SceneManager {
       this.switchTo(newScene.id);
       await this.preloadSwitchSounds(newScene);
       await this.game.textAssets.preloadScene(newScene);
+      StateEventSystem.syncSceneStateParserNotes(this.game, newScene);
       this.syncSceneRegistration(newScene, undefined, newScene.toJSON());
       await this.refreshSceneFootprint(newScene.id);
 
@@ -718,6 +744,10 @@ export class SceneManager {
       newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
     }
 
+    if (data.sceneLog) {
+      newScene.sceneLog.load(data.sceneLog);
+    }
+
     if (data.walkbox) {
       (data.walkbox || []).forEach((wb: any) => {
         const poly = wb.poly.map((p: any) => ({ x: Number(p.x), y: Number(p.y) }));
@@ -787,7 +817,9 @@ export class SceneManager {
 
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
     this.cacheScene(scene, false);
-    void this.game.textAssets.preloadScene(scene);
+    void this.game.textAssets
+      .preloadScene(scene)
+      .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
     void this.refreshSceneFootprint(scene.id);
     return scene;
   }

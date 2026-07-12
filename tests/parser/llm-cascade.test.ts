@@ -61,7 +61,9 @@ describe('LlmCascade', () => {
       'Use the lower cascade interpretation as a hint for what the dry machine parser would do.',
       'If you can give a richer, more atmospheric, and still grounded response, prefer final_response or showText.',
       'If the lower cascade action is genuinely the best answer, you may return that action plan.',
-      "If the player's intent is recognized but no exact standard action fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action.",
+      "If the player's intent is recognized but no faithful executable equivalent fits it, invent a short atmospheric and logical Game Master response instead of calling a merely adjacent or unrelated standard action.",
+      'Available actions are Game Master affordances.',
+      'For entity, source, target, container, relation, or authored command argument ambiguity, use structured clarification with pendingAction.',
       'If you cannot improve the lower cascade result safely, return fallback.',
     ],
     post_api_escalation_instructions: [
@@ -130,6 +132,260 @@ describe('LlmCascade', () => {
     expect(debug?.acceptedActions).toHaveLength(1);
   });
 
+  it('accepts putTarget as a faithful executable equivalent for throwing a held item', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'putTarget', item: 'Orange paper', target: 'floor', relation: 'on' },
+        { type: 'showText', message: 'You send the orange paper skidding across the floor.' },
+      ],
+    });
+
+    const result = await cascade.parse('throw orange paper', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'putTarget', item: 'Orange paper', target: 'floor', relation: 'on' },
+      { type: 'showText', message: 'You send the orange paper skidding across the floor.' },
+    ]);
+  });
+
+  it('accepts putTarget as a faithful executable equivalent for loading media into a device', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'putTarget', item: 'Compact cassette', target: 'Boombox', relation: 'in' },
+        { type: 'showText', message: 'You slide the cassette into the boombox.' },
+      ],
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'putTarget', item: 'Compact cassette', target: 'Boombox', relation: 'in' },
+      { type: 'showText', message: 'You slide the cassette into the boombox.' },
+    ]);
+  });
+
+  it('removes TAKE from an observational reading plan while preserving EXAMINE', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'takeTarget', target: 'Orange paper' },
+        { type: 'examineTarget', target: 'Orange paper' },
+      ],
+    });
+
+    const result = await cascade.parse('read orange paper', mockContext);
+
+    expect(result?.output.actions).toEqual([{ type: 'examineTarget', target: 'Orange paper' }]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toContainEqual(
+      expect.objectContaining({ reason: 'observational_intent_omits_take' })
+    );
+  });
+
+  it('accepts conditional discovery narration on EXAMINE', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        {
+          type: 'examineTarget',
+          target: 'TV remote',
+          narration: {
+            message: 'You slide the cover aside and find two batteries.',
+            requiresDiscoveredEntityIds: ['batteryAAA'],
+          },
+        },
+      ],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'examineTarget',
+        target: 'TV remote',
+        narration: {
+          message: 'You slide the cover aside and find two batteries.',
+          requiresDiscoveredEntityIds: ['batteryAAA'],
+        },
+      },
+    ]);
+  });
+
+  it('provides a grounded discovery opportunity for named hidden contents and their anchor', async () => {
+    provider.response.text = JSON.stringify({ kind: 'fallback' });
+    const context: ParserContext = {
+      ...mockContext,
+      inventory: [
+        { id: 'tv_rc', title: 'TV remote', synonyms: ['remote', 'remote control', 'rc'] },
+      ],
+      knownEntities: [
+        {
+          id: 'batteryAAA',
+          title: 'AAA batteries',
+          synonyms: ['batteries', 'battery'],
+          visibility: 'hidden',
+          hiddenReason: 'examinable',
+          location: { relation: 'in', parentId: 'tv_rc', parentTitle: 'TV remote' },
+        },
+      ],
+    };
+
+    await cascade.parse('check batterys in rc', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"discoveryOpportunities":[{"hiddenEntityId":"batteryAAA","hiddenTitle":"AAA batteries","anchorId":"tv_rc","anchorTitle":"TV remote","relation":"in"}]'
+    );
+  });
+
+  it.each([
+    { message: 'You find batteries.', requiresDiscoveredEntityIds: [] },
+    { message: 'You find batteries.' },
+    { requiresDiscoveredEntityIds: ['batteryAAA'] },
+  ])('rejects invalid EXAMINE discovery narration: %j', async (narration) => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'examineTarget', target: 'TV remote', narration }],
+    });
+
+    const result = await cascade.parse('check batteries in remote control', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      expect.objectContaining({ type: 'examineTarget' }),
+    ]);
+  });
+
+  it('exposes authored parser commands to the LLM and accepts runCustomCommand', async () => {
+    cascade = new LlmCascade(
+      provider,
+      () =>
+        ({
+          readServiceAsset: vi.fn().mockResolvedValue(mockPromptAssets),
+          getParserCommands: () => [
+            {
+              id: 'turn_tv_on',
+              phrases: ['turn on tv', 'turn tv on'],
+              arguments: [],
+              plan: [],
+            },
+          ],
+        }) as any,
+      () => undefined
+    );
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'runCustomCommand', commandId: 'turn_tv_on' }],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'runCustomCommand', commandId: 'turn_tv_on', arguments: {} },
+    ]);
+    expect(JSON.stringify(provider.system)).toContain('Available Authored Parser Commands');
+    expect(JSON.stringify(provider.system)).toContain('turn_tv_on');
+  });
+
+  it('filters runCustomCommand for unknown authored command ids', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'runCustomCommand', commandId: 'missing_command' }],
+    });
+
+    const result = await cascade.parse('do missing command', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      { type: 'runCustomCommand', commandId: 'missing_command' },
+    ]);
+  });
+
+  it('accepts direct Game Master world actions from the LLM', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on' },
+        { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+        { type: 'runScript', scriptId: 'tv_glow', restart: true },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'requireEntityAvailable', entityId: 'tv', scopes: ['visible'] },
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on', source: 'llm' },
+      { type: 'setGroupDisabled', groupId: '#tv_glow', disabled: false },
+      { type: 'runScript', scriptId: 'tv_glow', restart: true },
+      { type: 'showText', message: 'The TV clicks on.' },
+    ]);
+    expect(JSON.stringify(provider.system)).toContain('Direct Game Master World Actions');
+  });
+
+  it('accepts direct Game Master world actions with a fields wrapper for compatibility', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        {
+          type: 'setEntityState',
+          fields: { entityId: 'tv', stateId: 'power', value: 'on' },
+        },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result?.output.kind).toBe('plan');
+    expect(result?.output.actions).toEqual([
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: 'on', source: 'llm' },
+      { type: 'showText', message: 'The TV clicks on.' },
+    ]);
+  });
+
+  it('filters malformed direct Game Master world actions', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [{ type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } }],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+    ]);
+  });
+
+  it('does not keep showText when a paired direct world action fails validation', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'plan',
+      actions: [
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+        { type: 'showText', message: 'The TV clicks on.' },
+      ],
+    });
+
+    const result = await cascade.parse('tv on', mockContext);
+
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.acceptedActions).toEqual([]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual(
+      expect.arrayContaining([
+        { type: 'setEntityState', entityId: 'tv', stateId: 'power', value: { bad: true } },
+        expect.objectContaining({ reason: 'direct_world_action_failed_validation_omits_showText' }),
+      ])
+    );
+  });
+
   it('keeps prompt assets free of implementation-leaking unsupported-action phrases', () => {
     const systemPrompt = readFileSync(
       join(process.cwd(), 'public/text/system/parser-llm-system.md'),
@@ -149,7 +405,33 @@ describe('LlmCascade', () => {
     expect(combined).not.toContain('unrelated engine action');
     expect(combined).not.toContain('available engine actions');
     expect(combined).toContain('never mention parser mechanics');
+    expect(combined).toContain('text assets');
+    expect(combined).toContain('descriptions');
+    expect(combined).toContain('source material');
     expect(combined).toContain('the boombox currently produces only static when tuned to radio');
+  });
+
+  it('keeps prompt assets explicit that hidden entities are not player knowledge', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`.toLowerCase();
+
+    expect(combined).toContain('not the player character');
+    expect(combined).toContain('private game master knowledge, not player-character knowledge');
+    expect(combined).toContain('knownentities');
+    expect(combined).toContain('generate indirect sensory evidence');
+    expect(combined).toContain('observable effects, sensations, traces, or environmental changes');
+    expect(combined).toContain('exact nature');
+    expect(combined).toContain('if the player asks for an undiscovered hidden entity by name');
+    expect(combined).toContain('current perception and character knowledge');
+    expect(combined).toContain('without confirming that the hidden entity is present there');
+    expect(combined).toContain('something small and metallic rattles inside a box');
   });
 
   it('frames the LLM as a creative Game Master before action mapping', () => {
@@ -166,12 +448,37 @@ describe('LlmCascade', () => {
     expect(systemPrompt).toContain('You are a creative Game Master');
     expect(systemPrompt).toContain('use every safe opportunity to immerse the player');
     expect(systemPrompt).not.toContain('You are not just a command parser');
+    expect(combined).toContain('faithful executable equivalent');
+    expect(combined).toContain('Available actions are Game Master affordances');
     expect(combined).toContain(
-      "If the player's intent is recognized but no exact standard action fits it"
+      'every successful inventory, containment, device, state, group, script, or persistent world change'
     );
+    expect(combined).toContain('Do not narrate a successful inventory');
+    expect(combined).toContain('merely adjacent or unrelated standard action');
+  });
+
+  it('keeps prompt assets explicit that entity ambiguity must use parser clarification', () => {
+    const systemPrompt = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm-system.md'),
+      'utf8'
+    );
+    const promptAsset = readFileSync(
+      join(process.cwd(), 'public/text/system/parser-llm.json'),
+      'utf8'
+    );
+    const combined = `${systemPrompt}\n${promptAsset}`;
+
+    expect(combined).toContain('structured `clarification` with `pendingAction`');
     expect(combined).toContain(
-      'invent a short atmospheric and logical Game Master response instead of calling a merely adjacent standard action'
+      'return the intended action plan with the ambiguous title or phrase'
     );
+    expect(combined).toContain('standard numbered clarification');
+    expect(combined).toContain('keep the original command pending');
+    expect(combined).toContain(
+      'Do not ask a free-form entity-choice question without pendingAction'
+    );
+    expect(combined).toContain("keep the ambiguous field as the player's ambiguous phrase");
+    expect(combined).toContain('do not preselect one option');
   });
 
   it('keeps prompt assets explicit that Parser Notes are not temporary player state', () => {
@@ -353,7 +660,148 @@ describe('LlmCascade', () => {
     expect(userMessage).toContain('Per-call dynamic game world context');
     expect(userMessage).toContain('The radio hisses.');
     expect(userMessage).toContain('Reception is static.');
-    expect(userMessage).toContain('Boombox contains Compact cassette.');
+    expect(userMessage).not.toContain('Boombox contains Compact cassette.');
+    expect(userMessage).not.toContain('worldFacts');
+  });
+
+  it('includes details only for an entity recognized in the player command', async () => {
+    provider.response.text = JSON.stringify({ kind: 'plan', actions: [] });
+    const context: ParserContext = {
+      rawInput: 'read notes on orange paper',
+      normalizedInput: 'READ NOTES ON ORANGE PAPER',
+      scene: { id: 'test_room', description: 'A room.' },
+      entities: [
+        {
+          id: 'test_2',
+          title: 'Orange paper',
+          description: 'An orange sheet.',
+          details: 'The note says the meeting starts at nine.',
+        },
+        {
+          id: 'test_3',
+          title: 'Yellow paper',
+          description: 'A yellow sheet.',
+          details: 'This note must remain out of the current prompt.',
+        },
+      ],
+    };
+
+    await cascade.parse('read notes on orange paper', context);
+
+    const systemText = JSON.stringify(provider.system);
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(systemText).not.toContain('meeting starts at nine');
+    expect(userMessage).toContain('meeting starts at nine');
+    expect(userMessage).not.toContain('remain out of the current prompt');
+    expect(userMessage).toContain('"targetDetails"');
+  });
+
+  it('includes runtime action eligibility without guessing from object prose', async () => {
+    provider.response.text = JSON.stringify({ kind: 'plan', actions: [] });
+    const context: ParserContext = {
+      rawInput: 'take batterys',
+      normalizedInput: 'TAKE BATTERYS',
+      scene: { id: 'test_room' },
+      entities: [{ id: 'batteryAAA', title: 'AAA batteries' }],
+      inventory: [{ id: 'tv_rc', title: 'TV remote' }],
+      actionScope: { takable: ['batteryAAA'], putSource: ['batteryAAA'] },
+    };
+
+    await cascade.parse('take batterys', context);
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    expect(userMessage).toContain(
+      '"actionScope":{"takable":["batteryAAA"],"putSource":["batteryAAA"]}'
+    );
+  });
+
+  it('adds spoiler protection for hidden known entities and scrubs raw hidden details', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'final_response',
+      message: 'You do not see any cables.',
+    });
+    const context: ParserContext = {
+      rawInput: 'look for audio cables',
+      normalizedInput: 'LOOK FOR AUDIO CABLES',
+      scene: {
+        id: 'test_room',
+        title: "Mile's Home",
+        description: 'A room full of electronics.',
+      },
+      entities: [
+        {
+          id: 'boombox',
+          title: 'Boombox',
+          description: 'A radio and cassette recorder.',
+        },
+      ],
+      knownEntities: [
+        {
+          id: 'audio_cables',
+          title: 'audio cables',
+          location: { relation: 'behind', parentId: 'boombox', parentTitle: 'Boombox' },
+          contents: [{ relation: 'in', id: 'wire_core', title: 'wire core' }],
+          visibility: 'hidden',
+          accessibility: 'inaccessible',
+          hiddenReason: 'examinable',
+          synonyms: ['cables', 'wires'],
+          semanticTags: ['cable'],
+          description: 'Hidden behind the boombox.',
+          details: 'Two standard tape recorder cables.',
+          lore: 'Private cable lore.',
+          interactions: ['state:plugged'],
+          states: [{ id: 'found', type: 'boolean', value: false }],
+        },
+      ],
+      worldFacts: [],
+      spatialNodes: [],
+      inventory: [],
+    };
+
+    await cascade.parse('look for audio cables', context);
+
+    const systemBlocks = provider.system as Exclude<LlmProviderContent, string>;
+    const staticSceneText = systemBlocks.at(-1)?.text || '';
+    const staticContext = JSON.parse(staticSceneText.slice(staticSceneText.indexOf('{')));
+    const staticHidden = staticContext.knownEntities[0];
+    expect(staticHidden).toMatchObject({
+      id: 'audio_cables',
+      title: 'audio cables',
+      visibility: 'hidden',
+      hiddenReason: 'examinable',
+      synonyms: ['cables', 'wires'],
+      semanticTags: ['cable'],
+      states: [{ id: 'found', type: 'boolean', value: false }],
+    });
+    expect(staticHidden).not.toHaveProperty('location');
+    expect(staticHidden).not.toHaveProperty('contents');
+    expect(staticHidden).not.toHaveProperty('description');
+    expect(staticHidden).not.toHaveProperty('details');
+    expect(staticHidden).not.toHaveProperty('lore');
+    expect(staticHidden).not.toHaveProperty('interactions');
+
+    const userMessage = String(provider.messages[0]?.content || '');
+    const dynamicContextText = userMessage
+      .split('Per-call dynamic game world context:\n')[1]
+      .split('\n\n')[0];
+    const dynamicContext = JSON.parse(dynamicContextText);
+    const dynamicHidden = dynamicContext.hiddenUnknown[0];
+    expect(dynamicHidden).toMatchObject({
+      id: 'audio_cables',
+      title: 'audio cables',
+      hiddenReason: 'examinable',
+      synonyms: ['cables', 'wires'],
+    });
+    expect(JSON.stringify(dynamicContext)).not.toContain('Hidden behind the boombox');
+    expect(dynamicHidden).not.toHaveProperty('location');
+    expect(dynamicHidden).not.toHaveProperty('contents');
+    expect(dynamicHidden).not.toHaveProperty('description');
+    expect(dynamicHidden).not.toHaveProperty('details');
+    expect(dynamicHidden).not.toHaveProperty('lore');
+
+    expect(userMessage).not.toContain('Hidden behind the boombox');
+    expect(JSON.stringify(provider.system)).toContain('Hidden Object Spoiler Protection');
+    expect(JSON.stringify(provider.system)).toContain('blind guess');
   });
 
   it('converts final_response to a showText action', async () => {
@@ -369,7 +817,7 @@ describe('LlmCascade', () => {
     ]);
   });
 
-  it('converts clarification to a showText action', async () => {
+  it('rejects free-form clarification so entity ambiguity uses parser pending flow', async () => {
     provider.response.text = JSON.stringify({
       kind: 'clarification',
       question: 'Which one do you mean?',
@@ -377,8 +825,131 @@ describe('LlmCascade', () => {
 
     const result = await cascade.parse('take it', mockContext);
 
+    expect(result).toBeNull();
+    expect(cascade.getLastDebugInfo()?.matched).toBe(false);
+    expect(cascade.getLastDebugInfo()?.reason).toBe('invalid_response');
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_clarification_must_use_parser_pending_flow',
+        response: {
+          kind: 'clarification',
+          question: 'Which one do you mean?',
+        },
+      },
+    ]);
+  });
+
+  it('uses structured clarification pendingAction for parser numbered clarification', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Load which cassette?',
+      pendingAction: {
+        type: 'putTarget',
+        item: 'cassette',
+        target: 'Boombox',
+        relation: 'in',
+      },
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
     expect(result?.output.actions).toEqual([
-      { type: 'showText', message: 'Which one do you mean?' },
+      {
+        type: 'llmClarification',
+        question: 'Load which cassette?',
+        pendingActions: [
+          { type: 'putTarget', item: 'cassette', target: 'Boombox', relation: 'in' },
+        ],
+      },
+    ]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_structured_clarification_uses_pending_action',
+        response: {
+          kind: 'clarification',
+          question: 'Load which cassette?',
+          pendingAction: {
+            type: 'putTarget',
+            item: 'cassette',
+            target: 'Boombox',
+            relation: 'in',
+          },
+        },
+        normalizedAction: {
+          type: 'putTarget',
+          item: 'cassette',
+          target: 'Boombox',
+          relation: 'in',
+        },
+      },
+    ]);
+  });
+
+  it('executes a clarification pendingAction directly when its target is already unique', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Do you mean the orange paper, or examine it?',
+      pendingAction: {
+        type: 'examineTarget',
+        target: 'Orange paper',
+      },
+    });
+    const context: ParserContext = {
+      ...mockContext,
+      entities: [{ id: 'test_2', title: 'Orange paper', synonyms: ['paper'] }],
+    };
+
+    const result = await cascade.parse('read note on orange paper', context);
+
+    expect(result?.output.actions).toEqual([{ type: 'examineTarget', target: 'Orange paper' }]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      expect.objectContaining({ reason: 'llm_clarification_target_already_resolved' }),
+    ]);
+  });
+
+  it('normalizes structured load clarification pendingAction back to the ambiguous source phrase', async () => {
+    provider.response.text = JSON.stringify({
+      kind: 'clarification',
+      question: 'Load which cassette?',
+      pendingAction: {
+        type: 'putTarget',
+        item: "Cassette 'Music'",
+        target: 'Boombox',
+        relation: 'in',
+      },
+    });
+
+    const result = await cascade.parse('load cassette', mockContext);
+
+    expect(result?.output.actions).toEqual([
+      {
+        type: 'llmClarification',
+        question: 'Load which cassette?',
+        pendingActions: [
+          { type: 'putTarget', item: 'cassette', target: 'Boombox', relation: 'in' },
+        ],
+      },
+    ]);
+    expect(cascade.getLastDebugInfo()?.filteredActions).toEqual([
+      {
+        reason: 'llm_structured_clarification_uses_pending_action',
+        response: {
+          kind: 'clarification',
+          question: 'Load which cassette?',
+          pendingAction: {
+            type: 'putTarget',
+            item: "Cassette 'Music'",
+            target: 'Boombox',
+            relation: 'in',
+          },
+        },
+        normalizedAction: {
+          type: 'putTarget',
+          item: 'cassette',
+          target: 'Boombox',
+          relation: 'in',
+        },
+      },
     ]);
   });
 
