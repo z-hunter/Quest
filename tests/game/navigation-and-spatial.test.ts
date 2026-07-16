@@ -13,6 +13,7 @@ describe('Game navigation and spatial API', () => {
     const actor = fixture.addPlayer('Hero', 0, 100);
     actor.width = 40;
     actor.height = 100;
+    actor.colliderWidth = 40;
     const headLevelTarget = fixture.addEntity('head_level_target', {
       title: 'Head-level target',
     });
@@ -1081,7 +1082,9 @@ describe('Game navigation and spatial API', () => {
     target.x = 200;
     target.y = 50;
     target.interactionDistance = 100;
-    vi.spyOn(actor, 'previewRouteTo').mockImplementation((x, y) => (x <= 190 ? [{ x, y }] : null));
+    vi.spyOn(actor, 'previewWalkingRouteTo').mockImplementation((x, y) =>
+      x <= 190 ? [{ x, y }] : null
+    );
 
     expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe(
       'route_available'

@@ -332,7 +332,7 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
     ],
     messages: {
       missing_tv: "You don't see the TV here.",
-      missing_remote: 'Эти современные телевизоры без пульта даже непонятно как включить.',
+      missing_remote: 'These modern TVs are impossible to operate without the remote.',
       missing_power_state: 'The TV refuses to respond.',
       success: 'The TV clicks off.',
       success_manual: 'Fortunately, this thing can be turned off without the remote.',

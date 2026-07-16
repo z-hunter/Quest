@@ -4,7 +4,7 @@ import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBui
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { createParserFixture } from '../fixtures/parserFactory';
 
-const MISSING_REMOTE_MESSAGE = 'Эти современные телевизоры без пульта даже непонятно как включить.';
+const MISSING_REMOTE_MESSAGE = 'These modern TVs are impossible to operate without the remote.';
 
 function addTv(
   fixture: ReturnType<typeof createParserFixture>,

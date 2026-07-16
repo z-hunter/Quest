@@ -887,7 +887,7 @@ describe('NpcPuppetMaster', () => {
 
     void (pm as any).enqueueNpc(destination, 'guard', { type: 'manual' });
     expect((pm as any).pendingBatches.has(destination.id)).toBe(true);
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(500);
     expect((pm as any).pendingBatches.has(destination.id)).toBe(false);
 
     fixture.game.sceneManager.currentScene = destination;
@@ -1016,7 +1016,7 @@ describe('NpcPuppetMaster', () => {
         worldChanged: true,
       },
     });
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(500);
 
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
       'Reached the corridor. Arrived in Corridor.'
@@ -1057,7 +1057,7 @@ describe('NpcPuppetMaster', () => {
         worldChanged: true,
       },
     });
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(500);
 
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
       'Reached the corridor. Arrived in Corridor.'
@@ -1098,7 +1098,7 @@ describe('NpcPuppetMaster', () => {
         worldChanged: true,
       },
     });
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(500);
 
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Arrived in Corridor.');
   });
