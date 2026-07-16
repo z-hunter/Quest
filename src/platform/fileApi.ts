@@ -160,7 +160,7 @@ export async function readProjectFileExisting(path: string): Promise<string> {
   if (isTauriRuntime()) {
     return await invokeTauri<string>('read_project_file_existing', { path });
   }
-  const result = await postJson<{ content?: string }>('/api/read-file', { path, content: '' }); // fallback
+  const result = await postJson<{ content?: string }>('/api/read-file-existing', { path });
   return typeof result?.content === 'string' ? result.content : '';
 }
 

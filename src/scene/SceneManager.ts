@@ -84,6 +84,17 @@ export type ActorSceneTransferOptions = {
   activateScene?: boolean;
 };
 
+export type SceneRuntimeSnapshot = {
+  revealedHiddenEntities: string[];
+  parserNote: string;
+  parserNoteNeedsCheck: boolean;
+  entityParserNotes: Record<string, string>;
+  entityParserNoteNeedsCheck: Record<string, boolean>;
+  parserRecentTurns: Array<{ command: string; response: string }>;
+  activeSubscene: string | null;
+  camera: { x: number; y: number; zoom: number };
+};
+
 export class SceneManager {
   game: IGame;
   currentScene: Scene | null;
@@ -92,6 +103,8 @@ export class SceneManager {
 
   scenes: Map<string, Scene>;
   sceneRegistry: Map<string, SceneDescriptor>;
+  private authoredSceneData: Map<string, any>;
+  private sceneRuntimeSnapshots: Map<string, SceneRuntimeSnapshot>;
   private sceneCacheMeta: Map<string, CachedSceneEntry>;
   private sceneCacheBudget: number;
 
@@ -100,6 +113,8 @@ export class SceneManager {
     this.currentScene = null;
     this.scenes = new Map();
     this.sceneRegistry = new Map();
+    this.authoredSceneData = new Map();
+    this.sceneRuntimeSnapshots = new Map();
     this.sceneCacheMeta = new Map();
 
     const memoryProfile = this.detectDeviceMemoryProfile();
@@ -116,7 +131,7 @@ export class SceneManager {
   }
 
   addScene(scene: Scene): void {
-    this.syncSceneRegistration(scene);
+    this.syncSceneRegistration(scene, undefined, scene.toJSON());
     this.cacheScene(scene, false);
   }
 
@@ -460,6 +475,7 @@ export class SceneManager {
       }
 
       const pathValue = explicitPath || `${sceneId.replace(/\\/g, '/')}.json`;
+      this.sceneRuntimeSnapshots.delete(sceneId);
       const newScene = this.instantiateScene(sceneId, data, pathValue);
 
       this.syncSceneRegistration(newScene, undefined, data);
@@ -517,6 +533,21 @@ export class SceneManager {
       textureWeightUnits: existingMeta?.textureWeightUnits,
       totalWeightUnits: existingMeta?.totalWeightUnits,
     };
+
+    if (previousId && previousId !== sceneId) {
+      const previousAuthored = this.authoredSceneData.get(previousId);
+      if (previousAuthored && !this.authoredSceneData.has(sceneId)) {
+        this.authoredSceneData.set(sceneId, previousAuthored);
+      }
+      this.authoredSceneData.delete(previousId);
+      const previousRuntime = this.sceneRuntimeSnapshots.get(previousId);
+      if (previousRuntime) this.sceneRuntimeSnapshots.set(sceneId, previousRuntime);
+      this.sceneRuntimeSnapshots.delete(previousId);
+    }
+
+    if (sourceData && !this.authoredSceneData.has(sceneId)) {
+      this.authoredSceneData.set(sceneId, JSON.parse(JSON.stringify(sourceData)));
+    }
 
     if (previousId && previousId !== sceneId) {
       this.sceneRegistry.delete(previousId);
@@ -620,6 +651,7 @@ export class SceneManager {
           textureWeightUnits: existingMeta?.textureWeightUnits,
           totalWeightUnits: existingMeta?.totalWeightUnits,
         };
+        this.authoredSceneData.set(sceneId, JSON.parse(JSON.stringify(data)));
         this.sceneRegistry.set(sceneId, descriptor);
       }
 
@@ -708,6 +740,113 @@ export class SceneManager {
 
     console.table(results.map((profile) => this.formatMemoryProfileForConsole(profile)));
     return results;
+  }
+
+  getSaveSceneSources(): Array<{
+    id: string;
+    path: string;
+    authored: any;
+    current: any;
+    scene: Scene | null;
+    runtime: SceneRuntimeSnapshot | undefined;
+  }> {
+    const ids = new Set([...this.sceneRegistry.keys(), ...this.scenes.keys()]);
+    const result: Array<{
+      id: string;
+      path: string;
+      authored: any;
+      current: any;
+      scene: Scene | null;
+      runtime: SceneRuntimeSnapshot | undefined;
+    }> = [];
+
+    for (const id of ids) {
+      const scene = this.scenes.get(id) || null;
+      const descriptor = this.sceneRegistry.get(id);
+      const authored = this.authoredSceneData.get(id) || descriptor?.sourceData || scene?.toJSON();
+      const current = scene?.toJSON() || descriptor?.sourceData;
+      if (!authored || !current) continue;
+      result.push({
+        id,
+        path: descriptor?.path || `${id.replace(/\\/g, '/')}.json`,
+        authored: JSON.parse(JSON.stringify(authored)),
+        current: JSON.parse(JSON.stringify(current)),
+        scene,
+        runtime: scene
+          ? this.captureSceneRuntimeSnapshot(scene)
+          : this.cloneSceneRuntimeSnapshot(this.sceneRuntimeSnapshots.get(id)),
+      });
+    }
+    return result;
+  }
+
+  restoreSavedScenes(
+    savedScenes: Array<{ id: string; path: string; data: any }>,
+    currentSceneId: string
+  ): void {
+    const preparedScenes = savedScenes.map((saved) => ({
+      saved,
+      scene: this.instantiateScene(saved.id, saved.data, saved.path),
+    }));
+    if (
+      !preparedScenes.some(({ saved }) => saved.id === currentSceneId) &&
+      !this.sceneRegistry.get(currentSceneId)?.sourceData
+    ) {
+      throw new Error(`Save references unavailable current scene '${currentSceneId}'.`);
+    }
+
+    ScriptRegistry.stopAll();
+    this.currentScene = null;
+    this.scenes.clear();
+    this.sceneCacheMeta.clear();
+    this.sceneRuntimeSnapshots.clear();
+
+    for (const [id, authored] of this.authoredSceneData) {
+      const descriptor = this.sceneRegistry.get(id);
+      if (descriptor) descriptor.sourceData = JSON.parse(JSON.stringify(authored));
+    }
+
+    for (const { saved, scene } of preparedScenes) {
+      this.syncSceneRegistration(scene, undefined, saved.data);
+      this.cacheScene(scene, false);
+    }
+
+    this.switchTo(currentSceneId);
+  }
+
+  restoreSceneRuntimeSnapshot(sceneId: string, runtime: SceneRuntimeSnapshot): void {
+    const snapshot = this.cloneSceneRuntimeSnapshot(runtime);
+    if (!snapshot) return;
+    this.sceneRuntimeSnapshots.set(sceneId, snapshot);
+    const scene = this.scenes.get(sceneId);
+    if (!scene) return;
+    scene.revealedHiddenEntities = new Set(snapshot.revealedHiddenEntities);
+    scene.parserNote = snapshot.parserNote;
+    scene.parserNoteNeedsCheck = snapshot.parserNoteNeedsCheck;
+    scene.entityParserNotes = { ...snapshot.entityParserNotes };
+    scene.entityParserNoteNeedsCheck = { ...snapshot.entityParserNoteNeedsCheck };
+    scene.restoreParserRecentTurns(snapshot.parserRecentTurns);
+    scene.activeSubscene = snapshot.activeSubscene;
+    scene.camera = { ...snapshot.camera };
+  }
+
+  private captureSceneRuntimeSnapshot(scene: Scene): SceneRuntimeSnapshot {
+    return {
+      revealedHiddenEntities: [...scene.revealedHiddenEntities],
+      parserNote: scene.parserNote,
+      parserNoteNeedsCheck: scene.parserNoteNeedsCheck,
+      entityParserNotes: { ...scene.entityParserNotes },
+      entityParserNoteNeedsCheck: { ...scene.entityParserNoteNeedsCheck },
+      parserRecentTurns: scene.getParserRecentTurns(),
+      activeSubscene: scene.activeSubscene,
+      camera: { ...scene.camera },
+    };
+  }
+
+  private cloneSceneRuntimeSnapshot(
+    runtime: SceneRuntimeSnapshot | undefined
+  ): SceneRuntimeSnapshot | undefined {
+    return runtime ? JSON.parse(JSON.stringify(runtime)) : undefined;
   }
 
   private instantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
@@ -814,7 +953,9 @@ export class SceneManager {
     if (!descriptor?.sourceData) return null;
 
     const scene = this.instantiateScene(sceneId, descriptor.sourceData, descriptor.path);
+    const runtime = this.sceneRuntimeSnapshots.get(sceneId);
     this.cacheScene(scene, false);
+    if (runtime) this.restoreSceneRuntimeSnapshot(sceneId, runtime);
     void this.game.textAssets
       .preloadScene(scene)
       .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
@@ -935,6 +1076,7 @@ export class SceneManager {
     descriptor.name = scene.name;
     descriptor.title = this.game.textAssets.getResolvedSceneField(scene, 'title') || scene.name;
     descriptor.sourceData = scene.toJSON();
+    this.sceneRuntimeSnapshots.set(sceneId, this.captureSceneRuntimeSnapshot(scene));
     descriptor.lastIndexed = Date.now();
     descriptor.graphWeightUnits = entry?.graphWeightUnits;
     descriptor.textureBytes = entry?.textureBytes;

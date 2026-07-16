@@ -149,6 +149,15 @@ type NpcActionHistoryRecord = {
   updatedAt: number;
 };
 
+export type NpcPuppetMasterSaveState = {
+  actionHistories: Record<string, NpcActionHistoryRecord[]>;
+  continuations: Array<{
+    stateKey: string;
+    state: 'needs_replan';
+    reason: 'save_restore';
+  }>;
+};
+
 type NpcStrategyResponse = {
   kind: 'npc_strategy_response';
   npcId: string;
@@ -196,6 +205,7 @@ export class NpcPuppetMaster {
   private patternLoopStates = new Map<string, NpcPatternLoopState>();
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
+  private restoredContinuationStates = new Map<string, 'needs_replan'>();
   private memoryContinuationCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
@@ -237,6 +247,56 @@ export class NpcPuppetMaster {
     this.provider = provider;
   }
 
+  exportSaveState(): NpcPuppetMasterSaveState {
+    const continuationKeys = new Set([
+      ...this.pendingPlanContinuations.keys(),
+      ...this.restoredContinuationStates.keys(),
+    ]);
+    return {
+      actionHistories: Object.fromEntries(
+        [...this.actionHistories.entries()].map(([key, records]) => [
+          key,
+          records.map((record) => ({ ...record })),
+        ])
+      ),
+      continuations: [...continuationKeys].map((stateKey) => ({
+        stateKey,
+        state: 'needs_replan' as const,
+        reason: 'save_restore' as const,
+      })),
+    };
+  }
+
+  importSaveState(state: Partial<NpcPuppetMasterSaveState> | null | undefined): void {
+    this.haltAllNpcs();
+    for (const [key, records] of Object.entries(state?.actionHistories || {})) {
+      if (!Array.isArray(records)) continue;
+      this.actionHistories.set(
+        key,
+        records
+          .filter(
+            (record) =>
+              record &&
+              typeof record.signature === 'string' &&
+              typeof record.summary === 'string' &&
+              Number.isFinite(record.count) &&
+              Number.isFinite(record.updatedAt)
+          )
+          .slice(-PM_ACTION_HISTORY_LIMIT)
+          .map((record) => ({ ...record }))
+      );
+    }
+    for (const continuation of state?.continuations || []) {
+      if (
+        continuation?.state === 'needs_replan' &&
+        typeof continuation.stateKey === 'string' &&
+        continuation.stateKey.trim()
+      ) {
+        this.restoredContinuationStates.set(continuation.stateKey, 'needs_replan');
+      }
+    }
+  }
+
   haltAllNpcs(): void {
     this.haltGenerationId++;
     for (const timeoutId of this.waitTimeouts.values()) {
@@ -252,6 +312,7 @@ export class NpcPuppetMaster {
     this.patternLoopStates.clear();
     this.actionHistories.clear();
     this.pendingPlanContinuations.clear();
+    this.restoredContinuationStates.clear();
     this.memoryContinuationCounts.clear();
     this.npcCallTimes.clear();
     this.sceneCallTimes.clear();

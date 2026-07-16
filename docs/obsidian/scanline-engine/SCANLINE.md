@@ -9,6 +9,7 @@ system:
 Только устройство и реализация движка. Текущий код и JSON-активы остаются источником истины; заметки служат картой для брейншторма.
 
 - [[Architecture]]
+- [[SaveState-and-Saved-Games]]
 - [[Runtime-and-Rendering]]
 - [[Scenes-and-Spatial-Model]]
 - [[Scene-Core]]

@@ -3798,4 +3798,38 @@ describe('NpcPuppetMaster', () => {
       })
     );
   });
+
+  it('round-trips durable action history and safe continuation state for SaveState', () => {
+    const fixture = createSceneFixture();
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    pm.importSaveState({
+      actionHistories: {
+        [`${fixture.scene.id}:guard`]: [
+          { signature: 'LOOK:desk', summary: 'Inspected desk', count: 1, updatedAt: 123 },
+        ],
+      },
+      continuations: [
+        {
+          stateKey: `${fixture.scene.id}:guard`,
+          state: 'needs_replan',
+          reason: 'save_restore',
+        },
+      ],
+    });
+
+    expect(pm.exportSaveState()).toEqual({
+      actionHistories: {
+        [`${fixture.scene.id}:guard`]: [
+          { signature: 'LOOK:desk', summary: 'Inspected desk', count: 1, updatedAt: 123 },
+        ],
+      },
+      continuations: [
+        {
+          stateKey: `${fixture.scene.id}:guard`,
+          state: 'needs_replan',
+          reason: 'save_restore',
+        },
+      ],
+    });
+  });
 });

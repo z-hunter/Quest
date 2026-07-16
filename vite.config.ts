@@ -211,6 +211,35 @@ export default defineConfig({
             next();
           }
         });
+        server.middlewares.use('/api/read-file-existing', (req, res, next) => {
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk.toString();
+            });
+            req.on('end', () => {
+              try {
+                const { path: relativePath } = JSON.parse(body);
+                const targetPath = path.resolve(__dirname, relativePath);
+                if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) {
+                  res.statusCode = 404;
+                  res.end(JSON.stringify({ error: `File not found: ${relativePath}` }));
+                  return;
+                }
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({ success: true, content: fs.readFileSync(targetPath, 'utf-8') })
+                );
+              } catch (err) {
+                console.error('[Vite] Read existing file error:', err);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: String(err) }));
+              }
+            });
+          } else {
+            next();
+          }
+        });
         // OPEN FOLDER ENDPOINT
         server.middlewares.use('/api/open-folder', (req, res, next) => {
           if (req.method === 'POST') {

@@ -32,6 +32,7 @@ import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from './Resolution';
 import { ActorNavigationService } from '../systems/ActorNavigationService';
 import { ActorWorldQuery } from '../systems/ActorWorldQuery';
 import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
+import { SaveManager } from '../systems/SaveManager';
 
 // Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
 const USE_LOCAL_LLM = false;
@@ -83,6 +84,7 @@ export class Game implements IGame {
   actorNavigation: ActorNavigationService;
   actorWorld: ActorWorldQuery;
   actorCommands: ActorCommandExecutor;
+  saveManager: SaveManager;
 
   // ─── inventory getter-proxy (Q2-A: all external call-sites unchanged) ────
   get inventory(): Entity[] {
@@ -249,6 +251,7 @@ export class Game implements IGame {
     this.actorWorld = new ActorWorldQuery(this);
     this.actorCommands = new ActorCommandExecutor(this);
     this.semantic = new GameSemanticAPI(this);
+    this.saveManager = new SaveManager(this);
 
     if (typeof window !== 'undefined') {
       const debugWindow = window as Window & {

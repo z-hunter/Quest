@@ -389,6 +389,13 @@ export class Scene {
     this.parserRecentTurns = [];
   }
 
+  restoreParserRecentTurns(turns: ParserSceneTurnContext[]): void {
+    this.parserRecentTurns = [];
+    for (const turn of Array.isArray(turns) ? turns : []) {
+      this.addParserRecentTurn(turn?.command || '', turn?.response || '');
+    }
+  }
+
   addParserRecentTurn(command: string, response: string): void {
     const normalizedCommand = this.normalizeParserTurnText(command);
     const normalizedResponse = this.truncateParserTurnResponse(
