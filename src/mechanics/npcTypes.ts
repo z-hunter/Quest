@@ -95,6 +95,20 @@ export type NpcPlan = {
   interruptOn?: NpcPlanInterruptCondition[];
 };
 
+export type NpcContinuationState =
+  | 'idle'
+  | 'awaiting_barrier'
+  | 'executing_tail'
+  | 'needs_replan'
+  | 'interrupted'
+  | 'completed';
+
+export type NpcContinuationStateSnapshot = {
+  state: NpcContinuationState;
+  changedAt: number;
+  reason?: string;
+};
+
 export type NpcPuppetMasterResponse = {
   kind: 'pm_response';
   reasoning?: string;

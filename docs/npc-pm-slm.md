@@ -1,7 +1,9 @@
 # NPC Puppet Master — Hybrid SLM Subsystem
 
 > **Расположение**: `src/mechanics/slm/`  
-> **Статус**: Phase 1–3 реализованы. Модель требует дообучения перед активацией.
+> **Статус**: runtime и полный offline pipeline реализованы. Модель требует обучения на собранном production dataset перед активацией.
+
+Offline pipeline: `npm run slm:pipeline`. Реализация и зависимости находятся в `scripts/slm/`; runtime принимает ONNX только вместе с совместимым manifest.
 
 ---
 

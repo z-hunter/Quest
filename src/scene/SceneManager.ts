@@ -12,6 +12,7 @@ import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import { StateEventSystem } from '../systems/StateEventSystem';
+import { assertSceneData } from '../contracts/runtimeSchemas';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -467,6 +468,7 @@ export class SceneManager {
 
   async loadSceneData(data: any, filename?: string, explicitPath?: string): Promise<void> {
     try {
+      assertSceneData(data);
       const sceneId = filename || data.id || 'loaded_scene';
 
       // If we are hot-reloading or entirely replacing this scene, clean up any old scripts bound to it

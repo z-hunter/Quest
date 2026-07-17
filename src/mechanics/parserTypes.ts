@@ -568,6 +568,10 @@ export type LlmCascadeDebugInfo = {
     | 'api_error'
     | 'invalid_response'
     | 'timeout'
+    | 'authentication'
+    | 'rate_limited'
+    | 'unavailable'
+    | 'network_error'
     | 'disabled'
     | 'fallback';
 };

@@ -61,6 +61,7 @@ describe('OllamaProvider', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error).toBe('Internal Server Error');
-    expect(res.reason).toBe('api_error');
+    expect(res.reason).toBe('unavailable');
+    expect(res.retryable).toBe(true);
   });
 });

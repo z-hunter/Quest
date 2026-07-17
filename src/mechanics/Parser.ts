@@ -47,6 +47,7 @@ import type {
   ParserToolAction,
   ParserWorldModel,
 } from './parserTypes';
+import { assertParserCascadeEnvelope } from '../contracts/runtimeSchemas';
 
 type ParserNoteDebugEntry = {
   operation: 'context' | 'created' | 'updated' | 'cleared' | 'needsCheck';
@@ -1516,6 +1517,7 @@ export class Parser {
   }
 
   private runParserCore(envelope: ParserCascadeEnvelope): string {
+    assertParserCascadeEnvelope(envelope);
     const decision = this.makeCoreDecision(envelope);
     return this.executeCoreDecision(decision);
   }

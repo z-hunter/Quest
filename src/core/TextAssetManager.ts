@@ -8,6 +8,7 @@ import {
   openProjectFile,
   saveProjectFile,
 } from '../platform/fileApi';
+import { assertTextAssetData, ContractValidationError } from '../contracts/runtimeSchemas';
 
 export type TextAssetStructuredValue =
   | string
@@ -1004,7 +1005,9 @@ export class TextAssetManager {
         const path = `public${url.split('?')[0]}`;
         try {
           const content = await readProjectFileExisting(path);
-          return JSON.parse(content);
+          const parsed: unknown = JSON.parse(content);
+          assertTextAssetData(parsed, `TextAsset(${url})`);
+          return parsed;
         } catch {
           return null;
         }
@@ -1019,8 +1022,14 @@ export class TextAssetManager {
       if (!contentType.includes('application/json')) {
         return null;
       }
-      return await response.json();
+      const parsed: unknown = await response.json();
+      assertTextAssetData(parsed, `TextAsset(${url})`);
+      return parsed;
     } catch (error) {
+      if (error instanceof ContractValidationError) {
+        console.error(`[TextAssetManager] invalid asset ${url}:`, error.message);
+        return null;
+      }
       console.error(`[TextAssetManager] error reading ${url}:`, error);
       return null;
     }

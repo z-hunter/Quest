@@ -6,11 +6,13 @@ import type {
   LlmProviderResponse,
   LlmStreamDeltaCallback,
 } from './ILlmProvider';
+import { ProviderCircuitBreaker, classifyHttpFailure, delay, retryDelayMs } from './providerPolicy';
 
 const DEFAULT_PROXY_URL = '/api/llm';
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 const DEFAULT_MAX_TOKENS = 1024;
 const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 15000;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -20,6 +22,10 @@ type AnthropicProviderOptions = {
   maxTokens?: number;
   timeoutMs?: number;
   fetchImpl?: FetchLike;
+  maxAttempts?: number;
+  streamIdleTimeoutMs?: number;
+  circuitFailureThreshold?: number;
+  circuitCooldownMs?: number;
 };
 
 type SseEvent = {
@@ -33,6 +39,9 @@ export class AnthropicProvider implements ILlmProvider {
   private maxTokens: number;
   private timeoutMs: number;
   private fetchImpl: FetchLike;
+  private maxAttempts: number;
+  private streamIdleTimeoutMs: number;
+  private breaker: ProviderCircuitBreaker;
 
   constructor(options: AnthropicProviderOptions = {}) {
     this.proxyUrl = options.proxyUrl || DEFAULT_PROXY_URL;
@@ -40,6 +49,12 @@ export class AnthropicProvider implements ILlmProvider {
     this.maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS;
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetchImpl || fetch.bind(globalThis);
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? 2);
+    this.streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+    this.breaker = new ProviderCircuitBreaker(
+      options.circuitFailureThreshold,
+      options.circuitCooldownMs
+    );
   }
 
   sendMessage(
@@ -55,94 +70,144 @@ export class AnthropicProvider implements ILlmProvider {
     onDelta: LlmStreamDeltaCallback
   ): Promise<LlmProviderResponse> {
     const startedAt = this.nowMs();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    if (this.breaker.isOpen())
+      return {
+        ok: false,
+        text: '',
+        model: this.model,
+        error: 'Provider circuit is open',
+        reason: 'unavailable',
+        retryable: true,
+        retryAfterMs: this.breaker.remainingMs(),
+        attempts: 0,
+        durationMs: 0,
+      };
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await this.fetchImpl(this.proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: this.toAnthropicContent(system),
+            messages: messages.map((message) => ({
+              role: message.role,
+              content: this.toAnthropicContent(message.content),
+            })),
+            stream: true,
+          }),
+          signal: controller.signal,
+        });
 
-    try {
-      const response = await this.fetchImpl(this.proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          system: this.toAnthropicContent(system),
-          messages: messages.map((message) => ({
-            role: message.role,
-            content: this.toAnthropicContent(message.content),
-          })),
-          stream: true,
-        }),
-        signal: controller.signal,
-      });
+        if (!response.ok) {
+          const errorText = await response.text();
+          const failure = classifyHttpFailure(
+            response.status,
+            response.headers?.get?.('retry-after') || null
+          );
+          if (failure.retryable && attempt < this.maxAttempts) {
+            await delay(retryDelayMs(attempt, failure.retryAfterMs));
+            continue;
+          }
+          this.breaker.failure(failure.retryable);
+          return {
+            ok: false,
+            text: '',
+            model: this.model,
+            error: errorText || `LLM proxy returned HTTP ${response.status}`,
+            reason: failure.reason,
+            statusCode: response.status,
+            requestId: response.headers?.get?.('x-request-id') || undefined,
+            retryAfterMs: failure.retryAfterMs,
+            retryable: failure.retryable,
+            attempts: attempt,
+            durationMs: this.nowMs() - startedAt,
+          };
+        }
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          ok: false,
-          text: '',
-          model: this.model,
-          error: errorText || `LLM proxy returned HTTP ${response.status}`,
-          reason: 'api_error',
-          durationMs: this.nowMs() - startedAt,
-        };
-      }
+        if (!response.body) {
+          const text = await response.text();
+          this.breaker.success();
+          return {
+            ok: true,
+            text,
+            model: this.model,
+            durationMs: this.nowMs() - startedAt,
+          };
+        }
 
-      if (!response.body) {
-        const text = await response.text();
+        const streamResult = await this.readSseStream(response.body, onDelta);
+        if (streamResult.error) {
+          this.breaker.failure(false);
+          return {
+            ok: false,
+            text: streamResult.text,
+            model: this.model,
+            error: streamResult.error,
+            reason: 'api_error',
+            durationMs: this.nowMs() - startedAt,
+            tokensGenerated: streamResult.tokensGenerated,
+            inputTokens: streamResult.inputTokens,
+            cacheCreationInputTokens: streamResult.cacheCreationInputTokens,
+            cacheReadInputTokens: streamResult.cacheReadInputTokens,
+            retryable: false,
+            attempts: attempt,
+          };
+        }
+
+        this.breaker.success();
         return {
           ok: true,
-          text,
-          model: this.model,
-          durationMs: this.nowMs() - startedAt,
-        };
-      }
-
-      const streamResult = await this.readSseStream(response.body, onDelta);
-      if (streamResult.error) {
-        return {
-          ok: false,
           text: streamResult.text,
           model: this.model,
-          error: streamResult.error,
-          reason: 'api_error',
           durationMs: this.nowMs() - startedAt,
           tokensGenerated: streamResult.tokensGenerated,
           inputTokens: streamResult.inputTokens,
           cacheCreationInputTokens: streamResult.cacheCreationInputTokens,
           cacheReadInputTokens: streamResult.cacheReadInputTokens,
+          attempts: attempt,
         };
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : '';
+        const isAbort = errorName === 'AbortError';
+        if (attempt < this.maxAttempts) {
+          await delay(retryDelayMs(attempt));
+          continue;
+        }
+        this.breaker.failure(true);
+        return {
+          ok: false,
+          text: '',
+          model: this.model,
+          error: isAbort ? 'Request timed out' : String(error),
+          reason: isAbort ? 'timeout' : 'network_error',
+          retryable: true,
+          attempts: attempt,
+          durationMs: this.nowMs() - startedAt,
+        };
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      return {
-        ok: true,
-        text: streamResult.text,
-        model: this.model,
-        durationMs: this.nowMs() - startedAt,
-        tokensGenerated: streamResult.tokensGenerated,
-        inputTokens: streamResult.inputTokens,
-        cacheCreationInputTokens: streamResult.cacheCreationInputTokens,
-        cacheReadInputTokens: streamResult.cacheReadInputTokens,
-      };
-    } catch (error) {
-      const errorName = error instanceof Error ? error.name : '';
-      const isAbort = errorName === 'AbortError';
-      return {
-        ok: false,
-        text: '',
-        model: this.model,
-        error: isAbort ? 'Request timed out' : String(error),
-        reason: isAbort ? 'timeout' : 'api_error',
-        durationMs: this.nowMs() - startedAt,
-      };
-    } finally {
-      clearTimeout(timeoutId);
     }
+    return {
+      ok: false,
+      text: '',
+      model: this.model,
+      error: 'Retry policy exhausted',
+      reason: 'unavailable',
+      retryable: false,
+      attempts: this.maxAttempts,
+      durationMs: this.nowMs() - startedAt,
+    };
   }
 
   isAvailable(): boolean {
-    return true;
+    return !this.breaker.isOpen();
   }
 
   getProviderName(): string {
@@ -276,7 +341,15 @@ export class AnthropicProvider implements ILlmProvider {
     };
 
     while (true) {
-      const { done, value } = await reader.read();
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_, reject) => {
+        idleTimer = setTimeout(
+          () => reject(new DOMException('Stream idle timeout', 'AbortError')),
+          this.streamIdleTimeoutMs
+        );
+      });
+      const { done, value } = await Promise.race([reader.read(), idle]);
+      if (idleTimer) clearTimeout(idleTimer);
       if (done) break;
       lineBuffer += decoder.decode(value, { stream: true });
 

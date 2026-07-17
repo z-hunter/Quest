@@ -17,9 +17,12 @@ import type {
   NpcPuppetMasterDebugInfo,
   NpcPuppetMasterStrategyDebugInfo,
   NpcPuppetMasterResponse,
+  NpcContinuationState,
+  NpcContinuationStateSnapshot,
   NpcStaticPrefixDebugInfo,
   NpcWorldModel,
 } from './npcTypes';
+import { assertNpcPlan } from '../contracts/runtimeSchemas';
 
 const SYSTEM_PROMPT_URL = '/text/system/npc-pm-system.md';
 const FALLBACK_SYSTEM_PROMPT = [
@@ -167,6 +170,7 @@ type NpcStrategyResponse = {
 };
 
 type PendingPlanContinuation = {
+  state: 'awaiting_barrier';
   npcId: string;
   barrierStep: NpcPlanStep;
   steps: NpcPlanStep[];
@@ -205,6 +209,7 @@ export class NpcPuppetMaster {
   private patternLoopStates = new Map<string, NpcPatternLoopState>();
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
+  private continuationStates = new Map<string, NpcContinuationStateSnapshot>();
   private restoredContinuationStates = new Map<string, 'needs_replan'>();
   private memoryContinuationCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
@@ -293,6 +298,11 @@ export class NpcPuppetMaster {
         continuation.stateKey.trim()
       ) {
         this.restoredContinuationStates.set(continuation.stateKey, 'needs_replan');
+        this.continuationStates.set(continuation.stateKey, {
+          state: 'needs_replan',
+          changedAt: Date.now(),
+          reason: 'save_restore',
+        });
       }
     }
   }
@@ -312,6 +322,7 @@ export class NpcPuppetMaster {
     this.patternLoopStates.clear();
     this.actionHistories.clear();
     this.pendingPlanContinuations.clear();
+    this.continuationStates.clear();
     this.restoredContinuationStates.clear();
     this.memoryContinuationCounts.clear();
     this.npcCallTimes.clear();
@@ -331,6 +342,15 @@ export class NpcPuppetMaster {
 
   getLastDebugInfo(): NpcPuppetMasterDebugInfo | null {
     return this.lastDebugInfo;
+  }
+
+  getContinuationState(sceneId: string, npcId: string): NpcContinuationStateSnapshot {
+    return (
+      this.continuationStates.get(`${sceneId}:${npcId}`) || {
+        state: 'idle',
+        changedAt: 0,
+      }
+    );
   }
 
   traceWake(stage: string, details: Record<string, unknown> = {}): void {
@@ -588,6 +608,7 @@ export class NpcPuppetMaster {
           trigger
         )
       : itemValidatedPlans;
+    acceptedPlans.forEach((plan, index) => assertNpcPlan(plan, `$.plans[${index}]`));
     this.lastDebugInfo = {
       matched: acceptedPlans.length > 0,
       provider: this.provider.getProviderName(),
@@ -652,7 +673,10 @@ export class NpcPuppetMaster {
   private executePlanAndTrackContinuation(plan: NpcPlan): NpcPlanExecutionOutcome[] {
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
-      this.pendingPlanContinuations.delete(this.getNpcStateKey(scene, plan.npcId));
+      const stateKey = this.getNpcStateKey(scene, plan.npcId);
+      if (this.pendingPlanContinuations.has(stateKey)) {
+        this.transitionContinuation(stateKey, 'interrupted', 'superseded_by_new_plan');
+      }
     }
     const outcomes = this.executor.executePlan(plan);
     if (scene) {
@@ -884,7 +908,9 @@ export class NpcPuppetMaster {
     ) {
       return;
     }
-    this.pendingPlanContinuations.set(this.getNpcStateKey(scene, plan.npcId), {
+    const stateKey = this.getNpcStateKey(scene, plan.npcId);
+    this.pendingPlanContinuations.set(stateKey, {
+      state: 'awaiting_barrier',
       npcId: plan.npcId,
       barrierStep,
       steps: remainingSteps,
@@ -893,6 +919,7 @@ export class NpcPuppetMaster {
       completedSteps: [...previousCompletedSteps, ...outcomes.slice(0, scheduledIndex)],
       trackCompletion,
     });
+    this.transitionContinuation(stateKey, 'awaiting_barrier', 'scheduled_step');
     this.traceWake('pending_plan_stored', {
       sceneId: scene.id,
       npcId: plan.npcId,
@@ -902,6 +929,35 @@ export class NpcPuppetMaster {
       interruptOn: interruptOn.map((condition) => condition.type),
       trackCompletion,
     });
+  }
+
+  private transitionContinuation(
+    stateKey: string,
+    state: NpcContinuationState,
+    reason?: string
+  ): void {
+    const previous = this.continuationStates.get(stateKey)?.state || 'idle';
+    const allowed: Record<NpcContinuationState, NpcContinuationState[]> = {
+      idle: ['awaiting_barrier', 'needs_replan', 'completed'],
+      awaiting_barrier: ['executing_tail', 'needs_replan', 'interrupted', 'completed'],
+      executing_tail: ['awaiting_barrier', 'needs_replan', 'interrupted', 'completed'],
+      needs_replan: ['awaiting_barrier', 'interrupted'],
+      interrupted: ['awaiting_barrier'],
+      completed: ['awaiting_barrier'],
+    };
+    if (!allowed[previous].includes(state)) {
+      console.warn(`[NpcPuppetMaster] invalid continuation transition ${previous} -> ${state}`, {
+        stateKey,
+        reason,
+      });
+    }
+    this.continuationStates.set(stateKey, {
+      state,
+      changedAt: Date.now(),
+      ...(reason ? { reason } : {}),
+    });
+    if (state !== 'awaiting_barrier') this.pendingPlanContinuations.delete(stateKey);
+    this.traceWake('continuation_state_changed', { stateKey, previous, state, reason });
   }
 
   private tryExecutePendingContinuation(
@@ -945,7 +1001,7 @@ export class NpcPuppetMaster {
             message: `Already at ${targetId}; repeating MOVE_TO cannot make progress.`,
           };
           this.recordActionHistory(scene, npcId, terminalResult);
-          this.pendingPlanContinuations.delete(stateKey);
+          this.transitionContinuation(stateKey, 'needs_replan', 'move_without_progress');
           this.traceWake('move_no_progress_loop', {
             sceneId: scene.id,
             npcId,
@@ -999,7 +1055,7 @@ export class NpcPuppetMaster {
         : pending.completedSteps;
 
     if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
-      this.pendingPlanContinuations.delete(stateKey);
+      this.transitionContinuation(stateKey, 'completed', 'scene_transfer');
       const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
         (candidate) => candidate.getObjectByName(npcId)
       );
@@ -1043,7 +1099,7 @@ export class NpcPuppetMaster {
     });
 
     if (interrupt) {
-      this.pendingPlanContinuations.delete(stateKey);
+      this.transitionContinuation(stateKey, 'interrupted', interrupt.type);
       this.traceWake('plan_interrupted', {
         sceneId: scene.id,
         npcId,
@@ -1075,7 +1131,7 @@ export class NpcPuppetMaster {
       return true;
     }
 
-    this.pendingPlanContinuations.delete(stateKey);
+    this.transitionContinuation(stateKey, 'executing_tail', 'barrier_resolved');
     const barrierFailed = this.isFailedPlanBarrier(trigger, barrierResult);
     if (barrierFailed && pending.memory !== undefined) {
       this.traceWake('pending_plan_memory_discarded_after_failure', {
@@ -1099,6 +1155,7 @@ export class NpcPuppetMaster {
     );
     const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
     if (hasScheduled) return true;
+    this.transitionContinuation(stateKey, 'completed', 'tail_finished');
     const finalResults = [...completedSteps, ...outcomes];
     if (!pending.trackCompletion) return false;
     this.traceWake('plan_completed', {

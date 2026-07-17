@@ -124,6 +124,8 @@ Unit/integration coverage широкая (41 test file), но нужен browser
 
 ### P1 — закрыть production gaps
 
+**Статус текущего implementation pass (2026-07-17):** SaveState v1 реализован; добавлены runtime validators для SceneData, Parser Envelope/DSL, NPC structured plan и Text Assets; provider transport получил typed failures, bounded retry/backoff, Retry-After, stream idle watchdog и circuit breaker; NPC continuation оформлен как явная state machine; добавлен воспроизводимый SLM pipeline и обязательный ONNX compatibility manifest. Дальнейшие P1 hardening-пункты — versioned asset migrations, redacted replay fixtures и CI model-quality gates.
+
 1. SaveState v1: Scene runtime discoveries, Parser Notes, NPC memory/objectives/known entities, SceneLog cursors и versioned migrations.
 2. Parser/AI contract hardening: generated JSON schemas или runtime validators для envelopes, ParserToolAction, NPC DSL и provider responses.
 3. LLM operations: provider capability matrix, request IDs, bounded retries, circuit breaker, token/latency budgets, redacted prompt diagnostics и replayable fixtures.

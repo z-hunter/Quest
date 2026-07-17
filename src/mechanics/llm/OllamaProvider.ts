@@ -5,6 +5,7 @@ import type {
   LlmProviderResponse,
   LlmStreamDeltaCallback,
 } from './ILlmProvider';
+import { ProviderCircuitBreaker, classifyHttpFailure, delay, retryDelayMs } from './providerPolicy';
 
 const DEFAULT_BASE_URL = 'http://localhost:11434/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen2.5:3b';
@@ -22,6 +23,9 @@ export type OllamaProviderOptions = {
   timeoutMs?: number;
   jsonMode?: boolean;
   fetchImpl?: FetchLike;
+  maxAttempts?: number;
+  circuitFailureThreshold?: number;
+  circuitCooldownMs?: number;
 };
 
 export class OllamaProvider implements ILlmProvider {
@@ -32,6 +36,8 @@ export class OllamaProvider implements ILlmProvider {
   private timeoutMs: number;
   private jsonMode: boolean;
   private fetchImpl: FetchLike;
+  private maxAttempts: number;
+  private breaker: ProviderCircuitBreaker;
 
   constructor(options: OllamaProviderOptions = {}) {
     this.baseUrl = options.baseUrl || DEFAULT_BASE_URL;
@@ -41,6 +47,11 @@ export class OllamaProvider implements ILlmProvider {
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.jsonMode = options.jsonMode ?? true;
     this.fetchImpl = options.fetchImpl || fetch.bind(globalThis);
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? 2);
+    this.breaker = new ProviderCircuitBreaker(
+      options.circuitFailureThreshold,
+      options.circuitCooldownMs
+    );
   }
 
   sendMessage(
@@ -56,89 +67,135 @@ export class OllamaProvider implements ILlmProvider {
     onDelta: LlmStreamDeltaCallback
   ): Promise<LlmProviderResponse> {
     const startedAt = this.nowMs();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-      const formattedMessages = [
-        { role: 'system', content: this.contentToString(system) },
-        ...messages.map((m) => ({
-          role: m.role,
-          content: this.contentToString(m.content),
-        })),
-      ];
-
-      const body: Record<string, unknown> = {
-        model: this.model,
-        messages: formattedMessages,
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-        stream: false,
-        keep_alive: -1,
-        options: {
-          num_ctx: 4096,
-        },
-      };
-
-      if (this.jsonMode) {
-        body.response_format = { type: 'json_object' };
-      }
-
-      const response = await this.fetchImpl(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          ok: false,
-          text: '',
-          model: this.model,
-          error: errorText || `Ollama returned HTTP ${response.status}`,
-          reason: 'api_error',
-          durationMs: this.nowMs() - startedAt,
-        };
-      }
-
-      const data = await response.json();
-      const text = data?.choices?.[0]?.message?.content || '';
-      const usage = data?.usage;
-
-      if (text) {
-        onDelta(text, text);
-      }
-
-      return {
-        ok: true,
-        text,
-        model: data?.model || this.model,
-        durationMs: this.nowMs() - startedAt,
-        tokensGenerated: usage?.completion_tokens,
-        inputTokens: usage?.prompt_tokens,
-      };
-    } catch (error) {
-      const errorName = error instanceof Error ? error.name : '';
-      const isAbort = errorName === 'AbortError';
+    if (this.breaker.isOpen())
       return {
         ok: false,
         text: '',
         model: this.model,
-        error: isAbort ? 'Request timed out' : String(error),
-        reason: isAbort ? 'timeout' : 'api_error',
-        durationMs: this.nowMs() - startedAt,
+        error: 'Provider circuit is open',
+        reason: 'unavailable',
+        retryable: true,
+        retryAfterMs: this.breaker.remainingMs(),
+        attempts: 0,
+        durationMs: 0,
       };
-    } finally {
-      clearTimeout(timeoutId);
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const formattedMessages = [
+          { role: 'system', content: this.contentToString(system) },
+          ...messages.map((m) => ({
+            role: m.role,
+            content: this.contentToString(m.content),
+          })),
+        ];
+
+        const body: Record<string, unknown> = {
+          model: this.model,
+          messages: formattedMessages,
+          max_tokens: this.maxTokens,
+          temperature: this.temperature,
+          stream: false,
+          keep_alive: -1,
+          options: {
+            num_ctx: 4096,
+          },
+        };
+
+        if (this.jsonMode) {
+          body.response_format = { type: 'json_object' };
+        }
+
+        const response = await this.fetchImpl(this.baseUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const failure = classifyHttpFailure(
+            response.status,
+            response.headers?.get?.('retry-after') || null
+          );
+          if (failure.retryable && attempt < this.maxAttempts) {
+            await delay(retryDelayMs(attempt, failure.retryAfterMs));
+            continue;
+          }
+          this.breaker.failure(failure.retryable);
+          return {
+            ok: false,
+            text: '',
+            model: this.model,
+            error: errorText || `Ollama returned HTTP ${response.status}`,
+            reason: failure.reason,
+            statusCode: response.status,
+            requestId: response.headers?.get?.('x-request-id') || undefined,
+            retryAfterMs: failure.retryAfterMs,
+            retryable: failure.retryable,
+            attempts: attempt,
+            durationMs: this.nowMs() - startedAt,
+          };
+        }
+
+        const data = await response.json();
+        const text = data?.choices?.[0]?.message?.content || '';
+        const usage = data?.usage;
+
+        if (text) {
+          onDelta(text, text);
+        }
+        this.breaker.success();
+
+        return {
+          ok: true,
+          text,
+          model: data?.model || this.model,
+          durationMs: this.nowMs() - startedAt,
+          tokensGenerated: usage?.completion_tokens,
+          inputTokens: usage?.prompt_tokens,
+          attempts: attempt,
+        };
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : '';
+        const isAbort = errorName === 'AbortError';
+        if (attempt < this.maxAttempts) {
+          await delay(retryDelayMs(attempt));
+          continue;
+        }
+        this.breaker.failure(true);
+        return {
+          ok: false,
+          text: '',
+          model: this.model,
+          error: isAbort ? 'Request timed out' : String(error),
+          reason: isAbort ? 'timeout' : 'network_error',
+          retryable: true,
+          attempts: attempt,
+          durationMs: this.nowMs() - startedAt,
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+    return {
+      ok: false,
+      text: '',
+      model: this.model,
+      error: 'Retry policy exhausted',
+      reason: 'unavailable',
+      retryable: false,
+      attempts: this.maxAttempts,
+      durationMs: this.nowMs() - startedAt,
+    };
   }
 
   isAvailable(): boolean {
-    return true;
+    return !this.breaker.isOpen();
   }
 
   getProviderName(): string {

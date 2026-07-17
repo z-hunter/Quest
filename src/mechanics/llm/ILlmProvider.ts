@@ -16,7 +16,14 @@ export type LlmProviderMessage = {
   content: LlmProviderContent;
 };
 
-export type LlmProviderErrorReason = 'api_error' | 'timeout';
+export type LlmProviderErrorReason =
+  | 'authentication'
+  | 'rate_limited'
+  | 'unavailable'
+  | 'network_error'
+  | 'invalid_response'
+  | 'api_error'
+  | 'timeout';
 
 export type LlmProviderResponse = {
   ok: boolean;
@@ -24,6 +31,11 @@ export type LlmProviderResponse = {
   model?: string;
   error?: string;
   reason?: LlmProviderErrorReason;
+  statusCode?: number;
+  requestId?: string;
+  retryAfterMs?: number;
+  retryable?: boolean;
+  attempts?: number;
   durationMs: number;
   tokensGenerated?: number;
   inputTokens?: number;

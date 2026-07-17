@@ -8,6 +8,7 @@ import type {
   ParserScopeSlice,
   ParserToolAction,
 } from './parserTypes';
+import { assertParserCascadeEnvelope } from '../contracts/runtimeSchemas';
 
 const SYSTEM_PROMPT_URL = '/text/system/parser-llm-system.md';
 const PROMPT_ASSET_DOMAIN = 'parser-llm';
@@ -209,7 +210,7 @@ export class LlmCascade {
       return null;
     }
 
-    return {
+    const envelope: ParserCascadeEnvelope = {
       stage: 'llm-v3',
       output: {
         kind: 'plan',
@@ -223,6 +224,8 @@ export class LlmCascade {
         source: undefined,
       },
     };
+    assertParserCascadeEnvelope(envelope);
+    return envelope;
   }
 
   getLastDebugInfo(): LlmCascadeDebugInfo | null {
