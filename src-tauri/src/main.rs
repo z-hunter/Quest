@@ -240,6 +240,9 @@ fn setup_file_watcher(app_handle: tauri::AppHandle) {
   };
 
   std::thread::spawn(move || {
+    // The event callback owns its root so it can calculate relative paths;
+    // retain a separate handle for registering the watcher.
+    let watch_root = root.clone();
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<NotifyEvent>| {
       match res {
         Ok(event) => {
@@ -265,7 +268,7 @@ fn setup_file_watcher(app_handle: tauri::AppHandle) {
       }
     }).unwrap();
 
-    watcher.watch(&root, RecursiveMode::Recursive).unwrap();
+    watcher.watch(&watch_root, RecursiveMode::Recursive).unwrap();
     
     // keep thread alive
     loop {

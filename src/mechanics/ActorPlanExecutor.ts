@@ -17,11 +17,15 @@ export class ActorPlanExecutor {
   private readonly actionCompletionScheduler?: NpcActionCompletionScheduler;
   private readonly strategyScheduler?: NpcStrategyScheduler;
   private moveWatchTokens = new Map<string, number>();
+  private navigationTokens = new Map<string, number>();
   private pendingTimeouts = new Map<string, Set<any>>();
 
   clearState(npcId: string): void {
     const current = this.moveWatchTokens.get(npcId) || 0;
     this.moveWatchTokens.set(npcId, current + 1);
+    this.navigationTokens.set(npcId, (this.navigationTokens.get(npcId) || 0) + 1);
+    const actor = this.game.sceneManager.currentScene?.getObjectByName(npcId);
+    if (actor instanceof Actor) this.game.actorNavigation.cancelNpcApproach(actor);
     const timeouts = this.pendingTimeouts.get(npcId);
     if (timeouts) {
       for (const timeoutId of timeouts) {
@@ -33,6 +37,7 @@ export class ActorPlanExecutor {
 
   clearAllPending(): void {
     this.moveWatchTokens.clear();
+    this.navigationTokens.clear();
     for (const timeouts of this.pendingTimeouts.values()) {
       for (const timeoutId of timeouts) {
         globalThis.clearTimeout(timeoutId);
@@ -237,41 +242,52 @@ export class ActorPlanExecutor {
       return { status: 'failed', code: 'move_target_not_found', npcId: actor.name };
     }
 
-    const approach = this.game.actorNavigation.planApproach(actor, target);
-    if (approach.status === 'already_reachable') {
-      const result: ActorMoveResult = {
-        status: 'arrived',
-        code: 'arrived',
-        message: 'Already close enough to interact.',
-        target: { x: actor.x, y: actor.y },
-        route: [],
-      };
-      this.scheduleMoveCompletion(actor.name, result, 0);
-      return {
-        status: 'scheduled',
-        code: 'npc_already_reachable',
-        npcId: actor.name,
-        message: result.message,
-      };
-    }
-    if (!approach.point) {
-      const result: ActorMoveResult = {
-        status: 'unreachable',
-        code: 'route_unreachable',
-        message: 'Destination is unreachable.',
-        target: null,
-        route: [],
-      };
-      this.scheduleMoveCompletion(actor.name, result, 0);
-      return {
-        status: 'scheduled',
-        code: result.code,
-        npcId: actor.name,
-        message: result.message,
-      };
-    }
-
-    return this.startMove(actor, actor.moveTo(approach.point.x, approach.point.y));
+    const token = (this.navigationTokens.get(actor.name) || 0) + 1;
+    this.navigationTokens.set(actor.name, token);
+    this.game.actorNavigation.requestNpcApproach(actor, target, (navigation) => {
+      if (this.navigationTokens.get(actor.name) !== token) return;
+      this.navigationTokens.delete(actor.name);
+      if (navigation.plan.status === 'already_reachable') {
+        this.scheduleMoveCompletion(
+          actor.name,
+          {
+            status: 'arrived',
+            code: 'arrived',
+            message: 'Already close enough to interact.',
+            target: { x: actor.x, y: actor.y },
+            route: [],
+          },
+          0
+        );
+        return;
+      }
+      if (!navigation.plan.point) {
+        this.scheduleMoveCompletion(
+          actor.name,
+          {
+            status: 'unreachable',
+            code: 'route_unreachable',
+            message: 'Destination is unreachable.',
+            target: null,
+            route: [],
+          },
+          0
+        );
+        return;
+      }
+      const result = navigation.route
+        ? actor.startPlannedRoute(navigation.plan.point, navigation.route)
+        : actor.moveTo(navigation.plan.point.x, navigation.plan.point.y);
+      this.startMove(actor, result);
+    });
+    return {
+      status: 'scheduled',
+      code: 'npc_route_planning',
+      npcId: actor.name,
+      targetId,
+      message: 'Navigation route is being planned.',
+      actionType: 'MOVE_TO',
+    };
   }
 
   private traverseExit(actor: Actor, targetId: string): NpcPlanExecutionOutcome {

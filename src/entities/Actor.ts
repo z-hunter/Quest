@@ -242,6 +242,31 @@ export class Actor extends Entity {
     return this.lastMoveResult;
   }
 
+  /**
+   * Starts a route prepared by the navigation worker. The caller has already
+   * validated the route against the current Scene; this deliberately avoids
+   * re-running synchronous A* in moveTo().
+   */
+  startPlannedRoute(
+    target: { x: number; y: number },
+    route: { x: number; y: number }[]
+  ): ActorMoveResult {
+    if (route.length === 0) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return this.lastMoveResult;
+    }
+    this.route = route.map((point) => ({ ...point }));
+    this.routeIndex = 0;
+    this.target = this.route[0];
+    this.visualTarget = null;
+    this.localTeleportTarget = null;
+    this.localTeleportExit = null;
+    this.setState('walk');
+    this.overrideAnimSet = null;
+    this.lastMoveResult = this.createMoveResult('started', 'route_started', target, this.route);
+    return this.lastMoveResult;
+  }
+
   stop(): void {
     this.target = null;
     this.visualTarget = null;
