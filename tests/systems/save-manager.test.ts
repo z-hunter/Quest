@@ -78,6 +78,22 @@ describe('SaveManager', () => {
     npc.x = 77;
     const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
     npcComponent.memory = 'The key was found.';
+    npcComponent.objectives = ['Deliver the key to the archive'];
+    npcComponent.knownEntities = {
+      key: {
+        id: 'key',
+        title: 'Brass key',
+        kind: 'item',
+        lastSeenSceneId: 'hall',
+        lastSeenAt: 1234,
+        lastSeenLocation: {
+          sceneId: 'hall',
+          relation: 'in',
+          targetId: 'guard',
+          targetTitle: 'Guard',
+        },
+      },
+    };
     const inventory = npc.components.find(
       (component: any) => component.type === 'Inventory'
     ) as any;
@@ -86,6 +102,12 @@ describe('SaveManager', () => {
     key.visible = false;
     room.revealedHiddenEntities.add('secret');
     room.setParserNote('Door checked');
+    room.markParserNoteNeedsCheck();
+    room.setEntityParserNote('secret', 'The hidden panel is unlocked.');
+    room.markEntityParserNoteNeedsCheck('secret');
+    room.addParserRecentTurn('look at wall', 'A hidden panel is visible.');
+    hall.setEntityParserNote('guard', 'The guard intends to deliver the key.');
+    hall.markEntityParserNoteNeedsCheck('guard');
     game.parser.pendingState = {
       intent: 'take',
       question: 'Which key?',
@@ -97,7 +119,8 @@ describe('SaveManager', () => {
     manager.currentScene = hall;
     (manager as any).evictScene('room');
 
-    const state = game.saveManager.createState('slot one');
+    // Exercise the file boundary as well as the in-memory restore path.
+    const state = JSON.parse(JSON.stringify(game.saveManager.createState('slot one')));
 
     npcComponent.memory = 'corrupted';
     game.console.history = [];
@@ -115,8 +138,36 @@ describe('SaveManager', () => {
     expect(
       (restoredNpc.components.find((component: any) => component.type === 'NPC') as any).memory
     ).toBe('The key was found.');
+    const restoredNpcComponent = restoredNpc.components.find(
+      (component: any) => component.type === 'NPC'
+    ) as any;
+    expect(restoredNpcComponent.objectives).toEqual(['Deliver the key to the archive']);
+    expect(restoredNpcComponent.knownEntities).toEqual({
+      key: {
+        id: 'key',
+        title: 'Brass key',
+        kind: 'item',
+        lastSeenSceneId: 'hall',
+        lastSeenAt: 1234,
+        lastSeenLocation: {
+          sceneId: 'hall',
+          relation: 'in',
+          targetId: 'guard',
+          targetTitle: 'Guard',
+        },
+      },
+    });
     expect(restoredKey.spatial).toEqual({ parentNodeId: 'guard', relation: 'in' });
     expect(restoredRoom.revealedHiddenEntities.has('secret')).toBe(true);
+    expect(restoredRoom.getParserNote()).toBe('Door checked');
+    expect(restoredRoom.getParserNoteNeedsCheck()).toBe(true);
+    expect(restoredRoom.getEntityParserNote('secret')).toBe('The hidden panel is unlocked.');
+    expect(restoredRoom.getEntityParserNoteNeedsCheck('secret')).toBe(true);
+    expect(restoredRoom.getParserRecentTurns()).toEqual([
+      { command: 'look at wall', response: 'A hidden panel is visible.' },
+    ]);
+    expect(restoredHall.getEntityParserNote('guard')).toBe('The guard intends to deliver the key.');
+    expect(restoredHall.getEntityParserNoteNeedsCheck('guard')).toBe(true);
     expect(game.parser.pendingState?.question).toBe('Which key?');
     expect(game.console.history).toEqual(['TAKE KEY']);
     expect(game.console.parserLlmEnabled).toBe(true);
