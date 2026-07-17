@@ -1,4 +1,86 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+
+// ─── Scrubbing Hook ───────────────────────────────────────────────────────────
+
+export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const decimalPlaces = (step: number) => {
+      if (!Number.isFinite(step)) return 0;
+      const text = String(step);
+      return text.includes('.') ? text.split('.')[1].length : 0;
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const label = (event.target as HTMLElement | null)?.closest('label.e-label');
+      if (!label || !panel.contains(label)) return;
+
+      const nextSibling = label.nextElementSibling;
+      let input: HTMLInputElement | null = null;
+
+      if (nextSibling) {
+        if (
+          nextSibling.tagName === 'INPUT' &&
+          (nextSibling as HTMLInputElement).type === 'number'
+        ) {
+          input = nextSibling as HTMLInputElement;
+        } else {
+          input = nextSibling.querySelector<HTMLInputElement>('input[type="number"]');
+        }
+      }
+
+      if (!input || input.disabled || input.readOnly) return;
+
+      event.preventDefault();
+      const startX = event.clientX;
+      const startValue = Number(input.value || 0);
+      const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
+      const precision = decimalPlaces(step);
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        let currentStep = step;
+        let currentPrecision = precision;
+
+        if (moveEvent.ctrlKey) {
+          currentStep *= 10;
+        } else if (moveEvent.shiftKey) {
+          currentStep /= 10;
+          currentPrecision = Math.max(currentPrecision, decimalPlaces(currentStep));
+        }
+
+        const next = startValue + Math.round(delta / 6) * currentStep;
+        setInputValue(
+          input,
+          currentPrecision > 0 ? next.toFixed(currentPrecision) : String(Math.round(next))
+        );
+      };
+
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.classList.remove('is-scrubbing-number');
+      };
+
+      document.body.classList.add('is-scrubbing-number');
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+    };
+
+    panel.addEventListener('mousedown', handleMouseDown);
+    return () => panel.removeEventListener('mousedown', handleMouseDown);
+  }, [panelRef]);
+};
 
 // ─── Number formatting ────────────────────────────────────────────────────────
 

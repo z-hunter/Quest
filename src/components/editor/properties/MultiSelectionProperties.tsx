@@ -1,4 +1,5 @@
 import React from 'react';
+import { useGame } from '../../../hooks/useGame';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
 import { Entity } from '../../../entities/Entity';
@@ -11,6 +12,7 @@ import {
   getSharedBooleanState,
   renderOpacityBlurControls,
   renderSection,
+  useNumericScrubbing,
 } from './propertiesUtils';
 
 interface MultiSelectionPropertiesProps {
@@ -42,13 +44,14 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   getSpatialRelationOptions,
   getMultiSpatialParentOptions,
 }) => {
-  const {
-    game,
-    formatPanelNumber,
-    setSectionRef,
-    incrementObjectVersion,
-    incrementHierarchyVersion,
-  } = usePropertiesContext();
+  const game = useGame();
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const propertiesContext = usePropertiesContext();
+  useNumericScrubbing(panelRef);
+
+  const { formatPanelNumber, setSectionRef, incrementObjectVersion, incrementHierarchyVersion } =
+    propertiesContext;
+
   const getMultiKey = () =>
     `MULTI:${multiObjects
       .map((item: any) => item?.name || '')
@@ -98,9 +101,30 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
   return (
-    <div>
+    <div ref={panelRef}>
       <div className="editor-header">
-        <span>MULTI SELECTION ({multiObjects.length})</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>MULTI SELECTION ({multiObjects.length})</span>
+          <button
+            type="button"
+            className="toolbar-icon-btn"
+            title={propertiesContext.anyExpanded ? 'Collapse all' : 'Expand all'}
+            onClick={
+              propertiesContext.anyExpanded
+                ? propertiesContext.collapseAll
+                : propertiesContext.expandAll
+            }
+            style={{
+              width: '20px',
+              height: '20px',
+              padding: 0,
+              fontSize: '10px',
+              lineHeight: 1,
+            }}
+          >
+            {propertiesContext.anyExpanded ? '▼' : '▶'}
+          </button>
+        </div>
         <button className="e-btn" onClick={() => useEditorStore.getState().toggle(false)}>
           X
         </button>

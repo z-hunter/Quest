@@ -275,13 +275,15 @@
   user-select: none;
 }
 
-.e-row:has(input[type='number']) > .e-label,
-.e-row > div:has(input[type='number']) > .e-label {
+label.e-label:has(+ input[type='number']),
+label.e-label:has(+ div input[type='number']),
+label.e-label:has(+ .custom-select-container input[type='number']) {
   cursor: ew-resize;
 }
 
-.e-row:has(input[type='number']) > .e-label:hover,
-.e-row > div:has(input[type='number']) > .e-label:hover {
+label.e-label:has(+ input[type='number']):hover,
+label.e-label:has(+ div input[type='number']):hover,
+label.e-label:has(+ .custom-select-container input[type='number']):hover {
   color: var(--ui-main-color);
 }
 

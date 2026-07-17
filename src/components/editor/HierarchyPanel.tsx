@@ -67,24 +67,97 @@ export const HierarchyPanel: React.FC = () => {
     [filterMode, filterNeedle]
   );
 
-  const filteredEntities = [...(scene?.entities || []), ...(scene?.folders || [])].filter(
-    (item: any) => matchesFilter(item)
-  );
-  const filteredWalkboxes = [...(scene?.walkbox || [])].filter((item: any) => matchesFilter(item));
-  const filteredTriggers = [...(scene?.triggerboxes || [])].filter((item: any) =>
-    matchesFilter(item)
-  );
+  const allObjects = React.useMemo(() => {
+    const allEntities = [...(scene?.entities || []), ...(scene?.folders || [])];
+    const allWalkboxes = [...(scene?.walkbox || [])];
+    const allTriggers = [...(scene?.triggerboxes || [])];
+    return [...allEntities, ...allWalkboxes, ...allTriggers];
+  }, [scene?.entities, scene?.folders, scene?.walkbox, scene?.triggerboxes]);
+
+  const keepSet = React.useMemo(() => {
+    if (!filterNeedle) return null;
+
+    const objectByName = new Map(allObjects.map((item: any) => [item.name, item]));
+    const folderIdToName = new Map<string, string>();
+    allObjects.forEach((item: any) => {
+      if (item.type === 'Folder' && item.folderId) {
+        folderIdToName.set(item.folderId, item.name);
+      }
+    });
+
+    const childrenByParent = new Map<string, any[]>();
+    const parentByName = new Map<string, string>();
+
+    allObjects.forEach((item: any) => {
+      const fid = typeof item?.folder === 'string' ? item.folder : '';
+      const folderParentName = fid ? folderIdToName.get(fid) || '' : '';
+      if (
+        folderParentName &&
+        folderParentName !== item.name &&
+        objectByName.has(folderParentName)
+      ) {
+        const children = childrenByParent.get(folderParentName) || [];
+        children.push(item);
+        childrenByParent.set(folderParentName, children);
+        parentByName.set(item.name, folderParentName);
+        return;
+      }
+      const parentId =
+        typeof item?.spatial?.parentNodeId === 'string' ? item.spatial.parentNodeId.trim() : '';
+      if (parentId && parentId !== item.name && objectByName.has(parentId)) {
+        const children = childrenByParent.get(parentId) || [];
+        children.push(item);
+        childrenByParent.set(parentId, children);
+        parentByName.set(item.name, parentId);
+      }
+    });
+
+    const keep = new Set<string>();
+
+    const addDescendants = (name: string) => {
+      if (keep.has(name)) return;
+      keep.add(name);
+      const kids = childrenByParent.get(name) || [];
+      kids.forEach((k) => addDescendants(k.name));
+    };
+
+    const addAncestors = (name: string) => {
+      if (keep.has(name)) return;
+      keep.add(name);
+      const p = parentByName.get(name);
+      if (p) addAncestors(p);
+    };
+
+    allObjects.forEach((item) => {
+      if (matchesFilter(item)) {
+        keep.add(item.name);
+
+        const kids = childrenByParent.get(item.name) || [];
+        kids.forEach((k) => addDescendants(k.name));
+
+        const p = parentByName.get(item.name);
+        if (p) addAncestors(p);
+      }
+    });
+
+    return keep;
+  }, [allObjects, filterNeedle, matchesFilter]);
+
   const filteredObjects = React.useMemo(() => {
-    const all = [...filteredEntities, ...filteredWalkboxes, ...filteredTriggers];
+    let list = allObjects;
+    if (keepSet) {
+      list = allObjects.filter((item: any) => keepSet.has(item.name));
+    }
     const order = scene?.displayOrder || [];
-    if (order.length === 0) return all;
+    if (order.length === 0) return list;
     const orderIndex = new Map(order.map((n, i) => [n, i]));
-    return [...all].sort((a: any, b: any) => {
+    return [...list].sort((a: any, b: any) => {
       const ai = orderIndex.get(a.name) ?? Number.MAX_SAFE_INTEGER;
       const bi = orderIndex.get(b.name) ?? Number.MAX_SAFE_INTEGER;
       return ai - bi;
     });
-  }, [filteredEntities, filteredWalkboxes, filteredTriggers, scene?.displayOrder]);
+  }, [allObjects, keepSet, scene?.displayOrder]);
+
   const filteredObjectOrder = React.useMemo(
     () => new Map(filteredObjects.map((item: any, index: number) => [item.name, index])),
     [filteredObjects]
@@ -928,7 +1001,7 @@ export const HierarchyPanel: React.FC = () => {
                 lineHeight: 1,
               }}
             >
-              {anyExpanded ? '▶' : '▼'}
+              {anyExpanded ? '▼' : '▶'}
             </button>
           </div>
           <Select
@@ -962,6 +1035,7 @@ export const HierarchyPanel: React.FC = () => {
               className="e-input"
               value={filterText}
               placeholder='Filter by ID or "#group"'
+              title="Hotkey: /"
               onChange={(e) => setFilterText(e.target.value)}
               style={{
                 width: '100%',

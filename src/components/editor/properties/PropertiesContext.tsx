@@ -39,6 +39,10 @@ export interface PropertiesContextValue<T extends ObjType = ObjType> {
 
   // Undo ref keys (for batching)
   lastUndoObjectKeyRef: React.MutableRefObject<string | null>;
+
+  anyExpanded: boolean;
+  collapseAll: () => void;
+  expandAll: () => void;
 }
 
 export const PropertiesContext = React.createContext<PropertiesContextValue | null>(null);

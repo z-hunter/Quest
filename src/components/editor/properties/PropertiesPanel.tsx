@@ -16,6 +16,7 @@ import {
   getQuadCentroid,
   scalePolyByFactor,
   scaleQuadVerticesByFactor,
+  useNumericScrubbing,
 } from './propertiesUtils';
 import { normalizeGroupIdList } from '../../../utils/GroupIds';
 
@@ -61,6 +62,43 @@ export const PropertiesPanel: React.FC = () => {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const sectionRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
   const isPanelHoveredRef = React.useRef(false);
+
+  const [anyExpanded, setAnyExpanded] = React.useState(true);
+
+  const checkAnyExpanded = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = Array.from(panel.querySelectorAll<HTMLElement>('.properties-section-block'));
+    const isExpanded = sections.some((s) => {
+      if (s.classList.contains('properties-section-empty')) return false;
+      if (!s.querySelector(':scope > .properties-section-header')) return false;
+      return !s.classList.contains('collapsed');
+    });
+    setAnyExpanded(isExpanded);
+  }, []);
+
+  const collapseAll = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block');
+    sections.forEach((s) => {
+      if (s.classList.contains('properties-section-empty')) return;
+      if (s.querySelector(':scope > .properties-section-header')) {
+        s.classList.add('collapsed');
+      }
+    });
+    checkAnyExpanded();
+  }, [checkAnyExpanded]);
+
+  const expandAll = React.useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block');
+    sections.forEach((s) => {
+      s.classList.remove('collapsed');
+    });
+    checkAnyExpanded();
+  }, [checkAnyExpanded]);
 
   // ─── Derived object binding ────────────────────────────────────────────────
   let obj: any = null;
@@ -247,6 +285,7 @@ export const PropertiesPanel: React.FC = () => {
       const section = header.closest('.properties-section-block');
       if (section?.classList.contains('properties-section-empty')) return;
       section?.classList.toggle('collapsed');
+      checkAnyExpanded();
     };
 
     panel.addEventListener('click', handleClick);
@@ -269,59 +308,11 @@ export const PropertiesPanel: React.FC = () => {
           id !== 5
       );
     });
-  }, [selectedObjectId, selectedObjectType]);
+    // Check initial state after applying defaults
+    checkAnyExpanded();
+  }, [selectedObjectId, selectedObjectType, checkAnyExpanded]);
 
-  React.useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const setInputValue = (input: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-      setter?.call(input, value);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    };
-
-    const decimalPlaces = (step: number) => {
-      if (!Number.isFinite(step)) return 0;
-      const text = String(step);
-      return text.includes('.') ? text.split('.')[1].length : 0;
-    };
-
-    const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0) return;
-      const label = (event.target as HTMLElement | null)?.closest('label.e-label');
-      if (!label || !panel.contains(label)) return;
-      const group = label.parentElement;
-      const input = group?.querySelector<HTMLInputElement>('input[type="number"]');
-      if (!input || input.disabled || input.readOnly) return;
-
-      event.preventDefault();
-      const startX = event.clientX;
-      const startValue = Number(input.value || 0);
-      const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
-      const precision = decimalPlaces(step);
-
-      const handleMove = (moveEvent: MouseEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const next = startValue + Math.round(delta / 6) * step;
-        setInputValue(input, precision > 0 ? next.toFixed(precision) : String(Math.round(next)));
-      };
-
-      const handleUp = () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleUp);
-        document.body.classList.remove('is-scrubbing-number');
-      };
-
-      document.body.classList.add('is-scrubbing-number');
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleUp);
-    };
-
-    panel.addEventListener('mousedown', handleMouseDown);
-    return () => panel.removeEventListener('mousedown', handleMouseDown);
-  });
+  useNumericScrubbing(panelRef);
 
   // ─── Tooltip injection ─────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -746,6 +737,9 @@ export const PropertiesPanel: React.FC = () => {
         setSectionRef,
         scrollToSection,
         lastUndoObjectKeyRef,
+        anyExpanded,
+        collapseAll,
+        expandAll,
       }
     : null;
 
@@ -846,9 +840,28 @@ export const PropertiesPanel: React.FC = () => {
         {...panelEventProps}
       >
         <div className="editor-header">
-          <span>
-            {selectedObjectType === 'SETTINGS' ? 'SETTINGS' : selectedObjectType?.toUpperCase()}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>
+              {selectedObjectType === 'SETTINGS' ? 'SETTINGS' : selectedObjectType?.toUpperCase()}
+            </span>
+            {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
+              <button
+                type="button"
+                className="toolbar-icon-btn"
+                title={anyExpanded ? 'Collapse all' : 'Expand all'}
+                onClick={anyExpanded ? collapseAll : expandAll}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  padding: 0,
+                  fontSize: '10px',
+                  lineHeight: 1,
+                }}
+              >
+                {anyExpanded ? '▼' : '▶'}
+              </button>
+            )}
+          </div>
           <button className="e-btn" onClick={() => useEditorStore.getState().toggle(false)}>
             X
           </button>
