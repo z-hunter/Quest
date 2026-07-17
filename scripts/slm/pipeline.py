@@ -44,8 +44,9 @@ def valid_row(row: dict[str, Any]) -> bool:
     plans=row.get("generatedPlans")
     return (row.get("outcome")=="plan_completed" and row.get("worldChanged") is True
             and isinstance(row.get("minifiedDynamicContext"), dict) and isinstance(plans,list) and len(plans)==1
+            and isinstance(plans[0], dict)
             and isinstance(plans[0].get("steps"),list) and len(plans[0]["steps"])>0
-            and all(step.get("type") in SUPPORTED for step in plans[0]["steps"]))
+            and all(isinstance(step, dict) and step.get("type") in SUPPORTED for step in plans[0]["steps"]))
 
 def clean(source: Path, target: Path) -> list[dict[str, Any]]:
     unique={}
@@ -113,9 +114,16 @@ def encode_output(row: dict[str,Any], ids: dict[str,int]) -> list[int]:
 
 def tensors(rows: list[dict[str,Any]], max_input:int, max_output:int):
     encoded=[]
+    oversized_count = 0
     for row in rows:
         inp,ids=encode_input(row["minifiedDynamicContext"]); out=encode_output(row,ids)
+        if len(out) > max_output:
+            oversized_count += 1
+            out = [TOKENS["START"], TOKENS["ESCALATE"], TOKENS["END"]]
         encoded.append((inp[:max_input]+[0]*max(0,max_input-len(inp)),out[:max_output]+[0]*max(0,max_output-len(out))))
+    if oversized_count > 0:
+        import sys
+        sys.stderr.write(f"Oversized output plans (escalated): {oversized_count}\n")
     return encoded
 
 def require_torch():

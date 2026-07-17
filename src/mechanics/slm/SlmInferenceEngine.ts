@@ -8,6 +8,7 @@ export type SlmCompatibilityManifest = {
   modelId: string;
   vocabularyVersion: string;
   vocabularySha256: string;
+  modelSha256: string;
   onnxOpset: number;
   maxDynamicEntities: number;
   inputs: Array<{ name: string; dtype: string; shape: Array<string | number> }>;
@@ -25,18 +26,45 @@ export function validateSlmCompatibilityManifest(value: unknown): SlmCompatibili
   ) {
     throw new Error('SLM vocabulary is incompatible with this engine build');
   }
+  if (typeof manifest.modelSha256 !== 'string' || !manifest.modelSha256.trim()) {
+    throw new Error('SLM manifest modelSha256 is missing or invalid');
+  }
   if (
     !Number.isInteger(manifest.onnxOpset) ||
     Number(manifest.onnxOpset) < 13 ||
     Number(manifest.onnxOpset) > 21
   )
     throw new Error(`Unsupported ONNX opset: ${manifest.onnxOpset}`);
-  if (manifest.inputs?.[0]?.name !== 'input_ids' || manifest.inputs[0].dtype !== 'int32')
-    throw new Error('SLM input tensor contract is incompatible');
-  if (manifest.outputs?.[0]?.name !== 'output_ids' || manifest.outputs[0].dtype !== 'int32')
-    throw new Error('SLM output tensor contract is incompatible');
   if (!Number.isInteger(manifest.maxDynamicEntities) || Number(manifest.maxDynamicEntities) < 1)
     throw new Error('SLM dynamic entity capacity is missing');
+
+  const input = manifest.inputs?.[0];
+  const output = manifest.outputs?.[0];
+  if (!input || input.name !== 'input_ids' || input.dtype !== 'int32')
+    throw new Error('SLM input tensor contract is incompatible');
+  if (!output || output.name !== 'output_ids' || output.dtype !== 'int32')
+    throw new Error('SLM output tensor contract is incompatible');
+
+  if (
+    !Array.isArray(input.shape) ||
+    input.shape.length !== 2 ||
+    input.shape[0] !== 'batch' ||
+    typeof input.shape[1] !== 'number' ||
+    input.shape[1] <= 0
+  ) {
+    throw new Error('SLM input tensor contract is incompatible');
+  }
+
+  if (
+    !Array.isArray(output.shape) ||
+    output.shape.length !== 2 ||
+    output.shape[0] !== 'batch' ||
+    typeof output.shape[1] !== 'number' ||
+    output.shape[1] <= 0
+  ) {
+    throw new Error('SLM output tensor contract is incompatible');
+  }
+
   return manifest as SlmCompatibilityManifest;
 }
 
@@ -59,6 +87,12 @@ export class SlmInferenceEngine {
 
   static async init(modelUrl?: string): Promise<boolean> {
     if (modelUrl) {
+      if ((this.session || this.isLoading) && modelUrl !== this.modelPath) {
+        console.warn(
+          `[SlmInferenceEngine] Rejecting initialization with different modelUrl: ${modelUrl}`
+        );
+        return !!this.session;
+      }
       this.modelPath = modelUrl;
       this.manifestPath = modelUrl.replace(/\.onnx(?:\?.*)?$/, '.manifest.json');
     }
@@ -70,17 +104,30 @@ export class SlmInferenceEngine {
       if (!manifestResponse.ok)
         throw new Error(`SLM compatibility manifest HTTP ${manifestResponse.status}`);
       this.manifest = validateSlmCompatibilityManifest(await manifestResponse.json());
-      // Dynamically import onnxruntime-web to avoid bundling WASM on startup
-      // and ensure unit tests run smoothly without web worker dependencies.
+
+      const modelResponse = await fetch(this.modelPath);
+      if (!modelResponse.ok) throw new Error(`Failed to fetch model: ${modelResponse.status}`);
+      const arrayBuffer = await modelResponse.arrayBuffer();
+
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+      if (hashHex !== this.manifest.modelSha256) {
+        throw new Error(
+          `SLM model SHA-256 mismatch: expected ${this.manifest.modelSha256}, got ${hashHex}`
+        );
+      }
+
       this.ortModule = await import('onnxruntime-web');
 
-      this.session = await this.ortModule.InferenceSession.create(this.modelPath, {
+      const uint8Array = new Uint8Array(arrayBuffer);
+      this.session = await this.ortModule.InferenceSession.create(uint8Array, {
         executionProviders: ['wasm'],
       });
       console.log('[SlmInferenceEngine] Successfully loaded ONNX model from:', this.modelPath);
       return true;
     } catch (err) {
-      // Normal during Phase 1 (Data Collection) when model hasn't been trained/placed yet
       console.warn('[SlmInferenceEngine] Could not load ONNX model (fallback to LLM active):', err);
       this.session = null;
       this.manifest = null;
@@ -113,10 +160,17 @@ export class SlmInferenceEngine {
       if (mapping.idToIndex.size > Number(this.manifest?.maxDynamicEntities || 0))
         return { kind: 'escalate', reason: 'SLM dynamic entity capacity exceeded' };
 
-      // Prepare tensor input: shape [1, sequence_length]
-      const inputTensor = new this.ortModule.Tensor('int32', tokens, [1, tokens.length]);
+      const inputTokens = [...tokens];
+      if (Number.isFinite(maxInput) && inputTokens.length < maxInput) {
+        const paddingLength = maxInput - inputTokens.length;
+        inputTokens.push(...new Array(paddingLength).fill(0));
+      }
 
-      // Run inference
+      const inputTensor = new this.ortModule.Tensor('int32', Int32Array.from(inputTokens), [
+        1,
+        maxInput,
+      ]);
+
       const feeds: Record<string, any> = { input_ids: inputTensor };
       const results = await this.session.run(feeds);
 

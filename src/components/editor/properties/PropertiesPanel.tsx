@@ -230,16 +230,20 @@ export const PropertiesPanel: React.FC = () => {
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, []);
 
-  const openSection = React.useCallback((section: number) => {
-    const node = sectionRefs.current[section];
-    if (!node) return;
-    if (node.classList.contains('properties-section-empty')) return;
-    node.classList.remove('collapsed');
-    const header = node.querySelector<HTMLElement>('.properties-section-header');
-    header?.classList.remove('properties-section-flash');
-    window.setTimeout(() => header?.classList.add('properties-section-flash'), 0);
-    window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
-  }, []);
+  const openSection = React.useCallback(
+    (section: number) => {
+      const node = sectionRefs.current[section];
+      if (!node) return;
+      if (node.classList.contains('properties-section-empty')) return;
+      node.classList.remove('collapsed');
+      checkAnyExpanded();
+      const header = node.querySelector<HTMLElement>('.properties-section-header');
+      header?.classList.remove('properties-section-flash');
+      window.setTimeout(() => header?.classList.add('properties-section-flash'), 0);
+      window.setTimeout(() => header?.classList.remove('properties-section-flash'), 520);
+    },
+    [checkAnyExpanded]
+  );
 
   const shouldIgnoreKeyboardShortcuts = React.useCallback(() => {
     // If a modal like the file browser is open, yield key events to it

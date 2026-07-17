@@ -3377,3 +3377,73 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - Accumulate shadow logs in production until the training threshold is reached.
 - Train the model using the PyTorch template defined in the documentation and place the output `slm_routine_v1.onnx` file in `public/models/`.
 - Commit remaining workspace files (`.agent/context.md`, `.agent/current_task.md`, `Sessions.md`) after the initial pre-commit tasks complete.
+
+## Session Entry - 2026-07-17 15:07 +02:00
+
+### Session Goals
+
+- Finish P1 production readiness work for Scanline Engine.
+- Add contract validation around runtime data that crosses parser, scene, text asset, and LLM boundaries.
+- Harden the LLM provider layer so failures are typed, bounded, and better isolated.
+- Make NPC continuation state explicit instead of implicit.
+- Build the full SLM pipeline from export through ONNX packaging and compatibility metadata.
+- Leave a durable handoff in repo docs, memory, and NotebookLM.
+
+### What Was Implemented
+
+- Added `src/contracts/runtimeSchemas.ts` with reusable validators and a dedicated `ContractValidationError`.
+- Wired schema validation into runtime boundaries for:
+  - scene loading and scene instantiation,
+  - parser envelope/tool action handling,
+  - LLM cascade normalization,
+  - NPC Puppet Master plan acceptance,
+  - text asset JSON loading.
+- Added regression coverage for authored scene schema conformance and runtime contract validation cases.
+- Hardened the LLM provider layer with typed failure reasons, retry/backoff policy, HTTP classification, Retry-After parsing, and circuit-breaker behavior.
+- Converted NPC continuation handling to an explicit state machine with snapshot/restore support.
+- Built the SLM pipeline tooling for export, cleaning, splitting, training, evaluation, ONNX export, and compatibility manifest generation.
+- Updated docs for the production-readiness work, including the engine architecture notes and SLM/neural runtime documentation.
+
+### Important Architecture or Runtime Decisions
+
+- Runtime contracts are now enforced at the boundaries where bad data becomes engine state, instead of relying on downstream code to notice malformed inputs.
+- The LLM provider layer now treats transport, authentication, rate limit, timeout, and invalid-response cases as distinct operational states.
+- NPC continuation is modeled explicitly so save/restore and pending-plan handling no longer depend on hidden implicit flags.
+- The SLM pipeline is treated as an offline artifact pipeline with an explicit compatibility manifest, not just a model file dropped into the project.
+- `SaveState` from the previous session remained the persistence foundation for the runtime changes; this pass focused on making the surrounding contracts production-safe.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser:
+  - validated parser tool actions and cascade envelopes at runtime,
+  - tightened the parser boundary contract around structured plan data.
+- Mechanics:
+  - NPC plan handling now restores and serializes explicit continuation states,
+  - LLM provider retries and circuit breaking are now policy-driven rather than ad hoc.
+- Scene:
+  - scene data now validates before instantiation, reducing the chance of corrupted authored data reaching runtime.
+- Text assets:
+  - malformed JSON assets now fail safely instead of poisoning the whole load path.
+
+### Tests and Validation
+
+- Added focused tests for runtime contract validation and authored scene schema coverage.
+- Updated parser/LLM provider tests around retry policy and failure classification.
+- Validated the broader repository state before commit with the standard checks used during the P1 pass.
+- The main feature branch changes were committed after verification.
+
+### Commits Created
+
+- `069bf1d` - `feat: complete P1 production readiness`
+
+### Remaining Work / Next Recommended Steps
+
+- Finish the NotebookLM wrap-up sync so the current root Markdown set and curated `AgentMemory.md` are mirrored in the Scanline notebook.
+- Continue with any follow-up hardening that emerges from runtime use of the new schema checks and provider policy.
+- Train and evaluate the SLM pipeline on real shadow data once enough routine logs exist.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The SLM training/export path is scaffolded, but model quality still depends on actual dataset volume and evaluation results.
+- The new contract validation raises the quality floor, but any authored-data drift will now surface earlier and more explicitly.
+- The NotebookLM sync portion of this wrap-up depends on successful CLI authentication; if auth is stale, the source replacement step has to be retried after recovery.

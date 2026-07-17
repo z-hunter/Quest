@@ -68,11 +68,12 @@ export const HierarchyPanel: React.FC = () => {
   );
 
   const allObjects = React.useMemo(() => {
+    void hierarchyVersion;
     const allEntities = [...(scene?.entities || []), ...(scene?.folders || [])];
     const allWalkboxes = [...(scene?.walkbox || [])];
     const allTriggers = [...(scene?.triggerboxes || [])];
     return [...allEntities, ...allWalkboxes, ...allTriggers];
-  }, [scene?.entities, scene?.folders, scene?.walkbox, scene?.triggerboxes]);
+  }, [scene?.entities, scene?.folders, scene?.walkbox, scene?.triggerboxes, hierarchyVersion]);
 
   const keepSet = React.useMemo(() => {
     if (!filterNeedle) return null;

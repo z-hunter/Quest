@@ -1008,7 +1008,8 @@ export class TextAssetManager {
           const parsed: unknown = JSON.parse(content);
           assertTextAssetData(parsed, `TextAsset(${url})`);
           return parsed;
-        } catch {
+        } catch (err) {
+          if (err instanceof ContractValidationError) throw err;
           return null;
         }
       }

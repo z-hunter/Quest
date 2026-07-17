@@ -85,6 +85,21 @@ export class AnthropicProvider implements ILlmProvider {
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      let deltaEmitted = false;
+      let accumulatedText = '';
+      let callbackError: unknown = null;
+
+      const wrappedOnDelta = (delta: string, accumulated: string) => {
+        deltaEmitted = true;
+        accumulatedText = accumulated;
+        try {
+          onDelta(delta, accumulated);
+        } catch (err) {
+          callbackError = err;
+          throw err;
+        }
+      };
+
       try {
         const response = await this.fetchImpl(this.proxyUrl, {
           method: 'POST',
@@ -103,6 +118,8 @@ export class AnthropicProvider implements ILlmProvider {
           }),
           signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -131,17 +148,20 @@ export class AnthropicProvider implements ILlmProvider {
         }
 
         if (!response.body) {
-          const text = await response.text();
-          this.breaker.success();
+          this.breaker.failure(false);
           return {
-            ok: true,
-            text,
+            ok: false,
+            text: '',
             model: this.model,
+            error: 'Response body is missing',
+            reason: 'invalid_response',
+            retryable: false,
+            attempts: attempt,
             durationMs: this.nowMs() - startedAt,
           };
         }
 
-        const streamResult = await this.readSseStream(response.body, onDelta);
+        const streamResult = await this.readSseStream(response.body, wrappedOnDelta);
         if (streamResult.error) {
           this.breaker.failure(false);
           return {
@@ -173,20 +193,23 @@ export class AnthropicProvider implements ILlmProvider {
           attempts: attempt,
         };
       } catch (error) {
+        if (callbackError !== null) {
+          throw callbackError;
+        }
         const errorName = error instanceof Error ? error.name : '';
         const isAbort = errorName === 'AbortError';
-        if (attempt < this.maxAttempts) {
+        if (attempt < this.maxAttempts && !deltaEmitted) {
           await delay(retryDelayMs(attempt));
           continue;
         }
         this.breaker.failure(true);
         return {
           ok: false,
-          text: '',
+          text: accumulatedText,
           model: this.model,
           error: isAbort ? 'Request timed out' : String(error),
           reason: isAbort ? 'timeout' : 'network_error',
-          retryable: true,
+          retryable: !deltaEmitted,
           attempts: attempt,
           durationMs: this.nowMs() - startedAt,
         };
@@ -343,10 +366,10 @@ export class AnthropicProvider implements ILlmProvider {
     while (true) {
       let idleTimer: ReturnType<typeof setTimeout> | undefined;
       const idle = new Promise<never>((_, reject) => {
-        idleTimer = setTimeout(
-          () => reject(new DOMException('Stream idle timeout', 'AbortError')),
-          this.streamIdleTimeoutMs
-        );
+        idleTimer = setTimeout(() => {
+          reader.cancel().catch(() => {});
+          reject(new DOMException('Stream idle timeout', 'AbortError'));
+        }, this.streamIdleTimeoutMs);
       });
       const { done, value } = await Promise.race([reader.read(), idle]);
       if (idleTimer) clearTimeout(idleTimer);

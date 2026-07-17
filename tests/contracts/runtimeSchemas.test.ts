@@ -42,6 +42,19 @@ describe('runtime contract schemas', () => {
         debug: { rawInput: 'x', normalizedInput: 'x', verb: '', noun: '' },
       })
     ).toThrowError(/supported parser action/);
+
+    expect(() =>
+      assertParserCascadeEnvelope({
+        stage: 'llm-v3',
+        output: {
+          kind: 'plan',
+          actions: [
+            { type: 'resolveArgumentEntity', commandId: 'c1', arg: 'a1', query: null, saveAs: 'x' },
+          ],
+        },
+        debug: { rawInput: 'x', normalizedInput: 'x', verb: '', noun: '' },
+      })
+    ).toThrowError(/scopes/);
   });
 
   it('validates NPC structured-plan DSL', () => {
@@ -51,6 +64,20 @@ describe('runtime contract schemas', () => {
         plans: [{ npcId: 'guard', steps: [{ type: 'WAIT', ms: -1 }] }],
       })
     ).toThrowError(/non-negative/);
+
+    expect(() =>
+      assertNpcPuppetMasterResponse({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'PUT' }] }],
+      })
+    ).toThrowError(/itemId/);
+
+    expect(() =>
+      assertNpcPuppetMasterResponse({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'MOVE_TO' }] }],
+      })
+    ).toThrowError(/destination|targetId/);
   });
 
   it('rejects malformed known Text Asset fields', () => {

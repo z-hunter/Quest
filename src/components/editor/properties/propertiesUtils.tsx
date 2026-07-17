@@ -7,6 +7,8 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
     const panel = panelRef.current;
     if (!panel) return;
 
+    let activeCleanup: (() => void) | null = null;
+
     const setInputValue = (input: HTMLInputElement, value: string) => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(input, value);
@@ -47,7 +49,14 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
       const step = Number(input.step && input.step !== 'any' ? input.step : 1) || 1;
       const precision = decimalPlaces(step);
 
+      let hasFocused = false;
+
       const handleMove = (moveEvent: MouseEvent) => {
+        if (!hasFocused) {
+          hasFocused = true;
+          input.focus();
+        }
+
         const delta = moveEvent.clientX - startX;
         let currentStep = step;
         let currentPrecision = precision;
@@ -59,26 +68,61 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
           currentPrecision = Math.max(currentPrecision, decimalPlaces(currentStep));
         }
 
-        const next = startValue + Math.round(delta / 6) * currentStep;
+        let next = startValue + Math.round(delta / 6) * currentStep;
+
+        const minVal = input.min !== '' ? Number(input.min) : null;
+        const maxVal = input.max !== '' ? Number(input.max) : null;
+        if (minVal !== null && !isNaN(minVal) && next < minVal) {
+          next = minVal;
+        }
+        if (maxVal !== null && !isNaN(maxVal) && next > maxVal) {
+          next = maxVal;
+        }
+
         setInputValue(
           input,
           currentPrecision > 0 ? next.toFixed(currentPrecision) : String(Math.round(next))
         );
       };
 
-      const handleUp = () => {
+      const cleanupScrubbing = () => {
         document.removeEventListener('mousemove', handleMove);
         document.removeEventListener('mouseup', handleUp);
         document.body.classList.remove('is-scrubbing-number');
+        if (hasFocused) {
+          input.blur();
+        }
+        if (activeCleanup === cleanupScrubbing) {
+          activeCleanup = null;
+        }
       };
 
+      const handleUp = () => {
+        cleanupScrubbing();
+      };
+
+      activeCleanup = cleanupScrubbing;
       document.body.classList.add('is-scrubbing-number');
       document.addEventListener('mousemove', handleMove);
       document.addEventListener('mouseup', handleUp);
     };
 
+    const handleWindowBlur = () => {
+      if (activeCleanup) {
+        activeCleanup();
+      }
+    };
+
     panel.addEventListener('mousedown', handleMouseDown);
-    return () => panel.removeEventListener('mousedown', handleMouseDown);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      panel.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('blur', handleWindowBlur);
+      if (activeCleanup) {
+        activeCleanup();
+      }
+    };
   }, [panelRef]);
 };
 

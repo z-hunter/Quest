@@ -82,6 +82,7 @@ export class OllamaProvider implements ILlmProvider {
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      let callbackError: unknown = null;
       try {
         const formattedMessages = [
           { role: 'system', content: this.contentToString(system) },
@@ -142,15 +143,54 @@ export class OllamaProvider implements ILlmProvider {
           };
         }
 
-        const data = await response.json();
-        const text = data?.choices?.[0]?.message?.content || '';
-        const usage = data?.usage;
-
-        if (text) {
-          onDelta(text, text);
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch (jsonErr) {
+          this.breaker.failure(false);
+          return {
+            ok: false,
+            text: '',
+            model: this.model,
+            error: `Malformed JSON response: ${String(jsonErr)}`,
+            reason: 'invalid_response',
+            retryable: false,
+            attempts: attempt,
+            durationMs: this.nowMs() - startedAt,
+          };
         }
+
+        const text = data?.choices?.[0]?.message?.content;
+        if (text === undefined || text === null) {
+          this.breaker.failure(false);
+          return {
+            ok: false,
+            text: '',
+            model: this.model,
+            error: 'Missing choices[0].message.content in response',
+            reason: 'invalid_response',
+            retryable: false,
+            attempts: attempt,
+            durationMs: this.nowMs() - startedAt,
+          };
+        }
+
+        callbackError = null;
+        if (text) {
+          try {
+            onDelta(text, text);
+          } catch (err) {
+            callbackError = err;
+          }
+        }
+
+        if (callbackError !== null) {
+          throw callbackError;
+        }
+
         this.breaker.success();
 
+        const usage = data?.usage;
         return {
           ok: true,
           text,
@@ -161,6 +201,9 @@ export class OllamaProvider implements ILlmProvider {
           attempts: attempt,
         };
       } catch (error) {
+        if (callbackError !== null) {
+          throw callbackError;
+        }
         const errorName = error instanceof Error ? error.name : '';
         const isAbort = errorName === 'AbortError';
         if (attempt < this.maxAttempts) {

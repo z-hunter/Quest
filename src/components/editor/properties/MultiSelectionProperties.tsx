@@ -12,7 +12,6 @@ import {
   getSharedBooleanState,
   renderOpacityBlurControls,
   renderSection,
-  useNumericScrubbing,
 } from './propertiesUtils';
 
 interface MultiSelectionPropertiesProps {
@@ -45,9 +44,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   getMultiSpatialParentOptions,
 }) => {
   const game = useGame();
-  const panelRef = React.useRef<HTMLDivElement>(null);
   const propertiesContext = usePropertiesContext();
-  useNumericScrubbing(panelRef);
 
   const { formatPanelNumber, setSectionRef, incrementObjectVersion, incrementHierarchyVersion } =
     propertiesContext;
@@ -101,7 +98,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   const sharedDisabled = getSharedBooleanState(multiObjects, (o: any) => !!o.disabled);
 
   return (
-    <div ref={panelRef}>
+    <div>
       <div className="editor-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span>MULTI SELECTION ({multiObjects.length})</span>

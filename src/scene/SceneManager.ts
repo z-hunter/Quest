@@ -468,7 +468,6 @@ export class SceneManager {
 
   async loadSceneData(data: any, filename?: string, explicitPath?: string): Promise<void> {
     try {
-      assertSceneData(data);
       const sceneId = filename || data.id || 'loaded_scene';
 
       // If we are hot-reloading or entirely replacing this scene, clean up any old scripts bound to it
@@ -852,6 +851,7 @@ export class SceneManager {
   }
 
   private instantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
+    assertSceneData(data);
     const newScene = new Scene(this.game, sceneId, data.name || 'Untitled');
 
     if (pathValue) {
