@@ -33,6 +33,7 @@ import { SectionMisc } from './SectionMisc';
 import { FolderProperties } from './FolderProperties';
 import { SceneProperties } from './SceneProperties';
 import { SettingsProperties } from './SettingsProperties';
+import { SectionParserNote } from './SectionParserNote';
 
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
@@ -267,7 +268,7 @@ export const PropertiesPanel: React.FC = () => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (shouldIgnoreKeyboardShortcuts()) return;
       const key = e.key;
-      if (!/^[0-6]$/.test(key)) return;
+      if (!/^[0-7]$/.test(key)) return;
       e.preventDefault();
       const section = parseInt(key, 10);
       openSection(section);
@@ -309,7 +310,8 @@ export const PropertiesPanel: React.FC = () => {
           !section.classList.contains('properties-section-empty') &&
           id !== 0 &&
           id !== 1 &&
-          id !== 5
+          id !== 5 &&
+          id !== 7
       );
     });
     // Check initial state after applying defaults
@@ -935,6 +937,9 @@ export const PropertiesPanel: React.FC = () => {
 
           {/* Settings: Editor + CRT */}
           {isSettings && <SettingsProperties />}
+
+          {/* Runtime-only entity Parser Note; intentionally last in Properties. */}
+          {!isSettings && !isScene && selectedObjectType !== 'MULTI' && <SectionParserNote />}
         </div>
       </div>
     </PropertiesContext.Provider>
