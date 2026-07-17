@@ -939,7 +939,9 @@ export const PropertiesPanel: React.FC = () => {
           {isSettings && <SettingsProperties />}
 
           {/* Runtime-only entity Parser Note; intentionally last in Properties. */}
-          {!isSettings && !isScene && selectedObjectType !== 'MULTI' && <SectionParserNote />}
+          {isEntityLike && !isSettings && !isScene && String(selectedObjectType) !== 'MULTI' && (
+            <SectionParserNote />
+          )}
         </div>
       </div>
     </PropertiesContext.Provider>

@@ -3,7 +3,14 @@ import type { SceneObject } from '../../../entities/SceneObject';
 import { usePropertiesContext } from './PropertiesContext';
 
 export const SectionParserNote: React.FC = () => {
-  const { game, obj, incrementObjectVersion, setSectionRef } = usePropertiesContext<SceneObject>();
+  const {
+    game,
+    obj,
+    selectedObjectType,
+    incrementObjectVersion,
+    setSectionRef,
+    lastUndoObjectKeyRef,
+  } = usePropertiesContext<SceneObject>();
   const scene = obj.scene || game.sceneManager.currentScene;
   const entityId = String(obj.name || '').trim();
   const parserNote = entityId ? scene?.getEntityParserNote(entityId) || '' : '';
@@ -22,6 +29,11 @@ export const SectionParserNote: React.FC = () => {
           style={{ minHeight: '72px', resize: 'vertical' }}
           value={parserNote}
           onChange={(event) => {
+            const objectKey = `${selectedObjectType || 'Object'}:${obj.name || ''}`;
+            if (game.editor && lastUndoObjectKeyRef.current !== objectKey) {
+              game.editor.saveUndoState();
+              lastUndoObjectKeyRef.current = objectKey;
+            }
             scene?.setEntityParserNote(entityId, event.target.value);
             incrementObjectVersion();
           }}

@@ -3447,3 +3447,55 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - The SLM training/export path is scaffolded, but model quality still depends on actual dataset volume and evaluation results.
 - The new contract validation raises the quality floor, but any authored-data drift will now surface earlier and more explicitly.
 - The NotebookLM sync portion of this wrap-up depends on successful CLI authentication; if auth is stale, the source replacement step has to be retried after recovery.
+
+## Session Entry - 2026-07-17 17:33 +02:00
+
+### Session Goals
+
+- Verify SaveState persistence of runtime NPC/parser context.
+- Expose runtime entity Parser Notes in the scene editor Properties panel.
+- Harden the new PN editor path and leave durable testing context for future sessions.
+
+### What Was Implemented
+
+- Audited SaveState v1 against `revealedHiddenEntities`, NPC `knownEntities`/objectives, scene/entity Parser Notes, stale flags, parser history, evicted scenes, and cross-scene NPC movement. The production serializer already covered these contracts; regression coverage was added for the JSON boundary and cross-scene/evicted-scene round-trip.
+- Added `SectionParserNote` at the bottom of single-object Properties. It appears only for entity-like objects with a non-empty runtime PN, is expanded by default, supports Properties section shortcut `7`, and uses a vertically resizable textarea.
+- PN edits go through `Scene.setEntityParserNote` and invalidate the Properties view without entering authored scene serialization.
+- Fixed follow-up review findings: the Properties render is gated by `isEntityLike`, and the first PN edit records an undo snapshot using the existing `lastUndoObjectKeyRef`/`saveUndoState()` pattern.
+- Added `happy-dom` as a dev dependency and converted the PN test to an interaction-capable React DOM render. The helper mounts with `react-dom/client`, exercises native textarea input events, and makes future interactive editor-component tests possible without production DOM dependencies.
+
+### Architecture / Runtime Decisions
+
+- Parser Notes remain runtime-only scene state; editor edits must use Scene runtime APIs rather than mutate authored scene JSON.
+- PN undo grouping follows the existing per-object Properties undo key, so a sequence of edits produces one initial snapshot per selected object.
+- `happy-dom` is test-only infrastructure for DOM-backed React interactions; it is not part of the shipped runtime.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser/runtime: no contract changes; PN setter behavior and whitespace omission remain unchanged.
+- Editor: runtime PN display/editing and undo integration were added in the Properties panel.
+- SaveState: verified existing runtime snapshot and structural-delta coverage; no production SaveState changes were needed.
+- Inventory/NPC movement: verified as part of the SaveState regression path; no new runtime changes.
+
+### Tests and Validation
+
+- Editor, StateEvent, and PN tests: 31 tests passed.
+- PN interaction test now covers empty/whitespace omission, rendered textarea, `setEntityParserNote`, and `incrementObjectVersion`.
+- `npm run typecheck` passed.
+- Targeted ESLint and Prettier checks passed.
+- `git diff --check` passed.
+
+### Commits Created
+
+- No commits were created during this session.
+
+### Remaining Work / Next Recommended Steps
+
+- Consider reusing the `happy-dom` interactive render helper for other Properties components that need event-level coverage.
+- Keep `happy-dom` isolated to tests and avoid introducing browser-global assumptions into production components.
+- Review/commit the current worktree changes when ready.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The worktree contains intentional uncommitted changes in the Properties PN implementation, its test, `package.json`, `package-lock.json`, and this session log.
+- Installing `happy-dom` reported existing npm audit findings; no automatic audit fixes were applied.
