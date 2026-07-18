@@ -105,6 +105,38 @@ describe('Scene Transitions (Exit/Entry)', () => {
     expect(emitActorAction).toHaveBeenCalledWith(player, 'left_immediate_area');
   });
 
+  it('replans an active route after a same-scene Exit places an actor at its Entry', () => {
+    const fixture = createSceneFixture();
+    const scene = fixture.scene;
+    const sceneManager = fixture.game.sceneManager;
+    const player = fixture.addPlayer('player', 5, 5);
+
+    const entryObj = fixture.addTriggerbox('entry-1', {
+      components: [{ type: 'Entry' }],
+    });
+    entryObj.poly = [
+      { x: 200, y: 200 },
+      { x: 210, y: 200 },
+      { x: 210, y: 210 },
+      { x: 200, y: 210 },
+    ];
+
+    // This represents a worker route produced before the actor touched the Exit.
+    player.startPlannedRoute({ x: 300, y: 205 }, [
+      { x: 50, y: 5 },
+      { x: 300, y: 205 },
+    ]);
+
+    expect(sceneManager.currentScene).toBe(scene);
+    expect((player as any).plannedMoveTarget).toEqual({ x: 300, y: 205 });
+    sceneManager.transferActorToScene(player, scene.id, { targetEntryId: 'entry-1' });
+
+    expect(player.state).toBe('walk');
+    expect(player.getMoveResult()).toMatchObject({ status: 'started', target: { x: 300, y: 205 } });
+    expect(player.target).toEqual({ x: 300, y: 205 });
+    expect(player.route).toEqual([{ x: 300, y: 205 }]);
+  });
+
   it('works with Exit component on an Entity', () => {
     const fixture = createSceneFixture();
     const sceneA = fixture.scene;

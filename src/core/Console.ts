@@ -32,6 +32,7 @@ export interface ConsoleRuntimeSettings {
   parserPeekLlmEnabled: boolean;
   parserPeekPnEnabled: boolean;
   parserPeekPmEnabled: boolean;
+  parserPeekNavEnabled: boolean;
   parserStage1Enabled: boolean;
   parserStage2Enabled: boolean;
   parserLlmEnabled: boolean;
@@ -47,6 +48,7 @@ export class Console {
   parserPeekLlmEnabled: boolean = false;
   parserPeekPnEnabled: boolean = false;
   parserPeekPmEnabled: boolean = false;
+  parserPeekNavEnabled: boolean = false;
   parserStage1Enabled: boolean = true;
   parserStage2Enabled: boolean = true;
   parserLlmEnabled: boolean = false;
@@ -186,6 +188,10 @@ export class Console {
         'info'
       );
       this.log(
+        '*   #PEEKNAV-ON/OFF — Toggles NPC movement and local Exit navigation tracing.',
+        'info'
+      );
+      this.log(
         '*   #STAGE1-ON/OFF — Toggles the Stage 1 Regex processing stage of the text parser.',
         'info'
       );
@@ -224,6 +230,8 @@ export class Console {
         '#PEEKPN-OFF',
         '#PEEKPM-ON',
         '#PEEKPM-OFF',
+        '#PEEKNAV-ON',
+        '#PEEKNAV-OFF',
         '#STAGE1-ON',
         '#STAGE1-OFF',
         '#STAGE2-ON',
@@ -321,6 +329,18 @@ export class Console {
       this.parserPeekPmEnabled = false;
       this.lastPmDebugTimestamp = null;
       this.log('Puppet Master peek disabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKNAV-ON', () => {
+      this.parserPeekNavEnabled = true;
+      this.lastPmDebugTimestamp = null;
+      this.log('NPC navigation peek enabled.', 'info');
+    });
+
+    this.registerCommand('#PEEKNAV-OFF', () => {
+      this.parserPeekNavEnabled = false;
+      this.lastPmDebugTimestamp = null;
+      this.log('NPC navigation peek disabled.', 'info');
     });
 
     this.registerCommand('#STAGE1-OFF', () => {
@@ -506,7 +526,8 @@ export class Console {
       this.parserPeekEnabled ||
       this.parserPeekLlmEnabled ||
       this.parserPeekPnEnabled ||
-      this.parserPeekPmEnabled;
+      this.parserPeekPmEnabled ||
+      this.parserPeekNavEnabled;
 
     if (!this.isOpen && !isAnyPeekEnabled) return undefined;
     return this.log(this.withPmDebugDelta(text), 'info', { showInClosed: false });
@@ -695,6 +716,7 @@ export class Console {
         parserPeekLlmEnabled: this.parserPeekLlmEnabled,
         parserPeekPnEnabled: this.parserPeekPnEnabled,
         parserPeekPmEnabled: this.parserPeekPmEnabled,
+        parserPeekNavEnabled: this.parserPeekNavEnabled,
         parserStage1Enabled: this.parserStage1Enabled,
         parserStage2Enabled: this.parserStage2Enabled,
         parserLlmEnabled: this.parserLlmEnabled,
@@ -718,6 +740,7 @@ export class Console {
       this.parserPeekLlmEnabled = settings.parserPeekLlmEnabled ?? this.parserPeekLlmEnabled;
       this.parserPeekPnEnabled = settings.parserPeekPnEnabled ?? this.parserPeekPnEnabled;
       this.parserPeekPmEnabled = settings.parserPeekPmEnabled ?? this.parserPeekPmEnabled;
+      this.parserPeekNavEnabled = settings.parserPeekNavEnabled ?? this.parserPeekNavEnabled;
       this.parserStage1Enabled = settings.parserStage1Enabled ?? this.parserStage1Enabled;
       this.parserStage2Enabled = settings.parserStage2Enabled ?? this.parserStage2Enabled;
       this.parserLlmEnabled = settings.parserLlmEnabled ?? this.parserLlmEnabled;

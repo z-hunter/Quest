@@ -129,6 +129,14 @@ export type NpcActorContext = {
   inventory?: {
     available: boolean;
     itemIds: string[];
+    items?: Array<{
+      id: string;
+      title: string;
+      containerId: string;
+      relation: string;
+      groupIds?: string[];
+      states?: Array<{ id: string; value: string | number | boolean }>;
+    }>;
   };
   actors: Array<{ id: string; title: string; lastSeenSceneId?: string }>;
   visibleItemIds: string[];
@@ -176,6 +184,7 @@ export type NpcActorContext = {
       id: string;
       label: string;
       available?: boolean;
+      executable?: boolean;
       requires?: Array<{
         entityId: string;
         scope: string;
@@ -183,6 +192,18 @@ export type NpcActorContext = {
         via?: string;
       }>;
       effects?: Array<{ type: string; stateId?: string; value?: string | number | boolean }>;
+      preconditions?: Array<{
+        type: 'entity_available' | 'contained_group_entity' | 'numeric_state';
+        satisfied: boolean;
+        entityId?: string;
+        containerId?: string;
+        groupId?: string;
+        itemId?: string;
+        stateId?: string;
+        operator?: 'gt' | 'gte' | 'lt' | 'lte' | 'eq';
+        expectedValue?: number;
+        actualValue?: number;
+      }>;
     }>;
     exit?: {
       targetSceneId: string;

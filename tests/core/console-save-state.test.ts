@@ -13,6 +13,7 @@ describe('Console save state', () => {
     source.addHistory('LOOK');
     source.parserPeekEnabled = true;
     source.parserPeekPmEnabled = true;
+    source.parserPeekNavEnabled = true;
     source.parserStage1Enabled = false;
     source.parserLlmEnabled = true;
     source.parserCascade1ForceLlm = true;
@@ -27,6 +28,7 @@ describe('Console save state', () => {
     expect(restored.history).toEqual(['LOOK']);
     expect(restored.parserPeekEnabled).toBe(true);
     expect(restored.parserPeekPmEnabled).toBe(true);
+    expect(restored.parserPeekNavEnabled).toBe(true);
     expect(restored.parserStage1Enabled).toBe(false);
     expect(restored.parserLlmEnabled).toBe(true);
     expect(restored.parserCascade1ForceLlm).toBe(true);

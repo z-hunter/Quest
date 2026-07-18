@@ -61,6 +61,8 @@ export class Actor extends Entity {
   readonly type: string = 'Actor';
   private localTeleportTarget: { x: number; y: number } | null = null;
   private localTeleportExit: SceneObject | null = null;
+  /** Final intent survives a same-scene Exit placement so its stale route can be rebuilt. */
+  private plannedMoveTarget: { x: number; y: number } | null = null;
 
   isPlayer: boolean = false;
 
@@ -170,6 +172,7 @@ export class Actor extends Entity {
       return this.lastMoveResult;
     }
 
+    this.plannedMoveTarget = { ...target };
     const walkingRoute = this.planWalkingRouteTo(target);
     const teleportPlan = walkingRoute
       ? null
@@ -223,6 +226,7 @@ export class Actor extends Entity {
       this.scene?.camera || { x: 0, y: 0 },
       this.parallax !== undefined ? this.parallax : 1.0
     );
+    this.plannedMoveTarget = { ...worldTarget };
     const route = this.planWalkingRouteTo(worldTarget);
 
     if (!route) {
@@ -255,6 +259,7 @@ export class Actor extends Entity {
       this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
       return this.lastMoveResult;
     }
+    this.plannedMoveTarget = { ...target };
     this.route = route.map((point) => ({ ...point }));
     this.routeIndex = 0;
     this.target = this.route[0];
@@ -274,7 +279,26 @@ export class Actor extends Entity {
     this.routeIndex = 0;
     this.localTeleportTarget = null;
     this.localTeleportExit = null;
+    this.plannedMoveTarget = null;
     this.setState('idle');
+  }
+
+  /**
+   * A same-scene Exit can move an actor many screens away while it is walking.
+   * Worker routes are expressed in the pre-teleport coordinate space, so they
+   * must never be resumed from the Entry position.
+   */
+  resumePlannedMovementAfterLocalTeleport(): {
+    target: { x: number; y: number };
+    previousRouteLength: number;
+    result: ActorMoveResult;
+  } | null {
+    const target = this.plannedMoveTarget;
+    if (!target || this.state !== 'walk') return null;
+
+    const previousRouteLength = this.route.length;
+    const result = this.moveTo(target.x, target.y);
+    return { target: { ...target }, previousRouteLength, result };
   }
 
   getMoveResult(): ActorMoveResult {

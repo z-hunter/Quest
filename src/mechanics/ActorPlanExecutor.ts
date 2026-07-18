@@ -3,6 +3,7 @@ import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { traceNavigation } from '../systems/navigation/navigationDebug';
 import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
@@ -19,12 +20,14 @@ export class ActorPlanExecutor {
   private moveWatchTokens = new Map<string, number>();
   private navigationTokens = new Map<string, number>();
   private pendingTimeouts = new Map<string, Set<any>>();
+  private moveStartedAt = new Map<string, number>();
 
   clearState(npcId: string): void {
     const current = this.moveWatchTokens.get(npcId) || 0;
     this.moveWatchTokens.set(npcId, current + 1);
     this.navigationTokens.set(npcId, (this.navigationTokens.get(npcId) || 0) + 1);
-    const actor = this.game.sceneManager.currentScene?.getObjectByName(npcId);
+    this.moveStartedAt.delete(npcId);
+    const actor = this.findActor(npcId);
     if (actor instanceof Actor) this.game.actorNavigation.cancelNpcApproach(actor);
     const timeouts = this.pendingTimeouts.get(npcId);
     if (timeouts) {
@@ -38,6 +41,7 @@ export class ActorPlanExecutor {
   clearAllPending(): void {
     this.moveWatchTokens.clear();
     this.navigationTokens.clear();
+    this.moveStartedAt.clear();
     for (const timeouts of this.pendingTimeouts.values()) {
       for (const timeoutId of timeouts) {
         globalThis.clearTimeout(timeoutId);
@@ -61,12 +65,7 @@ export class ActorPlanExecutor {
   }
 
   executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
-    const currentScene = this.game.sceneManager.currentScene;
-    const actor =
-      currentScene?.getObjectByName(plan.npcId) ||
-      Array.from(this.game.sceneManager.scenes.values())
-        .map((scene) => scene.getObjectByName(plan.npcId))
-        .find((candidate) => candidate instanceof Actor);
+    const actor = this.findActor(plan.npcId);
     if (!(actor instanceof Actor) || !ComponentSystem.isNpc(actor)) {
       return [
         {
@@ -241,7 +240,7 @@ export class ActorPlanExecutor {
     }
 
     const targetId = String(step.targetId || '').trim();
-    const target = this.game.sceneManager.currentScene?.getObjectByName(targetId);
+    const target = this.getActorScene(actor)?.getObjectByName(targetId);
     if (!target) {
       return { status: 'failed', code: 'move_target_not_found', npcId: actor.name };
     }
@@ -282,6 +281,15 @@ export class ActorPlanExecutor {
       const result = navigation.route
         ? actor.startPlannedRoute(navigation.plan.point, navigation.route)
         : actor.moveTo(navigation.plan.point.x, navigation.plan.point.y);
+      traceNavigation(this.game, 'move_route_ready', {
+        actorId: actor.name,
+        targetId: target.name,
+        source: navigation.source,
+        actorPosition: { x: actor.x, y: actor.y },
+        approachPoint: navigation.plan.point,
+        routeLength: result.route.length,
+        result: result.status,
+      });
       this.startMove(actor, result);
     });
     return {
@@ -296,7 +304,7 @@ export class ActorPlanExecutor {
 
   private traverseExit(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
     const normalizedTargetId = String(targetId || '').trim();
-    const scene = this.game.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const target = scene?.getObjectByName(normalizedTargetId);
     const exit = target?.components?.find((component: any) => component?.type === 'Exit') as
       | { portal?: boolean; collider?: boolean }
@@ -341,6 +349,12 @@ export class ActorPlanExecutor {
 
   private startMove(actor: Actor, result: ActorMoveResult): NpcPlanExecutionOutcome {
     if (result.status === 'started') {
+      this.moveStartedAt.set(actor.name, Date.now());
+      traceNavigation(this.game, 'move_started', {
+        actorId: actor.name,
+        target: result.target,
+        routeLength: result.route.length,
+      });
       this.watchMoveCompletion(actor);
       return {
         status: 'scheduled',
@@ -369,6 +383,16 @@ export class ActorPlanExecutor {
       const result = actor.getMoveResult();
       if (result.status !== 'started' || actor.state !== 'walk') {
         this.moveWatchTokens.delete(actor.name);
+        const startedAt = this.moveStartedAt.get(actor.name);
+        this.moveStartedAt.delete(actor.name);
+        traceNavigation(this.game, 'move_completed', {
+          actorId: actor.name,
+          status: result.status,
+          code: result.code,
+          elapsedMs: startedAt === undefined ? null : Date.now() - startedAt,
+          actorPosition: { x: actor.x, y: actor.y },
+          target: result.target,
+        });
         this.moveCompletionScheduler?.(actor.name, result);
         return;
       }
@@ -385,7 +409,7 @@ export class ActorPlanExecutor {
     relation?: 'in' | 'on' | 'under' | 'behind' | null
   ): NpcPlanExecutionOutcome {
     const normalizedTargetId = String(targetId || '').trim();
-    const scene = this.game.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const target = scene?.getObjectByName(normalizedTargetId);
     if (!target) {
       const sceneTitle = scene
@@ -497,7 +521,7 @@ export class ActorPlanExecutor {
 
   private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {
     const normalizedTargetId = String(targetId || '').trim();
-    const scene = this.game.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const target = scene?.getObjectByName(normalizedTargetId);
     if (!(target instanceof Entity)) {
       return this.completeAction(actor.name, {
@@ -531,7 +555,7 @@ export class ActorPlanExecutor {
   }
 
   private giveEntity(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const item = scene?.getObjectByName(String(itemId || '').trim());
     const target = scene?.getObjectByName(String(targetId || '').trim());
     if (!(item instanceof Entity)) {
@@ -591,7 +615,7 @@ export class ActorPlanExecutor {
     relation?: 'in' | 'on' | 'under' | 'behind' | null
   ): NpcPlanExecutionOutcome {
     const normalizedItemId = String(itemId || '').trim();
-    const scene = this.game.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const item = scene?.getObjectByName(normalizedItemId);
     if (!(item instanceof Entity)) {
       return this.completeAction(actor.name, {
@@ -666,5 +690,25 @@ export class ActorPlanExecutor {
     // if that timer is throttled or lost by the host runtime.
     this.actionCompletionScheduler(npcId, outcome);
     return { ...outcome, status: 'scheduled' };
+  }
+
+  private findActor(npcId: string): Actor | null {
+    const current = this.game.sceneManager.currentScene?.getObjectByName(npcId);
+    if (current instanceof Actor) return current;
+    return (
+      Array.from(this.game.sceneManager.scenes.values())
+        .map((scene) => scene.getObjectByName(npcId))
+        .find((candidate): candidate is Actor => candidate instanceof Actor) || null
+    );
+  }
+
+  private getActorScene(actor: Actor): ReturnType<typeof this.game.sceneManager.scenes.get> | null {
+    const current = this.game.sceneManager.currentScene;
+    if (current?.getObjectByName(actor.name) === actor) return current;
+    return (
+      Array.from(this.game.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(actor.name) === actor
+      ) || null
+    );
   }
 }

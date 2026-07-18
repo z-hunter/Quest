@@ -33,6 +33,21 @@ export type ActorSwitchAffordance = {
   requiredKeyId?: string;
 };
 
+export type ActorInventoryItemKnowledge = {
+  id: string;
+  title: string;
+  containerId: string;
+  relation: EffectiveRelation;
+  groupIds?: string[];
+  states?: Array<{ id: string; value: string | number | boolean }>;
+};
+
+export type ActorInventoryKnowledge = {
+  available: boolean;
+  itemIds: string[];
+  items?: ActorInventoryItemKnowledge[];
+};
+
 export class ActorWorldQuery {
   readonly navigation: ActorNavigationService;
   private readonly game: IGame;
@@ -185,14 +200,56 @@ export class ActorWorldQuery {
     };
   }
 
-  getInventoryKnowledge(actor: Actor): { available: boolean; itemIds: string[] } {
+  getInventoryKnowledge(actor: Actor): ActorInventoryKnowledge {
+    const topLevelItems = this.game.inventoryManager
+      .getInventoryEntities(actor, 'in')
+      .filter((item) => !item.disabled);
+    const items: ActorInventoryItemKnowledge[] = [];
+    const visited = new Set<string>();
+    const visit = (container: Entity) => {
+      for (const component of ComponentSystem.getInventoryComponents(container)) {
+        const relation = ComponentSystem.normalizeInventoryRelation(component);
+        for (const item of this.game.inventoryManager.getInventoryEntities(container, relation)) {
+          if (item.disabled || visited.has(item.name)) continue;
+          visited.add(item.name);
+          const groupIds = this.getObjectGroupIds(item);
+          const states = ComponentSystem.getStateComponents(item).map((state) => ({
+            id: state.id,
+            value: ComponentSystem.getStateValue(item, state.id) ?? state.initialValue,
+          }));
+          items.push({
+            id: item.name,
+            title: this.game.textAssets.getResolvedObjectField(item, 'title') || item.name,
+            containerId: container.name,
+            relation,
+            ...(groupIds.length ? { groupIds } : {}),
+            ...(states.length ? { states } : {}),
+          });
+          visit(item);
+        }
+      }
+    };
+    visit(actor);
     return {
       available: this.game.inventoryManager.hasMainInventory(actor),
-      itemIds: this.game.inventoryManager
-        .getInventoryEntities(actor, 'in')
-        .filter((item) => !item.disabled)
-        .map((item) => item.name),
+      itemIds: topLevelItems.map((item) => item.name),
+      ...(items.length ? { items } : {}),
     };
+  }
+
+  private getObjectGroupIds(object: SceneObject): string[] {
+    const rawGroupIds = [
+      ...(Array.isArray((object as any).groupIds) ? (object as any).groupIds : []),
+      (object as any).groupID,
+    ];
+    return Array.from(
+      new Set(
+        rawGroupIds
+          .flatMap((value) => String(value || '').split(','))
+          .map((value) => value.trim())
+          .filter(Boolean)
+      )
+    );
   }
 
   getInspectionAffordance(object: SceneObject): {

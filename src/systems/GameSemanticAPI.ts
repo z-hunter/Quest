@@ -1586,8 +1586,9 @@ export class GameSemanticAPI {
   }
 
   giveEntityForActor(actor: Actor | null, entity: Entity, targetActor: Actor): GameActionOutcome {
-    const scene = this.game.sceneManager.currentScene;
-    const activeActor = actor || scene?.player || null;
+    const currentScene = this.game.sceneManager.currentScene;
+    const activeActor = actor || currentScene?.player || null;
+    const scene = activeActor ? this.getActorScene(activeActor) : currentScene;
     if (!scene) {
       return {
         status: 'failed',
@@ -1671,6 +1672,8 @@ export class GameSemanticAPI {
     this.game.emitActorAction?.(activeActor, 'give', targetActor, {
       itemId: entity.name,
       targetId: targetActor.name,
+      outcome: 'item_given',
+      worldChanged: true,
     });
     this.game.wakeNpc?.(targetActor, 'item_received');
 
@@ -1693,9 +1696,28 @@ export class GameSemanticAPI {
       status: 'ok',
       code: 'item_given',
       message: this.game.text('parser.give_success', { item: itemTitle, target: targetTitle }),
-      data: { entityId: entity.name, ownerId: targetActor.name, targetId: targetActor.name },
+      data: {
+        actionType: 'GIVE',
+        actorId: activeActor.name,
+        recipientId: targetActor.name,
+        entityId: entity.name,
+        itemId: entity.name,
+        ownerId: targetActor.name,
+        targetId: targetActor.name,
+        worldChanged: true,
+      },
       effects: ['removed_from_inventory', 'moved_to_inventory', 'item_given'],
     };
+  }
+
+  private getActorScene(actor: Actor): ReturnType<typeof this.game.sceneManager.scenes.get> | null {
+    const current = this.game.sceneManager.currentScene;
+    if (current?.getObjectByName(actor.name) === actor) return current;
+    return (
+      Array.from(this.game.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(actor.name) === actor
+      ) || null
+    );
   }
 
   canTakeEntity(entity: Entity): GameActionOutcome | null {

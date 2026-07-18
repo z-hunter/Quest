@@ -841,28 +841,28 @@
       "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": -550.6457352112014,
-      "y": -139.79715935854634,
+      "x": -526.9156739100213,
+      "y": -137.9803878720145,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -550.6457352112014,
-          "y": -139.79715935854634,
+          "x": -526.9156739100213,
+          "y": -137.9803878720145,
           "p": 1.0431424643929696
         },
         {
-          "x": -522.9013512835288,
-          "y": -140.0055142061039,
+          "x": -498.8556185760758,
+          "y": -138.20603868370347,
           "p": 1.0424314168264899
         },
         {
-          "x": -391.5258070795587,
-          "y": -131.67931926909367,
+          "x": -365.87650295538043,
+          "y": -129.69194555139597,
           "p": 1.0467476902559403
         },
         {
-          "x": -416.4691613474825,
-          "y": -131.26263919107012,
+          "x": -391.20031482516583,
+          "y": -129.39957101325064,
           "p": 1.0405613305364574
         }
       ],
@@ -1066,28 +1066,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1646.9214689253608,
-      "y": 81.06503356313719,
+      "x": 1656.6328054742842,
+      "y": 86.8830514075201,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1646.9214689253608,
-          "y": 81.06503356313719,
+          "x": 1656.6328054742842,
+          "y": 86.8830514075201,
           "p": 1
         },
         {
-          "x": 1666.3416895886883,
-          "y": 82.48864305587472,
+          "x": 1684.51067336607,
+          "y": 88.92665317992288,
           "p": 1
         },
         {
-          "x": 1652.0767513493884,
-          "y": 124.17356320268614,
+          "x": 1664.0332508581657,
+          "y": 148.76565898107228,
           "p": 1
         },
         {
-          "x": 1585.0247133091552,
-          "y": 157.82097034648677,
+          "x": 1567.7795629744596,
+          "y": 197.06675645661903,
           "p": 1
         }
       ],
@@ -1205,7 +1205,7 @@
       "type": "Entity",
       "locked": false,
       "disabled": false,
-      "groupID": null,
+      "groupID": "#aaa",
       "customName": "",
       "textRedirects": {},
       "interactions": {},
@@ -1273,7 +1273,7 @@
           "capacity": 10,
           "groups": [],
           "protected": true,
-          "items": ["test"],
+          "items": ["test", "tv_rc"],
           "relation": "in"
         },
         {
@@ -1288,15 +1288,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1656.984621622974,
-      "y": 92.80537837701903,
-      "width": 124.11221660389366,
-      "height": 296.8630045795835,
+      "x": 1666.8947176826825,
+      "y": 98.8552823173181,
+      "width": 126.56358390357893,
+      "height": 303.5815694984494,
       "baseWidth": 148,
-      "baseHeight": 354,
-      "spriteName": "miles2_ds-idle-down.json",
+      "baseHeight": 355,
+      "spriteName": "miles2_ds-idle-up.json",
       "color": "#00ffff",
-      "scale": 0.8385960581344166,
+      "scale": 0.8551593506998576,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -1307,7 +1307,7 @@
       "isPlayer": true,
       "speed": 0.24,
       "perceptionRadius": 600,
-      "direction": "down",
+      "direction": "up",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1349,17 +1349,114 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 1656.984621622974,
-      "y": 92.80537837701903,
-      "width": 15.733550418321286,
-      "height": 22.35820322603551,
+      "x": 1666.8947176826825,
+      "y": 98.8552823173181,
+      "width": 16.04430718392249,
+      "height": 22.799804945574067,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.7986629125089683,
+      "scale": 0.8144374768570073,
       "refScale": 0.8,
       "modelScale": 0.8,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "tv_rc",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Item"
+        },
+        {
+          "type": "Inventory",
+          "relation": "in",
+          "capacity": 1,
+          "groups": ["#aaa"],
+          "protected": false,
+          "items": ["batteryAAA"]
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "Miles",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 1666.8947176826825,
+      "y": 98.8552823173181,
+      "width": 26.46921799785273,
+      "height": 39.04209654683278,
+      "baseWidth": 199.99999999999997,
+      "baseHeight": 295,
+      "spriteName": "tv_rc",
+      "color": "#AAAAAA",
+      "scale": 0.13234608998926367,
+      "refScale": 0.13,
+      "modelScale": 0.13,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "batteryAAA",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": "#aaa",
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "State",
+          "id": "charge_percent",
+          "valueType": "number",
+          "initialValue": 100,
+          "value": 0
+        },
+        {
+          "type": "Item"
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": "examinable",
+      "spatial": {
+        "parentNodeId": "tv_rc",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 1666.8947176826825,
+      "y": 98.8552823173181,
+      "width": 16.288749537140145,
+      "height": 15.067093321854635,
+      "baseWidth": 80,
+      "baseHeight": 74,
+      "spriteName": "aaa",
+      "color": "#AAAAAA",
+      "scale": 0.20360936921425182,
+      "refScale": 0.2,
+      "modelScale": 0.2,
       "ignoreScaling": false,
       "animationSpeed": 150,
       "opacity": 1,

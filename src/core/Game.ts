@@ -701,7 +701,7 @@ export class Game implements IGame {
     subject?: SceneObject | null,
     payload: Record<string, unknown> = {}
   ): void {
-    const scene = this.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     if (!scene) return;
     const observers = this.actorWorld.getActionObservers(actor, subject);
     if (!observers.length) return;
@@ -728,9 +728,19 @@ export class Game implements IGame {
    * intentionally not a global PM wake trigger (for example, receiving an item).
    */
   wakeNpc(actor: Actor, reason?: string): void {
-    const scene = this.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     if (!scene || !this.npcWorldModelBuilder.getNpcActors(scene).includes(actor)) return;
     this.npcPuppetMaster.scheduleNpc(scene, actor.name, { type: 'manual', reason });
+  }
+
+  private getActorScene(actor: Actor): ReturnType<typeof this.sceneManager.scenes.get> | null {
+    const current = this.sceneManager.currentScene;
+    if (current?.getObjectByName(actor.name) === actor) return current;
+    return (
+      Array.from(this.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(actor.name) === actor
+      ) || null
+    );
   }
 
   private formatObservedActorAction(

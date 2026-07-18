@@ -10,6 +10,7 @@ import { toVisualPosition } from '../utils/Parallax';
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
 import { BackfaceSystem, type BackfaceComponent } from './BackfaceSystem';
+import { traceNavigation } from './navigation/navigationDebug';
 
 export interface SubsceneComponent {
   type: 'Subscene';
@@ -588,6 +589,15 @@ export class ComponentSystem {
     }
 
     if (activator) {
+      traceNavigation(scene.game, 'exit_activated', {
+        actorId: activator.name,
+        exitId: exitObject.name,
+        sourceSceneId: scene.id,
+        targetSceneId,
+        targetEntryId: exit.targetEntryId?.trim() || null,
+        navigationOnly: exit.navigationOnly === true,
+        actorPosition: { x: activator.x, y: activator.y },
+      });
       if (exit.navigationOnly) {
         scene.game?.emitActorAction?.(activator, 'left_immediate_area');
       } else {

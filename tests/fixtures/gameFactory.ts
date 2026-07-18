@@ -174,6 +174,7 @@ export function createTestGame(): TestGameHarness {
                 object.components?.some((component: any) => component.type === 'Entry')
               )?.name || null
           : null);
+      let placedAtEntry = false;
       if (targetEntryId) {
         const entryObj = targetScene.getObjectByName(targetEntryId);
         const entryComp = entryObj?.components?.find(
@@ -188,6 +189,7 @@ export function createTestGame(): TestGameHarness {
           actor.y = (entryObj as any).y;
         }
         if (entryComp) {
+          placedAtEntry = true;
           actor.layer = entryObj.layer;
           actor.parallax = entryObj.parallax;
           if (!targetScene.isWalkable(actor.x, actor.y, actor)) {
@@ -217,6 +219,9 @@ export function createTestGame(): TestGameHarness {
           }
           actor.update?.(0);
         }
+      }
+      if (oldScene === targetScene && placedAtEntry) {
+        actor.resumePlannedMovementAfterLocalTeleport?.();
       }
       if (transfersPlayerActor && oldScene !== targetScene && targetScene.defaultCamera) {
         targetScene.camera.zoom = targetScene.defaultCamera.zoom;

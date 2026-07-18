@@ -14,6 +14,7 @@ import { ScriptRegistry } from '../core/ScriptRegistry';
 import { StateEventSystem } from '../systems/StateEventSystem';
 import { assertSceneData } from '../contracts/runtimeSchemas';
 import type { SceneLogData } from './SceneLog';
+import { traceNavigation } from '../systems/navigation/navigationDebug';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -388,7 +389,21 @@ export class SceneManager {
     const targetEntryId =
       options.targetEntryId ??
       (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
-    this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    const positionBeforePlacement = { x: actor.x, y: actor.y };
+    const entryPlacement = this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    if (sourceScene === targetScene && entryPlacement) {
+      const resumed = actor.resumePlannedMovementAfterLocalTeleport();
+      traceNavigation(this.game, 'local_exit_replanned', {
+        actorId: actor.name,
+        sceneId: targetScene.id,
+        entryId: targetEntryId,
+        positionBeforePlacement,
+        positionAfterPlacement: { x: actor.x, y: actor.y },
+        previousRouteLength: resumed?.previousRouteLength ?? 0,
+        target: resumed?.target ?? null,
+        result: resumed?.result.status ?? 'not_walking',
+      });
+    }
     if (transfersPlayerActor && sourceScene !== targetScene && targetScene.defaultCamera) {
       targetScene.camera.zoom = targetScene.defaultCamera.zoom;
     }
@@ -520,7 +535,12 @@ export class SceneManager {
     await Promise.all(promises);
   }
 
-  syncSceneRegistration(scene: Scene, previousId?: string, sourceData?: any): void {
+  syncSceneRegistration(
+    scene: Scene,
+    previousId?: string,
+    sourceData?: any,
+    updateAuthored: boolean = true
+  ): void {
     const sceneId = scene.id;
     const pathValue = this.getScenePathFromScene(scene);
     const existingMeta = this.sceneCacheMeta.get(sceneId);
@@ -548,7 +568,7 @@ export class SceneManager {
       this.sceneRuntimeSnapshots.delete(previousId);
     }
 
-    if (sourceData && !this.authoredSceneData.has(sceneId)) {
+    if (sourceData && (updateAuthored || !this.authoredSceneData.has(sceneId))) {
       this.authoredSceneData.set(sceneId, JSON.parse(JSON.stringify(sourceData)));
     }
 
@@ -810,7 +830,7 @@ export class SceneManager {
     }
 
     for (const { saved, scene } of preparedScenes) {
-      this.syncSceneRegistration(scene, undefined, saved.data);
+      this.syncSceneRegistration(scene, undefined, saved.data, false);
       this.cacheScene(scene, false);
     }
 

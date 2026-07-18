@@ -2735,13 +2735,25 @@ describe('Game semantic API', () => {
 
     const outcome = fixture.game.giveEntityForActor(player, key, guard);
 
-    expect(outcome.code).toBe('item_given');
+    expect(outcome).toMatchObject({
+      status: 'ok',
+      code: 'item_given',
+      data: {
+        actionType: 'GIVE',
+        actorId: player.name,
+        recipientId: guard.name,
+        itemId: key.name,
+        worldChanged: true,
+      },
+    });
     expect(fixture.game.inventory).not.toContain(key);
     expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(true);
     expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toMatchObject({
       action: 'give',
       itemId: key.name,
       targetId: guard.name,
+      outcome: 'item_given',
+      worldChanged: true,
     });
     expect(fixture.scene.sceneLog.entries.at(-1)?.knownByActorIds).toContain(guard.name);
     const guardContext = new NpcWorldModelBuilder(fixture.game)
@@ -2751,6 +2763,7 @@ describe('Game semantic API', () => {
       action: 'give',
       itemId: key.name,
       targetId: guard.name,
+      outcome: 'item_given',
     });
     expect(wakeNpc).toHaveBeenCalledWith(guard, 'item_received');
   });

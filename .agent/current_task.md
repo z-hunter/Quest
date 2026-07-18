@@ -1,13 +1,16 @@
-# Current Task: Fix copy/paste hotkeys in Scene Editor text fields
+# Current Task: Fix Save Compatibility Hash Mismatch on Load
 
 ## Status: COMPLETED ✅
 
 ## Summary of the implementation
-- **Fixed hotkey and paste interception**: Fixed an issue in the Scene Editor where standard copy/paste hotkeys (Ctrl+C, Ctrl+V, Shift+Insert) did not work when typing inside textareas and select fields (such as "MEMORY" and "CURRENT OBJECTIVES" in the NPC properties panel).
-- **SceneEditor.ts**: Updated the keydown handler `handleGlobalKey` to use the helper `isTypingInField` for copy/paste checks instead of only checking `!(document.activeElement instanceof HTMLInputElement)`. This prevents custom Scene Object copy/paste from hijacking standard browser copying/pasting in textareas.
-- **EditorSelectionManager.ts**: Updated the global paste event listener `handleGlobalPaste` to return early if the active element is a textarea or select element, ensuring the browser's default paste action handles the text input instead of trying to deserialize it as a Scene Object.
-- **SpriteEditor.ts**: Updated the `isInputFocused` check to also include textareas and select elements.
+- **Root Cause Identified**: The `SaveManager` computes scene compatibility hashes based on `source.authored` data. When a scene was saved or updated in the editor, the raw data on disk was successfully updated. However, the in-memory `SceneManager.authoredSceneData` cache kept the stale pre-edited scene data due to a guard `!this.authoredSceneData.has(sceneId)` in `syncSceneRegistration`.
+- **Precedence Mismatch**: Because `getSaveSceneSources()` prioritizes `this.authoredSceneData.get(id)` over `descriptor?.sourceData`, the game save process calculated the fingerprint against the stale authored data, writing the old hash to the save file. Upon reloading the game, the freshly-read file on disk computed the new correct hash, triggering a `Save is incompatible with authored scene` error.
+- **Fixed Cache Updating**:
+  - Added an optional `updateAuthored` parameter (defaulting to `true`) to `syncSceneRegistration` in `src/scene/SceneManager.ts`.
+  - Allowed updating `this.authoredSceneData` if `updateAuthored` is `true`.
+  - Passed `updateAuthored: false` when calling `syncSceneRegistration` during save-game restoration (`restoreSavedScenes`), as we only want to register restored runtime data without overwriting the clean authored ground truth.
+  - Editor persistence and scene loads update the authored cache cleanly.
 
 ## Verification
-- Added a new unit test suite `tests/editor/scene-editor-hotkeys.test.ts` to verify that copy, paste, and global paste handlers are not intercepted when focused on text fields (`HTMLInputElement`, `HTMLTextAreaElement`, `HTMLSelectElement`), but function correctly when no text fields are focused.
-- Ran all Vitest tests (`npm test`): Passed (641 tests).
+- Added a new unit test in `tests/systems/save-manager.test.ts` to verify the cache update behavior under different parameters.
+- Ran all Vitest tests (`npm test`): Passed (651 tests).

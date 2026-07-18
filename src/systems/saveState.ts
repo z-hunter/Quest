@@ -117,6 +117,12 @@ function validateConsoleSettings(value: unknown): void {
   ]) {
     assert(typeof value[key] === 'boolean', `console.settings.${key} must be boolean`);
   }
+  if ('parserPeekNavEnabled' in value) {
+    assert(
+      typeof value.parserPeekNavEnabled === 'boolean',
+      'console.settings.parserPeekNavEnabled must be boolean'
+    );
+  }
 }
 
 export function parseSaveState(input: unknown): SaveStateV1 {

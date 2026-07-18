@@ -205,4 +205,28 @@ describe('SaveManager', () => {
       "Save is incompatible with authored scene 'room'"
     );
   });
+
+  it('updates authoredSceneData when syncSceneRegistration is called with updateAuthored=true, but not when false', () => {
+    const { manager, room } = createHarness();
+
+    // 1. Initially authoredSceneData has the original room data.
+    const originalName = (manager as any).authoredSceneData.get('room').name;
+    expect(originalName).toBe('Room');
+
+    // 2. Modify room name in a new data structure and sync registration with updateAuthored = true
+    const updatedData = room.toJSON();
+    updatedData.name = 'Updated Room Name';
+
+    manager.syncSceneRegistration(room, undefined, updatedData, true);
+    expect((manager as any).authoredSceneData.get('room').name).toBe('Updated Room Name');
+
+    // 3. Sync registration with updateAuthored = false (e.g. during restoreSavedScenes)
+    // It should NOT overwrite the authoredSceneData because updateAuthored is false.
+    const restoredData = room.toJSON();
+    restoredData.name = 'Restored Saved State';
+
+    manager.syncSceneRegistration(room, undefined, restoredData, false);
+    // Since updateAuthored is false, and 'room' already exists in authoredSceneData, it should keep the old one ('Updated Room Name')
+    expect((manager as any).authoredSceneData.get('room').name).toBe('Updated Room Name');
+  });
 });
