@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 import { Actor } from '../../src/entities/Actor';
 import { QuadObject } from '../../src/entities/QuadObject';
@@ -81,8 +81,12 @@ describe('Scene Transitions (Exit/Entry)', () => {
       { x: 200, y: 210 },
     ];
 
+    const emitActorAction = vi.fn();
+    (game as any).emitActorAction = emitActorAction;
     const exitObj = fixture.addTriggerbox('exit-1', {
-      components: [{ type: 'Exit', targetSceneId: '', targetEntryId: 'entry-1' }],
+      components: [
+        { type: 'Exit', targetSceneId: '', targetEntryId: 'entry-1', navigationOnly: true },
+      ],
     });
     exitObj.poly = [
       { x: 0, y: 0 },
@@ -98,6 +102,7 @@ describe('Scene Transitions (Exit/Entry)', () => {
     expect(sceneManager.currentScene?.id).toBe(scene.id);
     expect(player.x).toBe(205);
     expect(player.y).toBe(205);
+    expect(emitActorAction).toHaveBeenCalledWith(player, 'left_immediate_area');
   });
 
   it('works with Exit component on an Entity', () => {

@@ -106,6 +106,14 @@ describe('SaveManager', () => {
     room.setEntityParserNote('secret', 'The hidden panel is unlocked.');
     room.markEntityParserNoteNeedsCheck('secret');
     room.addParserRecentTurn('look at wall', 'A hidden panel is visible.');
+    room.sceneLog.appendAction({
+      actorId: 'hero',
+      displayName: 'Hero',
+      text: '[ Hero takes Key ]',
+      knownByActorIds: ['guard'],
+      timestamp: 1234,
+      payload: { action: 'take', itemId: 'key' },
+    });
     hall.setEntityParserNote('guard', 'The guard intends to deliver the key.');
     hall.markEntityParserNoteNeedsCheck('guard');
     game.parser.pendingState = {
@@ -121,6 +129,9 @@ describe('SaveManager', () => {
 
     // Exercise the file boundary as well as the in-memory restore path.
     const state = JSON.parse(JSON.stringify(game.saveManager.createState('slot one')));
+    expect(
+      state.scenes.find((scene: any) => scene.id === 'room')?.runtime?.sceneLog?.entries
+    ).toEqual([expect.objectContaining({ text: '[ Hero takes Key ]' })]);
 
     npcComponent.memory = 'corrupted';
     game.console.history = [];
@@ -165,6 +176,12 @@ describe('SaveManager', () => {
     expect(restoredRoom.getEntityParserNoteNeedsCheck('secret')).toBe(true);
     expect(restoredRoom.getParserRecentTurns()).toEqual([
       { command: 'look at wall', response: 'A hidden panel is visible.' },
+    ]);
+    expect(restoredRoom.sceneLog.entries).toEqual([
+      expect.objectContaining({
+        text: '[ Hero takes Key ]',
+        payload: { action: 'take', itemId: 'key' },
+      }),
     ]);
     expect(restoredHall.getEntityParserNote('guard')).toBe('The guard intends to deliver the key.');
     expect(restoredHall.getEntityParserNoteNeedsCheck('guard')).toBe(true);

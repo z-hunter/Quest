@@ -1,7 +1,7 @@
 import type { IGame } from '../core/IGame';
 import type { SceneObject } from '../entities/SceneObject';
 import type { Triggerbox } from '../entities/Triggerbox';
-import type { BlockerComponent } from '../systems/ComponentSystem';
+import { ComponentSystem, type BlockerComponent } from '../systems/ComponentSystem';
 import type { SwitchTrigger } from '../entities/TriggerComponents';
 import type { Scene } from './Scene';
 import type { SpatialPlacement, SpatialRelationType } from './spatialTypes';
@@ -52,6 +52,7 @@ type SceneTextRelationAccessState = SceneTextLayerAccessState & {
 };
 
 function getSceneObjectTitle(game: IGame, object: SceneObject): string | null {
+  if (ComponentSystem.isNavigationOnlyExit(object)) return null;
   const title = game.textAssets.getResolvedObjectField(object as any, 'title');
   return title && title.trim() ? title.trim() : null;
 }

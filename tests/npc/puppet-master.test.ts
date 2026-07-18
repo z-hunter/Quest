@@ -793,6 +793,35 @@ describe('NpcPuppetMaster', () => {
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
   });
 
+  it('omits a navigation-only Exit from PM context and NPC known-entity memory', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const serviceLink = fixture.addTriggerbox('service_link', {
+      title: 'Maintenance passage',
+      components: [
+        {
+          type: 'Exit',
+          targetSceneId: '',
+          targetEntryId: 'service_entry',
+          navigationOnly: true,
+        },
+      ],
+    });
+
+    const builder = new NpcWorldModelBuilder(fixture.game);
+    const world = builder.build(fixture.scene);
+    const context = world.npcs.find((entry) => entry.id === npc.name);
+    const component = ComponentSystem.getNpcComponent(npc);
+
+    expect(builder.buildStaticEntityProjection(fixture.scene)).not.toContainEqual(
+      expect.objectContaining({ id: serviceLink.name })
+    );
+    expect(context?.entities.some((entity) => entity.id === serviceLink.name)).toBe(false);
+    expect(context?.knownEntities.some((entity) => entity.id === serviceLink.name)).toBe(false);
+    expect(component?.knownEntities?.[serviceLink.name]).toBeUndefined();
+  });
+
   it('inserts MOVE_TO before route-available TRAVERSE_EXIT plans', async () => {
     const fixture = createGameSemanticFixture('start');
     fixture.addPlayer('Hero', 0, 0);

@@ -119,6 +119,7 @@ describe('Actor route movement', () => {
           targetEntryId: 'RightEntry',
           collider: false,
           portal: true,
+          navigationOnly: true,
         },
       ],
     });

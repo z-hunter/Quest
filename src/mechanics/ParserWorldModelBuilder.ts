@@ -733,10 +733,15 @@ export class ParserWorldModelBuilder {
       reachable,
       examinable,
       subscene,
-      worldKnown: scene ? scene.getAllSceneObjects() : [],
+      worldKnown: scene
+        ? scene
+            .getAllSceneObjects()
+            .filter((sceneObject) => !ComponentSystem.isNavigationOnlyExit(sceneObject))
+        : [],
       hiddenKnown: scene
         ? scene
             .getAllSceneObjects()
+            .filter((sceneObject) => !ComponentSystem.isNavigationOnlyExit(sceneObject))
             .filter((sceneObject) => !!this.getPlayerFacingObjectTitle(sceneObject))
             .filter(
               (sceneObject) => !visible.some((visibleObject) => visibleObject === sceneObject)
@@ -767,6 +772,7 @@ export class ParserWorldModelBuilder {
   }
 
   private getPlayerFacingObjectTitle(sceneObject: SceneObject): string | null {
+    if (ComponentSystem.isNavigationOnlyExit(sceneObject)) return null;
     const title = this.game.textAssets.getResolvedObjectField(sceneObject as any, 'title');
     return title && title.trim() ? title.trim() : null;
   }

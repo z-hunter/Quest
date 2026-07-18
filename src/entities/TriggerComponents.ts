@@ -21,6 +21,7 @@ export interface ExitTrigger extends TriggerComponent {
   type: 'Exit';
   targetSceneId: string;
   targetEntryId: string; // ID of the Entry Triggerbox in the target scene
+  navigationOnly?: boolean;
 }
 
 export interface EntryTrigger extends TriggerComponent {
@@ -69,6 +70,7 @@ export function normalizeTriggerComponent(component: any): AnyTriggerComponent |
       type: 'Exit',
       targetSceneId: typeof component.targetSceneId === 'string' ? component.targetSceneId : '',
       targetEntryId: typeof component.targetEntryId === 'string' ? component.targetEntryId : '',
+      ...(component.navigationOnly === true ? { navigationOnly: true } : {}),
     };
   }
 

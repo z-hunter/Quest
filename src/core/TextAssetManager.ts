@@ -135,6 +135,7 @@ const DEFAULT_SERVICE_ASSETS: Record<string, TextAssetData> = {
     observed_use: '[ {actor} uses {item} on {target} ]',
     observed_command: '[ {actor} operates {subject} ]',
     observed_traverse_exit: '[ {actor} goes through {subject} ]',
+    observed_left_immediate_area: '[ {actor} left the immediate area ]',
   },
   scripts: {
     pillar_key_inserted: 'You insert the key into a hidden slot in the pillar.',

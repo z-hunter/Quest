@@ -2636,25 +2636,5 @@
     "panningModel": "HRTF",
     "distanceModel": "linear",
     "defaultReverbIR": "/sounds/ir/room_drum_medium.wav"
-  },
-  "sceneLog": {
-    "entries": [
-      {
-        "id": "1783300688773-9",
-        "kind": "action",
-        "timestamp": 1783300688773,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through door ]",
-        "knownByActorIds": ["NPC"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "door",
-          "targetId": "door"
-        }
-      }
-    ],
-    "lastPmProcessedAt": 1780248522411,
-    "lastPmProcessedAtByNpc": {}
   }
 }

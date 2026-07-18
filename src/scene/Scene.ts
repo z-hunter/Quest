@@ -28,7 +28,7 @@ import type {
 import type { SubsceneComponent } from '../systems/ComponentSystem';
 import type { ParserSceneTurnContext } from '../mechanics/parserTypes';
 import type { SceneSoundEnv } from '../systems/SoundManager';
-import { SceneLog, type SceneLogData } from './SceneLog';
+import { SceneLog } from './SceneLog';
 
 interface PickupAnimation {
   entity: Entity;
@@ -92,7 +92,6 @@ export interface SceneData {
   camMinY?: number;
   camMaxY?: number;
   soundEnv?: Partial<SceneSoundEnv>;
-  sceneLog?: SceneLogData;
 }
 
 export class Scene {
@@ -1188,7 +1187,6 @@ export class Scene {
       camMinY: this.camMinY,
       camMaxY: this.camMaxY,
       soundEnv: this.soundEnv,
-      sceneLog: this.sceneLog.toJSON(),
     };
   }
 }

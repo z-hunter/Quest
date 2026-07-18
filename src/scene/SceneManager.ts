@@ -13,6 +13,7 @@ import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from '../core/ScriptRegistry';
 import { StateEventSystem } from '../systems/StateEventSystem';
 import { assertSceneData } from '../contracts/runtimeSchemas';
+import type { SceneLogData } from './SceneLog';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -94,6 +95,7 @@ export type SceneRuntimeSnapshot = {
   parserRecentTurns: Array<{ command: string; response: string }>;
   activeSubscene: string | null;
   camera: { x: number; y: number; zoom: number };
+  sceneLog?: SceneLogData;
 };
 
 export class SceneManager {
@@ -829,6 +831,8 @@ export class SceneManager {
     scene.restoreParserRecentTurns(snapshot.parserRecentTurns);
     scene.activeSubscene = snapshot.activeSubscene;
     scene.camera = { ...snapshot.camera };
+    // Older v1 saves have no SceneLog snapshot; they must not retain a live session's events.
+    scene.sceneLog.load(snapshot.sceneLog || {});
   }
 
   private captureSceneRuntimeSnapshot(scene: Scene): SceneRuntimeSnapshot {
@@ -841,6 +845,7 @@ export class SceneManager {
       parserRecentTurns: scene.getParserRecentTurns(),
       activeSubscene: scene.activeSubscene,
       camera: { ...scene.camera },
+      sceneLog: scene.sceneLog.toJSON(),
     };
   }
 
@@ -881,10 +886,6 @@ export class SceneManager {
 
     if (data.soundEnv) {
       newScene.soundEnv = { ...newScene.soundEnv, ...data.soundEnv };
-    }
-
-    if (data.sceneLog) {
-      newScene.sceneLog.load(data.sceneLog);
     }
 
     if (data.walkbox) {

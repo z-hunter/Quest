@@ -318,7 +318,13 @@ export class NpcWorldModelBuilder {
         });
       })
       .filter((entry): entry is NonNullable<typeof entry> => !!entry);
-    return { entities, observedObjects: knownObjects, trace };
+    return {
+      entities,
+      observedObjects: knownObjects.filter(
+        (object) => !ComponentSystem.isNavigationOnlyExit(object)
+      ),
+      trace,
+    };
   }
 
   private rememberObservedEntities(
@@ -562,11 +568,13 @@ export class NpcWorldModelBuilder {
   }
 
   private getObjectTitle(object: SceneObject): string | null {
+    if (ComponentSystem.isNavigationOnlyExit(object)) return null;
     const title = this.game.textAssets.getResolvedObjectField(object, 'title')?.trim();
     return title || null;
   }
 
   private shouldIncludeVisibleEntity(object: SceneObject): boolean {
+    if (ComponentSystem.isNavigationOnlyExit(object)) return false;
     if (this.hasAuthoredObjectTitle(object)) return true;
     return object.type === 'Walkbox' && ComponentSystem.getSurfaceComponents(object).length > 0;
   }

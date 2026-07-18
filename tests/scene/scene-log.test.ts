@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SceneLog } from '../../src/scene/SceneLog';
+import { SceneManager } from '../../src/scene/SceneManager';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('SceneLog', () => {
@@ -103,7 +104,7 @@ describe('SceneLog', () => {
     expect(loaded.entries).toEqual(log.entries);
   });
 
-  it('persists through Scene JSON', () => {
+  it('keeps runtime entries out of authored Scene JSON and ignores legacy asset logs', () => {
     const fixture = createSceneFixture();
     fixture.scene.sceneLog.appendSpeech({
       actorId: 'Hero',
@@ -113,7 +114,43 @@ describe('SceneLog', () => {
       timestamp: 1000,
     });
 
-    expect(fixture.scene.toJSON().sceneLog?.entries?.[0].text).toBe('Anyone here?');
+    const authored = fixture.scene.toJSON() as any;
+    expect(authored.sceneLog).toBeUndefined();
+
+    const legacy = {
+      ...authored,
+      id: 'legacy',
+      name: 'Legacy',
+      sceneLog: fixture.scene.sceneLog.toJSON(),
+    };
+    const loaded = (SceneManager.prototype as any).instantiateScene.call(
+      fixture.game.sceneManager,
+      'legacy',
+      legacy
+    );
+    expect(loaded.sceneLog.entries).toEqual([]);
+  });
+
+  it('clears live entries when restoring a legacy runtime snapshot without a log', () => {
+    const fixture = createSceneFixture();
+    const manager = Object.create(SceneManager.prototype) as SceneManager;
+    Object.assign(manager as any, {
+      scenes: new Map([[fixture.scene.id, fixture.scene]]),
+      sceneRuntimeSnapshots: new Map(),
+    });
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: 'Hero',
+      displayName: 'Miles',
+      text: 'Transient runtime event',
+      knownByNpcIds: ['guard'],
+      timestamp: 1000,
+    });
+    const snapshot = (manager as any).captureSceneRuntimeSnapshot(fixture.scene);
+    delete snapshot.sceneLog;
+
+    manager.restoreSceneRuntimeSnapshot(fixture.scene.id, snapshot);
+
+    expect(fixture.scene.sceneLog.entries).toEqual([]);
   });
 
   it('loads legacy knownByNpcIds as actor-aware recipients', () => {

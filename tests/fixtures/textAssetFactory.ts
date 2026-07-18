@@ -55,6 +55,7 @@ const DEFAULT_SERVICE_TEXT: Record<string, string | string[]> = {
   'engine.observed_use': '[ {actor} uses {item} on {target} ]',
   'engine.observed_command': '[ {actor} operates {subject} ]',
   'engine.observed_traverse_exit': '[ {actor} goes through {subject} ]',
+  'engine.observed_left_immediate_area': '[ {actor} left the immediate area ]',
   'parser.look_default_scene': 'You are in {scene}.',
   'parser.look_default_object': 'You see nothing special about the {target}.',
   'parser.look_not_found': "You don't see any {target} here.",

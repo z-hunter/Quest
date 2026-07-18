@@ -772,15 +772,17 @@ export class Game implements IGame {
     const key =
       (action === 'look' || action === 'examine') && relation
         ? 'engine.observed_look_relation'
-        : action === 'give_failed'
-          ? 'engine.observed_give_failed'
-          : action === 'put' && relation && target
-            ? 'engine.observed_put_relation'
-            : action === 'put' && target
-              ? 'engine.observed_put_target'
-              : action === 'put'
-                ? 'engine.observed_drop'
-                : `engine.observed_${action}`;
+        : action === 'left_immediate_area'
+          ? 'engine.observed_left_immediate_area'
+          : action === 'give_failed'
+            ? 'engine.observed_give_failed'
+            : action === 'put' && relation && target
+              ? 'engine.observed_put_relation'
+              : action === 'put' && target
+                ? 'engine.observed_put_target'
+                : action === 'put'
+                  ? 'engine.observed_drop'
+                  : `engine.observed_${action}`;
     const fallback = `[ ${actorTitle} acts. ]`;
     return this.textAssets.getServiceText(key, params, fallback);
   }

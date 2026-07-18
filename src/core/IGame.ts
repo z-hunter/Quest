@@ -163,4 +163,5 @@ export type ObservedActorActionCode =
   | 'put'
   | 'use'
   | 'command'
-  | 'traverse_exit';
+  | 'traverse_exit'
+  | 'left_immediate_area';

@@ -105,6 +105,7 @@ describe('observed Actor actions', () => {
     Game.prototype.emitActorAction.call(fixture.game, npc, 'traverse_exit', door, {
       targetId: door.name,
     });
+    Game.prototype.emitActorAction.call(fixture.game, npc, 'left_immediate_area');
 
     expect(log.mock.calls.map(([text]) => text)).toEqual([
       '[ Linda takes Cassette ]',
@@ -112,7 +113,11 @@ describe('observed Actor actions', () => {
       '[ Linda puts Cassette in Recorder ]',
       '[ Linda uses Cassette on Recorder ]',
       '[ Linda goes through Door ]',
+      '[ Linda left the immediate area ]',
     ]);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toEqual({
+      action: 'left_immediate_area',
+    });
   });
 
   it('keeps an observed action unread until the NPC next processes its scene log', () => {

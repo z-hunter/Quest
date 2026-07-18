@@ -50,6 +50,8 @@ export interface ExitComponent {
   targetEntryId: string;
   collider?: boolean;
   portal?: boolean;
+  /** Keeps a local Exit available to navigation without exposing it to text systems. */
+  navigationOnly?: boolean;
 }
 
 export interface EntryComponent {
@@ -155,6 +157,12 @@ export type AnyComponent = (
 import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
+  static isNavigationOnlyExit(object: SceneObject | null | undefined): boolean {
+    return !!object?.components?.some(
+      (component: any) => component?.type === 'Exit' && component.navigationOnly === true
+    );
+  }
+
   static isStateValueType(value: unknown): value is StateValueType {
     return value === 'string' || value === 'number' || value === 'boolean';
   }
@@ -580,9 +588,13 @@ export class ComponentSystem {
     }
 
     if (activator) {
-      scene.game?.emitActorAction?.(activator, 'traverse_exit', exitObject, {
-        targetId: exitObject.name,
-      });
+      if (exit.navigationOnly) {
+        scene.game?.emitActorAction?.(activator, 'left_immediate_area');
+      } else {
+        scene.game?.emitActorAction?.(activator, 'traverse_exit', exitObject, {
+          targetId: exitObject.name,
+        });
+      }
       sceneManager.transferActorToScene(activator, targetSceneId, {
         targetEntryId: exit.targetEntryId?.trim() || null,
         activateScene: activator === sceneManager.currentScene?.player,

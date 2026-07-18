@@ -1,6 +1,7 @@
 import type { ConsoleState } from '../core/Console';
 import type { NpcPuppetMasterSaveState } from '../mechanics/NpcPuppetMaster';
 import type { ParserPendingState, ParserSceneTurnContext } from '../mechanics/parserTypes';
+import type { SceneLogData } from '../scene/SceneLog';
 
 export const SAVE_STATE_VERSION = 1 as const;
 export const SAVE_STATE_ENGINE = 'scanline' as const;
@@ -18,6 +19,7 @@ export type SceneRuntimeSaveState = {
   parserRecentTurns: ParserSceneTurnContext[];
   activeSubscene: string | null;
   camera: { x: number; y: number; zoom: number };
+  sceneLog?: SceneLogData;
 };
 
 export type SavedSceneDelta = {
@@ -173,6 +175,9 @@ export function parseSaveState(input: unknown): SaveStateV1 {
       assert(Number.isFinite(scene.runtime.camera.x), `scenes[${index}].runtime.camera.x`);
       assert(Number.isFinite(scene.runtime.camera.y), `scenes[${index}].runtime.camera.y`);
       assert(Number.isFinite(scene.runtime.camera.zoom), `scenes[${index}].runtime.camera.zoom`);
+      if (scene.runtime.sceneLog !== undefined) {
+        assert(isObject(scene.runtime.sceneLog), `scenes[${index}].runtime.sceneLog`);
+      }
     }
   }
   assert(isObject(input.console), 'console is required');

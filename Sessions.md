@@ -3499,3 +3499,63 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 
 - The worktree contains intentional uncommitted changes in the Properties PN implementation, its test, `package.json`, `package-lock.json`, and this session log.
 - Installing `happy-dom` reported existing npm audit findings; no automatic audit fixes were applied.
+
+## Session Entry - 2026-07-17 18:42 +02:00
+
+### Session Goals
+
+- Remove the NPC navigation frame-drop bottleneck by moving heavy MOVE_TO route planning off the main thread.
+- Keep the solution compatible with both Vite web builds and Tauri 2 production builds.
+- Resolve the Tauri version mismatch that was blocking `npm run tauri:build`.
+- Leave a durable handoff in repo memory, session logs, and NotebookLM sources.
+
+### What Was Implemented
+
+- Introduced a pure TypeScript navigation planner in `src/systems/navigation/navigationPlanner.ts` with serializable snapshot/request types, binary-heap A*, approach-point selection, route smoothing, and WalkBox/collider geometry handling.
+- Added a Vite module worker entry at `src/systems/navigation/navigation.worker.ts` and wired it to load only through `new Worker(new URL(..., import.meta.url), { type: 'module' })`.
+- Extended `ActorNavigationService` with a single worker-backed client, FIFO NPC request queueing, request IDs, stale-result cancellation, snapshot fingerprinting, revision-aware cache reuse, and synchronous fallback when the worker fails.
+- Updated `ActorPlanExecutor` so NPC `MOVE_TO` can return `scheduled: npc_route_planning` and resume the normal move completion lifecycle after the worker response arrives.
+- Added `Actor.startPlannedRoute(target, route)` to start a precomputed route without rerunning the synchronous pathfinder.
+- Added targeted tests for the pure planner and the worker client, covering routing behavior, cache reuse, stale revision handling, retry behavior, and fallback on worker failure.
+- Resolved the Tauri build gate by pinning `@tauri-apps/api` and Rust `tauri` to matching `2.11.1` versions, then fixing a watcher ownership issue in `src-tauri/src/main.rs` that surfaced during the production build.
+
+### Important Architecture or Runtime Decisions
+
+- NPC route planning is asynchronous; player navigation and `Actor.moveTo()` remain synchronous, so the user-facing control path stays unchanged.
+- The worker is Vite/Tauri compatible because it relies on module-worker semantics and avoids Node-only imports, absolute paths, and Tauri-specific globals.
+- Correctness still depends on main-thread validation: stale scene/revision results are rejected, routes are rechecked against the current scene, and the existing unreachable/blocked semantics are preserved.
+- Tauri build compatibility is handled entirely in the Vite/Rust package versions and app code; no separate Rust-side navigation service or sidecar was introduced.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Mechanics:
+  - NPC MOVE_TO planning is now offloaded to a worker-backed route planner.
+  - Route planning includes geometry snapshot caching and stale-result protection so bursts of NPC wakeups do not block the frame.
+- Scene:
+  - Main-thread scene validation still guards worker output before a route is accepted.
+- Parser / Inventory:
+  - No direct parser or inventory contract changes were needed for this pass.
+
+### Tests and Validation
+
+- `npm run typecheck` passed.
+- `npm test` passed with the navigation changes in place.
+- `npm run build` passed and emitted the worker asset in the Vite bundle.
+- `npm run tauri:build` passed after the version pin and watcher fix, producing both MSI and NSIS bundles.
+- The Tauri build used a temporary `CARGO_TARGET_DIR` because the workspace drive was nearly full and the default target directory had historical ACL issues.
+
+### Commits Created
+
+- No commits were created during this session.
+
+### Remaining Work / Next Recommended Steps
+
+- If the temporary Tauri target directory is no longer needed, it can be cleaned up separately to reclaim disk space.
+- Keep an eye on any future scene or WalkBox geometry regressions, especially if the navigation data model changes.
+- If more build machines need to be supported, revisit whether the `CARGO_TARGET_DIR` workaround should be documented as a local-machine note only.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The worker path is robust, but the synchronous fallback is still the safety net for unexpected runtime failures.
+- The `tauri:build` fix is now validated locally, but it depends on the pinned API/runtime version pair remaining in sync.
+- The worktree still contains the broader navigation and Tauri version-alignment changes from the implementation session, plus this session log update.

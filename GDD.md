@@ -538,10 +538,11 @@ _Sort Mode_ (v0, v1, v2, v3, ignore)
   **Параметры:**
   - `targetSceneId` (string) — ID целевой сцены без расширения `.json`. Если пустой — локальная телепортация внутри текущей сцены к Entry с указанным id.
   - `targetEntryId` (string) — имя объекта-Entry в целевой сцене. Entry может быть на Triggerbox, Entity или Quad. Если не задан, Actor помещается в первый Entry или в дефолтную позицию.
+  - `navigationOnly` (boolean) — только для технического локального Exit -> Entry внутри одной сцены. Такой переход остаётся ребром `ActorNavigationService`, но не входит в parser/PM text context, scope или NPC memory, даже если у объекта есть Title. Наблюдатели получают событие `[ Actor left the immediate area ]` без ID технического Triggerbox. Сюжетные внутрисценовые двери и порталы не используют этот флаг и остаются обычными семантическими Exit.
 
   При активации: `transferActorToScene(actor, targetSceneId, { targetEntryId, activateScene: actor === currentScene.player })`.
 
-  Parser и Puppet Master получают в world context метаданные Exit: `targetSceneId`, `targetEntryId`, `targetSceneTitle`, `portal`, `collider`. Обычная команда `GO TO <object>` использует общий `ActorNavigationService` и ведёт Actor-а к ближайшей walkable-точке взаимодействия, а не в заблокированный центр объекта.
+  Parser и Puppet Master получают в world context метаданные семантического Exit: `targetSceneId`, `targetEntryId`, `targetSceneTitle`, `portal`, `collider`. Exit с `navigationOnly` исключается из этого слоя. Обычная команда `GO TO <object>` использует общий `ActorNavigationService` и ведёт Actor-а к ближайшей walkable-точке взаимодействия, а не в заблокированный центр объекта.
 
   Обычный pathfinding Actor-а учитывает валидные локальные связи Exit → Entry (пустой `targetSceneId`) как резервные телепорт-рёбра между несвязанными walkbox-областями. Сначала используется доступный непрерывный пеший маршрут; телепорт-поиск запускается только если такого маршрута нет. Телепорт-маршрут подходит к Exit, активирует его от имени Actor-а и продолжает движение от Entry. Межсценовые Exit не используются неявно и по-прежнему требуют явной активации/`TRAVERSE_EXIT`.
 

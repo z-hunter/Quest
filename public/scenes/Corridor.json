@@ -128,7 +128,8 @@
         {
           "type": "Exit",
           "targetSceneId": "",
-          "targetEntryId": "E3"
+          "targetEntryId": "E3",
+          "navigationOnly": true
         }
       ],
       "layer": 0,
@@ -1387,55 +1388,5 @@
     "pannerRolloffFactor": 0.7,
     "panningModel": "HRTF",
     "distanceModel": "linear"
-  },
-  "sceneLog": {
-    "entries": [
-      {
-        "id": "1783380368175-2",
-        "kind": "action",
-        "timestamp": 1783380368175,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783380377091-2",
-        "kind": "action",
-        "timestamp": 1783380377091,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      },
-      {
-        "id": "1783380430710-3",
-        "kind": "action",
-        "timestamp": 1783380430710,
-        "actorId": "Miles",
-        "displayName": "Miles",
-        "text": "[ Miles goes through Ex3 ]",
-        "knownByActorIds": ["npc_Rick"],
-        "payload": {
-          "action": "traverse_exit",
-          "subjectId": "Ex3",
-          "targetId": "Ex3"
-        }
-      }
-    ],
-    "lastPmProcessedAt": 0,
-    "lastPmProcessedAtByNpc": {
-      "npc_Rick": 1783264260430
-    }
   }
 }
