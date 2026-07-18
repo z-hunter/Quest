@@ -3559,3 +3559,65 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - The worker path is robust, but the synchronous fallback is still the safety net for unexpected runtime failures.
 - The `tauri:build` fix is now validated locally, but it depends on the pinned API/runtime version pair remaining in sync.
 - The worktree still contains the broader navigation and Tauri version-alignment changes from the implementation session, plus this session log update.
+
+## Session Entry - 2026-07-18 04:43 +02:00
+
+### Session Goals
+
+- Fix the technical teleport area behavior that started with `Ex3` in `Corridor`.
+- Keep navigation-only areas out of the semantic text layer and PM reasoning.
+- Tighten NPC context so protected, hidden, or merely remembered items do not leak into available targets.
+- Move `SceneLog` out of authored scene JSON and into runtime SaveState only.
+- Leave a durable handoff in the repo, memory, and NotebookLM.
+
+### What Was Implemented
+
+- Reworked the `Ex3` technical teleport path so it behaves as a navigation-only runtime area instead of a semantic scene object.
+- Updated the PM and world-model context so navigation-only exits do not appear as normal titled entities, and NPCs reason about them only through movement/arrival outcomes.
+- Fixed item-location tracking so when an item is picked up, the known location is replaced and the item is now treated as being held by an actor rather than still lying in the scene.
+- Tightened NPC target visibility rules so hidden or protected-inventory items do not become selectable just because they exist in static scene data.
+- Added runtime `SceneLog` persistence to SaveState and removed authored `sceneLog` serialization from scene JSON.
+- Cleaned legacy scene assets that still contained authored `sceneLog` data and updated the associated scene/save/parser tests.
+
+### Important Architecture or Runtime Decisions
+
+- Technical teleport areas are part of navigation, not the semantic scene model. They should influence movement, but not text-layer descriptions or NPC object reasoning.
+- `SceneLog` is gameplay/runtime state, not an authored scene asset. It belongs in save snapshots and live runtime state, not in scene JSON.
+- NPC memory of entities should track location history separately from the authored scene listing so item movement and actor transfer remain coherent.
+- The PM context must respect visibility and knowledge boundaries: hidden items, protected inventories, and unseen entities are not valid targets.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser / PM:
+  - Reduced false positives in available target generation.
+  - Kept technical navigation zones out of the textual scene scope.
+- Scene:
+  - `Scene.toJSON()` no longer serializes `SceneLog`.
+  - Scene runtime snapshots still preserve `SceneLog` for save/restore.
+- Inventory / NPC:
+  - Item pickup now updates known location state instead of leaving stale world coordinates behind.
+  - Actor transfer and inventory ownership now behave consistently when scenes swap the player actor.
+- Docs / assets:
+  - Updated project docs and removed obsolete authored `sceneLog` data from scene files.
+
+### Tests and Validation
+
+- Focused regression tests for scene logging, save-state restoration, PM context, and scene transitions passed.
+- `npm run build` passed.
+- The full test suite had one intermittent PM fake-timer timeout during the broad run, but the targeted `puppet-master` coverage passed when rerun in isolation.
+
+### Commits Created
+
+- `8a73c2f` - `Refine PM context and persistence`
+
+### Remaining Work / Next Recommended Steps
+
+- Keep watching PM traces for any remaining stale-memory or stale-location cases when items move between actors.
+- If more navigation-only areas appear, reuse the `Ex3` treatment so they stay out of the semantic layer.
+- Continue validating save/load and scene-transition behavior when player transfer overlaps with runtime inventory ownership.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- The intermittent PM fake-timer abort in the broad suite still deserves attention if it starts happening consistently.
+- Scene and PM contracts are now stricter, so any future authored-data drift should surface earlier in tests.
+- The wrap-up also depends on NotebookLM sync succeeding from the local CLI; if auth is stale, that step may need a retry after recovery.
