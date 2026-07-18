@@ -115,7 +115,10 @@ export class SpriteEditor {
     // If not active, let it propagate (e.g. to SceneEditor)
     if (!this.active) return;
 
-    const isInputFocused = document.activeElement instanceof HTMLInputElement;
+    const isInputFocused =
+      document.activeElement instanceof HTMLInputElement ||
+      document.activeElement instanceof HTMLTextAreaElement ||
+      document.activeElement instanceof HTMLSelectElement;
 
     // AGGRESSIVE HOTKEY HANDLING
     // We check keys first and return immediately if handled, bypassing input focus checks for specific keys.

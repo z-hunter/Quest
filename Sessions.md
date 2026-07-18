@@ -3621,3 +3621,55 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 - The intermittent PM fake-timer abort in the broad suite still deserves attention if it starts happening consistently.
 - Scene and PM contracts are now stricter, so any future authored-data drift should surface earlier in tests.
 - The wrap-up also depends on NotebookLM sync succeeding from the local CLI; if auth is stale, that step may need a retry after recovery.
+
+## Session Entry - 2026-07-18 05:03 +02:00
+
+### Session Goals
+
+- Wrap up the completed `GIVE` feature and leave a durable handoff for the next session.
+- Make sure the repo history, local memory, and NotebookLM sources all reflect the finished state.
+- Preserve the final root cause and fix for the brief UI freeze that appeared after successful `GIVE`.
+
+### What Was Implemented
+
+- Confirmed the feature landed in commit `d4689db` with the message `feat: add GIVE action and PM wake handling`.
+- Recorded durable project memory for the finished `GIVE` flow, including player and NPC transfer behavior, scene-log visibility, Puppet Master notifications, recipient wake-up, and the successful-player popup behavior.
+- Recorded the UI-freeze incident and its fix in long-term memory so future sessions can recognize the stale synchronous route-planning pattern quickly.
+- Ran the session wrap-up flow to persist the raw summary and prepare the NotebookLM sync set.
+
+### Important Architecture or Runtime Decisions
+
+- `GIVE` is now part of the standard action surface, not a one-off semantic shortcut.
+- Successful `GIVE` should wake a dormant recipient NPC, because receiving an item is enough to make that NPC relevant to the current simulation again.
+- The PM context path must stay pathfinder-free in its fast reachability branch so it does not reintroduce frame stalls when NPC state is rebuilt.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser:
+  - The player command surface includes `GIVE` variants for giving to and receiving from actors.
+- Mechanics:
+  - NPCs understand successful and failed give/receive outcomes through Puppet Master prompt context.
+  - The recipient wake behavior is preserved on successful item transfer.
+- Scene:
+  - `GIVE` is visible in the scene log to actors whose perception radius allows it.
+- Inventory:
+  - The transfer still respects the usual `TAKE`-style fit and space checks on the target inventory.
+
+### Tests and Validation
+
+- The feature work had already passed the full project test suite before commit.
+- `codex-doctor -Fast` passed during wrap-up and confirmed NotebookLM CLI readiness, repo health, and shared memory infrastructure.
+
+### Commits Created
+
+- `d4689db` - `feat: add GIVE action and PM wake handling`
+
+### Remaining Work / Next Recommended Steps
+
+- Keep an eye on any future route-planning regressions in Puppet Master context generation.
+- If the NotebookLM sync needs a retry on another machine, re-run the wrap-up source sync rather than hand-editing the manifest.
+
+### Risks, Caveats, Open Questions, or Non-committed Changes
+
+- `Sessions.md` itself now has an additional wrap-up entry, but no new code changes were made during this final handoff step.
+- NotebookLM and memory sync are dependent on the local CLI state, so a stale auth session would be the main thing to recheck if a future wrap-up stalls.

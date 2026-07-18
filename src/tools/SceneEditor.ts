@@ -173,8 +173,8 @@ export class SceneEditor {
     // Ctrl+C: Copy Object
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) {
       // Only prevent default if we have an object selected,
-      // otherwise let normal copy work (e.g. text in inputs)
-      if (this.selectedObject && !(document.activeElement instanceof HTMLInputElement)) {
+      // otherwise let normal copy work (e.g. text in inputs/textareas)
+      if (this.selectedObject && !isTypingInField) {
         e.preventDefault();
         this.copySelectedObjectToClipboard();
         return;
@@ -183,7 +183,7 @@ export class SceneEditor {
 
     // Ctrl+V: Paste Object
     if (this.enabled && e.ctrlKey && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
-      if (!(document.activeElement instanceof HTMLInputElement)) {
+      if (!isTypingInField) {
         // e.preventDefault(); // Don't prevent default, let 'paste' event fire
         // We rely on the global 'paste' event listener which calls handleGlobalPaste
         return;

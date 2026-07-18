@@ -324,7 +324,13 @@ export class EditorSelectionManager {
 
   handleGlobalPaste(e: ClipboardEvent): void {
     if (!this.editor.enabled) return;
-    if (document.activeElement instanceof HTMLInputElement) return;
+    if (
+      document.activeElement instanceof HTMLInputElement ||
+      document.activeElement instanceof HTMLTextAreaElement ||
+      document.activeElement instanceof HTMLSelectElement
+    ) {
+      return;
+    }
 
     // Use clipboard data from event if available (Synchronous and reliable)
     const text = e.clipboardData?.getData('text');
