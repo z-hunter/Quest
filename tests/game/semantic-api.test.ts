@@ -5,6 +5,7 @@ import { Entity } from '../../src/entities/Entity';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { SceneSpatialValidator } from '../../src/scene/SceneSpatialValidator';
+import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 
 describe('Game semantic API', () => {
   it('lookScene returns the scene description', () => {
@@ -2712,5 +2713,110 @@ describe('Game semantic API', () => {
     expect(remote.groupID).toBe('#quest_item');
     expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
     expect(fixture.scene.activeSubscene).toBeNull();
+  });
+  it('gives a held item into a protected Actor inventory and records the observed transfer', () => {
+    const fixture = createGameSemanticFixture();
+    const wakeNpc = vi.fn();
+    fixture.game.wakeNpc = wakeNpc;
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(player, key, guard);
+
+    expect(outcome.code).toBe('item_given');
+    expect(fixture.game.inventory).not.toContain(key);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(true);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toMatchObject({
+      action: 'give',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(fixture.scene.sceneLog.entries.at(-1)?.knownByActorIds).toContain(guard.name);
+    const guardContext = new NpcWorldModelBuilder(fixture.game)
+      .build(fixture.scene)
+      .npcs.find((npc) => npc.id === guard.name);
+    expect(guardContext?.newEvents.at(-1)?.payload).toMatchObject({
+      action: 'give',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(wakeNpc).toHaveBeenCalledWith(guard, 'item_received');
+  });
+
+  it('keeps the item with the giver and notifies the target when GIVE is rejected', () => {
+    const fixture = createGameSemanticFixture();
+    const wakeNpc = vi.fn();
+    fixture.game.wakeNpc = wakeNpc;
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 0, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(player, key, guard);
+
+    expect(outcome.code).toBe('inventory_full');
+    expect(fixture.game.inventory).toContain(key);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(false);
+    expect(fixture.scene.sceneLog.entries.at(-1)?.payload).toMatchObject({
+      action: 'give_failed',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(fixture.scene.sceneLog.entries.at(-1)?.knownByActorIds).toContain(guard.name);
+    const guardContext = new NpcWorldModelBuilder(fixture.game)
+      .build(fixture.scene)
+      .npcs.find((npc) => npc.id === guard.name);
+    expect(guardContext?.newEvents.at(-1)?.payload).toMatchObject({
+      action: 'give_failed',
+      itemId: key.name,
+      targetId: guard.name,
+    });
+    expect(wakeNpc).not.toHaveBeenCalled();
+  });
+
+  it('opens a received item preview for the player with the giver message first', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(guard, key, 'in');
+
+    const outcome = fixture.game.giveEntityForActor(guard, key, player);
+
+    expect(outcome.code).toBe('item_given');
+    expect(fixture.game.getInventoryPreviewEntity()).toBe(key);
+    expect(fixture.game.getInventoryPreviewText()).toBe('Guard gives you Key.\n\nA brass key.');
   });
 });

@@ -353,16 +353,12 @@ export class ActorNavigationService {
     const center = this.getObjectCenter(approachTarget);
     const scene = this.game.sceneManager.currentScene;
     if (!center || !scene) return 'unreachable';
-    if (this.getLocalTeleportExits(scene).length > 0) {
-      return 'route_available';
-    }
 
-    const maxRadius = this.getMaxApproachRadius(actor, approachTarget);
-    const walkingApproach =
-      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 16, 12) ||
-      this.findRoutedApproach(actor, approachTarget, center, maxRadius, 4, 12);
-    if (walkingApproach) return 'route_available';
-    return this.planApproach(actor, target).status;
+    // Context/perception construction must never run the legacy synchronous A*
+    // preview. A non-reachable, positioned target is therefore only a potential
+    // route; ActorPlanExecutor asks requestNpcApproach (the worker path) for the
+    // exact answer when an NPC actually chooses MOVE_TO.
+    return 'route_available';
   }
 
   planApproach(actor: Actor, target: SceneObject): ActorApproachPlan {

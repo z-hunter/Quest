@@ -1885,11 +1885,71 @@ export class InventoryManager {
     return this.getStoredInventoryEntities(owner, relation).includes(entity);
   }
 
+  canAddInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation: ContainerRelation = 'in'
+  ): GameActionOutcome | null {
+    if (owner === entity) {
+      return {
+        status: 'failed',
+        code: 'inventory_owner_is_entity',
+        message: this.getText('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    const component = ComponentSystem.getInventoryComponent(owner, relation);
+    if (!component) {
+      return {
+        status: 'failed',
+        code:
+          this.isPlayerInventoryOwner(owner) && relation === 'in'
+            ? 'player_inventory_missing'
+            : 'inventory_missing',
+        message: this.getText(
+          this.isPlayerInventoryOwner(owner) && relation === 'in'
+            ? 'parser.inventory_missing'
+            : 'parser.put_no_place'
+        ),
+        recoverable: true,
+      };
+    }
+    if (!Array.isArray(component.groups)) component.groups = [];
+    if (!Array.isArray(component.items)) component.items = [];
+    if (typeof component.capacity !== 'number' || !Number.isFinite(component.capacity)) {
+      component.capacity = Number.MAX_SAFE_INTEGER;
+    }
+    component.relation = ComponentSystem.normalizeInventoryRelation(component);
+    const currentItems = this.getStoredInventoryEntities(owner, relation);
+    if (currentItems.includes(entity)) {
+      return { status: 'failed', code: 'inventory_item_already_present', recoverable: true };
+    }
+    if (currentItems.length >= (component.capacity ?? Number.MAX_SAFE_INTEGER)) {
+      return {
+        status: 'failed',
+        code: 'inventory_full',
+        message: this.getText('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    if (!this.itemMatchesStorageGroups(component.groups || [], entity)) {
+      return {
+        status: 'failed',
+        code: 'inventory_group_rejected',
+        message: this.getText('parser.put_no_place'),
+        recoverable: true,
+      };
+    }
+    return null;
+  }
+
   addInventoryEntity(
     owner: Entity,
     entity: Entity,
     relation: ContainerRelation = 'in'
   ): GameActionOutcome {
+    const preflight = this.canAddInventoryEntity(owner, entity, relation);
+    if (preflight) return preflight;
     if (owner === entity) {
       return {
         status: 'failed',
@@ -1928,7 +1988,7 @@ export class InventoryManager {
         recoverable: true,
       };
     }
-    if (currentItems.length >= (component.capacity || Number.MAX_SAFE_INTEGER)) {
+    if (currentItems.length >= (component.capacity ?? Number.MAX_SAFE_INTEGER)) {
       return {
         status: 'failed',
         code: 'inventory_full',

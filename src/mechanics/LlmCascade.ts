@@ -30,6 +30,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   'examineTarget',
   'examineRelationTarget',
   'takeTarget',
+  'giveTarget',
   'putTarget',
   'openTarget',
   'closeTarget',
@@ -1081,6 +1082,12 @@ export class LlmCascade {
           target: this.asNullableString(action.target),
           anchor: this.asNullableString(action.anchor),
           relation: this.asNullableRelation(action.relation),
+        };
+      case 'giveTarget':
+        return {
+          type: 'giveTarget',
+          item: this.asNullableString(action.item),
+          target: this.asNullableString(action.target),
         };
       case 'putTarget':
         return {

@@ -3,6 +3,7 @@ import { createParserFixture } from '../fixtures/parserFactory';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Parser } from '../../src/mechanics/Parser';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
+import { Actor } from '../../src/entities/Actor';
 
 function inventoryNames(fixture: any): string[] {
   return fixture.game.inventory.map((entity: any) => entity.name);
@@ -32,6 +33,29 @@ async function finishAutoApproach(fixture: any): Promise<void> {
 }
 
 describe('Parser + game integration smoke', () => {
+  it('executes the player GIVE command into a protected Actor inventory', async () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const guard = new Actor(fixture.game, 10, 0, 10, 10, 'guard');
+    guard.components = [
+      { type: 'NPC', enabled: true },
+      { type: 'Inventory', relation: 'in', capacity: 1, groups: [], protected: true, items: [] },
+    ];
+    fixture.scene.addEntity(guard);
+    fixture.textAssets.setObject(guard.name, { title: 'Guard', description: 'A guard.' });
+    const key = fixture.addEntity('key', {
+      title: 'Key',
+      description: 'A brass key.',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.game.addInventoryEntity(player, key, 'in');
+
+    const messages = await runSemanticParser(fixture, 'give key to guard');
+
+    expect(messages.at(-1)).toBe('You give the Key to Guard.');
+    expect(fixture.game.inventoryManager.hasInventoryEntity(guard, key, 'in')).toBe(true);
+  });
+
   it('takes revealed contents from a held editor-authored container without auto-approach', async () => {
     const fixture = createParserFixture();
     const player = fixture.addPlayer('Hero', 0, 0);

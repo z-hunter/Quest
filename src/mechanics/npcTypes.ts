@@ -39,6 +39,11 @@ export type NpcPlanStep =
       targetId: string;
     }
   | {
+      type: 'GIVE';
+      itemId: string;
+      targetId: string;
+    }
+  | {
       type: 'PUT';
       itemId: string;
       targetId?: string | null;

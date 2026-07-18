@@ -179,6 +179,10 @@ export class ActorPlanExecutor {
       return this.takeEntity(actor, step.targetId);
     }
 
+    if (step.type === 'GIVE') {
+      return this.giveEntity(actor, step.itemId, step.targetId);
+    }
+
     if (step.type === 'PUT') {
       return this.putEntity(actor, step.itemId, step.targetId, step.relation);
     }
@@ -523,6 +527,42 @@ export class ActorPlanExecutor {
       actionType: 'TAKE',
       worldChanged: outcome.status === 'ok',
       repeatKey: `TAKE:${target.name}`,
+    });
+  }
+
+  private giveEntity(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    const item = scene?.getObjectByName(String(itemId || '').trim());
+    const target = scene?.getObjectByName(String(targetId || '').trim());
+    if (!(item instanceof Entity)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'give_item_not_found',
+        npcId: actor.name,
+        itemId,
+        targetId,
+      });
+    }
+    if (!(target instanceof Actor)) {
+      return this.completeAction(actor.name, {
+        status: 'failed',
+        code: 'give_target_not_found',
+        npcId: actor.name,
+        itemId: item.name,
+        targetId,
+      });
+    }
+    const outcome = this.game.giveEntityForActor(actor, item, target);
+    return this.completeAction(actor.name, {
+      status: outcome.status === 'ok' ? 'ok' : 'failed',
+      code: outcome.code,
+      npcId: actor.name,
+      itemId: item.name,
+      targetId: target.name,
+      message: outcome.message,
+      actionType: 'GIVE',
+      worldChanged: outcome.status === 'ok',
+      repeatKey: `GIVE:${item.name}:${target.name}`,
     });
   }
 

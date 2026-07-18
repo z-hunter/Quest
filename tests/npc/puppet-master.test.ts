@@ -2155,6 +2155,43 @@ describe('NpcPuppetMaster', () => {
     expect(planApproach).not.toHaveBeenCalled();
   });
 
+  it('does not run route planning while building PM context for an inactive Subscene', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const guard = addNpc(fixture, 'guard');
+    guard.x = 0;
+    guard.y = 0;
+    const drawer = fixture.addTriggerbox('DrawerZone', {
+      title: 'Drawer front',
+      components: [{ type: 'Subscene', targetGroupId: '' }],
+    });
+    drawer.poly = [
+      { x: 2000, y: 2000 },
+      { x: 2010, y: 2000 },
+      { x: 2010, y: 2010 },
+      { x: 2000, y: 2010 },
+    ];
+    const remote = fixture.addEntity('remote', {
+      title: 'Remote control',
+      disabled: true,
+      spatial: { parentNodeId: drawer.name, relation: 'in' },
+    });
+    remote.x = 2000;
+    remote.y = 2000;
+    const previewRoute = vi.spyOn(guard, 'previewWalkingRouteTo');
+    const planApproach = vi.spyOn(fixture.game.actorWorld.navigation, 'planApproach');
+
+    const context = new NpcWorldModelBuilder(fixture.game)
+      .build(fixture.scene)
+      .npcs.find((npc) => npc.id === guard.name);
+
+    expect(context?.entities.find((entity) => entity.id === remote.name)).toEqual(
+      expect.objectContaining({ approach: 'route_available', interaction: 'blocked' })
+    );
+    expect(previewRoute).not.toHaveBeenCalled();
+    expect(planApproach).not.toHaveBeenCalled();
+  });
+
   it('removes unsupported found-item claims after empty inspection results', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 0, 0);

@@ -61,6 +61,13 @@ describe('runtime contract schemas', () => {
     expect(() =>
       assertNpcPuppetMasterResponse({
         kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'GIVE', itemId: 'key', targetId: 'hero' }] }],
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      assertNpcPuppetMasterResponse({
+        kind: 'pm_response',
         plans: [{ npcId: 'guard', steps: [{ type: 'WAIT', ms: -1 }] }],
       })
     ).toThrowError(/non-negative/);

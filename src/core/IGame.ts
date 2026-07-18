@@ -66,7 +66,12 @@ export interface IGame {
   closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome;
   closeFocusedView(): GameActionOutcome;
   takeEntity(entity: Entity): GameActionOutcome;
-  takeEntityForActor(actor: Actor | null, entity: Entity): GameActionOutcome;
+  takeEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    options?: { emitAction?: boolean }
+  ): GameActionOutcome;
+  giveEntityForActor(actor: Actor | null, entity: Entity, targetActor: Actor): GameActionOutcome;
   getSurfacePutMessage(
     surface: SceneObject,
     item: Entity,
@@ -126,6 +131,7 @@ export interface IGame {
     subject?: SceneObject | null,
     payload?: Record<string, unknown>
   ): void;
+  wakeNpc?(actor: Actor, reason?: string): void;
   openFileBrowser(
     mode: 'load' | 'save',
     dir: string,
@@ -152,6 +158,8 @@ export type ObservedActorActionCode =
   | 'open'
   | 'close'
   | 'take'
+  | 'give'
+  | 'give_failed'
   | 'put'
   | 'use'
   | 'command'

@@ -199,7 +199,7 @@ describe('Game navigation and spatial API', () => {
     expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('route_available');
   });
 
-  it('does not advertise a route when no walkable interaction point exists near the target', () => {
+  it('keeps fast approach status pathfinder-free for a target with no known route', () => {
     const fixture = createGameSemanticFixture();
     const actor = fixture.addPlayer('Hero', 0, 50);
     actor.colliderWidth = 8;
@@ -219,7 +219,14 @@ describe('Game navigation and spatial API', () => {
     target.x = 1000;
     target.y = 50;
 
-    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe('unreachable');
+    const previewRoute = vi.spyOn(actor, 'previewWalkingRouteTo');
+    const planApproach = vi.spyOn(fixture.game.actorNavigation, 'planApproach');
+
+    expect(fixture.game.actorNavigation.getFastApproachStatus(actor, target)).toBe(
+      'route_available'
+    );
+    expect(previewRoute).not.toHaveBeenCalled();
+    expect(planApproach).not.toHaveBeenCalled();
     expect(fixture.game.actorNavigation.planApproach(actor, target).status).toBe('unreachable');
   });
 

@@ -7,6 +7,7 @@ import { NlpCascade } from './NlpCascade';
 import { matchParserCommandSpec } from './parserCommands';
 import {
   extractPutCommand,
+  extractGiveCommand,
   extractTakeCommand,
   extractRelationTargetForIntent,
   getStage1CommandWords,
@@ -340,6 +341,8 @@ export class Parser {
           return action.target ? action : { ...action, target: focusedTitle };
         case 'takeTarget':
           return action.target ? action : { ...action, target: focusedTitle };
+        case 'giveTarget':
+          return action.item ? action : { ...action, item: focusedTitle };
         case 'putTarget':
           return action.item ? action : { ...action, item: focusedTitle };
         case 'openTarget':
@@ -429,13 +432,15 @@ export class Parser {
           ? { type: 'examineTarget', target: input.trim() }
           : this.pendingState.intent === 'take'
             ? { type: 'takeTarget', target: input.trim() }
-            : this.pendingState.intent === 'put'
-              ? { type: 'putTarget', item: input.trim(), target: null, relation: null }
-              : this.pendingState.intent === 'open'
-                ? { type: 'openTarget', target: input.trim() }
-                : this.pendingState.intent === 'close'
-                  ? { type: 'closeTarget', target: input.trim() }
-                  : { type: 'goToTarget', target: input.trim() };
+            : this.pendingState.intent === 'give'
+              ? { type: 'giveTarget', item: input.trim(), target: null }
+              : this.pendingState.intent === 'put'
+                ? { type: 'putTarget', item: input.trim(), target: null, relation: null }
+                : this.pendingState.intent === 'open'
+                  ? { type: 'openTarget', target: input.trim() }
+                  : this.pendingState.intent === 'close'
+                    ? { type: 'closeTarget', target: input.trim() }
+                    : { type: 'goToTarget', target: input.trim() };
 
     const envelope: ParserCascadeEnvelope = {
       stage: 'pending-resolution',
@@ -479,6 +484,9 @@ export class Parser {
           ? { ...action, anchor: label }
           : { ...action, target: label };
       }
+      if (action.type === 'giveTarget') {
+        return scope === 'target' ? { ...action, target: label } : { ...action, item: label };
+      }
       if (action.type === 'putTarget') {
         return scope === 'target' ? { ...action, target: label } : { ...action, item: label };
       }
@@ -501,6 +509,7 @@ export class Parser {
       action.type === 'lookTarget' ||
       action.type === 'examineTarget' ||
       action.type === 'takeTarget' ||
+      action.type === 'giveTarget' ||
       action.type === 'putTarget'
     ) {
       if (action.type === 'putTarget' && scope === 'target') {
@@ -1197,6 +1206,23 @@ export class Parser {
           },
         };
       }
+      case 'give': {
+        const giveCommand = extractGiveCommand(input, lexicon);
+        return {
+          stage: 'regex-v1',
+          output: {
+            kind: 'plan',
+            actions: [{ type: 'giveTarget', item: giveCommand.item, target: giveCommand.target }],
+          },
+          debug: {
+            rawInput: input,
+            normalizedInput: input.trim().toUpperCase(),
+            verb,
+            noun,
+            anchor: giveCommand.target,
+          },
+        };
+      }
       case 'put': {
         const putCommand = extractPutCommand(input, lexicon);
         const putActions = this.buildPutGroupActions(
@@ -1643,6 +1669,8 @@ export class Parser {
           action.anchor || null,
           action.relation || null
         );
+      case 'giveTarget':
+        return this.resolveGiveTarget(action.item, action.target);
       case 'parserFailure':
         return {
           status: 'failed',
@@ -1815,6 +1843,8 @@ export class Parser {
         return 'examine';
       case 'takeTarget':
         return 'take';
+      case 'giveTarget':
+        return 'give';
       case 'putTarget':
         return 'put';
       case 'openTarget':
@@ -1903,6 +1933,8 @@ export class Parser {
         return 'examineRelation';
       case 'takeTarget':
         return 'take';
+      case 'giveTarget':
+        return 'give';
       case 'parserFailure':
         return 'parserFailure';
       case 'llmClarification':
@@ -2107,6 +2139,15 @@ export class Parser {
     ) {
       add(data.entityId);
       add(data.ownerId);
+      add(data.targetId);
+    }
+
+    if (
+      action.type === 'giveTarget' &&
+      outcome.effects?.includes('item_given') &&
+      typeof data.entityId === 'string'
+    ) {
+      add(data.entityId);
       add(data.targetId);
     }
 
@@ -3641,6 +3682,92 @@ export class Parser {
     if (!entityName) return false;
     return this.game.inventory.some(
       (held: Entity) => String(held?.name || '').trim() === entityName
+    );
+  }
+
+  private resolveGiveTarget(rawItem: string | null, rawTarget: string | null): GameActionOutcome {
+    if (!rawItem || !rawTarget) {
+      return {
+        status: 'needs_clarification',
+        code: 'missing_give_target',
+        message: this.game.text('parser.give_prompt'),
+        recoverable: true,
+      };
+    }
+
+    const sourceCandidates = this.getScopeCandidates(['held', 'putSource']).filter(
+      (candidate): candidate is Entity =>
+        candidate instanceof Entity && !(candidate instanceof Actor)
+    );
+    const source = this.resolveEntityTargetInCandidates(
+      rawItem,
+      sourceCandidates,
+      'parser.give_which_item'
+    );
+    if (source.status === 'escalate') {
+      return { status: 'escalate', code: source.code, recoverable: true };
+    }
+    if (source.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_give_item',
+        message: source.message,
+        data: {
+          item: rawItem,
+          options: source.options,
+          clarificationOptions: this.withClarificationScope(source.clarificationOptions, 'source'),
+        },
+        recoverable: true,
+      };
+    }
+    if (source.status === 'not_found') {
+      return {
+        status: 'failed',
+        code: 'give_item_not_found',
+        message: this.game.text('parser.look_not_found', { target: rawItem }),
+        data: { item: rawItem },
+        recoverable: true,
+      };
+    }
+
+    const targetCandidates = this.getScopeCandidates(['visible', 'reachable']).filter(
+      (candidate): candidate is Actor => candidate instanceof Actor
+    );
+    const target = this.resolveEntityTargetInCandidates(
+      rawTarget,
+      targetCandidates,
+      'parser.give_which_target'
+    );
+    if (target.status === 'escalate') {
+      return { status: 'escalate', code: target.code, recoverable: true };
+    }
+    if (target.status === 'ambiguous') {
+      return {
+        status: 'needs_clarification',
+        code: 'ambiguous_give_target',
+        message: target.message,
+        data: {
+          target: rawTarget,
+          options: target.options,
+          clarificationOptions: this.withClarificationScope(target.clarificationOptions, 'target'),
+        },
+        recoverable: true,
+      };
+    }
+    if (target.status === 'not_found') {
+      return {
+        status: 'failed',
+        code: 'give_target_not_found',
+        message: this.game.text('parser.give_target_not_found'),
+        data: { target: rawTarget },
+        recoverable: true,
+      };
+    }
+
+    return this.game.giveEntityForActor(
+      this.game.sceneManager.currentScene?.player || null,
+      source.entity,
+      target.entity
     );
   }
 

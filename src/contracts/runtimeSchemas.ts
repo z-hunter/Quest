@@ -109,6 +109,7 @@ const PARSER_ACTION_TYPES = new Set([
   'examineTarget',
   'examineRelationTarget',
   'takeTarget',
+  'giveTarget',
   'parserFailure',
   'putTarget',
   'llmClarification',
@@ -168,6 +169,12 @@ export function assertParserToolAction(
         issues.push({ path: `${path}.anchor`, message: 'must be a string or null' });
       if (value.relation !== undefined && !isStringOrNull(value.relation))
         issues.push({ path: `${path}.relation`, message: 'must be a string or null' });
+    }
+    if (type === 'giveTarget') {
+      if (!isStringOrNull(value.item))
+        issues.push({ path: `${path}.item`, message: 'must be a string or null' });
+      if (!isStringOrNull(value.target))
+        issues.push({ path: `${path}.target`, message: 'must be a string or null' });
     }
     if (type === 'parserFailure') {
       if (!isString(value.code)) issues.push({ path: `${path}.code`, message: 'must be a string' });
@@ -349,6 +356,7 @@ const NPC_STEP_TYPES = new Set([
   'OPEN',
   'CLOSE',
   'TAKE',
+  'GIVE',
   'PUT',
   'COMMAND',
   'USE',
@@ -393,6 +401,12 @@ export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is 
       }
     }
     if (value.type === 'OPEN' || value.type === 'CLOSE' || value.type === 'TAKE') {
+      if (!isString(value.targetId))
+        issues.push({ path: `${path}.targetId`, message: 'must be a string' });
+    }
+    if (value.type === 'GIVE') {
+      if (!isString(value.itemId))
+        issues.push({ path: `${path}.itemId`, message: 'must be a string' });
       if (!isString(value.targetId))
         issues.push({ path: `${path}.targetId`, message: 'must be a string' });
     }

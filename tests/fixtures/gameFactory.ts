@@ -453,6 +453,7 @@ export function createTestGame(): TestGameHarness {
     playSound(name: string) {
       sounds.push(name);
     },
+    wakeNpc(_actor: Actor, _reason?: string) {},
     openFileBrowser() {},
     setCommandInput() {},
     getCommandInput() {

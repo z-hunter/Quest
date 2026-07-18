@@ -398,7 +398,7 @@ export class NpcWorldModelBuilder {
     const payload = event.payload || {};
     const action = typeof payload.action === 'string' ? payload.action : '';
     const itemId = typeof payload.itemId === 'string' ? payload.itemId.trim() : '';
-    if (!itemId || (action !== 'take' && action !== 'put')) return;
+    if (!itemId || (action !== 'take' && action !== 'put' && action !== 'give')) return;
 
     const item = scene.getObjectByName(itemId);
     const existing = known[itemId];
@@ -420,6 +420,27 @@ export class NpcWorldModelBuilder {
           relation: 'in',
           targetId: event.actorId,
           ...(actorTitle ? { targetTitle: actorTitle } : {}),
+        },
+      };
+      return;
+    }
+
+    if (action === 'give') {
+      const targetId = typeof payload.targetId === 'string' ? payload.targetId.trim() : '';
+      if (!targetId) return;
+      const target = scene.getObjectByName(targetId);
+      const targetTitle = (target ? this.getObjectTitle(target) : '') || targetId;
+      known[itemId] = {
+        id: itemId,
+        title,
+        kind: 'item',
+        lastSeenSceneId: scene.id,
+        lastSeenAt,
+        lastSeenLocation: {
+          sceneId: scene.id,
+          relation: 'in',
+          targetId,
+          ...(targetTitle ? { targetTitle } : {}),
         },
       };
       return;

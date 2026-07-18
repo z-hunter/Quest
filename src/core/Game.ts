@@ -723,6 +723,16 @@ export class Game implements IGame {
     }
   }
 
+  /**
+   * Schedules a currently enabled NPC to react to a semantic event that is
+   * intentionally not a global PM wake trigger (for example, receiving an item).
+   */
+  wakeNpc(actor: Actor, reason?: string): void {
+    const scene = this.sceneManager.currentScene;
+    if (!scene || !this.npcWorldModelBuilder.getNpcActors(scene).includes(actor)) return;
+    this.npcPuppetMaster.scheduleNpc(scene, actor.name, { type: 'manual', reason });
+  }
+
   private formatObservedActorAction(
     actorTitle: string,
     action: import('./IGame').ObservedActorActionCode,
@@ -741,6 +751,7 @@ export class Game implements IGame {
       ? this.textAssets.getResolvedObjectField(subject as any, 'title')?.trim() || subject.name
       : '';
     const relation = typeof payload.relation === 'string' ? payload.relation.trim() : '';
+    const reason = typeof payload.reason === 'string' ? payload.reason.trim() : '';
     const item = titleFor(payload.itemId);
     const target = titleFor(payload.targetId, subjectTitle);
     const command =
@@ -756,17 +767,20 @@ export class Game implements IGame {
       item: item || subjectTitle || 'something',
       target: target || subjectTitle || 'something',
       relation,
+      reason: reason || 'the transfer cannot be completed',
     };
     const key =
       (action === 'look' || action === 'examine') && relation
         ? 'engine.observed_look_relation'
-        : action === 'put' && relation && target
-          ? 'engine.observed_put_relation'
-          : action === 'put' && target
-            ? 'engine.observed_put_target'
-            : action === 'put'
-              ? 'engine.observed_drop'
-              : `engine.observed_${action}`;
+        : action === 'give_failed'
+          ? 'engine.observed_give_failed'
+          : action === 'put' && relation && target
+            ? 'engine.observed_put_relation'
+            : action === 'put' && target
+              ? 'engine.observed_put_target'
+              : action === 'put'
+                ? 'engine.observed_drop'
+                : `engine.observed_${action}`;
     const fallback = `[ ${actorTitle} acts. ]`;
     return this.textAssets.getServiceText(key, params, fallback);
   }
@@ -991,9 +1005,18 @@ export class Game implements IGame {
 
   takeEntityForActor(
     actor: import('../entities/Actor').Actor | null,
-    entity: Entity
+    entity: Entity,
+    options?: { emitAction?: boolean }
   ): GameActionOutcome {
-    return this.semantic.takeEntityForActor(actor, entity);
+    return this.semantic.takeEntityForActor(actor, entity, options);
+  }
+
+  giveEntityForActor(
+    actor: import('../entities/Actor').Actor | null,
+    entity: Entity,
+    targetActor: import('../entities/Actor').Actor
+  ): GameActionOutcome {
+    return this.semantic.giveEntityForActor(actor, entity, targetActor);
   }
 
   canTakeEntity(entity: Entity): GameActionOutcome | null {

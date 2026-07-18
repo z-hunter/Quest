@@ -53,6 +53,12 @@
     "i want to take the key",
     "please pick up the card"
   ],
+  "give": [
+    "give key to linda",
+    "give the card to guard",
+    "hand note to linda",
+    "offer the key to guard"
+  ],
   "put": [
     "put key",
     "put pencil",

@@ -36,7 +36,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
@@ -70,7 +70,7 @@ const STRATEGY_SYSTEM_PROMPT = [
   'You are the internal strategy analyst for one NPC in a retro adventure game.',
   'Return exactly one JSON object and no extra text.',
   'Return {"kind":"npc_strategy_response","npcId":"...","memory":"optional compact memory","objectives":["optional updated objectives"],"waitMs":30000}.',
-  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, or any physical action.',
+  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, or any physical action.',
   'Analyze the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, commands, objectives, and memory.',
   'Write compact memory only with confirmed facts and useful conclusions. Remove noisy or speculative details.',
   'Revise objectives if the current goal is impossible, blocked, already satisfied, or needs a different strategy.',
@@ -712,10 +712,14 @@ export class NpcPuppetMaster {
       );
       const missing: Array<{ stepType: NpcPlanStep['type']; itemId: string }> = [];
       const entitiesById = new Map((npc.entities || []).map((entity) => [entity.id, entity]));
+      const visibleActorIds = new Set((npc.actors || []).map((actor) => actor.id));
       const plannedAvailableIds = new Set(availableIds);
       for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex++) {
         const step = plan.steps[stepIndex];
-        if ((step.type === 'PUT' || step.type === 'USE') && !availableIds.has(step.itemId)) {
+        if (
+          (step.type === 'PUT' || step.type === 'USE' || step.type === 'GIVE') &&
+          !availableIds.has(step.itemId)
+        ) {
           if (!plannedAvailableIds.has(step.itemId)) {
             missing.push({ stepType: step.type, itemId: step.itemId });
           }
@@ -732,6 +736,21 @@ export class NpcPuppetMaster {
             missing.push({ stepType: step.type, itemId: step.targetId });
           } else {
             plannedAvailableIds.add(step.targetId);
+          }
+        }
+        if (step.type === 'GIVE') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = plan.steps
+            .slice(0, stepIndex)
+            .some(
+              (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+            );
+          const canBecomeReachable = target?.approach === 'route_available' && hasPriorMove;
+          if (
+            !visibleActorIds.has(step.targetId) &&
+            (!target || (!plannedAvailableIds.has(step.targetId) && !canBecomeReachable))
+          ) {
+            missing.push({ stepType: step.type, itemId: step.targetId });
           }
         }
         if (step.type === 'COMMAND') {
@@ -824,6 +843,25 @@ export class NpcPuppetMaster {
             steps.push({ type: 'MOVE_TO', targetId: step.targetId });
             changed = true;
             this.traceWake('take_auto_approach_inserted', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              targetId: step.targetId,
+            });
+          }
+        }
+        if (step.type === 'GIVE') {
+          const target = entitiesById.get(step.targetId);
+          const hasPriorMove = steps.some(
+            (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
+          );
+          if (
+            target?.interaction !== 'reachable' &&
+            target?.approach === 'route_available' &&
+            !hasPriorMove
+          ) {
+            steps.push({ type: 'MOVE_TO', targetId: step.targetId });
+            changed = true;
+            this.traceWake('give_auto_approach_inserted', {
               sceneId: worldModel.scene.id,
               npcId: plan.npcId,
               targetId: step.targetId,
@@ -1337,6 +1375,7 @@ export class NpcPuppetMaster {
       step.type === 'OPEN' ||
       step.type === 'CLOSE' ||
       step.type === 'TAKE' ||
+      step.type === 'GIVE' ||
       step.type === 'PUT' ||
       step.type === 'COMMAND' ||
       step.type === 'USE'
@@ -1549,6 +1588,7 @@ export class NpcPuppetMaster {
       step.type === 'OPEN' ||
       step.type === 'CLOSE' ||
       step.type === 'TAKE' ||
+      step.type === 'GIVE' ||
       step.type === 'PUT' ||
       step.type === 'COMMAND' ||
       step.type === 'USE' ||
@@ -1912,7 +1952,7 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
           '5. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
@@ -2053,9 +2093,10 @@ export class NpcPuppetMaster {
       text: event.text,
       payload: this.compactPromptRecord({
         action: payload.action,
-        subjectId: payload.subjectId,
-        targetId: payload.targetId,
         itemId: payload.itemId,
+        targetId: payload.targetId,
+        reason: payload.reason,
+        subjectId: payload.subjectId,
         commandId: payload.commandId,
         relation: payload.relation,
         state: payload.state,
@@ -3159,6 +3200,11 @@ export class NpcPuppetMaster {
     if (record.type === 'TAKE') {
       const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
       return targetId ? { type: 'TAKE', targetId } : null;
+    }
+    if (record.type === 'GIVE') {
+      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
+      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
+      return itemId && targetId ? { type: 'GIVE', itemId, targetId } : null;
     }
     if (record.type === 'PUT') {
       const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';

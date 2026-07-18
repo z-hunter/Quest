@@ -1377,7 +1377,11 @@ export class GameSemanticAPI {
     return this.takeEntityForActor(actor, entity);
   }
 
-  takeEntityForActor(actor: Actor | null, entity: Entity): GameActionOutcome {
+  takeEntityForActor(
+    actor: Actor | null,
+    entity: Entity,
+    options: { emitAction?: boolean } = {}
+  ): GameActionOutcome {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) {
       return {
@@ -1556,10 +1560,12 @@ export class GameSemanticAPI {
           recoverable: true,
         };
       }
-      this.game.emitActorAction?.(activeActor, 'take', null, {
-        itemId: entity.name,
-        previousLocation: takeSourceTitle || undefined,
-      });
+      if (options.emitAction !== false) {
+        this.game.emitActorAction?.(activeActor, 'take', null, {
+          itemId: entity.name,
+          previousLocation: takeSourceTitle || undefined,
+        });
+      }
       return {
         status: 'ok',
         code: 'item_taken',
@@ -1576,6 +1582,119 @@ export class GameSemanticAPI {
       message: authoredTakeFailure || this.game.text('parser.take_cannot'),
       data: { entityId: entity.name },
       recoverable: authoredTakeFailure ? false : true,
+    };
+  }
+
+  giveEntityForActor(actor: Actor | null, entity: Entity, targetActor: Actor): GameActionOutcome {
+    const scene = this.game.sceneManager.currentScene;
+    const activeActor = actor || scene?.player || null;
+    if (!scene) {
+      return {
+        status: 'failed',
+        code: 'no_current_scene',
+        message: this.game.text('parser.parse_unknown'),
+        recoverable: false,
+      };
+    }
+    if (!(activeActor instanceof Entity) || activeActor.disabled) {
+      return {
+        status: 'failed',
+        code: 'actor_not_found',
+        message: this.game.text('parser.give_target_not_found'),
+        recoverable: false,
+      };
+    }
+    if (
+      !(targetActor instanceof Entity) ||
+      targetActor.disabled ||
+      scene.getObjectByName(targetActor.name) !== targetActor
+    ) {
+      return {
+        status: 'failed',
+        code: 'give_target_not_found',
+        message: this.game.text('parser.give_target_not_found'),
+        data: { targetId: targetActor?.name },
+        recoverable: true,
+      };
+    }
+    if (targetActor === activeActor) {
+      return {
+        status: 'failed',
+        code: 'give_target_is_source',
+        message: this.game.text('parser.give_self'),
+        data: { entityId: entity.name, targetId: targetActor.name },
+        recoverable: true,
+      };
+    }
+
+    const fail = (outcome: GameActionOutcome): GameActionOutcome => {
+      this.game.emitActorAction?.(activeActor, 'give_failed', targetActor, {
+        itemId: entity.name,
+        targetId: targetActor.name,
+        reason: outcome.message || outcome.code,
+      });
+      return outcome;
+    };
+
+    const targetAccessFailure = this.getPutAccessibilityFailure(
+      targetActor,
+      targetActor,
+      activeActor
+    );
+    if (targetAccessFailure) return fail(targetAccessFailure);
+
+    const destinationPreflight = this.game.inventoryManager.canAddInventoryEntity(
+      targetActor,
+      entity,
+      'in'
+    );
+    if (destinationPreflight) {
+      return fail(
+        this.withPutFailureContext(destinationPreflight, entity, targetActor, 'in', targetActor)
+      );
+    }
+
+    const sourceHeld = this.game.inventoryManager.hasInventoryEntity(activeActor, entity, 'in');
+    if (!sourceHeld) {
+      const takeOutcome = this.takeEntityForActor(activeActor, entity, { emitAction: false });
+      if (takeOutcome.status !== 'ok') return fail(takeOutcome);
+    }
+
+    const moveOutcome = this.game.inventoryManager.addInventoryEntity(targetActor, entity, 'in');
+    if (moveOutcome.status !== 'ok') {
+      return fail(this.withPutFailureContext(moveOutcome, entity, targetActor, 'in', targetActor));
+    }
+
+    const itemTitle = this.getPlayerFacingObjectTitle(entity) || entity.name;
+    const targetTitle = this.getPlayerFacingObjectTitle(targetActor) || targetActor.name;
+    const actorTitle = this.getPlayerFacingObjectTitle(activeActor) || activeActor.name;
+    this.game.emitActorAction?.(activeActor, 'give', targetActor, {
+      itemId: entity.name,
+      targetId: targetActor.name,
+    });
+    this.game.wakeNpc?.(targetActor, 'item_received');
+
+    if (targetActor === scene.player) {
+      const description = this.game.textAssets
+        .getResolvedObjectField(entity as any, 'description')
+        ?.trim();
+      this.game.openInventoryPreview(
+        entity,
+        [
+          this.game.text('parser.give_received_intro', { actor: actorTitle, item: itemTitle }),
+          description,
+        ]
+          .filter((text): text is string => !!text?.trim())
+          .join('\n\n')
+      );
+    }
+
+    return {
+      status: 'ok',
+      code: 'item_given',
+      message: this.game.text('parser.give_success', { item: itemTitle, target: targetTitle }),
+      data: { entityId: entity.name, ownerId: targetActor.name, targetId: targetActor.name },
+      effects: ['removed_from_inventory', 'moved_to_inventory', 'item_given'],
     };
   }
 
