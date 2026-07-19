@@ -493,7 +493,18 @@
           "type": "Surface",
           "capacity": 2,
           "groups": [],
-          "items": [],
+          "items": [
+            {
+              "id": "test",
+              "x": 4,
+              "y": 102
+            },
+            {
+              "id": "tv_rc",
+              "x": -12,
+              "y": 102
+            }
+          ],
           "relation": "on"
         }
       ],
@@ -1493,28 +1504,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 371.6527400450954,
-      "y": 228.88862125725504,
+      "x": 337.8701198762001,
+      "y": 203.56563538943524,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 371.6527400450954,
-          "y": 228.88862125725504,
+          "x": 337.8701198762001,
+          "y": 203.56563538943524,
           "p": 1.0284991047125034
         },
         {
-          "x": 461.9534464530457,
-          "y": 227.73220307070278,
+          "x": 425.0380049135614,
+          "y": 202.45036790050074,
           "p": 1.0277014172129904
         },
         {
-          "x": 907.7018535379843,
-          "y": 258.91641354364845,
+          "x": 864.1745075406452,
+          "y": 232.52900567162254,
           "p": 1.0485129785677496
         },
         {
-          "x": 814.8062613016864,
-          "y": 256.4991831943688,
+          "x": 773.6299721451452,
+          "y": 230.1974936502939,
           "p": 1.0468963151083723
         }
       ],
@@ -2223,21 +2234,21 @@
       ],
       "layer": 0,
       "visible": true,
-      "hidden": "lookable",
+      "hidden": false,
       "spatial": {
-        "parentNodeId": "sofa_pillow2",
-        "relation": "under"
+        "parentNodeId": "desk_surface",
+        "relation": "on"
       },
       "parallax": 1,
-      "x": 542,
-      "y": 312,
-      "width": 25.999999999999996,
-      "height": 38.35,
+      "x": -12,
+      "y": 102,
+      "width": 23.659999999999997,
+      "height": 34.8985,
       "baseWidth": 199.99999999999997,
       "baseHeight": 295,
       "spriteName": "tv_rc",
       "color": "#AAAAAA",
-      "scale": 0.13,
+      "scale": 0.1183,
       "refScale": 0.13,
       "modelScale": 0.13,
       "ignoreScaling": false,
@@ -2264,9 +2275,17 @@
         {
           "type": "NPC",
           "enabled": true,
-          "memory": "",
-          "objectives": ["TV is ON"],
-          "objectivesInitializedFromTA": true
+          "memory": ["Rick, who works on electronics, lives on this floor."],
+          "objectives": [
+            {
+              "id": "npc-objective-mrsebgt7-2",
+              "text": "TV is ON",
+              "subtasks": []
+            }
+          ],
+          "objectivesInitializedFromTA": true,
+          "memoryInitializedFromTA": true,
+          "memoryTARevision": "[]"
         },
         {
           "type": "Inventory",
@@ -2410,15 +2429,15 @@
         "relation": "in"
       },
       "parallax": 1,
-      "x": 542,
-      "y": 312,
-      "width": 16,
-      "height": 14.8,
+      "x": -12,
+      "y": 102,
+      "width": 14.560000000000002,
+      "height": 13.468000000000002,
       "baseWidth": 80,
       "baseHeight": 74,
       "spriteName": "aaa",
       "color": "#AAAAAA",
-      "scale": 0.2,
+      "scale": 0.18200000000000002,
       "refScale": 0.2,
       "modelScale": 0.2,
       "ignoreScaling": false,
@@ -2454,7 +2473,7 @@
           "capacity": 10,
           "groups": [],
           "protected": true,
-          "items": ["test"],
+          "items": [],
           "relation": "in"
         },
         {
@@ -2469,15 +2488,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 422.6511123637017,
-      "y": 248.08606500384053,
-      "width": 121.24102847519698,
-      "height": 290.8146291128036,
+      "x": 376.9626819170471,
+      "y": 222.1172763659468,
+      "width": 117.41787607635928,
+      "height": 280.8508657502107,
       "baseWidth": 148,
-      "baseHeight": 355,
-      "spriteName": "miles2_ds-idle-left.json",
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.8191961383459255,
+      "scale": 0.7933640275429681,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -2488,7 +2507,7 @@
       "isPlayer": true,
       "speed": 0.24,
       "perceptionRadius": 600,
-      "direction": "right",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -2522,23 +2541,23 @@
           "type": "Item"
         }
       ],
-      "layer": 4,
-      "visible": false,
+      "layer": 0,
+      "visible": true,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Miles",
-        "relation": "in"
+        "parentNodeId": "desk_surface",
+        "relation": "on"
       },
       "parallax": 1,
-      "x": 422.6511123637017,
-      "y": 248.08606500384053,
-      "width": 15.369573491476862,
-      "height": 21.840972856309225,
+      "x": 4,
+      "y": 102,
+      "width": 14.341500682128244,
+      "height": 20.380027285129607,
       "baseWidth": 19.69986357435198,
       "baseHeight": 27.994542974079128,
       "spriteName": null,
       "color": "#AAAAAA",
-      "scale": 0.7801867984246911,
+      "scale": 0.7280000000000001,
       "refScale": 0.8,
       "modelScale": 0.8,
       "ignoreScaling": false,

@@ -3673,3 +3673,65 @@ px vitest run — 511 passed, 4 failed (pre-existing в puppet-master.test.ts, �
 
 - `Sessions.md` itself now has an additional wrap-up entry, but no new code changes were made during this final handoff step.
 - NotebookLM and memory sync are dependent on the local CLI state, so a stale auth session would be the main thing to recheck if a future wrap-up stalls.
+
+## Session Entry - 2026-07-18 19:25 Europe/Warsaw
+
+### Session Goals
+
+- Stabilize the Scanline Engine NPC Puppet Master integration after manual Corridor / Mile's Home traces.
+- Fix cross-scene continuation, inventory perception, item discovery, navigation, save/load compatibility, and reciprocal item exchange behavior.
+- Commit the complete worktree, including authored content changes and the user's `#LOAD` fix.
+
+### What Was Implemented
+
+- Puppet Master now retains a compact cross-scene per-NPC action history with scene, outcome, and record-age context.
+- Dynamic PM context exposes current item titles and richer nested inventory/container information so `ITEM_FOUND` and battery/item reasoning can use actual names and state.
+- Objective/planning context was strengthened for prerequisite subgoals while keeping plans in `CURRENT OBJECTIVES` rather than adding a parallel commitment system.
+- `WAIT` continuations now resolve in the NPC's actual scene even after the player changes scenes; stale-generation protection remains active for real halts and `#LOAD`.
+- Cross-scene exit continuations preserve the completed plan and memory after actor transfer.
+- `MOVE_TO`, exit auto-approach, navigation diagnostics, route/no-progress handling, and related PM trace output were improved.
+- Runtime-confirmed item transfer remains authoritative. Premature model claims about `GIVE` are removed, and ordinary recipient plans wait for `item_given`.
+- Reciprocal same-response `GIVE` cycles are now handled with a generic strongly-connected-component dependency check: one deterministic sender starts each cycle, then runtime confirmation wakes the next recipient.
+- The save system now rejects incompatible authored-scene saves with a clear `#LOAD` diagnostic while preserving the authored-scene compatibility fix.
+- Corridor/Rick authored content and related documentation were updated.
+
+### Important Architecture and Runtime Decisions
+
+- NPC continuation ownership follows the NPC's scene, not the player's currently active scene.
+- Dynamic item identity is supplied by the runtime projection; prompts do not contain scenario-specific item-name hacks.
+- Runtime transfer events, not model memory or prose, are the authority for inventory ownership.
+- A reciprocal transfer is a dependency cycle, not a reason to discard every plan. The cycle breaker is generic and response-order deterministic.
+- `CURRENT OBJECTIVES` remains the sole planning/commitment surface; no separate tasks or commitments store was introduced.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- Parser and semantic contracts were updated for executable NPC plan steps, item discovery, inventory-aware actions, and save-state compatibility checks.
+- `NpcPuppetMaster`, `ActorPlanExecutor`, `ActorCommandExecutor`, `ActorWorldQuery`, `GameSemanticAPI`, `SceneManager`, and `ComponentSystem` were updated across planning, execution, perception, transfer, and persistence paths.
+- `navigationDebug.ts` was added for focused MOVE_TO/navigation diagnostics.
+- Scene and text assets for Corridor and Rick were updated alongside PM system documentation and the GDD / engineering notes.
+
+### Tests and Validation
+
+- Focused Puppet Master suite: 101 tests passed.
+- TypeScript validation: `npm run typecheck` passed.
+- Commit hooks ran Prettier and ESLint successfully with zero warnings.
+- `codex-doctor -Fast` passed: repository, NotebookLM CLI, Kairo, agent memory, and local RAG readiness all confirmed.
+- Manual gameplay validation remains recommended for the Corridor reciprocal exchange and `#LOAD` authored-scene flow.
+
+### Commits Created
+
+- `a582a19` - `feat: improve Puppet Master and fix runtime integration`
+
+The commit includes all current worktree changes, including user-authored Corridor/Rick content and the user's save compatibility fix.
+
+### Remaining Work / Next Recommended Steps
+
+- Run the manual Corridor exchange scenario with `#PEEKPM-ON` and `#PEEKNAV-ON`; verify the cycle-break trace, real `item_given`, recipient wake, and final battery/cassette ownership.
+- Exercise `#SAVE` / `#LOAD` against both matching and deliberately changed authored scenes.
+- Treat any new `No plans generated` trace involving transfers as a dependency/confirmation issue first, and inspect `recipient_plan_retained_to_break_give_cycle` and `recipient_plan_deferred_pending_give` together.
+
+### Risks, Caveats, and Open Questions
+
+- The first sender in a reciprocal transfer cycle is selected by provider response order; this is deterministic and generic, but the resulting conversational order remains model-dependent.
+- Manual testing was not performed in this session after the final commit.
+- NotebookLM source synchronization is performed by the wrap-up scripts below and should be verified through the final source listing.
