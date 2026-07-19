@@ -5,6 +5,13 @@ import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { traceNavigation } from '../systems/navigation/navigationDebug';
 import type { NpcPlan, NpcPlanExecutionOutcome, NpcPlanStep } from './npcTypes';
+import {
+  findNpcObjective,
+  materializeNpcObjectives,
+  normalizeNpcMemory,
+  normalizeNpcObjectives,
+  removeNpcObjective,
+} from './npcState';
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
 export type NpcMoveCompletionScheduler = (npcId: string, result: ActorMoveResult) => void;
@@ -88,7 +95,7 @@ export class ActorPlanExecutor {
     }
 
     if (completedSynchronously && typeof plan.memory === 'string') {
-      this.setNpcMemory(actor, plan.memory);
+      this.setLegacyNpcMemory(actor, plan.memory);
       outcomes.push({
         status: 'ok',
         code: 'npc_memory_updated',
@@ -114,13 +121,56 @@ export class ActorPlanExecutor {
     }
 
     if (step.type === 'MEMORY_SET') {
-      this.setNpcMemory(actor, step.memory);
+      this.setLegacyNpcMemory(actor, step.memory);
       return { status: 'ok', code: 'npc_memory_updated', npcId: actor.name };
     }
 
+    if (step.type === 'MEMORY_ADD') {
+      const memory = this.getNpcMemory(actor);
+      if (!memory.includes(step.memory)) memory.push(step.memory);
+      this.setNpcMemory(actor, memory);
+      return { status: 'ok', code: 'npc_memory_added', npcId: actor.name };
+    }
+
+    if (step.type === 'MEMORY_REMOVE') {
+      const next = this.getNpcMemory(actor).filter((memory) => memory !== step.memory);
+      this.setNpcMemory(actor, next);
+      return { status: 'ok', code: 'npc_memory_removed', npcId: actor.name };
+    }
+
     if (step.type === 'OBJECTIVES_SET') {
-      this.setNpcObjectives(actor, step.objectives);
+      this.setLegacyNpcObjectives(actor, step.objectives);
       return { status: 'ok', code: 'npc_objectives_updated', npcId: actor.name };
+    }
+
+    if (step.type === 'OBJECTIVE_ADD') {
+      const objectives = this.getNpcObjectives(actor);
+      const additions = materializeNpcObjectives([step.objective]);
+      const parent = step.parentId ? findNpcObjective(objectives, step.parentId) : null;
+      if (step.parentId && !parent) {
+        return { status: 'failed', code: 'objective_parent_not_found', npcId: actor.name };
+      }
+      (parent ? parent.subtasks : objectives).push(...additions);
+      this.setNpcObjectives(actor, objectives);
+      return { status: 'ok', code: 'npc_objective_added', npcId: actor.name };
+    }
+
+    if (step.type === 'OBJECTIVE_UPDATE') {
+      const objectives = this.getNpcObjectives(actor);
+      const objective = findNpcObjective(objectives, step.objectiveId);
+      if (!objective) return { status: 'failed', code: 'objective_not_found', npcId: actor.name };
+      objective.text = step.text;
+      this.setNpcObjectives(actor, objectives);
+      return { status: 'ok', code: 'npc_objective_updated', npcId: actor.name };
+    }
+
+    if (step.type === 'OBJECTIVE_REMOVE') {
+      const objectives = this.getNpcObjectives(actor);
+      if (!removeNpcObjective(objectives, step.objectiveId)) {
+        return { status: 'failed', code: 'objective_not_found', npcId: actor.name };
+      }
+      this.setNpcObjectives(actor, objectives);
+      return { status: 'ok', code: 'npc_objective_removed', npcId: actor.name };
     }
 
     if (step.type === 'WAIT') {
@@ -201,16 +251,75 @@ export class ActorPlanExecutor {
     };
   }
 
-  private setNpcMemory(actor: Actor, memory: string): void {
+  private getNpcMemory(actor: Actor): string[] {
     const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-      | { type: 'NPC'; memory?: string }
+      | { type: 'NPC'; memory?: unknown }
+      | undefined;
+    return normalizeNpcMemory(component?.memory);
+  }
+
+  private setNpcMemory(actor: Actor, memory: string[]): void {
+    const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | {
+          type: 'NPC';
+          memory?: string[];
+          memoryInitializedFromTA?: boolean;
+          memoryTARevision?: string;
+        }
       | undefined;
     if (component) {
-      component.memory = String(memory || '').trim();
+      component.memory = normalizeNpcMemory(memory);
+      component.memoryInitializedFromTA = true;
+      const textAssets = this.game.textAssets as any;
+      component.memoryTARevision =
+        typeof textAssets.getResolvedNpcMemoryRevision === 'function'
+          ? textAssets.getResolvedNpcMemoryRevision(actor)
+          : JSON.stringify([]);
     }
   }
 
-  private setNpcObjectives(actor: Actor, objectives: string[]): void {
+  /** Compatibility path for plans persisted before structured NPC cognition. */
+  private setLegacyNpcMemory(actor: Actor, memory: string): void {
+    const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | { type: 'NPC'; memory?: string }
+      | undefined;
+    if (component) component.memory = String(memory || '').trim();
+  }
+
+  private getNpcObjectives(actor: Actor) {
+    const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | { type: 'NPC'; objectives?: unknown }
+      | undefined;
+    return normalizeNpcObjectives(component?.objectives);
+  }
+
+  private setNpcObjectives(
+    actor: Actor,
+    objectives: ReturnType<typeof normalizeNpcObjectives>
+  ): void {
+    const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | {
+          type: 'NPC';
+          objectives?: ReturnType<typeof normalizeNpcObjectives>;
+          objectivesInitializedFromTA?: boolean;
+          objectivesTARevision?: string;
+        }
+      | undefined;
+    if (component) {
+      component.objectives = objectives;
+      component.objectivesInitializedFromTA = true;
+      const textAssets = this.game.textAssets as any;
+      component.objectivesTARevision =
+        typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+          ? textAssets.getResolvedNpcObjectivesRevision(actor)
+          : typeof textAssets.getResolvedObjectListRevision === 'function'
+            ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+            : JSON.stringify([]);
+    }
+  }
+
+  /** Compatibility path for legacy OBJECTIVES_SET continuation steps. */
+  private setLegacyNpcObjectives(actor: Actor, objectives: string[]): void {
     const component = actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
       | {
           type: 'NPC';
@@ -219,16 +328,16 @@ export class ActorPlanExecutor {
           objectivesTARevision?: string;
         }
       | undefined;
-    if (component) {
-      component.objectives = objectives
-        .map((objective) => String(objective || '').trim())
-        .filter(Boolean);
-      component.objectivesInitializedFromTA = true;
-      component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
-        actor,
-        'objectives'
-      );
-    }
+    if (!component) return;
+    component.objectives = objectives
+      .map((objective) => String(objective || '').trim())
+      .filter(Boolean);
+    component.objectivesInitializedFromTA = true;
+    const textAssets = this.game.textAssets as any;
+    component.objectivesTARevision =
+      typeof textAssets.getResolvedObjectListRevision === 'function'
+        ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+        : JSON.stringify([]);
   }
 
   private moveActor(

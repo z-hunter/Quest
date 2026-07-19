@@ -446,8 +446,12 @@ describe('NpcPuppetMaster', () => {
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
-    expect(world.npcs?.[0]?.objectives).toEqual(['Check IDs']);
-    expect(component.objectives).toEqual(['Check IDs']);
+    expect(world.npcs?.[0]?.objectives).toEqual([
+      expect.objectContaining({ text: 'Check IDs', subtasks: [] }),
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Check IDs', subtasks: [] }),
+    ]);
     expect(component.objectivesInitializedFromTA).toBe(true);
     expect(component.objectivesTARevision).toBe(JSON.stringify(['Check IDs']));
   });
@@ -460,11 +464,15 @@ describe('NpcPuppetMaster', () => {
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
-    expect(world.npcs?.[0]?.objectives).toEqual(['Keep Miles away from the server room']);
-    expect(component.objectives).toEqual(['Keep Miles away from the server room']);
+    expect(world.npcs?.[0]?.objectives).toEqual([
+      expect.objectContaining({ text: 'Keep Miles away from the server room', subtasks: [] }),
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Keep Miles away from the server room', subtasks: [] }),
+    ]);
   });
 
-  it('executes OBJECTIVES_SET as current runtime NPC objectives', async () => {
+  it('executes structured memory and objective operations', async () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -486,8 +494,16 @@ describe('NpcPuppetMaster', () => {
               npcId: 'guard',
               steps: [
                 {
-                  type: 'OBJECTIVES_SET',
-                  objectives: ['Watch the hallway', 'Report suspicious visitors'],
+                  type: 'MEMORY_ADD',
+                  memory: 'Miles asked the guard to watch the hallway.',
+                },
+                {
+                  type: 'OBJECTIVE_ADD',
+                  parentId: null,
+                  objective: {
+                    text: 'Watch the hallway',
+                    subtasks: [{ text: 'Report suspicious visitors', subtasks: [] }],
+                  },
                 },
               ],
             },
@@ -499,8 +515,58 @@ describe('NpcPuppetMaster', () => {
     await pm.processScene(fixture.scene);
 
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
-    expect(component.objectives).toEqual(['Watch the hallway', 'Report suspicious visitors']);
+    expect(component.memory).toEqual(['Old note.', 'Miles asked the guard to watch the hallway.']);
+    expect(component.objectives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: 'Watch the hallway',
+          subtasks: [expect.objectContaining({ text: 'Report suspicious visitors' })],
+        }),
+      ])
+    );
     expect(component.objectivesInitializedFromTA).toBe(true);
+
+    const addedObjective = component.objectives.find(
+      (objective: any) => objective.text === 'Watch the hallway'
+    );
+    const childId = addedObjective.subtasks[0].id;
+    const executor = new ActorPlanExecutor(fixture.game);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
+        steps: [
+          { type: 'MEMORY_REMOVE', memory: 'Old note.' },
+          { type: 'OBJECTIVE_UPDATE', objectiveId: childId, text: 'Ask visitors to report in' },
+          { type: 'OBJECTIVE_REMOVE', objectiveId: childId },
+        ],
+      })
+    ).toEqual([
+      expect.objectContaining({ code: 'npc_memory_removed' }),
+      expect.objectContaining({ code: 'npc_objective_updated' }),
+      expect.objectContaining({ code: 'npc_objective_removed' }),
+    ]);
+    expect(component.memory).toEqual(['Miles asked the guard to watch the hallway.']);
+    expect(
+      component.objectives.find((objective: any) => objective.text === 'Watch the hallway').subtasks
+    ).toEqual([]);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
+        steps: [{ type: 'OBJECTIVE_UPDATE', objectiveId: 'missing', text: 'Never happens' }],
+      })
+    ).toEqual([expect.objectContaining({ status: 'failed', code: 'objective_not_found' })]);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
+        steps: [
+          {
+            type: 'OBJECTIVE_ADD',
+            parentId: 'missing',
+            objective: { text: 'Never happens', subtasks: [] },
+          },
+        ],
+      })
+    ).toEqual([expect.objectContaining({ status: 'failed', code: 'objective_parent_not_found' })]);
   });
 
   it('instructs PM to preserve a parent objective and record confirmed prerequisites', async () => {
@@ -520,7 +586,7 @@ describe('NpcPuppetMaster', () => {
     expect(system).toContain('before dependent physical steps');
   });
 
-  it('filters malformed OBJECTIVES_SET steps', async () => {
+  it('filters malformed objective operation steps', async () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -536,7 +602,7 @@ describe('NpcPuppetMaster', () => {
       new MockProvider(
         JSON.stringify({
           kind: 'pm_response',
-          plans: [{ npcId: 'guard', steps: [{ type: 'OBJECTIVES_SET', objectives: 'oops' }] }],
+          plans: [{ npcId: 'guard', steps: [{ type: 'OBJECTIVE_ADD', objective: 'oops' }] }],
         })
       )
     );
@@ -556,8 +622,12 @@ describe('NpcPuppetMaster', () => {
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
-    expect(world.npcs?.[0]?.objectives).toEqual(['Check IDs']);
-    expect(component.objectives).toEqual(['Check IDs']);
+    expect(world.npcs?.[0]?.objectives).toEqual([
+      expect.objectContaining({ text: 'Check IDs', subtasks: [] }),
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Check IDs', subtasks: [] }),
+    ]);
     expect(component.objectivesInitializedFromTA).toBe(true);
   });
 
@@ -596,8 +666,12 @@ describe('NpcPuppetMaster', () => {
 
     const world = new NpcWorldModelBuilder(fixture.game).build(fixture.scene);
 
-    expect(world.npcs?.[0]?.objectives).toEqual(['Inspect the new delivery']);
-    expect(component.objectives).toEqual(['Inspect the new delivery']);
+    expect(world.npcs?.[0]?.objectives).toEqual([
+      expect.objectContaining({ text: 'Inspect the new delivery', subtasks: [] }),
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Inspect the new delivery', subtasks: [] }),
+    ]);
     expect(component.objectivesTARevision).toBe(JSON.stringify(['Inspect the new delivery']));
   });
 
@@ -807,7 +881,7 @@ describe('NpcPuppetMaster', () => {
     expect(completion).toEqual([
       expect.objectContaining({ status: 'ok', code: 'npc_memory_updated' }),
     ]);
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the corridor.');
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Reached the corridor.']);
   });
 
   it('omits a navigation-only Exit from PM context and NPC known-entity memory', () => {
@@ -1097,9 +1171,9 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
-      'Reached the corridor. Arrived in Corridor.'
-    );
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
+      'Reached the corridor. Arrived in Corridor.',
+    ]);
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     vi.useRealTimers();
   });
@@ -1138,9 +1212,9 @@ describe('NpcPuppetMaster', () => {
     await vi.advanceTimersByTimeAsync(500);
 
     expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
-      'Need to find Rick for batteries. Arrived in Corridor.'
-    );
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
+      'Need to find Rick for batteries. Arrived in Corridor.',
+    ]);
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     vi.useRealTimers();
   });
@@ -1179,9 +1253,9 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe(
-      'Reached the corridor. Arrived in Corridor.'
-    );
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
+      'Reached the corridor. Arrived in Corridor.',
+    ]);
     expect(JSON.stringify(provider.calls.map((call) => call.messages))).toContain('plan_completed');
     expect(JSON.stringify(provider.calls.map((call) => call.messages))).not.toContain(
       'plan_interrupted'
@@ -1220,7 +1294,7 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Arrived in Corridor.');
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Arrived in Corridor.']);
   });
 
   it('returns visible open-container contents in an NPC EXAMINE outcome', async () => {
@@ -1329,7 +1403,7 @@ describe('NpcPuppetMaster', () => {
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('wait_elapsed');
     expect(component.objectives).toEqual(['Resume guard duty']);
-    expect(component.memory).toBe('Waiting after confirming the previous result.');
+    expect(component.memory).toEqual(['Waiting after confirming the previous result.']);
   });
 
   it('executes MOVE_TO and wakes the same NPC with a move_completed trigger', async () => {
@@ -1428,7 +1502,7 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toBe('Reached the desk.');
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Reached the desk.']);
     expect((pm as any).pendingPlanContinuations.has(`${fixture.scene.id}:${npc.name}`)).toBe(false);
     expect(provider.calls).toHaveLength(1);
     vi.useRealTimers();
@@ -1761,9 +1835,9 @@ describe('NpcPuppetMaster', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(provider.calls).toHaveLength(2);
     expect(dialogue).toEqual(['I will use the remote now.']);
-    expect((npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory).toBe(
-      'Hero offered a remote, but I do not hold it.'
-    );
+    expect(
+      (npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory
+    ).toEqual(['Hero offered a remote, but I do not hold it.']);
   });
 
   it('automatically inserts MOVE_TO before TAKE for a visible route-available item', async () => {
@@ -1952,9 +2026,9 @@ describe('NpcPuppetMaster', () => {
     const plans = await pm.processScene(fixture.scene);
     expect(plans[0].interruptOn).toEqual([{ type: 'ACTION_FAILED' }]);
     expect(plans[0].memory).toBe('I put the ID card on the desk.');
-    expect((npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory).toBe(
-      'Hero asked me to put the ID card on the desk.'
-    );
+    expect(
+      (npc.components.find((candidate: any) => candidate.type === 'NPC') as any).memory
+    ).toEqual(['Hero asked me to put the ID card on the desk.']);
     expect(provider.calls).toHaveLength(1);
 
     fixture.scene.update(1000);
@@ -2204,7 +2278,7 @@ describe('NpcPuppetMaster', () => {
     expect(prompt).toContain('"reason": "WORLD_CHANGED"');
     expect(prompt).toContain('"code": "switch_opened"');
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
-    expect(component.memory).toBe('Old note.');
+    expect(component.memory).toEqual(['Old note.']);
   });
 
   it('drops a held NPC item onto the floor near that NPC, not near the player', async () => {
@@ -2907,7 +2981,7 @@ describe('NpcPuppetMaster', () => {
       },
     ]);
 
-    expect(npcComponent.memory).toBe('The TV is still off.');
+    expect(npcComponent.memory).toEqual(['The TV is still off.']);
   });
 
   it('rejects unavailable COMMAND item requirements and retries with details', async () => {
@@ -2950,9 +3024,9 @@ describe('NpcPuppetMaster', () => {
     await vi.advanceTimersByTimeAsync(200);
 
     expect(plans).toEqual([]);
-    expect((npc.components.find((component: any) => component.type === 'NPC') as any).memory).toBe(
-      'Old note.'
-    );
+    expect(
+      (npc.components.find((component: any) => component.type === 'NPC') as any).memory
+    ).toEqual(['Old note.']);
     expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
     expect(provider.calls).toHaveLength(2);
     expect(String(provider.calls[1].messages[0].content)).toContain('plan_rejected_missing_items');
@@ -3091,8 +3165,10 @@ describe('NpcPuppetMaster', () => {
     await pm.processScene(fixture.scene);
 
     expect(ComponentSystem.getStateValue(tv, 'power')).toBe('off');
-    expect(npcComponent.memory).toBe('The remote is in the drawer.');
-    expect(npcComponent.objectives).toEqual(['Turn on the TV']);
+    expect(npcComponent.memory).toEqual(['The remote is in the drawer.']);
+    expect(npcComponent.objectives).toEqual([
+      expect.objectContaining({ text: 'Turn on the TV', subtasks: [] }),
+    ]);
     expect((fixture.game as any).sayAsActor).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(400);
@@ -3671,10 +3747,12 @@ describe('NpcPuppetMaster', () => {
       { type: 'THINK_STRATEGY', reason: 'objective appears blocked' },
     ]);
     expect(dialogue).toEqual([]);
-    expect(component.memory).toBe(
-      'The current objective is blocked until Hero provides the remote.'
-    );
-    expect(component.objectives).toEqual(['Ask Hero for the remote later']);
+    expect(component.memory).toEqual([
+      'The current objective is blocked until Hero provides the remote.',
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Ask Hero for the remote later', subtasks: [] }),
+    ]);
     expect(provider.calls).toHaveLength(2);
 
     await vi.advanceTimersByTimeAsync(5200);
@@ -3711,8 +3789,10 @@ describe('NpcPuppetMaster', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
-    expect(component.memory).toBe('Old note.');
-    expect(component.objectives).toEqual(['Check IDs']);
+    expect(component.memory).toEqual(['Old note.']);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ text: 'Check IDs', subtasks: [] }),
+    ]);
     expect(pm.getLastDebugInfo()?.strategy).toEqual(
       expect.objectContaining({
         error: 'invalid_response',
@@ -3821,7 +3901,7 @@ describe('NpcPuppetMaster', () => {
     expect(pm.getLastDebugInfo()?.strategy).toEqual(
       expect.objectContaining({
         memoryUpdated: true,
-        objectivesUpdated: ['Search a different location'],
+        objectivesUpdated: [expect.objectContaining({ text: 'Search a different location' })],
       })
     );
   });
@@ -3889,7 +3969,9 @@ describe('NpcPuppetMaster', () => {
     expect(pm.getLastDebugInfo()?.strategy).toEqual(
       expect.objectContaining({
         memoryUpdated: true,
-        objectivesUpdated: ['Wait for new information about the remote'],
+        objectivesUpdated: [
+          expect.objectContaining({ text: 'Wait for new information about the remote' }),
+        ],
       })
     );
   });
@@ -3951,7 +4033,8 @@ describe('NpcPuppetMaster', () => {
     expect(output).toContain('strategy_request_start');
     expect(output).toContain('--- PM STRATEGY RESPONSE ---');
     expect(output).toContain('memory updated: true');
-    expect(output).toContain('objectives updated: ["Wait for new information"]');
+    expect(output).toContain('objectives updated: [{"id":');
+    expect(output).toContain('"text":"Wait for new information"');
     expect(output).toContain('waitMs: 1000');
   });
 
@@ -4177,7 +4260,7 @@ describe('NpcPuppetMaster', () => {
       })
     );
     expect(results.at(-1)?.message).toContain('Cyclic no-progress behavior detected');
-    expect(results.at(-1)?.message).toContain('OBJECTIVES_SET');
+    expect(results.at(-1)?.message).toContain('revise the relevant objective branch');
   });
 
   it('puts an NPC to sleep briefly when a mixed no-progress loop continues after warning', () => {

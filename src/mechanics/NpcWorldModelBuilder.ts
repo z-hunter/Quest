@@ -6,6 +6,7 @@ import type { Scene } from '../scene/Scene';
 import type { SceneLogEntry } from '../scene/SceneLog';
 import { ComponentSystem, type NpcKnownEntityMemory } from '../systems/ComponentSystem';
 import type { NpcActorContext, NpcStaticEntityContext, NpcWorldModel } from './npcTypes';
+import { normalizeNpcMemory, normalizeNpcObjectives, type NpcObjective } from './npcState';
 
 type NpcContextTrace = {
   npcId: string;
@@ -176,6 +177,7 @@ export class NpcWorldModelBuilder {
     const component = ComponentSystem.getNpcComponent(npc);
     const title = this.getObjectTitle(npc) || npc.name;
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
+    const memory = this.getOrInitializeNpcMemory(npc, component);
     const newEvents = scene.sceneLog.getUnreadEntries(npc.name);
     const newEventIds = new Set(newEvents.map((entry) => entry.id));
     const recentEvents = scene.sceneLog.entries
@@ -227,7 +229,7 @@ export class NpcWorldModelBuilder {
       title,
       lore: this.game.textAssets.getResolvedObjectField(npc, 'lore') || undefined,
       objectives,
-      memory: component?.memory || undefined,
+      memory: memory.length ? memory : undefined,
       inventory: this.game.actorWorld.getInventoryKnowledge(npc),
       actors,
       visibleItemIds: entityBuild.observedObjects
@@ -541,23 +543,37 @@ export class NpcWorldModelBuilder {
   private getOrInitializeNpcObjectives(
     npc: Actor,
     component: ReturnType<typeof ComponentSystem.getNpcComponent>
-  ): string[] {
-    if (component?.objectives && component.objectives.length > 0) {
-      return component.objectives;
-    }
-
-    const initialObjectives = this.game.textAssets.getResolvedObjectListField(npc, 'objectives');
-    const taRevision = this.game.textAssets.getResolvedObjectListRevision(npc, 'objectives');
+  ): NpcObjective[] {
+    const textAssets = this.game.textAssets as any;
+    const initialObjectives: NpcObjective[] =
+      typeof textAssets.getResolvedNpcObjectives === 'function'
+        ? textAssets.getResolvedNpcObjectives(npc)
+        : normalizeNpcObjectives(
+            typeof textAssets.getResolvedObjectListField === 'function'
+              ? textAssets.getResolvedObjectListField(npc, 'objectives')
+              : []
+          );
+    const taRevision =
+      typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+        ? textAssets.getResolvedNpcObjectivesRevision(npc)
+        : typeof textAssets.getResolvedObjectListRevision === 'function'
+          ? textAssets.getResolvedObjectListRevision(npc, 'objectives')
+          : JSON.stringify(initialObjectives.map((objective) => objective.text));
     const mutableComponent = npc.components?.find((candidate: any) => candidate?.type === 'NPC') as
       | {
           type: 'NPC';
-          objectives?: string[];
+          objectives?: unknown;
           objectivesInitializedFromTA?: boolean;
           objectivesTARevision?: string;
         }
       | undefined;
+    const current = normalizeNpcObjectives(mutableComponent?.objectives ?? component?.objectives);
+    if (current.length > 0) {
+      if (mutableComponent) mutableComponent.objectives = current;
+      return current;
+    }
     if (mutableComponent?.objectivesTARevision === taRevision) {
-      return mutableComponent.objectives || [];
+      return current;
     }
     if (mutableComponent) {
       mutableComponent.objectives = [...initialObjectives];
@@ -565,6 +581,41 @@ export class NpcWorldModelBuilder {
       mutableComponent.objectivesTARevision = taRevision;
     }
     return initialObjectives;
+  }
+
+  private getOrInitializeNpcMemory(
+    npc: Actor,
+    component: ReturnType<typeof ComponentSystem.getNpcComponent>
+  ): string[] {
+    const textAssets = this.game.textAssets as any;
+    const initialMemory =
+      typeof textAssets.getResolvedNpcMemory === 'function'
+        ? textAssets.getResolvedNpcMemory(npc)
+        : [];
+    const taRevision =
+      typeof textAssets.getResolvedNpcMemoryRevision === 'function'
+        ? textAssets.getResolvedNpcMemoryRevision(npc)
+        : JSON.stringify(initialMemory);
+    const mutableComponent = npc.components?.find((candidate: any) => candidate?.type === 'NPC') as
+      | {
+          type: 'NPC';
+          memory?: unknown;
+          memoryInitializedFromTA?: boolean;
+          memoryTARevision?: string;
+        }
+      | undefined;
+    const current = normalizeNpcMemory(mutableComponent?.memory ?? component?.memory);
+    if (current.length > 0) {
+      if (mutableComponent) mutableComponent.memory = current;
+      return current;
+    }
+    if (mutableComponent?.memoryTARevision === taRevision) return current;
+    if (mutableComponent) {
+      mutableComponent.memory = [...initialMemory];
+      mutableComponent.memoryInitializedFromTA = true;
+      mutableComponent.memoryTARevision = taRevision;
+    }
+    return initialMemory;
   }
 
   private getObjectTitle(object: SceneObject): string | null {

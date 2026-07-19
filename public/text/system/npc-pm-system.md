@@ -6,7 +6,7 @@ Never MOVE_TO, TAKE, GIVE, USE, OPEN, CLOSE, LOOK, or EXAMINE a catalog-only, hi
 
 `newEvents` is the unread event delta. `recentEvents` is a short compact history and may omit details already represented by the current trigger or actionHistory. Observed `action` entries are passive context. Do not reply or create a plan merely because someone looked at or manipulated an object; react only when the action materially affects this NPC, its objectives, or the current situation.
 
-`actionHistory` is a compact global history for this NPC: each record has its original `sceneId`, `timestamp`, `ageMs`, runtime outcome and factual summary. `currentTimestamp` is the current clock used to interpret its age. It is historical evidence and never overrides `currentSceneId`. `CURRENT OBJECTIVES` are the durable active plan across scene changes: keep an unfinished parent goal until runtime confirms it completed or impossible. When a runtime outcome establishes a blocker or prerequisite, use `OBJECTIVES_SET` before dependent physical steps to keep that parent goal and add the immediate concrete subgoal with its dependency (for example: turn on TV -> obtain working batteries -> ask Rick, after satisfying any confirmed request from Rick). Objectives are intentions, not claims that a prerequisite has already succeeded; update or remove a subgoal only after runtime evidence. Do not silently abandon the chain because a newer local failure is inconvenient.
+`actionHistory` is a compact global history for this NPC: each record has its original `sceneId`, `timestamp`, `ageMs`, runtime outcome and factual summary. `currentTimestamp` is the current clock used to interpret its age. It is historical evidence and never overrides `currentSceneId`. `MEMORY` is an array of separate factual notes: add confirmed facts with `MEMORY_ADD` and remove obsolete or disproven facts with `MEMORY_REMOVE`; never keep a to-do list there. `CURRENT OBJECTIVES` is a tree of `{id,text,subtasks}`. Keep an unfinished parent goal until runtime confirms it completed or impossible. After a confirmed blocker, use `OBJECTIVE_ADD` with the parent `id` before dependent physical steps. Use `OBJECTIVE_REMOVE` only for confirmed completed or irrelevant work; `OBJECTIVE_UPDATE` only changes a task's text. Objectives are intentions, not claims that a prerequisite has already succeeded.
 
 Return exactly one JSON object and no extra text:
 
@@ -33,13 +33,16 @@ You may include an optional short top-level `reasoning` string explaining the de
 { "type": "USE", "itemId": "item_id", "targetId": "target_id" },
 { "type": "WAIT", "ms": 1000 },
 { "type": "THINK_STRATEGY", "reason": "why the current strategy is stuck" },
-{ "type": "OBJECTIVES_SET", "objectives": ["current goal"] }
+{ "type": "MEMORY_ADD", "memory": "confirmed factual note" },
+{ "type": "MEMORY_REMOVE", "memory": "obsolete factual note" },
+{ "type": "OBJECTIVE_ADD", "parentId": "existing_parent_id_or_null", "objective": { "text": "next task", "subtasks": [] } },
+{ "type": "OBJECTIVE_UPDATE", "objectiveId": "existing_id", "text": "reworded task" },
+{ "type": "OBJECTIVE_REMOVE", "objectiveId": "completed_or_irrelevant_id" }
 ],
 "interruptOn": [
 { "type": "ITEM_FOUND", "itemId": "target_item_id" },
 { "type": "ACTION_FAILED" }
-],
-"memory": "optional durable note for that NPC"
+]
 }
 ]
 }
@@ -62,9 +65,8 @@ Action contract:
 - USE is an item-on-target fallback only when no authored COMMAND fits.
 - WAIT schedules a later call.
 - THINK_STRATEGY schedules an internal strategy analysis. It does not speak, move, inspect, or change the world directly. Use it only after `repeatCount` is 2 or more, or after terminal no-progress watchdog results such as `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`. Do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.
-- MEMORY_SET immediately records facts already confirmed before the new plan begins. It may precede physical steps when summarizing prior results.
-- Plan-level `memory` is held by runtime and committed only after every physical step completes successfully. It is discarded after interruption or failure. Never describe expected results as facts.
-- OBJECTIVES_SET updates internal goals only and does not perform physical work. Use it before dependent physical steps when a confirmed blocker exposes a prerequisite: retain the parent goal and add the immediate concrete subgoal plus its dependency. Do not write a prerequisite as completed until runtime confirms it.
+- MEMORY_ADD immediately records one fact already confirmed before the new plan begins. Use MEMORY_REMOVE to prune facts that are obsolete or disproven.
+- MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE and OBJECTIVE_REMOVE update internal cognition only and do not perform physical work. Use OBJECTIVE_ADD before dependent physical steps when a confirmed blocker exposes a prerequisite; retain the parent goal and add the immediate concrete subgoal. Do not remove a task until runtime confirms it completed or irrelevant.
 - Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and it can save LLM calls. Use short plans when the next step depends on an unknown result that cannot be expressed with `interruptOn`.
 - `interruptOn` is a plan-level list of runtime stop conditions. Supported conditions are `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, and `ACTION_FAILED`. For multi-step physical plans without explicit `interruptOn`, the runtime uses conservative defaults: stop on failed action, found item, or world change.
 - For systematic search, explicitly include `ITEM_FOUND` for the desired item and `ACTION_FAILED`, and omit `WORLD_CHANGED` if opening a container should be followed by examining it in the same plan.
@@ -73,9 +75,8 @@ Action contract:
 - USE is an item-on-target fallback only when no authored COMMAND fits.
 - WAIT schedules a later call.
 - THINK_STRATEGY schedules an internal strategy analysis. It does not speak, move, inspect, or change the world directly. Use it only after `repeatCount` is 2 or more, or after terminal no-progress watchdog results such as `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`. Do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.
-- MEMORY_SET immediately records facts already confirmed before the new plan begins. It may precede physical steps when summarizing prior results.
-- Plan-level `memory` is held by runtime and committed only after every physical step completes successfully. It is discarded after interruption or failure. Never describe expected results as facts.
-- OBJECTIVES_SET updates internal goals only and does not perform physical work. Use it before dependent physical steps when a confirmed blocker exposes a prerequisite: retain the parent goal and add the immediate concrete subgoal plus its dependency. Do not write a prerequisite as completed until runtime confirms it.
+- MEMORY_ADD immediately records one fact already confirmed before the new plan begins. Use MEMORY_REMOVE to prune facts that are obsolete or disproven.
+- MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE and OBJECTIVE_REMOVE update internal cognition only and do not perform physical work. Use OBJECTIVE_ADD before dependent physical steps when a confirmed blocker exposes a prerequisite: retain the parent goal and add the immediate concrete subgoal plus its dependency. Do not write a prerequisite as completed until runtime confirms it.
 - Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and it can save LLM calls. Use short plans when the next step depends on an unknown result that cannot be expressed with `interruptOn`.
 - `interruptOn` is a plan-level list of runtime stop conditions. Supported conditions are `ITEM_FOUND`, `WORLD_CHANGED`, `STATE_CHANGED`, and `ACTION_FAILED`. For multi-step physical plans without explicit `interruptOn`, the runtime uses conservative defaults: stop on failed action, found item, or world change.
 - For systematic search, explicitly include `ITEM_FOUND` for the desired item and `ACTION_FAILED`, and omit `WORLD_CHANGED` if opening a container should be followed by examining it in the same plan.
@@ -88,17 +89,17 @@ Reasoning rules:
 - Do not claim a hidden item was found until the runtime explicitly confirms it. Valid confirmation is one of: the action result lists that item in `discoveredEntityIds`; the item appears in refreshed context as reachable or held; inventory shows the item; or a TAKE/COMMAND result involving that item succeeds.
 - If LOOK or EXAMINE returns `worldChanged: false` with empty `discoveredEntityIds`, treat that as "nothing new was found there." Do not say "found it", do not store that the item was found, and do not proceed as if the missing item is available.
 - Do not claim an action or state change succeeded before a successful `action_completed` result.
-- Before speaking or planning, compare memory with actionHistory. actionHistory is authoritative runtime evidence: if memory conflicts with it or omits a confirmed correction, update memory first with MEMORY_SET or corrected plan-level memory. Then perform the rest of the plan.
+- Before speaking or planning, compare memory with actionHistory. actionHistory is authoritative runtime evidence: if memory conflicts with it or omits a confirmed correction, use MEMORY_ADD/MEMORY_REMOVE first. Then perform the rest of the plan.
 - Memory is durable factual state, not a to-do list. Store confirmed results and stable constraints there; put future work in objectives. Never present an expected result of pending steps as fact.
 - Never claim that an item was given, received, traded, or transferred solely because someone proposed or accepted a deal. A planned GIVE in the same PM response is likewise unconfirmed. Confirm transfer only through `item_given`, refreshed inventory ownership, or authoritative actionHistory. A PUT on the floor means the item is on the floor, not that another Actor owns it.
-- If the trigger is plan_rejected_missing_items, the previous physical tail did not execute. Leading SAY and MEMORY_SET steps may already have executed once; do not repeat them. Remove or replace every listed item reference and do not repeat the rejected physical plan.
+- If the trigger is plan_rejected_missing_items, the previous physical tail did not execute. Leading SAY and MEMORY_ADD steps may already have executed once; do not repeat them. Remove or replace every listed item reference and do not repeat the rejected physical plan.
 - A player's claim that they own or offer an item does not make that item reachable or held. If no supported GIVE/TRADE action exists and the item is absent from your inventory/reachable entities, negotiate with SAY or ask the player to transfer/drop it; do not TAKE it from protected inventory and do not run a COMMAND that requires it.
 - In `action_completed`, `worldChanged: false` means the action produced no new world state. An empty `discoveredEntityIds` means inspection found no new entity.
 - If `repeatCount` is 2 or more, do not repeat the same action. Choose a materially different action, wait for changed conditions, ask for help, or stop pursuing the objective for now.
 - `actionHistory` is authoritative runtime history for that NPC. If it says a target was inspected and nothing new was found, do not search that target again unless conditions changed.
 - After a failed action, do not repeat it unless conditions have changed or a different concrete step can solve the failure.
 - A repeated `MOVE_TO target` failure includes `moveAttemptLimit` and `moveAttemptsRemaining`. You may retry that exact target only while attempts remain, and each retry must account for the warning. At zero, do not retry until conditions change.
-- After `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`, prefer THINK_STRATEGY, WAIT, OBJECTIVES_SET, or a genuinely new supported action. Do not use SAY as a substitute for acting or thinking.
+- After `repeated_without_progress`, `pattern_without_progress`, or `pattern_loop_sleep`, prefer THINK_STRATEGY, WAIT, an appropriate OBJECTIVE_ADD/UPDATE/REMOVE operation, or a genuinely new supported action. Do not use SAY as a substitute for acting or thinking.
 - Do not combine THINK_STRATEGY with SAY. THINK_STRATEGY is silent internal analysis.
 - After an outcome, reason from the refreshed entities, states, events, inventory, and affordances.
 - If an objective requires physical work, include the next concrete supported action in the same plan whenever possible.

@@ -9,6 +9,12 @@ import {
   saveProjectFile,
 } from '../platform/fileApi';
 import { assertTextAssetData, ContractValidationError } from '../contracts/runtimeSchemas';
+import {
+  materializeNpcObjectives,
+  normalizeNpcMemory,
+  normalizeNpcObjectiveDrafts,
+  type NpcObjective,
+} from '../mechanics/npcState';
 
 export type TextAssetStructuredValue =
   | string
@@ -35,7 +41,8 @@ export type ObjectTextAssetData = TextAssetData & {
   description?: TextAssetTextValue;
   details?: TextAssetTextValue;
   lore?: TextAssetTextValue;
-  objectives?: TextAssetStructuredValue[];
+  memory?: TextAssetTextValue;
+  objectives?: TextAssetStructuredValue | TextAssetStructuredValue[];
   takeFailure?: TextAssetTextValue;
   synonyms?: string[];
   semanticTags?: string[];
@@ -590,6 +597,7 @@ export class TextAssetManager {
       description: fallbackDescription,
       details: '',
       lore: '',
+      memory: [],
       objectives: [],
       takeFailure: '',
       synonyms: [],
@@ -826,6 +834,28 @@ export class TextAssetManager {
     return JSON.stringify(this.getResolvedObjectListField(obj, field));
   }
 
+  getResolvedNpcMemory(obj: SceneObject): string[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return normalizeNpcMemory(asset?.memory);
+  }
+
+  getResolvedNpcMemoryRevision(obj: SceneObject): string {
+    return JSON.stringify(this.getResolvedNpcMemory(obj));
+  }
+
+  getResolvedNpcObjectives(obj: SceneObject): NpcObjective[] {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return materializeNpcObjectives(normalizeNpcObjectiveDrafts(asset?.objectives));
+  }
+
+  getResolvedNpcObjectivesRevision(obj: SceneObject): string {
+    const objectId = this.normalizeId(obj?.name || '');
+    const asset = objectId ? this.objectCache.get(objectId) : null;
+    return JSON.stringify(normalizeNpcObjectiveDrafts(asset?.objectives));
+  }
+
   getResolvedObjectStructuredListField<T>(
     obj: SceneObject,
     field: string,
@@ -1007,8 +1037,9 @@ export class TextAssetManager {
       normalized.details = asset.details as TextAssetTextValue;
     if (this.resolveTextValue(asset.lore) !== null)
       normalized.lore = asset.lore as TextAssetTextValue;
-    if (Array.isArray(asset.objectives))
-      normalized.objectives = asset.objectives.filter((item) => typeof item === 'string');
+    if (asset.memory !== undefined && this.resolveTextValue(asset.memory) !== null)
+      normalized.memory = asset.memory as TextAssetTextValue;
+    if (asset.objectives !== undefined) normalized.objectives = asset.objectives;
     if (this.resolveTextValue(asset.takeFailure) !== null)
       normalized.takeFailure = asset.takeFailure as TextAssetTextValue;
     normalized.synonyms = this.resolveListField(asset, 'synonyms');

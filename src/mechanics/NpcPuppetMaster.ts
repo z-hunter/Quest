@@ -23,6 +23,7 @@ import type {
   NpcWorldModel,
 } from './npcTypes';
 import { assertNpcPlan } from '../contracts/runtimeSchemas';
+import { normalizeNpcObjectiveDraft, normalizeNpcObjectives } from './npcState';
 
 const SYSTEM_PROMPT_URL = '/text/system/npc-pm-system.md';
 const FALLBACK_SYSTEM_PROMPT = [
@@ -36,7 +37,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
-  'Reliable steps are SAY, MEMORY_SET, OBJECTIVES_SET, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
@@ -52,16 +53,15 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
-  "CURRENT OBJECTIVES are the NPC's durable active plans across scene changes. Keep an unfinished objective until runtime evidence confirms completion or impossibility; do not silently replace it with a newer local concern. When runtime evidence reveals a prerequisite or blocker, use OBJECTIVES_SET before dependent physical steps to retain the parent goal and add the immediate concrete subgoal that unblocks it. Keep the dependency explicit (for example: turn TV on -> obtain working batteries -> ask Rick, after satisfying any confirmed request from Rick). Objectives are intentions, not claims that a prerequisite was completed.",
+  "CURRENT OBJECTIVES are the NPC's durable active plans across scene changes. Keep an unfinished parent objective until runtime evidence confirms completion or impossibility: retain the parent goal and add the immediate concrete subgoal with OBJECTIVE_ADD before dependent physical steps. OBJECTIVE_REMOVE is only for confirmed completed or irrelevant work. MEMORY is an array of factual notes: use MEMORY_ADD only for confirmed facts and MEMORY_REMOVE to prune stale facts. Objectives are intentions, not claims that a prerequisite was completed.",
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
   'Do not store attempted actions as successful facts in memory.',
-  'Plan-level memory is committed only after the physical plan completes and discarded after failure or interruption.',
   'Do not record a proposed trade or floor drop as a completed ownership transfer without runtime confirmation.',
   'A proposal, agreement, or a GIVE in the current response is not a completed transfer. Only item_given, refreshed inventory ownership, or authoritative actionHistory confirms it; recipients must not claim receipt or act on the item before then.',
   'Runtime may insert MOVE_TO before an explicit TAKE when the item has a route_available approach.',
-  'If a plan is rejected for missing items, leading SAY and MEMORY_SET steps may already have executed once; replace unavailable references and do not repeat the same speech or physical plan.',
+  'If a plan is rejected for missing items, leading SAY and memory operations may already have executed once; replace unavailable references and do not repeat the same speech or physical plan.',
   'A player offer does not make an item reachable; negotiate or ask them to transfer it instead of using an unavailable item.',
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
   'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
@@ -72,7 +72,7 @@ const FALLBACK_SYSTEM_PROMPT = [
 const STRATEGY_SYSTEM_PROMPT = [
   'You are the internal strategy analyst for one NPC in a retro adventure game.',
   'Return exactly one JSON object and no extra text.',
-  'Return {"kind":"npc_strategy_response","npcId":"...","memory":"optional compact memory","objectives":["optional updated objectives"],"waitMs":30000}.',
+  'Return {"kind":"npc_strategy_response","npcId":"...","updates":[memory/objective update steps],"waitMs":30000}.',
   'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, or any physical action.',
   'Analyze the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, commands, objectives, and memory.',
   'Write compact memory only with confirmed facts and useful conclusions. Remove noisy or speculative details.',
@@ -173,8 +173,7 @@ export type NpcPuppetMasterSaveState = {
 type NpcStrategyResponse = {
   kind: 'npc_strategy_response';
   npcId: string;
-  memory?: string;
-  objectives?: string[];
+  updates?: NpcPlanStep[];
   waitMs?: number;
 };
 
@@ -955,7 +954,16 @@ export class NpcPuppetMaster {
   private getSafeRejectedPlanPrefix(plan: NpcPlan): NpcPlanStep[] {
     const safePrefix: NpcPlanStep[] = [];
     for (const step of plan.steps) {
-      if (step.type !== 'SAY' && step.type !== 'MEMORY_SET') break;
+      if (
+        step.type !== 'SAY' &&
+        step.type !== 'MEMORY_SET' &&
+        step.type !== 'MEMORY_ADD' &&
+        step.type !== 'MEMORY_REMOVE' &&
+        step.type !== 'OBJECTIVE_ADD' &&
+        step.type !== 'OBJECTIVE_UPDATE' &&
+        step.type !== 'OBJECTIVE_REMOVE'
+      )
+        break;
       safePrefix.push(step);
     }
     return safePrefix;
@@ -1064,7 +1072,9 @@ export class NpcPuppetMaster {
         if (!plan.steps.some((step) => step.type === 'GIVE')) return plan;
         const steps = plan.steps.filter((step) => {
           if (step.type === 'SAY') return !completedTransferClaim.test(step.text);
-          if (step.type === 'MEMORY_SET') return !completedTransferClaim.test(step.memory);
+          if (step.type === 'MEMORY_SET' || step.type === 'MEMORY_ADD') {
+            return !completedTransferClaim.test(step.memory);
+          }
           return true;
         });
         const memory =
@@ -1665,7 +1675,9 @@ export class NpcPuppetMaster {
         if (!hasUnsupportedClaims) return plan;
         const steps = plan.steps.filter((step) => {
           if (step.type === 'SAY') return !this.hasUnsupportedDiscoveryClaim(step.text);
-          if (step.type === 'MEMORY_SET') return !this.hasUnsupportedDiscoveryClaim(step.memory);
+          if (step.type === 'MEMORY_SET' || step.type === 'MEMORY_ADD') {
+            return !this.hasUnsupportedDiscoveryClaim(step.memory);
+          }
           return true;
         });
         const memory =
@@ -1887,7 +1899,14 @@ export class NpcPuppetMaster {
 
     for (const plan of plans) {
       const hasExplicitStateUpdate = plan.steps.some(
-        (step) => step.type === 'MEMORY_SET' || step.type === 'OBJECTIVES_SET'
+        (step) =>
+          step.type === 'MEMORY_SET' ||
+          step.type === 'OBJECTIVES_SET' ||
+          step.type === 'MEMORY_ADD' ||
+          step.type === 'MEMORY_REMOVE' ||
+          step.type === 'OBJECTIVE_ADD' ||
+          step.type === 'OBJECTIVE_UPDATE' ||
+          step.type === 'OBJECTIVE_REMOVE'
       );
       const hasPlanMemory = typeof plan.memory === 'string';
       if (!hasExplicitStateUpdate && !hasPlanMemory) continue;
@@ -2006,10 +2025,18 @@ export class NpcPuppetMaster {
       }
 
       const actor = scene.getObjectByName(npcId);
-      const memoryUpdated =
-        typeof normalized.memory === 'string' && this.setNpcMemory(actor, normalized.memory);
-      const objectivesUpdated = normalized.objectives
-        ? this.setNpcObjectives(actor, normalized.objectives)
+      const updateOutcomes = normalized.updates?.length
+        ? this.executor.executePlan({ npcId, steps: normalized.updates })
+        : [];
+      const memoryUpdated = updateOutcomes.some((outcome) =>
+        outcome.code.startsWith('npc_memory_')
+      );
+      const objectivesUpdated = updateOutcomes.some((outcome) =>
+        outcome.code.startsWith('npc_objective')
+      )
+        ? normalizeNpcObjectives(
+            ComponentSystem.getNpcComponent(actor instanceof Actor ? actor : null)?.objectives
+          )
         : undefined;
       const waitMs = this.clampStrategyWaitMs(normalized.waitMs);
       const debug: NpcPuppetMasterStrategyDebugInfo = {
@@ -2077,7 +2104,7 @@ export class NpcPuppetMaster {
           'Strategy-only NPC context:',
           JSON.stringify(dynamicContext),
           '',
-          `Return strictly valid JSON: {"kind":"npc_strategy_response","npcId":"${npcId}","memory":"...","objectives":[...],"waitMs":30000}`,
+          `Return strictly valid JSON: {"kind":"npc_strategy_response","npcId":"${npcId}","updates":[...],"waitMs":30000}`,
         ].join('\n'),
       },
     ];
@@ -2088,12 +2115,34 @@ export class NpcPuppetMaster {
     const record = value as Partial<NpcStrategyResponse>;
     if (record.kind !== 'npc_strategy_response') return null;
     if (typeof record.npcId !== 'string' || record.npcId.trim() !== npcId) return null;
-    const memory = typeof record.memory === 'string' ? record.memory.trim() : undefined;
-    const objectives = Array.isArray(record.objectives)
-      ? record.objectives
-          .map((objective) => (typeof objective === 'string' ? objective.trim() : ''))
-          .filter(Boolean)
-      : undefined;
+    const updates = Array.isArray((record as any).updates)
+      ? (record as any).updates
+          .map((step: unknown) => this.normalizeStep(step))
+          .filter((step: NpcPlanStep | null): step is NpcPlanStep => !!step)
+          .filter((step: NpcPlanStep) =>
+            [
+              'MEMORY_ADD',
+              'MEMORY_REMOVE',
+              'OBJECTIVE_ADD',
+              'OBJECTIVE_UPDATE',
+              'OBJECTIVE_REMOVE',
+            ].includes(step.type)
+          )
+      : (() => {
+          // Older saves/queued providers may still return the previous strategy shape.
+          const legacy: NpcPlanStep[] = [];
+          if (typeof (record as any).memory === 'string' && (record as any).memory.trim()) {
+            legacy.push({ type: 'MEMORY_SET', memory: (record as any).memory.trim() });
+          }
+          if (Array.isArray((record as any).objectives)) {
+            const objectives = (record as any).objectives
+              .filter((objective: unknown): objective is string => typeof objective === 'string')
+              .map((objective: string) => objective.trim())
+              .filter(Boolean);
+            if (objectives.length) legacy.push({ type: 'OBJECTIVES_SET', objectives });
+          }
+          return legacy.length ? legacy : undefined;
+        })();
     const waitMs =
       typeof record.waitMs === 'number' && Number.isFinite(record.waitMs)
         ? record.waitMs
@@ -2101,8 +2150,7 @@ export class NpcPuppetMaster {
     return {
       kind: 'npc_strategy_response',
       npcId,
-      ...(memory ? { memory } : {}),
-      ...(objectives ? { objectives } : {}),
+      ...(updates?.length ? { updates } : {}),
       ...(waitMs !== undefined ? { waitMs } : {}),
     };
   }
@@ -2110,42 +2158,6 @@ export class NpcPuppetMaster {
   private clampStrategyWaitMs(ms?: number): number {
     if (typeof ms !== 'number' || !Number.isFinite(ms)) return PM_STRATEGY_DEFAULT_WAIT_MS;
     return Math.max(PM_STRATEGY_MIN_WAIT_MS, Math.min(PM_STRATEGY_MAX_WAIT_MS, ms));
-  }
-
-  private setNpcMemory(actor: unknown, memory: string): boolean {
-    const component =
-      actor instanceof Actor
-        ? (actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-            | { type: 'NPC'; memory?: string }
-            | undefined)
-        : undefined;
-    if (!component) return false;
-    component.memory = String(memory || '').trim();
-    return true;
-  }
-
-  private setNpcObjectives(actor: unknown, objectives: string[]): string[] | undefined {
-    const component =
-      actor instanceof Actor
-        ? (actor.components?.find((candidate: any) => candidate?.type === 'NPC') as
-            | {
-                type: 'NPC';
-                objectives?: string[];
-                objectivesInitializedFromTA?: boolean;
-                objectivesTARevision?: string;
-              }
-            | undefined)
-        : undefined;
-    if (!component) return undefined;
-    component.objectives = objectives
-      .map((objective) => String(objective || '').trim())
-      .filter(Boolean);
-    component.objectivesInitializedFromTA = true;
-    component.objectivesTARevision = this.game.textAssets.getResolvedObjectListRevision(
-      actor as Actor,
-      'objectives'
-    );
-    return component.objectives;
   }
 
   private async buildSystemPrompt(worldModel: NpcWorldModel): Promise<LlmProviderContent> {
@@ -2187,10 +2199,10 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, OBJECTIVES_SET, MEMORY_SET.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
-          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVES_SET before dependent actions to add the concrete next prerequisite and its dependency chain. Do not record a prerequisite as completed until runtime confirms it.',
+          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_REMOVE only after runtime confirmation. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
           '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
@@ -2783,7 +2795,7 @@ export class NpcPuppetMaster {
         ...result,
         status: 'failed',
         code: 'pattern_without_progress',
-        message: `Cyclic no-progress behavior detected: ${[...new Set(signatures)].join(', ')} have already been tried and did not help. Do not continue this action pattern. Choose a materially different strategy, ask for help, WAIT/rest voluntarily, or reconsider current objectives with OBJECTIVES_SET if the goal is not currently achievable.`,
+        message: `Cyclic no-progress behavior detected: ${[...new Set(signatures)].join(', ')} have already been tried and did not help. Do not continue this action pattern. Choose a materially different strategy, ask for help, WAIT/rest voluntarily, or revise the relevant objective branch if the goal is not currently achievable.`,
       };
     }
 
@@ -3206,7 +3218,7 @@ export class NpcPuppetMaster {
           if (Array.isArray(dynamicContext.npcs)) {
             for (const npc of dynamicContext.npcs) {
               const objStr = npc.objectives ? JSON.stringify(npc.objectives) : '[]';
-              const memStr = npc.memory ? `"${npc.memory}"` : 'none';
+              const memStr = npc.memory ? JSON.stringify(npc.memory) : 'none';
               let invStr = '';
               if (
                 npc.inventory &&
@@ -3393,6 +3405,38 @@ export class NpcPuppetMaster {
     if (record.type === 'SAY') {
       const text = typeof record.text === 'string' ? record.text.trim() : '';
       return text ? { type: 'SAY', text } : null;
+    }
+    if (record.type === 'MEMORY_ADD' || record.type === 'MEMORY_REMOVE') {
+      const memory = typeof record.memory === 'string' ? record.memory.trim() : '';
+      return memory ? { type: record.type, memory } : null;
+    }
+    if (record.type === 'OBJECTIVE_ADD') {
+      if (
+        !record.objective ||
+        typeof record.objective !== 'object' ||
+        Array.isArray(record.objective)
+      ) {
+        return null;
+      }
+      const objective = normalizeNpcObjectiveDraft(record.objective);
+      const parentId =
+        record.parentId === null
+          ? null
+          : typeof record.parentId === 'string' && record.parentId.trim()
+            ? record.parentId.trim()
+            : undefined;
+      return objective
+        ? { type: 'OBJECTIVE_ADD', objective, ...(parentId !== undefined ? { parentId } : {}) }
+        : null;
+    }
+    if (record.type === 'OBJECTIVE_UPDATE') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      const text = typeof record.text === 'string' ? record.text.trim() : '';
+      return objectiveId && text ? { type: 'OBJECTIVE_UPDATE', objectiveId, text } : null;
+    }
+    if (record.type === 'OBJECTIVE_REMOVE') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      return objectiveId ? { type: 'OBJECTIVE_REMOVE', objectiveId } : null;
     }
     if (record.type === 'MEMORY_SET') {
       const memory = typeof record.memory === 'string' ? record.memory.trim() : '';

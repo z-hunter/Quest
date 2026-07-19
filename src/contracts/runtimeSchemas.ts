@@ -362,9 +362,22 @@ const NPC_STEP_TYPES = new Set([
   'USE',
   'WAIT',
   'THINK_STRATEGY',
+  'MEMORY_ADD',
+  'MEMORY_REMOVE',
+  'OBJECTIVE_ADD',
+  'OBJECTIVE_UPDATE',
+  'OBJECTIVE_REMOVE',
   'MEMORY_SET',
   'OBJECTIVES_SET',
 ]);
+
+function isNpcObjectiveDraft(value: unknown): boolean {
+  if (!isRecord(value) || !isString(value.text) || !value.text.trim()) return false;
+  return (
+    value.subtasks === undefined ||
+    (Array.isArray(value.subtasks) && value.subtasks.every(isNpcObjectiveDraft))
+  );
+}
 
 export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is NpcPlanStep {
   const issues: ContractIssue[] = [];
@@ -438,9 +451,32 @@ export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is 
         issues.push({ path: `${path}.reason`, message: 'must be a string' });
       }
     }
-    if (value.type === 'MEMORY_SET') {
+    if (
+      value.type === 'MEMORY_ADD' ||
+      value.type === 'MEMORY_REMOVE' ||
+      value.type === 'MEMORY_SET'
+    ) {
       if (!isString(value.memory))
         issues.push({ path: `${path}.memory`, message: 'must be a string' });
+    }
+    if (value.type === 'OBJECTIVE_ADD') {
+      if (value.parentId !== undefined && value.parentId !== null && !isString(value.parentId)) {
+        issues.push({ path: `${path}.parentId`, message: 'must be a string or null' });
+      }
+      if (!isNpcObjectiveDraft(value.objective)) {
+        issues.push({
+          path: `${path}.objective`,
+          message: 'must be an objective { text, subtasks } tree',
+        });
+      }
+    }
+    if (value.type === 'OBJECTIVE_UPDATE') {
+      if (!isString(value.objectiveId))
+        issues.push({ path: `${path}.objectiveId`, message: 'must be a string' });
+      if (!isString(value.text)) issues.push({ path: `${path}.text`, message: 'must be a string' });
+    }
+    if (value.type === 'OBJECTIVE_REMOVE' && !isString(value.objectiveId)) {
+      issues.push({ path: `${path}.objectiveId`, message: 'must be a string' });
     }
     if (value.type === 'OBJECTIVES_SET') {
       if (!Array.isArray(value.objectives) || !value.objectives.every(isString)) {
@@ -510,6 +546,26 @@ export function assertTextAssetData(
     const item = value[field];
     if (item !== undefined && !isString(item) && !(Array.isArray(item) && item.every(isString)))
       issues.push({ path: `$.${field}`, message: 'must be a string or string array' });
+  }
+  if (
+    value.memory !== undefined &&
+    !isString(value.memory) &&
+    !(Array.isArray(value.memory) && value.memory.every(isString))
+  ) {
+    issues.push({ path: '$.memory', message: 'must be a string or string array' });
+  }
+  if (
+    value.objectives !== undefined &&
+    !isString(value.objectives) &&
+    !(
+      Array.isArray(value.objectives) &&
+      value.objectives.every((item) => isString(item) || isNpcObjectiveDraft(item))
+    )
+  ) {
+    issues.push({
+      path: '$.objectives',
+      message: 'must be a string, string array, or objective tree',
+    });
   }
   assertIssues<Record<string, unknown>>(source, value, issues);
 }

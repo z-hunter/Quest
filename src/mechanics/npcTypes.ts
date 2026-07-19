@@ -1,5 +1,8 @@
 import type { LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
 import type { SceneLogEntry } from '../scene/SceneLog';
+import type { NpcObjective, NpcObjectiveDraft } from './npcState';
+
+export type { NpcObjective, NpcObjectiveDraft } from './npcState';
 
 export type NpcPlanStep =
   | {
@@ -68,6 +71,28 @@ export type NpcPlanStep =
       reason?: string;
     }
   | {
+      type: 'MEMORY_ADD';
+      memory: string;
+    }
+  | {
+      type: 'MEMORY_REMOVE';
+      memory: string;
+    }
+  | {
+      type: 'OBJECTIVE_ADD';
+      parentId?: string | null;
+      objective: NpcObjectiveDraft;
+    }
+  | {
+      type: 'OBJECTIVE_UPDATE';
+      objectiveId: string;
+      text: string;
+    }
+  | {
+      type: 'OBJECTIVE_REMOVE';
+      objectiveId: string;
+    }
+  | {
       type: 'MEMORY_SET';
       memory: string;
     }
@@ -124,8 +149,8 @@ export type NpcActorContext = {
   id: string;
   title: string;
   lore?: string;
-  objectives?: string[];
-  memory?: string;
+  objectives?: NpcObjective[];
+  memory?: string[];
   inventory?: {
     available: boolean;
     itemIds: string[];
@@ -305,7 +330,7 @@ export type NpcPuppetMasterStrategyDebugInfo = {
   extractedJson?: string;
   error?: string;
   memoryUpdated: boolean;
-  objectivesUpdated?: string[];
+  objectivesUpdated?: NpcObjective[];
   waitMs: number;
   fallback: boolean;
   durationMs?: number;

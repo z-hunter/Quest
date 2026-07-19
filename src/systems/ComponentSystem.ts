@@ -6,6 +6,11 @@ import type { SpatialRelationType } from '../scene/spatialTypes';
 import { Actor } from '../entities/Actor';
 import { Geometry } from '../utils/Geometry';
 import { toVisualPosition } from '../utils/Parallax';
+import {
+  normalizeNpcMemory,
+  normalizeNpcObjectives,
+  type NpcObjective,
+} from '../mechanics/npcState';
 
 import { ShadowSystem, type ShadowComponent } from './ShadowSystem';
 
@@ -72,8 +77,11 @@ export interface ActorComponent {
 export interface NpcComponent {
   type: 'NPC';
   enabled?: boolean;
-  memory?: string;
-  objectives?: string[];
+  /** Legacy scalar/string-list values are accepted at the persisted-scene boundary. */
+  memory?: string[] | string;
+  objectives?: NpcObjective[] | string[];
+  memoryInitializedFromTA?: boolean;
+  memoryTARevision?: string;
   objectivesInitializedFromTA?: boolean;
   objectivesTARevision?: string;
   knownEntities?: Record<string, NpcKnownEntityMemory>;
@@ -277,13 +285,20 @@ export class ComponentSystem {
       (candidate: any): candidate is NpcComponent => candidate?.type === 'NPC'
     );
     if (!component) return null;
+    // Migrate persisted v1 cognition lazily at the component boundary so saves and
+    // authored scenes may still contain scalar memory or string-list objectives.
+    if (component.memory !== undefined) component.memory = normalizeNpcMemory(component.memory);
+    if (Array.isArray(component.objectives)) {
+      component.objectives = normalizeNpcObjectives(component.objectives);
+    }
     return {
       type: 'NPC',
       enabled: component.enabled !== false,
-      memory: typeof component.memory === 'string' ? component.memory : '',
-      objectives: Array.isArray(component.objectives)
-        ? component.objectives.filter((item): item is string => typeof item === 'string')
-        : undefined,
+      memory: normalizeNpcMemory(component.memory),
+      objectives: component.objectives,
+      memoryInitializedFromTA: component.memoryInitializedFromTA === true,
+      memoryTARevision:
+        typeof component.memoryTARevision === 'string' ? component.memoryTARevision : undefined,
       objectivesInitializedFromTA: component.objectivesInitializedFromTA === true,
       objectivesTARevision:
         typeof component.objectivesTARevision === 'string'

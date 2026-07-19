@@ -5,6 +5,13 @@ import { Select } from '../../common/Select';
 import { SceneObject } from '../../../entities/SceneObject';
 import { Actor } from '../../../entities/Actor';
 import { Entity } from '../../../entities/Entity';
+import {
+  materializeNpcObjectives,
+  formatNpcObjectivesForEditor,
+  normalizeNpcMemory,
+  normalizeNpcObjectives,
+  parseNpcObjectivesFromEditor,
+} from '../../../mechanics/npcState';
 
 const iconModules = import.meta.glob('../../../assets/components-icon/*.svg', { eager: true });
 function getIconUrl(type: string): string | undefined {
@@ -20,6 +27,9 @@ export const SectionComponents: React.FC = () => {
   const o = obj;
   const [stateParserNoteRows, setStateParserNoteRows] = React.useState<
     Record<string, Array<{ id: string; value: string; field: string }>>
+  >({});
+  const [npcDrafts, setNpcDrafts] = React.useState<
+    Record<string, { memory?: string; objectives?: string; objectiveError?: string }>
   >({});
   const title = game.textAssets.getResolvedObjectField(o, 'title');
   const hasTitle = !!title?.trim();
@@ -68,6 +78,7 @@ export const SectionComponents: React.FC = () => {
     return typeof value === 'boolean' ? value : value === 'true';
   };
   const getStateParserNoteRowsKey = (idx: number): string => `${o.name || 'object'}:${idx}`;
+  const getNpcDraftKey = (idx: number): string => `${o.name || 'object'}:npc:${idx}`;
   const getStateParserNoteRows = (comp: any, idx: number) => {
     const key = getStateParserNoteRowsKey(idx);
     const draft = stateParserNoteRows[key];
@@ -347,7 +358,7 @@ export const SectionComponents: React.FC = () => {
                 o.components.unshift({
                   type: 'NPC',
                   enabled: true,
-                  memory: '',
+                  memory: [],
                   objectives: [],
                 });
               } else if (type === '3d-parallax') {
@@ -478,14 +489,38 @@ export const SectionComponents: React.FC = () => {
                 </div>
                 <div className="e-row">
                   <label className="e-label" style={{ fontSize: '10px' }}>
-                    Memory
+                    Memory (one fact per line)
                   </label>
                   <textarea
                     className="e-input"
                     rows={3}
-                    value={comp.memory || ''}
+                    value={(() => {
+                      const key = getNpcDraftKey(idx);
+                      if (npcDrafts[key]?.memory !== undefined) return npcDrafts[key].memory;
+                      const current = normalizeNpcMemory(comp.memory);
+                      const revision = game.textAssets.getResolvedNpcMemoryRevision(o);
+                      const memory =
+                        current.length || comp.memoryTARevision === revision
+                          ? current
+                          : game.textAssets.getResolvedNpcMemory(o);
+                      return memory.join('\n');
+                    })()}
                     onChange={(e) => {
-                      comp.memory = e.target.value;
+                      const key = getNpcDraftKey(idx);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: { ...current[key], memory: e.target.value },
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const key = getNpcDraftKey(idx);
+                      comp.memory = normalizeNpcMemory(e.target.value.split(/\r?\n/));
+                      comp.memoryInitializedFromTA = true;
+                      comp.memoryTARevision = game.textAssets.getResolvedNpcMemoryRevision(o);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: { ...current[key], memory: undefined },
+                      }));
                       incrementObjectVersion();
                     }}
                   />
@@ -496,28 +531,67 @@ export const SectionComponents: React.FC = () => {
                   </label>
                   <textarea
                     className="e-input"
-                    rows={3}
-                    value={
-                      Array.isArray(comp.objectives) &&
-                      (comp.objectives.length > 0 ||
-                        comp.objectivesTARevision ===
-                          game.textAssets.getResolvedObjectListRevision(o, 'objectives'))
-                        ? comp.objectives.join('\n')
-                        : game.textAssets.getResolvedObjectListField(o, 'objectives').join('\n')
-                    }
+                    rows={5}
+                    value={(() => {
+                      const key = getNpcDraftKey(idx);
+                      if (npcDrafts[key]?.objectives !== undefined)
+                        return npcDrafts[key].objectives;
+                      const current = normalizeNpcObjectives(comp.objectives);
+                      const revision = game.textAssets.getResolvedNpcObjectivesRevision(o);
+                      const objectives =
+                        current.length || comp.objectivesTARevision === revision
+                          ? current
+                          : game.textAssets.getResolvedNpcObjectives(o);
+                      return formatNpcObjectivesForEditor(objectives);
+                    })()}
                     onChange={(e) => {
-                      comp.objectives = e.target.value
-                        .split(/\r?\n/)
-                        .map((objective: string) => objective.trim())
-                        .filter(Boolean);
+                      const key = getNpcDraftKey(idx);
+                      const parsed = parseNpcObjectivesFromEditor(e.target.value);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: {
+                          ...current[key],
+                          objectives: e.target.value,
+                          objectiveError: 'error' in parsed ? parsed.error : undefined,
+                        },
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const key = getNpcDraftKey(idx);
+                      const parsed = parseNpcObjectivesFromEditor(e.target.value);
+                      if ('error' in parsed) {
+                        setNpcDrafts((current) => ({
+                          ...current,
+                          [key]: { ...current[key], objectiveError: parsed.error },
+                        }));
+                        return;
+                      }
+                      comp.objectives = materializeNpcObjectives(parsed.objectives);
                       comp.objectivesInitializedFromTA = true;
-                      comp.objectivesTARevision = game.textAssets.getResolvedObjectListRevision(
-                        o,
-                        'objectives'
-                      );
+                      comp.objectivesTARevision =
+                        game.textAssets.getResolvedNpcObjectivesRevision(o);
+                      setNpcDrafts((current) => ({
+                        ...current,
+                        [key]: {
+                          ...current[key],
+                          objectives: undefined,
+                          objectiveError: undefined,
+                        },
+                      }));
                       incrementObjectVersion();
                     }}
                   />
+                  {npcDrafts[getNpcDraftKey(idx)]?.objectiveError && (
+                    <div
+                      style={{
+                        color: 'var(--ui-danger-color)',
+                        fontSize: '10px',
+                        marginTop: '3px',
+                      }}
+                    >
+                      {npcDrafts[getNpcDraftKey(idx)]?.objectiveError}
+                    </div>
+                  )}
                 </div>
               </>
             )}
