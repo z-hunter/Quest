@@ -38,6 +38,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'For direct player speech received by a visible listening NPC, return a plan with a concise SAY response whenever the speech addresses, questions, accuses, greets, or otherwise materially concerns that NPC. Return an empty plans array only when silence is genuinely appropriate; then reasoning MUST explicitly state why this NPC should not respond. Never say in reasoning that the NPC should answer and then return no plan.',
+  'Whenever an NPC decides, promises, volunteers, accepts responsibility, or otherwise commits to future work not already covered by an active objective, the same plan MUST first add a concrete OBJECTIVE_ADD. This is mandatory for work the NPC chose to do for another NPC as well as its own work; never leave a commitment only in dialogue, action history, or memory.',
   'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, and COMMAND.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
@@ -54,7 +55,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
-  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
+  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
@@ -1186,7 +1187,13 @@ export class NpcPuppetMaster {
       !remainingSteps.length &&
       !hasPendingMemory &&
       !interruptOn.length &&
-      barrierStep.type !== 'MOVE_TO'
+      barrierStep.type !== 'MOVE_TO' &&
+      // A scene transfer needs its completion hand-off even when it is the
+      // whole plan.  Besides emitting plan completion in the destination,
+      // that hand-off records the one-turn arrival fact used by the next PM
+      // decision.  Without it, a bare TRAVERSE_EXIT loses the destination
+      // context and the NPC can replan from stale travel history.
+      barrierStep.type !== 'TRAVERSE_EXIT'
     ) {
       return;
     }
@@ -1579,7 +1586,10 @@ export class NpcPuppetMaster {
   ): boolean {
     return (
       interruptOn.length > 0 ||
-      plan.steps.filter((step) => this.isPhysicalPlanStep(step)).length > 1
+      plan.steps.filter((step) => this.isPhysicalPlanStep(step)).length > 1 ||
+      // A terminal exit changes the NPC's scene.  Its destination needs a
+      // fresh PM turn even when the exit is the only physical step.
+      plan.steps.some((step) => step.type === 'TRAVERSE_EXIT')
     );
   }
 
@@ -2424,6 +2434,7 @@ export class NpcPuppetMaster {
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
           '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
           '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
+          '7. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
       },

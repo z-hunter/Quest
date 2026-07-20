@@ -658,6 +658,8 @@ describe('NpcPuppetMaster', () => {
     expect(system).toContain('retain the parent goal');
     expect(system).toContain('immediate concrete subgoal');
     expect(system).toContain('before dependent physical steps');
+    expect(system).toContain('voluntarily for another NPC');
+    expect(system).toContain('never leave it only in dialogue, actionHistory, or memory');
   });
 
   it('filters malformed objective operation steps', async () => {
@@ -1433,6 +1435,46 @@ describe('NpcPuppetMaster', () => {
 
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([]);
     expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
+  });
+
+  it('records arrival after a bare terminal Exit plan', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    fixture.scene.addEntity(npc);
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    (pm as any).storePendingContinuationAfterScheduledOutcome(
+      fixture.scene,
+      { npcId: npc.name, steps: [{ type: 'TRAVERSE_EXIT', targetId: 'door' }] },
+      [{ status: 'scheduled', code: 'npc_action_scheduled', npcId: npc.name }],
+      []
+    );
+
+    expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(true);
+    fixture.scene.entities = fixture.scene.entities.filter((entity) => entity !== npc);
+    destination.addEntity(npc);
+
+    void (pm as any).enqueueNpc(destination, npc.name, {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'exit_traversed',
+        npcId: npc.name,
+        targetId: 'door',
+        actionType: 'TRAVERSE_EXIT',
+        worldChanged: true,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(getDynamicPmText(provider.calls[0])).toContain('Arrived in Corridor. [JUST ARRIVED]');
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
+    vi.useRealTimers();
   });
 
   it('preserves durable memory and exposes arrival memory only for the next PM turn', async () => {
