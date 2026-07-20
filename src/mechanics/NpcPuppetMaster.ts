@@ -42,7 +42,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Use COMMAND only for an authored command listed on a visible entity; never invent a generic use action.',
-  'For a listed command, available means its direct affordance is present; execute it only when executable is true. Read preconditions and inventory entries by stable id, containerId, relation, groups, and states; items with similar titles or groups are distinct instances.',
+  'For a listed command, available means its direct affordance is present; execute it only when executable is true. Read preconditions and inventory entries by stable id, containerId, relation, groups, and states; items with similar titles or groups are distinct instances. inventory.itemIds lists only the Actor main inventory; inventory.items is a recursive container map. TAKE on an accessible nested inventory item extracts it into the Actor main inventory, and PUT can then place a main-inventory item into a listed target relation.',
   'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
   'EXAMINE is the deeper discovery mode: it may reveal both lookable and examinable contents. LOOK may reveal lookable contents but never examinable contents.',
@@ -804,6 +804,14 @@ export class NpcPuppetMaster {
           .filter((entity) => entity.interaction === 'held' || entity.interaction === 'reachable')
           .map((entity) => entity.id),
       ]);
+      // `itemIds` intentionally contains only the Actor's main inventory.
+      // Nested `inventory.items` are not already held at that level, but an
+      // accessible child may be extracted with TAKE before a subsequent PUT.
+      const nestedTakeableIds = new Set(
+        (npc.inventory?.items || [])
+          .filter((item) => item.containerId !== plan.npcId)
+          .map((item) => item.id)
+      );
       const knownItemIds = new Set(
         (npc.knownEntities || [])
           .filter((entity) => entity.kind === 'item')
@@ -828,7 +836,12 @@ export class NpcPuppetMaster {
               (candidate) => candidate.type === 'MOVE_TO' && candidate.targetId === step.targetId
             );
           const canBecomeReachable = target?.approach === 'route_available' && hasPriorMove;
-          if (!plannedAvailableIds.has(step.targetId) && !canBecomeReachable) {
+          const canExtractFromNestedInventory = nestedTakeableIds.has(step.targetId);
+          if (
+            !plannedAvailableIds.has(step.targetId) &&
+            !canBecomeReachable &&
+            !canExtractFromNestedInventory
+          ) {
             missing.push({ stepType: step.type, itemId: step.targetId });
           } else {
             plannedAvailableIds.add(step.targetId);
@@ -3455,6 +3468,23 @@ export class NpcPuppetMaster {
                 const itemNames = npc.inventory.itemIds.map((id: unknown) => String(id));
                 if (itemNames.length > 0) {
                   invStr = ` | Inventory: [${itemNames.join(', ')}]`;
+                }
+                const nestedItems = Array.isArray(npc.inventory.items)
+                  ? npc.inventory.items.filter((item: any) => item && item.containerId !== npc.id)
+                  : [];
+                if (nestedItems.length > 0) {
+                  const nestedSummary = nestedItems.map((item: any) => {
+                    const groups =
+                      Array.isArray(item.groupIds) && item.groupIds.length
+                        ? ` ${item.groupIds.join('/')}`
+                        : '';
+                    const states =
+                      Array.isArray(item.states) && item.states.length
+                        ? ` ${item.states.map((state: any) => `${state.id}=${state.value}`).join(',')}`
+                        : '';
+                    return `${item.id} in ${item.containerId}${groups}${states}`;
+                  });
+                  invStr += ` | Nested: [${nestedSummary.join('; ')}]`;
                 }
               }
               promptLines.push(

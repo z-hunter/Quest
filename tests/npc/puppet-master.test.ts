@@ -2906,6 +2906,90 @@ describe('NpcPuppetMaster', () => {
     );
   });
 
+  it('accepts and executes TAKE from a held nested inventory before PUT replacement', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'Device container',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(remote, 'in');
+    const depleted = fixture.addEntity('installed_cell', {
+      title: 'Installed power cell',
+      components: [
+        { type: 'Item' },
+        { type: 'State', id: 'charge_percent', valueType: 'number', initialValue: 0, value: 0 },
+      ],
+    });
+    depleted.groupID = '#aaa';
+    const replacement = fixture.addEntity('replacement_cell', {
+      title: 'Replacement power cell',
+      components: [
+        { type: 'Item' },
+        {
+          type: 'State',
+          id: 'charge_percent',
+          valueType: 'number',
+          initialValue: 100,
+          value: 100,
+        },
+      ],
+    });
+    replacement.groupID = '#aaa';
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    expect(fixture.game.inventoryManager.addInventoryEntity(remote, depleted, 'in').status).toBe(
+      'ok'
+    );
+    expect(fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in').status).toBe('ok');
+    expect(fixture.game.inventoryManager.addInventoryEntity(npc, replacement, 'in').status).toBe(
+      'ok'
+    );
+
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'TAKE', targetId: depleted.name },
+              { type: 'PUT', itemId: replacement.name, targetId: remote.name, relation: 'in' },
+            ],
+            interruptOn: [{ type: 'ACTION_FAILED' }],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name);
+    const prompt = String(provider.calls[0]?.messages[0]?.content || '');
+
+    expect(plans).toEqual([
+      expect.objectContaining({
+        npcId: npc.name,
+        steps: [
+          { type: 'TAKE', targetId: depleted.name },
+          { type: 'PUT', itemId: replacement.name, targetId: remote.name, relation: 'in' },
+        ],
+      }),
+    ]);
+    expect(prompt).toContain(`"containerId": "${remote.name}"`);
+    expect(prompt).toContain(`"id": "${depleted.name}"`);
+    expect(prompt).toContain('"charge_percent",\n              "value": 0');
+    expect(pm.getLastDebugInfo()?.rejectedPlans).toEqual([]);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, depleted, 'in')).toBe(true);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(remote, depleted, 'in')).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(fixture.game.inventoryManager.hasInventoryEntity(npc, replacement, 'in')).toBe(false);
+    expect(fixture.game.inventoryManager.hasInventoryEntity(remote, replacement, 'in')).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('does not expose item presence in the PM static catalog', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 5, 5);
