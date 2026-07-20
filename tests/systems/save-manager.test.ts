@@ -5,6 +5,7 @@ import { Actor } from '../../src/entities/Actor';
 import { Scene } from '../../src/scene/Scene';
 import { SceneManager } from '../../src/scene/SceneManager';
 import { SaveManager } from '../../src/systems/SaveManager';
+import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 import { createTestGame } from '../fixtures/gameFactory';
 
 function createHarness() {
@@ -78,6 +79,7 @@ describe('SaveManager', () => {
     npc.x = 77;
     const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
     npcComponent.memory = 'The key was found.';
+    npcComponent.transientMemory = ['Arrived in Hall.'];
     npcComponent.objectives = ['Deliver the key to the archive'];
     npcComponent.knownEntities = {
       key: {
@@ -132,6 +134,7 @@ describe('SaveManager', () => {
     expect(
       state.scenes.find((scene: any) => scene.id === 'room')?.runtime?.sceneLog?.entries
     ).toEqual([expect.objectContaining({ text: '[ Hero takes Key ]' })]);
+    expect(JSON.stringify(state)).toContain('"transientMemory":["Arrived in Hall."]');
 
     npcComponent.memory = 'corrupted';
     game.console.history = [];
@@ -153,6 +156,7 @@ describe('SaveManager', () => {
       (component: any) => component.type === 'NPC'
     ) as any;
     expect(restoredNpcComponent.objectives).toEqual(['Deliver the key to the archive']);
+    expect(restoredNpcComponent.transientMemory).toEqual(['Arrived in Hall.']);
     expect(restoredNpcComponent.knownEntities).toEqual({
       key: {
         id: 'key',
@@ -168,6 +172,9 @@ describe('SaveManager', () => {
         },
       },
     });
+    expect(
+      new NpcWorldModelBuilder(game).build(restoredHall, { npcIds: ['guard'] }).npcs[0]
+    ).toEqual(expect.objectContaining({ transientMemory: ['Arrived in Hall.'] }));
     expect(restoredKey.spatial).toEqual({ parentNodeId: 'guard', relation: 'in' });
     expect(restoredRoom.revealedHiddenEntities.has('secret')).toBe(true);
     expect(restoredRoom.getParserNote()).toBe('Door checked');

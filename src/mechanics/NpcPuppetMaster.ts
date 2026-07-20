@@ -23,7 +23,7 @@ import type {
   NpcWorldModel,
 } from './npcTypes';
 import { assertNpcPlan } from '../contracts/runtimeSchemas';
-import { normalizeNpcObjectiveDraft, normalizeNpcObjectives } from './npcState';
+import { normalizeNpcObjectiveDraft, normalizeNpcObjectives, type NpcObjective } from './npcState';
 
 const SYSTEM_PROMPT_URL = '/text/system/npc-pm-system.md';
 const FALLBACK_SYSTEM_PROMPT = [
@@ -38,7 +38,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'For direct player speech received by a visible listening NPC, return a plan with a concise SAY response whenever the speech addresses, questions, accuses, greets, or otherwise materially concerns that NPC. Return an empty plans array only when silence is genuinely appropriate; then reasoning MUST explicitly state why this NPC should not respond. Never say in reasoning that the NPC should answer and then return no plan.',
-  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
@@ -54,7 +54,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
-  "CURRENT OBJECTIVES are the NPC's durable active plans across scene changes. Keep an unfinished parent objective until runtime evidence confirms completion or impossibility: retain the parent goal and add the immediate concrete subgoal with OBJECTIVE_ADD before dependent physical steps. OBJECTIVE_REMOVE is only for confirmed completed or irrelevant work. MEMORY is an array of factual notes: use MEMORY_ADD only for confirmed facts and MEMORY_REMOVE to prune stale facts. Objectives are intentions, not claims that a prerequisite was completed.",
+  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. Maintain them actively: add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
@@ -76,6 +76,7 @@ const STRATEGY_SYSTEM_PROMPT = [
   'Return exactly one JSON object and no extra text.',
   'Return {"kind":"npc_strategy_response","npcId":"...","updates":[memory/objective update steps],"waitMs":30000}.',
   'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, or any physical action.',
+  'updates may contain only MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, or OBJECTIVE_REMOVE. OBJECTIVE_MARK_COMPLETED only records a task already confirmed complete by runtime; it never performs that task.',
   'Analyze the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, commands, objectives, and memory.',
   'Write compact memory only with confirmed facts and useful conclusions. Remove noisy or speculative details.',
   'Revise objectives if the current goal is impossible, blocked, already satisfied, or needs a different strategy.',
@@ -709,6 +710,11 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
+    // Completed objectives were presented in this request as JUST COMPLETED.
+    // Retire them only after that one PM turn, never by mutating their text.
+    this.pruneObjectivesSeenAsCompleted(scene, worldModel);
+    this.pruneTransientMemorySeenThisTurn(scene, worldModel);
+
     for (const plan of acceptedPlans) {
       const npcContext = worldModel.npcs.find((n) => n.id === plan.npcId);
       const planTrigger =
@@ -993,6 +999,7 @@ export class NpcPuppetMaster {
         step.type !== 'MEMORY_REMOVE' &&
         step.type !== 'OBJECTIVE_ADD' &&
         step.type !== 'OBJECTIVE_UPDATE' &&
+        step.type !== 'OBJECTIVE_MARK_COMPLETED' &&
         step.type !== 'OBJECTIVE_REMOVE'
       )
         break;
@@ -1398,14 +1405,15 @@ export class NpcPuppetMaster {
       const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
         (candidate) => candidate.getObjectByName(npcId)
       );
-      const memory = destinationScene
-        ? this.buildSceneArrivalMemory(destinationScene, pending.memory)
-        : pending.memory;
+      const memory = pending.memory;
       const completionOutcomes = this.executor.executePlan({
         npcId: pending.npcId,
         steps: [],
         ...(memory !== undefined ? { memory } : {}),
       });
+      if (destinationScene) {
+        this.addTransientArrivalMemory(destinationScene, pending.npcId);
+      }
       const finalResults = [...completedSteps, ...completionOutcomes];
       this.traceWake('plan_completed_after_scene_transfer', {
         sourceSceneId: scene.id,
@@ -1522,14 +1530,10 @@ export class NpcPuppetMaster {
     return true;
   }
 
-  private buildSceneArrivalMemory(scene: Scene, existing?: string): string {
+  private getSceneArrivalMemory(scene: Scene): string {
     const title = this.game.textAssets.getResolvedSceneField(scene, 'title')?.trim();
     const location = title || scene.id;
-    const arrival = `Arrived in ${location}.`;
-    const base = typeof existing === 'string' ? existing.trim() : '';
-    if (!base) return arrival;
-    if (base.toLowerCase().includes(arrival.toLowerCase())) return base;
-    return `${base} ${arrival}`;
+    return `Arrived in ${location}.`;
   }
 
   private getContinuationBarrierResult(
@@ -1983,6 +1987,7 @@ export class NpcPuppetMaster {
           step.type === 'MEMORY_REMOVE' ||
           step.type === 'OBJECTIVE_ADD' ||
           step.type === 'OBJECTIVE_UPDATE' ||
+          step.type === 'OBJECTIVE_MARK_COMPLETED' ||
           step.type === 'OBJECTIVE_REMOVE'
       );
       const hasPlanMemory = typeof plan.memory === 'string';
@@ -2053,6 +2058,82 @@ export class NpcPuppetMaster {
     );
   }
 
+  /**
+   * A completion marker is deliberately a one-turn acknowledgement. The
+   * world model is built before provider invocation, so removing flags here
+   * cannot consume objectives marked by the response currently being run.
+   */
+  private pruneObjectivesSeenAsCompleted(scene: Scene, worldModel: NpcWorldModel): void {
+    const hasCompleted = (objectives: NpcObjective[]): boolean =>
+      objectives.some(
+        (objective) => objective.completed === true || hasCompleted(objective.subtasks)
+      );
+    const prune = (objectives: NpcObjective[]): NpcObjective[] =>
+      objectives
+        .filter((objective) => objective.completed !== true)
+        .map((objective) => ({ ...objective, subtasks: prune(objective.subtasks) }));
+
+    for (const npc of worldModel.npcs) {
+      if (!hasCompleted(npc.objectives || [])) continue;
+      const npcScene = scene.entities.some((entity) => entity.name === npc.id)
+        ? scene
+        : this.getNpcScene(npc.id);
+      const actor = npcScene?.entities.find((entity) => entity.name === npc.id);
+      if (!actor) continue;
+      // ComponentSystem returns a normalized snapshot; update the stored
+      // component itself so this lifecycle state survives the next build.
+      const component = actor.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | {
+            objectives?: NpcObjective[];
+            objectivesInitializedFromTA?: boolean;
+            objectivesTARevision?: string;
+          }
+        | undefined;
+      if (!component) continue;
+      component.objectives = prune(normalizeNpcObjectives(component.objectives));
+      component.objectivesInitializedFromTA = true;
+      const textAssets = this.game.textAssets as any;
+      component.objectivesTARevision =
+        typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+          ? textAssets.getResolvedNpcObjectivesRevision(actor)
+          : typeof textAssets.getResolvedObjectListRevision === 'function'
+            ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+            : JSON.stringify([]);
+    }
+  }
+
+  private addTransientArrivalMemory(scene: Scene, npcId: string): void {
+    const actor = scene.entities.find((entity) => entity.name === npcId);
+    const component = actor?.components.find((candidate: any) => candidate?.type === 'NPC') as
+      | { transientMemory?: string[] | string }
+      | undefined;
+    if (!component) return;
+    const arrival = this.getSceneArrivalMemory(scene);
+    const transientMemory = Array.isArray(component.transientMemory)
+      ? component.transientMemory
+      : typeof component.transientMemory === 'string'
+        ? [component.transientMemory]
+        : [];
+    if (!transientMemory.some((entry) => entry.trim() === arrival)) {
+      component.transientMemory = [...transientMemory, arrival];
+    }
+  }
+
+  private pruneTransientMemorySeenThisTurn(scene: Scene, worldModel: NpcWorldModel): void {
+    for (const npc of worldModel.npcs) {
+      if (!npc.transientMemory?.length) continue;
+      const npcScene = scene.entities.some((entity) => entity.name === npc.id)
+        ? scene
+        : this.getNpcScene(npc.id);
+      const actor = npcScene?.entities.find((entity) => entity.name === npc.id);
+      const component = actor?.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | { transientMemory?: string[] | string }
+        | undefined;
+      if (!component) continue;
+      component.transientMemory = [];
+    }
+  }
+
   private hasConcretePlanAction(plan: NpcPlan): boolean {
     return plan.steps.some(
       (step) =>
@@ -2064,6 +2145,7 @@ export class NpcPuppetMaster {
           'MEMORY_REMOVE',
           'OBJECTIVE_ADD',
           'OBJECTIVE_UPDATE',
+          'OBJECTIVE_MARK_COMPLETED',
           'OBJECTIVE_REMOVE',
         ].includes(step.type)
     );
@@ -2253,6 +2335,7 @@ export class NpcPuppetMaster {
               'MEMORY_REMOVE',
               'OBJECTIVE_ADD',
               'OBJECTIVE_UPDATE',
+              'OBJECTIVE_MARK_COMPLETED',
               'OBJECTIVE_REMOVE',
             ].includes(step.type)
           )
@@ -2328,10 +2411,10 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_REMOVE.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
-          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_REMOVE only after runtime confirmation. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
+          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
           '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
         ].join('\n'),
@@ -2364,8 +2447,8 @@ export class NpcPuppetMaster {
           id: npc.id,
           currentSceneId: worldModel.scene.id,
           currentSceneTitle: worldModel.scene.title,
-          objectives: npc.objectives,
-          memory: npc.memory,
+          objectives: this.getPromptObjectives(npc.objectives),
+          memory: this.getPromptMemory(npc.memory, npc.transientMemory),
           inventory: npc.inventory,
           knownEntities: knownEntities.some(
             (entity) => entity.id !== npc.id && !currentEntityIds.has(entity.id)
@@ -2399,6 +2482,24 @@ export class NpcPuppetMaster {
         });
       }),
     });
+  }
+
+  private getPromptObjectives(objectives: NpcObjective[] | undefined): NpcObjective[] {
+    return (objectives || []).map((objective) => ({
+      id: objective.id,
+      text: objective.completed ? `${objective.text} [JUST COMPLETED]` : objective.text,
+      subtasks: this.getPromptObjectives(objective.subtasks),
+    }));
+  }
+
+  private getPromptMemory(
+    memory: string[] | undefined,
+    transientMemory: string[] | undefined
+  ): string[] | undefined {
+    const durable = memory || [];
+    const transient = (transientMemory || []).map((entry) => `${entry} [JUST ARRIVED]`);
+    const combined = [...durable, ...transient];
+    return combined.length ? combined : undefined;
   }
 
   private compactPromptTrigger(trigger: NpcIndividualTrigger | NpcBatchTrigger): unknown {
@@ -3568,6 +3669,10 @@ export class NpcPuppetMaster {
     if (record.type === 'OBJECTIVE_REMOVE') {
       const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
       return objectiveId ? { type: 'OBJECTIVE_REMOVE', objectiveId } : null;
+    }
+    if (record.type === 'OBJECTIVE_MARK_COMPLETED') {
+      const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
+      return objectiveId ? { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId } : null;
     }
     if (record.type === 'MEMORY_SET') {
       const memory = typeof record.memory === 'string' ? record.memory.trim() : '';

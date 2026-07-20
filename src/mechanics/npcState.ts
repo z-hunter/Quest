@@ -3,6 +3,8 @@ export type NpcObjective = {
   id: string;
   text: string;
   subtasks: NpcObjective[];
+  /** Shown to PM once as JUST COMPLETED, then pruned after that PM turn. */
+  completed?: boolean;
 };
 
 export type NpcObjectiveDraft = {
@@ -76,7 +78,7 @@ export function normalizeNpcObjectives(value: unknown): NpcObjective[] {
     const subtasks = Array.isArray(record.subtasks)
       ? record.subtasks.map(normalize).filter((child): child is NpcObjective => child !== null)
       : [];
-    return { id, text, subtasks };
+    return { id, text, subtasks, ...(record.completed === true ? { completed: true } : {}) };
   };
   if (!Array.isArray(value)) return [];
   return value.map(normalize).filter((item): item is NpcObjective => item !== null);

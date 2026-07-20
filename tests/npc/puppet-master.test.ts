@@ -557,18 +557,18 @@ describe('NpcPuppetMaster', () => {
         steps: [
           { type: 'MEMORY_REMOVE', memory: 'Old note.' },
           { type: 'OBJECTIVE_UPDATE', objectiveId: childId, text: 'Ask visitors to report in' },
-          { type: 'OBJECTIVE_REMOVE', objectiveId: childId },
+          { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: childId },
         ],
       })
     ).toEqual([
       expect.objectContaining({ code: 'npc_memory_removed' }),
       expect.objectContaining({ code: 'npc_objective_updated' }),
-      expect.objectContaining({ code: 'npc_objective_removed' }),
+      expect.objectContaining({ code: 'npc_objective_marked_completed' }),
     ]);
     expect(component.memory).toEqual(['Miles asked the guard to watch the hallway.']);
     expect(
       component.objectives.find((objective: any) => objective.text === 'Watch the hallway').subtasks
-    ).toEqual([]);
+    ).toEqual([expect.objectContaining({ text: 'Ask visitors to report in', completed: true })]);
     expect(
       executor.executePlan({
         npcId: npc.name,
@@ -587,6 +587,33 @@ describe('NpcPuppetMaster', () => {
         ],
       })
     ).toEqual([expect.objectContaining({ status: 'failed', code: 'objective_parent_not_found' })]);
+  });
+
+  it('shows marked objectives once to PM and then automatically removes them', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      { id: 'done', text: 'Find the batteries', subtasks: [], completed: true },
+      { id: 'next', text: 'Install the batteries', subtasks: [] },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    expect(getDynamicPmText(provider.calls[0])).toContain('Find the batteries [JUST COMPLETED]');
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'next', text: 'Install the batteries' }),
+    ]);
+    expect(getStaticPmText(provider.calls[0])).toContain('OBJECTIVE_MARK_COMPLETED');
+    expect(getStaticPmText(provider.calls[0])).toContain('does not perform the task');
   });
 
   it('instructs PM to preserve a parent objective and record confirmed prerequisites', async () => {
@@ -1197,9 +1224,8 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
-      'Reached the corridor. Arrived in Corridor.',
-    ]);
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Reached the corridor.']);
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     vi.useRealTimers();
   });
@@ -1246,8 +1272,9 @@ describe('NpcPuppetMaster', () => {
 
     expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
     expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
-      'Need to find Rick for batteries. Arrived in Corridor.',
+      'Need to find Rick for batteries.',
     ]);
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     expect(provider.calls).toHaveLength(1);
     expect(JSON.stringify(provider.calls[0].messages)).toContain('plan_completed');
@@ -1288,9 +1315,8 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([
-      'Reached the corridor. Arrived in Corridor.',
-    ]);
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Reached the corridor.']);
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
     expect(JSON.stringify(provider.calls.map((call) => call.messages))).toContain('plan_completed');
     expect(JSON.stringify(provider.calls.map((call) => call.messages))).not.toContain(
       'plan_interrupted'
@@ -1329,7 +1355,50 @@ describe('NpcPuppetMaster', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Arrived in Corridor.']);
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual([]);
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
+  });
+
+  it('preserves durable memory and exposes arrival memory only for the next PM turn', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [
+      { type: 'Actor' },
+      { type: 'NPC', enabled: true, memory: ['Rick repairs electronics.'] },
+    ];
+    destination.addEntity(npc);
+    fixture.game.sceneManager.currentScene = destination;
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    (pm as any).pendingPlanContinuations.set('start:guard', {
+      npcId: 'guard',
+      barrierStep: { type: 'TRAVERSE_EXIT', targetId: 'door' },
+      steps: [],
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+
+    void (pm as any).enqueueNpc(fixture.scene, 'guard', {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'exit_traversed',
+        npcId: 'guard',
+        targetId: 'door',
+        actionType: 'TRAVERSE_EXIT',
+        worldChanged: true,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(getDynamicPmText(provider.calls[0])).toContain('Rick repairs electronics.');
+    expect(getDynamicPmText(provider.calls[0])).toContain('Arrived in Corridor. [JUST ARRIVED]');
+    expect(ComponentSystem.getNpcComponent(npc)?.memory).toEqual(['Rick repairs electronics.']);
+    expect(ComponentSystem.getNpcComponent(npc)?.transientMemory).toEqual([]);
   });
 
   it('returns visible open-container contents in an NPC EXAMINE outcome', async () => {

@@ -178,6 +178,7 @@ export class NpcWorldModelBuilder {
     const title = this.getObjectTitle(npc) || npc.name;
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
     const memory = this.getOrInitializeNpcMemory(npc, component);
+    const transientMemory = normalizeNpcMemory(component?.transientMemory);
     const newEvents = scene.sceneLog.getUnreadEntries(npc.name);
     const newEventIds = new Set(newEvents.map((entry) => entry.id));
     const recentEvents = scene.sceneLog.entries
@@ -230,6 +231,7 @@ export class NpcWorldModelBuilder {
       lore: this.game.textAssets.getResolvedObjectField(npc, 'lore') || undefined,
       objectives,
       memory: memory.length ? memory : undefined,
+      transientMemory: transientMemory.length ? transientMemory : undefined,
       inventory: this.game.actorWorld.getInventoryKnowledge(npc),
       actors,
       visibleItemIds: entityBuild.observedObjects

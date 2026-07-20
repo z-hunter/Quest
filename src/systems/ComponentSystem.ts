@@ -79,6 +79,8 @@ export interface NpcComponent {
   enabled?: boolean;
   /** Legacy scalar/string-list values are accepted at the persisted-scene boundary. */
   memory?: string[] | string;
+  /** Runtime-only one-turn facts, such as a just-completed scene arrival. */
+  transientMemory?: string[] | string;
   objectives?: NpcObjective[] | string[];
   memoryInitializedFromTA?: boolean;
   memoryTARevision?: string;
@@ -288,6 +290,9 @@ export class ComponentSystem {
     // Migrate persisted v1 cognition lazily at the component boundary so saves and
     // authored scenes may still contain scalar memory or string-list objectives.
     if (component.memory !== undefined) component.memory = normalizeNpcMemory(component.memory);
+    if (component.transientMemory !== undefined) {
+      component.transientMemory = normalizeNpcMemory(component.transientMemory);
+    }
     if (Array.isArray(component.objectives)) {
       component.objectives = normalizeNpcObjectives(component.objectives);
     }
@@ -295,6 +300,7 @@ export class ComponentSystem {
       type: 'NPC',
       enabled: component.enabled !== false,
       memory: normalizeNpcMemory(component.memory),
+      transientMemory: normalizeNpcMemory(component.transientMemory),
       objectives: component.objectives,
       memoryInitializedFromTA: component.memoryInitializedFromTA === true,
       memoryTARevision:

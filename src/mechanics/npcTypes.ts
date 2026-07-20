@@ -93,6 +93,10 @@ export type NpcPlanStep =
       objectiveId: string;
     }
   | {
+      type: 'OBJECTIVE_MARK_COMPLETED';
+      objectiveId: string;
+    }
+  | {
       type: 'MEMORY_SET';
       memory: string;
     }
@@ -151,6 +155,7 @@ export type NpcActorContext = {
   lore?: string;
   objectives?: NpcObjective[];
   memory?: string[];
+  transientMemory?: string[];
   inventory?: {
     available: boolean;
     itemIds: string[];

@@ -183,6 +183,15 @@ export class ActorPlanExecutor {
       return { status: 'ok', code: 'npc_objective_removed', npcId: actor.name };
     }
 
+    if (step.type === 'OBJECTIVE_MARK_COMPLETED') {
+      const objectives = this.getNpcObjectives(actor);
+      const objective = findNpcObjective(objectives, step.objectiveId);
+      if (!objective) return { status: 'failed', code: 'objective_not_found', npcId: actor.name };
+      objective.completed = true;
+      this.setNpcObjectives(actor, objectives);
+      return { status: 'ok', code: 'npc_objective_marked_completed', npcId: actor.name };
+    }
+
     if (step.type === 'WAIT') {
       if (!this.waitScheduler) {
         return { status: 'failed', code: 'wait_unavailable', npcId: actor.name };

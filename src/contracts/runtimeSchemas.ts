@@ -367,6 +367,7 @@ const NPC_STEP_TYPES = new Set([
   'OBJECTIVE_ADD',
   'OBJECTIVE_UPDATE',
   'OBJECTIVE_REMOVE',
+  'OBJECTIVE_MARK_COMPLETED',
   'MEMORY_SET',
   'OBJECTIVES_SET',
 ]);
@@ -475,7 +476,10 @@ export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is 
         issues.push({ path: `${path}.objectiveId`, message: 'must be a string' });
       if (!isString(value.text)) issues.push({ path: `${path}.text`, message: 'must be a string' });
     }
-    if (value.type === 'OBJECTIVE_REMOVE' && !isString(value.objectiveId)) {
+    if (
+      (value.type === 'OBJECTIVE_REMOVE' || value.type === 'OBJECTIVE_MARK_COMPLETED') &&
+      !isString(value.objectiveId)
+    ) {
       issues.push({ path: `${path}.objectiveId`, message: 'must be a string' });
     }
     if (value.type === 'OBJECTIVES_SET') {
