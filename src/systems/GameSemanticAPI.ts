@@ -2173,6 +2173,10 @@ export class GameSemanticAPI {
   }
 
   openEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
+    if (!this.getSwitchComponent(entity)) {
+      const contentsOutcome = this.getOpenContainerContentsOutcome(actor, entity);
+      if (contentsOutcome) return contentsOutcome;
+    }
     return this.executeSwitchStateChange(actor, entity, 2);
   }
 
@@ -2182,6 +2186,44 @@ export class GameSemanticAPI {
 
   closeEntityForActor(actor: Actor | null, entity: SceneObject): GameActionOutcome {
     return this.executeSwitchStateChange(actor, entity, 1);
+  }
+
+  /**
+   * OPEN is also a convenient explicit inspection of an already accessible
+   * inventory nested inside a titled semantic anchor (for example, batteries
+   * inside a remote). It must not bypass a Switch or another access gate.
+   */
+  private getOpenContainerContentsOutcome(
+    actor: Actor | null,
+    entity: SceneObject
+  ): GameActionOutcome | null {
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
+    if (!scene) return null;
+
+    const activeActor = actor || scene.player || null;
+    const accessError = this.canExamineObject(entity, activeActor);
+    if (accessError) return accessError;
+
+    const storageCandidates = this.game.inventoryManager.findStorageCandidatesForRelation(
+      entity,
+      'in',
+      this.getBlockedAccessOutcome.bind(this),
+      this.getPlayerFacingObjectTitle.bind(this),
+      false
+    );
+    const hasAccessibleInventory = storageCandidates.inventoryOwners.some((storage) =>
+      this.game.inventoryManager.isInventoryAccessibleFromAnchor(
+        storage.owner,
+        entity,
+        this.getBlockedAccessOutcome.bind(this),
+        this.getPlayerFacingObjectTitle.bind(this),
+        storage.relation,
+        activeActor
+      )
+    );
+    if (!hasAccessibleInventory) return null;
+
+    return this.describeSpatialRelation(entity.name, 'in');
   }
 
   goToSceneTarget(target: string): GameActionOutcome {

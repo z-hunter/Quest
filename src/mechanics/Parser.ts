@@ -4202,6 +4202,11 @@ export class Parser {
 
   private getOpenCloseOutcome(intent: 'open' | 'close', entity: SceneObject): GameActionOutcome {
     if (!entity.components?.some((component: any) => component?.type === 'Switch')) {
+      if (intent === 'open') {
+        return this.executePlayerActionWithApproach(entity, () =>
+          this.game.openEntity(entity as any)
+        );
+      }
       return {
         status: 'escalate',
         code: 'target_is_not_switch',

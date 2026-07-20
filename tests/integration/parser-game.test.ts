@@ -619,6 +619,36 @@ describe('Parser + game integration smoke', () => {
     expect(result.messages.at(-1)).toBe(fixture.game.text('parser.parse_unknown'));
   });
 
+  it('uses OPEN on an accessible non-switch container to list its contents', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+
+    const result = await fixture.run('open remote');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+  });
+
   it('reports a clearly openable closed container on LOOK IN but not on direct LOOK of hidden contents', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);

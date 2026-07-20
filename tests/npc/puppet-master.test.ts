@@ -3210,6 +3210,45 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[1].messages[0].content)).toContain('"code": "switch_opened"');
   });
 
+  it('uses PM OPEN on an accessible non-switch container to report its contents', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 0;
+    npc.y = 0;
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.addInventoryEntity(batterySlot, batteries, 'in');
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'OPEN', targetId: remote.name }] }],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name);
+
+    expect(plans[0].steps).toEqual([{ type: 'OPEN', targetId: remote.name }]);
+    await vi.advanceTimersByTimeAsync(200);
+    const continuation = String(provider.calls[1].messages[0].content);
+    expect(continuation).toContain('"code": "relation_contents"');
+    expect(continuation).toContain('AAA batteries');
+  });
+
   it('executes authored COMMAND steps for NPCs and wakes with an action_completed trigger', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();

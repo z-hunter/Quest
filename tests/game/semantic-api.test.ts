@@ -2201,6 +2201,60 @@ describe('Game semantic API', () => {
     expect(fixture.game.openEntity(drawer).code).toBe('switch_opened');
   });
 
+  it('uses OPEN to list an accessible nested inventory when the semantic anchor has no Switch', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_contents');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+    expect(listed.data?.discoveredEntityIds).toEqual([batteries.name]);
+  });
+
+  it('reports an empty accessible nested inventory through OPEN', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_empty');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_empty', { relation: 'in', target: 'TV remote' })
+    );
+  });
+
   it('reveals hidden descendants through the same LOOK and EXAMINE runtime for NPC actors', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

@@ -191,7 +191,10 @@ export function createParserFixture(): ParserFixture {
       (component: any) => component?.type === 'Switch'
     ) as { state?: number; idKey?: string } | undefined;
     if (!switchComponent) {
-      return { status: 'escalate', code: 'target_is_not_switch', recoverable: true };
+      return (fixture.game as any).semantic.openEntityForActor(
+        fixture.scene.player || null,
+        entity
+      );
     }
     const title = fixture.textAssets.getResolvedObjectField(entity, 'title') || entity.name;
     if ((switchComponent.state || 1) === 2) {
