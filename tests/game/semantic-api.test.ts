@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Game } from '../../src/core/Game';
 import { Actor } from '../../src/entities/Actor';
 import { Entity } from '../../src/entities/Entity';
+import { Triggerbox } from '../../src/entities/Triggerbox';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { SceneSpatialValidator } from '../../src/scene/SceneSpatialValidator';
@@ -2713,6 +2714,47 @@ describe('Game semantic API', () => {
     expect(remote.groupID).toBe('#quest_item');
     expect(fixture.scene.subsceneEntities.has(remote)).toBe(false);
     expect(fixture.scene.activeSubscene).toBeNull();
+  });
+
+  it('uses an offscreen NPC scene for Switch access checks', () => {
+    const fixture = createGameSemanticFixture('player_scene');
+    fixture.addPlayer('Hero', 0, 0);
+    const background = fixture.addScene('background', 'Background');
+    const npc = new Actor(fixture.game, 20, 20, 10, 10, 'rick');
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    background.addEntity(npc);
+    const drawerZone = new Triggerbox(
+      [
+        { x: 10, y: 10 },
+        { x: 30, y: 10 },
+        { x: 30, y: 30 },
+        { x: 10, y: 30 },
+      ],
+      'DrawerZone'
+    );
+    drawerZone.components = [{ type: 'Subscene', targetGroupId: '#drawer_zone' }];
+    background.addTriggerbox(drawerZone);
+    const drawer = new Triggerbox(
+      [
+        { x: 15, y: 15 },
+        { x: 25, y: 15 },
+        { x: 25, y: 25 },
+        { x: 15, y: 25 },
+      ],
+      'Drawer'
+    );
+    drawer.disabled = true;
+    drawer.groupID = '#drawer_zone';
+    drawer.spatial = { parentNodeId: drawerZone.name, relation: 'in' };
+    drawer.components = [{ type: 'Switch', state: 1, groupId1: 'nil', groupId2: '#drawer_open' }];
+    background.addTriggerbox(drawer);
+    fixture.textAssets.setObject(drawerZone.name, { title: 'Desk close-up' });
+    fixture.textAssets.setObject(drawer.name, { title: 'Middle drawer' });
+
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+    expect(fixture.game.openEntityForActor(npc, drawer).code).toBe('switch_opened');
+    expect((drawer.components[0] as { state: number }).state).toBe(2);
+    expect(background.activeSubscene).toBeNull();
   });
   it('gives a held item into a protected Actor inventory and records the observed transfer', () => {
     const fixture = createGameSemanticFixture();

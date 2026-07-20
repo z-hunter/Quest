@@ -488,7 +488,7 @@ export class GameSemanticAPI {
   }
 
   private canExamineObject(entity: SceneObject, actor?: Actor | null): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     if (
       entity instanceof Entity &&
@@ -556,9 +556,9 @@ export class GameSemanticAPI {
     return (component as SwitchComponent | undefined) || null;
   }
 
-  private isSwitchTargetInInactiveSubscene(entity: SceneObject): boolean {
+  private isSwitchTargetInInactiveSubscene(entity: SceneObject, actor?: Actor | null): boolean {
     if (!this.getSwitchComponent(entity)) return false;
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) return false;
     return getInactiveSubsceneAncestors(scene, entity).length > 0;
   }
@@ -567,7 +567,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) return null;
 
     const ancestors = getInactiveSubsceneAncestors(scene, entity);
@@ -586,7 +586,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    if (!this.isSwitchTargetInInactiveSubscene(entity)) return null;
+    if (!this.isSwitchTargetInInactiveSubscene(entity, actor)) return null;
     return this.openInactiveAncestorSubscenes(entity, actor);
   }
 
@@ -594,7 +594,7 @@ export class GameSemanticAPI {
     entity: SceneObject,
     actor?: Actor | null
   ): GameActionOutcome | null {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     if (
       entity instanceof Entity &&
@@ -674,7 +674,10 @@ export class GameSemanticAPI {
     entity: SceneObject,
     desiredState: 1 | 2
   ): GameActionOutcome {
-    const scene = this.game.sceneManager.currentScene;
+    // NPCs may execute in a loaded background scene.  Semantic checks must
+    // use that actor's scene; using currentScene makes a valid offscreen
+    // drawer look inaccessible even when navigation reached its Subscene.
+    const scene = actor ? this.getActorScene(actor) : this.game.sceneManager.currentScene;
     if (!scene) {
       return {
         status: 'failed',

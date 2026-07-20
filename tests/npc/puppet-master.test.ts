@@ -4553,6 +4553,78 @@ describe('NpcPuppetMaster', () => {
     ).toBeGreaterThan(Date.now());
   });
 
+  it('delivers a terminal loop result so an awaiting continuation cannot strand', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const enqueue = vi.spyOn(pm as any, 'enqueueNpc').mockResolvedValue(undefined);
+    const stateKey = `${fixture.scene.id}:${npc.name}`;
+    (pm as any).patternLoopStates.set(stateKey, {
+      signatures: ['OPEN:Drawer1'],
+      warned: true,
+      cooldownUntil: Date.now() + 10_000,
+    });
+
+    (pm as any).scheduleNpc(
+      fixture.scene,
+      npc.name,
+      {
+        type: 'action_completed',
+        result: {
+          status: 'failed',
+          code: 'pattern_loop_sleep',
+          npcId: npc.name,
+          targetId: 'Drawer1',
+          actionType: 'OPEN',
+          worldChanged: false,
+        },
+      },
+      true
+    );
+
+    expect(enqueue).toHaveBeenCalledWith(
+      fixture.scene,
+      npc.name,
+      expect.objectContaining({ type: 'action_completed' })
+    );
+  });
+
+  it('recovers a pending continuation when its runtime completion is lost', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const plan = {
+      npcId: npc.name,
+      steps: [{ type: 'OPEN' as const, targetId: 'Drawer1' }],
+      interruptOn: [{ type: 'ACTION_FAILED' as const }],
+    };
+
+    (pm as any).storePendingContinuationAfterScheduledOutcome(
+      fixture.scene,
+      plan,
+      [
+        {
+          status: 'scheduled',
+          code: 'npc_action_scheduled',
+          npcId: npc.name,
+          targetId: 'Drawer1',
+          actionType: 'OPEN',
+        },
+      ],
+      [],
+      []
+    );
+    await vi.advanceTimersByTimeAsync(15_500);
+
+    expect(provider.calls).toHaveLength(1);
+    expect(JSON.stringify(provider.calls[0].messages)).toContain('continuation_timeout');
+    expect((pm as any).pendingPlanContinuations.has(`${fixture.scene.id}:${npc.name}`)).toBe(false);
+    vi.useRealTimers();
+  });
+
   it('resets the pattern warning when the NPC tries a different target', () => {
     const fixture = createSceneFixture();
     const npc = addNpc(fixture, 'guard');

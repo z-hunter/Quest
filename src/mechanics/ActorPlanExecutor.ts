@@ -15,7 +15,11 @@ import {
 
 export type NpcWaitScheduler = (npcId: string, ms: number) => void;
 export type NpcMoveCompletionScheduler = (npcId: string, result: ActorMoveResult) => void;
-export type NpcActionCompletionScheduler = (npcId: string, result: NpcPlanExecutionOutcome) => void;
+export type NpcActionCompletionScheduler = (
+  npcId: string,
+  result: NpcPlanExecutionOutcome,
+  fromExecutor?: boolean
+) => void;
 export type NpcStrategyScheduler = (npcId: string, reason?: string) => void;
 
 export class ActorPlanExecutor {
@@ -833,7 +837,7 @@ export class ActorPlanExecutor {
     // boundary before the continuation is consumed. Deferring this callback
     // through a zero-delay timer can strand a stored multi-step continuation
     // if that timer is throttled or lost by the host runtime.
-    this.actionCompletionScheduler(npcId, outcome);
+    this.actionCompletionScheduler(npcId, outcome, true);
     return { ...outcome, status: 'scheduled' };
   }
 

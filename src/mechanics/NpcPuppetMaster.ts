@@ -208,6 +208,10 @@ const PM_STATE_ONLY_CONTINUATION_LIMIT = 3;
 // beat before resuming autonomous goal pursuit instead of immediately making
 // another provider request in the same turn.
 const PM_SAY_ONLY_CONTINUATION_DELAY_MS = 2_000;
+// Runtime barriers normally resolve immediately through ActorPlanExecutor's
+// action-completion callback. Keep a recovery path nevertheless: a dropped
+// host callback must not leave an NPC immune to all later scene events.
+const PM_PENDING_CONTINUATION_TIMEOUT_MS = 15_000;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 20;
@@ -228,6 +232,7 @@ export class NpcPuppetMaster {
   private patternLoopStates = new Map<string, NpcPatternLoopState>();
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
+  private pendingContinuationTimeouts = new Map<string, any>();
   // Events that arrive while a runtime barrier is outstanding belong to the
   // next PM turn, not to a replacement plan.  Keeping them by continuation
   // key makes the hand-off explicit and prevents timer based requeue loops.
@@ -253,13 +258,18 @@ export class NpcPuppetMaster {
           this.scheduleNpc(scene, npcId, { type: 'move_completed', result });
         }
       },
-      (npcId, result) => {
+      (npcId, result, fromExecutor) => {
         const scene = this.getNpcScene(npcId);
         if (scene) {
-          this.scheduleNpc(scene, npcId, {
-            type: 'action_completed',
-            result: this.recordActionProgress(scene, npcId, result),
-          });
+          this.scheduleNpc(
+            scene,
+            npcId,
+            {
+              type: 'action_completed',
+              result: this.recordActionProgress(scene, npcId, result),
+            },
+            fromExecutor === true
+          );
         }
       },
       (npcId, reason) => {
@@ -365,6 +375,10 @@ export class NpcPuppetMaster {
     this.patternLoopStates.clear();
     this.actionHistories.clear();
     this.pendingPlanContinuations.clear();
+    for (const timeoutId of this.pendingContinuationTimeouts.values()) {
+      globalThis.clearTimeout(timeoutId);
+    }
+    this.pendingContinuationTimeouts.clear();
     this.deferredContinuationTriggers.clear();
     this.continuationStates.clear();
     this.restoredContinuationStates.clear();
@@ -448,14 +462,23 @@ export class NpcPuppetMaster {
     await Promise.all(completions);
   }
 
-  scheduleNpc(scene: Scene, npcId: string, trigger: NpcIndividualTrigger): void {
+  scheduleNpc(
+    scene: Scene,
+    npcId: string,
+    trigger: NpcIndividualTrigger,
+    preserveTerminalCompletion: boolean = false
+  ): void {
     const stateKey = this.getNpcStateKey(scene, npcId);
     const loopState = this.loopStates.get(stateKey);
     const patternLoopState = this.patternLoopStates.get(stateKey);
     if (
       trigger.type === 'action_completed' &&
       patternLoopState?.cooldownUntil &&
-      patternLoopState.cooldownUntil > Date.now()
+      patternLoopState.cooldownUntil > Date.now() &&
+      // This is the terminal result that started the cooldown.  It still has
+      // to resolve an already-scheduled runtime barrier; suppressing it here
+      // strands the pending continuation permanently.
+      !(preserveTerminalCompletion && this.isTerminalNoProgressCode(trigger.result.code))
     ) {
       return;
     }
@@ -464,7 +487,8 @@ export class NpcPuppetMaster {
       loopState?.cooldownUntil &&
       loopState.cooldownUntil > Date.now() &&
       trigger.result.repeatKey === loopState.repeatKey &&
-      (trigger.result.repeatCount || 0) > PM_REPEAT_SUPPRESS_COUNT
+      (trigger.result.repeatCount || 0) > PM_REPEAT_SUPPRESS_COUNT &&
+      !(preserveTerminalCompletion && this.isTerminalNoProgressCode(trigger.result.code))
     ) {
       return;
     }
@@ -1162,6 +1186,7 @@ export class NpcPuppetMaster {
       inventoryItemIds: this.getNpcInventoryItemIds(scene, plan.npcId),
       observableItemIds,
     });
+    this.schedulePendingContinuationRecovery(scene, plan.npcId, stateKey, barrierStep);
     this.transitionContinuation(stateKey, 'awaiting_barrier', 'scheduled_step');
     this.traceWake('pending_plan_stored', {
       sceneId: scene.id,
@@ -1199,8 +1224,65 @@ export class NpcPuppetMaster {
       changedAt: Date.now(),
       ...(reason ? { reason } : {}),
     });
-    if (state !== 'awaiting_barrier') this.pendingPlanContinuations.delete(stateKey);
+    if (state !== 'awaiting_barrier') {
+      this.pendingPlanContinuations.delete(stateKey);
+      const timeoutId = this.pendingContinuationTimeouts.get(stateKey);
+      if (timeoutId) globalThis.clearTimeout(timeoutId);
+      this.pendingContinuationTimeouts.delete(stateKey);
+    }
     this.traceWake('continuation_state_changed', { stateKey, previous, state, reason });
+  }
+
+  private schedulePendingContinuationRecovery(
+    scene: Scene,
+    npcId: string,
+    stateKey: string,
+    barrierStep: NpcPlanStep
+  ): void {
+    const previousTimeout = this.pendingContinuationTimeouts.get(stateKey);
+    if (previousTimeout) globalThis.clearTimeout(previousTimeout);
+    const currentGeneration = this.haltGenerationId;
+    const timeoutId = globalThis.setTimeout(() => {
+      this.pendingContinuationTimeouts.delete(stateKey);
+      if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene) return;
+      const pending = this.pendingPlanContinuations.get(stateKey);
+      if (!pending || pending.barrierStep !== barrierStep) return;
+
+      const result: NpcPlanExecutionOutcome = {
+        status: 'failed',
+        code: 'continuation_timeout',
+        npcId,
+        targetId:
+          'targetId' in barrierStep && typeof barrierStep.targetId === 'string'
+            ? barrierStep.targetId
+            : undefined,
+        actionType: this.getBarrierActionType(barrierStep),
+        message: `Timed out waiting for ${barrierStep.type} completion.`,
+        worldChanged: false,
+      };
+      this.transitionContinuation(stateKey, 'needs_replan', 'barrier_timeout');
+      this.traceWake('pending_continuation_timeout', {
+        sceneId: scene.id,
+        npcId,
+        barrierStepType: barrierStep.type,
+        timeoutMs: PM_PENDING_CONTINUATION_TIMEOUT_MS,
+      });
+      this.scheduleNpc(scene, npcId, {
+        type: 'plan_interrupted',
+        reason: 'ACTION_FAILED',
+        result,
+        completedSteps: pending.completedSteps,
+        remainingSteps: pending.steps,
+      });
+      this.resumeDeferredContinuation(scene, npcId);
+    }, PM_PENDING_CONTINUATION_TIMEOUT_MS);
+    this.pendingContinuationTimeouts.set(stateKey, timeoutId);
+  }
+
+  private getBarrierActionType(barrierStep: NpcPlanStep): NpcPlanExecutionOutcome['actionType'] {
+    return barrierStep.type === 'MOVE_TO' || barrierStep.type === 'WAIT'
+      ? undefined
+      : barrierStep.type;
   }
 
   private tryExecutePendingContinuation(
