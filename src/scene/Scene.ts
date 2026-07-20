@@ -1150,6 +1150,30 @@ export class Scene {
     }
   }
 
+  /**
+   * Advance NPC actors in a cached scene that is not currently rendered.
+   * Scene-level systems, camera, player input, and visual-only animations stay
+   * paused; autonomous NPC movement still needs Actor.update to resolve PM
+   * MOVE_TO steps and emit their completion callbacks.
+   */
+  updateAutonomousNpcs(deltaTime: number): void {
+    this.entities.forEach((entity) => {
+      if (entity.disabled || !(entity instanceof Actor) || entity.isPlayer) return;
+      if (!ComponentSystem.getNpcComponent(entity)?.enabled) return;
+      entity.update(deltaTime, (x: number, y: number) => this.isWalkable(x, y, entity));
+    });
+  }
+
+  hasAutonomousNpcs(): boolean {
+    return this.entities.some(
+      (entity) =>
+        !entity.disabled &&
+        entity instanceof Actor &&
+        !entity.isPlayer &&
+        ComponentSystem.getNpcComponent(entity)?.enabled
+    );
+  }
+
   // -----------------------------------------------------
   // RENDER LOOP
   // -----------------------------------------------------

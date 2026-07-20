@@ -488,7 +488,7 @@ export class NpcPuppetMaster {
     this.processingScenes.add(processingKey);
     try {
       const worldModel = this.worldModelBuilder.build(scene);
-      const plans = await this.processWorldModel(worldModel);
+      const plans = await this.processWorldModel(scene, worldModel);
       if (this.haltGenerationId !== currentGeneration) return [];
       if (this.lastDebugInfo?.error) return [];
       for (const npc of worldModel.npcs) {
@@ -528,7 +528,7 @@ export class NpcPuppetMaster {
     try {
       const worldModel = this.worldModelBuilder.build(scene, { npcIds: [npcId] });
       if (!worldModel.npcs.length) return [];
-      const plans = await this.processWorldModel(worldModel, trigger);
+      const plans = await this.processWorldModel(scene, worldModel, trigger);
       if (this.haltGenerationId !== currentGeneration) return [];
       if (!this.lastDebugInfo?.error && !this.shouldPreserveUnreadEventsForRetry(npcId)) {
         scene.sceneLog.markProcessed(undefined, npcId);
@@ -540,6 +540,7 @@ export class NpcPuppetMaster {
   }
 
   private async processWorldModel(
+    scene: Scene,
     worldModel: NpcWorldModel,
     trigger?: NpcIndividualTrigger | NpcBatchTrigger
   ): Promise<NpcPlan[]> {
@@ -600,7 +601,7 @@ export class NpcPuppetMaster {
       });
     }
 
-    const system = await this.buildSystemPrompt(worldModel);
+    const system = await this.buildSystemPrompt(scene, worldModel);
     const messages = this.buildMessages(worldModel, trigger);
     const staticPrefix = this.getStaticPrefixDebug(system);
     const dynamicPrompt = this.getDynamicPromptDebug(messages);
@@ -862,12 +863,8 @@ export class NpcPuppetMaster {
       }
       if (retryScheduled && scene) {
         const currentGeneration = this.haltGenerationId;
-        const currentScene = scene;
         globalThis.setTimeout(() => {
-          if (
-            this.haltGenerationId !== currentGeneration ||
-            this.game.sceneManager.currentScene !== currentScene
-          )
+          if (this.haltGenerationId !== currentGeneration || this.getNpcScene(plan.npcId) !== scene)
             return;
           this.scheduleNpc(scene, plan.npcId, {
             type: 'plan_rejected_missing_items',
@@ -1270,12 +1267,8 @@ export class NpcPuppetMaster {
             repeatCount: terminalResult.repeatCount,
           });
           const currentGeneration = this.haltGenerationId;
-          const currentScene = scene;
           globalThis.setTimeout(() => {
-            if (
-              this.haltGenerationId !== currentGeneration ||
-              this.game.sceneManager.currentScene !== currentScene
-            )
+            if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene)
               return;
             this.scheduleNpc(scene, npcId, {
               type: 'action_completed',
@@ -1376,12 +1369,8 @@ export class NpcPuppetMaster {
       });
       ShadowLogger.discard(npcId);
       const currentGeneration = this.haltGenerationId;
-      const currentScene = scene;
       globalThis.setTimeout(() => {
-        if (
-          this.haltGenerationId !== currentGeneration ||
-          this.game.sceneManager.currentScene !== currentScene
-        )
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene)
           return;
         this.scheduleNpc(scene, npcId, {
           type: 'plan_interrupted',
@@ -1438,13 +1427,8 @@ export class NpcPuppetMaster {
       finalResults.some((outcome) => outcome.worldChanged)
     );
     const currentGeneration = this.haltGenerationId;
-    const currentScene = scene;
     globalThis.setTimeout(() => {
-      if (
-        this.haltGenerationId !== currentGeneration ||
-        this.game.sceneManager.currentScene !== currentScene
-      )
-        return;
+      if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== scene) return;
       this.scheduleNpc(scene, npcId, {
         type: 'plan_completed',
         results: finalResults,
@@ -1924,14 +1908,15 @@ export class NpcPuppetMaster {
 
       if (plan.steps.some((step) => step.type === 'OBJECTIVE_ADD')) {
         this.traceWake('objective_add_without_concrete_action', {
-          sceneId: this.game.sceneManager.currentScene?.id,
+          sceneId: this.getNpcScene(plan.npcId)?.id,
           npcId: plan.npcId,
           stepTypes: plan.steps.map((step) => step.type),
         });
       }
 
-      const scene = this.game.sceneManager.currentScene;
-      const stateKey = scene ? this.getNpcStateKey(scene, plan.npcId) : plan.npcId;
+      const scene = this.getNpcScene(plan.npcId);
+      if (!scene) continue;
+      const stateKey = this.getNpcStateKey(scene, plan.npcId);
       const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
       if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) {
         this.traceWake('state_only_plan_continuation_suppressed', {
@@ -1946,16 +1931,10 @@ export class NpcPuppetMaster {
       this.stateOnlyContinuationCounts.set(stateKey, count + 1);
 
       const currentGeneration = this.haltGenerationId;
-      const currentScene = scene;
       globalThis.setTimeout(() => {
-        const activeScene = this.game.sceneManager.currentScene;
-        if (
-          !activeScene ||
-          this.haltGenerationId !== currentGeneration ||
-          activeScene !== currentScene
-        )
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(plan.npcId) !== scene)
           return;
-        this.scheduleNpc(activeScene, plan.npcId, {
+        this.scheduleNpc(scene, plan.npcId, {
           type: 'plan_continued',
           reason: 'previous_state_only_plan_completed_without_scheduling_action',
         });
@@ -2012,7 +1991,7 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
 
-      const system = this.buildStrategySystemPrompt(worldModel);
+      const system = this.buildStrategySystemPrompt(scene, worldModel);
       const messages = this.buildStrategyMessages(worldModel, npcId, reason);
       const staticPrefix = this.getStaticPrefixDebug(system);
       const response = this.provider.isAvailable()
@@ -2110,13 +2089,11 @@ export class NpcPuppetMaster {
     this.scheduleNpcWait(npcId, debug.waitMs);
   }
 
-  private buildStrategySystemPrompt(worldModel: NpcWorldModel): LlmProviderContent {
+  private buildStrategySystemPrompt(scene: Scene, worldModel: NpcWorldModel): LlmProviderContent {
     const staticContext = {
       projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      entities: this.worldModelBuilder.buildStaticEntityProjection(
-        this.game.sceneManager.currentScene!
-      ),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(scene),
     };
     return [
       { type: 'text', text: STRATEGY_SYSTEM_PROMPT },
@@ -2200,14 +2177,15 @@ export class NpcPuppetMaster {
     return Math.max(PM_STRATEGY_MIN_WAIT_MS, Math.min(PM_STRATEGY_MAX_WAIT_MS, ms));
   }
 
-  private async buildSystemPrompt(worldModel: NpcWorldModel): Promise<LlmProviderContent> {
+  private async buildSystemPrompt(
+    scene: Scene,
+    worldModel: NpcWorldModel
+  ): Promise<LlmProviderContent> {
     const systemPrompt = await this.loadSystemPrompt();
     const staticContext = {
       projectionVersion: 'pm-entity-v1',
       scene: worldModel.scene,
-      entities: this.worldModelBuilder.buildStaticEntityProjection(
-        this.game.sceneManager.currentScene!
-      ),
+      entities: this.worldModelBuilder.buildStaticEntityProjection(scene),
     };
 
     return [
@@ -2619,8 +2597,19 @@ export class NpcPuppetMaster {
     const continuationNpcIds = [...batch.npcIds].filter((npcId) =>
       this.tryExecutePendingContinuation(scene, npcId, batch.triggersByNpc.get(npcId) || [])
     );
+    // PM batches belong to the NPC's scene, not to the player's current scene.
+    // Let an NPC keep acting after it has crossed an Exit and is now offscreen.
     const providerCandidateNpcIds = [...batch.npcIds].filter((npcId) => {
       if (continuationNpcIds.includes(npcId)) return false;
+      const npcScene = this.getNpcScene(npcId);
+      if (npcScene !== scene) {
+        this.traceWake('batch_npc_skipped_scene_changed', {
+          sceneId,
+          npcId,
+          destinationSceneId: npcScene?.id ?? null,
+        });
+        return false;
+      }
       const stateKey = this.getNpcStateKey(scene, npcId);
       if (!this.pendingPlanContinuations.has(stateKey)) return true;
       const deferred = this.deferredContinuationTriggers.get(stateKey) || [];
@@ -2645,15 +2634,6 @@ export class NpcPuppetMaster {
           this.resumeDeferredContinuation(scene, npcId);
         }
       }
-    }
-    if (scene !== this.game.sceneManager.currentScene) {
-      this.traceWake('batch_stopped', {
-        sceneId,
-        reason: 'scene_is_no_longer_current',
-        continuationsExecuted: continuationNpcIds,
-      });
-      batch.completionResolvers.forEach((resolve) => resolve());
-      return;
     }
     if (!providerCandidateNpcIds.length) {
       batch.completionResolvers.forEach((resolve) => resolve());
@@ -2741,6 +2721,7 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
       await this.processWorldModel(
+        scene,
         worldModel,
         Object.keys(triggersByNpc).length ? { type: 'batch', triggersByNpc } : undefined
       );
@@ -2977,14 +2958,10 @@ export class NpcPuppetMaster {
 
   private deferBatch(batch: PendingNpcBatch, npcIds: string[] = [...batch.npcIds]): void {
     const currentGeneration = this.haltGenerationId;
-    const currentScene = batch.scene;
     globalThis.setTimeout(() => {
-      if (
-        this.haltGenerationId !== currentGeneration ||
-        this.game.sceneManager.currentScene !== currentScene
-      )
-        return;
       for (const npcId of npcIds) {
+        if (this.haltGenerationId !== currentGeneration || this.getNpcScene(npcId) !== batch.scene)
+          continue;
         const triggers = batch.triggersByNpc.get(npcId) || [];
         if (!triggers.length) {
           void this.enqueueNpc(batch.scene, npcId);

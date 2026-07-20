@@ -3,6 +3,7 @@ import { Actor } from '../../src/entities/Actor';
 import { ActorPlanExecutor } from '../../src/mechanics/ActorPlanExecutor';
 import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 import { NpcPuppetMaster } from '../../src/mechanics/NpcPuppetMaster';
+import { SceneManager } from '../../src/scene/SceneManager';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import type {
   ILlmProvider,
@@ -1014,20 +1015,26 @@ describe('NpcPuppetMaster', () => {
     ]);
   });
 
-  it('clears a destination batch whose debounce fires before that scene becomes current', async () => {
+  it('processes a destination batch while that scene is not current', async () => {
     vi.useFakeTimers();
     const fixture = createGameSemanticFixture('start');
     const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
-    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    destination.addEntity(npc);
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const staticProjection = vi.spyOn((pm as any).worldModelBuilder, 'buildStaticEntityProjection');
 
     void (pm as any).enqueueNpc(destination, 'guard', { type: 'manual' });
     expect((pm as any).pendingBatches.has(destination.id)).toBe(true);
     await vi.advanceTimersByTimeAsync(500);
-    expect((pm as any).pendingBatches.has(destination.id)).toBe(false);
 
-    fixture.game.sceneManager.currentScene = destination;
-    void (pm as any).enqueueNpc(destination, 'guard', { type: 'manual' });
-    expect((pm as any).pendingBatches.get(destination.id)?.timeoutId).toBeTruthy();
+    expect((pm as any).pendingBatches.has(destination.id)).toBe(false);
+    expect(provider.calls).toHaveLength(1);
+    expect(String(provider.calls[0].messages[0].content)).toContain('"id": "corridor"');
+    expect(staticProjection).toHaveBeenCalledWith(destination);
     vi.useRealTimers();
   });
 
@@ -1201,7 +1208,14 @@ describe('NpcPuppetMaster', () => {
     npc.name = 'guard';
     npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
     destination.addEntity(npc);
-    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'SAY', text: 'I made it to the corridor.' }] }],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    (fixture.game as any).sayAsActor = () => {};
     (pm as any).pendingPlanContinuations.set('start:guard', {
       state: 'awaiting_barrier',
       npcId: 'guard',
@@ -1231,6 +1245,8 @@ describe('NpcPuppetMaster', () => {
       'Need to find Rick for batteries. Arrived in Corridor.',
     ]);
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
+    expect(provider.calls).toHaveLength(1);
+    expect(JSON.stringify(provider.calls[0].messages)).toContain('plan_completed');
     vi.useRealTimers();
   });
 
@@ -1686,6 +1702,50 @@ describe('NpcPuppetMaster', () => {
     expect(ComponentSystem.getNpcComponent(npc)?.objectives).toEqual(
       expect.arrayContaining([expect.objectContaining({ text: 'Find charged batteries' })])
     );
+    vi.useRealTimers();
+  });
+
+  it('continues a state-only plan while its NPC is in an offscreen scene', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20);
+    npc.name = 'linda';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    destination.addEntity(npc);
+    (fixture.game as any).sayAsActor = () => {};
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: 'linda',
+            steps: [
+              { type: 'OBJECTIVE_ADD', objective: { text: 'Inspect the corridor', subtasks: [] } },
+              { type: 'SAY', text: 'I should inspect this corridor.' },
+            ],
+          },
+        ],
+      }),
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'linda', steps: [{ type: 'MOVE_TO', x: 60, y: 20 }] }],
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(destination, npc.name, { type: 'plan_completed', results: [] });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('plan_continued');
+    (fixture.game.sceneManager as any).update = SceneManager.prototype.update;
+    (fixture.game.sceneManager as any).refreshCurrentSceneGraphWeight = () => {};
+    fixture.game.sceneManager.update(1_000);
+    expect(npc.getMoveResult().status).toBe('arrived');
+    expect(npc.x).toBe(60);
+    expect(npc.y).toBe(20);
     vi.useRealTimers();
   });
 

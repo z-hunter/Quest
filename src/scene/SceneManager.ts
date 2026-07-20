@@ -454,6 +454,11 @@ export class SceneManager {
   update(deltaTime: number): void {
     if (!this.currentScene) return;
     this.currentScene.update(deltaTime);
+    for (const scene of this.scenes.values()) {
+      if (scene !== this.currentScene) {
+        scene.updateAutonomousNpcs(deltaTime);
+      }
+    }
     this.refreshCurrentSceneGraphWeight();
   }
 
@@ -1072,7 +1077,10 @@ export class SceneManager {
     if (stats.estimatedMemory <= this.sceneCacheBudget) return;
 
     const candidates = [...this.sceneCacheMeta.entries()]
-      .filter(([sceneId, entry]) => sceneId !== this.currentScene?.id && !entry.pinned)
+      .filter(([sceneId, entry]) => {
+        const scene = this.scenes.get(sceneId);
+        return sceneId !== this.currentScene?.id && !entry.pinned && !scene?.hasAutonomousNpcs();
+      })
       .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
 
     for (const [sceneId] of candidates) {
