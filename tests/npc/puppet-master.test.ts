@@ -231,6 +231,21 @@ describe('NpcPuppetMaster', () => {
     expect(message).toContain('Static catalog membership is not current presence');
   });
 
+  it('instructs visible NPC listeners to answer direct player speech or explain silence', async () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name);
+
+    const system = JSON.stringify(provider.calls[0].system);
+    expect(system).toContain('direct player speech received by a visible listening NPC');
+    expect(system).toContain(
+      'Never say in reasoning that the NPC should answer and then return no plan.'
+    );
+  });
+
   it('executes valid SAY plans and stores NPC memory', async () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero');

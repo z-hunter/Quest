@@ -37,6 +37,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
+  'For direct player speech received by a visible listening NPC, return a plan with a concise SAY response whenever the speech addresses, questions, accuses, greets, or otherwise materially concerns that NPC. Return an empty plans array only when silence is genuinely appropriate; then reasoning MUST explicitly state why this NPC should not respond. Never say in reasoning that the NPC should answer and then return no plan.',
   'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
