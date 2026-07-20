@@ -616,7 +616,7 @@ describe('NpcPuppetMaster', () => {
     expect(getStaticPmText(provider.calls[0])).toContain('does not perform the task');
   });
 
-  it('instructs PM to preserve a parent objective and record confirmed prerequisites', async () => {
+  it('instructs PM to audit all durable memory and objectives on every call', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -628,6 +628,11 @@ describe('NpcPuppetMaster', () => {
     await pm.processNpc(fixture.scene, npc.name);
 
     const system = getStaticPmText((pm as any).provider.calls[0]);
+    expect(system).toContain('On EVERY call');
+    expect(system).toContain('every objective (including every subtask)');
+    expect(system).toContain('every memory note');
+    expect(system).toContain('primarily for your own benefit');
+    expect(system).toContain('do not emit no-op cognition steps');
     expect(system).toContain('retain the parent goal');
     expect(system).toContain('immediate concrete subgoal');
     expect(system).toContain('before dependent physical steps');
