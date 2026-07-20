@@ -384,45 +384,10 @@ const DEFAULT_PARSER_COMMANDS: ParserCommandSpec[] = [
   {
     id: 'use_on',
     phrases: ['use'],
-    arguments: [
-      {
-        name: 'item',
-        kind: 'entity',
-        required: true,
-        scopes: ['held', 'reachable'],
-        messages: {
-          missing: 'Use what on what?',
-          ambiguous: 'Which item do you mean: {options}?',
-          notFound: "You don't see anything like that here.",
-          noEffect: "That doesn't work.",
-        },
-      },
-      {
-        name: 'target',
-        kind: 'entity',
-        required: true,
-        scopes: ['held', 'reachable'],
-        separatorsBefore: ['on', 'with'],
-        messages: {
-          missing: 'Use it on what?',
-          ambiguous: 'Which target do you mean: {options}?',
-          notFound: "You don't see anything like that here.",
-          noEffect: "That doesn't work.",
-        },
-      },
-    ],
-    plan: [
-      { type: 'resolveArgumentEntity', arg: 'item', saveAs: 'use_item' },
-      { type: 'resolveArgumentEntity', arg: 'target', saveAs: 'use_target' },
-      {
-        type: 'actorUseOn',
-        itemRef: 'use_item',
-        targetRef: 'use_target',
-        noEffectMessageId: 'no_effect_pair',
-      },
-    ],
+    arguments: [],
+    plan: [{ type: 'showText', messageId: 'default' }],
     messages: {
-      no_effect_pair: 'Using the {item} on the {target} does nothing.',
+      default: 'How to use?',
     },
   },
   {

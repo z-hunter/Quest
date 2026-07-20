@@ -58,11 +58,6 @@ export type NpcPlanStep =
       arguments?: Record<string, string | null>;
     }
   | {
-      type: 'USE';
-      itemId: string;
-      targetId: string;
-    }
-  | {
       type: 'WAIT';
       ms: number;
     }

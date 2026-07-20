@@ -38,10 +38,10 @@ const FALLBACK_SYSTEM_PROMPT = [
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',
   'For direct player speech received by a visible listening NPC, return a plan with a concise SAY response whenever the speech addresses, questions, accuses, greets, or otherwise materially concerns that NPC. Return an empty plans array only when silence is genuinely appropriate; then reasoning MUST explicitly state why this NPC should not respond. Never say in reasoning that the NPC should answer and then return no plan.',
-  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, and USE.',
+  'Reliable steps are SAY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, WAIT, THINK_STRATEGY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, and COMMAND.',
   'For an entity with exit metadata, MOVE_TO it first when needed, then use TRAVERSE_EXIT. Never treat MOVE_TO alone as crossing an exit.',
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
-  'Prefer COMMAND when a visible entity lists a suitable authored command; use USE only as fallback.',
+  'Use COMMAND only for an authored command listed on a visible entity; never invent a generic use action.',
   'For a listed command, available means its direct affordance is present; execute it only when executable is true. Read preconditions and inventory entries by stable id, containerId, relation, groups, and states; items with similar titles or groups are distinct instances.',
   'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
@@ -75,7 +75,7 @@ const STRATEGY_SYSTEM_PROMPT = [
   'You are the internal strategy analyst for one NPC in a retro adventure game.',
   'Return exactly one JSON object and no extra text.',
   'Return {"kind":"npc_strategy_response","npcId":"...","updates":[memory/objective update steps],"waitMs":30000}.',
-  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, or any physical action.',
+  'Do not role-play speech. Do not produce SAY, MOVE_TO, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, or any physical action.',
   'updates may contain only MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, or OBJECTIVE_REMOVE. OBJECTIVE_MARK_COMPLETED only records a task already confirmed complete by runtime; it never performs that task.',
   "On every strategy call, audit every objective (including subtasks) and every memory note against the current situation, confirmed facts, actionHistory, recent outcomes, inventory, visible entities, and commands before deciding updates. This keeps the NPC's own future planning reliable: stale memory and obsolete, completed, or misleading objectives obstruct goal completion.",
   'Write compact memory only with confirmed facts and useful conclusions. Remove noisy, obsolete, disproven, or speculative details.',
@@ -815,10 +815,7 @@ export class NpcPuppetMaster {
       const plannedAvailableIds = new Set(availableIds);
       for (let stepIndex = 0; stepIndex < plan.steps.length; stepIndex++) {
         const step = plan.steps[stepIndex];
-        if (
-          (step.type === 'PUT' || step.type === 'USE' || step.type === 'GIVE') &&
-          !availableIds.has(step.itemId)
-        ) {
+        if ((step.type === 'PUT' || step.type === 'GIVE') && !availableIds.has(step.itemId)) {
           if (!plannedAvailableIds.has(step.itemId)) {
             missing.push({ stepType: step.type, itemId: step.itemId });
           }
@@ -1704,8 +1701,7 @@ export class NpcPuppetMaster {
       step.type === 'TAKE' ||
       step.type === 'GIVE' ||
       step.type === 'PUT' ||
-      step.type === 'COMMAND' ||
-      step.type === 'USE'
+      step.type === 'COMMAND'
     );
   }
 
@@ -1920,7 +1916,6 @@ export class NpcPuppetMaster {
       step.type === 'GIVE' ||
       step.type === 'PUT' ||
       step.type === 'COMMAND' ||
-      step.type === 'USE' ||
       step.type === 'WAIT' ||
       step.type === 'THINK_STRATEGY'
     );
@@ -2411,7 +2406,7 @@ export class NpcPuppetMaster {
           `Generate plans ONLY for active NPCs: ${activeNpcIds}.`,
           'CRITICAL RULES:',
           '1. "npcId" MUST be the ID of the NPC (e.g. "NPC"), never an item ID.',
-          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, USE, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
+          '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
           '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
@@ -3753,11 +3748,6 @@ export class NpcPuppetMaster {
       return Object.keys(args).length
         ? { type: 'COMMAND', commandId, arguments: args }
         : { type: 'COMMAND', commandId };
-    }
-    if (record.type === 'USE') {
-      const itemId = typeof record.itemId === 'string' ? record.itemId.trim() : '';
-      const targetId = typeof record.targetId === 'string' ? record.targetId.trim() : '';
-      return itemId && targetId ? { type: 'USE', itemId, targetId } : null;
     }
     if (record.type === 'WAIT') {
       const ms = typeof record.ms === 'number' && Number.isFinite(record.ms) ? record.ms : 0;

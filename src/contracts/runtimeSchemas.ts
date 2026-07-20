@@ -359,7 +359,6 @@ const NPC_STEP_TYPES = new Set([
   'GIVE',
   'PUT',
   'COMMAND',
-  'USE',
   'WAIT',
   'THINK_STRATEGY',
   'MEMORY_ADD',
@@ -440,12 +439,6 @@ export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is 
       if (value.arguments !== undefined && value.arguments !== null && !isRecord(value.arguments)) {
         issues.push({ path: `${path}.arguments`, message: 'must be an object or null' });
       }
-    }
-    if (value.type === 'USE') {
-      if (!isString(value.itemId))
-        issues.push({ path: `${path}.itemId`, message: 'must be a string' });
-      if (!isString(value.targetId))
-        issues.push({ path: `${path}.targetId`, message: 'must be a string' });
     }
     if (value.type === 'THINK_STRATEGY') {
       if (value.reason !== undefined && !isString(value.reason)) {

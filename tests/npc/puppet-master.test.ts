@@ -159,6 +159,28 @@ describe('NpcPuppetMaster', () => {
     expect(getDynamicPmText(provider.calls[1])).toContain('"value": "on"');
   });
 
+  it('does not expose or accept a generic USE step for Puppet Master', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    fixture.addEntity('remote', { title: 'Remote', components: [{ type: 'Item' }] });
+    fixture.addEntity('tv', { title: 'TV' });
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: npc.name, steps: [{ type: 'USE', itemId: 'remote', targetId: 'tv' }] }],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name);
+    const system = getStaticPmText(provider.calls[0]);
+
+    expect(plans).toEqual([]);
+    expect(system).not.toContain('{ "type": "USE"');
+    expect(system).toContain('never invent a generic use action');
+  });
+
   it('changes the static prefix when authored scene structure changes', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
@@ -2112,7 +2134,7 @@ describe('NpcPuppetMaster', () => {
           steps: [
             { type: 'SAY', text: 'I will use the remote now.' },
             { type: 'MEMORY_SET', memory: 'Hero offered a remote, but I do not hold it.' },
-            { type: 'USE', itemId: 'tv_rc', targetId: tv.name },
+            { type: 'PUT', itemId: 'tv_rc', targetId: tv.name, relation: 'on' },
           ],
           memory: 'I used the remote to operate the TV.',
         },
@@ -2141,7 +2163,7 @@ describe('NpcPuppetMaster', () => {
     expect(provider.calls).toHaveLength(2);
     const retryPrompt = String(provider.calls[1].messages[0].content);
     expect(retryPrompt).toContain('plan_rejected_missing_items');
-    expect(retryPrompt).toContain('"stepType": "USE"');
+    expect(retryPrompt).toContain('"stepType": "PUT"');
     expect(retryPrompt).toContain('"itemId": "tv_rc"');
     expect(retryPrompt).toContain('I can trade you the remote.');
     await vi.advanceTimersByTimeAsync(1000);

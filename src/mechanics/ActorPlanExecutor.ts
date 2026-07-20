@@ -259,10 +259,6 @@ export class ActorPlanExecutor {
       return this.executeCommand(actor, step.commandId, step.arguments);
     }
 
-    if (step.type === 'USE') {
-      return this.useItemOn(actor, step.itemId, step.targetId);
-    }
-
     return {
       status: 'unsupported',
       code: 'unsupported_in_v1',
@@ -821,21 +817,6 @@ export class ActorPlanExecutor {
       actionType: 'PUT',
       worldChanged: outcome.status === 'ok',
       repeatKey: `PUT:${normalizedItemId}:${normalizedTargetId || 'floor'}:${relation || ''}`,
-    });
-  }
-
-  private useItemOn(actor: Actor, itemId: string, targetId: string): NpcPlanExecutionOutcome {
-    const outcome = this.game.actorCommands.useItemOn(actor, itemId, targetId);
-    return this.completeAction(actor.name, {
-      status: outcome.status === 'ok' ? 'ok' : 'failed',
-      code: outcome.code,
-      npcId: actor.name,
-      itemId,
-      targetId,
-      message: outcome.message,
-      actionType: 'USE',
-      worldChanged: outcome.status === 'ok',
-      repeatKey: `USE:${itemId}:${targetId}`,
     });
   }
 

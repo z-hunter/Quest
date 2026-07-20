@@ -263,7 +263,7 @@ Covers:
 - `teleport`
 - `teleport with id`
 - wrong item for teleport -> no effect;
-- `use id on boombox`
+- the standard `USE` stub response and an authored override of that command;
 - missing-argument prompts for custom commands;
 - `quit` / `exit` closing inventory preview or active subscene;
 - `quit` falling through to parser fallback when nothing is open.

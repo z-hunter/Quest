@@ -82,13 +82,7 @@ export class SlmOutputAdapter {
           break;
         }
         case SLM_TOKENS.USE: {
-          const itemId = nextEntityId();
-          const targetId = nextEntityId();
-          if (!itemId || !targetId) {
-            return { kind: 'escalate', reason: 'USE missing valid itemId or targetId' };
-          }
-          steps.push({ type: 'USE', itemId, targetId });
-          break;
+          return { kind: 'escalate', reason: 'Generic USE is not supported for Puppet Master' };
         }
         case SLM_TOKENS.PUT: {
           const itemId = nextEntityId();

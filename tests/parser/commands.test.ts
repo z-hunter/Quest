@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ScriptRegistry } from '../../src/core/ScriptRegistry';
 import { ParserWorldModelBuilder } from '../../src/mechanics/ParserWorldModelBuilder';
+import type { ParserCommandSpec } from '../../src/mechanics/parserTypes';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { createParserFixture } from '../fixtures/parserFactory';
 
@@ -195,7 +196,7 @@ describe('Parser custom commands', () => {
     expect(result.messages.at(-1)).toBe("That doesn't work.");
   });
 
-  it('parses USE X ON Y and renders the no-effect pair message', async () => {
+  it('uses the standard USE command only as a prompt for a specific action', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
     const idCard = fixture.addEntity('test_id', {
@@ -212,17 +213,36 @@ describe('Parser custom commands', () => {
 
     const result = await fixture.run('use id on boombox');
 
-    expect(result.messages.at(-1)).toBe('Using the Someone ID card on the Boombox does nothing.');
+    expect(result.messages.at(-1)).toBe('How to use?');
+    expect(result.pendingIntent).toBeNull();
   });
 
-  it('prompts when USE is missing required arguments', async () => {
+  it('uses the same default prompt when USE has no arguments', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
 
     const result = await fixture.run('use');
 
-    expect(result.messages.at(-1)).toBe('Use what on what?');
-    expect(result.pendingIntent).toBe('custom');
+    expect(result.messages.at(-1)).toBe('How to use?');
+    expect(result.pendingIntent).toBeNull();
+  });
+
+  it('allows an authored command to override the standard USE stub', async () => {
+    const fixture = createParserFixture();
+    fixture.addPlayer();
+    const commands: ParserCommandSpec[] = [
+      {
+        id: 'use_on',
+        phrases: ['use'],
+        arguments: [],
+        plan: [{ type: 'showText', text: 'The custom use action runs.' }],
+      },
+    ];
+    fixture.textAssets.setParserCommands(commands);
+
+    const result = await fixture.run('use remote on tv');
+
+    expect(result.messages.at(-1)).toBe('The custom use action runs.');
   });
 
   it('drops a held item onto an available surface', async () => {
