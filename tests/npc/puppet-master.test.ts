@@ -1096,6 +1096,55 @@ describe('NpcPuppetMaster', () => {
     vi.useRealTimers();
   });
 
+  it('keeps offscreen NPC knowledge in the NPC scene instead of the player scene', () => {
+    const fixture = createGameSemanticFixture('test_room');
+    fixture.addPlayer('Hero', 0, 0);
+    const desk = fixture.addEntity('desk', { title: 'Desk' });
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: desk.name, relation: 'on' },
+    });
+    const corridor = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game as any, 20, 20, 10, 10, 'guard');
+    npc.components = [
+      {
+        type: 'NPC',
+        enabled: true,
+        knownEntities: {
+          [cassette.name]: {
+            id: cassette.name,
+            title: 'Compact cassette',
+            kind: 'item',
+            lastSeenSceneId: fixture.scene.id,
+            lastSeenAt: 1,
+            lastSeenLocation: {
+              sceneId: fixture.scene.id,
+              relation: 'on',
+              targetId: desk.name,
+              targetTitle: 'Desk',
+            },
+          },
+        },
+      },
+    ];
+    corridor.addEntity(npc);
+    fixture.textAssets.setObject(npc.name, { title: 'Guard', description: 'Guard' });
+
+    const context = new NpcWorldModelBuilder(fixture.game).build(corridor).npcs[0];
+    const rememberedCassette = context.knownEntities?.find((entity) => entity.id === cassette.name);
+
+    expect(context.entities?.some((entity) => entity.id === cassette.name)).not.toBe(true);
+    expect(context.visibleItemIds || []).not.toContain(cassette.name);
+    expect(rememberedCassette).toEqual(
+      expect.objectContaining({
+        id: cassette.name,
+        lastSeenSceneId: fixture.scene.id,
+        lastSeenLocation: expect.objectContaining({ targetId: desk.name }),
+      })
+    );
+  });
+
   it('resolves an NPC wait continuation after the player leaves the NPC scene', async () => {
     vi.useFakeTimers();
     const fixture = createGameSemanticFixture('start');
