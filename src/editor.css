@@ -241,6 +241,11 @@
     box-shadow 160ms ease;
 }
 
+textarea.e-input,
+textarea {
+  resize: vertical;
+}
+
 .e-select {
   background: var(--ui-dropdown-bg);
   border: 1px solid var(--ui-input-border);

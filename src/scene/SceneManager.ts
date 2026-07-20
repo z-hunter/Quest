@@ -18,6 +18,7 @@ import { traceNavigation } from '../systems/navigation/navigationDebug';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
+export const HARD_OVER_BUDGET_FACTOR = 1.5;
 
 export interface SceneDescriptor {
   id: string;
@@ -1087,6 +1088,26 @@ export class SceneManager {
       if (stats.estimatedMemory <= this.sceneCacheBudget) break;
       this.evictScene(sceneId);
       stats = this.getSceneCacheStats();
+    }
+
+    const hardOverBudgetThreshold = Math.round(this.sceneCacheBudget * HARD_OVER_BUDGET_FACTOR);
+    if (stats.estimatedMemory > hardOverBudgetThreshold) {
+      const autonomousCandidates = [...this.sceneCacheMeta.entries()]
+        .filter(([sceneId, entry]) => {
+          const scene = this.scenes.get(sceneId);
+          return (
+            sceneId !== this.currentScene?.id &&
+            !entry.pinned &&
+            Boolean(scene?.hasAutonomousNpcs())
+          );
+        })
+        .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+
+      for (const [sceneId] of autonomousCandidates) {
+        if (stats.estimatedMemory <= this.sceneCacheBudget) break;
+        this.evictScene(sceneId);
+        stats = this.getSceneCacheStats();
+      }
     }
   }
 

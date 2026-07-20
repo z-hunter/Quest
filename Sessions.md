@@ -3735,3 +3735,98 @@ The commit includes all current worktree changes, including user-authored Corrid
 - The first sender in a reciprocal transfer cycle is selected by provider response order; this is deterministic and generic, but the resulting conversational order remains model-dependent.
 - Manual testing was not performed in this session after the final commit.
 - NotebookLM source synchronization is performed by the wrap-up scripts below and should be verified through the final source listing.
+
+## Session Entry - 2026-07-20 03:37 Europe/Warsaw
+
+### Session Goals
+
+- Diagnose long PM pauses, missing NPC responses, and apparent inactivity after scene transitions.
+- Make NPC Puppet Master continuations reliable after an NPC crosses an Exit while the player stays behind.
+- Ensure NPCs autonomously execute movement and subsequent plans in offscreen scenes.
+
+### What Was Implemented
+
+- State-only PM plans (for example objective/memory updates plus speech) now schedule bounded continuation wakes after any relevant trigger, rather than stopping after a cognitive-only result.
+- The PM prompt now requires a visible NPC to respond to direct player speech or explicitly justify appropriate silence.
+- PM ownership was made scene-authoritative for NPCs: batches, continuation timers, retries, no-progress wakes, interruptions, and completed plans use the NPC's actual scene instead of the player's `currentScene`.
+- Destination-scene PM batches now run after `TRAVERSE_EXIT`; stale entries are skipped only when the NPC has moved away again.
+- Static PM and strategy prompt projections now receive the processing scene explicitly, preventing offscreen NPCs from receiving the player's scene catalog.
+- Added background-scene simulation for enabled non-player NPC Actors. `SceneManager` advances these actors without running camera, rendering, player input, or scene-level systems, allowing offscreen `MOVE_TO` to complete and wake PM.
+- Cached scenes containing autonomous NPCs are protected from eviction so PM timers and continuations retain their actors.
+
+### Important Architecture and Runtime Decisions
+
+- A successful `TRAVERSE_EXIT` synchronously calls `ensureSceneLoaded`; an unloaded cached destination is therefore not the normal cause of an NPC stopping after `exit_traversed`.
+- Offscreen autonomy requires both PM planning and runtime actor simulation. Planning alone leaves a background `MOVE_TO` permanently in `started` because the previous update loop advanced only the rendered current scene.
+- Background simulation intentionally updates only enabled NPC actors. It does not run scene-wide triggers, camera changes, rendering, player input, or visual-only scene animations.
+
+### Parser / Mechanics / Scene Changes
+
+- Updated `src/mechanics/NpcPuppetMaster.ts` for cross-scene PM ownership, prompt construction, and continuation scheduling.
+- Updated `src/scene/Scene.ts` with `updateAutonomousNpcs` and `hasAutonomousNpcs`.
+- Updated `src/scene/SceneManager.ts` to tick cached offscreen NPCs and preserve their scenes in the cache.
+- Expanded `tests/npc/puppet-master.test.ts` with destination-batch, prompt-scene, post-exit continuation, state-only, and offscreen movement regression coverage.
+
+### Tests and Validation
+
+- `npm test -- --run tests/npc/puppet-master.test.ts tests/scene/scene-transition.test.ts tests/scene/subscene-activation.test.ts` passed: 114 tests.
+- `npm run typecheck` passed.
+- `git diff --check` passed before commit.
+- `codex-doctor -Fast` passed and confirmed NotebookLM CLI, agent memory, local RAG, Kairo, and repository readiness.
+- Final full suite rerun passed: `npm test -- --run` — 55 files and 664 tests. An earlier doctor-launched full-suite run reported one non-reproducing failure without test-name detail.
+
+### Commits Created
+
+- `6cc0308` - `Fix PM state-only plan continuations`
+- `b6fdc07` - `Require PM responses to direct player speech`
+- `522ed72` - `Keep NPCs active across offscreen scenes`
+
+### Remaining Work / Next Recommended Steps
+
+- Manually replay the Corridor/Rick scenario with `#PEEKPM-ON` and `#PEEKNAV-ON`; verify that Linda finishes offscreen movement and continues planning without player speech.
+- Investigate the separate prompt/perception issue visible in the trace: `npc_Rick` appears in knowledge but the model may still treat him as not directly actionable in the Corridor.
+- Watch memory usage in large projects: scenes with enabled autonomous NPCs now remain cached by design.
+
+### Risks, Caveats, and Non-committed Changes
+
+- The working tree was clean after commit `522ed72` before this wrap-up entry.
+- `Sessions.md` is modified by this handoff process and will be synchronized to NotebookLM; it is not part of the runtime commit unless explicitly committed later.
+- Shared-memory backup updated its local database, but its RAG-document export encountered a pre-existing malformed UTF-8 review-queue title; the generated `AgentMemory.md` therefore contained zero documents. NotebookLM source synchronization otherwise completed and verified Markdown source types.
+
+## Session Entry - 2026-07-20 17:31 +02:00
+
+### Session Goals
+
+- Update `evictScenesIfNeeded()` in `SceneManager.ts` so the scene cache can enforce its budget when autonomous-NPC scenes exhaust normal eviction candidates.
+- Preserve protection for current and pinned scenes while establishing a clear hard-over-budget fallback threshold for autonomous-NPC scenes.
+
+### What Was Implemented
+
+- Added `HARD_OVER_BUDGET_FACTOR = 1.5` in `src/scene/SceneManager.ts` to compute `hardOverBudgetThreshold` (`sceneCacheBudget * 1.5`).
+- Updated `evictScenesIfNeeded()`:
+  - Normal eviction pass continues to reduce estimated memory to `<= sceneCacheBudget` by evicting eligible non-autonomous, unpinned, non-current scenes in LRU order.
+  - Added a fallback pass triggered when `estimatedMemory > hardOverBudgetThreshold`: evicts eligible unpinned, non-current autonomous NPC scenes in LRU order until memory drops back to `<= sceneCacheBudget`.
+  - Calling `evictScene()` automatically snapshots and suspends NPC runtime state (`captureSceneRuntimeSnapshot`) and removes the scene from loaded active scenes.
+  - Current and pinned scenes remain fully protected under all budget conditions.
+- Added comprehensive unit test coverage in `tests/scene/scene-cache-eviction.test.ts`.
+
+### Important Architecture and Runtime Decisions
+
+- Soft budget (`sceneCacheBudget`) protects autonomous-NPC scenes from routine eviction when non-autonomous candidates exist.
+- Hard over-budget threshold (`1.5 * sceneCacheBudget`) acts as a safeguard against unbounded memory growth when autonomous-NPC scenes accumulate.
+- `evictScene()` snapshotting mechanism guarantees that NPC state and history are safely persisted and suspended before scene removal.
+
+### Tests and Validation
+
+- `npx vitest run tests/scene/` passed (11 test suites, 54 total tests passed).
+- Verified diffs for `src/scene/SceneManager.ts`.
+
+### Commits Created
+
+- No commits were created in this turn.
+
+### Remaining Work / Next Recommended Steps
+
+- Perform a full vitest test run across all project suites.
+- Commit the SceneManager eviction fallback update and new test file.
+

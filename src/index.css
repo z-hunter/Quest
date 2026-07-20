@@ -371,6 +371,7 @@ button:hover {
 
 input[type='text'],
 input[type='number'],
+textarea,
 .e-input,
 select {
   background: var(--ui-input-bg);
@@ -379,6 +380,10 @@ select {
   box-sizing: border-box;
   color-scheme: dark;
   font-family: var(--ui-mono-font);
+}
+
+textarea {
+  resize: vertical;
 }
 
 input:focus,
