@@ -2,6 +2,7 @@ import type { IGame } from '../core/IGame';
 import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
 import type { SceneObject } from '../entities/SceneObject';
+import type { Scene } from '../scene/Scene';
 import {
   getSceneTextLayerAccessState,
   type SceneTextLayerAccessState,
@@ -92,8 +93,10 @@ export class ActorWorldQuery {
     });
   }
 
-  getActorListeners(source: Actor): Actor[] {
-    const scene = this.game.sceneManager.currentScene;
+  getActorListeners(
+    source: Actor,
+    scene: Scene | null = this.game.sceneManager.currentScene
+  ): Actor[] {
     if (!scene) return [];
     return scene.entities.filter((entity): entity is Actor => {
       if (
@@ -104,16 +107,17 @@ export class ActorWorldQuery {
       ) {
         return false;
       }
-      return this.getObjectPerception(entity, source, true).visibility === 'visible';
+      return this.getObjectPerception(entity, source, true, scene).visibility === 'visible';
     });
   }
 
   getObjectPerception(
     actor: Actor,
     object: SceneObject,
-    fast: boolean = false
+    fast: boolean = false,
+    sceneOverride?: Scene | null
   ): ActorObjectPerception {
-    const scene = this.game.sceneManager.currentScene;
+    const scene = sceneOverride || this.game.sceneManager.currentScene;
     if (!scene) {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }

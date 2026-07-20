@@ -678,7 +678,7 @@ export class Game implements IGame {
     text: string,
     options: { triggerPuppetMaster?: boolean } = {}
   ): Promise<void> {
-    const scene = this.sceneManager.currentScene;
+    const scene = this.getActorScene(actor);
     const speech = text.trim();
     if (!scene || !speech) return;
     const displayName = this.getActorDialogueName(actor);

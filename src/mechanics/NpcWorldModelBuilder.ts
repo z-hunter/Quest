@@ -167,7 +167,7 @@ export class NpcWorldModelBuilder {
   getNpcListenerIds(scene: Scene, actorId?: string | null): string[] {
     const source = actorId ? scene.getObjectByName(actorId) : null;
     if (source instanceof Actor) {
-      return this.game.actorWorld.getActorListeners(source).map((npc) => npc.name);
+      return this.game.actorWorld.getActorListeners(source, scene).map((npc) => npc.name);
     }
     return this.getNpcActors(scene).map((npc) => npc.name);
   }

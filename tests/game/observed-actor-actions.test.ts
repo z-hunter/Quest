@@ -8,16 +8,46 @@ function addActor(
   fixture: ReturnType<typeof createGameSemanticFixture>,
   name: string,
   x: number,
-  npc = false
+  npc = false,
+  scene = fixture.scene
 ): Actor {
   const actor = new Actor(fixture.game, x, 0, 10, 10, name);
   actor.components = npc ? [{ type: 'NPC', enabled: true }] : [{ type: 'Actor' }];
-  fixture.scene.addEntity(actor);
+  scene.addEntity(actor);
   fixture.textAssets.setObject(name, { title: name, description: `${name} actor` });
   return actor;
 }
 
 describe('observed Actor actions', () => {
+  it('routes offscreen NPC speech to listeners in the speaker scene', async () => {
+    const fixture = createGameSemanticFixture('player_scene');
+    fixture.addPlayer('Hero', 0, 0);
+    const playerSceneNpc = addActor(fixture, 'PlayerSceneNpc', 20, true);
+    const corridor = fixture.addScene('corridor', 'Corridor');
+    const linda = addActor(fixture, 'Linda', 0, true, corridor);
+    const rick = addActor(fixture, 'Rick', 20, true, corridor);
+    const scheduleScene = vi.fn().mockResolvedValue(undefined);
+    (fixture.game as any).npcWorldModelBuilder = new NpcWorldModelBuilder(fixture.game);
+    (fixture.game as any).npcPuppetMaster = { scheduleScene };
+    (fixture.game as any).console = { log: vi.fn() };
+
+    await Game.prototype.sayAsActor.call(fixture.game, linda, 'Rick, can you help me?', {
+      triggerPuppetMaster: true,
+    });
+
+    expect(fixture.scene.sceneLog.entries).toEqual([]);
+    expect(corridor.sceneLog.entries).toEqual([
+      expect.objectContaining({
+        actorId: linda.name,
+        text: 'Rick, can you help me?',
+        knownByActorIds: [rick.name],
+      }),
+    ]);
+    expect(corridor.sceneLog.entries[0].knownByActorIds).not.toContain(playerSceneNpc.name);
+    expect(scheduleScene).toHaveBeenCalledTimes(1);
+    expect(scheduleScene).toHaveBeenCalledWith(corridor);
+  });
+
   it('records an action for every nearby Actor without waking Puppet Master', () => {
     const fixture = createGameSemanticFixture();
     const player = fixture.addPlayer('Hero', 0, 0);
