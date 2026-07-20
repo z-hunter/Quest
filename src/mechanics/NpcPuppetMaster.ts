@@ -30,7 +30,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'You are the Puppet Master for NPCs in a retro adventure game.',
   'Respond with exactly one JSON object and no extra text.',
   'Return {"kind":"pm_response","plans":[...]}.',
-  'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior.',
+  'You may include a short top-level "reasoning" string for diagnostics; it never changes runtime behavior. Omit it for a plan consisting solely of SAY or one obvious MOVE_TO, unless explaining a genuinely appropriate silence.',
   'Each plan must target a real NPC id from context.',
   'The scene-static catalog describes authored identity and affordances only; catalog membership never proves current physical presence. Inventory items can leave with another actor while the catalog remains cached.',
   'Current presence is confirmed only by this NPC visible dynamic entities or visible inventory. knownEntities and lastSeenSceneId are historical knowledge.',
@@ -68,7 +68,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not repeat an action when worldChanged is false and repeatCount is 2 or more.',
   'Repeated MOVE_TO failures include moveAttemptsRemaining. Retry the same target only while it is above zero; at zero, stop until conditions change.',
   'Only current visible dynamic entities can be inspected (LOOK, EXAMINE); their supported relations are in, on, under, behind unless explicitly stated otherwise.',
-  'Assume a dynamic entity approach is already_reachable only if interaction is reachable or held. Never infer presence or reachability from the static catalog.',
+  'Dynamic entities are currently present. Omitted dynamic fields mean visibility visible, interaction reachable, and approach already_reachable; explicit fields override those defaults. Never infer presence or reachability from the static catalog.',
 ].join('\n');
 
 const STRATEGY_SYSTEM_PROMPT = [
@@ -204,6 +204,10 @@ const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
 // wake so the NPC can choose a concrete action. They must still be bounded:
 // an unreliable provider must not be able to keep an NPC in an LLM-only loop.
 const PM_STATE_ONLY_CONTINUATION_LIMIT = 3;
+// A conversational-only reply is visible to the player. Give it a short
+// beat before resuming autonomous goal pursuit instead of immediately making
+// another provider request in the same turn.
+const PM_SAY_ONLY_CONTINUATION_DELAY_MS = 2_000;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 20;
@@ -1900,13 +1904,17 @@ export class NpcPuppetMaster {
           step.type === 'OBJECTIVE_REMOVE'
       );
       const hasPlanMemory = typeof plan.memory === 'string';
-      if (!hasExplicitStateUpdate && !hasPlanMemory) continue;
-
       const isStateOnlyPlan = !this.hasConcretePlanAction(plan);
       if (!isStateOnlyPlan) continue;
 
       const scene = this.getNpcScene(plan.npcId);
       if (!scene) continue;
+
+      const isSayOnlyPlan =
+        plan.steps.length > 0 && plan.steps.every((step) => step.type === 'SAY');
+      const shouldContinueSayOnlyPlan =
+        isSayOnlyPlan && this.hasActiveNpcObjectives(scene, plan.npcId);
+      if (!hasExplicitStateUpdate && !hasPlanMemory && !shouldContinueSayOnlyPlan) continue;
 
       if (plan.steps.some((step) => step.type === 'OBJECTIVE_ADD')) {
         this.traceWake('objective_add_without_concrete_action', {
@@ -1929,6 +1937,19 @@ export class NpcPuppetMaster {
         continue;
       }
       this.stateOnlyContinuationCounts.set(stateKey, count + 1);
+      const delayMs = shouldContinueSayOnlyPlan ? PM_SAY_ONLY_CONTINUATION_DELAY_MS : 0;
+
+      if (shouldContinueSayOnlyPlan) {
+        const actor = scene.getObjectByName(plan.npcId);
+        this.traceWake('say_only_plan_continuation_scheduled', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          delayMs,
+          objectives:
+            ComponentSystem.getNpcComponent(actor instanceof Actor ? actor : null)?.objectives
+              ?.length || 0,
+        });
+      }
 
       const currentGeneration = this.haltGenerationId;
       globalThis.setTimeout(() => {
@@ -1938,8 +1959,16 @@ export class NpcPuppetMaster {
           type: 'plan_continued',
           reason: 'previous_state_only_plan_completed_without_scheduling_action',
         });
-      }, 0);
+      }, delayMs);
     }
+  }
+
+  private hasActiveNpcObjectives(scene: Scene, npcId: string): boolean {
+    const actor = scene.getObjectByName(npcId);
+    return (
+      actor instanceof Actor &&
+      (ComponentSystem.getNpcComponent(actor)?.objectives?.length || 0) > 0
+    );
   }
 
   private hasConcretePlanAction(plan: NpcPlan): boolean {
@@ -2235,7 +2264,11 @@ export class NpcPuppetMaster {
     const compactTrigger = trigger ? this.compactPromptTrigger(trigger) : undefined;
     return this.compactPromptRecord({
       currentTimestamp: Date.now(),
-      scene: worldModel.scene,
+      // Description and lore are static and already present in the cacheable catalog.
+      scene: this.compactPromptRecord({
+        id: worldModel.scene.id,
+        title: worldModel.scene.title,
+      }),
       trigger: compactTrigger,
       npcs: worldModel.npcs.map((npc) => {
         const entities = npc.entities || [];
@@ -2467,10 +2500,10 @@ export class NpcPuppetMaster {
       id: entity.id,
       title: entity.title,
       lastSeenSceneId: entity.lastSeenSceneId,
-      visibility: entity.visibility,
+      ...(entity.visibility !== 'visible' ? { visibility: entity.visibility } : {}),
       ...(entity.location ? { location: entity.location } : {}),
-      interaction: entity.interaction,
-      approach: entity.approach,
+      ...(entity.interaction !== 'reachable' ? { interaction: entity.interaction } : {}),
+      ...(entity.approach !== 'already_reachable' ? { approach: entity.approach } : {}),
       ...(entity.switch
         ? {
             switch: {
@@ -2917,7 +2950,6 @@ export class NpcPuppetMaster {
     return records.map((record) =>
       this.compactPromptRecord({
         sceneId: record.sceneId,
-        timestamp: record.timestamp,
         ageMs: Math.max(0, now - record.timestamp),
         actionType: record.actionType,
         code: record.code,

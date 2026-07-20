@@ -210,11 +210,14 @@ describe('NpcPuppetMaster', () => {
     expect(staticText).not.toContain('"approach"');
     expect(staticText).not.toContain('"lastSeenSceneId"');
     expect(staticText).not.toContain('"state": "closed"');
-    expect(dynamicText).toContain('"interaction"');
+    expect(dynamicText).not.toContain('"interaction":"reachable"');
     expect(dynamicText).toContain('"state": "closed"');
     expect(dynamicText).not.toContain('A steel cabinet.');
     expect(dynamicText).not.toContain('Installed before the war.');
     expect(dynamicText).not.toContain('"inspection"');
+    expect(dynamicText).toMatch(new RegExp(`"scene":\\s*\\{\\s*"id":\\s*"${fixture.scene.id}"`));
+    expect(dynamicText).not.toContain('"description": "You are in Test Scene."');
+    expect(dynamicText).not.toContain('"lore":');
   });
 
   it('states that the static entity catalog does not prove current physical presence', async () => {
@@ -245,6 +248,7 @@ describe('NpcPuppetMaster', () => {
     expect(system).toContain(
       'Never say in reasoning that the NPC should answer and then return no plan.'
     );
+    expect(system).toContain('Omit it for a plan consisting solely of SAY or one obvious MOVE_TO');
   });
 
   it('executes valid SAY plans and stores NPC memory', async () => {
@@ -293,9 +297,9 @@ describe('NpcPuppetMaster', () => {
 
     expect(plans).toHaveLength(1);
     expect(dialogue).toContain('dialogue:Security Guard: Let me see your ID.');
-    expect((npc.components.find((component: any) => component.type === 'NPC') as any).memory).toBe(
-      'Miles greeted the guard.'
-    );
+    expect(
+      (npc.components.find((component: any) => component.type === 'NPC') as any).memory
+    ).toEqual(['Miles greeted the guard.']);
     expect(fixture.scene.sceneLog.getUnreadEntries()).toHaveLength(0);
     expect(JSON.stringify(provider.lastSystem)).not.toContain('Check IDs');
     expect(JSON.stringify(provider.lastMessages)).toContain('Check IDs');
@@ -1782,6 +1786,38 @@ describe('NpcPuppetMaster', () => {
     vi.useRealTimers();
   });
 
+  it('resumes an active objective after a SAY-only plan, with a short conversational delay', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    const npcComponent = npc.components.find((component: any) => component.type === 'NPC') as any;
+    npcComponent.objectives = [{ id: 'turn-tv-on', text: 'Turn on the TV', subtasks: [] }];
+    (fixture.game as any).sayAsActor = () => {};
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'SAY', text: 'Hi, Miles.' }] }],
+      }),
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [{ npcId: 'guard', steps: [{ type: 'MOVE_TO', x: 60, y: 20 }] }],
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(2_149);
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('plan_continued');
+    vi.useRealTimers();
+  });
+
   it('continues a state-only plan while its NPC is in an offscreen scene', async () => {
     vi.useFakeTimers();
     const fixture = createGameSemanticFixture('start');
@@ -2663,6 +2699,20 @@ describe('NpcPuppetMaster', () => {
     expect(dynamicCommand).not.toHaveProperty('label');
     expect(dynamicCommand.requires[0]).not.toHaveProperty('scope');
     expect(dynamicRemote).toEqual(expect.objectContaining({ id: 'tv_rc', title: 'TV remote' }));
+    const defaultDynamicEntity = (new NpcPuppetMaster(fixture.game, new MockProvider('')) as any)
+      .buildDynamicEntities([
+        {
+          id: 'default_entity',
+          title: 'Default entity',
+          visibility: 'visible',
+          interaction: 'reachable',
+          approach: 'already_reachable',
+        },
+      ])
+      .at(0);
+    expect(defaultDynamicEntity).not.toHaveProperty('visibility');
+    expect(defaultDynamicEntity).not.toHaveProperty('interaction');
+    expect(defaultDynamicEntity).not.toHaveProperty('approach');
     expect(builder.buildStaticEntityProjection(fixture.scene)).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'tv_rc' })])
     );
@@ -4341,9 +4391,7 @@ describe('NpcPuppetMaster', () => {
     expect(history[0]).toMatchObject({ sceneId: 'corridor', targetId: 'target_1' });
     expect(history.at(-1)).toMatchObject({ sceneId: 'test_room', targetId: 'target_20' });
     expect(
-      history.every(
-        (entry: any) => typeof entry.timestamp === 'number' && typeof entry.ageMs === 'number'
-      )
+      history.every((entry: any) => typeof entry.ageMs === 'number' && !('timestamp' in entry))
     ).toBe(true);
   });
 
