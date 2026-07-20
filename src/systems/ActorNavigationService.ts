@@ -4,6 +4,7 @@ import type { SceneObject } from '../entities/SceneObject';
 import { getInactiveSubsceneAncestors } from '../scene/SceneTextLayer';
 import { ComponentSystem } from './ComponentSystem';
 import type { ExitComponent } from './ComponentSystem';
+import { traceNavigation } from './navigation/navigationDebug';
 import type {
   NavigationActorProfile,
   NavigationPlanRequest,
@@ -41,10 +42,20 @@ export type NavigationDiagnostics = {
   staleResults: number;
   retries: number;
   fallbacks: number;
+  workerTimeouts: number;
   workerDurationMs: number;
 };
 
 export type NpcNavigationWorkerFactory = () => Worker;
+
+type QueuedNpcApproach = {
+  actor: Actor;
+  target: SceneObject;
+  request: NavigationPlanRequest;
+  callback: (result: NpcApproachResult) => void;
+};
+
+const NPC_WORKER_TIMEOUT_MS = 1_500;
 
 export class ActorNavigationService {
   private readonly game: IGame;
@@ -55,18 +66,10 @@ export class ActorNavigationService {
   >();
   private npcWorker: Worker | null | undefined;
   private npcRequestId = 0;
-  private npcQueue: Array<{
-    actor: Actor;
-    target: SceneObject;
-    request: NavigationPlanRequest;
-    callback: (result: NpcApproachResult) => void;
-  }> = [];
-  private npcActive: {
-    actor: Actor;
-    target: SceneObject;
-    request: NavigationPlanRequest;
-    callback: (result: NpcApproachResult) => void;
-  } | null = null;
+  private npcQueue: QueuedNpcApproach[] = [];
+  private npcActive: QueuedNpcApproach | null = null;
+  private npcWorkerTimeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+  private npcWorkerStartedAt: number | null = null;
   private snapshotFingerprint = '';
   private snapshotRevision = 0;
   private snapshot: NavigationSnapshot | null = null;
@@ -79,6 +82,7 @@ export class ActorNavigationService {
     staleResults: 0,
     retries: 0,
     fallbacks: 0,
+    workerTimeouts: 0,
     workerDurationMs: 0,
   };
 
@@ -151,8 +155,10 @@ export class ActorNavigationService {
         event: MessageEvent<NavigationPlanResult & { missingSnapshot?: boolean }>
       ) => this.handleNpcWorkerResult(event.data);
       worker.onerror = () => {
+        if (this.npcWorker !== worker) return;
         worker.terminate();
         this.npcWorker = null;
+        this.clearNpcWorkerTimeout();
         const active = this.npcActive;
         this.npcActive = null;
         if (active) this.deferFallback(active.actor, active.target, active.callback);
@@ -191,6 +197,45 @@ export class ActorNavigationService {
       this.sentSnapshotRevisions.add(snapshot.revision);
     }
     worker.postMessage({ type: 'plan', request: next.request });
+    this.startNpcWorkerTimeout(next);
+  }
+
+  private startNpcWorkerTimeout(active: QueuedNpcApproach): void {
+    this.clearNpcWorkerTimeout();
+    this.npcWorkerStartedAt = Date.now();
+    this.npcWorkerTimeout = globalThis.setTimeout(() => {
+      if (this.npcActive?.request.requestId !== active.request.requestId) return;
+
+      const elapsedMs = Date.now() - (this.npcWorkerStartedAt || Date.now());
+      this.clearNpcWorkerTimeout();
+      this.npcActive = null;
+      this.diagnostics.active = false;
+      this.diagnostics.workerTimeouts += 1;
+      traceNavigation(this.game, 'navigation_worker_timeout', {
+        actorId: active.actor.name,
+        sceneId: active.request.sceneId,
+        targetId: active.target.name,
+        requestId: active.request.requestId,
+        timeoutMs: NPC_WORKER_TIMEOUT_MS,
+        elapsedMs,
+      });
+
+      // A worker occupied by a stuck route search cannot service the FIFO queue.
+      // Replace it so later NPC routes are not stranded behind this request.
+      this.npcWorker?.terminate();
+      this.npcWorker = undefined;
+      this.sentSnapshotRevisions.clear();
+      this.deferFallback(active.actor, active.target, active.callback);
+      this.pumpNpcQueue();
+    }, NPC_WORKER_TIMEOUT_MS);
+  }
+
+  private clearNpcWorkerTimeout(): void {
+    if (this.npcWorkerTimeout !== null) {
+      globalThis.clearTimeout(this.npcWorkerTimeout);
+      this.npcWorkerTimeout = null;
+    }
+    this.npcWorkerStartedAt = null;
   }
 
   private handleNpcWorkerResult(
@@ -198,6 +243,7 @@ export class ActorNavigationService {
   ): void {
     const active = this.npcActive;
     if (!active || active.request.requestId !== result.requestId) return;
+    this.clearNpcWorkerTimeout();
     this.npcActive = null;
     this.diagnostics.active = false;
     this.diagnostics.workerDurationMs = result.durationMs;
