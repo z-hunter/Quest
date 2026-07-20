@@ -369,13 +369,12 @@ export class NpcPuppetMaster {
     this.sceneCallTimes.clear();
     this.executor.clearAllPending();
 
-    const scene = this.game.sceneManager.currentScene;
-    if (!scene) return;
-
-    for (const entity of scene.entities) {
-      if (entity instanceof Actor && ComponentSystem.isNpc(entity)) {
-        entity.stop();
-        this.executor.clearState(entity.name);
+    for (const scene of this.game.sceneManager.scenes.values()) {
+      for (const entity of scene.entities) {
+        if (entity instanceof Actor && ComponentSystem.isNpc(entity)) {
+          entity.stop();
+          this.executor.clearState(entity.name);
+        }
       }
     }
   }
@@ -1906,16 +1905,17 @@ export class NpcPuppetMaster {
       const isStateOnlyPlan = !this.hasConcretePlanAction(plan);
       if (!isStateOnlyPlan) continue;
 
+      const scene = this.getNpcScene(plan.npcId);
+      if (!scene) continue;
+
       if (plan.steps.some((step) => step.type === 'OBJECTIVE_ADD')) {
         this.traceWake('objective_add_without_concrete_action', {
-          sceneId: this.getNpcScene(plan.npcId)?.id,
+          sceneId: scene.id,
           npcId: plan.npcId,
           stepTypes: plan.steps.map((step) => step.type),
         });
       }
 
-      const scene = this.getNpcScene(plan.npcId);
-      if (!scene) continue;
       const stateKey = this.getNpcStateKey(scene, plan.npcId);
       const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
       if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) {
