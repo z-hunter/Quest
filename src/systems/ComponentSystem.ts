@@ -853,10 +853,7 @@ export class ComponentSystem {
     const allowedDist = interactionWidth * 2;
 
     if (dist > allowedDist) {
-      const isPortableItem = !!entity.components?.some(
-        (component: any) => component?.type === 'Item'
-      );
-      if (!options?.ignoreSpatialAncestors && !isPortableItem) {
+      if (!options?.ignoreSpatialAncestors) {
         const scene = game?.sceneManager?.currentScene;
         const visited = new Set<string>([String(entity.name || '')]);
         let parentId = String((entity as any).spatial?.parentNodeId || '').trim();
@@ -865,6 +862,9 @@ export class ComponentSystem {
           visited.add(parentId);
           const parent = scene.getObjectByName(parentId);
           if (!parent) break;
+          // A walkbox is the floor/navigation mesh, not a physical parent that
+          // can put a distant item within arm's reach.
+          if (parent.type === 'Walkbox') break;
           if (
             !this.getInteractionDistanceError(parent, player, {
               ignoreSpatialAncestors: true,

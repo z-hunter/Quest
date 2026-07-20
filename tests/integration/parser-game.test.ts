@@ -100,6 +100,42 @@ describe('Parser + game integration smoke', () => {
     expect(fixture.game.getInventoryEntities(remote, 'in')).not.toContain(batteries);
   });
 
+  it('takes a visible item from a reachable spatial parent even when its own coordinates are distant', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const pillow = fixture.addEntity('right_pillow', {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+    });
+    pillow.x = 0;
+    pillow.y = 0;
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      description: 'A remote tucked under the pillow.',
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: pillow.name, relation: 'under' },
+    });
+    remote.x = 500;
+    remote.y = 500;
+    fixture.textAssets.setObject(pillow.name, {
+      title: 'right pillow',
+      description: 'A sofa pillow.',
+      synonyms: ['pillow'],
+    });
+    fixture.textAssets.setObject(remote.name, {
+      title: 'TV remote',
+      description: 'A remote tucked under the pillow.',
+      synonyms: ['remote'],
+    });
+    const moveTo = vi.spyOn(player, 'moveTo');
+
+    const result = await fixture.run('take remote');
+
+    expect(result.messages.at(-1)).toContain('You picked up the TV remote');
+    expect(fixture.game.inventory).toContain(remote);
+    expect(moveTo).not.toHaveBeenCalled();
+  });
+
   it('describes direct spatial contents with LOOK UNDER', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer();
