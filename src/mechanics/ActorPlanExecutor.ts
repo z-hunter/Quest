@@ -28,12 +28,17 @@ export class ActorPlanExecutor {
   private navigationTokens = new Map<string, number>();
   private pendingTimeouts = new Map<string, Set<any>>();
   private moveStartedAt = new Map<string, number>();
+  private targetMoveStates = new Map<
+    string,
+    { targetId: string; localTeleportRevision: number; localTeleportReplans: number }
+  >();
 
   clearState(npcId: string): void {
     const current = this.moveWatchTokens.get(npcId) || 0;
     this.moveWatchTokens.set(npcId, current + 1);
     this.navigationTokens.set(npcId, (this.navigationTokens.get(npcId) || 0) + 1);
     this.moveStartedAt.delete(npcId);
+    this.targetMoveStates.delete(npcId);
     const actor = this.findActor(npcId);
     if (actor instanceof Actor) this.game.actorNavigation.cancelNpcApproach(actor);
     const timeouts = this.pendingTimeouts.get(npcId);
@@ -49,6 +54,7 @@ export class ActorPlanExecutor {
     this.moveWatchTokens.clear();
     this.navigationTokens.clear();
     this.moveStartedAt.clear();
+    this.targetMoveStates.clear();
     for (const timeouts of this.pendingTimeouts.values()) {
       for (const timeoutId of timeouts) {
         globalThis.clearTimeout(timeoutId);
@@ -342,9 +348,11 @@ export class ActorPlanExecutor {
 
   private moveActor(
     actor: Actor,
-    step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>
+    step: Extract<NpcPlanStep, { type: 'MOVE_TO' }>,
+    preserveTargetMoveState: boolean = false
   ): NpcPlanExecutionOutcome {
     if (typeof step.x === 'number' && typeof step.y === 'number') {
+      this.targetMoveStates.delete(actor.name);
       return this.startMove(actor, actor.moveTo(step.x, step.y));
     }
 
@@ -354,12 +362,21 @@ export class ActorPlanExecutor {
       return { status: 'failed', code: 'move_target_not_found', npcId: actor.name };
     }
 
+    if (!preserveTargetMoveState) {
+      this.targetMoveStates.set(actor.name, {
+        targetId,
+        localTeleportRevision: actor.getLocalTeleportRevision(),
+        localTeleportReplans: 0,
+      });
+    }
+
     const token = (this.navigationTokens.get(actor.name) || 0) + 1;
     this.navigationTokens.set(actor.name, token);
     this.game.actorNavigation.requestNpcApproach(actor, target, (navigation) => {
       if (this.navigationTokens.get(actor.name) !== token) return;
       this.navigationTokens.delete(actor.name);
       if (navigation.plan.status === 'already_reachable') {
+        this.targetMoveStates.delete(actor.name);
         this.scheduleMoveCompletion(
           actor.name,
           {
@@ -374,6 +391,7 @@ export class ActorPlanExecutor {
         return;
       }
       if (!navigation.plan.point) {
+        this.targetMoveStates.delete(actor.name);
         this.scheduleMoveCompletion(
           actor.name,
           {
@@ -494,6 +512,24 @@ export class ActorPlanExecutor {
         this.moveWatchTokens.delete(actor.name);
         const startedAt = this.moveStartedAt.get(actor.name);
         this.moveStartedAt.delete(actor.name);
+        const targetMove = this.targetMoveStates.get(actor.name);
+        if (
+          result.status === 'arrived' &&
+          targetMove &&
+          targetMove.localTeleportReplans < 1 &&
+          actor.getLocalTeleportRevision() > targetMove.localTeleportRevision
+        ) {
+          targetMove.localTeleportReplans += 1;
+          targetMove.localTeleportRevision = actor.getLocalTeleportRevision();
+          traceNavigation(this.game, 'move_replanned_after_local_teleport', {
+            actorId: actor.name,
+            targetId: targetMove.targetId,
+            actorPosition: { x: actor.x, y: actor.y },
+          });
+          this.moveActor(actor, { type: 'MOVE_TO', targetId: targetMove.targetId }, true);
+          return;
+        }
+        this.targetMoveStates.delete(actor.name);
         traceNavigation(this.game, 'move_completed', {
           actorId: actor.name,
           status: result.status,

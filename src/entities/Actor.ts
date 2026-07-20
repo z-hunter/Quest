@@ -63,6 +63,8 @@ export class Actor extends Entity {
   private localTeleportExit: SceneObject | null = null;
   /** Final intent survives a same-scene Exit placement so its stale route can be rebuilt. */
   private plannedMoveTarget: { x: number; y: number } | null = null;
+  /** Increments when a same-scene Exit relocates an in-progress movement. */
+  private localTeleportRevision = 0;
 
   isPlayer: boolean = false;
 
@@ -297,8 +299,13 @@ export class Actor extends Entity {
     if (!target || this.state !== 'walk') return null;
 
     const previousRouteLength = this.route.length;
+    this.localTeleportRevision += 1;
     const result = this.moveTo(target.x, target.y);
     return { target: { ...target }, previousRouteLength, result };
+  }
+
+  getLocalTeleportRevision(): number {
+    return this.localTeleportRevision;
   }
 
   getMoveResult(): ActorMoveResult {

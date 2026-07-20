@@ -1495,6 +1495,83 @@ describe('NpcPuppetMaster', () => {
     expect(component.objectives).toEqual(['Reached the marked spot']);
   });
 
+  it('replans a target MOVE_TO once after an internal teleport before completing it', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const leftFloor = fixture.addWalkbox('LeftFloor');
+    leftFloor.poly = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    const rightFloor = fixture.addWalkbox('RightFloor');
+    rightFloor.poly = [
+      { x: 200, y: 0 },
+      { x: 300, y: 0 },
+      { x: 300, y: 100 },
+      { x: 200, y: 100 },
+    ];
+    const npc = addNpc(fixture, 'guard');
+    npc.x = 10;
+    npc.y = 50;
+    npc.speed = 1;
+    npc.colliderWidth = 4;
+    npc.colliderHeight = 4;
+    const entry = fixture.addTriggerbox('RightEntry', { components: [{ type: 'Entry' }] });
+    entry.poly = [
+      { x: 205, y: 45 },
+      { x: 215, y: 45 },
+      { x: 215, y: 55 },
+      { x: 205, y: 55 },
+    ];
+    const exit = fixture.addTriggerbox('LeftExit', {
+      components: [
+        {
+          type: 'Exit',
+          targetSceneId: '',
+          targetEntryId: 'RightEntry',
+          collider: false,
+          portal: true,
+          navigationOnly: true,
+        },
+      ],
+    });
+    exit.poly = [
+      { x: 80, y: 45 },
+      { x: 90, y: 45 },
+      { x: 90, y: 55 },
+      { x: 80, y: 55 },
+    ];
+    const door = fixture.addTriggerbox('Door');
+    door.poly = [
+      { x: 285, y: 45 },
+      { x: 295, y: 45 },
+      { x: 295, y: 55 },
+      { x: 285, y: 55 },
+    ];
+    const requestApproach = vi.spyOn(fixture.game.actorNavigation, 'requestNpcApproach');
+    const completions: Array<{ npcId: string; result: any }> = [];
+    const executor = new ActorPlanExecutor(fixture.game, undefined, (npcId, result) => {
+      completions.push({ npcId, result });
+    });
+
+    executor.executePlan({ npcId: npc.name, steps: [{ type: 'MOVE_TO', targetId: door.name }] });
+
+    for (let tick = 0; tick < 12 && completions.length === 0; tick += 1) {
+      fixture.scene.update(100);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+
+    expect(requestApproach).toHaveBeenCalledTimes(2);
+    expect(completions).toHaveLength(1);
+    expect(completions[0]).toMatchObject({
+      npcId: npc.name,
+      result: { status: 'arrived', code: 'arrived' },
+    });
+    expect(fixture.game.actorNavigation.isReachable(npc, door)).toBe(true);
+  });
+
   it('defers an ordinary batch while a continuation awaits its barrier, then consumes it once', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
