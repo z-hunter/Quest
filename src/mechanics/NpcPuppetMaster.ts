@@ -54,6 +54,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
   "CURRENT OBJECTIVES are the NPC's durable active plans across scene changes. Keep an unfinished parent objective until runtime evidence confirms completion or impossibility: retain the parent goal and add the immediate concrete subgoal with OBJECTIVE_ADD before dependent physical steps. OBJECTIVE_REMOVE is only for confirmed completed or irrelevant work. MEMORY is an array of factual notes: use MEMORY_ADD only for confirmed facts and MEMORY_REMOVE to prune stale facts. Objectives are intentions, not claims that a prerequisite was completed.",
+  'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
@@ -198,7 +199,10 @@ const PM_LOOP_COOLDOWN_MS = 10_000;
 const PM_RATE_WINDOW_MS = 10_000;
 const PM_MAX_NPC_CALLS_PER_WINDOW = 6;
 const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
-const PM_MEMORY_CONTINUATION_LIMIT = 3;
+// State-only PM turns (for example OBJECTIVE_ADD + SAY) need one follow-up
+// wake so the NPC can choose a concrete action. They must still be bounded:
+// an unreliable provider must not be able to keep an NPC in an LLM-only loop.
+const PM_STATE_ONLY_CONTINUATION_LIMIT = 3;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 20;
@@ -225,7 +229,7 @@ export class NpcPuppetMaster {
   private deferredContinuationTriggers = new Map<string, NpcIndividualTrigger[]>();
   private continuationStates = new Map<string, NpcContinuationStateSnapshot>();
   private restoredContinuationStates = new Map<string, 'needs_replan'>();
-  private memoryContinuationCounts = new Map<string, number>();
+  private stateOnlyContinuationCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
 
@@ -359,7 +363,7 @@ export class NpcPuppetMaster {
     this.deferredContinuationTriggers.clear();
     this.continuationStates.clear();
     this.restoredContinuationStates.clear();
-    this.memoryContinuationCounts.clear();
+    this.stateOnlyContinuationCounts.clear();
     this.npcCallTimes.clear();
     this.sceneCallTimes.clear();
     this.executor.clearAllPending();
@@ -433,7 +437,7 @@ export class NpcPuppetMaster {
     for (const npcId of unreadNpcIds) {
       this.clearLoopSuppression(scene, npcId);
       this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
-      this.memoryContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
+      this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
       this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
       completions.push(this.enqueueNpc(scene, npcId));
     }
@@ -731,6 +735,9 @@ export class NpcPuppetMaster {
     const observableItemIds = scene ? this.getNpcObservableItemIds(scene, plan.npcId) : [];
     const outcomes = this.executor.executePlan(plan);
     if (scene) {
+      if (this.hasConcretePlanAction(plan)) {
+        this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, plan.npcId));
+      }
       this.storePendingContinuationAfterScheduledOutcome(
         scene,
         plan,
@@ -1895,7 +1902,7 @@ export class NpcPuppetMaster {
     trigger: NpcIndividualTrigger | undefined,
     hasScheduledStep: boolean
   ): void {
-    if (hasScheduledStep || trigger?.type !== 'move_completed') return;
+    if (hasScheduledStep) return;
 
     for (const plan of plans) {
       const hasExplicitStateUpdate = plan.steps.some(
@@ -1911,15 +1918,31 @@ export class NpcPuppetMaster {
       const hasPlanMemory = typeof plan.memory === 'string';
       if (!hasExplicitStateUpdate && !hasPlanMemory) continue;
 
+      const isStateOnlyPlan = !this.hasConcretePlanAction(plan);
+      if (!isStateOnlyPlan) continue;
+
+      if (plan.steps.some((step) => step.type === 'OBJECTIVE_ADD')) {
+        this.traceWake('objective_add_without_concrete_action', {
+          sceneId: this.game.sceneManager.currentScene?.id,
+          npcId: plan.npcId,
+          stepTypes: plan.steps.map((step) => step.type),
+        });
+      }
+
       const scene = this.game.sceneManager.currentScene;
       const stateKey = scene ? this.getNpcStateKey(scene, plan.npcId) : plan.npcId;
-      if (hasExplicitStateUpdate) {
-        this.memoryContinuationCounts.delete(stateKey);
-      } else {
-        const count = this.memoryContinuationCounts.get(stateKey) || 0;
-        if (count >= PM_MEMORY_CONTINUATION_LIMIT) continue;
-        this.memoryContinuationCounts.set(stateKey, count + 1);
+      const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
+      if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) {
+        this.traceWake('state_only_plan_continuation_suppressed', {
+          sceneId: scene?.id,
+          npcId: plan.npcId,
+          count,
+          limit: PM_STATE_ONLY_CONTINUATION_LIMIT,
+          triggerType: trigger?.type,
+        });
+        continue;
       }
+      this.stateOnlyContinuationCounts.set(stateKey, count + 1);
 
       const currentGeneration = this.haltGenerationId;
       const currentScene = scene;
@@ -1933,10 +1956,26 @@ export class NpcPuppetMaster {
           return;
         this.scheduleNpc(activeScene, plan.npcId, {
           type: 'plan_continued',
-          reason: 'previous_plan_updated_memory_or_objectives_without_scheduling_action',
+          reason: 'previous_state_only_plan_completed_without_scheduling_action',
         });
       }, 0);
     }
+  }
+
+  private hasConcretePlanAction(plan: NpcPlan): boolean {
+    return plan.steps.some(
+      (step) =>
+        ![
+          'SAY',
+          'MEMORY_SET',
+          'OBJECTIVES_SET',
+          'MEMORY_ADD',
+          'MEMORY_REMOVE',
+          'OBJECTIVE_ADD',
+          'OBJECTIVE_UPDATE',
+          'OBJECTIVE_REMOVE',
+        ].includes(step.type)
+    );
   }
 
   private scheduleNpcWait(npcId: string, ms: number): void {

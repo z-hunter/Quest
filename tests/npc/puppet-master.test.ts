@@ -1635,7 +1635,46 @@ describe('NpcPuppetMaster', () => {
     expect(npc.getMoveResult().target).toEqual({ x: tv.x, y: tv.y });
   });
 
-  it('limits move-completion continuations for plan-level memory alone', async () => {
+  it('continues after plan completion when an objective-only plan has no scheduling action', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 5, 5);
+    const npc = addNpc(fixture, 'guard');
+    (fixture.game as any).sayAsActor = () => {};
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: 'guard',
+            steps: [
+              {
+                type: 'OBJECTIVE_ADD',
+                objective: { text: 'Find charged batteries', subtasks: [] },
+              },
+              { type: 'SAY', text: 'I need to look for batteries.' },
+            ],
+          },
+        ],
+      }),
+      JSON.stringify({ kind: 'pm_response', plans: [{ npcId: 'guard', steps: [] }] }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'plan_completed', results: [] });
+    expect(provider.calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(provider.calls).toHaveLength(2);
+    expect(JSON.stringify(provider.calls[1].messages)).toContain('plan_continued');
+    expect(ComponentSystem.getNpcComponent(npc)?.objectives).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'Find charged batteries' })])
+    );
+    vi.useRealTimers();
+  });
+
+  it('limits state-only continuations after plan completion', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero', 5, 5);
@@ -1659,18 +1698,29 @@ describe('NpcPuppetMaster', () => {
 
     for (let attempt = 0; attempt < 4; attempt++) {
       await pm.processNpc(fixture.scene, npc.name, {
-        type: 'move_completed',
-        result: {
-          status: 'arrived',
-          code: 'arrived',
-          message: 'Arrived.',
-          target: { x: 60, y: 20 },
-          route: [],
-        },
+        type: 'plan_completed',
+        results: [],
       });
     }
 
-    expect((pm as any).memoryContinuationCounts.get(`${fixture.scene.id}:${npc.name}`)).toBe(3);
+    expect((pm as any).stateOnlyContinuationCounts.get(`${fixture.scene.id}:${npc.name}`)).toBe(3);
+  });
+
+  it('resets the state-only continuation limit when a physical action is scheduled', () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    const stateKey = `${fixture.scene.id}:${npc.name}`;
+    (pm as any).stateOnlyContinuationCounts.set(stateKey, 3);
+
+    (pm as any).executePlanAndTrackContinuation({
+      npcId: npc.name,
+      steps: [{ type: 'WAIT', ms: 1000 }],
+    });
+
+    expect((pm as any).stateOnlyContinuationCounts.has(stateKey)).toBe(false);
+    vi.useRealTimers();
   });
 
   it('executes TAKE into the NPC inventory and wakes with an action_completed trigger', async () => {
