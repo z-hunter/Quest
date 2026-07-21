@@ -717,6 +717,114 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
+  it('immediately completes an objective from matching successful plan_completed evidence', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'give-battery',
+        text: 'Give the battery to Linda',
+        subtasks: [],
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              {
+                type: 'OBJECTIVE_MARK_COMPLETED',
+                objectiveId: 'give-battery',
+                evidence: {
+                  actionType: 'GIVE',
+                  code: 'item_given',
+                  targetId: 'Linda',
+                  itemId: 'battery_aaa',
+                },
+              },
+            ],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, {
+      type: 'plan_completed',
+      results: [
+        {
+          status: 'ok',
+          code: 'item_given',
+          npcId: npc.name,
+          actionType: 'GIVE',
+          targetId: 'Linda',
+          itemId: 'battery_aaa',
+          worldChanged: true,
+        },
+      ],
+    });
+
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'give-battery', completed: true }),
+    ]);
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
+    pm.haltAllNpcs();
+  });
+
+  it('does not treat evidence claimed by the current response as runtime confirmation', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'turn-tv-on',
+        text: 'Turn on the TV',
+        subtasks: [],
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              {
+                type: 'OBJECTIVE_MARK_COMPLETED',
+                objectiveId: 'turn-tv-on',
+                evidence: { actionType: 'COMMAND', commandId: 'turn_tv_on' },
+              },
+            ],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'turn-tv-on', pendingConfirmation: true }),
+    ]);
+    expect(component.objectives[0].completed).toBeUndefined();
+    pm.haltAllNpcs();
+  });
+
   it('drops a repeated marker for JUST COMPLETED objective without aborting the plan tail', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');

@@ -2608,24 +2608,28 @@ export class NpcPuppetMaster {
           }
           // Missing IDs remain in the plan so the executor can produce its
           // normal deterministic failure outcome.
-          if (!objective || !objective.pendingConfirmation) return true;
+          if (!objective) return true;
           if (
-            !step.evidence ||
-            !this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
+            step.evidence &&
+            this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
           ) {
-            rejectedNpcIds.add(plan.npcId);
-            this.traceWake('objective_completion_unconfirmed', {
-              sceneId: worldModel.scene.id,
-              npcId: plan.npcId,
-              objectiveId: step.objectiveId,
-              evidence: step.evidence,
-            });
-            return false;
+            const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+            confirmed.add(step.objectiveId);
+            confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+            return true;
           }
-          const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
-          confirmed.add(step.objectiveId);
-          confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
-          return true;
+          // A first, unconfirmed claim is retained as PENDING CONFIRMATION.
+          // Evidence describing another step in this response cannot confirm
+          // it because only results from the current trigger are matched.
+          if (!objective.pendingConfirmation) return true;
+          rejectedNpcIds.add(plan.npcId);
+          this.traceWake('objective_completion_unconfirmed', {
+            sceneId: worldModel.scene.id,
+            npcId: plan.npcId,
+            objectiveId: step.objectiveId,
+            evidence: step.evidence,
+          });
+          return false;
         });
         return steps.length ? { ...plan, steps } : null;
       })
@@ -2649,18 +2653,24 @@ export class NpcPuppetMaster {
     const triggers =
       trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
     return triggers.some((candidate) => {
-      const result =
-        candidate.type === 'action_completed' || candidate.type === 'plan_interrupted'
-          ? candidate.result
-          : null;
-      if (!result || result.status !== 'ok' || result.actionType !== evidence.actionType)
-        return false;
-      return (
-        (!evidence.code || result.code === evidence.code) &&
-        (!evidence.targetId || result.targetId === evidence.targetId) &&
-        (!evidence.itemId || result.itemId === evidence.itemId) &&
-        (!evidence.commandId || result.commandId === evidence.commandId)
-      );
+      const results: Array<NpcPlanExecutionOutcome | ActorMoveResult> =
+        candidate.type === 'action_completed'
+          ? [candidate.result]
+          : candidate.type === 'plan_completed'
+            ? candidate.results
+            : candidate.type === 'plan_interrupted'
+              ? [...candidate.completedSteps, candidate.result]
+              : [];
+      return results.some((result) => {
+        if (!result || result.status !== 'ok' || result.actionType !== evidence.actionType)
+          return false;
+        return (
+          (!evidence.code || result.code === evidence.code) &&
+          (!evidence.targetId || result.targetId === evidence.targetId) &&
+          (!evidence.itemId || result.itemId === evidence.itemId) &&
+          (!evidence.commandId || result.commandId === evidence.commandId)
+        );
+      });
     });
   }
 
@@ -3902,7 +3912,13 @@ export class NpcPuppetMaster {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const record = value as Record<string, unknown>;
     if (record.type === 'SAY') {
-      const text = typeof record.text === 'string' ? record.text.trim() : '';
+      let text = typeof record.text === 'string' ? record.text.trim() : '';
+      if (text) {
+        text = text
+          .split('—')
+          .map((s) => s.trim())
+          .join('\u202F—\u202F');
+      }
       return text ? { type: 'SAY', text } : null;
     }
     if (record.type === 'MEMORY_ADD' || record.type === 'MEMORY_REMOVE') {

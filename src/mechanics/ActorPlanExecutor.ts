@@ -201,12 +201,11 @@ export class ActorPlanExecutor {
       if (objective.completed) {
         return { status: 'failed', code: 'objective_already_completed', npcId: actor.name };
       }
-      if (objective.pendingConfirmation) {
-        if (!confirmedObjectiveIds.has(objective.id)) {
-          return { status: 'failed', code: 'objective_confirmation_required', npcId: actor.name };
-        }
+      if (confirmedObjectiveIds.has(objective.id)) {
         objective.completed = true;
         delete objective.pendingConfirmation;
+      } else if (objective.pendingConfirmation) {
+        return { status: 'failed', code: 'objective_confirmation_required', npcId: actor.name };
       } else {
         objective.pendingConfirmation = true;
       }
