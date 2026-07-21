@@ -344,11 +344,23 @@ export class InventoryManager {
     const relationMatches = spatialMatches.filter(
       (candidate) => (candidate as any).__inventoryRelation === relation
     );
+    // A stale component item id must never resolve to an entity that is
+    // explicitly held by somebody else. Otherwise an old source inventory
+    // can make the same moved entity appear held by both Actors, which lets
+    // PM attempt a duplicate GIVE that runtime then has to reject.
+    const unownedFallbackMatches = matches.filter((candidate) => {
+      const spatialOwnerId = String(candidate.spatial?.parentNodeId || '').trim();
+      const inventoryOwner = candidate.getInventoryPositionOwner();
+      return (
+        (!spatialOwnerId || spatialOwnerId === owner.name) &&
+        (!inventoryOwner || inventoryOwner === owner)
+      );
+    });
 
     return (
       relationMatches[relationMatches.length - 1] ||
       spatialMatches[spatialMatches.length - 1] ||
-      matches[matches.length - 1] ||
+      unownedFallbackMatches[unownedFallbackMatches.length - 1] ||
       null
     );
   }

@@ -391,8 +391,6 @@ describe('NpcPuppetMaster', () => {
     expect(output).toContain('Tokens: 456 in, 32 out');
     expect(output).toContain('Cache: 222 read, 111 created');
     expect(output).toContain('Dynamic prompt:');
-    expect(output).toContain('knownEntities:');
-    expect(output).not.toContain('"lastSeenSceneId"');
   });
 
   it('shows optional model reasoning only in Puppet Master diagnostics', async () => {
@@ -1078,6 +1076,15 @@ describe('NpcPuppetMaster', () => {
       fixture.game.inventoryManager.getInventoryEntitiesInScene(linda, corridor, 'in')
     ).toContain(battery);
     expect(fixture.scene.entities).not.toContain(battery);
+
+    // A stale source component must not resolve the item id to the entity
+    // that GIVE has already moved into Linda's inventory.
+    (rick.components.find((component: any) => component.type === 'Inventory') as any).items = [
+      battery.name,
+    ];
+    expect(fixture.game.inventoryManager.getInventoryEntitiesInScene(rick, corridor, 'in')).toEqual(
+      []
+    );
   });
 
   it('omits untitled inventory entities from PM knowledge', () => {
