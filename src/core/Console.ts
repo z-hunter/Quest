@@ -542,7 +542,7 @@ export class Console {
     const delta = this.lastPmDebugTimestamp === null ? 0 : now - this.lastPmDebugTimestamp;
     this.lastPmDebugTimestamp = now;
     const roundedDelta = Math.round(delta * 10) / 10;
-    return text.replace(/^--- PM ([^-]+) ---/, `--- PM $1 (+${roundedDelta}ms) ---`);
+    return text.replace(/^--- PM ([^-]+) ---\n?/, `[PM $1 +${roundedDelta}ms] `);
   }
 
   logResponse(

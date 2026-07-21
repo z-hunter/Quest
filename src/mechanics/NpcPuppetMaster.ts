@@ -424,8 +424,30 @@ export class NpcPuppetMaster {
   traceWake(stage: string, details: Record<string, unknown> = {}): void {
     const console = (this.game as any).console;
     if (!console?.parserPeekPmEnabled) return;
-    const body = Object.keys(details).length ? ` ${JSON.stringify(details)}` : '';
-    const message = `--- PM WAKE TRACE ---\n${stage}${body}`;
+
+    let body = JSON.stringify(details);
+    if (stage === 'player_speech_received' || stage === 'player_speech_logged') {
+      const d = details as any;
+      body = `${d.actorId || 'player'} -> [${(d.listenerNpcIds || d.knownByActorIds || []).join(', ')}]: "${d.speech || d.entryId || ''}"`;
+    } else if (stage === 'schedule_scene_scan') {
+      const d = details as any;
+      body = `${d.sceneId}: Selected [${(d.selectedNpcIds || []).join(', ')}]`;
+    } else if (stage === 'batch_enqueued') {
+      const d = details as any;
+      body = `${d.sceneId}: ${d.npcId} (trigger: ${d.triggerType || 'none'})`;
+    } else if (stage === 'continuation_state_changed') {
+      const d = details as any;
+      body = `${d.stateKey}: ${d.previous} -> ${d.state} (${d.reason})`;
+    } else if (stage === 'pending_plan_stored') {
+      const d = details as any;
+      body = `${d.npcId}: ${d.remainingStepCount} steps remaining [${(d.remainingStepTypes || []).join(', ')}]. Interrupts: [${(d.interruptOn || []).join(', ')}]`;
+    } else if (Object.keys(details).length === 0) {
+      body = '';
+    } else {
+      body = `: ${body}`;
+    }
+
+    const message = `--- PM WAKE TRACE ---\n> ${stage}${body}`;
     if (typeof console.logDebug === 'function') {
       console.logDebug(message);
     } else if (typeof console.log === 'function') {
@@ -3683,47 +3705,43 @@ export class NpcPuppetMaster {
         }
 
         if (dynamicContext) {
+          let summaryHeader = '';
           if (dynamicContext.scene) {
-            promptLines.push(`Scene: ${JSON.stringify(dynamicContext.scene)}`);
+            summaryHeader += `Scene: ${dynamicContext.scene.id}`;
           }
           // Format Trigger
           let triggerStr = 'None';
           if (dynamicContext.trigger) {
             const t = dynamicContext.trigger;
-            if (t.type === 'wait_elapsed') {
-              triggerStr = `Wait elapsed (${t.ms}ms)`;
-            } else if (t.type === 'move_completed') {
+            if (t.type === 'wait_elapsed') triggerStr = `Wait elapsed (${t.ms}ms)`;
+            else if (t.type === 'move_completed')
               triggerStr = `Move completed (${t.result?.status || 'unknown'})`;
-            } else if (t.type === 'action_completed') {
+            else if (t.type === 'action_completed')
               triggerStr = `Action completed (${t.result?.code || 'unknown'})`;
-            } else if (t.type === 'plan_continued') {
-              triggerStr = `Plan continued: ${t.reason}`;
-            } else if (t.type === 'plan_interrupted') {
-              triggerStr = `Plan interrupted (${t.reason})`;
-            } else if (t.type === 'plan_completed') {
+            else if (t.type === 'plan_continued') triggerStr = `Plan continued: ${t.reason}`;
+            else if (t.type === 'plan_interrupted') triggerStr = `Plan interrupted (${t.reason})`;
+            else if (t.type === 'plan_completed')
               triggerStr = `Plan completed (${Array.isArray(t.results) ? t.results.length : 0} results)`;
-            } else if (t.type === 'manual') {
-              triggerStr = `Manual trigger: ${t.reason || 'none'}`;
-            } else {
-              triggerStr = JSON.stringify(t);
-            }
+            else if (t.type === 'manual') triggerStr = `Manual trigger: ${t.reason || 'none'}`;
+            else triggerStr = JSON.stringify(t);
           }
-          promptLines.push(`Trigger: ${triggerStr}`);
+          summaryHeader += ` | Trigger: ${triggerStr}`;
 
           // Format Speech Events if any
+          const speeches: string[] = [];
           if (Array.isArray(dynamicContext.npcs)) {
             for (const npc of dynamicContext.npcs) {
               if (Array.isArray(npc.newEvents)) {
                 for (const ev of npc.newEvents) {
-                  if (ev.kind === 'speech') {
-                    promptLines.push(`Speech: ${ev.displayName || ev.actorId}: "${ev.text}"`);
-                  } else if (ev.kind === 'action') {
-                    promptLines.push(`Action: ${ev.text}`);
-                  }
+                  if (ev.kind === 'speech')
+                    speeches.push(`${ev.displayName || ev.actorId}: "${ev.text}"`);
+                  else if (ev.kind === 'action') speeches.push(`Action: ${ev.text}`);
                 }
               }
             }
           }
+          if (speeches.length > 0) summaryHeader += ` | Speech: ${speeches.join(', ')}`;
+          promptLines.push(summaryHeader);
 
           // Summarize Active NPCs
           promptLines.push('Active NPCs:');
@@ -3732,44 +3750,21 @@ export class NpcPuppetMaster {
               const objStr = npc.objectives ? JSON.stringify(npc.objectives) : '[]';
               const memStr = npc.memory ? JSON.stringify(npc.memory) : 'none';
               let invStr = '';
-              if (
-                npc.inventory &&
-                npc.inventory.available &&
-                Array.isArray(npc.inventory.itemIds)
-              ) {
+              if (npc.inventory?.available && Array.isArray(npc.inventory.itemIds)) {
                 const itemNames = npc.inventory.itemIds.map((id: unknown) => String(id));
-                if (itemNames.length > 0) {
-                  invStr = ` | Inventory: [${itemNames.join(', ')}]`;
-                }
+                if (itemNames.length > 0) invStr = ` | Inv: [${itemNames.join(', ')}]`;
                 const nestedItems = Array.isArray(npc.inventory.items)
                   ? npc.inventory.items.filter((item: any) => item && item.containerId !== npc.id)
                   : [];
-                if (nestedItems.length > 0) {
-                  const nestedSummary = nestedItems.map((item: any) => {
-                    const groups =
-                      Array.isArray(item.groupIds) && item.groupIds.length
-                        ? ` ${item.groupIds.join('/')}`
-                        : '';
-                    const states =
-                      Array.isArray(item.states) && item.states.length
-                        ? ` ${item.states.map((state: any) => `${state.id}=${state.value}`).join(',')}`
-                        : '';
-                    return `${item.id} in ${item.containerId}${groups}${states}`;
-                  });
-                  invStr += ` | Nested: [${nestedSummary.join('; ')}]`;
-                }
+                if (nestedItems.length > 0) invStr += ` | Nested: ${nestedItems.length} items`;
               }
               promptLines.push(
-                `  * ${npc.id} @ ${npc.currentSceneId || dynamicContext.scene?.id || 'unknown'} -> Objectives: ${objStr} | Memory: ${memStr}${invStr}`
+                `  * ${npc.id} @ ${npc.currentSceneId || dynamicContext.scene?.id || 'unknown'} -> Obj: ${objStr} | Mem: ${memStr}${invStr}`
               );
-              const knownEntities = Array.isArray(npc.knownEntities)
-                ? npc.knownEntities.map((entry: any) => ({
-                    id: String(entry.id || ''),
-                    kind: entry.kind,
-                    lastSeenSceneId: entry.lastSeenSceneId,
-                  }))
-                : [];
-              promptLines.push(`    knownEntities: ${JSON.stringify(knownEntities)}`);
+              const knownEntities = Array.isArray(npc.knownEntities) ? npc.knownEntities : [];
+              if (knownEntities.length > 0) {
+                promptLines.push(`    knownEntities: ${knownEntities.length} items`);
+              }
             }
           }
         } else {
