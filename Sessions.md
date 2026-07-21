@@ -4022,3 +4022,94 @@ The commit includes all current worktree changes, including user-authored Corrid
 - `run-test-debug.ts` is an existing untracked diagnostic file and was intentionally left untouched.
 - `src/scene/SceneManager.ts` remains marked modified by the pre-existing diagnostic/edit state; no functional SceneManager diff remains after log removal.
 - The semantic-api surface-duplicate failure should be tracked separately if it is not already covered by an existing task.
+
+## Session Entry - 2026-07-21 19:15 Europe/Warsaw
+
+### Session goals
+
+- Analyze several fresh Puppet Master logs from the game.
+- Investigate Linda/Rick behavior, especially apparent distance failures, stalled plans, and the `schedule_scene_scan` path.
+- Implement and validate the agreed Puppet Master fixes, then commit them.
+
+### Problems analyzed and resolved
+
+#### 1. GIVE confirmation and stale continuation state
+
+The earlier logs showed repeated or incorrect GIVE-related behavior: a recipient could react before the giver's transfer had an authoritative result, and a stored GIVE tail could use stale distance or inventory assumptions.
+
+Resolution:
+
+- Added a pending incoming-GIVE barrier for recipients.
+- Deferred recipient planning until the giver reaches a terminal GIVE result.
+- Re-evaluated the current interaction distance before executing a stored GIVE tail.
+- Preserved authoritative inventory ownership and avoided treating a proposal or agreement as a completed transfer.
+
+Commit: `b4c9c14 Fix Puppet Master GIVE confirmation flow`.
+
+#### 2. `schedule_scene_scan` self-activation and duplicate scene batches
+
+Individual scene-log cursors prevented ordinary self-activation, but they did not by themselves prevent multiple scene batches from being queued while one provider request was still running. Autonomous NPC events could therefore create redundant follow-up scans and consume rate budget unnecessarily.
+
+Resolution:
+
+- Added scene-batch coalescing while a provider request is in flight.
+- Moved the busy check before rate-budget consumption.
+- Kept a single pending follow-up batch and merged its triggers.
+- Used per-NPC scene-log watermarks captured before context construction and marked them processed only after successful processing.
+- Preserved player-speech priority and its rate-budget reset behavior while autonomous NPC speech uses the normal budget.
+- Added stale triggerless-batch suppression when no NPC has unread events.
+
+Commit: `7f155b5 Coalesce Puppet Master scene batches`.
+
+#### 3. First fresh log: explicit empty response
+
+One fresh run ended with the provider reasoning that Linda should respond or continue, followed by `No plans generated`. This was identified as a provider response-contract violation rather than an executor or scene-scan failure. The existing prompt contract requires a non-empty plan when an active objective or mandatory wake trigger remains.
+
+#### 4. Second fresh log: Linda stopped after a non-empty plan
+
+The second run was more specific. The provider returned a valid recovery plan containing `OBJECTIVE_REMOVE`, `OBJECTIVE_ADD`, memory updates, `SAY`, `MOVE_TO`, and `TRAVERSE_EXIT`, but the log contained no execution trace afterward.
+
+Root cause:
+
+- The model incorrectly marked the composite parent objective `TV is ON` complete using evidence from the child action `TAKE tv_rc`.
+- On the next PM turn the objective appeared as `[JUST COMPLETED]` and lifecycle cleanup removed it before the new response was executed.
+- The response then started with `OBJECTIVE_REMOVE` for the already-removed objective.
+- `ActorPlanExecutor` returned `objective_not_found` and stopped the remainder of the plan, so Linda never said anything or moved. The failure was also insufficiently visible in the PM trace.
+
+Resolution in commit `fd3d7e3 Fix Puppet Master objective recovery`:
+
+- Completion evidence cannot confirm a composite objective while any nested subtask remains incomplete. The invalid marker is dropped while valid objective, memory, and action-tail steps are preserved.
+- `OBJECTIVE_REMOVE` is idempotent when lifecycle cleanup has already removed the target; it returns a successful no-op and does not abort the plan.
+- Added `plan_step_failed` wake tracing with the failed code and planned step types.
+- Added regressions for composite-objective evidence, lifecycle-pruned removal, and executor behavior.
+
+### Important architecture decisions
+
+- Individual scene-log cursors are necessary for unread-event ownership, but in-flight batch coalescing is separately required to control provider calls and rate budgets.
+- Objective completion is cognition over already confirmed runtime evidence; it never performs the physical action.
+- Composite objectives represent the full procedure. A child action cannot confirm the parent unless all nested subtasks are already complete.
+- Lifecycle cleanup and model-emitted objective grooming must be safely composable. Removing an already absent objective is a no-op.
+- Runtime execution remains authoritative for movement, inventory, GIVE, commands, and scene transitions.
+
+### Validation
+
+- Puppet Master focused suite: 136/136 tests passed.
+- After updating the compatibility assertion for the autonomous `scheduleScene` options, the full project suite passed: 56 files, 708/708 tests.
+- TypeScript typecheck: passed.
+- Prettier check: passed.
+- ESLint on touched files: passed.
+- `git diff --check`: passed.
+- `codex-doctor -Fast -NoMemoryReview`: 17 checks passed, including project, NotebookLM, Kairo, agent-memory, and local-RAG readiness.
+
+### Commits created during the session
+
+- `b4c9c14 Fix Puppet Master GIVE confirmation flow`
+- `7f155b5 Coalesce Puppet Master scene batches`
+- `fd3d7e3 Fix Puppet Master objective recovery`
+- `3214f86 Align scene scan budget test`
+
+### Remaining work and caveats
+
+- The first fresh-log empty-plan issue remains a provider reliability case; the prompt contract identifies it, but a separate bounded runtime fallback may still be useful if it recurs.
+- The PM focused tests emitted one pre-existing warning about an invalid continuation transition in the moved-GIVE test; the suite still passed and this warning was not part of the current fixes.
+- No uncommitted implementation changes remain after `c2c6b2a`; the only test adjustment was the expected second argument `{ resetRateBudget: false }` for autonomous NPC speech.
