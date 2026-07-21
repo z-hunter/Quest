@@ -208,16 +208,18 @@ export class ActorWorldQuery {
     };
   }
 
-  getInventoryKnowledge(actor: Actor): ActorInventoryKnowledge {
-    const topLevelItems = this.game.inventoryManager
-      .getInventoryEntities(actor, 'in')
-      .filter((item) => !item.disabled);
+  getInventoryKnowledge(actor: Actor, scene?: Scene): ActorInventoryKnowledge {
+    const getInventoryEntities = (owner: Entity, relation: EffectiveRelation) =>
+      scene
+        ? this.game.inventoryManager.getInventoryEntitiesInScene(owner, scene, relation)
+        : this.game.inventoryManager.getInventoryEntities(owner, relation);
+    const topLevelItems = getInventoryEntities(actor, 'in').filter((item) => !item.disabled);
     const items: ActorInventoryItemKnowledge[] = [];
     const visited = new Set<string>();
     const visit = (container: Entity) => {
       for (const component of ComponentSystem.getInventoryComponents(container)) {
         const relation = ComponentSystem.normalizeInventoryRelation(component);
-        for (const item of this.game.inventoryManager.getInventoryEntities(container, relation)) {
+        for (const item of getInventoryEntities(container, relation)) {
           if (item.disabled || visited.has(item.name)) continue;
           visited.add(item.name);
           const groupIds = this.getObjectGroupIds(item);

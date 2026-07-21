@@ -1,6 +1,5 @@
-import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
-import type { ActorMoveResult } from '../entities/Actor';
+import { Actor, type ActorMoveResult } from '../entities/Actor';
 import type { IGame } from '../core/IGame';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { traceNavigation } from '../systems/navigation/navigationDebug';
@@ -34,7 +33,12 @@ export class ActorPlanExecutor {
   private moveStartedAt = new Map<string, number>();
   private targetMoveStates = new Map<
     string,
-    { targetId: string; localTeleportRevision: number; localTeleportReplans: number }
+    {
+      targetId: string;
+      localTeleportRevision: number;
+      localTeleportReplans: number;
+      dynamicBlockerReplans: number;
+    }
   >();
 
   clearState(npcId: string): void {
@@ -400,6 +404,7 @@ export class ActorPlanExecutor {
         targetId,
         localTeleportRevision: actor.getLocalTeleportRevision(),
         localTeleportReplans: 0,
+        dynamicBlockerReplans: 0,
       });
     }
 
@@ -568,9 +573,39 @@ export class ActorPlanExecutor {
           this.moveActor(actor, { type: 'MOVE_TO', targetId: targetMove.targetId }, true);
           return;
         }
-        this.targetMoveStates.delete(actor.name);
         const routeBlock = result.code === 'route_blocked' ? actor.getRouteBlockDiagnostic() : null;
         const scene = actor.scene;
+        const dynamicBlockerIds =
+          routeBlock && scene
+            ? (
+                (scene.getWalkabilityDiagnostics(
+                  routeBlock.attemptedPosition.x,
+                  routeBlock.attemptedPosition.y,
+                  actor
+                ).entityBlockers as Array<{ id?: string }> | undefined) || []
+              )
+                .map((blocker) => blocker.id)
+                .filter((id): id is string => !!id)
+                .filter((id) => scene.getObjectByName(id) instanceof Actor)
+            : [];
+        if (
+          result.code === 'route_blocked' &&
+          targetMove &&
+          targetMove.dynamicBlockerReplans < 1 &&
+          dynamicBlockerIds.length > 0
+        ) {
+          targetMove.dynamicBlockerReplans += 1;
+          traceNavigation(this.game, 'move_replanned_after_dynamic_blocker', {
+            actorId: actor.name,
+            targetId: targetMove.targetId,
+            blockerIds: dynamicBlockerIds,
+            actorPosition: { x: actor.x, y: actor.y },
+            actorCollider: { width: actor.colliderWidth, height: actor.colliderHeight },
+          });
+          this.moveActor(actor, { type: 'MOVE_TO', targetId: targetMove.targetId }, true);
+          return;
+        }
+        this.targetMoveStates.delete(actor.name);
         traceNavigation(this.game, 'move_completed', {
           actorId: actor.name,
           status: result.status,

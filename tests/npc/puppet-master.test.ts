@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Actor } from '../../src/entities/Actor';
+import { Entity } from '../../src/entities/Entity';
 import { ActorPlanExecutor } from '../../src/mechanics/ActorPlanExecutor';
 import { NpcWorldModelBuilder } from '../../src/mechanics/NpcWorldModelBuilder';
 import { NpcPuppetMaster } from '../../src/mechanics/NpcPuppetMaster';
@@ -890,6 +891,42 @@ describe('NpcPuppetMaster', () => {
     });
   });
 
+  it('includes an autonomous NPC inventory from its non-current scene', () => {
+    const fixture = createSceneFixture();
+    const corridor = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = new Actor(fixture.game, 20, 20, 10, 10, 'guard');
+    npc.components = [
+      { type: 'Actor' },
+      { type: 'NPC', enabled: true },
+      {
+        type: 'Inventory',
+        relation: 'in',
+        capacity: 8,
+        groups: [],
+        protected: true,
+        items: ['battery_aaa'],
+      },
+    ];
+    const battery = new Entity(fixture.game, 20, 20, 4, 4, 'battery_aaa');
+    battery.components = [{ type: 'Item' }];
+    battery.spatial = { parentNodeId: npc.name, relation: 'in' };
+    corridor.addEntity(npc);
+    corridor.addEntity(battery);
+    fixture.textAssets.setObject(npc.name, { title: 'Guard', description: 'Guard' });
+    fixture.textAssets.setObject(battery.name, { title: 'AAA battery', description: 'Fresh.' });
+
+    expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+
+    const context = new NpcWorldModelBuilder(fixture.game).build(corridor).npcs[0];
+
+    expect(context.inventory).toEqual(
+      expect.objectContaining({ available: true, itemIds: ['battery_aaa'] })
+    );
+    expect(context.inventory?.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'battery_aaa', containerId: 'guard' })])
+    );
+  });
+
   it('records scene-aware NPC knowledge and lists immediately visible items', () => {
     const fixture = createSceneFixture();
     const npc = addNpc(fixture, 'guard');
@@ -1289,6 +1326,47 @@ describe('NpcPuppetMaster', () => {
     await vi.advanceTimersByTimeAsync(600);
 
     expect((pm as any).pendingPlanContinuations.has(stateKey)).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('never executes a plan tail after its MOVE_TO barrier fails', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const stateKey = `${fixture.scene.id}:${npc.name}`;
+    (pm as any).pendingPlanContinuations.set(stateKey, {
+      state: 'awaiting_barrier',
+      npcId: npc.name,
+      barrierStep: { type: 'MOVE_TO', targetId: 'door' },
+      steps: [{ type: 'TRAVERSE_EXIT', targetId: 'door' }],
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+    (pm as any).continuationStates.set(stateKey, {
+      state: 'awaiting_barrier',
+      changedAt: Date.now(),
+    });
+    const executePlan = vi.spyOn((pm as any).executor, 'executePlan');
+
+    void (pm as any).enqueueNpc(fixture.scene, npc.name, {
+      type: 'move_completed',
+      result: {
+        status: 'blocked',
+        code: 'route_blocked',
+        message: 'Route is blocked.',
+        target: null,
+        route: [],
+      },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(executePlan).not.toHaveBeenCalled();
+    expect(JSON.stringify(provider.calls.map((call) => call.messages))).toContain(
+      'plan_interrupted'
+    );
     vi.useRealTimers();
   });
 

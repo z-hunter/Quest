@@ -236,7 +236,9 @@ export class NpcWorldModelBuilder {
       objectives,
       memory: memory.length ? memory : undefined,
       transientMemory: transientMemory.length ? transientMemory : undefined,
-      inventory: this.game.actorWorld.getInventoryKnowledge(npc),
+      // NPCs can act in cached, non-player scenes. Keep inventory resolution
+      // bound to the scene whose PM context we are building.
+      inventory: this.game.actorWorld.getInventoryKnowledge(npc, scene),
       actors,
       visibleItemIds: entityBuild.observedObjects
         .filter((object) => object instanceof Entity && this.isItem(object))

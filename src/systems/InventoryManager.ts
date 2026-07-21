@@ -7,6 +7,7 @@ import { Geometry } from '../utils/Geometry';
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { TextAssetManager } from '../core/TextAssetManager';
 import type { SceneManager } from '../scene/SceneManager';
+import type { Scene } from '../scene/Scene';
 import type { SpatialRelationType } from '../scene/spatialTypes';
 
 type ContainerRelation = Exclude<SpatialRelationType, 'near'>;
@@ -296,13 +297,14 @@ export class InventoryManager {
 
   private resolveInventoryEntitiesFromComponent(
     owner: Entity,
-    relation: ContainerRelation
+    relation: ContainerRelation,
+    scene: Scene | null = this.sceneManager.currentScene
   ): Entity[] {
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return [];
     return (component.items || [])
       .map((id) => {
-        return this.findInventoryEntityCandidate(owner, String(id || '').trim(), relation);
+        return this.findInventoryEntityCandidate(owner, String(id || '').trim(), relation, scene);
       })
       .filter((entity): entity is Entity => !!entity);
   }
@@ -310,9 +312,9 @@ export class InventoryManager {
   private findInventoryEntityCandidate(
     owner: Entity,
     id: string,
-    relation: ContainerRelation
+    relation: ContainerRelation,
+    scene: Scene | null = this.sceneManager.currentScene
   ): Entity | null {
-    const scene = this.sceneManager.currentScene;
     if (!scene || !id) return null;
 
     const matches = scene.entities.filter(
@@ -1845,6 +1847,26 @@ export class InventoryManager {
 
   getInventoryEntities(owner: Entity, relation: ContainerRelation = 'in'): Entity[] {
     return [...this.getStoredInventoryEntities(owner, relation)];
+  }
+
+  /**
+   * Resolves inventory against an explicit scene without consulting the
+   * current player scene or its cache. Autonomous Actors may act in any
+   * loaded scene, so their world-model queries cannot use currentScene.
+   */
+  getInventoryEntitiesInScene(
+    owner: Entity,
+    scene: Scene,
+    relation: ContainerRelation = 'in'
+  ): Entity[] {
+    if (
+      this.isPlayerInventoryOwner(owner) &&
+      scene === this.sceneManager.currentScene &&
+      relation === 'in'
+    ) {
+      return [...this.inventory];
+    }
+    return this.resolveInventoryEntitiesFromComponent(owner, relation, scene);
   }
 
   getSurfaceEntities(surface: SceneObject, relation: ContainerRelation = 'on'): Entity[] {

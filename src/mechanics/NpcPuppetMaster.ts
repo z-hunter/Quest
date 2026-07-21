@@ -1644,6 +1644,13 @@ export class NpcPuppetMaster {
     trigger: NpcIndividualTrigger,
     result: NpcPlanExecutionOutcome | ActorMoveResult
   ): NpcPlanInterruptCondition | null {
+    // A MOVE_TO is a hard runtime barrier for everything after it. Continuing
+    // with a tail such as TRAVERSE_EXIT after route_blocked can only turn one
+    // actionable navigation failure into a misleading exit_not_reachable.
+    // This must hold even when a model omitted ACTION_FAILED from interruptOn.
+    if (pending.barrierStep.type === 'MOVE_TO' && this.isFailedPlanBarrier(trigger, result)) {
+      return { type: 'ACTION_FAILED' };
+    }
     for (const condition of pending.interruptOn) {
       if (condition.type === 'ACTION_FAILED' && this.isFailedPlanBarrier(trigger, result)) {
         return condition;
