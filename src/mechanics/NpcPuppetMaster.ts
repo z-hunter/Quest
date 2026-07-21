@@ -1503,7 +1503,7 @@ export class NpcPuppetMaster {
       }
       const finalResults = [...completedSteps, ...completionOutcomes];
       this.traceWake('plan_completed_after_scene_transfer', {
-        sourceSceneId: scene.id,
+        sourceSceneId: stateKey.slice(0, stateKey.lastIndexOf(':')),
         destinationSceneId: destinationScene?.id,
         npcId,
         discardedStepTypes: pending.steps.map((step) => step.type),

@@ -1692,10 +1692,15 @@ describe('NpcPuppetMaster', () => {
     vi.useFakeTimers();
     const fixture = createGameSemanticFixture('start');
     const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const debugLines: string[] = [];
     const npc = new Actor(fixture.game as any, 20, 20);
     npc.name = 'guard';
     npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
     destination.addEntity(npc);
+    (fixture.game as any).console = {
+      parserPeekPmEnabled: true,
+      logDebug: (message: string) => debugLines.push(message),
+    };
     const provider = new MockProvider(
       JSON.stringify({
         kind: 'pm_response',
@@ -1736,6 +1741,9 @@ describe('NpcPuppetMaster', () => {
     expect((pm as any).pendingPlanContinuations.has('start:guard')).toBe(false);
     expect(provider.calls).toHaveLength(1);
     expect(JSON.stringify(provider.calls[0].messages)).toContain('plan_completed');
+    expect(debugLines.join('\n')).toContain(
+      'plan_completed_after_scene_transfer: {"sourceSceneId":"start","destinationSceneId":"corridor"'
+    );
     vi.useRealTimers();
   });
 
