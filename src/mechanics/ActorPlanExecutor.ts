@@ -188,7 +188,11 @@ export class ActorPlanExecutor {
     if (step.type === 'OBJECTIVE_REMOVE') {
       const objectives = this.getNpcObjectives(actor);
       if (!removeNpcObjective(objectives, step.objectiveId)) {
-        return { status: 'failed', code: 'objective_not_found', npcId: actor.name };
+        // Objective lifecycle cleanup may remove a JUST COMPLETED objective
+        // immediately before this plan is executed. Removing an already absent
+        // objective is therefore a safe, idempotent no-op, not a reason to
+        // discard the rest of the plan.
+        return { status: 'ok', code: 'npc_objective_already_absent', npcId: actor.name };
       }
       this.setNpcObjectives(actor, objectives);
       return { status: 'ok', code: 'npc_objective_removed', npcId: actor.name };

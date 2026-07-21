@@ -660,6 +660,12 @@ describe('NpcPuppetMaster', () => {
     expect(
       executor.executePlan({
         npcId: npc.name,
+        steps: [{ type: 'OBJECTIVE_REMOVE', objectiveId: 'missing' }],
+      })
+    ).toEqual([expect.objectContaining({ status: 'ok', code: 'npc_objective_already_absent' })]);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
         steps: [
           {
             type: 'OBJECTIVE_ADD',
@@ -799,7 +805,7 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
-  it('does not confirm a composite procedure merely because a named tool is held', async () => {
+  it('keeps a composite procedure active when a named tool is held', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -833,9 +839,125 @@ describe('NpcPuppetMaster', () => {
 
     await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
 
-    expect(component.objectives).toEqual([
-      expect.objectContaining({ id: 'install-and-turn-on', pendingConfirmation: true }),
-    ]);
+    expect(component.objectives).toEqual([expect.objectContaining({ id: 'install-and-turn-on' })]);
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
+    pm.haltAllNpcs();
+  });
+
+  it('does not confirm an incomplete composite objective from matching child-action evidence', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'turn-tv-on',
+        text: 'Turn on the TV',
+        subtasks: [
+          { id: 'find-remote', text: 'Find the TV remote', subtasks: [] },
+          { id: 'replace-battery', text: 'Replace the battery', subtasks: [] },
+        ],
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    const pm = new NpcPuppetMaster(
+      fixture.game,
+      new MockProvider(
+        JSON.stringify({
+          kind: 'pm_response',
+          plans: [
+            {
+              npcId: npc.name,
+              steps: [
+                {
+                  type: 'OBJECTIVE_MARK_COMPLETED',
+                  objectiveId: 'turn-tv-on',
+                  evidence: { actionType: 'TAKE', targetId: 'tv_rc' },
+                },
+                {
+                  type: 'OBJECTIVE_UPDATE',
+                  objectiveId: 'find-remote',
+                  text: 'TV remote found',
+                },
+              ],
+            },
+          ],
+        })
+      )
+    );
+
+    await pm.processNpc(fixture.scene, npc.name, {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'item_taken',
+        npcId: npc.name,
+        actionType: 'TAKE',
+        targetId: 'tv_rc',
+      },
+    });
+
+    expect(component.objectives[0]).toEqual(
+      expect.objectContaining({ id: 'turn-tv-on', text: 'Turn on the TV' })
+    );
+    expect(component.objectives[0].completed).toBeUndefined();
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
+    expect(component.objectives[0].subtasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'find-remote', text: 'TV remote found' }),
+      ])
+    );
+    pm.haltAllNpcs();
+  });
+
+  it('continues past removal of a JUST COMPLETED objective already pruned by lifecycle cleanup', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      { id: 'wrong-done', text: 'Old incorrect objective', subtasks: [], completed: true },
+      { id: 'next', text: 'Find batteries', subtasks: [] },
+    ];
+    component.objectivesInitializedFromTA = true;
+    const pm = new NpcPuppetMaster(
+      fixture.game,
+      new MockProvider(
+        JSON.stringify({
+          kind: 'pm_response',
+          plans: [
+            {
+              npcId: npc.name,
+              steps: [
+                { type: 'OBJECTIVE_REMOVE', objectiveId: 'wrong-done' },
+                {
+                  type: 'OBJECTIVE_ADD',
+                  parentId: null,
+                  objective: { text: 'Get a battery from Rick', subtasks: [] },
+                },
+                {
+                  type: 'OBJECTIVE_UPDATE',
+                  objectiveId: 'next',
+                  text: 'Ask Rick for batteries',
+                },
+              ],
+            },
+          ],
+        })
+      )
+    );
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(component.objectives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'next', text: 'Ask Rick for batteries' }),
+        expect.objectContaining({ text: 'Get a battery from Rick' }),
+      ])
+    );
+    expect(component.objectives).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'wrong-done' })])
+    );
     pm.haltAllNpcs();
   });
 

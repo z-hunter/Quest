@@ -864,6 +864,19 @@ export class NpcPuppetMaster {
     if (scene) this.registerPendingIncomingGives(scene, plan);
     const outcomes = this.executor.executePlan(plan, confirmedObjectiveIds);
     if (scene) {
+      const failedOutcome = outcomes.find((outcome) => outcome.status === 'failed');
+      if (failedOutcome) {
+        this.traceWake('plan_step_failed', {
+          sceneId: scene.id,
+          npcId: plan.npcId,
+          code: failedOutcome.code,
+          actionType: failedOutcome.actionType,
+          targetId: failedOutcome.targetId,
+          itemId: failedOutcome.itemId,
+          commandId: failedOutcome.commandId,
+          plannedStepTypes: plan.steps.map((step) => step.type),
+        });
+      }
       if (this.hasConcretePlanAction(plan)) {
         this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, plan.npcId));
       }
@@ -2786,6 +2799,24 @@ export class NpcPuppetMaster {
           // Missing IDs remain in the plan so the executor can produce its
           // normal deterministic failure outcome.
           if (!objective) return true;
+          // A parent objective represents the whole procedure. A successful
+          // child action (for example taking the remote) must not confirm the
+          // parent while its other required subtasks are still active.
+          // Drop only this invalid marker so the same response can still
+          // repair objectives, memory, and its valid action tail.
+          if (
+            objective.subtasks.length > 0 &&
+            !this.areAllObjectiveSubtasksCompleted(objective.subtasks)
+          ) {
+            rejectedNpcIds.add(plan.npcId);
+            this.traceWake('objective_completion_composite_incomplete', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+              evidence: step.evidence,
+            });
+            return false;
+          }
           if (
             step.evidence &&
             this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
@@ -2843,6 +2874,13 @@ export class NpcPuppetMaster {
       .filter((plan): plan is NpcPlan => !!plan);
 
     return { plans: validatedPlans, confirmedObjectiveIdsByNpc, rejectedNpcIds };
+  }
+
+  private areAllObjectiveSubtasksCompleted(subtasks: NpcObjective[]): boolean {
+    return subtasks.every(
+      (subtask) =>
+        subtask.completed === true && this.areAllObjectiveSubtasksCompleted(subtask.subtasks)
+    );
   }
 
   private findInventoryObjectiveMatch(
