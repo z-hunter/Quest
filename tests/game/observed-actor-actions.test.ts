@@ -46,7 +46,7 @@ describe('observed Actor actions', () => {
     ]);
     expect(corridor.sceneLog.entries[0].knownByActorIds).not.toContain(playerSceneNpc.name);
     expect(scheduleScene).toHaveBeenCalledTimes(1);
-    expect(scheduleScene).toHaveBeenCalledWith(corridor);
+    expect(scheduleScene).toHaveBeenCalledWith(corridor, { resetRateBudget: false });
     expect(log).not.toHaveBeenCalled();
   });
 
