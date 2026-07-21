@@ -90,29 +90,31 @@ PM возвращает **структурированный JSON** в форм�
 
 `ActorPlanExecutor` (`src/mechanics/ActorPlanExecutor.ts`) поддерживает следующие шаги:
 
-| Шаг | Аргументы | Описание |
-| :--- | :--- | :--- |
-| `SAY` | `text: string` | NPC произносит реплику. Добавляет запись в лог сцены. |
-| `MOVE_TO` | `targetId?: string` или `x, y: number` | Начинает движение к объекту или координатам. Асинхронный: PM получит `move_completed` по завершении. |
-| `TRAVERSE_EXIT` | `targetId: string` | Активирует доступный объект с `Exit` и переносит NPC в целевую сцену. Если Exit ещё не reachable, перед ним нужен `MOVE_TO`. Всегда является последним физическим шагом плана. |
-| `LOOK` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`). |
-| `EXAMINE` | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`. |
-| `OPEN` | `targetId: string` | Открывает объект с компонентом Switch. Соблюдает правила ключей. |
-| `CLOSE` | `targetId: string` | Закрывает объект с компонентом Switch. |
-| `TAKE` | `targetId: string` | Берёт предмет в инвентарь. **Требует наличия компонента Inventory у NPC.** |
-| `GIVE` | `itemId: string`, `targetId: string` | Передаёт held или reachable предмет в инвентарь другого reachable Actor. Подтверждается только runtime-outcome `item_given`; до этого ни giver, ни recipient не могут считать передачу состоявшейся. |
-| `PUT` | `itemId: string`, `targetId?: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Кладёт предмет на/в/под/за объект. Если `targetId` не указан, кладёт на пол. |
-| `COMMAND` | `commandId: string`, `arguments?: Record<string, string>` | Исполняет авторскую команду объекта. **Предпочтительнее `USE`**, так как исполняет authored runtime-контракт без лишней маршрутизации. |
-| `WAIT` | `ms: number` | Ставит таймер. PM получит триггер `wait_elapsed` по истечении. Асинхронный. |
-| `THINK_STRATEGY` | `reason?: string` | Запускает внутренний стратегический LLM-анализ без реплик и физических действий. Используется, когда текущая стратегия зашла в тупик. |
-| `MEMORY_ADD` | `memory: string` | Добавляет одну подтверждённую фактическую заметку в массив `memory`. Не создаёт дубликатов. |
-| `MEMORY_REMOVE` | `memory: string` | Удаляет устаревшую или опровергнутую заметку из массива `memory`. |
-| `OBJECTIVE_ADD` | `parentId?: string`, `objective: { text, subtasks }` | Добавляет новую цель или подзадачу в дерево objectives. Если указан `parentId`, добавляется как subtask. |
-| `OBJECTIVE_UPDATE` | `objectiveId: string`, `text: string` | Обновляет текст существующей цели, не меняя её id или subtasks. |
-| `OBJECTIVE_MARK_COMPLETED` | `objectiveId: string`, `evidence?: { actionType, commandId?, ... }` | Помечает цель как завершённую. Использует двухфазный протокол подтверждения (см. «Подтверждение завершения целей»). |
-| `OBJECTIVE_REMOVE` | `objectiveId: string` | Удаляет устаревшую или нерелевантную цель из дерева. |
-| `MEMORY_SET` *(legacy)* | `memory: string` | Немедленно заменяет всё поле `memory` компонента NPC одной строкой. Сохранён для обратной совместимости; предпочитать `MEMORY_ADD`/`MEMORY_REMOVE`. |
-| `OBJECTIVES_SET` *(legacy)* | `objectives: string[]` | Немедленно заменяет весь список целей NPC плоским массивом строк. Сохранён для обратной совместимости; предпочитать структурированные `OBJECTIVE_*` шаги. |
+| Шаг                         | Аргументы                                                                         | Описание                                                                                                                                                                                             |
+| :-------------------------- | :-------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SAY`                       | `text: string`                                                                    | NPC произносит реплику. Добавляет запись в лог сцены.                                                                                                                                                |
+| `MOVE_TO`                   | `targetId?: string` или `x, y: number`                                            | Начинает движение к объекту или координатам. Асинхронный: PM получит `move_completed` по завершении.                                                                                                 |
+| `TRAVERSE_EXIT`             | `targetId: string`                                                                | Активирует доступный объект с `Exit` и переносит NPC в целевую сцену. Если Exit ещё не reachable, перед ним нужен `MOVE_TO`. Всегда является последним физическим шагом плана.                       |
+| `LOOK`                      | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'`                    | Осматривает объект или конкретную spatial-гипотезу вроде `under Sofa`. Может раскрыть скрытые предметы (возвращает `discoveredEntityIds`).                                                           |
+| `EXAMINE`                   | `targetId: string`, `relation?: 'in'\|'on'\|'under'\|'behind'`                    | Детально исследует объект или конкретную spatial-гипотезу. Работает аналогично `LOOK`.                                                                                                               |
+| `OPEN`                      | `targetId: string`                                                                | Открывает объект с компонентом Switch. Соблюдает правила ключей.                                                                                                                                     |
+| `CLOSE`                     | `targetId: string`                                                                | Закрывает объект с компонентом Switch.                                                                                                                                                               |
+| `TAKE`                      | `targetId: string`                                                                | Берёт предмет в инвентарь. **Требует наличия компонента Inventory у NPC.**                                                                                                                           |
+| `GIVE`                      | `itemId: string`, `targetId: string`                                              | Передаёт held или reachable предмет в инвентарь другого reachable Actor. Подтверждается только runtime-outcome `item_given`; до этого ни giver, ни recipient не могут считать передачу состоявшейся. |
+| `PUT`                       | `itemId: string`, `targetId?: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Кладёт предмет на/в/под/за объект. Если `targetId` не указан, кладёт на пол.                                                                                                                         |
+| `COMMAND`                   | `commandId: string`, `arguments?: Record<string, string>`                         | Исполняет авторскую команду объекта. **Предпочтительнее `USE`**, так как исполняет authored runtime-контракт без лишней маршрутизации.                                                               |
+| `WAIT`                      | `ms: number`                                                                      | Ставит таймер. PM получит триггер `wait_elapsed` по истечении. Асинхронный.                                                                                                                          |
+| `THINK_STRATEGY`            | `reason?: string`                                                                 | Запускает внутренний стратегический LLM-анализ без реплик и физических действий. Используется, когда текущая стратегия зашла в тупик.                                                                |
+| `MEMORY_ADD`                | `memory: string`                                                                  | Добавляет одну подтверждённую фактическую заметку в массив `memory`. Не создаёт дубликатов.                                                                                                          |
+| `MEMORY_REMOVE`             | `memory: string`                                                                  | Удаляет устаревшую или опровергнутую заметку из массива `memory`.                                                                                                                                    |
+| `OBJECTIVE_ADD`             | `parentId?: string`, `objective: { text, subtasks }`                              | Добавляет новую цель или подзадачу в дерево objectives. Если указан `parentId`, добавляется как subtask.                                                                                             |
+| `OBJECTIVE_UPDATE`          | `objectiveId: string`, `text: string`                                             | Обновляет текст существующей цели, не меняя её id или subtasks.                                                                                                                                      |
+| `OBJECTIVE_MARK_COMPLETED`  | `objectiveId: string`, `evidence?: { actionType, commandId?, ... }`               | Помечает цель как завершённую. Использует двухфазный протокол подтверждения (см. «Подтверждение завершения целей»).                                                                                  |
+| `OBJECTIVE_REMOVE`          | `objectiveId: string`                                                             | Удаляет устаревшую или нерелевантную цель из дерева.                                                                                                                                                 |
+| `MEMORY_SET` _(legacy)_     | `memory: string`                                                                  | Немедленно заменяет всё поле `memory` компонента NPC одной строкой. Сохранён для обратной совместимости; предпочитать `MEMORY_ADD`/`MEMORY_REMOVE`.                                                  |
+| `OBJECTIVES_SET` _(legacy)_ | `objectives: string[]`                                                            | Немедленно заменяет весь список целей NPC плоским массивом строк. Сохранён для обратной совместимости; предпочитать `OBJECTIVE_*` шаги.                                                              |
+
+> Актуальное правило: `OBJECTIVE_MARK_COMPLETED` оптимистично закрывает leaf-цель и не использует прежний двухфазный протокол как обязательный gate. Runtime отклоняет только явное структурное противоречие (например, parent с активными подзадачами) и никогда не меняет игровой мир этим marker-ом.
 
 ### Выполнение плана
 
@@ -161,12 +163,13 @@ PM возвращает **структурированный JSON** в форм�
 
 ### Подтверждение завершения целей
 
-`OBJECTIVE_MARK_COMPLETED` использует **двухфазный протокол**:
+`OBJECTIVE_MARK_COMPLETED` обновляет **плановое состояние**, а не игровой мир. Для leaf-цели PM может пометить её завершённой, если текущий state или authoritative `actionHistory` делают выполнение достаточно вероятным. Runtime принимает такое оптимистичное закрытие, если не видит явного противоречия.
 
-1. Первый вызов `OBJECTIVE_MARK_COMPLETED` без подтверждённого runtime-evidence ставит цель в состояние `[PENDING CONFIRMATION]`. На следующем PM-turn модель видит эту пометку.
-2. Для подтверждения модель повторяет `OBJECTIVE_MARK_COMPLETED` с полем `evidence: { actionType, commandId?, targetId?, ... }`, совпадающим с результатом из текущего trigger. Если evidence совпадает, цель помечается `completed` и появляется как `[JUST COMPLETED]` на один PM-turn.
-3. Повторный маркер без matching evidence отклоняется, и `pendingConfirmation` сбрасывается.
-4. `[JUST COMPLETED]` — информационная пометка; после одного PM-turn цель автоматически удаляется из дерева.
+- Текущий trigger, inventory и actionHistory — положительные подтверждающие сигналы, но отсутствие идеально совпавшего trigger-а само по себе больше не является причиной отказа.
+- Runtime по-прежнему строго авторитетен для физических изменений: `GIVE`, `TAKE`, `PUT`, `COMMAND`, владения предметом, состояния Switch и переходов между сценами. Закрытие objective никогда не выполняет эти действия и не может их подменить.
+- Parent-цель с активными подзадачами не может быть завершена: это структурное противоречие независимо от текста или evidence.
+- Если marker удалён из-за структурного противоречия, остальные независимые шаги того же плана не отбрасываются; их отдельно проверит executor.
+- `[JUST COMPLETED]` — информационная пометка; после одного PM-turn цель автоматически удаляется из дерева.
 
 Этот протокол предотвращает преждевременные заявления LLM о завершении задач, которые runtime ещё не подтвердил.
 
@@ -187,7 +190,6 @@ PM возвращает **структурированный JSON** в форм�
 Помимо персистентной `memory`, NPC-компонент может содержать `transientMemory: string[]` — массив одноразовых runtime-заметок (например, `[JUST ARRIVED]` после перехода через Exit). Transient memory попадает в PM-промпт, но автоматически удаляется после одного PM-turn. Она не сохраняется в save и не управляется шагами DSL.
 
 ---
-
 
 ## Обдумать стратегию (`THINK_STRATEGY`)
 
@@ -297,15 +299,15 @@ PM не хранит потенциально устаревающий authored 
 
 Вызывается для одного конкретного NPC по триггеру:
 
-| Триггер            | Источник                                                                                                                          |
-| :----------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `move_completed`   | NPC завершил движение по `MOVE_TO` (дошёл до цели или упёрся в препятствие)                                                       |
-| `wait_elapsed`     | Истёк таймер, заданный шагом `WAIT`                                                                                               |
-| `action_completed` | Завершено физическое действие (`TAKE`, `OPEN`, `LOOK` и т.д.)                                                                     |
-| `manual`           | Явный внешний runtime-триггер; обычные наблюдаемые действия Actor этот trigger не создают.                                       |
-| `plan_continued`   | Автоматический триггер защиты от зависания (см. ниже)                                                                             |
-| `plan_interrupted` | Runtime остановил multi-step plan по `interruptOn` и передаёт PM причину, последний outcome, выполненные шаги и оставшийся хвост. |
-| `plan_completed`   | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена.                       |
+| Триггер                       | Источник                                                                                                                                                                                                                                                     |
+| :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `move_completed`              | NPC завершил движение по `MOVE_TO` (дошёл до цели или упёрся в препятствие)                                                                                                                                                                                  |
+| `wait_elapsed`                | Истёк таймер, заданный шагом `WAIT`                                                                                                                                                                                                                          |
+| `action_completed`            | Завершено физическое действие (`TAKE`, `OPEN`, `LOOK` и т.д.)                                                                                                                                                                                                |
+| `manual`                      | Явный внешний runtime-триггер; обычные наблюдаемые действия Actor этот trigger не создают.                                                                                                                                                                   |
+| `plan_continued`              | Автоматический триггер защиты от зависания (см. ниже)                                                                                                                                                                                                        |
+| `plan_interrupted`            | Runtime остановил multi-step plan по `interruptOn` и передаёт PM причину, последний outcome, выполненные шаги и оставшийся хвост.                                                                                                                            |
+| `plan_completed`              | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена.                                                                                                                                                  |
 | `plan_rejected_missing_items` | Предыдущий план ссылался на предметы, отсутствующие в доступном контексте NPC. PM передаёт `missingItems: [{ stepType, itemId }]` и даёт модели одну попытку коррекции. SceneLog cursor при этом не продвигается, чтобы исходные события остались в промпте. |
 
 ### Динамическое батчирование
@@ -448,19 +450,21 @@ Subscene для NPC не активируется визуально — это 
 
 После нормализации LLM-ответа в `NpcPlan[]`, PM пропускает планы через 9-ступенчатый pipeline фильтрации. Каждый фильтр решает конкретную проблему надёжности:
 
-| # | Фильтр | Что делает |
-|:---|:---|:---|
-| 1 | `expandImplicitApproaches` | Если `TAKE` ссылается на предмет с `approach: route_available`, автоматически вставляет `MOVE_TO` перед ним |
-| 2 | `validatePlanItems` | Проверяет, что все item/entity references в плане доступны NPC. При провале — corrective retry (макс. 1 раз) |
-| 3 | `removeUnavailableCommandSteps` | Вырезает `COMMAND` шаги, ссылающиеся на команды, которые не listed или не `executable` |
-| 4 | `removeUnsupportedDiscoveryClaims` | Вырезает из `SAY`/`MEMORY_ADD` фразы типа «я нашёл», «вот оно», если в плане не было успешного discovery |
-| 5 | `removeRepeatedNoProgressSteps` | После terminal no-progress (`repeated_without_progress`, `pattern_loop_sleep`) вырезает повторение той же физической сигнатуры |
-| 6 | `removePrematureStrategySteps` | Вырезает `THINK_STRATEGY`, если `repeatCount < 2` и нет terminal no-progress триггера |
-| 7 | `removePrematureGiveClaims` | Вырезает из `SAY`/`MEMORY_ADD` заявления о передаче предметов без подтверждённого `item_given` |
-| 8 | `deferPlansDependingOnUnconfirmedGive` | Откладывает планы, зависящие от незавершённого GIVE в другом плане (SCC resolution) |
-| 9 | `validateObjectiveCompletionConfirmations` | Реализует двухфазный протокол подтверждения `OBJECTIVE_MARK_COMPLETED` |
+| #   | Фильтр                                     | Что делает                                                                                                                     |
+| :-- | :----------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `expandImplicitApproaches`                 | Если `TAKE` ссылается на предмет с `approach: route_available`, автоматически вставляет `MOVE_TO` перед ним                    |
+| 2   | `validatePlanItems`                        | Проверяет, что все item/entity references в плане доступны NPC. При провале — corrective retry (макс. 1 раз)                   |
+| 3   | `removeUnavailableCommandSteps`            | Вырезает `COMMAND` шаги, ссылающиеся на команды, которые не listed или не `executable`                                         |
+| 4   | `removeUnsupportedDiscoveryClaims`         | Вырезает из `SAY`/`MEMORY_ADD` фразы типа «я нашёл», «вот оно», если в плане не было успешного discovery                       |
+| 5   | `removeRepeatedNoProgressSteps`            | После terminal no-progress (`repeated_without_progress`, `pattern_loop_sleep`) вырезает повторение той же физической сигнатуры |
+| 6   | `removePrematureStrategySteps`             | Вырезает `THINK_STRATEGY`, если `repeatCount < 2` и нет terminal no-progress триггера                                          |
+| 7   | `removePrematureGiveClaims`                | Вырезает из `SAY`/`MEMORY_ADD` заявления о передаче предметов без подтверждённого `item_given`                                 |
+| 8   | `deferPlansDependingOnUnconfirmedGive`     | Откладывает планы, зависящие от незавершённого GIVE в другом плане (SCC resolution)                                            |
+| 9   | `validateObjectiveCompletionConfirmations` | Реализует двухфазный протокол подтверждения `OBJECTIVE_MARK_COMPLETED`                                                         |
 
 Pipeline применяется идентично для планов из SLM-инференса и LLM-ответа.
+
+`validateObjectiveCompletionConfirmations` теперь сохраняет оптимистичный marker leaf-цели и отбрасывает только marker parent-цели с незавершёнными subtask. Удалённый marker не обрывает независимый хвост плана.
 
 ---
 
@@ -470,13 +474,13 @@ PM поддерживает **гибридный маршрут**: перед о
 
 ### Архитектура
 
-| Файл | Роль |
-|:---|:---|
-| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-runtime: загрузка модели, SHA-256 валидация, инференс |
-| `src/mechanics/slm/SlmInputAdapter.ts` | Кодирование NPC-контекста в фиксированный vocabulary |
-| `src/mechanics/slm/SlmOutputAdapter.ts` | Декодирование output tensor в `NpcPlan[]` или escalation signal |
-| `src/mechanics/slm/SlmVocabulary.ts` | Фиксированный vocabulary с version hash |
-| `src/mechanics/slm/ShadowLogger.ts` | Теневое логирование LLM-планов для обучения SLM |
+| Файл                                      | Роль                                                            |
+| :---------------------------------------- | :-------------------------------------------------------------- |
+| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-runtime: загрузка модели, SHA-256 валидация, инференс      |
+| `src/mechanics/slm/SlmInputAdapter.ts`    | Кодирование NPC-контекста в фиксированный vocabulary            |
+| `src/mechanics/slm/SlmOutputAdapter.ts`   | Декодирование output tensor в `NpcPlan[]` или escalation signal |
+| `src/mechanics/slm/SlmVocabulary.ts`      | Фиксированный vocabulary с version hash                         |
+| `src/mechanics/slm/ShadowLogger.ts`       | Теневое логирование LLM-планов для обучения SLM                 |
 
 ### Маршрут решения
 
@@ -491,6 +495,7 @@ SLM escalates к LLM при: превышении input capacity, неизвес
 ### Совместимость
 
 SLM-модель валидируется через compatibility manifest (`*.manifest.json`) с контролем:
+
 - `schemaVersion`, `vocabularyVersion`, `vocabularySha256` — совместимость vocabulary
 - `modelSha256` — целостность модели
 - Tensor shapes и dtypes — contract input/output
@@ -499,22 +504,22 @@ SLM-модель валидируется через compatibility manifest (`*.
 
 ## Ключевые файлы системы
 
-| Файл                                    | Роль                                                                                                      |
-| :-------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
-| `src/mechanics/NpcPuppetMaster.ts`      | Главный оркестратор: батчинг, rate limiting, триггеры, SLM/LLM routing, постобработка планов, continuations. |
-| `src/mechanics/ActorPlanExecutor.ts`    | Выполнение DSL-шагов плана, маршрутизация к GameSemanticAPI.                                              |
-| `src/mechanics/NpcWorldModelBuilder.ts` | Сборка NpcWorldModel: список entities, актеров, событий для каждого NPC.                                  |
-| `src/mechanics/ActorCommandExecutor.ts` | Исполнение authored command affordances. Проверяет reachability, availability, held-state.                 |
-| `src/mechanics/npcTypes.ts`             | TypeScript-типы: `NpcPlanStep`, `NpcPlan`, `NpcActorContext`, `NpcWorldModel`, `NpcPlanExecutionOutcome`. |
-| `src/mechanics/npcState.ts`             | Утилиты для работы с objectives tree и memory array.                                                       |
-| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-инференс для SLM hybrid router.                                                                    |
-| `src/mechanics/slm/ShadowLogger.ts`     | Теневое логирование LLM-планов для обучения SLM.                                                          |
-| `src/scene/SceneLog.ts`                 | Лог событий сцены, индивидуальные NPC-курсоры, TTL-прунинг.                                               |
-| `src/systems/ComponentSystem.ts`        | Структура компонента NPC (поля `memory`, `objectives`, known entities и др.).                              |
-| `src/systems/ActorWorldQuery.ts`        | Построение восприятия актёра: `perceptionRadius`, видимость, known objects.                               |
-| `src/core/Game.ts`                      | `sayAsPlayer`, `sayAsActor`, `emitActorAction` — точки входа в систему логирования и вызова PM.           |
-| `src/mechanics/llm/ILlmProvider.ts`     | Интерфейс LLM-провайдера: `sendMessageStream`, `isAvailable`, static/dynamic message split.               |
-| `public/text/system/npc-pm-system.md`   | Системный промпт PM: инструкции для LLM по поведению NPC и использованию DSL.                             |
+| Файл                                      | Роль                                                                                                         |
+| :---------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| `src/mechanics/NpcPuppetMaster.ts`        | Главный оркестратор: батчинг, rate limiting, триггеры, SLM/LLM routing, постобработка планов, continuations. |
+| `src/mechanics/ActorPlanExecutor.ts`      | Выполнение DSL-шагов плана, маршрутизация к GameSemanticAPI.                                                 |
+| `src/mechanics/NpcWorldModelBuilder.ts`   | Сборка NpcWorldModel: список entities, актеров, событий для каждого NPC.                                     |
+| `src/mechanics/ActorCommandExecutor.ts`   | Исполнение authored command affordances. Проверяет reachability, availability, held-state.                   |
+| `src/mechanics/npcTypes.ts`               | TypeScript-типы: `NpcPlanStep`, `NpcPlan`, `NpcActorContext`, `NpcWorldModel`, `NpcPlanExecutionOutcome`.    |
+| `src/mechanics/npcState.ts`               | Утилиты для работы с objectives tree и memory array.                                                         |
+| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-инференс для SLM hybrid router.                                                                         |
+| `src/mechanics/slm/ShadowLogger.ts`       | Теневое логирование LLM-планов для обучения SLM.                                                             |
+| `src/scene/SceneLog.ts`                   | Лог событий сцены, индивидуальные NPC-курсоры, TTL-прунинг.                                                  |
+| `src/systems/ComponentSystem.ts`          | Структура компонента NPC (поля `memory`, `objectives`, known entities и др.).                                |
+| `src/systems/ActorWorldQuery.ts`          | Построение восприятия актёра: `perceptionRadius`, видимость, known objects.                                  |
+| `src/core/Game.ts`                        | `sayAsPlayer`, `sayAsActor`, `emitActorAction` — точки входа в систему логирования и вызова PM.              |
+| `src/mechanics/llm/ILlmProvider.ts`       | Интерфейс LLM-провайдера: `sendMessageStream`, `isAvailable`, static/dynamic message split.                  |
+| `public/text/system/npc-pm-system.md`     | Системный промпт PM: инструкции для LLM по поведению NPC и использованию DSL.                                |
 
 ## Тесты
 

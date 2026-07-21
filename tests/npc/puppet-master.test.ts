@@ -701,7 +701,7 @@ describe('NpcPuppetMaster', () => {
       expect.objectContaining({ id: 'next', text: 'Install the batteries' }),
     ]);
     expect(getStaticPmText(provider.calls[0])).toContain('OBJECTIVE_MARK_COMPLETED');
-    expect(getStaticPmText(provider.calls[0])).toContain('does not perform the task');
+    expect(getStaticPmText(provider.calls[0])).toContain('never performs a physical task');
   });
 
   it('confirms a pending objective only with matching successful trigger evidence', async () => {
@@ -961,7 +961,7 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
-  it('does not run a physical tail after an unconfirmed completion claim', async () => {
+  it('keeps a physical tail after a soft leaf-objective completion claim', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -991,11 +991,14 @@ describe('NpcPuppetMaster', () => {
 
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'receive-battery' }],
+        steps: [
+          { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'receive-battery' },
+          { type: 'TRAVERSE_EXIT', targetId: 'corridor_exit' },
+        ],
       }),
-      undefined
+      expect.any(Set)
     );
-    expect(component.objectives[0]).toEqual(expect.objectContaining({ pendingConfirmation: true }));
+    expect(component.objectives[0]).toEqual(expect.objectContaining({ completed: true }));
     pm.haltAllNpcs();
   });
 
@@ -1062,7 +1065,7 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
-  it('does not treat evidence claimed by the current response as runtime confirmation', async () => {
+  it('soft-completes a leaf objective when the current response has no contradictory runtime state', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
@@ -1101,9 +1104,9 @@ describe('NpcPuppetMaster', () => {
     await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
 
     expect(component.objectives).toEqual([
-      expect.objectContaining({ id: 'turn-tv-on', pendingConfirmation: true }),
+      expect.objectContaining({ id: 'turn-tv-on', completed: true }),
     ]);
-    expect(component.objectives[0].completed).toBeUndefined();
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
     pm.haltAllNpcs();
   });
 
@@ -2809,6 +2812,38 @@ describe('NpcPuppetMaster', () => {
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain('plan_continued');
     vi.useRealTimers();
+  });
+
+  it('runs one strategy recovery when an internal wake-up returns no plan for an active objective', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [{ id: 'goal', text: 'Find the remote', subtasks: [] }];
+    const provider = new MockProvider([
+      JSON.stringify({ kind: 'pm_response', plans: [] }),
+      JSON.stringify({
+        kind: 'npc_strategy_response',
+        npcId: npc.name,
+        updates: [],
+        waitMs: 30_000,
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, {
+      type: 'plan_continued',
+      reason: 'objective_completion_unconfirmed',
+    });
+
+    expect(plans).toEqual([
+      expect.objectContaining({
+        npcId: npc.name,
+        steps: [{ type: 'THINK_STRATEGY', reason: 'active objective produced an empty plan' }],
+      }),
+    ]);
+    expect(provider.calls).toHaveLength(2);
+    pm.haltAllNpcs();
   });
 
   it('continues a state-only plan while its NPC is in an offscreen scene', async () => {

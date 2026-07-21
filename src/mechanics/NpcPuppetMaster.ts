@@ -62,10 +62,10 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
-  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. An unconfirmed marker becomes [PENDING CONFIRMATION] for the next PM turn; repeat it only after checking runtime confirmation, otherwise continue the still-active objective. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
+  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and mark a leaf objective completed when current state or authoritative history supports it. OBJECTIVE_MARK_COMPLETED only records planning state; it never performs a physical task or changes world ownership. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until its active subtasks are resolved or it is impossible, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
   'A wait_elapsed trigger is a mandatory cognitive wake-up, not permission to idle. If any active objective or subtask exists, including [PENDING CONFIRMATION], the response MUST contain a non-empty plan: first groom OBJECTIVES and MEMORY, then either emit the needed cognition updates, continue with a concrete supported step, or use THINK_STRATEGY when no concrete step is appropriate. Empty plans after wait_elapsed are allowed only when no active objectives remain and no response or action is needed.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
-  'To confirm an objective shown as [PENDING CONFIRMATION], repeat OBJECTIVE_MARK_COMPLETED with evidence copied exactly from a successful current action result, including actionType and a matching commandId, itemId, targetId, or code. If the objective unambiguously names an item currently held in the NPC main inventory, the runtime may confirm it from that inventory state. Without action evidence or an unambiguous held-item match, the objective remains active.',
+  'Use OBJECTIVE_MARK_COMPLETED for a leaf task once the current state or authoritative actionHistory makes it reasonably clear that the task is done. Runtime keeps physical world changes authoritative and rejects only structural contradictions, such as completing a parent with active subtasks.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
@@ -223,6 +223,7 @@ const PM_MAX_SCENE_CALLS_PER_WINDOW = 12;
 // wake so the NPC can choose a concrete action. They must still be bounded:
 // an unreliable provider must not be able to keep an NPC in an LLM-only loop.
 const PM_STATE_ONLY_CONTINUATION_LIMIT = 3;
+const PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT = 1;
 // A conversational-only reply is visible to the player. Give it a short
 // beat before resuming autonomous goal pursuit instead of immediately making
 // another provider request in the same turn.
@@ -267,6 +268,7 @@ export class NpcPuppetMaster {
   private restoredContinuationStates = new Map<string, 'needs_replan'>();
   private stateOnlyContinuationCounts = new Map<string, number>();
   private objectiveConfirmationRetryCounts = new Map<string, number>();
+  private emptyObjectiveRecoveryCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
 
@@ -404,6 +406,7 @@ export class NpcPuppetMaster {
     this.pendingPlanContinuations.clear();
     this.pendingIncomingGives.clear();
     this.objectiveConfirmationRetryCounts.clear();
+    this.emptyObjectiveRecoveryCounts.clear();
     for (const timeoutId of this.pendingContinuationTimeouts.values()) {
       globalThis.clearTimeout(timeoutId);
     }
@@ -654,7 +657,11 @@ export class NpcPuppetMaster {
             worldModel,
             trigger
           );
-          const acceptedPlans = completionValidation.plans;
+          const acceptedPlans = this.recoverEmptyPlansForActiveObjectives(
+            completionValidation.plans,
+            worldModel,
+            trigger
+          );
           if (acceptedPlans.length > 0) {
             this.settlePendingObjectiveConfirmations(worldModel, acceptedPlans);
             this.traceWake('slm_handled_routine', {
@@ -761,7 +768,11 @@ export class NpcPuppetMaster {
       worldModel,
       trigger
     );
-    const acceptedPlans = completionValidation.plans;
+    const acceptedPlans = this.recoverEmptyPlansForActiveObjectives(
+      completionValidation.plans,
+      worldModel,
+      trigger
+    );
     acceptedPlans.forEach((plan, index) => assertNpcPlan(plan, `$.plans[${index}]`));
     this.lastDebugInfo = {
       matched: acceptedPlans.length > 0,
@@ -879,6 +890,9 @@ export class NpcPuppetMaster {
       }
       if (this.hasConcretePlanAction(plan)) {
         this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, plan.npcId));
+      }
+      if (this.hasPhysicalPlanAction(plan)) {
+        this.emptyObjectiveRecoveryCounts.delete(this.getNpcStateKey(scene, plan.npcId));
       }
       this.storePendingContinuationAfterScheduledOutcome(
         scene,
@@ -2184,6 +2198,22 @@ export class NpcPuppetMaster {
     );
   }
 
+  private hasPhysicalPlanAction(plan: NpcPlan): boolean {
+    return plan.steps.some(
+      (step) =>
+        step.type === 'MOVE_TO' ||
+        step.type === 'TRAVERSE_EXIT' ||
+        step.type === 'LOOK' ||
+        step.type === 'EXAMINE' ||
+        step.type === 'OPEN' ||
+        step.type === 'CLOSE' ||
+        step.type === 'TAKE' ||
+        step.type === 'GIVE' ||
+        step.type === 'PUT' ||
+        step.type === 'COMMAND'
+    );
+  }
+
   private hasDiscoveryConfirmation(
     trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
     npcId: string
@@ -2672,7 +2702,7 @@ export class NpcPuppetMaster {
           '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
-          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. To confirm a [PENDING CONFIRMATION] objective, repeat its marker with evidence copied exactly from a successful current trigger, for example {"type":"OBJECTIVE_MARK_COMPLETED","objectiveId":"...","evidence":{"actionType":"COMMAND","commandId":"turn_tv_on"}}. A repeated marker without matching current runtime evidence is rejected and the objective remains active. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
+          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. OBJECTIVE_MARK_COMPLETED updates planning state only; it never performs a task, transfers an item, or changes the world. Mark a leaf objective when current state or authoritative actionHistory makes its completion reasonably clear. Runtime keeps physical changes authoritative and rejects only structural contradictions, especially completing a parent with active subtasks. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
           '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           '7. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
@@ -2774,9 +2804,7 @@ export class NpcPuppetMaster {
       .map((plan) => {
         const objectives = objectivesByNpc.get(plan.npcId) || [];
         const seenMarkers = new Set<string>();
-        let blockDependentTail = false;
         const steps = plan.steps.filter((step) => {
-          if (blockDependentTail) return false;
           if (step.type !== 'OBJECTIVE_MARK_COMPLETED') return true;
           if (seenMarkers.has(step.objectiveId)) {
             rejectedNpcIds.add(plan.npcId);
@@ -2808,7 +2836,6 @@ export class NpcPuppetMaster {
             objective.subtasks.length > 0 &&
             !this.areAllObjectiveSubtasksCompleted(objective.subtasks)
           ) {
-            rejectedNpcIds.add(plan.npcId);
             this.traceWake('objective_completion_composite_incomplete', {
               sceneId: worldModel.scene.id,
               npcId: plan.npcId,
@@ -2845,35 +2872,78 @@ export class NpcPuppetMaster {
             });
             return true;
           }
-          // A first, unconfirmed claim is retained as PENDING CONFIRMATION.
-          // Evidence describing another step in this response cannot confirm
-          // it because only results from the current trigger are matched. Its
-          // physical tail is not allowed to run: it commonly assumes a GIVE,
-          // trade, or other external action that has not happened yet.
-          if (!objective.pendingConfirmation) {
-            blockDependentTail = true;
-            this.traceWake('objective_completion_pending_blocks_tail', {
-              sceneId: worldModel.scene.id,
-              npcId: plan.npcId,
-              objectiveId: step.objectiveId,
-            });
-            return true;
-          }
-          rejectedNpcIds.add(plan.npcId);
-          blockDependentTail = true;
-          this.traceWake('objective_completion_unconfirmed', {
+          // Objectives are planning state, not world mutations. A leaf marker
+          // without a perfectly matching current trigger is accepted unless
+          // the runtime can prove it wrong. This avoids leaving a completed
+          // branch stale merely because an asynchronous result was delivered
+          // through a previous batch or continuation.
+          this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
+          const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+          confirmed.add(step.objectiveId);
+          confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+          this.traceWake('objective_completion_soft_confirmed', {
             sceneId: worldModel.scene.id,
             npcId: plan.npcId,
             objectiveId: step.objectiveId,
             evidence: step.evidence,
           });
-          return false;
+          return true;
         });
         return steps.length ? { ...plan, steps } : null;
       })
       .filter((plan): plan is NpcPlan => !!plan);
 
     return { plans: validatedPlans, confirmedObjectiveIdsByNpc, rejectedNpcIds };
+  }
+
+  private recoverEmptyPlansForActiveObjectives(
+    plans: NpcPlan[],
+    worldModel: NpcWorldModel,
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): NpcPlan[] {
+    if (plans.length) return plans;
+
+    const recoveries: NpcPlan[] = [];
+    for (const npc of worldModel.npcs) {
+      if (!npc.objectives?.length || !this.hasObjectiveCompletionRecoveryTrigger(trigger, npc.id))
+        continue;
+      const stateKey = `${worldModel.scene.id}:${npc.id}`;
+      const count = this.emptyObjectiveRecoveryCounts.get(stateKey) || 0;
+      if (count >= PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT) {
+        this.traceWake('active_objective_empty_plan_recovery_suppressed', {
+          sceneId: worldModel.scene.id,
+          npcId: npc.id,
+          count,
+          limit: PM_EMPTY_OBJECTIVE_RECOVERY_LIMIT,
+          triggerType: trigger?.type,
+        });
+        continue;
+      }
+      this.emptyObjectiveRecoveryCounts.set(stateKey, count + 1);
+      this.traceWake('active_objective_empty_plan_recovered', {
+        sceneId: worldModel.scene.id,
+        npcId: npc.id,
+        triggerType: trigger?.type,
+      });
+      recoveries.push({
+        npcId: npc.id,
+        steps: [{ type: 'THINK_STRATEGY', reason: 'active objective produced an empty plan' }],
+      });
+    }
+    return recoveries;
+  }
+
+  private hasObjectiveCompletionRecoveryTrigger(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string
+  ): boolean {
+    const triggers =
+      trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
+    return triggers.some(
+      (candidate) =>
+        candidate.type === 'plan_continued' &&
+        candidate.reason === 'objective_completion_unconfirmed'
+    );
   }
 
   private areAllObjectiveSubtasksCompleted(subtasks: NpcObjective[]): boolean {
