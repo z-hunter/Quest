@@ -51,7 +51,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'TRAVERSE_EXIT is always the final physical step of a plan because scene transfer discards the remaining tail.',
   'Use COMMAND only for an authored command listed on a visible entity; never invent a generic use action.',
   'For a listed command, available means its direct affordance is present; execute it only when executable is true. Read preconditions and inventory entries by stable id, containerId, relation, groups, and states; items with similar titles or groups are distinct instances. inventory.itemIds lists only the Actor main inventory; inventory.items is a recursive container map. TAKE on an accessible nested inventory item extracts it into the Actor main inventory, and PUT can then place a main-inventory item into a listed target relation.',
-  'Use THINK_STRATEGY only after repeatCount is 2 or more, or after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep; do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
+  'Use THINK_STRATEGY after repeatCount is 2 or more, after terminal no-progress watchdog results such as repeated_without_progress, pattern_without_progress, or pattern_loop_sleep, OR on wait_elapsed when an active objective exists but no concrete supported next step is appropriate. Do not use it for ordinary uncertainty or missing prerequisites while concrete supported actions remain.',
   'Hidden entities absent from context are unknown; inspect known anchors with LOOK or EXAMINE.',
   'EXAMINE is the deeper discovery mode: it may reveal both lookable and examinable contents. LOOK may reveal lookable contents but never examinable contents.',
   'An ok LOOK or EXAMINE means the anchor was inspected, not that any hidden item was found.',
@@ -63,6 +63,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
   'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. An unconfirmed marker becomes [PENDING CONFIRMATION] for the next PM turn; repeat it only after checking runtime confirmation, otherwise continue the still-active objective. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
+  'A wait_elapsed trigger is a mandatory cognitive wake-up, not permission to idle. If any active objective or subtask exists, including [PENDING CONFIRMATION], the response MUST contain a non-empty plan: first groom OBJECTIVES and MEMORY, then either emit the needed cognition updates, continue with a concrete supported step, or use THINK_STRATEGY when no concrete step is appropriate. Empty plans after wait_elapsed are allowed only when no active objectives remain and no response or action is needed.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
   'To confirm an objective shown as [PENDING CONFIRMATION], repeat OBJECTIVE_MARK_COMPLETED with evidence copied exactly from a successful current action result, including actionType and a matching commandId, itemId, targetId, or code. Without that evidence the objective remains active.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
@@ -599,7 +600,8 @@ export class NpcPuppetMaster {
             this.removePrematureGiveClaims(
               this.removePrematureStrategySteps(
                 this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
-                trigger
+                trigger,
+                worldModel
               )
             )
           );
@@ -704,7 +706,8 @@ export class NpcPuppetMaster {
                 ),
                 trigger
               ),
-              trigger
+              trigger,
+              worldModel
             )
           )
         )
@@ -1888,13 +1891,18 @@ export class NpcPuppetMaster {
 
   private removePrematureStrategySteps(
     plans: NpcPlan[],
-    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger,
+    worldModel?: NpcWorldModel
   ): NpcPlan[] {
     const allowedNpcIds = this.getStrategyAllowedNpcIds(trigger);
     return plans
       .map((plan) => {
         const hasStrategy = plan.steps.some((step) => step.type === 'THINK_STRATEGY');
-        if (!hasStrategy || allowedNpcIds.has(plan.npcId)) return plan;
+        const waitElapsedWithActiveObjective =
+          this.triggerContainsWaitElapsed(trigger, plan.npcId) &&
+          (worldModel?.npcs.find((npc) => npc.id === plan.npcId)?.objectives?.length || 0) > 0;
+        if (!hasStrategy || allowedNpcIds.has(plan.npcId) || waitElapsedWithActiveObjective)
+          return plan;
         const steps = plan.steps.filter((step) => step.type !== 'THINK_STRATEGY');
         if (!steps.some((step) => this.isConsequentialPlanStep(step))) return null;
         return {
@@ -1904,6 +1912,18 @@ export class NpcPuppetMaster {
         };
       })
       .filter((plan): plan is NpcPlan => !!plan);
+  }
+
+  private triggerContainsWaitElapsed(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string
+  ): boolean {
+    if (!trigger) return false;
+    if (trigger.type === 'wait_elapsed') return true;
+    if (trigger.type !== 'batch') return false;
+    return (trigger.triggersByNpc[npcId] || []).some(
+      (candidate) => candidate.type === 'wait_elapsed'
+    );
   }
 
   private getStrategyAllowedNpcIds(trigger?: NpcIndividualTrigger | NpcBatchTrigger): Set<string> {

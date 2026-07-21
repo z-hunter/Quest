@@ -881,6 +881,9 @@ describe('NpcPuppetMaster', () => {
     expect(system).toContain('before dependent physical steps');
     expect(system).toContain('voluntarily for another NPC');
     expect(system).toContain('never leave it only in dialogue, actionHistory, or memory');
+    expect(system).toContain('wait_elapsed trigger is a mandatory cognitive wake-up');
+    expect(system).toContain('response MUST contain a non-empty plan');
+    expect(system).toContain('use THINK_STRATEGY when no concrete step is appropriate');
   });
 
   it('filters malformed objective operation steps', async () => {
@@ -4689,6 +4692,36 @@ describe('NpcPuppetMaster', () => {
 
     await vi.advanceTimersByTimeAsync(5200);
     expect(provider.calls).toHaveLength(3);
+  });
+
+  it('allows THINK_STRATEGY on wait_elapsed when active objectives remain', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [{ id: 'goal', text: 'Find the remote', subtasks: [] }];
+    const provider = new MockProvider([
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          { npcId: npc.name, steps: [{ type: 'THINK_STRATEGY', reason: 'no next step yet' }] },
+        ],
+      }),
+      JSON.stringify({
+        kind: 'npc_strategy_response',
+        npcId: npc.name,
+        updates: [
+          { type: 'OBJECTIVE_UPDATE', objectiveId: 'goal', text: 'Ask Hero for the remote' },
+        ],
+        waitMs: 5000,
+      }),
+    ]);
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, { type: 'wait_elapsed', ms: 2000 });
+
+    expect(plans[0].steps).toEqual([{ type: 'THINK_STRATEGY', reason: 'no next step yet' }]);
+    expect(provider.calls).toHaveLength(2);
   });
 
   it('falls back to WAIT when the strategy response is invalid', async () => {
