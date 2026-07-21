@@ -1126,7 +1126,10 @@ export class GameSemanticAPI {
     }
 
     const textLayer = buildSceneTextLayerSnapshot(scene, this.game);
-    const anchorTitle = textLayer.entryById.get(anchorNodeId)?.title?.trim() || null;
+    const anchorObject = scene.getObjectByName(anchorNodeId);
+    const anchorTitle =
+      textLayer.entryById.get(anchorNodeId)?.title?.trim() ||
+      (anchorObject ? this.getPlayerFacingObjectTitle(anchorObject) : null);
     if (!anchorTitle) {
       return {
         status: 'escalate',
@@ -1135,7 +1138,6 @@ export class GameSemanticAPI {
       };
     }
 
-    const anchorObject = scene.getObjectByName(anchorNodeId);
     const effectiveRelation = this.isEffectiveRelation(relation) ? relation : null;
     const blockingComponent = anchorObject
       ? getActiveBlockingComponentState(anchorObject, effectiveRelation)

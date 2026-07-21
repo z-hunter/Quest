@@ -4092,7 +4092,7 @@ export class Parser {
     const clarificationKey = intent === 'open' ? 'parser.open_which_one' : 'parser.close_which_one';
     const resolved = this.resolveEntityTargetInCandidates(
       rawTarget,
-      this.getScopeCandidates(['reachable']),
+      this.getScopeCandidates(['reachable', 'held']),
       clarificationKey
     );
     const broadResolved =

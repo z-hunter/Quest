@@ -2234,6 +2234,39 @@ describe('Game semantic API', () => {
     expect(listed.data?.discoveredEntityIds).toEqual([batteries.name]);
   });
 
+  it('uses OPEN to list a held container inventory', () => {
+    const fixture = createGameSemanticFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [{ type: 'Item', ignoreDistance: true }],
+    });
+    const batterySlot = fixture.addEntity('remote_battery_slot', {
+      title: null,
+      spatial: { parentNodeId: remote.name, relation: 'in' },
+      components: [{ type: 'Inventory', relation: 'in', capacity: 2, groups: [], items: [] }],
+    });
+    const batteries = fixture.addEntity('aaa_batteries', {
+      title: 'AAA batteries',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.addInventoryEntity(batterySlot, batteries);
+    fixture.game.addInventoryEntity(player, remote);
+
+    const listed = fixture.game.openEntity(remote);
+
+    expect(listed.status).toBe('ok');
+    expect(listed.code).toBe('relation_contents');
+    expect(listed.message).toBe(
+      fixture.game.text('parser.relation_contents', {
+        Relation: 'In',
+        relation: 'in',
+        target: 'TV remote',
+        items: 'AAA batteries',
+      })
+    );
+  });
+
   it('reports an empty accessible nested inventory through OPEN', () => {
     const fixture = createGameSemanticFixture();
     fixture.addPlayer('Hero', 0, 0);

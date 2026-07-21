@@ -649,6 +649,27 @@ describe('Parser + game integration smoke', () => {
     );
   });
 
+  it('uses OPEN on a held switch matched by a synonym', async () => {
+    const fixture = createParserFixture();
+    const player = fixture.addPlayer('Hero', 0, 0);
+    const remote = fixture.addEntity('remote', {
+      title: 'TV remote',
+      components: [
+        { type: 'Item', ignoreDistance: true },
+        { type: 'Switch', state: 1 },
+      ],
+    });
+    fixture.textAssets.setObject(remote.name, { title: 'TV remote', synonyms: ['rc'] });
+    fixture.game.inventoryManager.handleSceneChange();
+    fixture.game.addInventoryEntity(player, remote);
+
+    const result = await fixture.run('open rc');
+
+    expect(result.messages.at(-1)).toBe(
+      fixture.game.text('parser.open_success', { target: 'TV remote' })
+    );
+  });
+
   it('reports a clearly openable closed container on LOOK IN but not on direct LOOK of hidden contents', async () => {
     const fixture = createParserFixture();
     fixture.addPlayer('Hero', 0, 0);
