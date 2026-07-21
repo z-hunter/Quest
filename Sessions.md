@@ -4113,3 +4113,58 @@ Resolution in commit `fd3d7e3 Fix Puppet Master objective recovery`:
 - The first fresh-log empty-plan issue remains a provider reliability case; the prompt contract identifies it, but a separate bounded runtime fallback may still be useful if it recurs.
 - The PM focused tests emitted one pre-existing warning about an invalid continuation transition in the moved-GIVE test; the suite still passed and this warning was not part of the current fixes.
 - No uncommitted implementation changes remain after `c2c6b2a`; the only test adjustment was the expected second argument `{ resetRateBudget: false }` for autonomous NPC speech.
+
+## Session Entry - 2026-07-22 01:12 Europe/Warsaw
+
+### Session goals
+
+- Analyze a fresh Puppet Master run after the objective-completion fixes.
+- Verify whether Linda still stops prematurely at the end of the TV objective chain.
+- Commit the accepted soft objective-completion implementation with a detailed description.
+- Preserve the result as a durable session handoff.
+
+### What was implemented and verified
+
+The fresh run demonstrated that the main Linda stall is resolved. Linda successfully completed the entire multi-scene chain: she found the TV remote, discovered its dead battery, negotiated with Rick, fetched the compact cassette, exchanged it for a charged AAA battery, returned to the apartment, installed the battery, and executed `turn_tv_on` successfully.
+
+The runtime emitted `objective_completion_soft_confirmed` for the TV objective and continued with the next objective instead of blocking on missing exact evidence. After a later movement timeout on the way to the sofa, the watch objective was also closed optimistically, allowing the story to reach a natural completion point. The remaining `No plans generated` entries were valid cases where an NPC was waiting or had no immediate work, not the previous deadlock.
+
+### Architecture and runtime decisions
+
+- Leaf objectives use optimistic completion when the model claims completion but the current trigger does not contain exact confirmation evidence.
+- Physical world mutations remain runtime-authoritative; soft completion never fabricates movement, inventory transfer, command execution, or scene transitions.
+- Composite objectives with unfinished subtasks remain protected from premature closure.
+- Invalid objective markers do not discard independent physical tail actions.
+- Empty-plan recovery remains deliberately bounded and narrow: it handles the specific objective-validation wake-up path without repeatedly waking ordinary idle/wait states.
+
+### Puppet Master, mechanics, and documentation changes
+
+- `src/mechanics/NpcPuppetMaster.ts` contains the soft leaf-confirmation path, composite-objective guard, tail preservation, and bounded empty-plan recovery.
+- `public/text/system/npc-pm-system.md` and `NPCsys.md` describe the new optimistic leaf-objective contract and the distinction between cognitive completion and authoritative physical execution.
+- `tests/npc/puppet-master.test.ts` covers soft leaf completion, preservation of physical tails, and one-shot recovery after an empty plan.
+
+### Fresh-log observations and remaining caveats
+
+- Linda's `MOVE_TO Sofa` timed out after 15 seconds. This is a separate pathfinding/collision issue; it no longer blocks the logical objective because the TV was already on and the watch objective was treated as achievable from the current position.
+- After the watch objective was already completed, the model attempted to mark a stale invented ID (`watch_muppet_show`). Runtime rejected it with `objective_not_found`, and Linda still responded correctly to Miles. This is safe but suggests a future prompt refinement: do not emit `OBJECTIVE_MARK_COMPLETED` for objectives already shown as `[JUST COMPLETED]` or absent from the active objective list.
+
+### Validation
+
+- `npm run typecheck` — passed.
+- Focused Puppet Master suite — 137/137 passed.
+- Full project suite — 56 files, 709/709 passed.
+- Targeted Prettier check — passed.
+- `git diff --check` — passed.
+- Commit hooks ran Prettier and ESLint successfully on the staged implementation files.
+
+### Commit created
+
+- `ba9f69ab2aebcabb2c65abc8e8a4f5a25401d3be` — `fix: soften NPC objective completion validation`
+
+The commit includes the runtime fix, prompt/documentation updates, and regression tests. The worktree was clean after the commit. The commit has not been pushed to a remote repository.
+
+### Next recommended steps
+
+- Reproduce and inspect the independent `MOVE_TO Sofa` timeout if sofa positioning is important to gameplay.
+- Optionally strengthen the PM prompt against repeated completion markers for already completed or missing objective IDs.
+- Run another real PM log after any prompt refinement; no further runtime change is required for the original Linda-stall symptom.
