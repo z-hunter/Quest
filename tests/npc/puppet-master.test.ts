@@ -715,6 +715,51 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
+  it('confirms an objective when its named item is currently held in inventory', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const cassette = fixture.addEntity('cassette', {
+      title: 'Compact cassette',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    expect(fixture.game.inventoryManager.addInventoryEntity(npc, cassette, 'in').status).toBe('ok');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'find-cassette',
+        text: 'Find a compact cassette for the music player',
+        subtasks: [],
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'find-cassette' }],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'find-cassette', completed: true }),
+    ]);
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
+    pm.haltAllNpcs();
+  });
+
   it('immediately completes an objective from matching successful plan_completed evidence', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
@@ -1435,6 +1480,50 @@ describe('NpcPuppetMaster', () => {
     expect(String(provider.calls[0].messages[0].content)).toContain('"id": "corridor"');
     expect(staticProjection).toHaveBeenCalledWith(destination);
     vi.useRealTimers();
+  });
+
+  it('keeps the source scene id in the scene-transfer completion trace', () => {
+    const fixture = createSceneFixture();
+    const destination = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const npc = addNpc(fixture, 'guard');
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    const trace = vi.spyOn(pm, 'traceWake');
+    const stateKey = `${fixture.scene.id}:${npc.name}`;
+
+    (pm as any).pendingPlanContinuations.set(stateKey, {
+      state: 'awaiting_barrier',
+      npcId: npc.name,
+      barrierStep: { type: 'TRAVERSE_EXIT', targetId: 'door' },
+      steps: [],
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+    fixture.scene.removeEntity(npc);
+    destination.addEntity(npc);
+
+    (pm as any).tryExecutePendingContinuation(destination, npc.name, [
+      {
+        type: 'action_completed',
+        result: {
+          status: 'ok',
+          code: 'exit_traversed',
+          npcId: npc.name,
+          actionType: 'TRAVERSE_EXIT',
+          targetId: 'door',
+          worldChanged: true,
+        },
+      },
+    ]);
+
+    expect(trace).toHaveBeenCalledWith(
+      'plan_completed_after_scene_transfer',
+      expect.objectContaining({
+        sourceSceneId: fixture.scene.id,
+        destinationSceneId: destination.id,
+      })
+    );
+    pm.haltAllNpcs();
   });
 
   it('keeps offscreen NPC knowledge in the NPC scene instead of the player scene', () => {
@@ -4427,7 +4516,7 @@ describe('NpcPuppetMaster', () => {
     await completion;
 
     expect(debugLines.join('\n')).toContain('schedule_scene_scan');
-    expect(debugLines.join('\n')).toContain('batch_enqueued');
+    expect(debugLines.join('\n')).toContain(`> batch_enqueued: ${fixture.scene.id}:`);
     expect(debugLines.join('\n')).toContain('--- PM CONTEXT TRACE ---');
     expect(debugLines.join('\n')).toContain('pm_context_entity_summary');
     expect(debugLines.join('\n')).toContain('provider_request_start');

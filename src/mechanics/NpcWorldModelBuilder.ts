@@ -690,10 +690,18 @@ export class NpcWorldModelBuilder {
       const cmds = d.commandEntities?.length || 0;
       const switches = d.switchEntities?.length || 0;
       const blocked = d.blockedEntities?.length || 0;
-      body = `${d.npcId}: ${d.knownObjects} known, ${d.includedEntities} incl, ${d.skippedUntitled} skipU, ${d.skippedTechnical} skipT. Interactions: ${JSON.stringify(d.interactions || {})}. Approaches: ${JSON.stringify(d.approaches || {})}. Cmds: ${cmds}, Switches: ${switches}, Blocked: ${blocked}.`;
+      const timing =
+        d.durationMs !== undefined
+          ? ` | ${typeof d.durationMs === 'number' ? d.durationMs.toFixed(1) : d.durationMs}ms`
+          : '';
+      body = `${d.npcId}: ${d.knownObjects} known, ${d.includedEntities} incl, ${d.skippedUntitled} skipU, ${d.skippedTechnical} skipT. Interactions: ${JSON.stringify(d.interactions || {})}. Approaches: ${JSON.stringify(d.approaches || {})}. Cmds: ${cmds}, Switches: ${switches}, Blocked: ${blocked}${timing}`;
     } else if (stage === 'pm_context_built') {
       const d = details as any;
-      body = `${d.sceneId}: ${d.npcCount} NPCs.`;
+      const timing =
+        d.durationMs !== undefined
+          ? ` | ${typeof d.durationMs === 'number' ? d.durationMs.toFixed(1) : d.durationMs}ms`
+          : '';
+      body = `${d.sceneId}: ${d.npcCount} NPCs${timing}`;
     }
 
     const message = `--- PM CONTEXT TRACE ---\n${stage}: ${body}`;

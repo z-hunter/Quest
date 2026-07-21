@@ -65,7 +65,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. An unconfirmed marker becomes [PENDING CONFIRMATION] for the next PM turn; repeat it only after checking runtime confirmation, otherwise continue the still-active objective. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
   'A wait_elapsed trigger is a mandatory cognitive wake-up, not permission to idle. If any active objective or subtask exists, including [PENDING CONFIRMATION], the response MUST contain a non-empty plan: first groom OBJECTIVES and MEMORY, then either emit the needed cognition updates, continue with a concrete supported step, or use THINK_STRATEGY when no concrete step is appropriate. Empty plans after wait_elapsed are allowed only when no active objectives remain and no response or action is needed.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
-  'To confirm an objective shown as [PENDING CONFIRMATION], repeat OBJECTIVE_MARK_COMPLETED with evidence copied exactly from a successful current action result, including actionType and a matching commandId, itemId, targetId, or code. Without that evidence the objective remains active.',
+  'To confirm an objective shown as [PENDING CONFIRMATION], repeat OBJECTIVE_MARK_COMPLETED with evidence copied exactly from a successful current action result, including actionType and a matching commandId, itemId, targetId, or code. If the objective unambiguously names an item currently held in the NPC main inventory, the runtime may confirm it from that inventory state. Without action evidence or an unambiguous held-item match, the objective remains active.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
@@ -193,6 +193,7 @@ type NpcStrategyResponse = {
 type PendingPlanContinuation = {
   state: 'awaiting_barrier';
   npcId: string;
+  sourceSceneId: string;
   barrierStep: NpcPlanStep;
   steps: NpcPlanStep[];
   memory?: string;
@@ -434,7 +435,7 @@ export class NpcPuppetMaster {
       body = `${d.sceneId}: Selected [${(d.selectedNpcIds || []).join(', ')}]`;
     } else if (stage === 'batch_enqueued') {
       const d = details as any;
-      body = `${d.sceneId}: ${d.npcId} (trigger: ${d.triggerType || 'none'})`;
+      body = `: ${d.sceneId}: ${d.npcId} (trigger: ${d.triggerType || 'none'})`;
     } else if (stage === 'continuation_state_changed') {
       const d = details as any;
       body = `${d.stateKey}: ${d.previous} -> ${d.state} (${d.reason})`;
@@ -1271,6 +1272,7 @@ export class NpcPuppetMaster {
     this.pendingPlanContinuations.set(stateKey, {
       state: 'awaiting_barrier',
       npcId: plan.npcId,
+      sourceSceneId: scene.id,
       barrierStep,
       steps: remainingSteps,
       ...(hasPendingMemory ? { memory: plan.memory } : {}),
@@ -1407,8 +1409,10 @@ export class NpcPuppetMaster {
       );
       if (sourceContinuation) {
         [stateKey, pending] = sourceContinuation;
+        const sourceSceneId =
+          pending?.sourceSceneId || stateKey.slice(0, stateKey.lastIndexOf(':'));
         this.traceWake('cross_scene_exit_continuation_matched', {
-          sourceSceneId: stateKey.slice(0, stateKey.lastIndexOf(':')),
+          sourceSceneId,
           destinationSceneId: scene.id,
           npcId,
         });
@@ -1488,6 +1492,7 @@ export class NpcPuppetMaster {
         : pending.completedSteps;
 
     if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
+      const sourceSceneId = pending.sourceSceneId || stateKey.slice(0, stateKey.lastIndexOf(':'));
       this.transitionContinuation(stateKey, 'completed', 'scene_transfer');
       const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
         (candidate) => candidate.getObjectByName(npcId)
@@ -1503,7 +1508,7 @@ export class NpcPuppetMaster {
       }
       const finalResults = [...completedSteps, ...completionOutcomes];
       this.traceWake('plan_completed_after_scene_transfer', {
-        sourceSceneId: stateKey.slice(0, stateKey.lastIndexOf(':')),
+        sourceSceneId,
         destinationSceneId: destinationScene?.id,
         npcId,
         discardedStepTypes: pending.steps.map((step) => step.type),
@@ -2660,6 +2665,23 @@ export class NpcPuppetMaster {
             confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
             return true;
           }
+          const npcContext = worldModel.npcs.find((npc) => npc.id === plan.npcId);
+          const inventoryMatch = npcContext
+            ? this.findInventoryObjectiveMatch(npcContext, objective)
+            : null;
+          if (inventoryMatch) {
+            const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+            confirmed.add(step.objectiveId);
+            confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+            this.traceWake('objective_completion_confirmed_from_inventory', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+              itemId: inventoryMatch.itemId,
+              itemTitle: inventoryMatch.itemTitle,
+            });
+            return true;
+          }
           // A first, unconfirmed claim is retained as PENDING CONFIRMATION.
           // Evidence describing another step in this response cannot confirm
           // it because only results from the current trigger are matched.
@@ -2678,6 +2700,57 @@ export class NpcPuppetMaster {
       .filter((plan): plan is NpcPlan => !!plan);
 
     return { plans: validatedPlans, confirmedObjectiveIdsByNpc, rejectedNpcIds };
+  }
+
+  private findInventoryObjectiveMatch(
+    npc: NpcActorContext,
+    objective: NpcObjective
+  ): { itemId: string; itemTitle: string } | null {
+    const inventory = npc.inventory;
+    if (!inventory?.available || !Array.isArray(inventory.itemIds) || !inventory.itemIds.length) {
+      return null;
+    }
+
+    const objectiveTokens = this.getObjectiveMatchTokens(objective.text);
+    if (!objectiveTokens.length) return null;
+    const inventoryItems = Array.isArray(inventory.items) ? inventory.items : [];
+
+    for (const itemId of inventory.itemIds) {
+      const item = inventoryItems.find((candidate) => candidate.id === itemId);
+      const itemTitle = item?.title?.trim() || itemId;
+      const itemTokens = this.getObjectiveMatchTokens(itemTitle);
+      if (itemTokens.length && itemTokens.every((token) => objectiveTokens.includes(token))) {
+        return { itemId, itemTitle };
+      }
+    }
+    return null;
+  }
+
+  private getObjectiveMatchTokens(value: string): string[] {
+    const stopWords = new Set([
+      'a',
+      'an',
+      'and',
+      'for',
+      'from',
+      'in',
+      'into',
+      'of',
+      'on',
+      'the',
+      'to',
+      'with',
+    ]);
+    return Array.from(
+      new Set(
+        value
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLocaleLowerCase()
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter((token) => token.length > 1 && !stopWords.has(token))
+      )
+    );
   }
 
   private matchesCurrentCompletionEvidence(
@@ -3723,7 +3796,15 @@ export class NpcPuppetMaster {
             else if (t.type === 'plan_completed')
               triggerStr = `Plan completed (${Array.isArray(t.results) ? t.results.length : 0} results)`;
             else if (t.type === 'manual') triggerStr = `Manual trigger: ${t.reason || 'none'}`;
-            else triggerStr = JSON.stringify(t);
+            else if (t.type === 'batch') {
+              const summaries = Object.entries(t.triggersByNpc || {}).map(([npcId, triggers]) => {
+                const latest = (triggers as any[])[(triggers as any[]).length - 1];
+                if (!latest) return `${npcId}: none`;
+                const res = latest.result?.status || latest.result?.code || latest.reason || '';
+                return `${npcId}: ${latest.type}${res ? `(${res})` : ''}`;
+              });
+              triggerStr = `Batch: ${summaries.join(', ')}`;
+            } else triggerStr = JSON.stringify(t);
           }
           summaryHeader += ` | Trigger: ${triggerStr}`;
 

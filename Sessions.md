@@ -3917,3 +3917,108 @@ The commit includes all current worktree changes, including user-authored Corrid
 - Re-run the runtime log reproduction to confirm no cassette leakage after the scene-local fix.
 - Consider a separate follow-up for the parallel fake-timer flake.
 - This wrap-up intentionally leaves `Sessions.md` and the pre-existing user change in `public/text/objects/NPC.json` uncommitted.
+
+## Session Entry - 2026-07-21 15:17 Europe/Warsaw
+
+### Goals
+
+- Analyze successive compact PM logs for Linda/Rick, especially scene transfers, MOVE_TO/GIVE behavior, stale inventory, WAIT wake-ups, and objective confirmations.
+- Make NPC cognition continue after `wait_elapsed` and prevent stale inventory from making a transferred item appear in two Actors' inventories.
+- Preserve the compact PM diagnostics while keeping the runtime and tests correct.
+
+### Problems Encountered
+
+- Autonomous NPCs sometimes used the player's `currentScene` for inventory, perception, speech, or action routing, causing cross-scene leakage and incorrect cassette/battery decisions.
+- Linda could receive a `wait_elapsed` wake-up with active objectives and return an empty plan, making her stop without progressing.
+- After a successful `GIVE`, a stale source `Inventory.items` ID could resolve to the recipient's entity through same-ID fallback. PM then saw the item in both inventories and repeated `GIVE`, producing `inventory_item_already_present`.
+- PM treated a one-way cassette `GIVE` as proof that the promised battery had also been transferred. It wrote false memory/objective state even though no `GIVE battery_aaa -> Linda` occurred.
+- `OBJECTIVE_MARK_COMPLETED` evidence was not consistently accepted when the relevant successful result was carried by a later `plan_completed`/continuation trigger; models could leave objectives pending or remove a parent containing a pending subtask.
+- MOVE_TO continuation watchdogs sometimes timed out while navigation later completed; scene-transfer diagnostics could also report identical source/destination IDs after a real cross-scene transfer.
+
+### Implemented Decisions and Fixes
+
+- NPC world-model and inventory queries are scene-authoritative and no longer depend on the player's scene. Speech/listener routing is scene-local by default.
+- Inventory transfer moves nested descendants with the autonomous Actor and filters untitled entities from PM knowledge.
+- `wait_elapsed` is a mandatory cognitive wake-up when active objectives remain: PM must groom OBJECTIVES/MEMORY, continue with a concrete action, or use `THINK_STRATEGY`; empty plans are allowed only with no active objectives. Runtime preserves `THINK_STRATEGY` for this case.
+- Inventory candidate resolution now rejects same-ID entities explicitly spatially/inventory-owned by another Actor instead of falling back to an arbitrary match. This prevents duplicate-GIVE loops after transfer.
+- PM diagnostics were compacted into readable one-line wake/context summaries without exposing the old full `knownEntities` dump.
+- Runtime evidence, pending-confirmation lifecycle, held-container OPEN/TAKE behavior, and related objective safeguards received regression coverage.
+
+### Validation
+
+- Targeted autonomous-NPC GIVE regression passes.
+- `npm run typecheck`, ESLint, Prettier, and `git diff --check` pass for the committed changes.
+- The compact PM log confirms the stale-inventory fix: after cassette transfer Linda shows `Inv: [tv_rc]`, while Rick shows `Inv: [battery_aaa, test]`.
+- Some broader legacy tests still expose separate navigation/surface-duplicate or compact-log expectation issues; those were not hidden inside the inventory fix.
+
+### Commits Created During This Session
+
+- `3942b5e` — keep dialogue within the speaker scene.
+- `98f13ad` — require runtime evidence for objectives.
+- `e011bdc` — preserve scene-arrival context and commitments.
+- `d31ddc4` — correct autonomous scene transfers.
+- `6453d57` — keep PM world model scene-local.
+- `ad6b3ac` — resolve autonomous NPC inventory in its PM scene.
+- `e78f4f4` — strengthen pending-confirmation evidence handling.
+- `bc338cd` — allow OPEN on held inventory items.
+- `ad66b4d` — keep autonomous NPC inventory scene-aware.
+- `c14cc0d` — keep NPCs active after `wait_elapsed`.
+- `3463445` — compact/refactor PM logging.
+- `baf368a` — stale inventory candidate fix and regression test.
+- `429bf92` — fix active-player inventory bleed and explicit scene parsing during duplicate removal.
+
+### Remaining Work / Recommended Next Steps
+
+- Model bilateral trades explicitly: require a confirmed counter-item `item_given` or implement an atomic trade action; never infer the counter-transfer from the offered-item GIVE.
+- Make objective confirmation matching accept authoritative successful results from `plan_completed` and continuation batches, while preventing `OBJECTIVE_REMOVE` from deleting unresolved pending descendants.
+- Investigate MOVE_TO continuation timeout versus late `move_completed` delivery and correct `plan_completed_after_scene_transfer` source/destination diagnostics.
+- Re-run a full sequential suite and the real Linda/Rick reproduction after the remaining trade/confirmation fixes.
+
+### Risks and Caveats
+
+- The working tree was clean before this entry; `Sessions.md` is intentionally modified by this wrap-up and will remain uncommitted unless requested.
+- The latest runtime log demonstrates that the stale inventory fix is effective, but the battery was still not transferred; memory claiming otherwise is model error, not authoritative runtime state.
+
+## Session Entry - 2026-07-21 15:27 Europe/Warsaw
+
+### Session Goals
+
+- Diagnose the failing `Game navigation and spatial API > transfers a player actor with inventory and nested spatial descendants to the target scene` regression.
+- Verify whether `SceneManager.discardReplacedPlayer` failed to recursively remove inventory descendants.
+- Keep scene transfer universal for any `Actor`, while retaining only necessary player-specific scene activation behavior.
+
+### Implemented
+
+- Fixed `InventoryManager.syncInventoryStore` so the global `game.inventory` branch is used only when:
+  - the owner belongs to `sceneManager.currentScene`;
+  - the owner is that scene's player;
+  - the relation is `in`.
+- Cached-scene players now use scene-scoped inventory/component storage, matching the existing universal Actor transfer model.
+- Removed temporary diagnostic logging from `SceneManager` that had been present in the working tree.
+- Added regression assertions proving that a stale target-scene inventory item remains owned by the stale player and does not enter the active player's global inventory.
+
+### Root Cause and Architecture Decision
+
+- `Scene.addEntity(stalePlayer)` makes the stale player the target scene's `player`, but that scene is not active.
+- `syncInventoryStore` previously treated any `scene.player` as the global active player and wrote `staleCassette` into `game.inventory`.
+- Adding the incoming Hero's inventory then re-synchronized that contaminated list and rebound `staleCassette` to Hero before `discardReplacedPlayer` ran.
+- The discard BFS was therefore correct: it could not find an item that no longer belonged to `OldHero`.
+- Universal transfer remains the contract: any Actor moves with inventory contents and nested spatial descendants. Player-only behavior is limited to replacement, `scene.player`, camera, and activation concerns.
+
+### Validation
+
+- Targeted player and NPC transfer tests: passed.
+- `tests/game/navigation-and-spatial.test.ts` plus `tests/scene/scene-transition.test.ts`: 37/37 passed.
+- `npm run typecheck`: passed.
+- `git diff --check`: passed.
+- A separate existing failure remains in `tests/game/semantic-api.test.ts`: `chooses the latest surface-shaped duplicate during scene surface hydration`; it reproduces in isolation and is outside this transfer fix.
+
+### Commits
+
+- No commit was created during this session.
+
+### Remaining Work / Caveats
+
+- `run-test-debug.ts` is an existing untracked diagnostic file and was intentionally left untouched.
+- `src/scene/SceneManager.ts` remains marked modified by the pre-existing diagnostic/edit state; no functional SceneManager diff remains after log removal.
+- The semantic-api surface-duplicate failure should be tracked separately if it is not already covered by an existing task.
