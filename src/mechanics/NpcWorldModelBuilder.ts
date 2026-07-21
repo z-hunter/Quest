@@ -182,7 +182,9 @@ export class NpcWorldModelBuilder {
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
     const memory = this.getOrInitializeNpcMemory(npc, component);
     const transientMemory = normalizeNpcMemory(component?.transientMemory);
-    const newEvents = scene.sceneLog.getUnreadEntries(npc.name);
+    const newEvents = scene.sceneLog
+      .getUnreadEntries(npc.name)
+      .filter((event) => this.isSemanticallyVisibleEvent(scene, event));
     const newEventIds = new Set(newEvents.map((entry) => entry.id));
     const recentEvents = scene.sceneLog.entries
       .filter(
@@ -190,6 +192,7 @@ export class NpcWorldModelBuilder {
           !newEventIds.has(entry.id) &&
           (entry.actorId === npc.name || entry.knownByActorIds.includes(npc.name))
       )
+      .filter((event) => this.isSemanticallyVisibleEvent(scene, event))
       .slice(-12);
 
     const actors = scene.entities
@@ -217,13 +220,15 @@ export class NpcWorldModelBuilder {
     const mutableComponent = npc.components?.find(
       (candidate: any) => candidate?.type === 'NPC'
     ) as typeof component;
-    const knownEntities = Object.values(mutableComponent?.knownEntities || {}).map((entry) => ({
-      id: entry.id,
-      title: entry.title,
-      kind: entry.kind,
-      lastSeenSceneId: entry.lastSeenSceneId === scene.id ? undefined : entry.lastSeenSceneId,
-      lastSeenLocation: entry.lastSeenLocation,
-    }));
+    const knownEntities = Object.values(mutableComponent?.knownEntities || {})
+      .filter((entry) => this.isSemanticallyVisibleKnownEntity(entry))
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        kind: entry.kind,
+        lastSeenSceneId: entry.lastSeenSceneId === scene.id ? undefined : entry.lastSeenSceneId,
+        lastSeenLocation: entry.lastSeenLocation,
+      }));
     this.trace('pm_context_entity_summary', {
       ...entityBuild.trace,
       durationMs: this.elapsedMs(startedAt),
@@ -334,7 +339,10 @@ export class NpcWorldModelBuilder {
     return {
       entities,
       observedObjects: knownObjects.filter(
-        (object) => !ComponentSystem.isNavigationOnlyExit(object)
+        (object) =>
+          !!this.getObjectTitle(object) &&
+          this.shouldIncludeVisibleEntity(object) &&
+          !ComponentSystem.isNavigationOnlyExit(object)
       ),
       trace,
     };
@@ -420,8 +428,10 @@ export class NpcWorldModelBuilder {
     if (!itemId || (action !== 'take' && action !== 'put' && action !== 'give')) return;
 
     const item = scene.getObjectByName(itemId);
+    if (!item || !this.getObjectTitle(item)) return;
     const existing = known[itemId];
-    const title = (item ? this.getObjectTitle(item) : '') || existing?.title || itemId;
+    const title = this.getObjectTitle(item) || existing?.title;
+    if (!title) return;
     const lastSeenAt = event.timestamp || Date.now();
 
     if (action === 'take') {
@@ -633,6 +643,22 @@ export class NpcWorldModelBuilder {
     if (ComponentSystem.isNavigationOnlyExit(object)) return null;
     const title = this.game.textAssets.getResolvedObjectField(object, 'title')?.trim();
     return title || null;
+  }
+
+  private isSemanticallyVisibleEvent(scene: Scene, event: SceneLogEntry): boolean {
+    const itemId = typeof event.payload?.itemId === 'string' ? event.payload.itemId.trim() : '';
+    if (!itemId) return true;
+    const item = scene.getObjectByName(itemId);
+    return !!item && !!this.getObjectTitle(item);
+  }
+
+  private isSemanticallyVisibleKnownEntity(entry: NpcKnownEntityMemory): boolean {
+    if (!entry.title?.trim()) return false;
+    if (entry.kind !== 'item') return true;
+    const object = Array.from(this.game.sceneManager.scenes.values())
+      .map((scene) => scene.getObjectByName(entry.id))
+      .find((candidate) => !!candidate);
+    return !object || !!this.getObjectTitle(object);
   }
 
   private shouldIncludeVisibleEntity(object: SceneObject): boolean {

@@ -1035,6 +1035,78 @@ describe('NpcPuppetMaster', () => {
     );
   });
 
+  it('executes GIVE from an autonomous NPC inventory outside the player scene', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    (fixture.game as any).giveEntityForActor = fixture.game.semantic.giveEntityForActor.bind(
+      fixture.game.semantic
+    );
+    const corridor = fixture.addScene('corridor', 'Corridor', 'A corridor.');
+    const rick = new Actor(fixture.game, 20, 20, 10, 10, 'Rick');
+    const linda = new Actor(fixture.game, 40, 20, 10, 10, 'Linda');
+    for (const actor of [rick, linda]) {
+      actor.components = [
+        { type: 'Actor' },
+        { type: 'NPC', enabled: true },
+        { type: 'Inventory', relation: 'in', capacity: 8, groups: [], protected: true, items: [] },
+      ];
+      corridor.addEntity(actor);
+      fixture.textAssets.setObject(actor.name, { title: actor.name, description: actor.name });
+    }
+    const battery = new Entity(fixture.game, 20, 20, 4, 4, 'battery_aaa');
+    battery.components = [{ type: 'Item' }];
+    battery.spatial = { parentNodeId: rick.name, relation: 'in' };
+    (rick.components.find((component: any) => component.type === 'Inventory') as any).items = [
+      battery.name,
+    ];
+    corridor.addEntity(battery);
+    fixture.textAssets.setObject(battery.name, { title: 'AAA battery', description: 'Fresh.' });
+
+    const outcomes = new ActorPlanExecutor(fixture.game).executePlan({
+      npcId: rick.name,
+      steps: [{ type: 'GIVE', itemId: battery.name, targetId: linda.name }],
+    });
+
+    expect(outcomes).toEqual([expect.objectContaining({ status: 'ok', code: 'item_given' })]);
+    expect(
+      fixture.game.inventoryManager.getInventoryEntitiesInScene(rick, corridor, 'in')
+    ).not.toContain(battery);
+    expect(
+      fixture.game.inventoryManager.getInventoryEntitiesInScene(linda, corridor, 'in')
+    ).toContain(battery);
+    expect(fixture.scene.entities).not.toContain(battery);
+  });
+
+  it('omits untitled inventory entities from PM knowledge', () => {
+    const fixture = createSceneFixture();
+    const npc = addNpc(fixture, 'guard');
+    npc.components.push({
+      type: 'Inventory',
+      relation: 'in',
+      capacity: 8,
+      groups: [],
+      protected: true,
+      items: [],
+    });
+    const hiddenImplementationItem = fixture.addEntity('implementation_item', {
+      title: null,
+      components: [{ type: 'Item' }],
+      spatial: { parentNodeId: npc.name, relation: 'in' },
+    });
+    (npc.components.find((component: any) => component.type === 'Inventory') as any).items = [
+      hiddenImplementationItem.name,
+    ];
+
+    const context = new NpcWorldModelBuilder(fixture.game).build(fixture.scene).npcs[0];
+
+    expect(context.inventory?.itemIds).toBeUndefined();
+    expect(context.inventory?.items).toBeUndefined();
+    expect(context.visibleItemIds).toBeUndefined();
+    expect(context.knownEntities.map((entity) => entity.id)).not.toContain(
+      hiddenImplementationItem.name
+    );
+  });
+
   it('records scene-aware NPC knowledge and lists immediately visible items', () => {
     const fixture = createSceneFixture();
     const npc = addNpc(fixture, 'guard');

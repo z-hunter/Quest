@@ -160,13 +160,28 @@ export class InventoryManager {
     return this.inventory.some((held) => String(held?.name || '').trim() === entityName);
   }
 
-  getPlayerEntity(): Entity | null {
-    const player = this.sceneManager.currentScene?.player;
+  private getObjectScene(object: SceneObject | null | undefined): Scene | null {
+    if (!object) return null;
+    const declaredScene = (object as any).scene as Scene | null | undefined;
+    if (declaredScene?.getObjectByName(object.name) === object) return declaredScene;
+    return (
+      Array.from(this.sceneManager.scenes.values()).find(
+        (scene) => scene.getObjectByName(object.name) === object
+      ) || null
+    );
+  }
+
+  private getSceneForInventoryOwner(owner: Entity | null | undefined): Scene | null {
+    return this.getObjectScene(owner) || this.sceneManager.currentScene;
+  }
+
+  getPlayerEntity(scene: Scene | null = this.sceneManager.currentScene): Entity | null {
+    const player = scene?.player;
     return player instanceof Entity ? player : null;
   }
 
   isPlayerInventoryOwner(owner: Entity | null | undefined): boolean {
-    const player = this.getPlayerEntity();
+    const player = this.getPlayerEntity(this.getSceneForInventoryOwner(owner));
     return !!owner && !!player && owner === player;
   }
 
@@ -192,8 +207,9 @@ export class InventoryManager {
   }
 
   getInventorySlotForEntity(entity: Entity): InventorySlotRef | null {
-    const player = this.getPlayerEntity();
-    if (player && this.inventory.includes(entity)) {
+    const scene = this.getObjectScene(entity) || this.sceneManager.currentScene;
+    const player = this.getPlayerEntity(scene);
+    if (player && scene === this.sceneManager.currentScene && this.inventory.includes(entity)) {
       const component = ComponentSystem.getInventoryComponent(player, 'in');
       if (!component) return null;
       return {
@@ -203,14 +219,13 @@ export class InventoryManager {
       };
     }
 
-    const scene = this.sceneManager.currentScene;
     if (!scene) return null;
     for (const candidate of scene.entities) {
       if (!(candidate instanceof Entity) || candidate.disabled) continue;
       for (const relation of this.getInventoryRelations(candidate)) {
         const component = ComponentSystem.getInventoryComponent(candidate, relation);
         if (!component) continue;
-        if (this.getStoredInventoryEntities(candidate, relation).includes(entity)) {
+        if (this.getStoredInventoryEntities(candidate, relation, scene).includes(entity)) {
           return {
             owner: candidate,
             component,
@@ -298,7 +313,7 @@ export class InventoryManager {
   private resolveInventoryEntitiesFromComponent(
     owner: Entity,
     relation: ContainerRelation,
-    scene: Scene | null = this.sceneManager.currentScene
+    scene: Scene | null = this.getSceneForInventoryOwner(owner)
   ): Entity[] {
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return [];
@@ -313,7 +328,7 @@ export class InventoryManager {
     owner: Entity,
     id: string,
     relation: ContainerRelation,
-    scene: Scene | null = this.sceneManager.currentScene
+    scene: Scene | null = this.getSceneForInventoryOwner(owner)
   ): Entity | null {
     if (!scene || !id) return null;
 
@@ -354,8 +369,10 @@ export class InventoryManager {
     return spatialMatches[spatialMatches.length - 1] || matches[matches.length - 1] || null;
   }
 
-  private removeDuplicateSceneEntityRefs(entity: Entity): void {
-    const scene = this.sceneManager.currentScene;
+  private removeDuplicateSceneEntityRefs(
+    entity: Entity,
+    scene = this.getObjectScene(entity)
+  ): void {
     if (!scene) return;
 
     const duplicateRefs = scene.entities.filter(
@@ -394,15 +411,15 @@ export class InventoryManager {
   private syncInventoryEntitySceneState(
     owner: Entity,
     entity: Entity,
-    relation: ContainerRelation
+    relation: ContainerRelation,
+    scene = this.getSceneForInventoryOwner(owner)
   ): void {
-    const scene = this.sceneManager.currentScene;
     if (!scene) return;
-    this.removeDuplicateSceneEntityRefs(entity);
+    this.removeDuplicateSceneEntityRefs(entity, scene);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
-    this.removeDuplicateSceneEntityRefs(entity);
+    this.removeDuplicateSceneEntityRefs(entity, scene);
     (entity as any).__inventoryRelation = relation;
     entity.setInventoryPositionOwner(owner);
     entity.visible = false;
@@ -568,13 +585,18 @@ export class InventoryManager {
     }
   }
 
-  syncInventoryStore(owner: Entity, entities: Entity[], relation: ContainerRelation = 'in'): void {
+  syncInventoryStore(
+    owner: Entity,
+    entities: Entity[],
+    relation: ContainerRelation = 'in',
+    scene = this.getSceneForInventoryOwner(owner)
+  ): void {
     const previous =
       this.isPlayerInventoryOwner(owner) && relation === 'in'
         ? [...this.inventory]
         : [
             ...(this.inventoryEntityStore.get(this.getInventoryStoreKey(owner, relation)) ||
-              this.resolveInventoryEntitiesFromComponent(owner, relation)),
+              this.resolveInventoryEntitiesFromComponent(owner, relation, scene)),
           ];
 
     if (this.isPlayerInventoryOwner(owner) && relation === 'in') {
@@ -587,20 +609,30 @@ export class InventoryManager {
       this.notifyInventoryUiChange();
       return;
     }
-    this.inventoryEntityStore.set(this.getInventoryStoreKey(owner, relation), entities);
+    if (scene === this.sceneManager.currentScene) {
+      this.inventoryEntityStore.set(this.getInventoryStoreKey(owner, relation), entities);
+    }
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return;
     component.items = entities.map((entity) => entity.name);
     for (const entity of entities) {
-      this.syncInventoryEntitySceneState(owner, entity, relation);
+      this.syncInventoryEntitySceneState(owner, entity, relation, scene);
     }
     previous
       .filter((entity) => !entities.includes(entity))
       .forEach((entity) => this.releaseInventoryEntitySceneState(entity));
   }
 
-  getStoredInventoryEntities(owner: Entity, relation: ContainerRelation = 'in'): Entity[] {
-    if (this.isPlayerInventoryOwner(owner) && relation === 'in') {
+  getStoredInventoryEntities(
+    owner: Entity,
+    relation: ContainerRelation = 'in',
+    scene = this.getSceneForInventoryOwner(owner)
+  ): Entity[] {
+    if (
+      this.isPlayerInventoryOwner(owner) &&
+      scene === this.sceneManager.currentScene &&
+      relation === 'in'
+    ) {
       this.syncPlayerInventoryComponent(relation);
       return this.inventory;
     }
@@ -609,21 +641,22 @@ export class InventoryManager {
     const component = ComponentSystem.getInventoryComponent(owner, relation);
     if (!component) return [];
 
-    const existing = this.inventoryEntityStore.get(storeKey);
+    const existing =
+      scene === this.sceneManager.currentScene ? this.inventoryEntityStore.get(storeKey) : null;
     if (existing) {
       component.items = existing.map((entity) => entity.name);
       for (const entity of existing) {
-        this.syncInventoryEntitySceneState(owner, entity, relation);
+        this.syncInventoryEntitySceneState(owner, entity, relation, scene);
       }
       return existing;
     }
 
-    const resolved = this.resolveInventoryEntitiesFromComponent(owner, relation);
+    const resolved = this.resolveInventoryEntitiesFromComponent(owner, relation, scene);
 
-    this.inventoryEntityStore.set(storeKey, resolved);
+    if (scene === this.sceneManager.currentScene) this.inventoryEntityStore.set(storeKey, resolved);
     component.items = resolved.map((entity) => entity.name);
     for (const entity of resolved) {
-      this.syncInventoryEntitySceneState(owner, entity, relation);
+      this.syncInventoryEntitySceneState(owner, entity, relation, scene);
     }
     return resolved;
   }
@@ -659,20 +692,19 @@ export class InventoryManager {
     this.syncInventoryEntitySceneState(owner, entity, inventoryRelation);
   }
 
-  findInventoryOwnerForEntity(entity: Entity): Entity | null {
-    const player = this.getPlayerEntity();
-    if (player && this.inventory.includes(entity)) {
+  findInventoryOwnerForEntity(entity: Entity, scene = this.getObjectScene(entity)): Entity | null {
+    const player = this.getPlayerEntity(scene);
+    if (player && scene === this.sceneManager.currentScene && this.inventory.includes(entity)) {
       return player;
     }
 
-    const scene = this.sceneManager.currentScene;
     if (!scene) return null;
     for (const candidate of scene.entities) {
       if (!(candidate instanceof Entity) || candidate.disabled) continue;
       const relations = this.getInventoryRelations(candidate);
       if (
         relations.some((relation) =>
-          this.getStoredInventoryEntities(candidate, relation).includes(entity)
+          this.getStoredInventoryEntities(candidate, relation, scene).includes(entity)
         )
       ) {
         return candidate;
@@ -1003,18 +1035,17 @@ export class InventoryManager {
       .filter((entity) => !entity.disabled);
   }
 
-  removeEntityFromCurrentStorage(entity: Entity): void {
-    const inventoryOwner = this.findInventoryOwnerForEntity(entity);
+  removeEntityFromCurrentStorage(entity: Entity, scene = this.getObjectScene(entity)): void {
+    const inventoryOwner = this.findInventoryOwnerForEntity(entity, scene);
     if (inventoryOwner) {
       for (const relation of this.getInventoryRelations(inventoryOwner)) {
-        const entities = this.getStoredInventoryEntities(inventoryOwner, relation).filter(
+        const entities = this.getStoredInventoryEntities(inventoryOwner, relation, scene).filter(
           (candidate) => candidate !== entity
         );
-        this.syncInventoryStore(inventoryOwner, entities, relation);
+        this.syncInventoryStore(inventoryOwner, entities, relation, scene);
       }
     }
 
-    const scene = this.sceneManager.currentScene;
     if (!scene) return;
 
     for (const candidate of scene.getAllSceneObjects()) {
@@ -1903,14 +1934,20 @@ export class InventoryManager {
     return Array.from(collected);
   }
 
-  hasInventoryEntity(owner: Entity, entity: Entity, relation: ContainerRelation = 'in'): boolean {
-    return this.getStoredInventoryEntities(owner, relation).includes(entity);
+  hasInventoryEntity(
+    owner: Entity,
+    entity: Entity,
+    relation: ContainerRelation = 'in',
+    scene = this.getSceneForInventoryOwner(owner)
+  ): boolean {
+    return this.getStoredInventoryEntities(owner, relation, scene).includes(entity);
   }
 
   canAddInventoryEntity(
     owner: Entity,
     entity: Entity,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    scene = this.getSceneForInventoryOwner(owner)
   ): GameActionOutcome | null {
     if (owner === entity) {
       return {
@@ -1942,7 +1979,7 @@ export class InventoryManager {
       component.capacity = Number.MAX_SAFE_INTEGER;
     }
     component.relation = ComponentSystem.normalizeInventoryRelation(component);
-    const currentItems = this.getStoredInventoryEntities(owner, relation);
+    const currentItems = this.getStoredInventoryEntities(owner, relation, scene);
     if (currentItems.includes(entity)) {
       return { status: 'failed', code: 'inventory_item_already_present', recoverable: true };
     }
@@ -1968,9 +2005,10 @@ export class InventoryManager {
   addInventoryEntity(
     owner: Entity,
     entity: Entity,
-    relation: ContainerRelation = 'in'
+    relation: ContainerRelation = 'in',
+    scene = this.getSceneForInventoryOwner(owner)
   ): GameActionOutcome {
-    const preflight = this.canAddInventoryEntity(owner, entity, relation);
+    const preflight = this.canAddInventoryEntity(owner, entity, relation, scene);
     if (preflight) return preflight;
     if (owner === entity) {
       return {
@@ -2002,7 +2040,7 @@ export class InventoryManager {
       component.capacity = Number.MAX_SAFE_INTEGER;
     }
     component.relation = ComponentSystem.normalizeInventoryRelation(component);
-    const currentItems = this.getStoredInventoryEntities(owner, relation);
+    const currentItems = this.getStoredInventoryEntities(owner, relation, scene);
     if (currentItems.includes(entity)) {
       return {
         status: 'failed',
@@ -2027,9 +2065,9 @@ export class InventoryManager {
       };
     }
 
-    this.removeEntityFromCurrentStorage(entity);
+    this.removeEntityFromCurrentStorage(entity, scene);
     this.clearInheritedSurfaceSwitchGroups(entity);
-    this.syncInventoryStore(owner, [...currentItems, entity], relation);
+    this.syncInventoryStore(owner, [...currentItems, entity], relation, scene);
     return {
       status: 'ok',
       code: 'inventory_item_added',

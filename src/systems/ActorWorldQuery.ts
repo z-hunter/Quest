@@ -72,7 +72,7 @@ export class ActorWorldQuery {
   }
 
   getActionObservers(source: Actor, subject?: SceneObject | null): Actor[] {
-    const scene = this.game.sceneManager.currentScene;
+    const scene: Scene | null = source.scene || this.game.sceneManager.currentScene;
     if (!scene) return [];
     const focus = subject || source;
     const focusPoint = this.game.inventoryManager.getSceneObjectReferencePoint(focus);
@@ -99,7 +99,7 @@ export class ActorWorldQuery {
 
   getActorListeners(
     source: Actor,
-    scene: Scene | null = this.game.sceneManager.currentScene
+    scene: Scene | null = (source.scene as Scene | null) || this.game.sceneManager.currentScene
   ): Actor[] {
     if (!scene) return [];
     return scene.entities.filter((entity): entity is Actor => {
@@ -213,7 +213,11 @@ export class ActorWorldQuery {
       scene
         ? this.game.inventoryManager.getInventoryEntitiesInScene(owner, scene, relation)
         : this.game.inventoryManager.getInventoryEntities(owner, relation);
-    const topLevelItems = getInventoryEntities(actor, 'in').filter((item) => !item.disabled);
+    const getTitle = (item: Entity) =>
+      this.game.textAssets.getResolvedObjectField(item, 'title')?.trim() || null;
+    const topLevelItems = getInventoryEntities(actor, 'in').filter(
+      (item) => !item.disabled && !!getTitle(item)
+    );
     const items: ActorInventoryItemKnowledge[] = [];
     const visited = new Set<string>();
     const visit = (container: Entity) => {
@@ -222,19 +226,22 @@ export class ActorWorldQuery {
         for (const item of getInventoryEntities(container, relation)) {
           if (item.disabled || visited.has(item.name)) continue;
           visited.add(item.name);
+          const title = getTitle(item);
           const groupIds = this.getObjectGroupIds(item);
           const states = ComponentSystem.getStateComponents(item).map((state) => ({
             id: state.id,
             value: ComponentSystem.getStateValue(item, state.id) ?? state.initialValue,
           }));
-          items.push({
-            id: item.name,
-            title: this.game.textAssets.getResolvedObjectField(item, 'title') || item.name,
-            containerId: container.name,
-            relation,
-            ...(groupIds.length ? { groupIds } : {}),
-            ...(states.length ? { states } : {}),
-          });
+          if (title) {
+            items.push({
+              id: item.name,
+              title,
+              containerId: container.name,
+              relation,
+              ...(groupIds.length ? { groupIds } : {}),
+              ...(states.length ? { states } : {}),
+            });
+          }
           visit(item);
         }
       }
