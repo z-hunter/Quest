@@ -782,6 +782,73 @@ export class Scene {
     });
   }
 
+  getWalkabilityDiagnostics(x: number, y: number, sourceEntity?: Entity): Record<string, unknown> {
+    const cam = this.collisionCamera || this.camera;
+    const collider = sourceEntity
+      ? { width: sourceEntity.colliderWidth, height: sourceEntity.colliderHeight }
+      : null;
+    let sourceRect: { x: number; y: number; w: number; h: number } | null = null;
+    if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
+      const parallax = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
+      const visualOffset = (sourceEntity as any).visualOffset || { x: 0, y: 0 };
+      const visual = toVisualPosition({ x, y }, cam, parallax, visualOffset);
+      sourceRect = {
+        x: visual.x - sourceEntity.colliderWidth / 2,
+        y: visual.y - sourceEntity.colliderHeight,
+        w: sourceEntity.colliderWidth,
+        h: sourceEntity.colliderHeight,
+      };
+    }
+    const entityBlockers = sourceRect
+      ? this.entities
+          .filter(
+            (other) =>
+              other !== sourceEntity &&
+              !other.disabled &&
+              other.colliderWidth > 0 &&
+              other.colliderHeight > 0
+          )
+          .flatMap((other) => {
+            const parallax = other.parallax !== undefined ? other.parallax : 1.0;
+            const visualOffset = (other as any).visualOffset || { x: 0, y: 0 };
+            const visual = toVisualPosition(
+              { x: other.x, y: other.y },
+              cam,
+              parallax,
+              visualOffset
+            );
+            const rect = {
+              x: visual.x - other.colliderWidth / 2,
+              y: visual.y - other.colliderHeight,
+              w: other.colliderWidth,
+              h: other.colliderHeight,
+            };
+            return Geometry.rectIntersectsRect(sourceRect, rect)
+              ? [
+                  {
+                    id: other.name,
+                    rect,
+                    collider: { width: other.colliderWidth, height: other.colliderHeight },
+                  },
+                ]
+              : [];
+          })
+      : [];
+    const walkboxes = (this.walkbox || [])
+      .filter((walkbox) => !walkbox.disabled)
+      .map((walkbox) => ({ id: walkbox.name, mode: walkbox.mode || 'Invert' }));
+    return {
+      point: { x, y },
+      walkable: this.isWalkable(x, y, sourceEntity),
+      source: sourceEntity?.name,
+      collider,
+      sourceRect,
+      collisionCamera: cam ? { x: cam.x, y: cam.y } : null,
+      entityBlockers,
+      walkboxes,
+    };
+  }
+
   isWalkable(x: number, y: number, sourceEntity?: Entity): boolean {
     // console.log(`[Scene] isWalkable(${x}, ${y}) source=${sourceEntity?.name} Collider=${sourceEntity?.colliderWidth}x${sourceEntity?.colliderHeight}`);
 

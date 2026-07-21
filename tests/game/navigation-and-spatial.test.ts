@@ -791,8 +791,21 @@ describe('Game navigation and spatial API', () => {
 
     expect(target.entities).toContain(npc);
     expect(target.entities).toContain(badge);
+    expect(fixture.scene.entities).not.toContain(npc);
+    expect(fixture.scene.entities).not.toContain(badge);
+    expect(npc.scene).toBe(target);
     expect(target.player).not.toBe(npc);
     expect(fixture.scene.player).toBe(player);
+
+    // The player remains in `start`, but the NPC must still be transferred
+    // from its actual offscreen scene rather than from `currentScene`.
+    fixture.game.sceneManager.transferActorToScene(npc, fixture.scene.id);
+
+    expect(fixture.scene.entities).toContain(npc);
+    expect(fixture.scene.entities).toContain(badge);
+    expect(target.entities).not.toContain(npc);
+    expect(target.entities).not.toContain(badge);
+    expect(npc.scene).toBe(fixture.scene);
   });
 
   it('switchTo hydrates untitled nested surface extensions and projects them through the titled anchor', () => {

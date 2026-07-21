@@ -207,6 +207,33 @@ export const SectionComponents: React.FC = () => {
     }
   }, [hasRenderedComponents]);
 
+  React.useEffect(() => {
+    if (!o.components) return;
+    const npcComp = o.components.find((c: any) => c.type === 'NPC') as any;
+    if (!npcComp) return;
+
+    let lastMemory = npcComp.memory;
+    let lastObjectives = JSON.stringify(npcComp.objectives);
+
+    const interval = setInterval(() => {
+      let changed = false;
+      if (npcComp.memory !== lastMemory) {
+        lastMemory = npcComp.memory;
+        changed = true;
+      }
+      const currentObj = JSON.stringify(npcComp.objectives);
+      if (currentObj !== lastObjectives) {
+        lastObjectives = currentObj;
+        changed = true;
+      }
+      if (changed) {
+        incrementObjectVersion();
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [o, incrementObjectVersion]);
+
   return (
     <div
       ref={(node) => {

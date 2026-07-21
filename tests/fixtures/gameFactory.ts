@@ -96,7 +96,9 @@ export function createTestGame(): TestGameHarness {
       const targetScene = this.scenes.get(sceneId);
       if (!targetScene) return null;
 
-      const oldScene = this.currentScene;
+      // NPCs may transfer while the player remains in a different current
+      // scene, so ownership of the transferred actor is the source of truth.
+      const oldScene = actor.scene || this.currentScene;
       const removeExistingPlayer = options.removeExistingPlayer ?? !!actor.isPlayer;
       const setAsScenePlayer = options.setAsScenePlayer ?? !!actor.isPlayer;
       const transfersPlayerActor =

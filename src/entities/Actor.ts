@@ -65,6 +65,13 @@ export class Actor extends Entity {
   private plannedMoveTarget: { x: number; y: number } | null = null;
   /** Increments when a same-scene Exit relocates an in-progress movement. */
   private localTeleportRevision = 0;
+  private lastRouteBlockDiagnostic: {
+    position: { x: number; y: number };
+    attemptedPosition: { x: number; y: number };
+    target: { x: number; y: number } | null;
+    routeIndex: number;
+    routeLength: number;
+  } | null = null;
 
   isPlayer: boolean = false;
 
@@ -168,6 +175,7 @@ export class Actor extends Entity {
   }
 
   moveTo(x: number, y: number): ActorMoveResult {
+    this.lastRouteBlockDiagnostic = null;
     const target = { x, y };
     if (Math.abs(x - this.x) < 1.0 && Math.abs(y - this.y) < 1.0) {
       this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
@@ -312,6 +320,24 @@ export class Actor extends Entity {
     return this.lastMoveResult;
   }
 
+  getRouteBlockDiagnostic(): {
+    position: { x: number; y: number };
+    attemptedPosition: { x: number; y: number };
+    target: { x: number; y: number } | null;
+    routeIndex: number;
+    routeLength: number;
+  } | null {
+    if (!this.lastRouteBlockDiagnostic) return null;
+    return {
+      ...this.lastRouteBlockDiagnostic,
+      position: { ...this.lastRouteBlockDiagnostic.position },
+      attemptedPosition: { ...this.lastRouteBlockDiagnostic.attemptedPosition },
+      target: this.lastRouteBlockDiagnostic.target
+        ? { ...this.lastRouteBlockDiagnostic.target }
+        : null,
+    };
+  }
+
   previewRouteTo(x: number, y: number): { x: number; y: number }[] | null {
     const target = { x, y };
     const walkingRoute = this.planWalkingRouteTo(target);
@@ -413,6 +439,13 @@ export class Actor extends Entity {
         } else if (isWalkable && this.trySlideTowardTarget(nextX, nextY, isWalkable)) {
           if (this.overrideAnimSet) this.overrideAnimSet = null;
         } else {
+          this.lastRouteBlockDiagnostic = {
+            position: { x: this.x, y: this.y },
+            attemptedPosition: { x: nextX, y: nextY },
+            target: this.target ? { ...this.target } : null,
+            routeIndex: this.routeIndex,
+            routeLength: this.route.length,
+          };
           this.stopWithMoveResult(
             this.createMoveResult('blocked', 'route_blocked', this.target, this.route)
           );

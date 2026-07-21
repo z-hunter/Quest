@@ -446,8 +446,14 @@ export class ActorPlanExecutor {
         targetId: target.name,
         source: navigation.source,
         actorPosition: { x: actor.x, y: actor.y },
+        localTeleportRevision: actor.getLocalTeleportRevision(),
+        navigationSnapshotRevision: this.game.actorNavigation.getNavigationSnapshotRevision(
+          this.getActorScene(actor)!
+        ),
+        actorCollider: { width: actor.colliderWidth, height: actor.colliderHeight },
         approachPoint: navigation.plan.point,
         routeLength: result.route.length,
+        route: result.route.slice(0, 24),
         result: result.status,
       });
       this.startMove(actor, result);
@@ -563,13 +569,31 @@ export class ActorPlanExecutor {
           return;
         }
         this.targetMoveStates.delete(actor.name);
+        const routeBlock = result.code === 'route_blocked' ? actor.getRouteBlockDiagnostic() : null;
+        const scene = actor.scene;
         traceNavigation(this.game, 'move_completed', {
           actorId: actor.name,
           status: result.status,
           code: result.code,
           elapsedMs: startedAt === undefined ? null : Date.now() - startedAt,
           actorPosition: { x: actor.x, y: actor.y },
+          localTeleportRevision: actor.getLocalTeleportRevision(),
+          navigationSnapshotRevision: scene
+            ? this.game.actorNavigation.getNavigationSnapshotRevision(scene)
+            : null,
+          actorCollider: { width: actor.colliderWidth, height: actor.colliderHeight },
           target: result.target,
+          routeLength: result.route.length,
+          route: result.route.slice(0, 24),
+          routeBlock,
+          blockedPointDiagnostics:
+            routeBlock && scene
+              ? scene.getWalkabilityDiagnostics(
+                  routeBlock.attemptedPosition.x,
+                  routeBlock.attemptedPosition.y,
+                  actor
+                )
+              : undefined,
         });
         this.moveCompletionScheduler?.(actor.name, result);
         return;

@@ -348,7 +348,11 @@ export class SceneManager {
     targetSceneId: string,
     options: ActorSceneTransferOptions = {}
   ): Scene | null {
-    const sourceScene = this.currentScene;
+    // Autonomous NPCs can move through cached scenes while the player stays in
+    // `currentScene`. The actor's owning scene is therefore authoritative;
+    // using `currentScene` here would leave the NPC in its real source scene
+    // and treat a return to the player's scene as a local teleport.
+    const sourceScene = actor.scene ?? this.currentScene;
     const targetScene = this.ensureSceneLoaded(targetSceneId);
     if (!targetScene) {
       console.error(`Scene ${targetSceneId} not found!`);
@@ -392,6 +396,19 @@ export class SceneManager {
       (sourceScene !== targetScene ? this.findFirstEntryId(targetScene) : null);
     const positionBeforePlacement = { x: actor.x, y: actor.y };
     const entryPlacement = this.applyEntryPlacement(targetScene, actor, targetEntryId);
+    if (entryPlacement) {
+      traceNavigation(this.game, 'scene_transfer_entry_placement', {
+        actorId: actor.name,
+        sourceSceneId: sourceScene?.id ?? null,
+        destinationSceneId: targetScene.id,
+        entryId: targetEntryId,
+        positionBeforePlacement,
+        positionAfterPlacement: { x: actor.x, y: actor.y },
+        localTeleportRevision: actor.getLocalTeleportRevision(),
+        actorCollider: { width: actor.colliderWidth, height: actor.colliderHeight },
+        placementDiagnostics: targetScene.getWalkabilityDiagnostics(actor.x, actor.y, actor),
+      });
+    }
     if (sourceScene === targetScene && entryPlacement) {
       const resumed = actor.resumePlannedMovementAfterLocalTeleport();
       traceNavigation(this.game, 'local_exit_replanned', {

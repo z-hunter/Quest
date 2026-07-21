@@ -1,7 +1,6 @@
 {
   "title": "Linda",
-  "description": "You see a young woman.",
-  "details": "A girl with lush, curly red hair is dressed like an office vixen. She looks about 20 or 25 years old. A gray miniskirt accentuates the grace of her figure. Her gaze is sometimes dreamy, sometimes sly, but her glasses conceal it.",
+  "description": "A girl with lush, curly red hair is dressed like an office vixen. She looks about 20 or 25 years old. A gray miniskirt accentuates the grace of her figure. Her gaze is sometimes dreamy, sometimes sly, but her glasses conceal it.",
   "lore": "Linda wants to watch her favorite TV show -- Muppet show.",
   "objectives": ["TV is ON"],
   "takeFailure": "What do you mean?",

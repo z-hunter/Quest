@@ -3830,3 +3830,90 @@ The commit includes all current worktree changes, including user-authored Corrid
 - Perform a full vitest test run across all project suites.
 - Commit the SceneManager eviction fallback update and new test file.
 
+## Session Entry - 2026-07-20 21:07 +02:00
+
+### Session Goals
+
+- Make the standard parser `USE` command an intentional prompt rather than a generic adventure-game item-on-target action.
+- Remove generic `USE` from the Puppet Master action DSL while preserving explicitly authored commands.
+- Make `OPEN` on an accessible, non-switch semantic container report its `in` contents for both player parser and Puppet Master.
+
+### What Was Implemented
+
+- Replaced the default `use_on` command asset with a zero-argument stub that displays `How to use?`.
+- Kept authored override support: a project can replace the `use_on` asset or add a more specific parser command, including one that uses `actorUseOn`.
+- Removed generic PM `USE` from the PM plan type, runtime schema, prompt contract, normalization, executor, and SLM decoding path. PM now uses only explicitly projected authored `COMMAND` affordances such as `turn_tv_on`.
+- Added `OPEN` handling in `GameSemanticAPI`: when a titled non-switch object has an accessible nested `Inventory` on semantic relation `in`, `OPEN` returns `relation_contents` or `relation_empty` instead of escalating as a non-switch action.
+- Routed player parser `OPEN` through the shared semantic path and verified PM receives the same actor-aware outcome, including discovered item IDs and the text list of contents.
+- Updated `GDD.md`, `Autotests.md`, parser fixture behavior, and focused regression tests.
+
+### Important Architecture and Runtime Decisions
+
+- `USE` is not a generic player or NPC interaction convention in Quest. The default player command is a stub; meaningful use behavior is authored explicitly.
+- Generic PM `USE` is unsupported even if returned by a model; it is discarded/escalated. This prevents PM from inventing un-authored item interactions.
+- `OPEN` on a non-switch does not bypass access controls. It becomes a contents inspection only when existing actor-aware Inventory accessibility succeeds; Switch and Blocker gating remain authoritative.
+- The semantic `relation_contents` / `relation_empty` outcome is shared by player parser and PM so the two paths do not independently infer container state.
+
+### Parser / Mechanics / Scene / Inventory Changes
+
+- `public/text/system/commands/use_on.json` and the fallback command definitions now implement the `How to use?` stub.
+- `src/mechanics/NpcPuppetMaster.ts`, `src/mechanics/npcTypes.ts`, `src/contracts/runtimeSchemas.ts`, `src/mechanics/ActorPlanExecutor.ts`, and `src/mechanics/slm/SlmOutputAdapter.ts` no longer advertise or execute PM `USE` steps.
+- `src/systems/GameSemanticAPI.ts` now resolves accessible nested `Inventory` storage below a titled anchor for non-switch `OPEN`.
+- `src/mechanics/Parser.ts` delegates non-switch `OPEN` to the semantic runtime, retaining the previous fallback for targets without eligible storage.
+
+### Tests and Validation
+
+- `npm run typecheck` passed after both changes.
+- `tests/parser/commands.test.ts` and `tests/npc/puppet-master.test.ts` passed: 150 focused tests for the `USE` change.
+- `tests/game/semantic-api.test.ts`, `tests/integration/parser-game.test.ts`, and `tests/npc/puppet-master.test.ts` passed: 300 focused tests for the `OPEN` change.
+- `git diff --check` passed before both commits.
+- `codex-doctor -Fast` passed and confirmed repository, NotebookLM CLI, agent memory, local RAG, and Kairo readiness.
+
+### Commits Created
+
+- `0283c84` - `Make USE an explicit authored action`
+- `4e0aa3a` - `Make OPEN inspect accessible containers`
+
+### Remaining Work / Next Recommended Steps
+
+- No immediate follow-up is required for these contracts.
+- When authoring future interactions, prefer explicit parser commands and PM `COMMAND` affordances over generic verbs.
+
+### Risks, Caveats, and Non-committed Changes
+
+- `OPEN` only lists an accessible nested `Inventory` on the semantic `in` relation; a non-switch object without eligible accessible storage still follows the prior non-switch fallback.
+- The working tree was clean after commit `4e0aa3a` before this wrap-up entry. `Sessions.md` is modified by this handoff workflow and is intentionally left uncommitted unless the user requests a documentation commit.
+
+## Session Entry - 2026-07-20 23:30 Europe/Warsaw
+
+### Goals
+
+- Analyze Puppet Master logs where Linda/Rick crossed scenes and speech was not heard.
+- Fix the critical scene-local world-model bug that made Linda place the cassette in the Corridor although she had seen it on the Desk in `test_room`.
+- Preserve the nested-inventory battery transfer fix and commit the implementation.
+
+### Implemented
+
+1. `f4d6ecb fix: let PM transfer nested inventory items` added prompt/fallback guidance and nested-inventory validation/peek support so PM can plan “remove old batteries, insert new batteries” without requiring `REPLACE`.
+2. `ade9d04 fix: route NPC speech to speaker scene` made `Game.sayAsActor` and listener perception use the speaking actor’s actual scene rather than the player’s current scene. Regression coverage was added in `tests/game/observed-actor-actions.test.ts`.
+3. `6453d57 fix: keep PM world model scene-local` made `ActorWorldQuery` scene-aware and threaded the authoritative NPC scene through `NpcWorldModelBuilder` for known objects, dynamic perception, switch affordances, location resolution, exits, protected inventory, and remembered locations. Regression coverage verifies that the cassette on the `test_room` Desk is not stamped into Corridor state.
+
+### Root causes
+
+- `NpcWorldModelBuilder.build(scene=Corridor)` called `buildKnownEntities(npc)`, while `ActorWorldQuery` implicitly read `sceneManager.currentScene` (`test_room`). The cassette was therefore discovered in `test_room` and then remembered as if observed in Corridor, producing an invalid TAKE/GIVE plan and rejection.
+- Speech listener lookup likewise used the player scene, so Rick could not hear Linda after she moved to another scene.
+
+### Validation
+
+- `npm run typecheck` passed.
+- Sequential full suite passed: `npm test -- --run --maxWorkers=1 --no-file-parallelism` — 56 files, 685 tests.
+- `tests/npc/puppet-master.test.ts`: 115 passed.
+- `tests/game/observed-actor-actions.test.ts`: 6 passed.
+- `git diff --check` passed.
+- The default parallel Vitest run still has an existing fake-timer interaction in `builds PM batch context only for selected NPCs`; the isolated test and PM file pass.
+
+### Follow-up
+
+- Re-run the runtime log reproduction to confirm no cassette leakage after the scene-local fix.
+- Consider a separate follow-up for the parallel fake-timer flake.
+- This wrap-up intentionally leaves `Sessions.md` and the pre-existing user change in `public/text/objects/NPC.json` uncommitted.

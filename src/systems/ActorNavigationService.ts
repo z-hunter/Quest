@@ -95,6 +95,14 @@ export class ActorNavigationService {
     return { ...this.diagnostics, queueDepth: this.npcQueue.length, active: !!this.npcActive };
   }
 
+  getNavigationSnapshotRevision(scene: {
+    id: string;
+    walkbox: Array<{ disabled?: boolean; mode?: string; poly?: Array<{ x: number; y: number }> }>;
+    entities: SceneObject[];
+  }): number {
+    return this.getNavigationSnapshot(scene).revision;
+  }
+
   cancelNpcApproach(actor: Actor): void {
     this.npcQueue = this.npcQueue.filter((entry) => entry.actor !== actor);
   }
