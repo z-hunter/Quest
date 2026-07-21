@@ -100,13 +100,19 @@ PM возвращает **структурированный JSON** в форм�
 | `OPEN` | `targetId: string` | Открывает объект с компонентом Switch. Соблюдает правила ключей. |
 | `CLOSE` | `targetId: string` | Закрывает объект с компонентом Switch. |
 | `TAKE` | `targetId: string` | Берёт предмет в инвентарь. **Требует наличия компонента Inventory у NPC.** |
+| `GIVE` | `itemId: string`, `targetId: string` | Передаёт held или reachable предмет в инвентарь другого reachable Actor. Подтверждается только runtime-outcome `item_given`; до этого ни giver, ни recipient не могут считать передачу состоявшейся. |
 | `PUT` | `itemId: string`, `targetId?: string`, `relation?: 'in'\|'on'\|'under'\|'behind'` | Кладёт предмет на/в/под/за объект. Если `targetId` не указан, кладёт на пол. |
 | `COMMAND` | `commandId: string`, `arguments?: Record<string, string>` | Исполняет авторскую команду объекта. **Предпочтительнее `USE`**, так как исполняет authored runtime-контракт без лишней маршрутизации. |
-| `USE` | `itemId: string`, `targetId: string` | Использует предмет на объекте. Запасной вариант, если нет подходящей authored-команды. |
 | `WAIT` | `ms: number` | Ставит таймер. PM получит триггер `wait_elapsed` по истечении. Асинхронный. |
 | `THINK_STRATEGY` | `reason?: string` | Запускает внутренний стратегический LLM-анализ без реплик и физических действий. Используется, когда текущая стратегия зашла в тупик. |
-| `MEMORY_SET` | `memory: string` | Немедленно обновляет поле `memory` компонента NPC. Используется для сохранения фактов между сессиями. |
-| `OBJECTIVES_SET` | `objectives: string[]` | Немедленно заменяет список текущих целей NPC. |
+| `MEMORY_ADD` | `memory: string` | Добавляет одну подтверждённую фактическую заметку в массив `memory`. Не создаёт дубликатов. |
+| `MEMORY_REMOVE` | `memory: string` | Удаляет устаревшую или опровергнутую заметку из массива `memory`. |
+| `OBJECTIVE_ADD` | `parentId?: string`, `objective: { text, subtasks }` | Добавляет новую цель или подзадачу в дерево objectives. Если указан `parentId`, добавляется как subtask. |
+| `OBJECTIVE_UPDATE` | `objectiveId: string`, `text: string` | Обновляет текст существующей цели, не меняя её id или subtasks. |
+| `OBJECTIVE_MARK_COMPLETED` | `objectiveId: string`, `evidence?: { actionType, commandId?, ... }` | Помечает цель как завершённую. Использует двухфазный протокол подтверждения (см. «Подтверждение завершения целей»). |
+| `OBJECTIVE_REMOVE` | `objectiveId: string` | Удаляет устаревшую или нерелевантную цель из дерева. |
+| `MEMORY_SET` *(legacy)* | `memory: string` | Немедленно заменяет всё поле `memory` компонента NPC одной строкой. Сохранён для обратной совместимости; предпочитать `MEMORY_ADD`/`MEMORY_REMOVE`. |
+| `OBJECTIVES_SET` *(legacy)* | `objectives: string[]` | Немедленно заменяет весь список целей NPC плоским массивом строк. Сохранён для обратной совместимости; предпочитать структурированные `OBJECTIVE_*` шаги. |
 
 ### Выполнение плана
 
@@ -145,25 +151,43 @@ PM возвращает **структурированный JSON** в форм�
 
 ## Цели NPC (Objectives)
 
-Поле `objectives` хранится в компоненте NPC как `string[]`. Это активный список текущих задач персонажа.
+Поле `objectives` хранится в компоненте NPC. Текущий формат — **дерево** `NpcObjective[]`, где каждый объект имеет поля `{ id, text, subtasks: NpcObjective[], completed?, pendingConfirmation? }`. Runtime присваивает уникальный `id` каждому узлу при материализации. Legacy-формат `string[]` по-прежнему читается и преобразуется в одноуровневое дерево при загрузке.
 
 **Инициализация:** при первом доступе к целям, если `objectives` компонента NPC отсутствует или пуст, PM копирует начальные значения из Text Assets объекта (поле `objectives`) в компонент. Вместе с ними компонент сохраняет `objectivesTARevision` — детерминированную ревизию списка целей из TA.
 
 В динамический PM-промпт поле `objectives` попадает только из runtime-свойств компонента NPC. Значение из TA служит исключительно одноразовым источником начальных целей и больше напрямую при сборке промпта не читается.
 
-**Обновление в runtime:** PM может в любой момент заменить цели через шаг `OBJECTIVES_SET`. Обновлённые цели сохраняются вместе с игрой и становятся новой «точкой отсчёта». Пустой массив `OBJECTIVES_SET: []` означает намеренно очищенный список целей: вместе с ним сохраняется текущая `objectivesTARevision`, поэтому та же версия TA не заполняет список повторно. Если при пустом runtime-списке поле `objectives` в TA изменилось и его ревизия стала другой, новые цели снова копируются в компонент. Ревизия содержимого используется вместо файлового времени, чтобы контракт одинаково работал в браузере, Vite/Tauri и после Git/deploy операций.
+**Обновление в runtime:** PM управляет целями через структурированные DSL-шаги: `OBJECTIVE_ADD` (создание новой цели или subtask), `OBJECTIVE_UPDATE` (изменение текста), `OBJECTIVE_MARK_COMPLETED` (пометка завершения) и `OBJECTIVE_REMOVE` (удаление). Legacy `OBJECTIVES_SET` заменяет всё дерево плоским `string[]` и сохранён для обратной совместимости.
+
+### Подтверждение завершения целей
+
+`OBJECTIVE_MARK_COMPLETED` использует **двухфазный протокол**:
+
+1. Первый вызов `OBJECTIVE_MARK_COMPLETED` без подтверждённого runtime-evidence ставит цель в состояние `[PENDING CONFIRMATION]`. На следующем PM-turn модель видит эту пометку.
+2. Для подтверждения модель повторяет `OBJECTIVE_MARK_COMPLETED` с полем `evidence: { actionType, commandId?, targetId?, ... }`, совпадающим с результатом из текущего trigger. Если evidence совпадает, цель помечается `completed` и появляется как `[JUST COMPLETED]` на один PM-turn.
+3. Повторный маркер без matching evidence отклоняется, и `pendingConfirmation` сбрасывается.
+4. `[JUST COMPLETED]` — информационная пометка; после одного PM-turn цель автоматически удаляется из дерева.
+
+Этот протокол предотвращает преждевременные заявления LLM о завершении задач, которые runtime ещё не подтвердил.
+
+Обновлённые цели сохраняются вместе с игрой. Пустое дерево с текущей `objectivesTARevision` означает намеренно очищенный список; та же версия TA не заполняет его повторно.
 
 ---
 
 ## Память NPC (NPC Memory)
 
-Это персистентная строка заметок NPC (`memory: string` в компоненте NPC), куда PM может заносить самые значимые фразы, факты, сведения, которые NPC необходимо помнить между сессиями.
+Это персистентный массив фактических заметок NPC (`memory: string[]` в компоненте NPC), куда PM может заносить самые значимые факты, сведения и подтверждённые результаты, которые NPC необходимо помнить между сессиями. Каждая заметка — отдельная строка. Память **не** является to-do списком: для задач используются `objectives`.
 
 Без этой области NPC помнили бы лишь то, что есть в логе сцены (до 10 минут), и забывали бы всё при переходе в другую локацию. NPC Memory сохраняется вместе с игрой.
 
-Обновляется через шаг `MEMORY_SET` или через поле `memory` в корне DSL-плана.
+**Обновление в runtime:** PM управляет памятью через `MEMORY_ADD` (добавить заметку, без дубликатов) и `MEMORY_REMOVE` (удалить устаревшую заметку). Legacy `MEMORY_SET` заменяет всё поле одной строкой и сохранён для обратной совместимости.
+
+### Transient Memory
+
+Помимо персистентной `memory`, NPC-компонент может содержать `transientMemory: string[]` — массив одноразовых runtime-заметок (например, `[JUST ARRIVED]` после перехода через Exit). Transient memory попадает в PM-промпт, но автоматически удаляется после одного PM-turn. Она не сохраняется в save и не управляется шагами DSL.
 
 ---
+
 
 ## Обдумать стратегию (`THINK_STRATEGY`)
 
@@ -282,10 +306,11 @@ PM не хранит потенциально устаревающий authored 
 | `plan_continued`   | Автоматический триггер защиты от зависания (см. ниже)                                                                             |
 | `plan_interrupted` | Runtime остановил multi-step plan по `interruptOn` и передаёт PM причину, последний outcome, выполненные шаги и оставшийся хвост. |
 | `plan_completed`   | Multi-step plan завершился без interrupt; PM получает список outcomes, а plan-level `memory` уже применена.                       |
+| `plan_rejected_missing_items` | Предыдущий план ссылался на предметы, отсутствующие в доступном контексте NPC. PM передаёт `missingItems: [{ stepType, itemId }]` и даёт модели одну попытку коррекции. SceneLog cursor при этом не продвигается, чтобы исходные события остались в промпте. |
 
 ### Динамическое батчирование
 
-Несколько почти одновременных событий объединяются в один PM-вызов за счёт дебаунсинга: система ждёт `150 мс` (`PM_BATCH_DEBOUNCE_MS`) перед отправкой запроса к LLM, собирая все триггеры для текущей сцены в один batch. Это снижает количество LLM-запросов при активном взаимодействии.
+Несколько почти одновременных событий объединяются в один PM-вызов за счёт дебаунсинга: система ждёт `400 мс` в production и `150 мс` в тестах (`PM_BATCH_DEBOUNCE_MS`) перед отправкой запроса к LLM, собирая все триггеры для текущей сцены в один batch. Это снижает количество LLM-запросов при активном взаимодействии.
 
 ---
 
@@ -400,23 +425,103 @@ Subscene для NPC не активируется визуально — это 
 
 ---
 
+## Протокол передачи предметов (GIVE)
+
+Шаг `GIVE` переносит предмет из inventory или reachable scope одного Actor в inventory другого reachable Actor. Передача подтверждается только runtime-outcome `item_given`. До получения этого outcome ни giver, ни recipient не могут:
+
+- Утверждать, что предмет передан/получен, в `SAY`, `MEMORY_ADD`, или objectives;
+- Строить следующие шаги плана, зависящие от владения переданным предметом.
+
+Успешный `item_given` публикуется в SceneLog и обновляет inventory обоих Actor.
+
+### Предотвращение преждевременных заявлений о передаче
+
+Фильтр `removePrematureGiveClaims` вырезает из `SAY` и `MEMORY_ADD` шагов текущего плана фразы, утверждающие передачу, если в этом же плане не было подтверждённого `item_given`.
+
+### Разрешение циклических обменов (GIVE Deadlock)
+
+Если несколько NPC одновременно планируют `GIVE` друг другу (A→B, B→A), runtime обнаруживает цикл через анализ сильно связных компонентов (SCC) в графе зависимостей между планами. Циклические планы откладываются: один из них выполняется первым, остальные ждут `item_given` и получают повторный PM-вызов.
+
+---
+
+## Pipeline постобработки планов
+
+После нормализации LLM-ответа в `NpcPlan[]`, PM пропускает планы через 9-ступенчатый pipeline фильтрации. Каждый фильтр решает конкретную проблему надёжности:
+
+| # | Фильтр | Что делает |
+|:---|:---|:---|
+| 1 | `expandImplicitApproaches` | Если `TAKE` ссылается на предмет с `approach: route_available`, автоматически вставляет `MOVE_TO` перед ним |
+| 2 | `validatePlanItems` | Проверяет, что все item/entity references в плане доступны NPC. При провале — corrective retry (макс. 1 раз) |
+| 3 | `removeUnavailableCommandSteps` | Вырезает `COMMAND` шаги, ссылающиеся на команды, которые не listed или не `executable` |
+| 4 | `removeUnsupportedDiscoveryClaims` | Вырезает из `SAY`/`MEMORY_ADD` фразы типа «я нашёл», «вот оно», если в плане не было успешного discovery |
+| 5 | `removeRepeatedNoProgressSteps` | После terminal no-progress (`repeated_without_progress`, `pattern_loop_sleep`) вырезает повторение той же физической сигнатуры |
+| 6 | `removePrematureStrategySteps` | Вырезает `THINK_STRATEGY`, если `repeatCount < 2` и нет terminal no-progress триггера |
+| 7 | `removePrematureGiveClaims` | Вырезает из `SAY`/`MEMORY_ADD` заявления о передаче предметов без подтверждённого `item_given` |
+| 8 | `deferPlansDependingOnUnconfirmedGive` | Откладывает планы, зависящие от незавершённого GIVE в другом плане (SCC resolution) |
+| 9 | `validateObjectiveCompletionConfirmations` | Реализует двухфазный протокол подтверждения `OBJECTIVE_MARK_COMPLETED` |
+
+Pipeline применяется идентично для планов из SLM-инференса и LLM-ответа.
+
+---
+
+## SLM Hybrid Router
+
+PM поддерживает **гибридный маршрут**: перед обращением к cloud LLM для одиночного NPC пробуется быстрый локальный инференс через SLM (Small Language Model), работающий как ONNX-модель в WebAssembly.
+
+### Архитектура
+
+| Файл | Роль |
+|:---|:---|
+| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-runtime: загрузка модели, SHA-256 валидация, инференс |
+| `src/mechanics/slm/SlmInputAdapter.ts` | Кодирование NPC-контекста в фиксированный vocabulary |
+| `src/mechanics/slm/SlmOutputAdapter.ts` | Декодирование output tensor в `NpcPlan[]` или escalation signal |
+| `src/mechanics/slm/SlmVocabulary.ts` | Фиксированный vocabulary с version hash |
+| `src/mechanics/slm/ShadowLogger.ts` | Теневое логирование LLM-планов для обучения SLM |
+
+### Маршрут решения
+
+```
+NPC Context → SLM.infer() → SlmDecodeResult
+  ├─ kind: 'success' → normalizeResponse → pipeline → execute
+  └─ kind: 'escalate' → cloud LLM fallback
+```
+
+SLM escalates к LLM при: превышении input capacity, неизвестных dynamic entities, или если decoded план не проходит нормализацию. Shadow Logger записывает каждый LLM-принятый план для последующего offline-обучения SLM.
+
+### Совместимость
+
+SLM-модель валидируется через compatibility manifest (`*.manifest.json`) с контролем:
+- `schemaVersion`, `vocabularyVersion`, `vocabularySha256` — совместимость vocabulary
+- `modelSha256` — целостность модели
+- Tensor shapes и dtypes — contract input/output
+
+---
+
 ## Ключевые файлы системы
 
 | Файл                                    | Роль                                                                                                      |
 | :-------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
-| `src/mechanics/NpcPuppetMaster.ts`      | Главный оркестратор: батчинг, rate limiting, триггеры, вызов LLM, постобработка планов.                   |
+| `src/mechanics/NpcPuppetMaster.ts`      | Главный оркестратор: батчинг, rate limiting, триггеры, SLM/LLM routing, постобработка планов, continuations. |
 | `src/mechanics/ActorPlanExecutor.ts`    | Выполнение DSL-шагов плана, маршрутизация к GameSemanticAPI.                                              |
 | `src/mechanics/NpcWorldModelBuilder.ts` | Сборка NpcWorldModel: список entities, актеров, событий для каждого NPC.                                  |
+| `src/mechanics/ActorCommandExecutor.ts` | Исполнение authored command affordances. Проверяет reachability, availability, held-state.                 |
 | `src/mechanics/npcTypes.ts`             | TypeScript-типы: `NpcPlanStep`, `NpcPlan`, `NpcActorContext`, `NpcWorldModel`, `NpcPlanExecutionOutcome`. |
+| `src/mechanics/npcState.ts`             | Утилиты для работы с objectives tree и memory array.                                                       |
+| `src/mechanics/slm/SlmInferenceEngine.ts` | ONNX-инференс для SLM hybrid router.                                                                    |
+| `src/mechanics/slm/ShadowLogger.ts`     | Теневое логирование LLM-планов для обучения SLM.                                                          |
 | `src/scene/SceneLog.ts`                 | Лог событий сцены, индивидуальные NPC-курсоры, TTL-прунинг.                                               |
 | `src/systems/ComponentSystem.ts`        | Структура компонента NPC (поля `memory`, `objectives`, known entities и др.).                              |
 | `src/systems/ActorWorldQuery.ts`        | Построение восприятия актёра: `perceptionRadius`, видимость, known objects.                               |
 | `src/core/Game.ts`                      | `sayAsPlayer`, `sayAsActor`, `emitActorAction` — точки входа в систему логирования и вызова PM.           |
+| `src/mechanics/llm/ILlmProvider.ts`     | Интерфейс LLM-провайдера: `sendMessageStream`, `isAvailable`, static/dynamic message split.               |
 | `public/text/system/npc-pm-system.md`   | Системный промпт PM: инструкции для LLM по поведению NPC и использованию DSL.                             |
 
 ## Тесты
 
 Основное тестовое покрытие системы:
 
-- `tests/npc/puppet-master.test.ts` — unit-тесты PM: батчинг, rate limiting, plan execution, discovery claim filter.
+- `tests/npc/puppet-master.test.ts` — unit-тесты PM: батчинг, rate limiting, plan execution, discovery claim filter, objective confirmation, GIVE protocol, pattern watchdog.
+- `tests/npc/actor-plan-executor.test.ts` — unit-тесты исполнителя DSL-шагов.
+- `tests/npc/npc-world-model-builder.test.ts` — unit-тесты сборки мировой модели.
+- `tests/npc/slm-*.test.ts` — тесты SLM: input/output adapters, inference engine, shadow logger.
 - `tests/scene/scene-log.test.ts` — тесты SceneLog: курсоры, TTL, фильтрация событий по NPC.
