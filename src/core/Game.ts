@@ -683,7 +683,12 @@ export class Game implements IGame {
     if (!scene || !speech) return;
     const displayName = this.getActorDialogueName(actor);
     const knownByNpcIds = this.npcWorldModelBuilder.getNpcListenerIds(scene, actor.name);
-    this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    // Dialogue is local to a scene. Autonomous NPCs can speak in cached
+    // offscreen scenes, but their lines must not appear in the player's
+    // console until an explicit cross-scene communication mechanic exists.
+    if (scene === this.sceneManager.currentScene) {
+      this.console.log(`${displayName}: ${speech}`, 'dialogue');
+    }
     scene.sceneLog.appendSpeech({
       actorId: actor.name,
       displayName,
@@ -734,6 +739,7 @@ export class Game implements IGame {
   }
 
   private getActorScene(actor: Actor): ReturnType<typeof this.sceneManager.scenes.get> | null {
+    if (actor.scene) return actor.scene;
     const current = this.sceneManager.currentScene;
     if (current?.getObjectByName(actor.name) === actor) return current;
     return (

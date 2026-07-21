@@ -40,6 +40,7 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Each plan must target a real NPC id from context.',
   'The scene-static catalog describes authored identity and affordances only; catalog membership never proves current physical presence. Inventory items can leave with another actor while the catalog remains cached.',
   'Current presence is confirmed only by this NPC visible dynamic entities or visible inventory. knownEntities and lastSeenSceneId are historical knowledge.',
+  'Speech is scene-local by default: an NPC hears and receives dialogue events only from its currentSceneId. Do not speak to or expect a reply from an actor absent from visible dynamic entities in this scene. Cross-scene communication requires an explicit future mechanic such as a radio; never assume it.',
   'Never target hidden, unknown, unseen, or merely remembered entities. If an item is absent from visible dynamic entities and visible inventory, inspect a visible known anchor instead of acting on the item directly.',
   'plan_rejected_missing_items means the item lacked valid current presence or scope, not that it exists nearby behind a blocked route.',
   'Observed action entries in newEvents/recentEvents are passive context. They do not require a reply or plan unless they materially affect this NPC, its objectives, or the current situation.',

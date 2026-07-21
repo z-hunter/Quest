@@ -267,6 +267,7 @@ describe('NpcPuppetMaster', () => {
 
     const system = JSON.stringify(provider.calls[0].system);
     expect(system).toContain('direct player speech received by a visible listening NPC');
+    expect(system).toContain('Speech is scene-local by default');
     expect(system).toContain(
       'Never say in reasoning that the NPC should answer and then return no plan.'
     );

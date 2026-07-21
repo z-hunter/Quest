@@ -166,6 +166,10 @@ export class NpcWorldModelBuilder {
   getNpcListenerIds(scene: Scene, actorId?: string | null): string[] {
     const source = actorId ? scene.getObjectByName(actorId) : null;
     if (source instanceof Actor) {
+      // Speech is scene-local by default. Future radio-like mechanics can
+      // extend this explicitly instead of accidentally leaking dialogue
+      // through a stale scene reference.
+      if (source.scene !== scene || !scene.entities.includes(source)) return [];
       return this.game.actorWorld.getActorListeners(source, scene).map((npc) => npc.name);
     }
     return this.getNpcActors(scene).map((npc) => npc.name);

@@ -29,7 +29,8 @@ describe('observed Actor actions', () => {
     const scheduleScene = vi.fn().mockResolvedValue(undefined);
     (fixture.game as any).npcWorldModelBuilder = new NpcWorldModelBuilder(fixture.game);
     (fixture.game as any).npcPuppetMaster = { scheduleScene };
-    (fixture.game as any).console = { log: vi.fn() };
+    const log = vi.fn();
+    (fixture.game as any).console = { log };
 
     await Game.prototype.sayAsActor.call(fixture.game, linda, 'Rick, can you help me?', {
       triggerPuppetMaster: true,
@@ -46,6 +47,7 @@ describe('observed Actor actions', () => {
     expect(corridor.sceneLog.entries[0].knownByActorIds).not.toContain(playerSceneNpc.name);
     expect(scheduleScene).toHaveBeenCalledTimes(1);
     expect(scheduleScene).toHaveBeenCalledWith(corridor);
+    expect(log).not.toHaveBeenCalled();
   });
 
   it('records an action for every nearby Actor without waking Puppet Master', () => {
