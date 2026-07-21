@@ -23,7 +23,13 @@ import type {
   NpcWorldModel,
 } from './npcTypes';
 import { assertNpcPlan } from '../contracts/runtimeSchemas';
-import { normalizeNpcObjectiveDraft, normalizeNpcObjectives, type NpcObjective } from './npcState';
+import {
+  findNpcObjective,
+  normalizeNpcObjectiveDraft,
+  normalizeNpcObjectives,
+  type NpcObjective,
+} from './npcState';
+import type { NpcObjectiveCompletionEvidence } from './npcTypes';
 
 const SYSTEM_PROMPT_URL = '/text/system/npc-pm-system.md';
 const FALLBACK_SYSTEM_PROMPT = [
@@ -55,8 +61,9 @@ const FALLBACK_SYSTEM_PROMPT = [
   'Do not claim actions succeeded before a successful action_completed result.',
   'actionHistory is authoritative runtime history: do not repeat targets marked inspected with nothing new found unless conditions changed.',
   'Before speaking or planning, correct memory to match authoritative actionHistory when they conflict.',
-  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
+  'CURRENT OBJECTIVES and MEMORY are your durable working state for the NEXT PM turn. On EVERY call, silently audit every objective (including every subtask) and every memory note against current context and authoritative actionHistory before choosing the plan. This is primarily for your own benefit: stale memories and obsolete, completed, or misleading objectives make your next plans worse and obstruct goal completion. Make the necessary MEMORY_REMOVE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE, OBJECTIVE_UPDATE, OBJECTIVE_ADD, or MEMORY_ADD operations in the same plan when the audit finds a change; do not emit no-op cognition steps when nothing needs changing. Whenever the NPC commits to future work, whether for itself or voluntarily for another NPC, add a concrete OBJECTIVE_ADD in that same plan unless an active objective already covers the commitment; never leave it only in dialogue, actionHistory, or memory. Add concrete new prerequisites, update changed plans, remove obsolete objectives and stale memory, and use OBJECTIVE_MARK_COMPLETED immediately after runtime-confirmed success. OBJECTIVE_MARK_COMPLETED only records an already completed task; it does not perform the task. An unconfirmed marker becomes [PENDING CONFIRMATION] for the next PM turn; repeat it only after checking runtime confirmation, otherwise continue the still-active objective. A marked objective appears once as [JUST COMPLETED] next turn and is then removed automatically, so do not write [COMPLETED] into objective text. A [JUST ARRIVED] memory note is temporary runtime context and will be removed after this turn. Always retain the parent goal until runtime evidence confirms completion or impossibility, and add an immediate concrete subgoal before dependent physical steps. MEMORY is factual only: add confirmed facts and remove stale facts.',
   'When you add a blocker objective, MUST include the first concrete non-state step toward it in the same plan (for example OPEN, EXAMINE, MOVE_TO, WAIT, or COMMAND). Do not return only OBJECTIVE_ADD plus SAY.',
+  'To confirm an objective shown as [PENDING CONFIRMATION], repeat OBJECTIVE_MARK_COMPLETED with evidence copied exactly from a successful current action result, including actionType and a matching commandId, itemId, targetId, or code. Without that evidence the objective remains active.',
   'Prefer a well-structured multi-step plan over a short plan when the steps are one coherent procedure and runtime interruptOn conditions can stop the chain to save LLM calls.',
   'Use short plans when the next step depends on an unknown result that cannot be expressed with interruptOn.',
   'inventory.available false means the Actor has no inventory, not that it is full.',
@@ -587,7 +594,7 @@ export class NpcPuppetMaster {
         if (normalized.valid) {
           const expandedPlans = this.expandImplicitApproaches(normalized.plans, worldModel);
           const itemValidation = this.validatePlanItems(expandedPlans, worldModel, trigger);
-          const acceptedPlans = this.deferPlansDependingOnUnconfirmedGive(
+          const filteredPlans = this.deferPlansDependingOnUnconfirmedGive(
             this.removePrematureGiveClaims(
               this.removePrematureStrategySteps(
                 this.removeRepeatedNoProgressSteps(itemValidation.plans, trigger),
@@ -595,14 +602,24 @@ export class NpcPuppetMaster {
               )
             )
           );
+          const completionValidation = this.validateObjectiveCompletionConfirmations(
+            filteredPlans,
+            worldModel,
+            trigger
+          );
+          const acceptedPlans = completionValidation.plans;
           if (acceptedPlans.length > 0) {
+            this.settlePendingObjectiveConfirmations(worldModel, acceptedPlans);
             this.traceWake('slm_handled_routine', {
               sceneId: worldModel.scene.id,
               npcId: npcContext.id,
               steps: acceptedPlans[0].steps.length,
             });
             for (const plan of acceptedPlans) {
-              const outcomes = this.executePlanAndTrackContinuation(plan);
+              const outcomes = this.executePlanAndTrackContinuation(
+                plan,
+                completionValidation.confirmedObjectiveIdsByNpc.get(plan.npcId)
+              );
               const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
               if (!hasScheduled) {
                 ShadowLogger.commit(
@@ -619,6 +636,11 @@ export class NpcPuppetMaster {
                   : trigger;
               this.maybeScheduleContinuation([plan], planTrigger, hasScheduled);
             }
+            this.scheduleObjectiveConfirmationRetries(
+              scene,
+              completionValidation.rejectedNpcIds,
+              acceptedPlans
+            );
             return acceptedPlans;
           }
         }
@@ -670,7 +692,7 @@ export class NpcPuppetMaster {
       ? this.validatePlanItems(expandedPlans, worldModel, trigger)
       : { plans: normalized.plans, rejectedPlans: [] };
     const itemValidatedPlans = itemValidation.plans;
-    const acceptedPlans = normalized.valid
+    const filteredPlans = normalized.valid
       ? this.deferPlansDependingOnUnconfirmedGive(
           this.removePrematureGiveClaims(
             this.removePrematureStrategySteps(
@@ -686,6 +708,12 @@ export class NpcPuppetMaster {
           )
         )
       : itemValidatedPlans;
+    const completionValidation = this.validateObjectiveCompletionConfirmations(
+      filteredPlans,
+      worldModel,
+      trigger
+    );
+    const acceptedPlans = completionValidation.plans;
     acceptedPlans.forEach((plan, index) => assertNpcPlan(plan, `$.plans[${index}]`));
     this.lastDebugInfo = {
       matched: acceptedPlans.length > 0,
@@ -711,6 +739,11 @@ export class NpcPuppetMaster {
 
     if (!normalized.valid) return [];
 
+    // A pending marker is a one-turn claim. Keep it visible for the next PM
+    // call only when the model repeats the marker; otherwise restore the
+    // objective to active state so it can be planned again.
+    this.settlePendingObjectiveConfirmations(worldModel, acceptedPlans);
+
     // Completed objectives were presented in this request as JUST COMPLETED.
     // Retire them only after that one PM turn, never by mutating their text.
     this.pruneObjectivesSeenAsCompleted(scene, worldModel);
@@ -729,7 +762,10 @@ export class NpcPuppetMaster {
     }
 
     for (const plan of acceptedPlans) {
-      const outcomes = this.executePlanAndTrackContinuation(plan);
+      const outcomes = this.executePlanAndTrackContinuation(
+        plan,
+        completionValidation.confirmedObjectiveIdsByNpc.get(plan.npcId)
+      );
       const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
       if (!hasScheduled) {
         ShadowLogger.commit(
@@ -750,10 +786,18 @@ export class NpcPuppetMaster {
         outcomes.some((outcome) => outcome.status === 'scheduled')
       );
     }
+    this.scheduleObjectiveConfirmationRetries(
+      scene,
+      completionValidation.rejectedNpcIds,
+      acceptedPlans
+    );
     return acceptedPlans;
   }
 
-  private executePlanAndTrackContinuation(plan: NpcPlan): NpcPlanExecutionOutcome[] {
+  private executePlanAndTrackContinuation(
+    plan: NpcPlan,
+    confirmedObjectiveIds?: ReadonlySet<string>
+  ): NpcPlanExecutionOutcome[] {
     const scene = this.getNpcScene(plan.npcId);
     if (scene) {
       const stateKey = this.getNpcStateKey(scene, plan.npcId);
@@ -769,7 +813,7 @@ export class NpcPuppetMaster {
       }
     }
     const observableItemIds = scene ? this.getNpcObservableItemIds(scene, plan.npcId) : [];
-    const outcomes = this.executor.executePlan(plan);
+    const outcomes = this.executor.executePlan(plan, confirmedObjectiveIds);
     if (scene) {
       if (this.hasConcretePlanAction(plan)) {
         this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, plan.npcId));
@@ -2432,7 +2476,7 @@ export class NpcPuppetMaster {
           '2. "steps.type" MUST be one of: SAY, MOVE_TO, TRAVERSE_EXIT, LOOK, EXAMINE, OPEN, CLOSE, TAKE, GIVE, PUT, COMMAND, WAIT, THINK_STRATEGY, MEMORY_ADD, MEMORY_REMOVE, OBJECTIVE_ADD, OBJECTIVE_UPDATE, OBJECTIVE_MARK_COMPLETED, OBJECTIVE_REMOVE.',
           '3. To run an entity command like "turn_tv_on", use: {"type":"COMMAND","commandId":"turn_tv_on","arguments":{}}.',
           '4. currentSceneId is the authoritative current location for each NPC. Memory, actionHistory, and prior TRAVERSE_EXIT results are historical and must not override currentSceneId.',
-          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
+          '5. CURRENT OBJECTIVES persist across scenes. Keep the parent goal and, after a confirmed blocker, use OBJECTIVE_ADD before dependent actions to add the concrete next prerequisite and its dependency chain. Use OBJECTIVE_MARK_COMPLETED only to record a task that runtime already confirmed; it never performs that task. To confirm a [PENDING CONFIRMATION] objective, repeat its marker with evidence copied exactly from a successful current trigger, for example {"type":"OBJECTIVE_MARK_COMPLETED","objectiveId":"...","evidence":{"actionType":"COMMAND","commandId":"turn_tv_on"}}. A repeated marker without matching current runtime evidence is rejected and the objective remains active. A [JUST COMPLETED] objective and [JUST ARRIVED] memory entry are informational runtime context and will be removed after this turn. Use OBJECTIVE_REMOVE for obsolete objectives. MEMORY_ADD/MEMORY_REMOVE maintain factual memory.',
           '6. Static catalog membership is not current presence. Target only this NPC dynamic entities or inventory; plan_rejected_missing_items means the item is not currently available, not merely route-blocked.',
           '7. Any newly accepted, promised, volunteered, or self-chosen future work MUST be represented by OBJECTIVE_ADD in the same plan before dependent action or speech, unless an active objective already covers it. This includes work undertaken to help another NPC.',
           `Return strictly valid JSON: {"kind":"pm_response","plans":[{"npcId":"${firstNpcId}","steps":[...]}]}`,
@@ -2506,9 +2550,188 @@ export class NpcPuppetMaster {
   private getPromptObjectives(objectives: NpcObjective[] | undefined): NpcObjective[] {
     return (objectives || []).map((objective) => ({
       id: objective.id,
-      text: objective.completed ? `${objective.text} [JUST COMPLETED]` : objective.text,
+      text: objective.completed
+        ? `${objective.text} [JUST COMPLETED]`
+        : objective.pendingConfirmation
+          ? `${objective.text} [PENDING CONFIRMATION]`
+          : objective.text,
       subtasks: this.getPromptObjectives(objective.subtasks),
     }));
+  }
+
+  private validateObjectiveCompletionConfirmations(
+    plans: NpcPlan[],
+    worldModel: NpcWorldModel,
+    trigger?: NpcIndividualTrigger | NpcBatchTrigger
+  ): {
+    plans: NpcPlan[];
+    confirmedObjectiveIdsByNpc: Map<string, Set<string>>;
+    rejectedNpcIds: Set<string>;
+  } {
+    const confirmedObjectiveIdsByNpc = new Map<string, Set<string>>();
+    const rejectedNpcIds = new Set<string>();
+    const objectivesByNpc = new Map(
+      worldModel.npcs.map((npc) => [npc.id, normalizeNpcObjectives(npc.objectives)] as const)
+    );
+
+    const validatedPlans = plans
+      .map((plan) => {
+        const objectives = objectivesByNpc.get(plan.npcId) || [];
+        const seenMarkers = new Set<string>();
+        const steps = plan.steps.filter((step) => {
+          if (step.type !== 'OBJECTIVE_MARK_COMPLETED') return true;
+          if (seenMarkers.has(step.objectiveId)) {
+            rejectedNpcIds.add(plan.npcId);
+            return false;
+          }
+          seenMarkers.add(step.objectiveId);
+
+          const objective = findNpcObjective(objectives, step.objectiveId);
+          // A JUST COMPLETED objective is still shown for one PM turn, so the
+          // model can easily repeat its marker. That repetition is a harmless
+          // no-op and must not fail the whole plan before its physical tail.
+          if (objective?.completed) {
+            this.traceWake('objective_completion_already_recorded', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+            });
+            return false;
+          }
+          // Missing IDs remain in the plan so the executor can produce its
+          // normal deterministic failure outcome.
+          if (!objective || !objective.pendingConfirmation) return true;
+          if (
+            !step.evidence ||
+            !this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
+          ) {
+            rejectedNpcIds.add(plan.npcId);
+            this.traceWake('objective_completion_unconfirmed', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+              evidence: step.evidence,
+            });
+            return false;
+          }
+          const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
+          confirmed.add(step.objectiveId);
+          confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
+          return true;
+        });
+        return steps.length ? { ...plan, steps } : null;
+      })
+      .filter((plan): plan is NpcPlan => !!plan);
+
+    return { plans: validatedPlans, confirmedObjectiveIdsByNpc, rejectedNpcIds };
+  }
+
+  private matchesCurrentCompletionEvidence(
+    trigger: NpcIndividualTrigger | NpcBatchTrigger | undefined,
+    npcId: string,
+    evidence: NpcObjectiveCompletionEvidence
+  ): boolean {
+    const hasIdentity = !!(
+      evidence.code ||
+      evidence.targetId ||
+      evidence.itemId ||
+      evidence.commandId
+    );
+    if (!hasIdentity) return false;
+    const triggers =
+      trigger?.type === 'batch' ? trigger.triggersByNpc[npcId] || [] : trigger ? [trigger] : [];
+    return triggers.some((candidate) => {
+      const result =
+        candidate.type === 'action_completed' || candidate.type === 'plan_interrupted'
+          ? candidate.result
+          : null;
+      if (!result || result.status !== 'ok' || result.actionType !== evidence.actionType)
+        return false;
+      return (
+        (!evidence.code || result.code === evidence.code) &&
+        (!evidence.targetId || result.targetId === evidence.targetId) &&
+        (!evidence.itemId || result.itemId === evidence.itemId) &&
+        (!evidence.commandId || result.commandId === evidence.commandId)
+      );
+    });
+  }
+
+  private scheduleObjectiveConfirmationRetries(
+    scene: Scene,
+    rejectedNpcIds: Set<string>,
+    acceptedPlans: NpcPlan[]
+  ): void {
+    for (const npcId of rejectedNpcIds) {
+      const replacement = acceptedPlans.find((plan) => plan.npcId === npcId);
+      // A retained plan is handled by the normal continuation policy below.
+      // This fallback exists only for a response consisting solely of rejected
+      // completion markers, which would otherwise leave an active objective idle.
+      if (replacement) continue;
+      const stateKey = this.getNpcStateKey(scene, npcId);
+      const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
+      if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) continue;
+      this.stateOnlyContinuationCounts.set(stateKey, count + 1);
+      const generation = this.haltGenerationId;
+      globalThis.setTimeout(() => {
+        if (generation !== this.haltGenerationId || this.getNpcScene(npcId) !== scene) return;
+        this.scheduleNpc(scene, npcId, {
+          type: 'plan_continued',
+          reason: 'objective_completion_unconfirmed',
+        });
+      }, 0);
+    }
+  }
+
+  private settlePendingObjectiveConfirmations(
+    worldModel: NpcWorldModel,
+    acceptedPlans: NpcPlan[]
+  ): void {
+    const markedByNpc = new Map<string, Set<string>>();
+    for (const plan of acceptedPlans) {
+      const marked = new Set(
+        plan.steps
+          .filter((step) => step.type === 'OBJECTIVE_MARK_COMPLETED')
+          .map((step) => step.objectiveId)
+      );
+      if (marked.size) markedByNpc.set(plan.npcId, marked);
+    }
+
+    for (const npc of worldModel.npcs) {
+      const actor = this.getNpcScene(npc.id)?.getObjectByName(npc.id);
+      if (!(actor instanceof Actor)) continue;
+      const component = actor.components.find((candidate: any) => candidate?.type === 'NPC') as
+        | {
+            objectives?: NpcObjective[] | string[];
+            objectivesInitializedFromTA?: boolean;
+            objectivesTARevision?: string;
+          }
+        | undefined;
+      if (!component?.objectives) continue;
+      const marked = markedByNpc.get(npc.id) || new Set<string>();
+      let changed = false;
+      const clearUnconfirmed = (objectives: NpcObjective[]): void => {
+        for (const objective of objectives) {
+          if (objective.pendingConfirmation && !marked.has(objective.id)) {
+            delete objective.pendingConfirmation;
+            changed = true;
+          }
+          clearUnconfirmed(objective.subtasks);
+        }
+      };
+      const objectives = normalizeNpcObjectives(component.objectives);
+      clearUnconfirmed(objectives);
+      if (changed) {
+        component.objectives = objectives;
+        component.objectivesInitializedFromTA = true;
+        const textAssets = this.game.textAssets as any;
+        component.objectivesTARevision =
+          typeof textAssets.getResolvedNpcObjectivesRevision === 'function'
+            ? textAssets.getResolvedNpcObjectivesRevision(actor)
+            : typeof textAssets.getResolvedObjectListRevision === 'function'
+              ? textAssets.getResolvedObjectListRevision(actor, 'objectives')
+              : JSON.stringify([]);
+      }
+    }
   }
 
   private getPromptMemory(
@@ -3708,7 +3931,34 @@ export class NpcPuppetMaster {
     }
     if (record.type === 'OBJECTIVE_MARK_COMPLETED') {
       const objectiveId = typeof record.objectiveId === 'string' ? record.objectiveId.trim() : '';
-      return objectiveId ? { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId } : null;
+      const rawEvidence = record.evidence;
+      const evidence =
+        rawEvidence && typeof rawEvidence === 'object' && !Array.isArray(rawEvidence)
+          ? (() => {
+              const value = rawEvidence as Record<string, unknown>;
+              const actionType =
+                typeof value.actionType === 'string' ? value.actionType.trim() : '';
+              if (
+                !['TAKE', 'GIVE', 'PUT', 'COMMAND', 'OPEN', 'CLOSE', 'LOOK', 'EXAMINE'].includes(
+                  actionType
+                )
+              ) {
+                return undefined;
+              }
+              const text = (key: string) =>
+                typeof value[key] === 'string' && value[key].trim() ? value[key].trim() : undefined;
+              return {
+                actionType: actionType as NpcObjectiveCompletionEvidence['actionType'],
+                ...(text('code') ? { code: text('code') } : {}),
+                ...(text('targetId') ? { targetId: text('targetId') } : {}),
+                ...(text('itemId') ? { itemId: text('itemId') } : {}),
+                ...(text('commandId') ? { commandId: text('commandId') } : {}),
+              };
+            })()
+          : undefined;
+      return objectiveId
+        ? { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId, ...(evidence ? { evidence } : {}) }
+        : null;
     }
     if (record.type === 'MEMORY_SET') {
       const memory = typeof record.memory === 'string' ? record.memory.trim() : '';

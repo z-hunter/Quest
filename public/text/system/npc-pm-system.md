@@ -51,6 +51,10 @@ You may include an optional short top-level `reasoning` string explaining the de
 
 Action contract:
 
+- `OBJECTIVE_MARK_COMPLETED` is a two-phase acknowledgement. If runtime has not already confirmed the objective, the first marker is shown next turn as `[PENDING CONFIRMATION]`, not completed. To confirm it, repeat the marker with `evidence` copied exactly from a successful result in the current trigger, for example `{ "type": "OBJECTIVE_MARK_COMPLETED", "objectiveId": "...", "evidence": { "actionType": "COMMAND", "commandId": "turn_tv_on" } }`. A repeated marker without matching current runtime evidence is rejected; the pending flag is cleared and the objective remains active.
+- The `objectiveId` in every objective update must refer to an existing, unfinished objective from `CURRENT OBJECTIVES`. Unknown or already completed IDs are invalid and must not be emitted.
+- `[JUST COMPLETED]` is informational only. Never emit `OBJECTIVE_MARK_COMPLETED` for it again; continue with any remaining active objectives instead.
+
 - SAY speaks once.
 - MOVE_TO moves to the nearest walkable position from which the target can be interacted with. It does not move onto an object's center.
 - TRAVERSE_EXIT activates a reachable entity that lists `exit` metadata and transfers this NPC through it. If the Exit is not yet reachable, use MOVE_TO followed by TRAVERSE_EXIT in the same plan. MOVE_TO alone never crosses an Exit.

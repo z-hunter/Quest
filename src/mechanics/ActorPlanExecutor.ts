@@ -81,7 +81,10 @@ export class ActorPlanExecutor {
     this.strategyScheduler = strategyScheduler;
   }
 
-  executePlan(plan: NpcPlan): NpcPlanExecutionOutcome[] {
+  executePlan(
+    plan: NpcPlan,
+    confirmedObjectiveIds: ReadonlySet<string> = new Set<string>()
+  ): NpcPlanExecutionOutcome[] {
     const actor = this.findActor(plan.npcId);
     if (!(actor instanceof Actor) || !ComponentSystem.isNpc(actor)) {
       return [
@@ -96,7 +99,7 @@ export class ActorPlanExecutor {
     const outcomes: NpcPlanExecutionOutcome[] = [];
     let completedSynchronously = true;
     for (const step of plan.steps) {
-      const outcome = this.executeStep(actor, step);
+      const outcome = this.executeStep(actor, step, confirmedObjectiveIds);
       outcomes.push(outcome);
       if (outcome.status !== 'ok') {
         completedSynchronously = false;
@@ -116,7 +119,11 @@ export class ActorPlanExecutor {
     return outcomes;
   }
 
-  private executeStep(actor: Actor, step: NpcPlanStep): NpcPlanExecutionOutcome {
+  private executeStep(
+    actor: Actor,
+    step: NpcPlanStep,
+    confirmedObjectiveIds: ReadonlySet<string>
+  ): NpcPlanExecutionOutcome {
     if (step.type === 'SAY') {
       const text = String(step.text || '').trim();
       if (!text) {
@@ -187,9 +194,26 @@ export class ActorPlanExecutor {
       const objectives = this.getNpcObjectives(actor);
       const objective = findNpcObjective(objectives, step.objectiveId);
       if (!objective) return { status: 'failed', code: 'objective_not_found', npcId: actor.name };
-      objective.completed = true;
+      if (objective.completed) {
+        return { status: 'failed', code: 'objective_already_completed', npcId: actor.name };
+      }
+      if (objective.pendingConfirmation) {
+        if (!confirmedObjectiveIds.has(objective.id)) {
+          return { status: 'failed', code: 'objective_confirmation_required', npcId: actor.name };
+        }
+        objective.completed = true;
+        delete objective.pendingConfirmation;
+      } else {
+        objective.pendingConfirmation = true;
+      }
       this.setNpcObjectives(actor, objectives);
-      return { status: 'ok', code: 'npc_objective_marked_completed', npcId: actor.name };
+      return {
+        status: 'ok',
+        code: objective.completed
+          ? 'npc_objective_marked_completed'
+          : 'npc_objective_pending_confirmation',
+        npcId: actor.name,
+      };
     }
 
     if (step.type === 'WAIT') {

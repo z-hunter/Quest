@@ -4,6 +4,14 @@ import type { NpcObjective, NpcObjectiveDraft } from './npcState';
 
 export type { NpcObjective, NpcObjectiveDraft } from './npcState';
 
+export type NpcObjectiveCompletionEvidence = {
+  actionType: 'TAKE' | 'GIVE' | 'PUT' | 'COMMAND' | 'OPEN' | 'CLOSE' | 'LOOK' | 'EXAMINE';
+  code?: string;
+  targetId?: string;
+  itemId?: string;
+  commandId?: string;
+};
+
 export type NpcPlanStep =
   | {
       type: 'SAY';
@@ -90,6 +98,7 @@ export type NpcPlanStep =
   | {
       type: 'OBJECTIVE_MARK_COMPLETED';
       objectiveId: string;
+      evidence?: NpcObjectiveCompletionEvidence;
     }
   | {
       type: 'MEMORY_SET';

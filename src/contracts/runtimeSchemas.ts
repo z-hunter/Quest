@@ -379,6 +379,20 @@ function isNpcObjectiveDraft(value: unknown): boolean {
   );
 }
 
+function isNpcObjectiveCompletionEvidence(value: unknown): boolean {
+  if (!isRecord(value) || !isString(value.actionType)) return false;
+  if (
+    !['TAKE', 'GIVE', 'PUT', 'COMMAND', 'OPEN', 'CLOSE', 'LOOK', 'EXAMINE'].includes(
+      value.actionType
+    )
+  ) {
+    return false;
+  }
+  return ['code', 'targetId', 'itemId', 'commandId'].every(
+    (key) => value[key] === undefined || isString(value[key])
+  );
+}
+
 export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is NpcPlanStep {
   const issues: ContractIssue[] = [];
   if (!isRecord(value) || !isString(value.type) || !NPC_STEP_TYPES.has(value.type)) {
@@ -474,6 +488,13 @@ export function assertNpcPlanStep(value: unknown, path = '$'): asserts value is 
       !isString(value.objectiveId)
     ) {
       issues.push({ path: `${path}.objectiveId`, message: 'must be a string' });
+    }
+    if (
+      value.type === 'OBJECTIVE_MARK_COMPLETED' &&
+      value.evidence !== undefined &&
+      !isNpcObjectiveCompletionEvidence(value.evidence)
+    ) {
+      issues.push({ path: `${path}.evidence`, message: 'must identify a supported action result' });
     }
     if (value.type === 'OBJECTIVES_SET') {
       if (!Array.isArray(value.objectives) || !value.objectives.every(isString)) {

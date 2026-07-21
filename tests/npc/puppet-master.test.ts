@@ -585,8 +585,23 @@ describe('NpcPuppetMaster', () => {
     ).toEqual([
       expect.objectContaining({ code: 'npc_memory_removed' }),
       expect.objectContaining({ code: 'npc_objective_updated' }),
-      expect.objectContaining({ code: 'npc_objective_marked_completed' }),
+      expect.objectContaining({ code: 'npc_objective_pending_confirmation' }),
     ]);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
+        steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: childId }],
+      })[0]
+    ).toEqual(expect.objectContaining({ code: 'objective_confirmation_required' }));
+    expect(
+      executor.executePlan(
+        {
+          npcId: npc.name,
+          steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: childId }],
+        },
+        new Set([childId])
+      )[0]
+    ).toEqual(expect.objectContaining({ code: 'npc_objective_marked_completed' }));
     expect(component.memory).toEqual(['Miles asked the guard to watch the hallway.']);
     expect(
       component.objectives.find((objective: any) => objective.text === 'Watch the hallway').subtasks
@@ -595,6 +610,12 @@ describe('NpcPuppetMaster', () => {
       executor.executePlan({
         npcId: npc.name,
         steps: [{ type: 'OBJECTIVE_UPDATE', objectiveId: 'missing', text: 'Never happens' }],
+      })
+    ).toEqual([expect.objectContaining({ status: 'failed', code: 'objective_not_found' })]);
+    expect(
+      executor.executePlan({
+        npcId: npc.name,
+        steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'missing' }],
       })
     ).toEqual([expect.objectContaining({ status: 'failed', code: 'objective_not_found' })]);
     expect(
@@ -636,6 +657,96 @@ describe('NpcPuppetMaster', () => {
     ]);
     expect(getStaticPmText(provider.calls[0])).toContain('OBJECTIVE_MARK_COMPLETED');
     expect(getStaticPmText(provider.calls[0])).toContain('does not perform the task');
+  });
+
+  it('confirms a pending objective only with matching successful trigger evidence', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'turn-tv-on',
+        text: 'Turn on the TV',
+        subtasks: [],
+        pendingConfirmation: true,
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              {
+                type: 'OBJECTIVE_MARK_COMPLETED',
+                objectiveId: 'turn-tv-on',
+                evidence: { actionType: 'COMMAND', commandId: 'turn_tv_on' },
+              },
+            ],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, {
+      type: 'action_completed',
+      result: {
+        status: 'ok',
+        code: 'command_executed',
+        npcId: npc.name,
+        actionType: 'COMMAND',
+        commandId: 'turn_tv_on',
+        worldChanged: true,
+      },
+    });
+
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'turn-tv-on', completed: true }),
+    ]);
+    expect(component.objectives[0].pendingConfirmation).toBeUndefined();
+    pm.haltAllNpcs();
+  });
+
+  it('drops a repeated marker for JUST COMPLETED objective without aborting the plan tail', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      { id: 'done', text: 'Find the remote', subtasks: [], completed: true },
+      { id: 'next', text: 'Find batteries', subtasks: [] },
+    ];
+    component.objectivesInitializedFromTA = true;
+    component.objectivesTARevision = fixture.textAssets.getResolvedObjectListRevision(
+      npc,
+      'objectives'
+    );
+    const pm = new NpcPuppetMaster(
+      fixture.game,
+      new MockProvider(
+        '{"kind":"pm_response","plans":[{"npcId":"guard","steps":[{"type":"OBJECTIVE_MARK_COMPLETED","objectiveId":"done"},{"type":"OBJECTIVE_UPDATE","objectiveId":"next","text":"Ask Rick for batteries"}]}]}'
+      )
+    );
+
+    const plans = await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(plans).toEqual([
+      expect.objectContaining({
+        steps: [expect.objectContaining({ type: 'OBJECTIVE_UPDATE', objectiveId: 'next' })],
+      }),
+    ]);
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'next', text: 'Ask Rick for batteries' }),
+    ]);
+    pm.haltAllNpcs();
   });
 
   it('instructs PM to audit all durable memory and objectives on every call', async () => {
