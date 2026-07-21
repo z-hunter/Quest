@@ -457,11 +457,11 @@ export class InventoryManager {
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
-    this.removeDuplicateSceneEntityRefs(entity);
+    this.removeDuplicateSceneEntityRefs(entity, scene);
     if (!scene.entities.includes(entity)) {
       scene.addEntity(entity);
     }
-    this.removeDuplicateSceneEntityRefs(entity);
+    this.removeDuplicateSceneEntityRefs(entity, scene);
 
     delete (entity as any).__inventoryRelation;
     entity.setInventoryPositionOwner(null);
@@ -603,15 +603,18 @@ export class InventoryManager {
     relation: ContainerRelation = 'in',
     scene = this.getSceneForInventoryOwner(owner)
   ): void {
-    const previous =
-      this.isPlayerInventoryOwner(owner) && relation === 'in'
-        ? [...this.inventory]
-        : [
-            ...(this.inventoryEntityStore.get(this.getInventoryStoreKey(owner, relation)) ||
-              this.resolveInventoryEntitiesFromComponent(owner, relation, scene)),
-          ];
+    const usesActivePlayerInventory =
+      scene === this.sceneManager.currentScene &&
+      this.isPlayerInventoryOwner(owner) &&
+      relation === 'in';
+    const previous = usesActivePlayerInventory
+      ? [...this.inventory]
+      : [
+          ...(this.inventoryEntityStore.get(this.getInventoryStoreKey(owner, relation)) ||
+            this.resolveInventoryEntitiesFromComponent(owner, relation, scene)),
+        ];
 
-    if (this.isPlayerInventoryOwner(owner) && relation === 'in') {
+    if (usesActivePlayerInventory) {
       this.inventory = entities;
       this.syncPlayerInventoryComponent(relation);
       previous

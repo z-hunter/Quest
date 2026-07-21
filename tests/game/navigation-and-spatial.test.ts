@@ -629,6 +629,8 @@ describe('Game navigation and spatial API', () => {
     staleCassette.spatial = { parentNodeId: stalePlayer.name, relation: 'in' };
     target.addEntity(staleCassette);
     fixture.game.inventoryManager.addInventoryEntity(stalePlayer, staleCassette, 'in');
+    expect(staleCassette.getInventoryPositionOwner()).toBe(stalePlayer);
+    expect(fixture.game.inventory).not.toContain(staleCassette);
 
     const cassette = fixture.addEntity('cassette', {
       title: 'Cassette',
