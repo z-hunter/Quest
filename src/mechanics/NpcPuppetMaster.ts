@@ -202,6 +202,7 @@ type PendingPlanContinuation = {
   trackCompletion: boolean;
   inventoryItemIds?: string[];
   observableItemIds?: string[];
+  tailApproachAttempts?: number;
 };
 
 const PM_BATCH_DEBOUNCE_MS = (globalThis as any).process?.env?.NODE_ENV === 'test' ? 150 : 400;
@@ -224,6 +225,7 @@ const PM_SAY_ONLY_CONTINUATION_DELAY_MS = 2_000;
 // action-completion callback. Keep a recovery path nevertheless: a dropped
 // host callback must not leave an NPC immune to all later scene events.
 const PM_PENDING_CONTINUATION_TIMEOUT_MS = 15_000;
+const PM_TAIL_APPROACH_REPLAN_LIMIT = 2;
 const PM_PATTERN_LOOP_WINDOW = 6;
 const PM_PATTERN_LOOP_UNIQUE_LIMIT = 3;
 const PM_ACTION_HISTORY_LIMIT = 20;
@@ -245,6 +247,12 @@ export class NpcPuppetMaster {
   private actionHistories = new Map<string, NpcActionHistoryRecord[]>();
   private pendingPlanContinuations = new Map<string, PendingPlanContinuation>();
   private pendingContinuationTimeouts = new Map<string, any>();
+  // A recipient must not autonomously act on an offered item while its giver
+  // is still walking or waiting for the authoritative GIVE result.
+  private pendingIncomingGives = new Map<
+    string,
+    { sceneId: string; giverNpcId: string; recipientNpcId: string; itemId: string }
+  >();
   // Events that arrive while a runtime barrier is outstanding belong to the
   // next PM turn, not to a replacement plan.  Keeping them by continuation
   // key makes the hand-off explicit and prevents timer based requeue loops.
@@ -252,6 +260,7 @@ export class NpcPuppetMaster {
   private continuationStates = new Map<string, NpcContinuationStateSnapshot>();
   private restoredContinuationStates = new Map<string, 'needs_replan'>();
   private stateOnlyContinuationCounts = new Map<string, number>();
+  private objectiveConfirmationRetryCounts = new Map<string, number>();
   private npcCallTimes = new Map<string, number[]>();
   private sceneCallTimes = new Map<string, number[]>();
 
@@ -387,6 +396,8 @@ export class NpcPuppetMaster {
     this.patternLoopStates.clear();
     this.actionHistories.clear();
     this.pendingPlanContinuations.clear();
+    this.pendingIncomingGives.clear();
+    this.objectiveConfirmationRetryCounts.clear();
     for (const timeoutId of this.pendingContinuationTimeouts.values()) {
       globalThis.clearTimeout(timeoutId);
     }
@@ -840,6 +851,7 @@ export class NpcPuppetMaster {
       }
     }
     const observableItemIds = scene ? this.getNpcObservableItemIds(scene, plan.npcId) : [];
+    if (scene) this.registerPendingIncomingGives(scene, plan);
     const outcomes = this.executor.executePlan(plan, confirmedObjectiveIds);
     if (scene) {
       if (this.hasConcretePlanAction(plan)) {
@@ -852,8 +864,62 @@ export class NpcPuppetMaster {
         [],
         observableItemIds
       );
+      if (!outcomes.some((outcome) => outcome.status === 'scheduled')) {
+        this.releasePendingIncomingGives(scene, plan.npcId, 'give_finished_without_barrier');
+      }
     }
     return outcomes;
+  }
+
+  private getIncomingGiveKey(scene: Scene, recipientNpcId: string): string {
+    return `${scene.id}:${recipientNpcId}`;
+  }
+
+  private registerPendingIncomingGives(scene: Scene, plan: NpcPlan): void {
+    for (const step of plan.steps) {
+      if (step.type !== 'GIVE') continue;
+      const recipient = scene.getObjectByName(step.targetId);
+      if (!(recipient instanceof Actor) || !ComponentSystem.getNpcComponent(recipient)?.enabled)
+        continue;
+      const key = this.getIncomingGiveKey(scene, recipient.name);
+      this.pendingIncomingGives.set(key, {
+        sceneId: scene.id,
+        giverNpcId: plan.npcId,
+        recipientNpcId: recipient.name,
+        itemId: step.itemId,
+      });
+      this.traceWake('incoming_give_pending', {
+        sceneId: scene.id,
+        giverNpcId: plan.npcId,
+        recipientNpcId: recipient.name,
+        itemId: step.itemId,
+      });
+    }
+  }
+
+  private releasePendingIncomingGives(scene: Scene, giverNpcId: string, reason: string): void {
+    for (const [key, pending] of this.pendingIncomingGives) {
+      if (pending.sceneId !== scene.id || pending.giverNpcId !== giverNpcId) continue;
+      this.pendingIncomingGives.delete(key);
+      this.traceWake('incoming_give_released', {
+        sceneId: scene.id,
+        giverNpcId,
+        recipientNpcId: pending.recipientNpcId,
+        itemId: pending.itemId,
+        reason,
+      });
+      const recipientScene = this.getNpcScene(pending.recipientNpcId);
+      if (recipientScene === scene) {
+        this.scheduleNpc(scene, pending.recipientNpcId, {
+          type: 'manual',
+          reason: 'incoming_give_resolved',
+        });
+      }
+    }
+  }
+
+  private getPendingIncomingGive(scene: Scene, npcId: string) {
+    return this.pendingIncomingGives.get(this.getIncomingGiveKey(scene, npcId));
   }
 
   private validatePlanItems(
@@ -1244,7 +1310,8 @@ export class NpcPuppetMaster {
     plan: NpcPlan,
     outcomes: NpcPlanExecutionOutcome[],
     previousCompletedSteps: NpcPlanExecutionOutcome[] = [],
-    observableItemIds: string[] = this.getNpcObservableItemIds(scene, plan.npcId)
+    observableItemIds: string[] = this.getNpcObservableItemIds(scene, plan.npcId),
+    tailApproachAttempts: number = 0
   ): void {
     const scheduledIndex = outcomes.findIndex((outcome) => outcome.status === 'scheduled');
     if (scheduledIndex < 0) return;
@@ -1281,6 +1348,7 @@ export class NpcPuppetMaster {
       trackCompletion,
       inventoryItemIds: this.getNpcInventoryItemIds(scene, plan.npcId),
       observableItemIds,
+      tailApproachAttempts,
     });
     this.schedulePendingContinuationRecovery(scene, plan.npcId, stateKey, barrierStep);
     this.transitionContinuation(stateKey, 'awaiting_barrier', 'scheduled_step');
@@ -1494,6 +1562,7 @@ export class NpcPuppetMaster {
     if (trigger.type === 'action_completed' && barrierResult.code === 'exit_traversed') {
       const sourceSceneId = pending.sourceSceneId || stateKey.slice(0, stateKey.lastIndexOf(':'));
       this.transitionContinuation(stateKey, 'completed', 'scene_transfer');
+      this.releasePendingIncomingGives(scene, npcId, 'scene_transfer');
       const destinationScene = Array.from(this.game.sceneManager.scenes.values()).find(
         (candidate) => candidate.getObjectByName(npcId)
       );
@@ -1539,6 +1608,7 @@ export class NpcPuppetMaster {
 
     if (interrupt) {
       this.transitionContinuation(stateKey, 'interrupted', interrupt.type);
+      this.releasePendingIncomingGives(scene, npcId, `continuation_interrupted:${interrupt.type}`);
       this.traceWake('pending_continuation_interrupted', {
         sceneId: scene.id,
         npcId,
@@ -1580,9 +1650,10 @@ export class NpcPuppetMaster {
         code: barrierResult.code,
       });
     }
+    const preparedTail = this.prepareContinuationTail(scene, pending);
     const continuationPlan: NpcPlan = {
       npcId: pending.npcId,
-      steps: pending.steps,
+      steps: preparedTail.steps,
       ...(!barrierFailed && pending.memory !== undefined ? { memory: pending.memory } : {}),
       interruptOn: pending.interruptOn,
     };
@@ -1593,10 +1664,12 @@ export class NpcPuppetMaster {
       continuationPlan,
       outcomes,
       completedSteps,
-      observableItemIds
+      observableItemIds,
+      preparedTail.tailApproachAttempts
     );
     const hasScheduled = outcomes.some((outcome) => outcome.status === 'scheduled');
     if (hasScheduled) return true;
+    this.releasePendingIncomingGives(scene, npcId, 'continuation_finished');
     this.transitionContinuation(stateKey, 'completed', 'tail_finished');
     const finalResults = [...completedSteps, ...outcomes];
     if (!pending.trackCompletion) return false;
@@ -1646,6 +1719,51 @@ export class NpcPuppetMaster {
       };
     }
     return trigger.result;
+  }
+
+  /**
+   * MOVE_TO targets are dynamic. A route may have completed while its Actor
+   * target moved during the batch debounce, so a stored GIVE tail must use
+   * the current reachability predicate instead of trusting the old arrival.
+   */
+  private prepareContinuationTail(
+    scene: Scene,
+    pending: PendingPlanContinuation
+  ): { steps: NpcPlanStep[]; tailApproachAttempts: number } {
+    const first = pending.steps[0];
+    if (first?.type !== 'GIVE') {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+    const actor = scene.getObjectByName(pending.npcId);
+    const target = scene.getObjectByName(first.targetId);
+    if (!(actor instanceof Actor) || !target) {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+    if (!ComponentSystem.getInteractionDistanceError(target, actor)) {
+      return { steps: pending.steps, tailApproachAttempts: pending.tailApproachAttempts || 0 };
+    }
+
+    const attempts = pending.tailApproachAttempts || 0;
+    if (attempts >= PM_TAIL_APPROACH_REPLAN_LIMIT) {
+      this.traceWake('give_tail_approach_limit_reached', {
+        sceneId: scene.id,
+        npcId: pending.npcId,
+        targetId: first.targetId,
+        attempts,
+      });
+      return { steps: pending.steps, tailApproachAttempts: attempts };
+    }
+
+    this.traceWake('give_tail_auto_approach_inserted', {
+      sceneId: scene.id,
+      npcId: pending.npcId,
+      targetId: first.targetId,
+      attempts: attempts + 1,
+    });
+    return {
+      steps: [{ type: 'MOVE_TO', targetId: first.targetId }, ...pending.steps],
+      tailApproachAttempts: attempts + 1,
+    };
   }
 
   private getPlanInterruptConditions(plan: NpcPlan): NpcPlanInterruptCondition[] {
@@ -2633,7 +2751,9 @@ export class NpcPuppetMaster {
       .map((plan) => {
         const objectives = objectivesByNpc.get(plan.npcId) || [];
         const seenMarkers = new Set<string>();
+        let blockDependentTail = false;
         const steps = plan.steps.filter((step) => {
+          if (blockDependentTail) return false;
           if (step.type !== 'OBJECTIVE_MARK_COMPLETED') return true;
           if (seenMarkers.has(step.objectiveId)) {
             rejectedNpcIds.add(plan.npcId);
@@ -2660,6 +2780,7 @@ export class NpcPuppetMaster {
             step.evidence &&
             this.matchesCurrentCompletionEvidence(trigger, plan.npcId, step.evidence)
           ) {
+            this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
             const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
             confirmed.add(step.objectiveId);
             confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
@@ -2670,6 +2791,7 @@ export class NpcPuppetMaster {
             ? this.findInventoryObjectiveMatch(npcContext, objective)
             : null;
           if (inventoryMatch) {
+            this.objectiveConfirmationRetryCounts.delete(`${worldModel.scene.id}:${plan.npcId}`);
             const confirmed = confirmedObjectiveIdsByNpc.get(plan.npcId) || new Set<string>();
             confirmed.add(step.objectiveId);
             confirmedObjectiveIdsByNpc.set(plan.npcId, confirmed);
@@ -2684,9 +2806,20 @@ export class NpcPuppetMaster {
           }
           // A first, unconfirmed claim is retained as PENDING CONFIRMATION.
           // Evidence describing another step in this response cannot confirm
-          // it because only results from the current trigger are matched.
-          if (!objective.pendingConfirmation) return true;
+          // it because only results from the current trigger are matched. Its
+          // physical tail is not allowed to run: it commonly assumes a GIVE,
+          // trade, or other external action that has not happened yet.
+          if (!objective.pendingConfirmation) {
+            blockDependentTail = true;
+            this.traceWake('objective_completion_pending_blocks_tail', {
+              sceneId: worldModel.scene.id,
+              npcId: plan.npcId,
+              objectiveId: step.objectiveId,
+            });
+            return true;
+          }
           rejectedNpcIds.add(plan.npcId);
+          blockDependentTail = true;
           this.traceWake('objective_completion_unconfirmed', {
             sceneId: worldModel.scene.id,
             npcId: plan.npcId,
@@ -2710,6 +2843,12 @@ export class NpcPuppetMaster {
     if (!inventory?.available || !Array.isArray(inventory.itemIds) || !inventory.itemIds.length) {
       return null;
     }
+    // Holding an item proves only an acquisition-style leaf objective. It
+    // cannot prove a composite procedure such as installing a battery and
+    // turning on a TV merely because one of its named tools is held.
+    if (objective.subtasks.length || !this.isInventoryAcquisitionObjective(objective.text)) {
+      return null;
+    }
 
     const objectiveTokens = this.getObjectiveMatchTokens(objective.text);
     if (!objectiveTokens.length) return null;
@@ -2724,6 +2863,17 @@ export class NpcPuppetMaster {
       }
     }
     return null;
+  }
+
+  private isInventoryAcquisitionObjective(text: string): boolean {
+    const normalized = text.toLocaleLowerCase();
+    const acquisition =
+      /\b(?:find|get|obtain|take|retrieve|acquire|collect|pick\s+up)\b/i.test(normalized) ||
+      /(?:получ\p{L}*|найт\p{L}*|взят\p{L}*|доста\p{L}*)/iu.test(normalized);
+    if (!acquisition) return false;
+    return !/\b(?:install|insert|turn\s+on|turn\s+off|use|put|place|give|trade|repair)\b/i.test(
+      normalized
+    );
   }
 
   private getObjectiveMatchTokens(value: string): string[] {
@@ -2803,6 +2953,17 @@ export class NpcPuppetMaster {
       const stateKey = this.getNpcStateKey(scene, npcId);
       const count = this.stateOnlyContinuationCounts.get(stateKey) || 0;
       if (count >= PM_STATE_ONLY_CONTINUATION_LIMIT) continue;
+      const confirmationRetries = this.objectiveConfirmationRetryCounts.get(stateKey) || 0;
+      if (confirmationRetries >= 1) {
+        this.clearPendingObjectiveConfirmations(scene, npcId);
+        this.traceWake('objective_completion_retry_suppressed', {
+          sceneId: scene.id,
+          npcId,
+          retries: confirmationRetries,
+        });
+        continue;
+      }
+      this.objectiveConfirmationRetryCounts.set(stateKey, confirmationRetries + 1);
       this.stateOnlyContinuationCounts.set(stateKey, count + 1);
       const generation = this.haltGenerationId;
       globalThis.setTimeout(() => {
@@ -2813,6 +2974,28 @@ export class NpcPuppetMaster {
         });
       }, 0);
     }
+  }
+
+  private clearPendingObjectiveConfirmations(scene: Scene, npcId: string): void {
+    const actor = scene.getObjectByName(npcId);
+    if (!(actor instanceof Actor)) return;
+    const component = ComponentSystem.getNpcComponent(actor);
+    if (!component?.objectives) return;
+    const objectives = normalizeNpcObjectives(component.objectives);
+    let changed = false;
+    const visit = (items: NpcObjective[]): void => {
+      for (const objective of items) {
+        if (objective.pendingConfirmation) {
+          delete objective.pendingConfirmation;
+          changed = true;
+        }
+        visit(objective.subtasks);
+      }
+    };
+    visit(objectives);
+    if (!changed) return;
+    component.objectives = objectives;
+    component.objectivesInitializedFromTA = true;
   }
 
   private settlePendingObjectiveConfirmations(
@@ -3198,6 +3381,17 @@ export class NpcPuppetMaster {
           sceneId,
           npcId,
           destinationSceneId: npcScene?.id ?? null,
+        });
+        return false;
+      }
+      const incomingGive = this.getPendingIncomingGive(scene, npcId);
+      if (incomingGive && incomingGive.giverNpcId !== npcId) {
+        this.traceWake('batch_deferred_pending_incoming_give', {
+          sceneId,
+          npcId,
+          giverNpcId: incomingGive.giverNpcId,
+          itemId: incomingGive.itemId,
+          triggerTypes: (batch.triggersByNpc.get(npcId) || []).map((trigger) => trigger.type),
         });
         return false;
       }

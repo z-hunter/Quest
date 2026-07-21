@@ -760,6 +760,84 @@ describe('NpcPuppetMaster', () => {
     pm.haltAllNpcs();
   });
 
+  it('does not confirm a composite procedure merely because a named tool is held', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const remote = fixture.addEntity('tv_rc', {
+      title: 'TV remote',
+      components: [{ type: 'Item' }],
+    });
+    fixture.game.inventoryManager.ensureInventoryComponent(npc, 'in');
+    expect(fixture.game.inventoryManager.addInventoryEntity(npc, remote, 'in').status).toBe('ok');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      {
+        id: 'install-and-turn-on',
+        text: 'Install charged battery in remote and turn on TV',
+        subtasks: [{ id: 'install-battery', text: 'Install the battery', subtasks: [] }],
+      },
+    ];
+    component.objectivesInitializedFromTA = true;
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'install-and-turn-on' }],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(component.objectives).toEqual([
+      expect.objectContaining({ id: 'install-and-turn-on', pendingConfirmation: true }),
+    ]);
+    pm.haltAllNpcs();
+  });
+
+  it('does not run a physical tail after an unconfirmed completion claim', async () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const component = npc.components.find((candidate: any) => candidate.type === 'NPC') as any;
+    component.objectives = [
+      { id: 'receive-battery', text: 'Receive the battery from Rick', subtasks: [] },
+    ];
+    component.objectivesInitializedFromTA = true;
+    const provider = new MockProvider(
+      JSON.stringify({
+        kind: 'pm_response',
+        plans: [
+          {
+            npcId: npc.name,
+            steps: [
+              { type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'receive-battery' },
+              { type: 'TRAVERSE_EXIT', targetId: 'corridor_exit' },
+            ],
+          },
+        ],
+      })
+    );
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const execute = vi.spyOn((pm as any).executor, 'executePlan');
+
+    await pm.processNpc(fixture.scene, npc.name, { type: 'manual' });
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [{ type: 'OBJECTIVE_MARK_COMPLETED', objectiveId: 'receive-battery' }],
+      }),
+      undefined
+    );
+    expect(component.objectives[0]).toEqual(expect.objectContaining({ pendingConfirmation: true }));
+    pm.haltAllNpcs();
+  });
+
   it('immediately completes an objective from matching successful plan_completed evidence', async () => {
     const fixture = createSceneFixture();
     fixture.addPlayer('Hero');
@@ -2316,6 +2394,99 @@ describe('NpcPuppetMaster', () => {
       }),
     ]);
     expect(plans[0].memory).toBeUndefined();
+  });
+
+  it('re-approaches a moved GIVE target before executing a pending tail', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const rick = addNpc(fixture, 'Rick');
+    const linda = addNpc(fixture, 'Linda');
+    rick.x = 0;
+    rick.y = 0;
+    linda.x = 500;
+    linda.y = 0;
+    const pm = new NpcPuppetMaster(fixture.game, new MockProvider(''));
+    const execute = vi.spyOn((pm as any).executor, 'executePlan').mockReturnValue([
+      {
+        status: 'scheduled',
+        code: 'npc_route_planning',
+        npcId: rick.name,
+        actionType: 'MOVE_TO',
+      },
+    ]);
+    const stateKey = `${fixture.scene.id}:${rick.name}`;
+    (pm as any).pendingPlanContinuations.set(stateKey, {
+      state: 'awaiting_barrier',
+      npcId: rick.name,
+      sourceSceneId: fixture.scene.id,
+      barrierStep: { type: 'MOVE_TO', targetId: linda.name },
+      steps: [{ type: 'GIVE', itemId: 'battery_aaa', targetId: linda.name }],
+      interruptOn: [],
+      completedSteps: [],
+      trackCompletion: true,
+    });
+
+    expect(
+      (pm as any).tryExecutePendingContinuation(fixture.scene, rick.name, [
+        {
+          type: 'move_completed',
+          result: {
+            status: 'arrived',
+            code: 'arrived',
+            target: { x: 0, y: 0 },
+            route: [{ x: 0, y: 0 }],
+          },
+        },
+      ])
+    ).toBe(true);
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        npcId: rick.name,
+        steps: [
+          { type: 'MOVE_TO', targetId: linda.name },
+          { type: 'GIVE', itemId: 'battery_aaa', targetId: linda.name },
+        ],
+      })
+    );
+    expect((pm as any).pendingPlanContinuations.get(stateKey)).toEqual(
+      expect.objectContaining({
+        barrierStep: { type: 'MOVE_TO', targetId: linda.name },
+        steps: [{ type: 'GIVE', itemId: 'battery_aaa', targetId: linda.name }],
+        tailApproachAttempts: 1,
+      })
+    );
+    pm.haltAllNpcs();
+  });
+
+  it('defers a recipient while another NPC has an unresolved GIVE', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero');
+    const rick = addNpc(fixture, 'Rick');
+    const linda = addNpc(fixture, 'Linda');
+    const provider = new MockProvider('{' + '"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    vi.spyOn((pm as any).executor, 'executePlan').mockReturnValue([
+      { status: 'scheduled', code: 'npc_route_planning', npcId: rick.name, actionType: 'MOVE_TO' },
+    ]);
+
+    (pm as any).executePlanAndTrackContinuation({
+      npcId: rick.name,
+      steps: [
+        { type: 'MOVE_TO', targetId: linda.name },
+        { type: 'GIVE', itemId: 'battery_aaa', targetId: linda.name },
+      ],
+    });
+    (pm as any).scheduleNpc(fixture.scene, linda.name, { type: 'manual', reason: 'heard_offer' });
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(provider.calls).toHaveLength(0);
+    expect((pm as any).getPendingIncomingGive(fixture.scene, linda.name)).toEqual(
+      expect.objectContaining({ giverNpcId: rick.name, itemId: 'battery_aaa' })
+    );
+    pm.haltAllNpcs();
+    vi.useRealTimers();
   });
 
   it('keeps one deterministic giver to start a same-response reciprocal GIVE cycle', () => {
