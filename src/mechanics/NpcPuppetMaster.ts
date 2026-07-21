@@ -149,6 +149,12 @@ type PendingNpcBatch = {
   completionResolvers: Array<() => void>;
 };
 
+type ScheduleSceneOptions = {
+  // Player input is allowed to break through an autonomous rate limit. NPC
+  // dialogue is not: otherwise every SAY resets its listeners' budgets.
+  resetRateBudget?: boolean;
+};
+
 type NpcLoopState = {
   repeatKey: string;
   count: number;
@@ -467,7 +473,7 @@ export class NpcPuppetMaster {
     }
   }
 
-  async scheduleScene(scene: Scene): Promise<void> {
+  async scheduleScene(scene: Scene, options: ScheduleSceneOptions = {}): Promise<void> {
     const npcStates = this.worldModelBuilder.getNpcActors(scene).map((npc) => ({
       npcId: npc.name,
       cursor: scene.sceneLog.lastPmProcessedAtByNpc[npc.name] ?? scene.sceneLog.lastPmProcessedAt,
@@ -494,14 +500,18 @@ export class NpcPuppetMaster {
     }
 
     // External scene events such as player speech must never be starved by an
-    // autonomous NPC chain that exhausted its background rate budget.
-    this.sceneCallTimes.delete(scene.id);
+    // autonomous NPC chain that exhausted its background rate budget. Calls
+    // from autonomous SAY plans deliberately keep the normal budget.
+    const resetRateBudget = options.resetRateBudget !== false;
+    if (resetRateBudget) this.sceneCallTimes.delete(scene.id);
     const completions: Promise<void>[] = [];
     for (const npcId of unreadNpcIds) {
-      this.clearLoopSuppression(scene, npcId);
-      this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
-      this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
-      this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
+      if (resetRateBudget) {
+        this.clearLoopSuppression(scene, npcId);
+        this.patternLoopStates.delete(this.getNpcStateKey(scene, npcId));
+        this.stateOnlyContinuationCounts.delete(this.getNpcStateKey(scene, npcId));
+        this.npcCallTimes.delete(this.getNpcStateKey(scene, npcId));
+      }
       completions.push(this.enqueueNpc(scene, npcId));
     }
     await Promise.all(completions);
@@ -3315,6 +3325,17 @@ export class NpcPuppetMaster {
     return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
   }
 
+  private getSceneLogWatermarks(scene: Scene, npcIds: Iterable<string>): Map<string, number> {
+    const watermarks = new Map<string, number>();
+    for (const npcId of npcIds) {
+      const processedThrough = scene.sceneLog
+        .getUnreadEntries(npcId)
+        .reduce((latest, event) => Math.max(latest, event.timestamp), Number.NEGATIVE_INFINITY);
+      if (Number.isFinite(processedThrough)) watermarks.set(npcId, processedThrough);
+    }
+    return watermarks;
+  }
+
   private enqueueNpc(scene: Scene, npcId: string, trigger?: NpcIndividualTrigger): Promise<void> {
     let resolveCompletion: () => void = () => {};
     const completion = new Promise<void>((resolve) => {
@@ -3346,18 +3367,52 @@ export class NpcPuppetMaster {
       alreadyScheduled: !!batch.timeoutId,
     });
     if (batch.timeoutId) return completion;
+    // A request for this scene is in flight. Keep one coalesced follow-up
+    // batch and let the current request finish; polling every second here
+    // used to consume rate budget without ever reaching the provider.
+    if (this.processingScenes.has(`batch:${scene.id}`)) return completion;
+    this.scheduleBatchFlush(batch);
+    return completion;
+  }
+
+  private scheduleBatchFlush(batch: PendingNpcBatch, delayMs: number = PM_BATCH_DEBOUNCE_MS): void {
+    if (batch.timeoutId) return;
     const currentGeneration = this.haltGenerationId;
     batch.timeoutId = globalThis.setTimeout(() => {
       if (this.haltGenerationId !== currentGeneration) {
-        if (this.pendingBatches.get(scene.id) === batch) {
-          this.pendingBatches.delete(scene.id);
+        if (this.pendingBatches.get(batch.scene.id) === batch) {
+          this.pendingBatches.delete(batch.scene.id);
         }
         batch.completionResolvers.forEach((resolve) => resolve());
         return;
       }
-      void this.flushBatch(scene.id);
-    }, PM_BATCH_DEBOUNCE_MS);
-    return completion;
+      void this.flushBatch(batch.scene.id);
+    }, delayMs);
+  }
+
+  private mergeBatchAfterProcessing(batch: PendingNpcBatch): void {
+    let queued = this.pendingBatches.get(batch.scene.id);
+    if (!queued) {
+      queued = {
+        scene: batch.scene,
+        npcIds: new Set(),
+        triggersByNpc: new Map(),
+        timeoutId: null,
+        completionResolvers: [],
+      };
+      this.pendingBatches.set(batch.scene.id, queued);
+    }
+    if (queued.timeoutId) {
+      globalThis.clearTimeout(queued.timeoutId);
+      queued.timeoutId = null;
+    }
+    for (const npcId of batch.npcIds) queued.npcIds.add(npcId);
+    for (const [npcId, triggers] of batch.triggersByNpc) {
+      const existing = queued.triggersByNpc.get(npcId) || [];
+      existing.push(...triggers);
+      queued.triggersByNpc.set(npcId, existing);
+    }
+    queued.completionResolvers.push(...batch.completionResolvers);
   }
 
   private async flushBatch(sceneId: string): Promise<void> {
@@ -3384,6 +3439,14 @@ export class NpcPuppetMaster {
         });
         return false;
       }
+      const triggers = batch.triggersByNpc.get(npcId) || [];
+      if (!triggers.length && !scene.sceneLog.getUnreadEntries(npcId).length) {
+        this.traceWake('batch_npc_skipped_no_unread_events', {
+          sceneId,
+          npcId,
+        });
+        return false;
+      }
       const incomingGive = this.getPendingIncomingGive(scene, npcId);
       if (incomingGive && incomingGive.giverNpcId !== npcId) {
         this.traceWake('batch_deferred_pending_incoming_give', {
@@ -3391,19 +3454,19 @@ export class NpcPuppetMaster {
           npcId,
           giverNpcId: incomingGive.giverNpcId,
           itemId: incomingGive.itemId,
-          triggerTypes: (batch.triggersByNpc.get(npcId) || []).map((trigger) => trigger.type),
+          triggerTypes: triggers.map((trigger) => trigger.type),
         });
         return false;
       }
       const stateKey = this.getNpcStateKey(scene, npcId);
       if (!this.pendingPlanContinuations.has(stateKey)) return true;
       const deferred = this.deferredContinuationTriggers.get(stateKey) || [];
-      deferred.push(...(batch.triggersByNpc.get(npcId) || []));
+      deferred.push(...triggers);
       this.deferredContinuationTriggers.set(stateKey, deferred);
       this.traceWake('batch_deferred_pending_continuation', {
         sceneId,
         npcId,
-        triggerTypes: (batch.triggersByNpc.get(npcId) || []).map((trigger) => trigger.type),
+        triggerTypes: triggers.map((trigger) => trigger.type),
         deferredTriggerCount: deferred.length,
       });
       return false;
@@ -3432,6 +3495,17 @@ export class NpcPuppetMaster {
         model: this.provider.getModelName(),
       });
       batch.completionResolvers.forEach((resolve) => resolve());
+      return;
+    }
+
+    const processingKey = `batch:${scene.id}`;
+    if (this.processingScenes.has(processingKey)) {
+      this.traceWake('batch_requeued', {
+        sceneId,
+        reason: 'scene_batch_already_processing',
+        npcIds: providerCandidateNpcIds,
+      });
+      this.mergeBatchAfterProcessing(batch);
       return;
     }
 
@@ -3470,20 +3544,12 @@ export class NpcPuppetMaster {
 
     const providerNpcIds = allowedNpcIds;
 
-    const processingKey = `batch:${scene.id}`;
-    if (this.processingScenes.has(processingKey)) {
-      this.traceWake('batch_requeued', {
-        sceneId,
-        reason: 'scene_batch_already_processing',
-        npcIds: providerNpcIds,
-      });
-      this.deferBatch(batch, providerNpcIds);
-      batch.completionResolvers.forEach((resolve) => resolve());
-      return;
-    }
-
     this.processingScenes.add(processingKey);
     try {
+      // Snapshot before building the prompt. Events that arrive afterwards
+      // remain unread for the coalesced follow-up batch, even if the current
+      // provider request finishes later.
+      const processedEventWatermarks = this.getSceneLogWatermarks(scene, providerNpcIds);
       const worldModel = this.worldModelBuilder.build(scene, { npcIds: providerNpcIds });
       if (!worldModel.npcs.length) {
         this.traceWake('batch_stopped', {
@@ -3512,14 +3578,17 @@ export class NpcPuppetMaster {
       );
       if (!this.lastDebugInfo?.error) {
         for (const npcId of providerNpcIds) {
-          if (!this.shouldPreserveUnreadEventsForRetry(npcId)) {
-            scene.sceneLog.markProcessed(undefined, npcId);
+          const processedThrough = processedEventWatermarks.get(npcId);
+          if (processedThrough !== undefined && !this.shouldPreserveUnreadEventsForRetry(npcId)) {
+            scene.sceneLog.markProcessed(processedThrough, npcId);
           }
         }
       }
     } finally {
       this.processingScenes.delete(processingKey);
       batch.completionResolvers.forEach((resolve) => resolve());
+      const queued = this.pendingBatches.get(sceneId);
+      if (queued && !queued.timeoutId) this.scheduleBatchFlush(queued, 0);
     }
   }
 

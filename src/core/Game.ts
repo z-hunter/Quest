@@ -665,7 +665,7 @@ export class Game implements IGame {
           ])
         ),
       });
-      await this.npcPuppetMaster.scheduleScene(scene);
+      await this.npcPuppetMaster.scheduleScene(scene, { resetRateBudget: true });
       return;
     }
     this.npcPuppetMaster.traceWake('player_speech_stopped', {
@@ -696,7 +696,7 @@ export class Game implements IGame {
       knownByNpcIds,
     });
     if (options.triggerPuppetMaster && knownByNpcIds.length) {
-      await this.npcPuppetMaster.scheduleScene(scene);
+      await this.npcPuppetMaster.scheduleScene(scene, { resetRateBudget: false });
     }
   }
 

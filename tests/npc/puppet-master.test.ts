@@ -106,6 +106,45 @@ class MockProvider implements ILlmProvider {
   }
 }
 
+class DeferredMockProvider implements ILlmProvider {
+  calls: Array<{ system: LlmProviderContent; messages: LlmProviderMessage[] }> = [];
+  private resolvers: Array<(response: LlmProviderResponse) => void> = [];
+
+  sendMessage(
+    system: LlmProviderContent,
+    messages: LlmProviderMessage[]
+  ): Promise<LlmProviderResponse> {
+    this.calls.push({ system, messages });
+    return new Promise((resolve) => this.resolvers.push(resolve));
+  }
+
+  sendMessageStream(
+    system: LlmProviderContent,
+    messages: LlmProviderMessage[],
+    _onDelta: LlmStreamDeltaCallback
+  ): Promise<LlmProviderResponse> {
+    return this.sendMessage(system, messages);
+  }
+
+  resolveNext(text = '{"kind":"pm_response","plans":[]}'): void {
+    const resolve = this.resolvers.shift();
+    if (!resolve) throw new Error('No pending provider request');
+    resolve({ ok: true, text, durationMs: 0 });
+  }
+
+  isAvailable(): boolean {
+    return true;
+  }
+
+  getProviderName(): string {
+    return 'deferred-mock';
+  }
+
+  getModelName(): string {
+    return 'deferred-mock-npc';
+  }
+}
+
 function addNpc(fixture: ReturnType<typeof createSceneFixture>, id: string): Actor {
   const npc = new Actor(fixture.game, 20, 20, 10, 10, id);
   npc.components = [{ type: 'Actor' }, { type: 'NPC', memory: 'Old note.' }];
@@ -1743,7 +1782,7 @@ describe('NpcPuppetMaster', () => {
     expect(getKnownObjects.mock.calls.map(([actor]) => actor.name)).toEqual([guard.name]);
   });
 
-  it('defers same-scene batch requeues while a provider call is still running', async () => {
+  it('coalesces same-scene batches while a provider call is still running', async () => {
     vi.useFakeTimers();
     const fixture = createSceneFixture();
     const guard = addNpc(fixture, 'guard');
@@ -1781,10 +1820,7 @@ describe('NpcPuppetMaster', () => {
     expect(provider.calls).toHaveLength(1);
 
     resolveFirst?.();
-    await vi.advanceTimersByTimeAsync(200);
-    expect(provider.calls).toHaveLength(1);
-
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(0);
     expect(provider.calls).toHaveLength(2);
     expect(JSON.stringify(provider.calls[1].messages)).toContain(bystander.name);
   });
@@ -4595,6 +4631,117 @@ describe('NpcPuppetMaster', () => {
     expect(prompt).toContain('"guard"');
     expect(prompt).toContain('"clerk"');
     expect(prompt).toContain('"type": "batch"');
+  });
+
+  it('coalesces scene events arriving during an in-flight provider request without losing them', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const provider = new DeferredMockProvider();
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'First message.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+
+    const firstCompletion = pm.scheduleScene(fixture.scene, { resetRateBudget: false });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(provider.calls).toHaveLength(1);
+
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Second message.',
+      knownByNpcIds: [npc.name],
+      timestamp: 2000,
+    });
+    const secondCompletion = pm.scheduleScene(fixture.scene, { resetRateBudget: false });
+
+    provider.resolveNext();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.scene.sceneLog.lastPmProcessedAtByNpc[npc.name]).toBe(1000);
+    expect(provider.calls).toHaveLength(2);
+    expect(String(provider.calls[1].messages[0].content)).toContain('Second message.');
+
+    provider.resolveNext();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.all([firstCompletion, secondCompletion]);
+    expect(fixture.scene.sceneLog.lastPmProcessedAtByNpc[npc.name]).toBe(2000);
+  });
+
+  it('does not spend rate budget while coalescing an in-flight scene batch', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero');
+    const npc = addNpc(fixture, 'guard');
+    const provider = new DeferredMockProvider();
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'First message.',
+      knownByNpcIds: [npc.name],
+      timestamp: 1000,
+    });
+    const firstCompletion = pm.scheduleScene(fixture.scene, { resetRateBudget: false });
+    await vi.advanceTimersByTimeAsync(200);
+    const sceneCallsBefore = ((pm as any).sceneCallTimes.get(fixture.scene.id) || []).length;
+    const npcKey = `${fixture.scene.id}:${npc.name}`;
+    const npcCallsBefore = ((pm as any).npcCallTimes.get(npcKey) || []).length;
+
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: player.name,
+      displayName: 'Hero',
+      text: 'Second message.',
+      knownByNpcIds: [npc.name],
+      timestamp: 2000,
+    });
+    const secondCompletion = pm.scheduleScene(fixture.scene, { resetRateBudget: false });
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(provider.calls).toHaveLength(1);
+    expect(((pm as any).sceneCallTimes.get(fixture.scene.id) || []).length).toBe(sceneCallsBefore);
+    expect(((pm as any).npcCallTimes.get(npcKey) || []).length).toBe(npcCallsBefore);
+
+    provider.resolveNext();
+    await vi.advanceTimersByTimeAsync(0);
+    provider.resolveNext();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.all([firstCompletion, secondCompletion]);
+  });
+
+  it('keeps autonomous scene scans within the ordinary PM rate budget', async () => {
+    vi.useFakeTimers();
+    const fixture = createSceneFixture();
+    const rick = addNpc(fixture, 'Rick');
+    const provider = new MockProvider('{"kind":"pm_response","plans":[]}');
+    const pm = new NpcPuppetMaster(fixture.game, provider);
+    const now = Date.now();
+    (pm as any).sceneCallTimes.set(
+      fixture.scene.id,
+      Array.from({ length: 12 }, () => now)
+    );
+    (pm as any).npcCallTimes.set(
+      `${fixture.scene.id}:${rick.name}`,
+      Array.from({ length: 6 }, () => now)
+    );
+
+    fixture.scene.sceneLog.appendSpeech({
+      actorId: 'Linda',
+      displayName: 'Linda',
+      text: 'Rick, can you hear me?',
+      knownByNpcIds: [rick.name],
+      timestamp: 1000,
+    });
+    const completion = pm.scheduleScene(fixture.scene, { resetRateBudget: false });
+    await vi.advanceTimersByTimeAsync(200);
+    await completion;
+
+    expect(provider.calls).toHaveLength(0);
   });
 
   it('flushes player speech through the dispatcher before scheduleScene resolves', async () => {
