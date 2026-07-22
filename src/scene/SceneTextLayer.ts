@@ -503,7 +503,7 @@ export function getSceneTextTargetDescriptor(
   if (!target) return null;
 
   const relation = normalizeRelation(fallbackRelation) || 'on';
-  if (target.type === 'Walkbox' || isWalkboxObject(target)) {
+  if (isWalkboxObject(target)) {
     return { title: game.text('engine.floor_label'), relation: 'on' };
   }
 

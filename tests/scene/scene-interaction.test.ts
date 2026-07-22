@@ -239,6 +239,7 @@ describe('Scene interaction text layer', () => {
     ];
     quad.components = [{ type: 'WalkBox', mode: 'Invert' }];
     fixture.scene.addEntity(quad);
+    fixture.textAssets.setObject('QuadFloor', { title: 'Quad Floor Title' });
 
     handleSceneClick(fixture.scene, 320, 180);
 
