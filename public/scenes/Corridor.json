@@ -4,42 +4,7 @@
   "description": "You are in New Scene.",
   "textRedirects": {},
   "filename": "Corridor",
-  "walkbox": [
-    {
-      "name": "Walk_main2",
-      "type": "Walkbox",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "poly": [
-        {
-          "x": 1626,
-          "y": -14
-        },
-        {
-          "x": 1811,
-          "y": -19
-        },
-        {
-          "x": 1812,
-          "y": 291
-        },
-        {
-          "x": 1358,
-          "y": 283
-        }
-      ],
-      "mode": "Add"
-    }
-  ],
+  "walkbox": [],
   "triggerboxes": [
     {
       "name": "E1",
@@ -237,7 +202,8 @@
         },
         {
           "type": "WalkBox",
-          "mode": "Add"
+          "mode": "Add",
+          "perspectiveWalk3D": true
         }
       ],
       "layer": 0,
@@ -841,28 +807,28 @@
       "visible": false,
       "hidden": false,
       "parallax": 1,
-      "x": -526.9156739100213,
-      "y": -137.9803878720145,
+      "x": -523.9006032049551,
+      "y": -138.38566367284758,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": -526.9156739100213,
-          "y": -137.9803878720145,
+          "x": -523.9006032049551,
+          "y": -138.38566367284758,
           "p": 1.0431424643929696
         },
         {
-          "x": -498.8556185760758,
-          "y": -138.20603868370347,
+          "x": -495.95187375772605,
+          "y": -138.59484701563844,
           "p": 1.0424314168264899
         },
         {
-          "x": -365.87650295538043,
-          "y": -129.69194555139597,
+          "x": -355.3595296408981,
+          "y": -130.25440327373417,
           "p": 1.0467476902559403
         },
         {
-          "x": -391.20031482516583,
-          "y": -129.39957101325064,
+          "x": -381.4829526063986,
+          "y": -129.84404894482628,
           "p": 1.0405613305364574
         }
       ],
@@ -1066,28 +1032,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1656.6328054742842,
-      "y": 86.8830514075201,
+      "x": 1643.2108592806637,
+      "y": 93.0709738046178,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1656.6328054742842,
-          "y": 86.8830514075201,
+          "x": 1643.2108592806637,
+          "y": 93.0709738046178,
           "p": 1
         },
         {
-          "x": 1684.51067336607,
-          "y": 88.92665317992288,
+          "x": 1684.0541344017543,
+          "y": 96.06501157508833,
           "p": 1
         },
         {
-          "x": 1664.0332508581657,
-          "y": 148.76565898107228,
+          "x": 1654.0530954231751,
+          "y": 183.73387443059374,
           "p": 1
         },
         {
-          "x": 1567.7795629744596,
-          "y": 197.06675645661903,
+          "x": 1513.0338513793317,
+          "y": 254.49879162232907,
           "p": 1
         }
       ],
@@ -1273,7 +1239,7 @@
           "capacity": 10,
           "groups": [],
           "protected": true,
-          "items": ["test", "tv_rc"],
+          "items": [],
           "relation": "in"
         },
         {
@@ -1288,15 +1254,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1666.8947176826825,
-      "y": 98.8552823173181,
-      "width": 126.56358390357893,
-      "height": 303.5815694984494,
+      "x": 1653.6841679579834,
+      "y": 105.28983392815748,
+      "width": 129.1708070202767,
+      "height": 308.9626059809321,
       "baseWidth": 148,
-      "baseHeight": 355,
-      "spriteName": "miles2_ds-idle-up.json",
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
       "color": "#00ffff",
-      "scale": 0.8551593506998576,
+      "scale": 0.8727757231099778,
       "refScale": 0.84,
       "modelScale": 0.84,
       "ignoreScaling": false,
@@ -1307,7 +1273,7 @@
       "isPlayer": true,
       "speed": 0.24,
       "perceptionRadius": 600,
-      "direction": "up",
+      "direction": "down",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -1328,139 +1294,60 @@
       "colliderHeight": 4
     },
     {
-      "name": "test",
-      "type": "Entity",
+      "name": "Quad_30",
+      "type": "Quad",
       "locked": false,
       "disabled": false,
-      "groupID": "#compact_cassete",
+      "groupID": null,
       "customName": "",
       "textRedirects": {},
       "interactions": {},
       "components": [
         {
-          "type": "Item"
-        }
-      ],
-      "layer": 4,
-      "visible": false,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "Miles",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 1666.8947176826825,
-      "y": 98.8552823173181,
-      "width": 16.04430718392249,
-      "height": 22.799804945574067,
-      "baseWidth": 19.69986357435198,
-      "baseHeight": 27.994542974079128,
-      "spriteName": null,
-      "color": "#AAAAAA",
-      "scale": 0.8144374768570073,
-      "refScale": 0.8,
-      "modelScale": 0.8,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "tv_rc",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Item"
-        },
-        {
-          "type": "Inventory",
-          "relation": "in",
-          "capacity": 1,
-          "groups": ["#aaa"],
-          "protected": false,
-          "items": ["batteryAAA"]
+          "type": "WalkBox",
+          "mode": "Add",
+          "perspectiveWalk3D": true
         }
       ],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
-      "spatial": {
-        "parentNodeId": "Miles",
-        "relation": "in"
-      },
       "parallax": 1,
-      "x": 1666.8947176826825,
-      "y": 98.8552823173181,
-      "width": 26.46921799785273,
-      "height": 39.04209654683278,
-      "baseWidth": 199.99999999999997,
-      "baseHeight": 295,
-      "spriteName": "tv_rc",
-      "color": "#AAAAAA",
-      "scale": 0.13234608998926367,
-      "refScale": 0.13,
-      "modelScale": 0.13,
+      "x": 1682.7451928923542,
+      "y": 69.58086613466526,
       "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "batteryAAA",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": "#aaa",
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
+      "vertices": [
         {
-          "type": "State",
-          "id": "charge_percent",
-          "valueType": "number",
-          "initialValue": 100,
-          "value": 0
+          "x": 1638,
+          "y": -22,
+          "p": 1
         },
         {
-          "type": "Item"
+          "x": 1813,
+          "y": -21,
+          "p": 1
+        },
+        {
+          "x": 1768,
+          "y": 289,
+          "p": 1
+        },
+        {
+          "x": 1358,
+          "y": 286,
+          "p": 1
         }
       ],
-      "layer": 0,
-      "visible": false,
-      "hidden": "examinable",
-      "spatial": {
-        "parentNodeId": "tv_rc",
-        "relation": "in"
-      },
-      "parallax": 1,
-      "x": 1666.8947176826825,
-      "y": 98.8552823173181,
-      "width": 16.288749537140145,
-      "height": 15.067093321854635,
-      "baseWidth": 80,
-      "baseHeight": 74,
-      "spriteName": "aaa",
-      "color": "#AAAAAA",
-      "scale": 0.20360936921425182,
-      "refScale": 0.2,
-      "modelScale": 0.2,
-      "ignoreScaling": false,
-      "animationSpeed": 150,
+      "color": "#52779aff",
+      "sortMode": "ignore",
       "opacity": 1,
       "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": false,
       "blur": 0,
       "colliderWidth": 0,
       "colliderHeight": 0

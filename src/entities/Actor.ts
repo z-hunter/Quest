@@ -3,6 +3,7 @@ import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
 import { toWorldPosition } from '../utils/Parallax';
+import { Geometry } from '../utils/Geometry';
 import type { SceneObject } from './SceneObject';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
@@ -480,16 +481,24 @@ export class Actor extends Entity {
       if (input.isDown('ArrowRight')) dx += 1;
 
       if (dx !== 0 || dy !== 0) {
+        const rawDx = dx;
+        const rawDy = dy;
         this.target = null;
         this.route = [];
         this.routeIndex = 0;
         this.setState('walk');
         if (this.overrideAnimSet) this.overrideAnimSet = null;
 
-        const length = Math.sqrt(dx * dx + dy * dy);
-        if (length > 0) {
-          dx /= length;
-          dy /= length;
+        const perspectiveVector = this.getPerspectiveWalkVector(dx, dy);
+        if (perspectiveVector) {
+          dx = perspectiveVector.dx;
+          dy = perspectiveVector.dy;
+        } else {
+          const length = Math.sqrt(dx * dx + dy * dy);
+          if (length > 0) {
+            dx /= length;
+            dy /= length;
+          }
         }
 
         const p = this.parallax !== undefined ? this.parallax : 1.0;
@@ -501,10 +510,18 @@ export class Actor extends Entity {
         const nextY = this.y + moveY;
 
         // Update Direction
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.setDirection(dx > 0 ? 'right' : 'left');
+        if (perspectiveVector) {
+          if (rawDy !== 0) {
+            this.setDirection(rawDy < 0 ? 'up' : 'down');
+          } else {
+            this.setDirection(rawDx > 0 ? 'right' : 'left');
+          }
         } else {
-          this.setDirection(dy > 0 ? 'down' : 'up');
+          if (Math.abs(dx) > Math.abs(dy)) {
+            this.setDirection(dx > 0 ? 'right' : 'left');
+          } else {
+            this.setDirection(dy > 0 ? 'down' : 'up');
+          }
         }
 
         if (!isWalkable || isWalkable(nextX, nextY)) {
@@ -521,6 +538,48 @@ export class Actor extends Entity {
         this.setState('idle');
       }
     }
+  }
+
+  private getPerspectiveWalkVector(
+    inputX: number,
+    inputY: number
+  ): { dx: number; dy: number } | null {
+    if (!this.scene || !this.scene.entities) return null;
+
+    const cam = this.scene.camera;
+
+    for (const entity of this.scene.entities) {
+      if (entity.disabled) continue;
+      if ((entity as any).type !== 'Quad') continue;
+      const quad = entity as any;
+      if (!quad.vertices || quad.vertices.length < 4) continue;
+
+      const wbComp = quad.components?.find(
+        (c: any) =>
+          c &&
+          (c.type === 'WalkBox' || c.type === 'Walkbox') &&
+          (c.perspectiveWalk3D === true || c.threeDPerspectiveWalk === true)
+      );
+      if (!wbComp) continue;
+
+      const vertices = quad.vertices.map((v: any) => {
+        const p = v.p !== undefined ? v.p : quad.parallax || 1.0;
+        let vx = v.x;
+        let vy = v.y;
+        if (cam && p !== 1.0) {
+          vx = v.x - cam.x * (p - 1.0);
+          vy = v.y - cam.y * (p - 1.0);
+        }
+        return { x: vx, y: vy };
+      });
+
+      const dist = Geometry.getPointToPolygonDistance({ x: this.x, y: this.y }, vertices);
+      if (dist < 10.0) {
+        return getQuadPerspectiveMovementVector(vertices, this.x, this.y, inputX, inputY);
+      }
+    }
+
+    return null;
   }
 
   updateSpriteForState() {
@@ -1025,4 +1084,94 @@ export class Actor extends Entity {
     actor.load(data);
     return actor;
   }
+}
+
+export function getQuadPerspectiveMovementVector(
+  quadVertices: Array<{ x: number; y: number }>,
+  px: number,
+  py: number,
+  inputX: number,
+  inputY: number
+): { dx: number; dy: number } | null {
+  if (quadVertices.length < 4) return null;
+
+  const v0 = quadVertices[0]; // Top-Left
+  const v1 = quadVertices[1]; // Top-Right
+  const v2 = quadVertices[2]; // Bottom-Right
+  const v3 = quadVertices[3]; // Bottom-Left
+
+  // Calculate distance from point P to Left edge (v0 -> v3) and Right edge (v1 -> v2)
+  const dL = Geometry.getPointToSegmentDistance({ x: px, y: py }, v0, v3);
+  const dR = Geometry.getPointToSegmentDistance({ x: px, y: py }, v1, v2);
+
+  const totalHorizontalDist = dL + dR;
+  const u = totalHorizontalDist > 0.0001 ? Math.max(0, Math.min(1, dL / totalHorizontalDist)) : 0.5;
+
+  // Top point at ratio u (on top edge v0 -> v1)
+  const TopU = {
+    x: (1 - u) * v0.x + u * v1.x,
+    y: (1 - u) * v0.y + u * v1.y,
+  };
+
+  // Bottom point at ratio u (on bottom edge v3 -> v2)
+  const BottomU = {
+    x: (1 - u) * v3.x + u * v2.x,
+    y: (1 - u) * v3.y + u * v2.y,
+  };
+
+  // Up vector (from BottomU to TopU)
+  let upX = TopU.x - BottomU.x;
+  let upY = TopU.y - BottomU.y;
+  const upLen = Math.hypot(upX, upY);
+  if (upLen > 0.0001) {
+    upX /= upLen;
+    upY /= upLen;
+  } else {
+    upX = 0;
+    upY = -1;
+  }
+
+  // Calculate distance from point P to Top edge (v0 -> v1) and Bottom edge (v3 -> v2)
+  const dT = Geometry.getPointToSegmentDistance({ x: px, y: py }, v0, v1);
+  const dB = Geometry.getPointToSegmentDistance({ x: px, y: py }, v3, v2);
+
+  const totalVerticalDist = dT + dB;
+  const v = totalVerticalDist > 0.0001 ? Math.max(0, Math.min(1, dT / totalVerticalDist)) : 0.5;
+
+  // Left point at ratio v (on left edge v0 -> v3)
+  const LeftV = {
+    x: (1 - v) * v0.x + v * v3.x,
+    y: (1 - v) * v0.y + v * v3.y,
+  };
+
+  // Right point at ratio v (on right edge v1 -> v2)
+  const RightV = {
+    x: (1 - v) * v1.x + v * v2.x,
+    y: (1 - v) * v1.y + v * v2.y,
+  };
+
+  // Right vector (from LeftV to RightV)
+  let rightX = RightV.x - LeftV.x;
+  let rightY = RightV.y - LeftV.y;
+  const rightLen = Math.hypot(rightX, rightY);
+  if (rightLen > 0.0001) {
+    rightX /= rightLen;
+    rightY /= rightLen;
+  } else {
+    rightX = 1;
+    rightY = 0;
+  }
+
+  // Input direction: inputY is -1 for UP, +1 for DOWN
+  // Movement vector = inputX * RightVector - inputY * UpVector
+  let dx = inputX * rightX - inputY * upX;
+  let dy = inputX * rightY - inputY * upY;
+
+  const len = Math.hypot(dx, dy);
+  if (len > 0.0001) {
+    dx /= len;
+    dy /= len;
+  }
+
+  return { dx, dy };
 }

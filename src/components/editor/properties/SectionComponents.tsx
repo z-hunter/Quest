@@ -1463,6 +1463,25 @@ export const SectionComponents: React.FC = () => {
                       style={{ width: '100%' }}
                     />
                   </div>
+                  {(obj as any)?.type === 'Quad' && (
+                    <div className="e-row" style={{ marginTop: '8px' }}>
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!(comp as any).perspectiveWalk3D}
+                          onChange={(e) => {
+                            (comp as any).perspectiveWalk3D = e.target.checked;
+                            incrementObjectVersion();
+                          }}
+                          style={{ marginRight: '6px' }}
+                        />
+                        3d-perspective walk
+                      </label>
+                    </div>
+                  )}
                 </div>
               </>
             )}

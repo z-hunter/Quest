@@ -144,6 +144,7 @@ import type { ActivationSceneContext } from './types';
 export interface WalkBoxComponent {
   type: 'WalkBox';
   mode?: 'Invert' | 'Add' | 'Subtract';
+  perspectiveWalk3D?: boolean;
 }
 
 export type AnyComponent = (
