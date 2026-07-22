@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Entity } from '../../src/entities/Entity';
+import { QuadObject } from '../../src/entities/QuadObject';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../../src/core/Resolution';
 import { handleSceneClick } from '../../src/scene/SceneInteraction';
 import { createSceneFixture } from '../fixtures/sceneFactory';
@@ -224,5 +225,25 @@ describe('Scene interaction text layer', () => {
 
     expect(player.getMoveResult().status).toBe('started');
     expect(player.getMoveResult().route.length).toBeGreaterThan(1);
+  });
+
+  it('moves the player when clicking a Quad object with a Walkbox component instead of showing SEE title', () => {
+    const fixture = createSceneFixture();
+    fixture.addPlayer('Hero', 100, 100);
+    const quad = new QuadObject(fixture.game as any, 'QuadFloor');
+    quad.vertices = [
+      { x: 0, y: 0, p: 1.0 },
+      { x: 640, y: 0, p: 1.0 },
+      { x: 640, y: 360, p: 1.0 },
+      { x: 0, y: 360, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert' }];
+    fixture.scene.addEntity(quad);
+
+    handleSceneClick(fixture.scene, 320, 180);
+
+    expect(fixture.messages).toHaveLength(0);
+    expect(fixture.scene.player?.getMoveResult().status).toBe('started');
+    expect(fixture.scene.player?.target).not.toBeNull();
   });
 });

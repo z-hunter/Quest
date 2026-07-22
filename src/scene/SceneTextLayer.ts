@@ -6,6 +6,8 @@ import type { SwitchTrigger } from '../entities/TriggerComponents';
 import type { Scene } from './Scene';
 import type { SpatialPlacement, SpatialRelationType } from './spatialTypes';
 
+import { isWalkboxObject } from './SceneInteraction';
+
 type EffectiveRelation = Exclude<SpatialRelationType, 'near'>;
 
 export type SceneTextLayerEntry = {
@@ -501,7 +503,7 @@ export function getSceneTextTargetDescriptor(
   if (!target) return null;
 
   const relation = normalizeRelation(fallbackRelation) || 'on';
-  if (target.type === 'Walkbox') {
+  if (target.type === 'Walkbox' || isWalkboxObject(target)) {
     return { title: game.text('engine.floor_label'), relation: 'on' };
   }
 
