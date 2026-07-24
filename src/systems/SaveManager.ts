@@ -91,8 +91,7 @@ export class SaveManager {
         // Dry-run instantiate to find any broken objects
         try {
           const mergedData = applyJsonDelta(source.authored, saved.delta);
-          // Cast sceneManager to any to access private instantiateScene method
-          const tempScene = (this.game.sceneManager as any).instantiateScene(
+          const tempScene = this.game.sceneManager.dryRunInstantiateScene(
             saved.id,
             mergedData,
             saved.path || source.path

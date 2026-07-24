@@ -899,6 +899,10 @@ export class SceneManager {
     return runtime ? JSON.parse(JSON.stringify(runtime)) : undefined;
   }
 
+  dryRunInstantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
+    return this.instantiateScene(sceneId, data, pathValue);
+  }
+
   private instantiateScene(sceneId: string, data: any, pathValue?: string): Scene {
     assertSceneData(data);
     const newScene = new Scene(this.game, sceneId, data.name || 'Untitled');
