@@ -106,6 +106,7 @@ export class Scene {
   entities: Entity[];
   folders: Folder[] = [];
   displayOrder: string[] = [];
+  loadWarnings: string[] = [];
   pickupAnimations: PickupAnimation[] = [];
   dropAnimations: DropAnimation[] = [];
   walkbox: Walkbox[];

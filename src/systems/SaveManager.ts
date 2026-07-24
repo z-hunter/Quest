@@ -97,7 +97,7 @@ export class SaveManager {
             mergedData,
             saved.path || source.path
           );
-          if (tempScene.loadWarnings && tempScene.loadWarnings.length > 0) {
+          if (tempScene.loadWarnings.length > 0) {
             allLoadWarnings.push(...tempScene.loadWarnings);
           }
         } catch (e: any) {

@@ -977,8 +977,7 @@ export class SceneManager {
 
           newScene.addEntity(entity);
         } catch (e: any) {
-          (newScene as any).loadWarnings = (newScene as any).loadWarnings || [];
-          (newScene as any).loadWarnings.push(
+          newScene.loadWarnings.push(
             `Failed to load object "${entityData.name || entityData.id}": ${e.message}`
           );
           console.warn(
@@ -1006,11 +1005,10 @@ export class SceneManager {
         if (issue.objectId) {
           const obj = newScene.getObjectByName(issue.objectId);
           if (obj) {
-            (newScene as any).loadWarnings = (newScene as any).loadWarnings || [];
             if (issue.code === 'missing_related_object' || issue.code === 'relation_cycle') {
               if (obj.spatial) {
                 delete (obj as any).spatial;
-                (newScene as any).loadWarnings.push(
+                newScene.loadWarnings.push(
                   `Repaired object "${obj.name}": removed invalid spatial relation.`
                 );
               }
@@ -1020,33 +1018,29 @@ export class SceneManager {
             ) {
               if (obj.spatial) {
                 delete (obj as any).spatial;
-                (newScene as any).loadWarnings.push(
+                newScene.loadWarnings.push(
                   `Repaired object "${obj.name}": removed spatial relation to non-container.`
                 );
               }
             } else {
               if (obj instanceof Triggerbox) {
                 newScene.removeTriggerbox(obj);
-                (newScene as any).loadWarnings.push(
+                newScene.loadWarnings.push(
                   `Removed broken triggerbox "${obj.name}": ${issue.message}`
                 );
               } else if (obj instanceof Walkbox) {
                 newScene.removeWalkbox(obj);
-                (newScene as any).loadWarnings.push(
+                newScene.loadWarnings.push(
                   `Removed broken walkbox "${obj.name}": ${issue.message}`
                 );
               } else if (obj instanceof Folder) {
                 newScene.folders = newScene.folders.filter((f) => f.name !== obj.name);
-                (newScene as any).loadWarnings.push(
-                  `Removed broken folder "${obj.name}": ${issue.message}`
-                );
+                newScene.loadWarnings.push(`Removed broken folder "${obj.name}": ${issue.message}`);
               } else if (obj instanceof Entity) {
                 newScene.removeEntity(obj);
-                (newScene as any).loadWarnings.push(
-                  `Removed broken object "${obj.name}": ${issue.message}`
-                );
+                newScene.loadWarnings.push(`Removed broken object "${obj.name}": ${issue.message}`);
               } else {
-                (newScene as any).loadWarnings.push(
+                newScene.loadWarnings.push(
                   `Removed broken object "${(obj as any).name}": ${issue.message}`
                 );
               }
