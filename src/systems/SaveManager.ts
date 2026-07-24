@@ -69,14 +69,64 @@ export class SaveManager {
     return state;
   }
 
-  async load(name: string): Promise<SaveStateV1> {
+  async load(name: string): Promise<SaveStateV1 | null> {
     const content = await readProjectFileExisting(SaveManager.pathFor(name));
     const state = migrateSaveState(JSON.parse(content));
-    this.restoreState(state);
+
+    const sources = new Map(
+      this.game.sceneManager.getSaveSceneSources().map((source) => [source.id, source])
+    );
+    const mismatchedScenes: string[] = [];
+    const allLoadWarnings: string[] = [];
+
+    for (const saved of state.scenes) {
+      const source = sources.get(saved.id);
+      if (source) {
+        const expectedHash = state.compatibility.authoredSceneHashes[saved.id];
+        const actualHash = fingerprintJson(source.authored);
+        if (expectedHash && expectedHash !== actualHash) {
+          mismatchedScenes.push(saved.id);
+        }
+
+        // Dry-run instantiate to find any broken objects
+        try {
+          const mergedData = applyJsonDelta(source.authored, saved.delta);
+          // Cast sceneManager to any to access private instantiateScene method
+          const tempScene = (this.game.sceneManager as any).instantiateScene(
+            saved.id,
+            mergedData,
+            saved.path || source.path
+          );
+          if (tempScene.loadWarnings && tempScene.loadWarnings.length > 0) {
+            allLoadWarnings.push(...tempScene.loadWarnings);
+          }
+        } catch (e) {
+          allLoadWarnings.push(`Failed to parse scene ${saved.id}`);
+        }
+      }
+    }
+
+    if (mismatchedScenes.length > 0 || allLoadWarnings.length > 0) {
+      let message = `The following scenes have been modified since this save was created:\n${mismatchedScenes.join(', ')}\n\nLoading this save may result in unpredictable behavior.`;
+      if (allLoadWarnings.length > 0) {
+        message += `\n\nDuring dry-run, the following invalid or outdated objects were repaired or removed:\n- ${allLoadWarnings.join('\n- ')}`;
+      }
+      message += '\n\nDo you want to continue loading?';
+
+      const choice = await this.game.requestChoiceDialog('Warning: Modified Scenes', message, [
+        { id: 'load', label: 'Load Anyway', variant: 'danger' },
+        { id: 'cancel', label: 'Cancel', variant: 'neutral' },
+      ]);
+      if (choice !== 'load') {
+        return null;
+      }
+    }
+
+    this.restoreState(state, true);
     return state;
   }
 
-  restoreState(state: SaveStateV1): void {
+  restoreState(state: SaveStateV1, ignoreHashMismatch: boolean = false): void {
     const parsed = migrateSaveState(state);
     const sources = new Map(
       this.game.sceneManager.getSaveSceneSources().map((source) => [source.id, source])
@@ -87,9 +137,13 @@ export class SaveManager {
       const expectedHash = parsed.compatibility.authoredSceneHashes[saved.id];
       const actualHash = fingerprintJson(source.authored);
       if (!expectedHash || expectedHash !== actualHash) {
-        throw new Error(
-          `Save is incompatible with authored scene '${saved.id}' (expected ${expectedHash || 'missing hash'}, found ${actualHash}).`
-        );
+        if (!ignoreHashMismatch) {
+          throw new Error(
+            `Save is incompatible with authored scene '${saved.id}' (expected ${expectedHash || 'missing hash'}, found ${actualHash}).`
+          );
+        } else {
+          this.game.console.log(`Warning: Ignoring hash mismatch for scene '${saved.id}'`, 'info');
+        }
       }
       return {
         id: saved.id,

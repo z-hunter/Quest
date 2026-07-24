@@ -15,6 +15,7 @@ import { StateEventSystem } from '../systems/StateEventSystem';
 import { assertSceneData } from '../contracts/runtimeSchemas';
 import type { SceneLogData } from './SceneLog';
 import { traceNavigation } from '../systems/navigation/navigationDebug';
+import { SceneSpatialValidator } from './SceneSpatialValidator';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -951,29 +952,39 @@ export class SceneManager {
 
     if (data.entities) {
       data.entities.forEach((entityData: any) => {
-        if (entityData.type === 'Folder') {
-          const folder = Folder.fromData(this.game, entityData);
-          newScene.addFolder(folder);
-          return;
+        try {
+          if (entityData.type === 'Folder') {
+            const folder = Folder.fromData(this.game, entityData);
+            newScene.addFolder(folder);
+            return;
+          }
+
+          let entity: Entity;
+
+          const hasActorComponent = Array.isArray(entityData.components)
+            ? entityData.components.some((component: any) => component?.type === 'Actor')
+            : false;
+
+          if (entityData.type === 'Player') {
+            entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
+          } else if (entityData.type === 'Actor' || hasActorComponent) {
+            entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
+          } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
+            entity = QuadObject.fromJSON(this.game, entityData);
+          } else {
+            entity = Entity.fromJSON(this.game, entityData);
+          }
+
+          newScene.addEntity(entity);
+        } catch (e: any) {
+          (newScene as any).loadWarnings = (newScene as any).loadWarnings || [];
+          (newScene as any).loadWarnings.push(
+            `Failed to load object "${entityData.name || entityData.id}": ${e.message}`
+          );
+          console.warn(
+            `Failed to instantiate entity ${entityData.name || entityData.id}: ${e.message}`
+          );
         }
-
-        let entity: Entity;
-
-        const hasActorComponent = Array.isArray(entityData.components)
-          ? entityData.components.some((component: any) => component?.type === 'Actor')
-          : false;
-
-        if (entityData.type === 'Player') {
-          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor', isPlayer: true });
-        } else if (entityData.type === 'Actor' || hasActorComponent) {
-          entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
-        } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
-          entity = QuadObject.fromJSON(this.game, entityData);
-        } else {
-          entity = Entity.fromJSON(this.game, entityData);
-        }
-
-        newScene.addEntity(entity);
       });
     }
 
@@ -986,6 +997,49 @@ export class SceneManager {
 
     if (Array.isArray(data.displayOrder)) {
       newScene.displayOrder = data.displayOrder.filter((n: any) => typeof n === 'string');
+    }
+
+    // Auto-repair spatial relations and components
+    const validationResult = SceneSpatialValidator.validate(newScene, this.game);
+    if (validationResult.errors.length > 0) {
+      for (const issue of validationResult.errors) {
+        if (issue.objectId) {
+          const obj = newScene.getObjectByName(issue.objectId);
+          if (obj) {
+            (newScene as any).loadWarnings = (newScene as any).loadWarnings || [];
+            if (issue.code === 'missing_related_object' || issue.code === 'relation_cycle') {
+              if (obj.spatial) {
+                delete (obj as any).spatial;
+                (newScene as any).loadWarnings.push(
+                  `Repaired object "${obj.name}": removed invalid spatial relation.`
+                );
+              }
+            } else if (
+              issue.code === 'missing_component_inventory' ||
+              issue.code === 'missing_component_surface'
+            ) {
+              if (obj.spatial) {
+                delete (obj as any).spatial;
+                (newScene as any).loadWarnings.push(
+                  `Repaired object "${obj.name}": removed spatial relation to non-container.`
+                );
+              }
+            } else {
+              if (obj instanceof Entity) {
+                newScene.removeEntity(obj);
+                (newScene as any).loadWarnings.push(
+                  `Removed broken object "${obj.name}": ${issue.message}`
+                );
+              } else if (obj instanceof Folder) {
+                newScene.folders = newScene.folders.filter((f) => f.name !== obj.name);
+                (newScene as any).loadWarnings.push(
+                  `Removed broken folder "${obj.name}": ${issue.message}`
+                );
+              }
+            }
+          }
+        }
+      }
     }
 
     return newScene;
