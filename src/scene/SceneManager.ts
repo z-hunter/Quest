@@ -1025,16 +1025,33 @@ export class SceneManager {
                 );
               }
             } else {
-              if (obj instanceof Entity) {
-                newScene.removeEntity(obj);
+              if (obj instanceof Triggerbox) {
+                newScene.removeTriggerbox(obj);
                 (newScene as any).loadWarnings.push(
-                  `Removed broken object "${obj.name}": ${issue.message}`
+                  `Removed broken triggerbox "${obj.name}": ${issue.message}`
+                );
+              } else if (obj instanceof Walkbox) {
+                newScene.removeWalkbox(obj);
+                (newScene as any).loadWarnings.push(
+                  `Removed broken walkbox "${obj.name}": ${issue.message}`
                 );
               } else if (obj instanceof Folder) {
                 newScene.folders = newScene.folders.filter((f) => f.name !== obj.name);
                 (newScene as any).loadWarnings.push(
                   `Removed broken folder "${obj.name}": ${issue.message}`
                 );
+              } else if (obj instanceof Entity) {
+                newScene.removeEntity(obj);
+                (newScene as any).loadWarnings.push(
+                  `Removed broken object "${obj.name}": ${issue.message}`
+                );
+              } else {
+                (newScene as any).loadWarnings.push(
+                  `Removed broken object "${(obj as any).name}": ${issue.message}`
+                );
+              }
+              if (Array.isArray(newScene.displayOrder)) {
+                newScene.displayOrder = newScene.displayOrder.filter((n) => n !== obj.name);
               }
             }
           }

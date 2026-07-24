@@ -84,7 +84,7 @@ export class SaveManager {
       if (source) {
         const expectedHash = state.compatibility.authoredSceneHashes[saved.id];
         const actualHash = fingerprintJson(source.authored);
-        if (expectedHash && expectedHash !== actualHash) {
+        if (!expectedHash || expectedHash !== actualHash) {
           mismatchedScenes.push(saved.id);
         }
 
@@ -100,18 +100,28 @@ export class SaveManager {
           if (tempScene.loadWarnings && tempScene.loadWarnings.length > 0) {
             allLoadWarnings.push(...tempScene.loadWarnings);
           }
-        } catch (e) {
-          allLoadWarnings.push(`Failed to parse scene ${saved.id}`);
+        } catch (e: any) {
+          allLoadWarnings.push(`Failed to parse scene ${saved.id}: ${e?.message || e}`);
         }
+      } else {
+        allLoadWarnings.push(`Save references unknown or missing scene '${saved.id}'.`);
       }
     }
 
     if (mismatchedScenes.length > 0 || allLoadWarnings.length > 0) {
-      let message = `The following scenes have been modified since this save was created:\n${mismatchedScenes.join(', ')}\n\nLoading this save may result in unpredictable behavior.`;
-      if (allLoadWarnings.length > 0) {
-        message += `\n\nDuring dry-run, the following invalid or outdated objects were repaired or removed:\n- ${allLoadWarnings.join('\n- ')}`;
+      const parts: string[] = [];
+      if (mismatchedScenes.length > 0) {
+        parts.push(
+          `The following scenes have been modified since this save was created:\n${mismatchedScenes.join(', ')}\n\nLoading this save may result in unpredictable behavior.`
+        );
       }
-      message += '\n\nDo you want to continue loading?';
+      if (allLoadWarnings.length > 0) {
+        parts.push(
+          `During dry-run, the following invalid or outdated objects were repaired or removed:\n- ${allLoadWarnings.join('\n- ')}`
+        );
+      }
+      parts.push('Do you want to continue loading?');
+      const message = parts.join('\n\n');
 
       const choice = await this.game.requestChoiceDialog('Warning: Modified Scenes', message, [
         { id: 'load', label: 'Load Anyway', variant: 'danger' },
@@ -122,7 +132,12 @@ export class SaveManager {
       }
     }
 
-    this.restoreState(state, true);
+    try {
+      this.restoreState(state, true);
+    } catch (e: any) {
+      this.game.console.log(`Failed to restore save state: ${e?.message || e}`, 'error');
+      return null;
+    }
     return state;
   }
 
