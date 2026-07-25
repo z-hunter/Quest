@@ -279,7 +279,11 @@ function routeFor(
   bitmap?: WalkabilityBitmap,
   sizeOverride?: number,
   boundsOverride?: { minX: number; minY: number; cols: number; rows: number }
-): { route: NavigationPoint[] | null; iterations: number } {
+): {
+  route: NavigationPoint[] | null;
+  iterations: number;
+  exhaustivelySearched?: Set<string> | null;
+} {
   if (!isSnapshotWalkable(snapshot, target, actor, dynamicBlockers)) {
     return { route: null, iterations: 0 };
   }
@@ -362,7 +366,7 @@ function routeFor(
       heap.push({ key, score: tentative + distance(neighbor, finish) });
     }
   }
-  return { route: null, iterations };
+  return { route: null, iterations, exhaustivelySearched: heap.size === 0 ? closed : null };
 }
 
 function computeCorridorBounds(
@@ -391,17 +395,34 @@ export function routeForAdaptive(
   target: NavigationPoint,
   dynamicBlockers: NavigationRect[],
   fineBitmap?: WalkabilityBitmap,
-  coarseBitmap?: WalkabilityBitmap
+  coarseBitmap?: WalkabilityBitmap,
+  knownCoarseReachable?: Set<string>,
+  knownFineReachable?: Set<string>
 ): {
   route: NavigationPoint[] | null;
   iterations: number;
   adaptiveUsed: boolean;
   adaptiveFallback: boolean;
+  coarseExhausted?: Set<string> | null;
+  fineExhausted?: Set<string> | null;
 } {
   const fineSize = gridSize(actor);
   const coarseSize = fineSize * 4;
 
+  let coarseExhausted: Set<string> | null | undefined = null;
+  let fineExhausted: Set<string> | null | undefined = null;
+
+  if (knownCoarseReachable && coarseBitmap) {
+    const cellX = Math.round((target.x - coarseBitmap.minX) / coarseSize);
+    const cellY = Math.round((target.y - coarseBitmap.minY) / coarseSize);
+    if (!knownCoarseReachable.has(`${cellX},${cellY}`)) {
+      return { route: null, iterations: 0, adaptiveUsed: true, adaptiveFallback: false };
+    }
+  }
+
   const coarseResult = routeFor(snapshot, actor, target, dynamicBlockers, coarseBitmap, coarseSize);
+  coarseExhausted = coarseResult.exhaustivelySearched;
+
   if (coarseResult.route) {
     const buffer = coarseSize * 2;
     const corridorBounds = computeCorridorBounds(
@@ -428,16 +449,36 @@ export function routeForAdaptive(
         iterations: coarseResult.iterations + fineResult.iterations,
         adaptiveUsed: true,
         adaptiveFallback: false,
+        coarseExhausted,
+        fineExhausted,
+      };
+    }
+  }
+
+  if (knownFineReachable && fineBitmap) {
+    const cellX = Math.round((target.x - fineBitmap.minX) / fineSize);
+    const cellY = Math.round((target.y - fineBitmap.minY) / fineSize);
+    if (!knownFineReachable.has(`${cellX},${cellY}`)) {
+      return {
+        route: null,
+        iterations: coarseResult.iterations,
+        adaptiveUsed: true,
+        adaptiveFallback: true,
+        coarseExhausted,
       };
     }
   }
 
   const fallbackResult = routeFor(snapshot, actor, target, dynamicBlockers, fineBitmap, fineSize);
+  fineExhausted = fallbackResult.exhaustivelySearched;
+
   return {
     route: fallbackResult.route,
     iterations: coarseResult.iterations + fallbackResult.iterations,
     adaptiveUsed: true,
     adaptiveFallback: true,
+    coarseExhausted,
+    fineExhausted,
   };
 }
 
@@ -471,6 +512,8 @@ export function planSnapshotApproach(
   let totalIterations = 0;
   let usedAdaptive = false;
   let usedFallback = false;
+  let knownCoarseReachable: Set<string> | null = null;
+  let knownFineReachable: Set<string> | null = null;
 
   for (const step of steps) {
     for (let r = 0; r <= radius; r += step) {
@@ -487,11 +530,15 @@ export function planSnapshotApproach(
             point,
             request.dynamicBlockers,
             fineBitmap,
-            coarseBitmap
+            coarseBitmap,
+            knownCoarseReachable || undefined,
+            knownFineReachable || undefined
           );
           totalIterations += adaptiveRes.iterations;
           if (adaptiveRes.adaptiveUsed) usedAdaptive = true;
           if (adaptiveRes.adaptiveFallback) usedFallback = true;
+          if (adaptiveRes.coarseExhausted) knownCoarseReachable = adaptiveRes.coarseExhausted;
+          if (adaptiveRes.fineExhausted) knownFineReachable = adaptiveRes.fineExhausted;
 
           const route = adaptiveRes.route;
           if (!route) continue;
