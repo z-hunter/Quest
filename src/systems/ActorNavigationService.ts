@@ -649,8 +649,9 @@ export class ActorNavigationService {
       const entryPoint = this.getLocalTeleportEntryPoint(actor, exitObject);
       if (!entryPoint) continue;
 
+      const exitPoint = this.getObjectCenter(exitObject) || { x: actor.x, y: actor.y };
       const minPossibleCost =
-        Math.hypot(exitObject.x - actor.x, exitObject.y - actor.y) +
+        Math.hypot(exitPoint.x - actor.x, exitPoint.y - actor.y) +
         Math.hypot(target.x - entryPoint.x, target.y - entryPoint.y);
       if (best && minPossibleCost >= best.cost) continue;
       if (minPossibleCost >= directCost) continue;

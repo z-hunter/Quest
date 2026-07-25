@@ -1591,13 +1591,12 @@ describe('NpcPuppetMaster', () => {
     fixture.addPlayer('Hero');
     const npc = addNpc(fixture, 'guard');
     const serviceLink = fixture.addTriggerbox('service_link', {
-      title: 'Maintenance passage',
+      title: null,
       components: [
         {
           type: 'Exit',
           targetSceneId: '',
           targetEntryId: 'service_entry',
-          navigationOnly: true,
         },
       ],
     });
@@ -2433,6 +2432,7 @@ describe('NpcPuppetMaster', () => {
       { x: 205, y: 55 },
     ];
     const exit = fixture.addTriggerbox('LeftExit', {
+      title: null,
       components: [
         {
           type: 'Exit',
@@ -2440,7 +2440,6 @@ describe('NpcPuppetMaster', () => {
           targetEntryId: 'RightEntry',
           collider: false,
           portal: true,
-          navigationOnly: true,
         },
       ],
     });

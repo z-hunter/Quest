@@ -230,17 +230,16 @@ export class Actor extends Entity {
         ? true
         : this.scene.isWalkable(wx, wy, this);
 
+    const teleportPlan = this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+
     let walkingRoute: { x: number; y: number }[] | null = null;
     if (
+      !teleportPlan &&
       isWalkable(target.x, target.y) &&
       this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)
     ) {
       walkingRoute = [target];
     }
-
-    const teleportPlan = walkingRoute
-      ? null
-      : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
 
     if (!walkingRoute && !teleportPlan) {
       walkingRoute = this.planWalkingRouteTo(target);
@@ -332,8 +331,11 @@ export class Actor extends Entity {
     this.routeIndex = 0;
     this.target = this.route[0];
     this.visualTarget = null;
-    this.localTeleportTarget = null;
-    this.localTeleportExit = null;
+
+    const teleportPlan = this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+    this.localTeleportTarget = teleportPlan ? target : null;
+    this.localTeleportExit = teleportPlan?.exits[0] || null;
+
     this.setState('walk');
     this.overrideAnimSet = null;
     this.lastMoveResult = this.createMoveResult('started', 'route_started', target, this.route);
@@ -362,7 +364,9 @@ export class Actor extends Entity {
     result: ActorMoveResult;
   } | null {
     const target = this.plannedMoveTarget;
-    if (!target || this.state !== 'walk') return null;
+    if (!target || this.state !== 'walk') {
+      return null;
+    }
 
     // If this teleport was NOT part of an intentional teleport plan (e.g., player clicking the floor
     // and accidentally pathing over a teleport), we stop the navigation to avoid bouncing back.
@@ -478,9 +482,9 @@ export class Actor extends Entity {
           const teleportExit = this.localTeleportExit;
           const teleportTarget = this.localTeleportTarget;
           if (teleportExit && teleportTarget && this.scene) {
+            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
             this.localTeleportExit = null;
             this.localTeleportTarget = null;
-            const activated = ComponentSystem.handleActivation(teleportExit, this.scene, 0, this);
             if (activated) {
               this.moveTo(teleportTarget.x, teleportTarget.y);
               return;

@@ -911,8 +911,8 @@ export class Scene {
       if (this.triggerboxes) {
         for (const tb of this.triggerboxes) {
           if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
-          const exit = tb.components?.find((c: any) => c.type === 'Exit');
-          if (exit && exit.navigationOnly !== true) {
+          const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
+          if (exit) {
             const targetScene = exit.targetSceneId?.trim();
             const isLocalTeleport = !targetScene || targetScene === this.id;
             const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
@@ -932,8 +932,8 @@ export class Scene {
       if (this.triggerboxes) {
         for (const tb of this.triggerboxes) {
           if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
-          const exit = tb.components?.find((c: any) => c.type === 'Exit');
-          if (exit && exit.navigationOnly !== true) {
+          const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
+          if (exit && !ComponentSystem.isNavigationOnlyExit(tb as any)) {
             const targetScene = exit.targetSceneId?.trim();
             const isLocalTeleport = !targetScene || targetScene === this.id;
             const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;

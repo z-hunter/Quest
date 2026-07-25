@@ -1294,17 +1294,6 @@ export const SectionComponents: React.FC = () => {
                       />
                       Portal
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <input
-                        type="checkbox"
-                        checked={comp.navigationOnly === true}
-                        onChange={(e) => {
-                          comp.navigationOnly = e.target.checked;
-                          incrementObjectVersion();
-                        }}
-                      />
-                      Navigation only
-                    </label>
                   </div>
                 </div>
                 <div className="e-row">
