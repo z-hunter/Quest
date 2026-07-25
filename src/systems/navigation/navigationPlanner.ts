@@ -42,6 +42,21 @@ export type NavigationPlanResult = {
   point: NavigationPoint | null;
   route: NavigationPoint[];
   durationMs: number;
+  bitmapBuilt?: boolean;
+  adaptiveUsed?: boolean;
+  adaptiveFallback?: boolean;
+  iterationsCount?: number;
+};
+
+export type WalkabilityBitmap = {
+  revision: number;
+  actorKey: string;
+  minX: number;
+  minY: number;
+  cols: number;
+  rows: number;
+  size: number;
+  bitmap: Uint8Array;
 };
 
 type Cell = { x: number; y: number };
@@ -161,7 +176,8 @@ function boundsFor(
   snapshot: NavigationSnapshot,
   actor: NavigationActorProfile,
   target: NavigationPoint,
-  size: number
+  size: number,
+  radiusPadding = 0
 ): { minX: number; minY: number; cols: number; rows: number } {
   const points = [
     { x: actor.x, y: actor.y },
@@ -172,16 +188,16 @@ function boundsFor(
       { x: rect.x + rect.w, y: rect.y + rect.h },
     ]),
   ];
-  let minX = Math.min(...points.map((point) => point.x)) - size * 4;
-  let maxX = Math.max(...points.map((point) => point.x)) + size * 4;
-  let minY = Math.min(...points.map((point) => point.y)) - size * 4;
-  let maxY = Math.max(...points.map((point) => point.y)) + size * 4;
+  let minX = Math.min(...points.map((point) => point.x), target.x - radiusPadding) - size * 4;
+  let maxX = Math.max(...points.map((point) => point.x), target.x + radiusPadding) + size * 4;
+  let minY = Math.min(...points.map((point) => point.y), target.y - radiusPadding) - size * 4;
+  let maxY = Math.max(...points.map((point) => point.y), target.y + radiusPadding) + size * 4;
   // Keep malformed/empty snapshots bounded to the requested route.
   if (!Number.isFinite(minX + maxX + minY + maxY)) {
-    minX = Math.min(actor.x, target.x) - size * 4;
-    maxX = Math.max(actor.x, target.x) + size * 4;
-    minY = Math.min(actor.y, target.y) - size * 4;
-    maxY = Math.max(actor.y, target.y) + size * 4;
+    minX = Math.min(actor.x, target.x - radiusPadding) - size * 4;
+    maxX = Math.max(actor.x, target.x + radiusPadding) + size * 4;
+    minY = Math.min(actor.y, target.y - radiusPadding) - size * 4;
+    maxY = Math.max(actor.y, target.y + radiusPadding) + size * 4;
   }
   return {
     minX,
@@ -191,15 +207,88 @@ function boundsFor(
   };
 }
 
+export function buildWalkabilityBitmap(
+  snapshot: NavigationSnapshot,
+  actor: NavigationActorProfile,
+  target: NavigationPoint,
+  radiusPadding = 0,
+  sizeOverride?: number
+): WalkabilityBitmap {
+  const size = sizeOverride ?? gridSize(actor);
+  const bounds = boundsFor(snapshot, actor, target, size, radiusPadding);
+  const bitmap = new Uint8Array(bounds.cols * bounds.rows);
+  const actorKey = `${actor.colliderWidth}x${actor.colliderHeight}`;
+
+  for (let r = 0; r < bounds.rows; r++) {
+    for (let c = 0; c < bounds.cols; c++) {
+      const point = {
+        x: bounds.minX + c * size,
+        y: bounds.minY + r * size,
+      };
+      if (isSnapshotWalkable(snapshot, point, actor, [])) {
+        bitmap[r * bounds.cols + c] = 1;
+      }
+    }
+  }
+
+  return {
+    revision: snapshot.revision,
+    actorKey,
+    minX: bounds.minX,
+    minY: bounds.minY,
+    cols: bounds.cols,
+    rows: bounds.rows,
+    size,
+    bitmap,
+  };
+}
+
+function isCellWalkableCached(
+  bitmap: WalkabilityBitmap,
+  cell: Cell,
+  actor: NavigationActorProfile,
+  dynamicBlockers: NavigationRect[]
+): boolean {
+  if (cell.x < 0 || cell.y < 0 || cell.x >= bitmap.cols || cell.y >= bitmap.rows) {
+    return false;
+  }
+  const idx = cell.y * bitmap.cols + cell.x;
+  if (!bitmap.bitmap[idx]) {
+    return false;
+  }
+  if (dynamicBlockers.length === 0) {
+    return true;
+  }
+  const point = {
+    x: bitmap.minX + cell.x * bitmap.size,
+    y: bitmap.minY + cell.y * bitmap.size,
+  };
+  const rect = sourceRect(point, actor);
+  if (!rect) return true;
+  for (const blocker of dynamicBlockers) {
+    if (Geometry.rectIntersectsRect(rect, blocker)) return false;
+  }
+  return true;
+}
+
 function routeFor(
   snapshot: NavigationSnapshot,
   actor: NavigationActorProfile,
   target: NavigationPoint,
-  dynamicBlockers: NavigationRect[]
-): NavigationPoint[] | null {
-  if (!isSnapshotWalkable(snapshot, target, actor, dynamicBlockers)) return null;
-  const size = gridSize(actor);
-  const bounds = boundsFor(snapshot, actor, target, size);
+  dynamicBlockers: NavigationRect[],
+  bitmap?: WalkabilityBitmap,
+  sizeOverride?: number,
+  boundsOverride?: { minX: number; minY: number; cols: number; rows: number }
+): { route: NavigationPoint[] | null; iterations: number } {
+  if (!isSnapshotWalkable(snapshot, target, actor, dynamicBlockers)) {
+    return { route: null, iterations: 0 };
+  }
+  const size = sizeOverride ?? gridSize(actor);
+  const bounds =
+    boundsOverride ??
+    (bitmap
+      ? { minX: bitmap.minX, minY: bitmap.minY, cols: bitmap.cols, rows: bitmap.rows }
+      : boundsFor(snapshot, actor, target, size));
   const toCell = (point: NavigationPoint): Cell => ({
     x: Math.round((point.x - bounds.minX) / size),
     y: Math.round((point.y - bounds.minY) / size),
@@ -229,7 +318,8 @@ function routeFor(
     { x: -1, y: -1 },
   ];
   const maxIterations = (bounds.cols + 1) * (bounds.rows + 1);
-  for (let iterations = 0; heap.size > 0 && iterations < maxIterations; iterations += 1) {
+  let iterations = 0;
+  for (; heap.size > 0 && iterations < maxIterations; iterations += 1) {
     const next = heap.pop();
     if (!next || closed.has(next.key)) continue;
     const current = cells.get(next.key);
@@ -239,13 +329,13 @@ function routeFor(
       let key = next.key;
       while (key !== startKey) {
         const cell = cells.get(key);
-        if (!cell) return null;
+        if (!cell) return { route: null, iterations };
         route.unshift(key === targetKey ? target : toPoint(cell));
         const previous = cameFrom.get(key);
-        if (!previous) return null;
+        if (!previous) return { route: null, iterations };
         key = previous;
       }
-      return route.length ? route : [target];
+      return { route: route.length ? route : [target], iterations };
     }
     closed.add(next.key);
     for (const direction of directions) {
@@ -254,8 +344,15 @@ function routeFor(
         continue;
       const key = cellKey(neighbor);
       if (closed.has(key)) continue;
-      const point = key === targetKey ? target : toPoint(neighbor);
-      if (!isSnapshotWalkable(snapshot, point, actor, dynamicBlockers)) continue;
+      const isWalkable = bitmap
+        ? isCellWalkableCached(bitmap, neighbor, actor, dynamicBlockers)
+        : isSnapshotWalkable(
+            snapshot,
+            key === targetKey ? target : toPoint(neighbor),
+            actor,
+            dynamicBlockers
+          );
+      if (!isWalkable) continue;
       const tentative =
         (gScore.get(next.key) ?? Number.POSITIVE_INFINITY) + distance(current, neighbor);
       if (tentative >= (gScore.get(key) ?? Number.POSITIVE_INFINITY)) continue;
@@ -265,7 +362,83 @@ function routeFor(
       heap.push({ key, score: tentative + distance(neighbor, finish) });
     }
   }
-  return null;
+  return { route: null, iterations };
+}
+
+function computeCorridorBounds(
+  route: NavigationPoint[],
+  actor: NavigationActorProfile,
+  target: NavigationPoint,
+  buffer: number,
+  fineSize: number
+): { minX: number; minY: number; cols: number; rows: number } {
+  const points = [{ x: actor.x, y: actor.y }, target, ...route];
+  const minX = Math.min(...points.map((p) => p.x)) - buffer;
+  const maxX = Math.max(...points.map((p) => p.x)) + buffer;
+  const minY = Math.min(...points.map((p) => p.y)) - buffer;
+  const maxY = Math.max(...points.map((p) => p.y)) + buffer;
+  return {
+    minX,
+    minY,
+    cols: Math.max(1, Math.ceil((maxX - minX) / fineSize)),
+    rows: Math.max(1, Math.ceil((maxY - minY) / fineSize)),
+  };
+}
+
+export function routeForAdaptive(
+  snapshot: NavigationSnapshot,
+  actor: NavigationActorProfile,
+  target: NavigationPoint,
+  dynamicBlockers: NavigationRect[],
+  fineBitmap?: WalkabilityBitmap,
+  coarseBitmap?: WalkabilityBitmap
+): {
+  route: NavigationPoint[] | null;
+  iterations: number;
+  adaptiveUsed: boolean;
+  adaptiveFallback: boolean;
+} {
+  const fineSize = gridSize(actor);
+  const coarseSize = fineSize * 4;
+
+  const coarseResult = routeFor(snapshot, actor, target, dynamicBlockers, coarseBitmap, coarseSize);
+  if (coarseResult.route) {
+    const buffer = coarseSize * 2;
+    const corridorBounds = computeCorridorBounds(
+      coarseResult.route,
+      actor,
+      target,
+      buffer,
+      fineSize
+    );
+
+    const fineResult = routeFor(
+      snapshot,
+      actor,
+      target,
+      dynamicBlockers,
+      fineBitmap,
+      fineSize,
+      corridorBounds
+    );
+
+    if (fineResult.route) {
+      return {
+        route: fineResult.route,
+        iterations: coarseResult.iterations + fineResult.iterations,
+        adaptiveUsed: true,
+        adaptiveFallback: false,
+      };
+    }
+  }
+
+  const fallbackResult = routeFor(snapshot, actor, target, dynamicBlockers, fineBitmap, fineSize);
+  return {
+    route: fallbackResult.route,
+    iterations: coarseResult.iterations + fallbackResult.iterations,
+    adaptiveUsed: true,
+    adaptiveFallback: true,
+  };
 }
 
 export function planSnapshotApproach(
@@ -275,12 +448,30 @@ export function planSnapshotApproach(
   const startedAt = performance.now();
   const radius = Math.max(32, request.interactionRadius);
   const steps = [16, 4];
+
+  const fineBitmap = buildWalkabilityBitmap(snapshot, request.actor, request.target, radius);
+  const fineSize = gridSize(request.actor);
+  const coarseSize = fineSize * 4;
+  const coarseBitmap = buildWalkabilityBitmap(
+    snapshot,
+    request.actor,
+    request.target,
+    radius,
+    coarseSize
+  );
+  const bitmapBuilt = true;
+
   let best: {
     point: NavigationPoint;
     route: NavigationPoint[];
     targetDistance: number;
     actorDistance: number;
   } | null = null;
+
+  let totalIterations = 0;
+  let usedAdaptive = false;
+  let usedFallback = false;
+
   for (const step of steps) {
     for (let r = 0; r <= radius; r += step) {
       for (let dx = -r; dx <= r; dx += step) {
@@ -289,8 +480,22 @@ export function planSnapshotApproach(
           const point = { x: request.target.x + dx, y: request.target.y + dy };
           const targetDistance = Math.hypot(dx, dy);
           if (targetDistance > radius) continue;
-          const route = routeFor(snapshot, request.actor, point, request.dynamicBlockers);
+
+          const adaptiveRes = routeForAdaptive(
+            snapshot,
+            request.actor,
+            point,
+            request.dynamicBlockers,
+            fineBitmap,
+            coarseBitmap
+          );
+          totalIterations += adaptiveRes.iterations;
+          if (adaptiveRes.adaptiveUsed) usedAdaptive = true;
+          if (adaptiveRes.adaptiveFallback) usedFallback = true;
+
+          const route = adaptiveRes.route;
           if (!route) continue;
+
           const actorDistance = Math.hypot(point.x - request.actor.x, point.y - request.actor.y);
           if (
             !best ||
@@ -311,6 +516,7 @@ export function planSnapshotApproach(
     targetDistance: number;
     actorDistance: number;
   } | null;
+
   return {
     requestId: request.requestId,
     sceneId: request.sceneId,
@@ -318,5 +524,9 @@ export function planSnapshotApproach(
     point: selected?.point || null,
     route: selected?.route || [],
     durationMs: performance.now() - startedAt,
+    bitmapBuilt,
+    adaptiveUsed: usedAdaptive,
+    adaptiveFallback: usedFallback,
+    iterationsCount: totalIterations,
   };
 }

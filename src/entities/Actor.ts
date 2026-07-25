@@ -44,6 +44,47 @@ export interface ActorData extends EntityData {
   perceptionRadius?: number;
 }
 
+class MinHeap {
+  private readonly values: Array<{ key: string; score: number }> = [];
+
+  get size(): number {
+    return this.values.length;
+  }
+
+  push(value: { key: string; score: number }): void {
+    this.values.push(value);
+    let index = this.values.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.values[parent].score <= value.score) break;
+      this.values[index] = this.values[parent];
+      index = parent;
+    }
+    this.values[index] = value;
+  }
+
+  pop(): { key: string; score: number } | undefined {
+    const first = this.values[0];
+    const last = this.values.pop();
+    if (!first || !last) return first;
+    let index = 0;
+    while (index * 2 + 1 < this.values.length) {
+      let child = index * 2 + 1;
+      if (
+        child + 1 < this.values.length &&
+        this.values[child + 1].score < this.values[child].score
+      ) {
+        child += 1;
+      }
+      if (this.values[child].score >= last.score) break;
+      this.values[index] = this.values[child];
+      index = child;
+    }
+    this.values[index] = last;
+    return first;
+  }
+}
+
 export class Actor extends Entity {
   direction: ActorDirection;
   state: ActorState;
@@ -184,10 +225,26 @@ export class Actor extends Entity {
     }
 
     this.plannedMoveTarget = { ...target };
-    const walkingRoute = this.planWalkingRouteTo(target);
+    const isWalkable = (wx: number, wy: number) =>
+      !this.scene || typeof this.scene.isWalkable !== 'function'
+        ? true
+        : this.scene.isWalkable(wx, wy, this);
+
+    let walkingRoute: { x: number; y: number }[] | null = null;
+    if (
+      isWalkable(target.x, target.y) &&
+      this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)
+    ) {
+      walkingRoute = [target];
+    }
+
     const teleportPlan = walkingRoute
       ? null
       : this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
+
+    if (!walkingRoute && !teleportPlan) {
+      walkingRoute = this.planWalkingRouteTo(target);
+    }
     if (
       teleportPlan?.firstLeg.status === 'already_reachable' &&
       teleportPlan.exits[0] &&
@@ -306,6 +363,19 @@ export class Actor extends Entity {
   } | null {
     const target = this.plannedMoveTarget;
     if (!target || this.state !== 'walk') return null;
+
+    // If this teleport was NOT part of an intentional teleport plan (e.g., player clicking the floor
+    // and accidentally pathing over a teleport), we stop the navigation to avoid bouncing back.
+    if (!this.localTeleportTarget) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return null;
+    }
+
+    const distanceToTarget = Math.hypot(target.x - this.x, target.y - this.y);
+    if (distanceToTarget <= 48 || this.localTeleportRevision >= 3) {
+      this.stopWithMoveResult(this.createMoveResult('arrived', 'arrived', target, []));
+      return null;
+    }
 
     const previousRouteLength = this.route.length;
     this.localTeleportRevision += 1;
@@ -781,11 +851,12 @@ export class Actor extends Entity {
     const targetCell = this.pointToCell(target, bounds, gridSize);
     const startKey = this.cellKey(startCell);
     const targetKey = this.cellKey(targetCell);
-    const open = new Set<string>([startKey]);
+    const heap = new MinHeap();
     const cameFrom = new Map<string, string>();
     const gScore = new Map<string, number>([[startKey, 0]]);
-    const fScore = new Map<string, number>([[startKey, this.cellDistance(startCell, targetCell)]]);
     const cells = new Map<string, { x: number; y: number }>([[startKey, startCell]]);
+    const closed = new Set<string>();
+    heap.push({ key: startKey, score: this.cellDistance(startCell, targetCell) });
     const directions = [
       { x: 1, y: 0 },
       { x: -1, y: 0 },
@@ -796,12 +867,14 @@ export class Actor extends Entity {
       { x: -1, y: 1 },
       { x: -1, y: -1 },
     ];
-    const maxIterations = (bounds.cols + 1) * (bounds.rows + 1);
+    const maxIterations = Math.min((bounds.cols + 1) * (bounds.rows + 1), 50000);
     let iterations = 0;
 
-    while (open.size > 0 && iterations < maxIterations) {
+    while (heap.size > 0 && iterations < maxIterations) {
       iterations += 1;
-      const currentKey = this.getBestOpenCell(open, fScore);
+      const next = heap.pop();
+      if (!next || closed.has(next.key)) continue;
+      const currentKey = next.key;
       const current = cells.get(currentKey);
       if (!current) return null;
 
@@ -822,7 +895,7 @@ export class Actor extends Entity {
         );
       }
 
-      open.delete(currentKey);
+      closed.add(currentKey);
 
       for (const direction of directions) {
         const neighbor = { x: current.x + direction.x, y: current.y + direction.y };
@@ -836,16 +909,8 @@ export class Actor extends Entity {
         }
 
         const neighborKey = this.cellKey(neighbor);
-        const currentPoint = this.cellToRoutePoint(
-          current,
-          currentKey,
-          bounds,
-          gridSize,
-          startKey,
-          targetKey,
-          start,
-          target
-        );
+        if (closed.has(neighborKey)) continue;
+
         const point = this.cellToRoutePoint(
           neighbor,
           neighborKey,
@@ -857,7 +922,29 @@ export class Actor extends Entity {
           target
         );
         if (!isWalkable(point.x, point.y)) continue;
-        if (!this.isRouteSegmentClear(currentPoint, point, isWalkable)) continue;
+        if (direction.x !== 0 && direction.y !== 0) {
+          const card1 = this.cellToRoutePoint(
+            { x: current.x + direction.x, y: current.y },
+            '',
+            bounds,
+            gridSize,
+            startKey,
+            targetKey,
+            start,
+            target
+          );
+          const card2 = this.cellToRoutePoint(
+            { x: current.x, y: current.y + direction.y },
+            '',
+            bounds,
+            gridSize,
+            startKey,
+            targetKey,
+            start,
+            target
+          );
+          if (!isWalkable(card1.x, card1.y) || !isWalkable(card2.x, card2.y)) continue;
+        }
 
         const tentativeG =
           (gScore.get(currentKey) ?? Number.POSITIVE_INFINITY) +
@@ -867,8 +954,10 @@ export class Actor extends Entity {
           cameFrom.set(neighborKey, currentKey);
           cells.set(neighborKey, neighbor);
           gScore.set(neighborKey, tentativeG);
-          fScore.set(neighborKey, tentativeG + this.cellDistance(neighbor, targetCell));
-          open.add(neighborKey);
+          heap.push({
+            key: neighborKey,
+            score: tentativeG + this.cellDistance(neighbor, targetCell),
+          });
         }
       }
     }
@@ -963,21 +1052,6 @@ export class Actor extends Entity {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  private getBestOpenCell(open: Set<string>, fScore: Map<string, number>): string {
-    let best = '';
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (const key of open) {
-      const score = fScore.get(key) ?? Number.POSITIVE_INFINITY;
-      if (score < bestScore) {
-        best = key;
-        bestScore = score;
-      }
-    }
-
-    return best;
   }
 
   private reconstructRoute(

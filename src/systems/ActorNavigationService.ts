@@ -255,6 +255,17 @@ export class ActorNavigationService {
     this.npcActive = null;
     this.diagnostics.active = false;
     this.diagnostics.workerDurationMs = result.durationMs;
+    traceNavigation(this.game, 'navigation_worker_result', {
+      actorId: active.actor.name,
+      targetId: active.target.name,
+      requestId: result.requestId,
+      durationMs: result.durationMs,
+      bitmapBuilt: result.bitmapBuilt,
+      adaptiveUsed: result.adaptiveUsed,
+      adaptiveFallback: result.adaptiveFallback,
+      iterationsCount: result.iterationsCount,
+      routeLength: result.route?.length ?? 0,
+    });
     const scene = active.actor.scene || this.game.sceneManager.currentScene;
     const stale =
       result.missingSnapshot ||
@@ -638,10 +649,23 @@ export class ActorNavigationService {
       const entryPoint = this.getLocalTeleportEntryPoint(actor, exitObject);
       if (!entryPoint) continue;
 
+      const minPossibleCost =
+        Math.hypot(exitObject.x - actor.x, exitObject.y - actor.y) +
+        Math.hypot(target.x - entryPoint.x, target.y - entryPoint.y);
+      if (best && minPossibleCost >= best.cost) continue;
+      if (minPossibleCost >= directCost) continue;
+
       const firstLeg = this.planWalkingApproach(actor, exitObject);
       if (firstLeg.status === 'unreachable' || !firstLeg.point) continue;
       const probe = this.createActorProbe(actor, entryPoint);
-      const finalRoute = probe.previewWalkingRouteTo(target.x, target.y);
+      const distanceFromEntryToTarget = Math.hypot(
+        target.x - entryPoint.x,
+        target.y - entryPoint.y
+      );
+      const finalRoute =
+        distanceFromEntryToTarget <= 64
+          ? [target]
+          : probe.previewWalkingRouteTo(target.x, target.y);
       if (!finalRoute) continue;
       const cost =
         routeLength({ x: actor.x, y: actor.y }, firstLeg.route) +

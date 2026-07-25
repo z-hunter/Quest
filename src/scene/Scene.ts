@@ -905,6 +905,49 @@ export class Scene {
       }
     }
 
+    if (sourceRect) {
+      // 2.5 Physical Exits (navigationOnly: false) act as obstacles
+      // This prevents actors from accidentally walking through a portal and triggering a teleport loop.
+      if (this.triggerboxes) {
+        for (const tb of this.triggerboxes) {
+          if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
+          const exit = tb.components?.find((c: any) => c.type === 'Exit');
+          if (exit && exit.navigationOnly !== true) {
+            const targetScene = exit.targetSceneId?.trim();
+            const isLocalTeleport = !targetScene || targetScene === this.id;
+            const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
+
+            // Block if it's an inter-scene teleport (always a wall),
+            // OR if it's a local teleport but the entity is an NPC.
+            if (!isLocalTeleport || !isPlayer) {
+              if (Geometry.rectIntersectsPolygon(sourceRect, tb.poly)) {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // 1.5 Physical Exits
+      if (this.triggerboxes) {
+        for (const tb of this.triggerboxes) {
+          if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
+          const exit = tb.components?.find((c: any) => c.type === 'Exit');
+          if (exit && exit.navigationOnly !== true) {
+            const targetScene = exit.targetSceneId?.trim();
+            const isLocalTeleport = !targetScene || targetScene === this.id;
+            const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
+
+            if (!isLocalTeleport || !isPlayer) {
+              if (Geometry.isPointInPolygonWithEpsilon({ x, y }, tb.poly)) {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Filter out disabled walkboxes first
     const activeWalkboxes = this.walkbox ? this.walkbox.filter((wb) => !wb.disabled) : [];
 
@@ -937,7 +980,7 @@ export class Scene {
       }
     });
 
-    // If no active walkboxes, everything is walkable
+    // If no active walkboxes, everything is walkable (unless blocked by entities or physical exits checked above)
     if (activeWalkboxes.length === 0) return true;
 
     if (sourceRect) {

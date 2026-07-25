@@ -1499,28 +1499,28 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 746.8315882393255,
-      "y": 198.02187728717183,
+      "x": 839.4245694969658,
+      "y": 237.07066417896343,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 746.8315882393255,
-          "y": 198.02187728717183,
+          "x": 839.4245694969658,
+          "y": 237.07066417896343,
           "p": 1.0284991047125034
         },
         {
-          "x": 832.8463954381032,
-          "y": 196.9262303294158,
+          "x": 929.1344858023598,
+          "y": 235.92773621104976,
           "p": 1.0277014172129904
         },
         {
-          "x": 1282.7254904151312,
-          "y": 226.48597506940484,
+          "x": 1418.8420290593078,
+          "y": 266.7703140259866,
           "p": 1.0485129785677496
         },
         {
-          "x": 1191.748714820306,
-          "y": 224.19473535521402,
+          "x": 1321.9379564740707,
+          "y": 264.37967494347504,
           "p": 1.0468963151083723
         }
       ],
@@ -2396,85 +2396,6 @@
       "colliderHeight": 0
     },
     {
-      "name": "Miles",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 10,
-          "groups": [],
-          "protected": true,
-          "items": [],
-          "relation": "in"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow2",
-          "offsetX": -12,
-          "offsetY": -14,
-          "triggerId": "#F2"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "x": 774.2071727672343,
-      "y": 216.43213784520708,
-      "width": 116.58090399897964,
-      "height": 279.6366278353903,
-      "baseWidth": 148,
-      "baseHeight": 355,
-      "spriteName": "miles2_ds-idle-left.json",
-      "color": "#00ffff",
-      "scale": 0.7877088108039164,
-      "refScale": 0.84,
-      "modelScale": 0.84,
-      "ignoreScaling": false,
-      "animationSpeed": 53,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "isPlayer": true,
-      "speed": 0.24,
-      "perceptionRadius": 600,
-      "direction": "right",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles2_ds-idle-up.json",
-          "down": "miles2_ds-idle-down.json",
-          "left": "miles2_ds-idle-left.json",
-          "right": ""
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles2_ds-wlk-up.json",
-          "down": "miles2_ds-walk-down.json",
-          "left": "miles2_ds-walk-left.json",
-          "right": ""
-        }
-      },
-      "colliderWidth": 88,
-      "colliderHeight": 4
-    },
-    {
       "name": "test",
       "type": "Entity",
       "locked": false,
@@ -2562,6 +2483,85 @@
       "blur": 0,
       "colliderWidth": 0,
       "colliderHeight": 0
+    },
+    {
+      "name": "Miles",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 867.1867894714892,
+      "y": 256.476771548839,
+      "width": 122.47631712507433,
+      "height": 292.95010988024535,
+      "baseWidth": 148,
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
+      "color": "#00ffff",
+      "scale": 0.8275426832775292,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "down",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
     }
   ],
   "folders": [
@@ -2639,6 +2639,7 @@
   "camDeadzoneX": 200,
   "camDeadzoneY": -21,
   "camMinX": 143,
+  "camMaxX": 1116,
   "camMaxY": 45,
   "soundEnv": {
     "audioMaxDistance": 10000,
