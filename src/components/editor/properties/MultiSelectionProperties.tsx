@@ -93,6 +93,14 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     quads,
     (q: any) => q.gridPerspectiveAmount ?? 1.0
   );
+  const sharedGridPerspectiveInvertX = getSharedBooleanState(
+    quads,
+    (q: any) => !!q.gridPerspectiveInvertX
+  );
+  const sharedGridPerspectiveInvertY = getSharedBooleanState(
+    quads,
+    (q: any) => !!q.gridPerspectiveInvertY
+  );
   const sharedIgnoreScaling = getSharedBooleanState(
     entitiesAndQuads,
     (o: any) => !!o.ignoreScaling
@@ -686,6 +694,50 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                         });
                       }}
                     />
+                    <div style={{ display: 'flex', gap: '15px', marginTop: '6px' }}>
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          style={{ marginRight: '5px' }}
+                          checked={sharedGridPerspectiveInvertX === 'on'}
+                          ref={(el) => {
+                            if (el) el.indeterminate = sharedGridPerspectiveInvertX === 'mixed';
+                          }}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            applyToMulti((o: any) => {
+                              if ((o as any).type === 'Quad')
+                                (o as any).gridPerspectiveInvertX = checked;
+                            });
+                          }}
+                        />
+                        Invert X
+                      </label>
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          style={{ marginRight: '5px' }}
+                          checked={sharedGridPerspectiveInvertY === 'on'}
+                          ref={(el) => {
+                            if (el) el.indeterminate = sharedGridPerspectiveInvertY === 'mixed';
+                          }}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            applyToMulti((o: any) => {
+                              if ((o as any).type === 'Quad')
+                                (o as any).gridPerspectiveInvertY = checked;
+                            });
+                          }}
+                        />
+                        Invert Y
+                      </label>
+                    </div>
                   </div>
                 )}
 

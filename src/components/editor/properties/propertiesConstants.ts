@@ -162,6 +162,10 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
     'Enables 3D perspective line spacing. Grid lines bunch closer together towards the narrower edge of trapezoidal Quads.',
   Amount:
     'Controls the intensity of the perspective effect. 0 = flat grid, 1 = standard 3D perspective, higher values increase distortion.',
+  'Invert X':
+    'Inverts perspective line spacing on the X axis (lines widen towards narrower vertical edges).',
+  'Invert Y':
+    'Inverts perspective line spacing on the Y axis (lines widen towards narrower horizontal edges).',
   Checkerboard:
     'Renders the Quad fill as a 2-color alternating checkerboard pattern across grid cells.',
   'Second Fill Color': 'Secondary color used for alternating checkerboard fill cells.',

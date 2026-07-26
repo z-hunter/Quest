@@ -50,6 +50,8 @@ export const DefaultQuadData: any = {
   gridColor: '#ffffff',
   gridPerspective: true,
   gridPerspectiveAmount: 1.0,
+  gridPerspectiveInvertX: false,
+  gridPerspectiveInvertY: false,
   filled: true,
   checkerboard: false,
   secondColor: '#000000',
