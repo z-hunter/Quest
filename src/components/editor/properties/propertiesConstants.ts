@@ -162,6 +162,9 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
     'Enables 3D perspective line spacing. Grid lines bunch closer together towards the narrower edge of trapezoidal Quads.',
   Amount:
     'Controls the intensity of the perspective effect. 0 = flat grid, 1 = standard 3D perspective, higher values increase distortion.',
+  Checkerboard:
+    'Renders the Quad fill as a 2-color alternating checkerboard pattern across grid cells.',
+  'Second Fill Color': 'Secondary color used for alternating checkerboard fill cells.',
   Collider: 'Teleports the Actor if their collider enters this area.',
   Portal:
     'Teleports the Actor if they activate the area (e.g. by clicking on it) while within reachable distance.',

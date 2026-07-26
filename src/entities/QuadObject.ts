@@ -70,6 +70,8 @@ export class QuadObject extends Entity {
 
   // Fill Props
   filled: boolean = true;
+  checkerboard: boolean = false;
+  secondColor: string = '#000000';
 
   // Effects
   blur: number = 0;
@@ -97,6 +99,8 @@ export class QuadObject extends Entity {
     'gridPerspective',
     'gridPerspectiveAmount',
     'filled',
+    'checkerboard',
+    'secondColor',
     'blur',
   ];
 
@@ -163,7 +167,7 @@ export class QuadObject extends Entity {
       }
     }
 
-    // 1. Draw Fill (Solid Mode)
+    // 1. Draw Fill (Solid / Checkerboard Mode)
     if (this.filled) {
       ctx.globalCompositeOperation = this.blendMode;
       ctx.fillStyle = this.color;
@@ -174,6 +178,98 @@ export class QuadObject extends Entity {
       });
       ctx.closePath();
       ctx.fill();
+
+      if (this.checkerboard) {
+        const v0 = screenVerts[0]; // TL
+        const v1 = screenVerts[1]; // TR
+        const v2 = screenVerts[2]; // BR
+        const v3 = screenVerts[3]; // BL
+
+        const usePerspective = this.gridPerspective ?? true;
+        const amount = this.gridPerspectiveAmount ?? 1.0;
+
+        const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
+        const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
+        const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
+        const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+
+        const cols = (this.gridLinesX ?? 5) + 1;
+        const rows = (this.gridLinesY ?? 5) + 1;
+
+        ctx.fillStyle = this.secondColor || '#000000';
+
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if ((col + row) % 2 === 1) {
+              const rawU0 = col / cols;
+              const rawU1 = (col + 1) / cols;
+              const rawV0 = row / rows;
+              const rawV1 = (row + 1) / rows;
+
+              const u0 = usePerspective ? getPerspectiveT(rawU0, hLeft, hRight, amount) : rawU0;
+              const u1 = usePerspective ? getPerspectiveT(rawU1, hLeft, hRight, amount) : rawU1;
+              const v0_t = usePerspective ? getPerspectiveT(rawV0, wTop, wBot, amount) : rawV0;
+              const v1_t = usePerspective ? getPerspectiveT(rawV1, wTop, wBot, amount) : rawV1;
+
+              // Top-Left corner
+              const p00x =
+                (1 - u0) * (1 - v0_t) * v0.x +
+                u0 * (1 - v0_t) * v1.x +
+                (1 - u0) * v0_t * v3.x +
+                u0 * v0_t * v2.x;
+              const p00y =
+                (1 - u0) * (1 - v0_t) * v0.y +
+                u0 * (1 - v0_t) * v1.y +
+                (1 - u0) * v0_t * v3.y +
+                u0 * v0_t * v2.y;
+
+              // Top-Right corner
+              const p10x =
+                (1 - u1) * (1 - v0_t) * v0.x +
+                u1 * (1 - v0_t) * v1.x +
+                (1 - u1) * v0_t * v3.x +
+                u1 * v0_t * v2.x;
+              const p10y =
+                (1 - u1) * (1 - v0_t) * v0.y +
+                u1 * (1 - v0_t) * v1.y +
+                (1 - u1) * v0_t * v3.y +
+                u1 * v0_t * v2.y;
+
+              // Bottom-Right corner
+              const p11x =
+                (1 - u1) * (1 - v1_t) * v0.x +
+                u1 * (1 - v1_t) * v1.x +
+                (1 - u1) * v1_t * v3.x +
+                u1 * v1_t * v2.x;
+              const p11y =
+                (1 - u1) * (1 - v1_t) * v0.y +
+                u1 * (1 - v1_t) * v1.y +
+                (1 - u1) * v1_t * v3.y +
+                u1 * v1_t * v2.y;
+
+              // Bottom-Left corner
+              const p01x =
+                (1 - u0) * (1 - v1_t) * v0.x +
+                u0 * (1 - v1_t) * v1.x +
+                (1 - u0) * v1_t * v3.x +
+                u0 * v1_t * v2.x;
+              const p01y =
+                (1 - u0) * (1 - v1_t) * v0.y +
+                u0 * (1 - v1_t) * v1.y +
+                (1 - u0) * v1_t * v3.y +
+                u0 * v1_t * v2.y;
+
+              ctx.beginPath();
+              ctx.moveTo(p00x, p00y);
+              ctx.lineTo(p10x, p10y);
+              ctx.lineTo(p11x, p11y);
+              ctx.lineTo(p01x, p01y);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+        }
+      }
     }
 
     // 2. Draw Grid (Overlay)

@@ -72,19 +72,45 @@ describe('QuadObject', () => {
     expect(tExaggerated).toBeLessThan(tPersp);
   });
 
-  it('serializes and deserializes gridPerspective and gridPerspectiveAmount', () => {
+  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, checkerboard and secondColor', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'test_quad');
     quad.isGrid = true;
     quad.gridPerspective = true;
     quad.gridPerspectiveAmount = 1.5;
+    quad.filled = true;
+    quad.checkerboard = true;
+    quad.secondColor = '#ff0000';
 
     const json = quad.toJSON();
     expect(json.gridPerspective).toBe(true);
     expect(json.gridPerspectiveAmount).toBe(1.5);
+    expect(json.checkerboard).toBe(true);
+    expect(json.secondColor).toBe('#ff0000');
 
     const loadedQuad = QuadObject.fromJSON(fixture.game, json);
     expect(loadedQuad.gridPerspective).toBe(true);
     expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
+    expect(loadedQuad.checkerboard).toBe(true);
+    expect(loadedQuad.secondColor).toBe('#ff0000');
+  });
+
+  it('draws checkerboard pattern when filled and checkerboard are active', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'checker_quad');
+    quad.filled = true;
+    quad.checkerboard = true;
+    quad.color = '#ffffff';
+    quad.secondColor = '#000000';
+    quad.gridLinesX = 2; // 3 cols
+    quad.gridLinesY = 2; // 3 rows -> 9 total cells (4 filled with secondColor)
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    // Initial base fill + 4 alternating cells filled with secondColor = 5 fill calls total
+    expect(ctx.fill).toHaveBeenCalledTimes(5);
+    expect(ctx.fillStyle).toBe('#000000');
   });
 });

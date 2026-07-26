@@ -51,6 +51,8 @@ export const DefaultQuadData: any = {
   gridPerspective: true,
   gridPerspectiveAmount: 1.0,
   filled: true,
+  checkerboard: false,
+  secondColor: '#000000',
   blur: 0,
   opacity: 1.0,
   blendMode: 'source-over',
