@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QuadObject, getPerspectiveT } from '../../src/entities/QuadObject';
+import { createQuadHomography, projectQuadPoint, QuadObject } from '../../src/entities/QuadObject';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 function createMockContext() {
@@ -55,31 +55,55 @@ describe('QuadObject', () => {
     expect(ctx.strokeStyle).toBe('#000000');
   });
 
-  it('calculates getPerspectiveT correctly with ratio and amount blending', () => {
-    // Rectangle: equal edge lengths -> linear parameter t
-    expect(getPerspectiveT(0.5, 100, 100, 1.0)).toBe(0.5);
+  it('uses converging edges, not opposite edge lengths, for grid perspective', () => {
+    // Top/bottom are parallel; the right edge is vertical and the left one is
+    // slanted. Therefore vertical grid cuts must stay linearly spaced even
+    // though the side edges have different lengths.
+    const p0 = { x: 0, y: 0 };
+    const p1 = { x: 100, y: 0 };
+    const p2 = { x: 100, y: 100 };
+    const p3 = { x: -20, y: 100 };
+    const transform = createQuadHomography(p0, p1, p2, p3);
 
-    // Amount = 0 -> linear parameter t
-    expect(getPerspectiveT(0.5, 50, 100, 0.0)).toBe(0.5);
+    expect(transform).not.toBeNull();
+    expect(transform!.g).toBeCloseTo(0);
+    expect(projectQuadPoint(transform!, 0.25, 0)).toMatchObject({ x: 25, y: 0 });
+    expect(projectQuadPoint(transform!, 0.25, 1)).toMatchObject({ x: expect.closeTo(10), y: 100 });
 
-    // Narrower top edge (50 vs 100) -> standard perspective pulls t closer to 0 (top)
-    const tPersp = getPerspectiveT(0.5, 50, 100, 1.0);
-    expect(tPersp).toBeLessThan(0.5);
-    expect(tPersp).toBeCloseTo(1 / 3, 4); // 0.5 / (0.5 + 0.5 * 2) = 1/3
-
-    // Amount = 2.0 (exaggerated effect)
-    const tExaggerated = getPerspectiveT(0.5, 50, 100, 2.0);
-    expect(tExaggerated).toBeLessThan(tPersp);
+    // The other pair of edges does converge, so horizontal cuts still receive
+    // the appropriate projective spacing.
+    expect(transform!.h).not.toBeCloseTo(0);
   });
 
-  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, gridPerspectiveOffX/Y, checkerboard and secondColor', () => {
+  it('maps every unit-square corner exactly to its Quad vertex', () => {
+    const points = [
+      { x: 20, y: 10 },
+      { x: 130, y: 30 },
+      { x: 110, y: 140 },
+      { x: -10, y: 100 },
+    ];
+    const transform = createQuadHomography(points[0], points[1], points[2], points[3]);
+
+    expect(transform).not.toBeNull();
+    for (const [u, v, point] of [
+      [0, 0, points[0]],
+      [1, 0, points[1]],
+      [1, 1, points[2]],
+      [0, 1, points[3]],
+    ] as const) {
+      expect(projectQuadPoint(transform!, u, v)).toMatchObject({
+        x: expect.closeTo(point.x),
+        y: expect.closeTo(point.y),
+      });
+    }
+  });
+
+  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, checkerboard and secondColor', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'test_quad');
     quad.isGrid = true;
     quad.gridPerspective = true;
     quad.gridPerspectiveAmount = 1.5;
-    quad.gridPerspectiveOffX = true;
-    quad.gridPerspectiveOffY = true;
     quad.filled = true;
     quad.checkerboard = true;
     quad.secondColor = '#ff0000';
@@ -87,16 +111,12 @@ describe('QuadObject', () => {
     const json = quad.toJSON();
     expect(json.gridPerspective).toBe(true);
     expect(json.gridPerspectiveAmount).toBe(1.5);
-    expect(json.gridPerspectiveOffX).toBe(true);
-    expect(json.gridPerspectiveOffY).toBe(true);
     expect(json.checkerboard).toBe(true);
     expect(json.secondColor).toBe('#ff0000');
 
     const loadedQuad = QuadObject.fromJSON(fixture.game, json);
     expect(loadedQuad.gridPerspective).toBe(true);
     expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
-    expect(loadedQuad.gridPerspectiveOffX).toBe(true);
-    expect(loadedQuad.gridPerspectiveOffY).toBe(true);
     expect(loadedQuad.checkerboard).toBe(true);
     expect(loadedQuad.secondColor).toBe('#ff0000');
   });

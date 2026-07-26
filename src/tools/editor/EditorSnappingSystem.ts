@@ -1,5 +1,10 @@
 import { Entity } from '../../entities/Entity';
-import { QuadObject, getPerspectiveT, type QuadVertexBinding } from '../../entities/QuadObject';
+import {
+  createQuadHomography,
+  projectQuadGridPoint,
+  QuadObject,
+  type QuadVertexBinding,
+} from '../../entities/QuadObject';
 
 export class EditorSnappingSystem {
   /**
@@ -243,22 +248,31 @@ export class EditorSnappingSystem {
 
             const basePerspective = q.gridPerspective ?? true;
             const amount = q.gridPerspectiveAmount ?? 1.0;
-            const usePerspectiveX = basePerspective && !(q.gridPerspectiveOffX ?? false);
-            const usePerspectiveY = basePerspective && !(q.gridPerspectiveOffY ?? false);
-
-            const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
-            const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
-            const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
-            const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+            const usePerspective = basePerspective;
+            const gridTransform = createQuadHomography(v0, v1, v2, v3);
+            const gridPoint = (u: number, v: number) =>
+              projectQuadGridPoint(
+                v0,
+                v1,
+                v2,
+                v3,
+                gridTransform,
+                u,
+                v,
+                amount,
+                usePerspective,
+                usePerspective
+              );
 
             // Horizontal Cuts (Down the shape using GridLinesY)
             for (let i = 1; i <= q.gridLinesY; i++) {
               const rawV = i / (q.gridLinesY + 1);
-              const v = usePerspectiveY ? getPerspectiveT(rawV, wTop, wBot, amount) : rawV;
+              const v = rawV;
 
               // Left Edge (V0-V3)
-              const lx = v0.x + (v3.x - v0.x) * v;
-              const ly = v0.y + (v3.y - v0.y) * v;
+              const left = gridPoint(0, v);
+              const lx = left.x;
+              const ly = left.y;
               const lp = v0.p + (v3.p - v0.p) * v;
 
               let d = Math.abs(lx - result.x);
@@ -270,8 +284,9 @@ export class EditorSnappingSystem {
               }
 
               // Right Edge (V1-V2)
-              const rx = v1.x + (v2.x - v1.x) * v;
-              const ry = v1.y + (v2.y - v1.y) * v;
+              const right = gridPoint(1, v);
+              const rx = right.x;
+              const ry = right.y;
               const rp = v1.p + (v2.p - v1.p) * v;
 
               d = Math.abs(rx - result.x);
@@ -286,11 +301,12 @@ export class EditorSnappingSystem {
             // Vertical Cuts (Across the shape using GridLinesX)
             for (let i = 1; i <= q.gridLinesX; i++) {
               const rawU = i / (q.gridLinesX + 1);
-              const u = usePerspectiveX ? getPerspectiveT(rawU, hLeft, hRight, amount) : rawU;
+              const u = rawU;
 
               // Top Edge (V0-V1)
-              const tx = v0.x + (v1.x - v0.x) * u;
-              const ty = v0.y + (v1.y - v0.y) * u;
+              const top = gridPoint(u, 0);
+              const tx = top.x;
+              const ty = top.y;
               const tp = v0.p + (v1.p - v0.p) * u;
 
               let d = Math.abs(tx - result.x);
@@ -302,8 +318,9 @@ export class EditorSnappingSystem {
               }
 
               // Bottom Edge (V3-V2)
-              const bx = v3.x + (v2.x - v3.x) * u;
-              const by = v3.y + (v2.y - v3.y) * u;
+              const bottom = gridPoint(u, 1);
+              const bx = bottom.x;
+              const by = bottom.y;
               const bp = v3.p + (v2.p - v3.p) * u;
 
               d = Math.abs(bx - result.x);
@@ -317,11 +334,10 @@ export class EditorSnappingSystem {
               // Internal Nodes
               for (let j = 1; j <= q.gridLinesY; j++) {
                 const rawV = j / (q.gridLinesY + 1);
-                const v = usePerspectiveY ? getPerspectiveT(rawV, wTop, wBot, amount) : rawV;
-                const nx =
-                  (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
-                const ny =
-                  (1 - u) * (1 - v) * v0.y + u * (1 - v) * v1.y + (1 - u) * v * v3.y + u * v * v2.y;
+                const v = rawV;
+                const node = gridPoint(u, v);
+                const nx = node.x;
+                const ny = node.y;
                 const np =
                   (1 - u) * (1 - v) * v0.p + u * (1 - v) * v1.p + (1 - u) * v * v3.p + u * v * v2.p;
 

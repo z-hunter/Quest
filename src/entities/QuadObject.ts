@@ -21,19 +21,164 @@ export interface QuadVertex {
 
 export type QuadSortMode = 'ignore' | 'v0' | 'v1' | 'v2' | 'v3';
 
-export function getPerspectiveT(
-  t: number,
-  edge1Length: number,
-  edge2Length: number,
-  amount: number = 1.0
-): number {
-  if (amount <= 0 || edge1Length <= 0 || edge2Length <= 0) return t;
-  const ratio = edge2Length / edge1Length;
-  if (Math.abs(ratio - 1.0) < 1e-5) return t;
+export interface QuadPoint {
+  x: number;
+  y: number;
+}
 
-  const tPersp = t / (t + (1.0 - t) * ratio);
-  const tFinal = (1.0 - amount) * t + amount * tPersp;
-  return Math.max(0, Math.min(1, tFinal));
+/** Maps the unit square (u, v) to a Quad's screen-space vertices. */
+export interface QuadHomography {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+  g: number;
+  h: number;
+}
+
+const HOMOGRAPHY_EPSILON = 1e-9;
+
+/**
+ * Builds a projective transform from (0,0)-(1,1) to a convex Quad.
+ *
+ * The four corners uniquely determine a homography, so its projective terms
+ * must not be scaled: doing so would detach the grid from one corner.
+ */
+export function createQuadHomography(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint
+): QuadHomography | null {
+  const dx1 = p1.x - p2.x;
+  const dx2 = p3.x - p2.x;
+  const dx3 = p0.x - p1.x + p2.x - p3.x;
+  const dy1 = p1.y - p2.y;
+  const dy2 = p3.y - p2.y;
+  const dy3 = p0.y - p1.y + p2.y - p3.y;
+
+  let g = 0;
+  let h = 0;
+  if (Math.abs(dx3) > HOMOGRAPHY_EPSILON || Math.abs(dy3) > HOMOGRAPHY_EPSILON) {
+    const denominator = dx1 * dy2 - dx2 * dy1;
+    if (Math.abs(denominator) < HOMOGRAPHY_EPSILON) return null;
+
+    g = (dx3 * dy2 - dx2 * dy3) / denominator;
+    h = (dx1 * dy3 - dx3 * dy1) / denominator;
+  }
+
+  const transform = {
+    a: p1.x - p0.x + g * p1.x,
+    b: p3.x - p0.x + h * p3.x,
+    c: p0.x,
+    d: p1.y - p0.y + g * p1.y,
+    e: p3.y - p0.y + h * p3.y,
+    f: p0.y,
+    g,
+    h,
+  };
+
+  // Do not render an unstable/infinite grid for a malformed Quad.
+  if ([0, 1].some((u) => [0, 1].some((v) => Math.abs(g * u + h * v + 1) < HOMOGRAPHY_EPSILON))) {
+    return null;
+  }
+
+  return transform;
+}
+
+export function projectQuadPoint(
+  transform: QuadHomography,
+  u: number,
+  v: number
+): QuadPoint | null {
+  const w = transform.g * u + transform.h * v + 1;
+  if (Math.abs(w) < HOMOGRAPHY_EPSILON) return null;
+  return {
+    x: (transform.a * u + transform.b * v + transform.c) / w,
+    y: (transform.d * u + transform.e * v + transform.f) / w,
+  };
+}
+
+/** Affine fallback used only for malformed/degenerate Quads. */
+export function interpolateQuadPoint(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  u: number,
+  v: number
+): QuadPoint {
+  return {
+    x: (1 - u) * (1 - v) * p0.x + u * (1 - v) * p1.x + (1 - u) * v * p3.x + u * v * p2.x,
+    y: (1 - u) * (1 - v) * p0.y + u * (1 - v) * p1.y + (1 - u) * v * p3.y + u * v * p2.y,
+  };
+}
+
+function intersectQuadLines(
+  a0: QuadPoint,
+  a1: QuadPoint,
+  b0: QuadPoint,
+  b1: QuadPoint
+): QuadPoint | null {
+  const ax = a1.x - a0.x;
+  const ay = a1.y - a0.y;
+  const bx = b1.x - b0.x;
+  const by = b1.y - b0.y;
+  const denominator = ax * by - ay * bx;
+  if (Math.abs(denominator) < HOMOGRAPHY_EPSILON) return null;
+  const t = ((b0.x - a0.x) * by - (b0.y - a0.y) * bx) / denominator;
+  return { x: a0.x + t * ax, y: a0.y + t * ay };
+}
+
+function blendQuadPoints(flat: QuadPoint, projected: QuadPoint, amount: number): QuadPoint {
+  return {
+    x: flat.x + (projected.x - flat.x) * amount,
+    y: flat.y + (projected.y - flat.y) * amount,
+  };
+}
+
+/**
+ * Produces a Retro Grid node. Perspective intensity is applied on the four
+ * boundary edges, then the two resulting grid lines are intersected. This
+ * keeps every grid line straight, every cell connected, and all four Quad
+ * corners fixed for all intensity values.
+ */
+export function projectQuadGridPoint(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  transform: QuadHomography | null,
+  u: number,
+  v: number,
+  amount: number = 1,
+  perspectiveX: boolean = true,
+  perspectiveY: boolean = true
+): QuadPoint {
+  if (!transform) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
+  const alphaX = perspectiveX ? amount : 0;
+  const alphaY = perspectiveY ? amount : 0;
+  if (alphaX === 0 && alphaY === 0) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
+
+  const projectedTop = projectQuadPoint(transform, u, 0);
+  const projectedBottom = projectQuadPoint(transform, u, 1);
+  const projectedLeft = projectQuadPoint(transform, 0, v);
+  const projectedRight = projectQuadPoint(transform, 1, v);
+  if (!projectedTop || !projectedBottom || !projectedLeft || !projectedRight) {
+    return interpolateQuadPoint(p0, p1, p2, p3, u, v);
+  }
+
+  const top = blendQuadPoints(interpolateQuadPoint(p0, p1, p2, p3, u, 0), projectedTop, alphaX);
+  const bottom = blendQuadPoints(
+    interpolateQuadPoint(p0, p1, p2, p3, u, 1),
+    projectedBottom,
+    alphaX
+  );
+  const left = blendQuadPoints(interpolateQuadPoint(p0, p1, p2, p3, 0, v), projectedLeft, alphaY);
+  const right = blendQuadPoints(interpolateQuadPoint(p0, p1, p2, p3, 1, v), projectedRight, alphaY);
+  return intersectQuadLines(top, bottom, left, right) || interpolateQuadPoint(p0, p1, p2, p3, u, v);
 }
 
 export class QuadObject extends Entity {
@@ -67,8 +212,6 @@ export class QuadObject extends Entity {
   gridColor: string = '#ffffff';
   gridPerspective: boolean = true;
   gridPerspectiveAmount: number = 1.0;
-  gridPerspectiveOffX: boolean = false;
-  gridPerspectiveOffY: boolean = false;
 
   // Fill Props
   filled: boolean = true;
@@ -100,8 +243,6 @@ export class QuadObject extends Entity {
     'gridColor',
     'gridPerspective',
     'gridPerspectiveAmount',
-    'gridPerspectiveOffX',
-    'gridPerspectiveOffY',
     'filled',
     'checkerboard',
     'secondColor',
@@ -194,13 +335,21 @@ export class QuadObject extends Entity {
 
         const basePerspective = this.gridPerspective ?? true;
         const amount = this.gridPerspectiveAmount ?? 1.0;
-        const usePerspectiveX = basePerspective && !(this.gridPerspectiveOffX ?? false);
-        const usePerspectiveY = basePerspective && !(this.gridPerspectiveOffY ?? false);
-
-        const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
-        const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
-        const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
-        const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+        const usePerspective = basePerspective;
+        const gridTransform = createQuadHomography(v0, v1, v2, v3);
+        const gridPoint = (u: number, v: number) =>
+          projectQuadGridPoint(
+            v0,
+            v1,
+            v2,
+            v3,
+            gridTransform,
+            u,
+            v,
+            amount,
+            usePerspective,
+            usePerspective
+          );
 
         const cols = (this.gridLinesX ?? 5) + 1;
         const rows = (this.gridLinesY ?? 5) + 1;
@@ -215,64 +364,16 @@ export class QuadObject extends Entity {
               const rawV0 = row / rows;
               const rawV1 = (row + 1) / rows;
 
-              const u0 = usePerspectiveX ? getPerspectiveT(rawU0, hLeft, hRight, amount) : rawU0;
-              const u1 = usePerspectiveX ? getPerspectiveT(rawU1, hLeft, hRight, amount) : rawU1;
-              const v0_t = usePerspectiveY ? getPerspectiveT(rawV0, wTop, wBot, amount) : rawV0;
-              const v1_t = usePerspectiveY ? getPerspectiveT(rawV1, wTop, wBot, amount) : rawV1;
-
-              // Top-Left corner
-              const p00x =
-                (1 - u0) * (1 - v0_t) * v0.x +
-                u0 * (1 - v0_t) * v1.x +
-                (1 - u0) * v0_t * v3.x +
-                u0 * v0_t * v2.x;
-              const p00y =
-                (1 - u0) * (1 - v0_t) * v0.y +
-                u0 * (1 - v0_t) * v1.y +
-                (1 - u0) * v0_t * v3.y +
-                u0 * v0_t * v2.y;
-
-              // Top-Right corner
-              const p10x =
-                (1 - u1) * (1 - v0_t) * v0.x +
-                u1 * (1 - v0_t) * v1.x +
-                (1 - u1) * v0_t * v3.x +
-                u1 * v0_t * v2.x;
-              const p10y =
-                (1 - u1) * (1 - v0_t) * v0.y +
-                u1 * (1 - v0_t) * v1.y +
-                (1 - u1) * v0_t * v3.y +
-                u1 * v0_t * v2.y;
-
-              // Bottom-Right corner
-              const p11x =
-                (1 - u1) * (1 - v1_t) * v0.x +
-                u1 * (1 - v1_t) * v1.x +
-                (1 - u1) * v1_t * v3.x +
-                u1 * v1_t * v2.x;
-              const p11y =
-                (1 - u1) * (1 - v1_t) * v0.y +
-                u1 * (1 - v1_t) * v1.y +
-                (1 - u1) * v1_t * v3.y +
-                u1 * v1_t * v2.y;
-
-              // Bottom-Left corner
-              const p01x =
-                (1 - u0) * (1 - v1_t) * v0.x +
-                u0 * (1 - v1_t) * v1.x +
-                (1 - u0) * v1_t * v3.x +
-                u0 * v1_t * v2.x;
-              const p01y =
-                (1 - u0) * (1 - v1_t) * v0.y +
-                u0 * (1 - v1_t) * v1.y +
-                (1 - u0) * v1_t * v3.y +
-                u0 * v1_t * v2.y;
+              const p00 = gridPoint(rawU0, rawV0);
+              const p10 = gridPoint(rawU1, rawV0);
+              const p11 = gridPoint(rawU1, rawV1);
+              const p01 = gridPoint(rawU0, rawV1);
 
               ctx.beginPath();
-              ctx.moveTo(p00x, p00y);
-              ctx.lineTo(p10x, p10y);
-              ctx.lineTo(p11x, p11y);
-              ctx.lineTo(p01x, p01y);
+              ctx.moveTo(p00.x, p00.y);
+              ctx.lineTo(p10.x, p10.y);
+              ctx.lineTo(p11.x, p11.y);
+              ctx.lineTo(p01.x, p01.y);
               ctx.closePath();
               ctx.fill();
             }
@@ -304,48 +405,40 @@ export class QuadObject extends Entity {
 
       const basePerspective = this.gridPerspective ?? true;
       const amount = this.gridPerspectiveAmount ?? 1.0;
-      const usePerspectiveX = basePerspective && !(this.gridPerspectiveOffX ?? false);
-      const usePerspectiveY = basePerspective && !(this.gridPerspectiveOffY ?? false);
-
-      const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
-      const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
-      const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
-      const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+      const usePerspective = basePerspective;
+      const gridTransform = createQuadHomography(v0, v1, v2, v3);
+      const gridPoint = (u: number, v: number) =>
+        projectQuadGridPoint(
+          v0,
+          v1,
+          v2,
+          v3,
+          gridTransform,
+          u,
+          v,
+          amount,
+          usePerspective,
+          usePerspective
+        );
 
       ctx.beginPath();
 
       // Horizontal Cuts (Down the shape using Y count)
       for (let i = 1; i <= this.gridLinesY; i++) {
         const rawT = i / (this.gridLinesY + 1);
-        const t = usePerspectiveY ? getPerspectiveT(rawT, wTop, wBot, amount) : rawT;
-
-        // Left Point
-        const lx = v0.x + (v3.x - v0.x) * t;
-        const ly = v0.y + (v3.y - v0.y) * t;
-
-        // Right Point
-        const rx = v1.x + (v2.x - v1.x) * t;
-        const ry = v1.y + (v2.y - v1.y) * t;
-
-        ctx.moveTo(lx, ly);
-        ctx.lineTo(rx, ry);
+        const left = gridPoint(0, rawT);
+        const right = gridPoint(1, rawT);
+        ctx.moveTo(left.x, left.y);
+        ctx.lineTo(right.x, right.y);
       }
 
       // Vertical Cuts (Across the shape using X count)
       for (let i = 1; i <= this.gridLinesX; i++) {
         const rawT = i / (this.gridLinesX + 1);
-        const t = usePerspectiveX ? getPerspectiveT(rawT, hLeft, hRight, amount) : rawT;
-
-        // Top Point
-        const tx = v0.x + (v1.x - v0.x) * t;
-        const ty = v0.y + (v1.y - v0.y) * t;
-
-        // Bottom Point
-        const bx = v3.x + (v2.x - v3.x) * t;
-        const by = v3.y + (v2.y - v3.y) * t;
-
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(bx, by);
+        const top = gridPoint(rawT, 0);
+        const bottom = gridPoint(rawT, 1);
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(bottom.x, bottom.y);
       }
 
       ctx.stroke();
@@ -535,17 +628,22 @@ export class QuadObject extends Entity {
             const tv2 = q.vertices[2];
             const tv3 = q.vertices[3];
 
-            // Bilinear Interpolation
-            const nx =
-              (1 - u) * (1 - v_param) * tv0.x +
-              u * (1 - v_param) * tv1.x +
-              (1 - u) * v_param * tv3.x +
-              u * v_param * tv2.x;
-            const ny =
-              (1 - u) * (1 - v_param) * tv0.y +
-              u * (1 - v_param) * tv1.y +
-              (1 - u) * v_param * tv3.y +
-              u * v_param * tv2.y;
+            const basePerspective = q.gridPerspective ?? true;
+            const transform = createQuadHomography(tv0, tv1, tv2, tv3);
+            const point = projectQuadGridPoint(
+              tv0,
+              tv1,
+              tv2,
+              tv3,
+              transform,
+              u,
+              v_param,
+              q.gridPerspectiveAmount ?? 1,
+              basePerspective,
+              basePerspective
+            );
+            const nx = point.x;
+            const ny = point.y;
 
             // Parallax Interpolation
             const np =

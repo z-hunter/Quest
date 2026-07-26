@@ -487,46 +487,6 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                       handleChange('gridPerspectiveAmount', parseFloat(e.target.value))
                     }
                   />
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '15px',
-                      marginTop: '6px',
-                    }}
-                  >
-                    <label
-                      className="e-label"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        style={{ marginRight: '5px' }}
-                        checked={quad.gridPerspectiveOffX || false}
-                        onChange={(e) => handleChange('gridPerspectiveOffX', e.target.checked)}
-                      />
-                      Off X
-                    </label>
-                    <label
-                      className="e-label"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        style={{ marginRight: '5px' }}
-                        checked={quad.gridPerspectiveOffY || false}
-                        onChange={(e) => handleChange('gridPerspectiveOffY', e.target.checked)}
-                      />
-                      Off Y
-                    </label>
-                  </div>
                 </div>
               )}
 

@@ -93,14 +93,6 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     quads,
     (q: any) => q.gridPerspectiveAmount ?? 1.0
   );
-  const sharedGridPerspectiveOffX = getSharedBooleanState(
-    quads,
-    (q: any) => !!q.gridPerspectiveOffX
-  );
-  const sharedGridPerspectiveOffY = getSharedBooleanState(
-    quads,
-    (q: any) => !!q.gridPerspectiveOffY
-  );
   const sharedIgnoreScaling = getSharedBooleanState(
     entitiesAndQuads,
     (o: any) => !!o.ignoreScaling
@@ -694,50 +686,6 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                         });
                       }}
                     />
-                    <div style={{ display: 'flex', gap: '15px', marginTop: '6px' }}>
-                      <label
-                        className="e-label"
-                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                      >
-                        <input
-                          type="checkbox"
-                          style={{ marginRight: '5px' }}
-                          checked={sharedGridPerspectiveOffX === 'on'}
-                          ref={(el) => {
-                            if (el) el.indeterminate = sharedGridPerspectiveOffX === 'mixed';
-                          }}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            applyToMulti((o: any) => {
-                              if ((o as any).type === 'Quad')
-                                (o as any).gridPerspectiveOffX = checked;
-                            });
-                          }}
-                        />
-                        Off X
-                      </label>
-                      <label
-                        className="e-label"
-                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                      >
-                        <input
-                          type="checkbox"
-                          style={{ marginRight: '5px' }}
-                          checked={sharedGridPerspectiveOffY === 'on'}
-                          ref={(el) => {
-                            if (el) el.indeterminate = sharedGridPerspectiveOffY === 'mixed';
-                          }}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            applyToMulti((o: any) => {
-                              if ((o as any).type === 'Quad')
-                                (o as any).gridPerspectiveOffY = checked;
-                            });
-                          }}
-                        />
-                        Off Y
-                      </label>
-                    </div>
                   </div>
                 )}
 
