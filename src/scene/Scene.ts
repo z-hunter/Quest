@@ -158,6 +158,29 @@ export class Scene {
   public sceneLog: SceneLog = new SceneLog();
   private parserRecentTurns: ParserSceneTurnContext[] = [];
 
+  private _walkboxEntitiesCache: Entity[] | null = null;
+  private _physicalExitsCache: Triggerbox[] | null = null;
+
+  getWalkboxEntities(): Entity[] {
+    if (!this._walkboxEntitiesCache) {
+      this._walkboxEntitiesCache = this.entities.filter(
+        (e) => !e.disabled && e.components?.some((c) => c.type === 'WalkBox')
+      );
+    }
+    return this._walkboxEntitiesCache;
+  }
+
+  getPhysicalExits(): Triggerbox[] {
+    if (!this._physicalExitsCache) {
+      this._physicalExitsCache = this.triggerboxes.filter((tb) => {
+        if (tb.disabled || !tb.poly || tb.poly.length < 3) return false;
+        const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
+        return exit && !ComponentSystem.isNavigationOnlyExit(tb as any);
+      });
+    }
+    return this._physicalExitsCache;
+  }
+
   get activeSubscene(): string | null {
     return this._activeSubscene;
   }
@@ -487,6 +510,7 @@ export class Scene {
     }
 
     this.entities.push(entity);
+    this._walkboxEntitiesCache = null;
     // @ts-ignore
     entity.scene = this;
     // If this entity is the player, store a reference
@@ -512,6 +536,7 @@ export class Scene {
     this.triggerboxes.push(triggerbox);
     // @ts-ignore
     triggerbox.scene = this;
+    this._physicalExitsCache = null;
   }
 
   addWalkbox(walkbox: Walkbox): void {
@@ -532,6 +557,7 @@ export class Scene {
       if (this.player === entity) {
         this.player = null;
       }
+      this._walkboxEntitiesCache = null;
     }
   }
 
@@ -546,6 +572,7 @@ export class Scene {
       if (this.activeSubscene && triggerbox.name === this.activeSubscene) {
         this.activeSubscene = null;
       }
+      this._physicalExitsCache = null;
     }
   }
 
@@ -850,7 +877,12 @@ export class Scene {
     };
   }
 
-  isWalkable(x: number, y: number, sourceEntity?: Entity): boolean {
+  isWalkable(
+    x: number,
+    y: number,
+    sourceEntity?: Entity,
+    ignorePhysicalExits: boolean = false
+  ): boolean {
     // console.log(`[Scene] isWalkable(${x}, ${y}) source=${sourceEntity?.name} Collider=${sourceEntity?.colliderWidth}x${sourceEntity?.colliderHeight}`);
 
     // 0. Zero Collider / Check
@@ -905,43 +937,18 @@ export class Scene {
       }
     }
 
-    if (sourceRect) {
-      // 2.5 Physical Exits (navigationOnly: false) act as obstacles
-      // This prevents actors from accidentally walking through a portal and triggering a teleport loop.
-      if (this.triggerboxes) {
-        for (const tb of this.triggerboxes) {
-          if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
-          const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
-          if (exit) {
-            const targetScene = exit.targetSceneId?.trim();
-            const isLocalTeleport = !targetScene || targetScene === this.id;
-            const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
-
-            // Block if it's an inter-scene teleport (always a wall),
-            // OR if it's a local teleport but the entity is an NPC.
-            if (!isLocalTeleport || !isPlayer) {
-              if (Geometry.rectIntersectsPolygon(sourceRect, tb.poly)) {
-                return false;
-              }
+    if (!ignorePhysicalExits) {
+      const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
+      if (!isPlayer) {
+        const physicalExits = this.getPhysicalExits();
+        for (const tb of physicalExits) {
+          if (sourceRect) {
+            if (Geometry.rectIntersectsPolygon(sourceRect, tb.poly)) {
+              return false;
             }
-          }
-        }
-      }
-    } else {
-      // 1.5 Physical Exits
-      if (this.triggerboxes) {
-        for (const tb of this.triggerboxes) {
-          if (tb.disabled || !tb.poly || tb.poly.length < 3) continue;
-          const exit = tb.components?.find((c: any) => c.type === 'Exit') as any;
-          if (exit && !ComponentSystem.isNavigationOnlyExit(tb as any)) {
-            const targetScene = exit.targetSceneId?.trim();
-            const isLocalTeleport = !targetScene || targetScene === this.id;
-            const isPlayer = !sourceEntity || (sourceEntity as any).isPlayer === true;
-
-            if (!isLocalTeleport || !isPlayer) {
-              if (Geometry.isPointInPolygonWithEpsilon({ x, y }, tb.poly)) {
-                return false;
-              }
+          } else {
+            if (Geometry.isPointInPolygonWithEpsilon({ x, y }, tb.poly)) {
+              return false;
             }
           }
         }
@@ -954,7 +961,8 @@ export class Scene {
     // Integrated WalkBox Components (Quads)
     // We look for entities with 'WalkBox' component and treat them as walkboxes
     // Optimization: In a large scene, we might want to cache this list.
-    this.entities.forEach((entity) => {
+    const wbEntities = this.getWalkboxEntities();
+    wbEntities.forEach((entity) => {
       if (entity.disabled) return;
       if (entity.components) {
         const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');

@@ -158,6 +158,9 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   Disabled: 'Disables the object so it does not participate in the scene. Hotkey: Alt-D.',
   'Retro Grid':
     'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+  Collider: 'Teleports the Actor if their collider enters this area.',
+  Portal:
+    'Teleports the Actor if they activate the area (e.g. by clicking on it) while within reachable distance.',
 };
 
 export const normalizeTooltipLabelText = (rawText: string): string => {

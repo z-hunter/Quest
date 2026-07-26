@@ -600,7 +600,7 @@ export class ActorNavigationService {
         )
         .slice(0, 12);
       for (const candidate of destinationCandidates) {
-        if (probe.previewWalkingRouteTo(candidate.point.x, candidate.point.y)) {
+        if (probe.previewWalkingRouteTo(candidate.point.x, candidate.point.y, true)) {
           this.pendingTeleportPlans.set(actor, {
             target: { ...candidate.point },
             plan: { exits: [exitObject], firstLeg, cost: 0 },

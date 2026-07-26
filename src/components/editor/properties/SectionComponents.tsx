@@ -1272,7 +1272,16 @@ export const SectionComponents: React.FC = () => {
                       color: 'var(--ui-label-color)',
                     }}
                   >
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <label
+                      className="e-label"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 'normal',
+                        marginBottom: 0,
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={comp.collider !== false}
@@ -1283,7 +1292,16 @@ export const SectionComponents: React.FC = () => {
                       />
                       Collider
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <label
+                      className="e-label"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 'normal',
+                        marginBottom: 0,
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={!!comp.portal}

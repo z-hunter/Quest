@@ -56,8 +56,6 @@ export interface ExitComponent {
   targetEntryId: string;
   collider?: boolean;
   portal?: boolean;
-  /** Keeps a local Exit available to navigation without exposing it to text systems. */
-  navigationOnly?: boolean;
 }
 
 export interface EntryComponent {

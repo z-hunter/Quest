@@ -423,8 +423,12 @@ export class Actor extends Entity {
     return route ? route.map((point) => ({ ...point })) : null;
   }
 
-  previewWalkingRouteTo(x: number, y: number): { x: number; y: number }[] | null {
-    const route = this.planWalkingRouteTo({ x, y });
+  previewWalkingRouteTo(
+    x: number,
+    y: number,
+    ignorePhysicalExits: boolean = false
+  ): { x: number; y: number }[] | null {
+    const route = this.planWalkingRouteTo({ x, y }, ignorePhysicalExits);
     return route ? route.map((point) => ({ ...point })) : null;
   }
 
@@ -769,16 +773,20 @@ export class Actor extends Entity {
     this.lastMoveResult = result;
   }
 
-  private planWalkingRouteTo(target: { x: number; y: number }): { x: number; y: number }[] | null {
-    const isWalkable = (x: number, y: number) =>
+  private planWalkingRouteTo(
+    target: { x: number; y: number },
+    ignorePhysicalExits: boolean = false
+  ): { x: number; y: number }[] | null {
+    const isWalkable =
       !this.scene || typeof this.scene.isWalkable !== 'function'
-        ? true
-        : this.scene.isWalkable(x, y, this);
+        ? () => true
+        : (x: number, y: number) => this.scene!.isWalkable!(x, y, this, ignorePhysicalExits);
 
     if (!isWalkable(target.x, target.y)) return null;
-    if (this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)) return [target];
+    if (this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable as any))
+      return [target];
 
-    return this.findGridRoute(target, isWalkable);
+    return this.findGridRoute(target, isWalkable as any);
   }
 
   private isRouteSegmentClear(
@@ -801,11 +809,12 @@ export class Actor extends Entity {
   }
 
   private getRouteGridSize(): number {
-    const colliderSize =
-      this.colliderWidth > 0 && this.colliderHeight > 0
-        ? Math.min(this.colliderWidth, this.colliderHeight)
-        : 12;
-    return Math.max(4, Math.min(24, colliderSize));
+    // A fixed grid size of 16-24 provides a good balance between
+    // pathfinding resolution and A* search space size.
+    // Using min(width, height) causes issues with flat colliders (e.g. 46x2),
+    // resulting in a tiny grid size (4), causing A* to hit the 50,000 iteration limit
+    // and failing to find paths over long distances.
+    return 16;
   }
 
   private trySlideTowardTarget(
@@ -855,6 +864,7 @@ export class Actor extends Entity {
     const targetCell = this.pointToCell(target, bounds, gridSize);
     const startKey = this.cellKey(startCell);
     const targetKey = this.cellKey(targetCell);
+
     const heap = new MinHeap();
     const cameFrom = new Map<string, string>();
     const gScore = new Map<string, number>([[startKey, 0]]);
