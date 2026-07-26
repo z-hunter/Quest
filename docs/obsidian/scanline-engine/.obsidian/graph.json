@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "",
+  "search": "-\"SCANLINE\"",
   "showTags": true,
   "showAttachments": false,
   "hideUnresolved": false,
@@ -17,6 +17,6 @@
   "repelStrength": 11.6494845360825,
   "linkStrength": 1,
   "linkDistance": 202,
-  "scale": 2.0707092497453012,
+  "scale": 1.0534979423868318,
   "close": true
 }

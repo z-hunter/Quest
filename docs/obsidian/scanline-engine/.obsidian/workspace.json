@@ -13,58 +13,13 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Parser-Subsystems-and-Dataflow.md",
+                "file": "Script-Runtime.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Parser-Subsystems-and-Dataflow"
-            },
-            "group": "99e29ff9dcd4d1d6"
-          }
-        ]
-      },
-      {
-        "id": "d278d655c4afeaed",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "c580f4577121dc0f",
-            "type": "leaf",
-            "state": {
-              "type": "localgraph",
-              "state": {
-                "file": "Parser-Subsystems-and-Dataflow.md",
-                "options": {
-                  "collapse-filter": false,
-                  "search": "-file:\"SCANLINE\"",
-                  "localJumps": 1,
-                  "localBacklinks": true,
-                  "localForelinks": true,
-                  "localInterlinks": false,
-                  "showTags": false,
-                  "showAttachments": false,
-                  "hideUnresolved": false,
-                  "collapse-color-groups": true,
-                  "colorGroups": [],
-                  "collapse-display": true,
-                  "showArrow": false,
-                  "textFadeMultiplier": 0,
-                  "nodeSizeMultiplier": 1,
-                  "lineSizeMultiplier": 1,
-                  "collapse-forces": true,
-                  "centerStrength": 0.518713248970312,
-                  "repelStrength": 10,
-                  "linkStrength": 1,
-                  "linkDistance": 250,
-                  "scale": 1,
-                  "close": true
-                }
-              },
-              "icon": "lucide-git-fork",
-              "title": "Graph of Parser-Subsystems-and-Dataflow"
-            },
-            "group": "99e29ff9dcd4d1d6"
+              "title": "Script-Runtime"
+            }
           }
         ]
       }
@@ -231,24 +186,25 @@
   },
   "active": "55a73009cffd7586",
   "lastOpenFiles": [
+    "Data-Formats-and-Assets.md",
+    "Asset-and-Text-Pipeline.md",
     "Architecture-Audit-and-Roadmap.md",
     "Parser-Cascade-Architecture.md",
+    "Parser-Subsystems-and-Dataflow.md",
+    "Game-Master-Implementation.md",
     "Parser-Implementation.md",
     "AI-Cascade-Implementation.md",
     "NLPJS-Training-and-Model-Cache.md",
-    "Parser-Subsystems-and-Dataflow.md",
     "Parser-Data-Contracts.md",
     "Configuration-and-UI-Tokens.md",
     "Console-and-Diagnostics.md",
     "SCANLINE.md",
-    "Asset-and-Text-Pipeline.md",
     "Actor-Access-and-Navigation.md",
     "Scene-Hierarchy.md",
     "Core-Game-Implementation.md",
     "SLM-Dataset-Collection.md",
     "LLM-Prompt-Catalog.md",
     "Component-and-State-Events.md",
-    "Data-Formats-and-Assets.md",
     "Scene-Objects.md",
     "AI-Validation-and-Guardrails.md",
     "AI-Data-Flow.md",
@@ -256,7 +212,6 @@
     "LLM-Provider-Contracts.md",
     "NPC-Plan-and-Command-Execution.md",
     "NPC-World-Model.md",
-    "Game-Master-Implementation.md",
     "Untitled.canvas"
   ]
 }
