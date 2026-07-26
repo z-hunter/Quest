@@ -86,6 +86,11 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   const sharedGridY = getSharedValue(quads, (q: any) => q.gridLinesY ?? 5);
   const sharedGridWidth = getSharedValue(quads, (q: any) => q.lineWidth ?? 1.0);
   const sharedGridColor = getSharedValue(quads, (q: any) => q.gridColor || '#ffffff');
+  const sharedGridPerspective = getSharedBooleanState(quads, (q: any) => q.gridPerspective ?? true);
+  const sharedGridPerspectiveAmount = getSharedValue(
+    quads,
+    (q: any) => q.gridPerspectiveAmount ?? 1.0
+  );
   const sharedIgnoreScaling = getSharedBooleanState(
     entitiesAndQuads,
     (o: any) => !!o.ignoreScaling
@@ -621,6 +626,66 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                     />
                   </div>
                 </div>
+
+                <div className="e-row">
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ marginRight: '5px' }}
+                      checked={sharedGridPerspective === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedGridPerspective === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).gridPerspective = checked;
+                        });
+                      }}
+                    />
+                    Perspective
+                  </label>
+                </div>
+
+                {sharedGridPerspective !== 'off' && (
+                  <div className="e-row">
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <label className="e-label">Amount</label>
+                      <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                        {sharedGridPerspectiveAmount === ''
+                          ? 'mixed'
+                          : formatPanelNumber(sharedGridPerspectiveAmount as number)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      style={{ width: '100%', cursor: 'pointer' }}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      value={
+                        sharedGridPerspectiveAmount === ''
+                          ? 1.0
+                          : (sharedGridPerspectiveAmount as number)
+                      }
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        applyToMulti((o: any) => {
+                          if ((o as any).type === 'Quad') (o as any).gridPerspectiveAmount = v;
+                        });
+                      }}
+                    />
+                  </div>
+                )}
               </>
             )}
           </>,

@@ -21,6 +21,21 @@ export interface QuadVertex {
 
 export type QuadSortMode = 'ignore' | 'v0' | 'v1' | 'v2' | 'v3';
 
+export function getPerspectiveT(
+  t: number,
+  edge1Length: number,
+  edge2Length: number,
+  amount: number = 1.0
+): number {
+  if (amount <= 0 || edge1Length <= 0 || edge2Length <= 0) return t;
+  const ratio = edge2Length / edge1Length;
+  if (Math.abs(ratio - 1.0) < 1e-5) return t;
+
+  const tPersp = t / (t + (1.0 - t) * ratio);
+  const tFinal = (1.0 - amount) * t + amount * tPersp;
+  return Math.max(0, Math.min(1, tFinal));
+}
+
 export class QuadObject extends Entity {
   vertices: QuadVertex[];
   color: string;
@@ -50,6 +65,8 @@ export class QuadObject extends Entity {
   gridLinesY: number = 5;
   lineWidth: number = 1.0;
   gridColor: string = '#ffffff';
+  gridPerspective: boolean = true;
+  gridPerspectiveAmount: number = 1.0;
 
   // Fill Props
   filled: boolean = true;
@@ -77,6 +94,8 @@ export class QuadObject extends Entity {
     'gridLinesY',
     'lineWidth',
     'gridColor',
+    'gridPerspective',
+    'gridPerspectiveAmount',
     'filled',
     'blur',
   ];
@@ -178,11 +197,20 @@ export class QuadObject extends Entity {
       const v2 = screenVerts[2]; // BR
       const v3 = screenVerts[3]; // BL
 
+      const usePerspective = this.gridPerspective ?? true;
+      const amount = this.gridPerspectiveAmount ?? 1.0;
+
+      const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
+      const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
+      const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
+      const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+
       ctx.beginPath();
 
       // Horizontal Cuts (Down the shape using Y count)
       for (let i = 1; i <= this.gridLinesY; i++) {
-        const t = i / (this.gridLinesY + 1);
+        const rawT = i / (this.gridLinesY + 1);
+        const t = usePerspective ? getPerspectiveT(rawT, wTop, wBot, amount) : rawT;
 
         // Left Point
         const lx = v0.x + (v3.x - v0.x) * t;
@@ -198,7 +226,8 @@ export class QuadObject extends Entity {
 
       // Vertical Cuts (Across the shape using X count)
       for (let i = 1; i <= this.gridLinesX; i++) {
-        const t = i / (this.gridLinesX + 1);
+        const rawT = i / (this.gridLinesX + 1);
+        const t = usePerspective ? getPerspectiveT(rawT, hLeft, hRight, amount) : rawT;
 
         // Top Point
         const tx = v0.x + (v1.x - v0.x) * t;

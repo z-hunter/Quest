@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QuadObject } from '../../src/entities/QuadObject';
+import { QuadObject, getPerspectiveT } from '../../src/entities/QuadObject';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 function createMockContext() {
@@ -53,5 +53,38 @@ describe('QuadObject', () => {
     expect(ctx.stroke).toHaveBeenCalledTimes(2);
     expect(ctx.globalCompositeOperation).toBe('source-over');
     expect(ctx.strokeStyle).toBe('#000000');
+  });
+
+  it('calculates getPerspectiveT correctly with ratio and amount blending', () => {
+    // Rectangle: equal edge lengths -> linear parameter t
+    expect(getPerspectiveT(0.5, 100, 100, 1.0)).toBe(0.5);
+
+    // Amount = 0 -> linear parameter t
+    expect(getPerspectiveT(0.5, 50, 100, 0.0)).toBe(0.5);
+
+    // Narrower top edge (50 vs 100) -> perspective pulls t closer to 0 (top)
+    const tPersp = getPerspectiveT(0.5, 50, 100, 1.0);
+    expect(tPersp).toBeLessThan(0.5);
+    expect(tPersp).toBeCloseTo(1 / 3, 4); // 0.5 / (0.5 + 0.5 * 2) = 1/3
+
+    // Amount = 2.0 (exaggerated effect)
+    const tExaggerated = getPerspectiveT(0.5, 50, 100, 2.0);
+    expect(tExaggerated).toBeLessThan(tPersp);
+  });
+
+  it('serializes and deserializes gridPerspective and gridPerspectiveAmount', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'test_quad');
+    quad.isGrid = true;
+    quad.gridPerspective = true;
+    quad.gridPerspectiveAmount = 1.5;
+
+    const json = quad.toJSON();
+    expect(json.gridPerspective).toBe(true);
+    expect(json.gridPerspectiveAmount).toBe(1.5);
+
+    const loadedQuad = QuadObject.fromJSON(fixture.game, json);
+    expect(loadedQuad.gridPerspective).toBe(true);
+    expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
   });
 });

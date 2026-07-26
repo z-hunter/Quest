@@ -1,5 +1,5 @@
 import { Entity } from '../../entities/Entity';
-import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
+import { QuadObject, getPerspectiveT, type QuadVertexBinding } from '../../entities/QuadObject';
 
 export class EditorSnappingSystem {
   /**
@@ -232,9 +232,18 @@ export class EditorSnappingSystem {
             const v2 = visualVerts[2]; // BR
             const v3 = visualVerts[3]; // BL
 
+            const usePerspective = q.gridPerspective ?? true;
+            const amount = q.gridPerspectiveAmount ?? 1.0;
+
+            const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
+            const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
+            const hLeft = Math.hypot(v3.x - v0.x, v3.y - v0.y);
+            const hRight = Math.hypot(v2.x - v1.x, v2.y - v1.y);
+
             // Horizontal Cuts (Down the shape using GridLinesY)
             for (let i = 1; i <= q.gridLinesY; i++) {
-              const v = i / (q.gridLinesY + 1);
+              const rawV = i / (q.gridLinesY + 1);
+              const v = usePerspective ? getPerspectiveT(rawV, wTop, wBot, amount) : rawV;
 
               // Left Edge (V0-V3)
               const lx = v0.x + (v3.x - v0.x) * v;
@@ -265,7 +274,8 @@ export class EditorSnappingSystem {
 
             // Vertical Cuts (Across the shape using GridLinesX)
             for (let i = 1; i <= q.gridLinesX; i++) {
-              const u = i / (q.gridLinesX + 1);
+              const rawU = i / (q.gridLinesX + 1);
+              const u = usePerspective ? getPerspectiveT(rawU, hLeft, hRight, amount) : rawU;
 
               // Top Edge (V0-V1)
               const tx = v0.x + (v1.x - v0.x) * u;
@@ -295,7 +305,8 @@ export class EditorSnappingSystem {
 
               // Internal Nodes
               for (let j = 1; j <= q.gridLinesY; j++) {
-                const v = j / (q.gridLinesY + 1);
+                const rawV = j / (q.gridLinesY + 1);
+                const v = usePerspective ? getPerspectiveT(rawV, wTop, wBot, amount) : rawV;
                 const nx =
                   (1 - u) * (1 - v) * v0.x + u * (1 - v) * v1.x + (1 - u) * v * v3.x + u * v * v2.x;
                 const ny =

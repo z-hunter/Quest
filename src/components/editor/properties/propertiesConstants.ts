@@ -158,6 +158,10 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   Disabled: 'Disables the object so it does not participate in the scene. Hotkey: Alt-D.',
   'Retro Grid':
     'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+  Perspective:
+    'Enables 3D perspective line spacing. Grid lines bunch closer together towards the narrower edge of trapezoidal Quads.',
+  Amount:
+    'Controls the intensity of the perspective effect. 0 = flat grid, 1 = standard 3D perspective, higher values increase distortion.',
   Collider: 'Teleports the Actor if their collider enters this area.',
   Portal:
     'Teleports the Actor if they activate the area (e.g. by clicking on it) while within reachable distance.',

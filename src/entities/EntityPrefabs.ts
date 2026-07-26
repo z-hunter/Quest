@@ -48,6 +48,8 @@ export const DefaultQuadData: any = {
   gridLines: 5,
   lineWidth: 1.0,
   gridColor: '#ffffff',
+  gridPerspective: true,
+  gridPerspectiveAmount: 1.0,
   filled: true,
   blur: 0,
   opacity: 1.0,
