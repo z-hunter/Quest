@@ -4168,3 +4168,59 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - Reproduce and inspect the independent `MOVE_TO Sofa` timeout if sofa positioning is important to gameplay.
 - Optionally strengthen the PM prompt against repeated completion markers for already completed or missing objective IDs.
 - Run another real PM log after any prompt refinement; no further runtime change is required for the original Linda-stall symptom.
+
+## Session Entry - 2026-07-26 20:47 +02:00
+
+### Session Goals
+
+- Resolve navigation performance bottlenecks, freeze/lag issues on flat colliders, and early-return bugs in adaptive pathfinding.
+- Maintain editor UX for Exit components (`Collider` and `Portal` tooltips) and clarify technical exit hiding semantics (`navigationOnly`).
+- Create comprehensive system documentation in `NavSys.md` covering architecture, Worker pathfinding, caches, and exit mechanics.
+- Fix local teleport pruning bounds and target walkability validation in Actor navigation flows.
+
+### What Was Implemented
+
+1. **A* Grid Size Optimization (`Actor.ts`)**:
+   - Fixed `Actor.getRouteGridSize()` to return a stable `16px` grid size on the main thread instead of computing it dynamically from `Math.min(colliderWidth, colliderHeight)`.
+   - Prevented thin/flat colliders (e.g. 46x2px) from creating tiny 4px grids that caused A* search iterations to hit the 50,000 safety cap and trigger freezes.
+
+2. **Adaptive Navigation & Reachability Cache Fix (`navigationPlanner.ts`)**:
+   - Fixed early-return logic in `routeForAdaptive()` on `knownCoarseReachable` cache miss: coarse search misses now skip coarse routing (`skipCoarse = true`) and fall back to fine-resolution A* searches instead of returning early `null`.
+   - Removed unused `revision` and `actorKey` fields from `WalkabilityBitmap` type and `buildWalkabilityBitmap`.
+
+3. **Local Teleport Pruning & Target Walkability (`ActorNavigationService.ts` & `Actor.ts`)**:
+   - Updated `planLocalTeleportRoute` pruning bound (`minPossibleCost`) to conservatively subtract the exit's maximum approach radius (`maxRadius`) from the exit-center distance before adding entry-to-target distance.
+   - Added `isWalkable(target.x, target.y)` validation before calling `planLocalTeleportRoute` in `Actor.ts`, ensuring target destination is walkable before creating/accepting local teleport plans.
+   - Fixed A* heap processing loop in `Actor.ts`: replaced `if (!current) return null;` with `if (!current) continue;` to skip stale heap entries safely.
+   - Updated `startPlannedRoute` so `localTeleportTarget` is recorded only when a valid `teleportPlan` exists (`teleportPlan ? target : null`), preserving accidental-exit stop guards.
+
+4. **Editor & Component System (`ComponentSystem.ts` & Editor UX)**:
+   - Restored `navigationOnly?: boolean` in `ExitComponent` and `ComponentSystem.isNavigationOnlyExit()`.
+   - Added hover tooltips for `Collider` and `Portal` checkboxes in `SectionComponents.tsx` and `propertiesConstants.ts`.
+
+5. **Documentation (`NavSys.md`)**:
+   - Created `NavSys.md` in the project root documenting system architecture, Web Worker execution, A* grid size behaviors (16px main-thread vs 4–24px worker), adaptive coarse (`gridSize * 4`)/fine resolution searches, reachability caching, NPC exit rules (`ignorePhysicalExits`), `Collider`/`Portal` triggers, and `navigationOnly` technical exit rules.
+
+### Parser / Mechanics / Scene Changes
+
+- **Mechanics / Navigation**:
+  - Main-thread and worker pathfinding are now consistent and resilient against narrow corridors and flat colliders.
+  - NPC physical exit avoidance during blughd/wander flows is guarded by `ignorePhysicalExits`.
+- **Parser & Text Systems**:
+  - `ComponentSystem.isNavigationOnlyExit()` remains authoritative for hiding technical exits from text context when `navigationOnly: true`.
+
+### Tests and Validation
+
+- `npx vitest run tests/systems/navigationPlanner.test.ts` — 6/6 passed (including new `dynamicBlockers` test suite).
+- Full test suite `npm test` — 58 test files, 722/722 passed.
+- TypeScript typecheck `npm run typecheck` — 0 errors.
+
+### Commits Created
+
+- Session changes committed and linted during the session.
+
+### Remaining Work / Next Recommended Steps
+
+- Monitor NPC wandering behavior in complex multi-room scenes to verify `ignorePhysicalExits` cache performance.
+- Re-verify any future authored scenes with narrow doorway geometry to ensure fine-resolution fallback continues to perform within expected time bounds.
+

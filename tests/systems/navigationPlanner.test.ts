@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildWalkabilityBitmap,
+  gridSize,
   isSnapshotWalkable,
   planSnapshotApproach,
   routeForAdaptive,
@@ -66,7 +67,13 @@ describe('navigationPlanner optimizations', () => {
   it('routes adaptively around obstacles', () => {
     const target = { x: 60, y: 0 };
     const fineBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32);
-    const coarseBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32, 16);
+    const coarseBitmap = buildWalkabilityBitmap(
+      simpleSnapshot,
+      actor,
+      target,
+      32,
+      gridSize(actor) * 4
+    );
 
     const result = routeForAdaptive(simpleSnapshot, actor, target, [], fineBitmap, coarseBitmap);
 
@@ -105,7 +112,13 @@ describe('navigationPlanner optimizations', () => {
     const target = { x: 80, y: 0 };
     const dynamicBlocker = { x: 45, y: -100, w: 20, h: 200 };
     const fineBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32);
-    const coarseBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32, 16);
+    const coarseBitmap = buildWalkabilityBitmap(
+      simpleSnapshot,
+      actor,
+      target,
+      32,
+      gridSize(actor) * 4
+    );
 
     const blockedCellX = Math.round((50 - fineBitmap.minX) / fineBitmap.size);
     const blockedCellY = Math.round((0 - fineBitmap.minY) / fineBitmap.size);

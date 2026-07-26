@@ -100,7 +100,7 @@ class MinHeap {
   }
 }
 
-function gridSize(actor: NavigationActorProfile): number {
+export function gridSize(actor: NavigationActorProfile): number {
   const collider =
     actor.colliderWidth > 0 && actor.colliderHeight > 0
       ? Math.min(actor.colliderWidth, actor.colliderHeight)

@@ -121,6 +121,16 @@ describe('Scene Transitions (Exit/Entry)', () => {
       { x: 200, y: 210 },
     ];
 
+    const exitObj = fixture.addTriggerbox('exit-1', {
+      components: [{ type: 'Exit', targetSceneId: scene.id, targetEntryId: 'entry-1' }],
+    });
+    exitObj.poly = [
+      { x: 40, y: 0 },
+      { x: 60, y: 0 },
+      { x: 60, y: 20 },
+      { x: 40, y: 20 },
+    ];
+
     // This represents a worker route produced before the actor touched the Exit.
     player.startPlannedRoute({ x: 300, y: 205 }, [
       { x: 50, y: 5 },
