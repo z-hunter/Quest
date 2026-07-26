@@ -49,8 +49,6 @@ export type NavigationPlanResult = {
 };
 
 export type WalkabilityBitmap = {
-  revision: number;
-  actorKey: string;
   minX: number;
   minY: number;
   cols: number;
@@ -217,7 +215,6 @@ export function buildWalkabilityBitmap(
   const size = sizeOverride ?? gridSize(actor);
   const bounds = boundsFor(snapshot, actor, target, size, radiusPadding);
   const bitmap = new Uint8Array(bounds.cols * bounds.rows);
-  const actorKey = `${actor.colliderWidth}x${actor.colliderHeight}`;
 
   for (let r = 0; r < bounds.rows; r++) {
     for (let c = 0; c < bounds.cols; c++) {
@@ -232,8 +229,6 @@ export function buildWalkabilityBitmap(
   }
 
   return {
-    revision: snapshot.revision,
-    actorKey,
     minX: bounds.minX,
     minY: bounds.minY,
     cols: bounds.cols,
@@ -411,47 +406,59 @@ export function routeForAdaptive(
 
   let coarseExhausted: Set<string> | null | undefined = null;
   let fineExhausted: Set<string> | null | undefined = null;
+  let coarseIterations = 0;
+  let skipCoarse = false;
 
   if (knownCoarseReachable && coarseBitmap) {
     const cellX = Math.round((target.x - coarseBitmap.minX) / coarseSize);
     const cellY = Math.round((target.y - coarseBitmap.minY) / coarseSize);
     if (!knownCoarseReachable.has(`${cellX},${cellY}`)) {
-      return { route: null, iterations: 0, adaptiveUsed: true, adaptiveFallback: false };
+      skipCoarse = true;
     }
   }
 
-  const coarseResult = routeFor(snapshot, actor, target, dynamicBlockers, coarseBitmap, coarseSize);
-  coarseExhausted = coarseResult.exhaustivelySearched;
-
-  if (coarseResult.route) {
-    const buffer = coarseSize * 2;
-    const corridorBounds = computeCorridorBounds(
-      coarseResult.route,
-      actor,
-      target,
-      buffer,
-      fineSize
-    );
-
-    const fineResult = routeFor(
+  if (!skipCoarse) {
+    const coarseResult = routeFor(
       snapshot,
       actor,
       target,
       dynamicBlockers,
-      fineBitmap,
-      fineSize,
-      corridorBounds
+      coarseBitmap,
+      coarseSize
     );
+    coarseIterations = coarseResult.iterations;
+    coarseExhausted = coarseResult.exhaustivelySearched;
 
-    if (fineResult.route) {
-      return {
-        route: fineResult.route,
-        iterations: coarseResult.iterations + fineResult.iterations,
-        adaptiveUsed: true,
-        adaptiveFallback: false,
-        coarseExhausted,
-        fineExhausted,
-      };
+    if (coarseResult.route) {
+      const buffer = coarseSize * 2;
+      const corridorBounds = computeCorridorBounds(
+        coarseResult.route,
+        actor,
+        target,
+        buffer,
+        fineSize
+      );
+
+      const fineResult = routeFor(
+        snapshot,
+        actor,
+        target,
+        dynamicBlockers,
+        fineBitmap,
+        fineSize,
+        corridorBounds
+      );
+
+      if (fineResult.route) {
+        return {
+          route: fineResult.route,
+          iterations: coarseIterations + fineResult.iterations,
+          adaptiveUsed: true,
+          adaptiveFallback: false,
+          coarseExhausted,
+          fineExhausted,
+        };
+      }
     }
   }
 
@@ -461,7 +468,7 @@ export function routeForAdaptive(
     if (!knownFineReachable.has(`${cellX},${cellY}`)) {
       return {
         route: null,
-        iterations: coarseResult.iterations,
+        iterations: coarseIterations,
         adaptiveUsed: true,
         adaptiveFallback: true,
         coarseExhausted,
@@ -474,7 +481,7 @@ export function routeForAdaptive(
 
   return {
     route: fallbackResult.route,
-    iterations: coarseResult.iterations + fallbackResult.iterations,
+    iterations: coarseIterations + fallbackResult.iterations,
     adaptiveUsed: true,
     adaptiveFallback: true,
     coarseExhausted,

@@ -101,6 +101,38 @@ describe('navigationPlanner optimizations', () => {
     expect(planResult.iterationsCount).toBeGreaterThan(0);
   });
 
+  it('evaluates dynamic blockers during routing while keeping static bitmap valid', () => {
+    const target = { x: 80, y: 0 };
+    const dynamicBlocker = { x: 45, y: -100, w: 20, h: 200 };
+    const fineBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32);
+    const coarseBitmap = buildWalkabilityBitmap(simpleSnapshot, actor, target, 32, 16);
+
+    const blockedCellX = Math.round((50 - fineBitmap.minX) / fineBitmap.size);
+    const blockedCellY = Math.round((0 - fineBitmap.minY) / fineBitmap.size);
+    const idx = blockedCellY * fineBitmap.cols + blockedCellX;
+    expect(fineBitmap.bitmap[idx]).toBe(1);
+
+    const blockedResult = routeForAdaptive(
+      simpleSnapshot,
+      actor,
+      target,
+      [dynamicBlocker],
+      fineBitmap,
+      coarseBitmap
+    );
+    expect(blockedResult.route).toBeNull();
+
+    const clearResult = routeForAdaptive(
+      simpleSnapshot,
+      actor,
+      target,
+      [],
+      fineBitmap,
+      coarseBitmap
+    );
+    expect(clearResult.route).not.toBeNull();
+  });
+
   it('returns null route for completely unreachable target', () => {
     const request = {
       requestId: 2,

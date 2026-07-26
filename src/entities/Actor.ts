@@ -230,16 +230,19 @@ export class Actor extends Entity {
         ? true
         : this.scene.isWalkable(wx, wy, this);
 
-    const teleportPlan = this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
-
+    const targetIsWalkable = isWalkable(target.x, target.y);
     let walkingRoute: { x: number; y: number }[] | null = null;
     if (
-      !teleportPlan &&
-      isWalkable(target.x, target.y) &&
+      targetIsWalkable &&
       this.isRouteSegmentClear({ x: this.x, y: this.y }, target, isWalkable)
     ) {
       walkingRoute = [target];
     }
+
+    const teleportPlan =
+      !walkingRoute && targetIsWalkable
+        ? this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null)
+        : null;
 
     if (!walkingRoute && !teleportPlan) {
       walkingRoute = this.planWalkingRouteTo(target);
@@ -333,7 +336,7 @@ export class Actor extends Entity {
     this.visualTarget = null;
 
     const teleportPlan = this.game.actorNavigation?.planLocalTeleportRoute?.(this, target, null);
-    this.localTeleportTarget = teleportPlan ? target : null;
+    this.localTeleportTarget = target;
     this.localTeleportExit = teleportPlan?.exits[0] || null;
 
     this.setState('walk');
@@ -890,7 +893,7 @@ export class Actor extends Entity {
       if (!next || closed.has(next.key)) continue;
       const currentKey = next.key;
       const current = cells.get(currentKey);
-      if (!current) return null;
+      if (!current) continue;
 
       if (currentKey === targetKey) {
         return this.smoothRoute(

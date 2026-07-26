@@ -56,6 +56,8 @@ export interface ExitComponent {
   targetEntryId: string;
   collider?: boolean;
   portal?: boolean;
+  /** Keeps a local Exit available to navigation without exposing it to text systems. */
+  navigationOnly?: boolean;
 }
 
 export interface EntryComponent {
@@ -168,19 +170,9 @@ import type { IGame } from '../core/IGame';
 
 export class ComponentSystem {
   static isNavigationOnlyExit(object: SceneObject | null | undefined): boolean {
-    if (!object) return false;
-    const hasExit = object.components?.some((c: any) => c?.type === 'Exit');
-    if (!hasExit) return false;
-    // An Exit without a customName/title is a technical (navigation-only) exit.
-    if (object.customName && object.customName.trim() !== '') return false;
-
-    const game = object.scene?.game as IGame | undefined;
-    if (game && game.textAssets) {
-      const title = game.textAssets.getResolvedObjectField(object as any, 'title');
-      if (title && title.trim() !== '') return false;
-    }
-
-    return true;
+    return !!object?.components?.some(
+      (component: any) => component?.type === 'Exit' && component.navigationOnly === true
+    );
   }
 
   static isStateValueType(value: unknown): value is StateValueType {

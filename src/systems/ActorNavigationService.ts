@@ -650,8 +650,9 @@ export class ActorNavigationService {
       if (!entryPoint) continue;
 
       const exitPoint = this.getObjectCenter(exitObject) || { x: actor.x, y: actor.y };
+      const maxRadius = this.getMaxApproachRadius(actor, exitObject);
       const minPossibleCost =
-        Math.hypot(exitPoint.x - actor.x, exitPoint.y - actor.y) +
+        Math.max(0, Math.hypot(exitPoint.x - actor.x, exitPoint.y - actor.y) - maxRadius) +
         Math.hypot(target.x - entryPoint.x, target.y - entryPoint.y);
       if (best && minPossibleCost >= best.cost) continue;
       if (minPossibleCost >= directCost) continue;
