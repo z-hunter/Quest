@@ -967,8 +967,9 @@ export class Scene {
       if (entity.components) {
         const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
         if (wbComp && (entity as any).vertices) {
+          const globalP = (entity as any).parallax !== undefined ? (entity as any).parallax : 1.0;
           const vertices = (entity as any).vertices.map((v: any) => {
-            const p = v.p !== undefined ? v.p : (entity as any).parallax || 1.0;
+            const p = (v.p !== undefined ? v.p : 1.0) * globalP;
             let vx = v.x;
             let vy = v.y;
             if (cam && p !== 1.0) {

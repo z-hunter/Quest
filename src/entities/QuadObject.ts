@@ -128,15 +128,17 @@ export class QuadObject extends Entity {
 
     // Calculate Screen Positions of Vertices
     // Apply parallax offset relative to P=1.0 base
-    // Offset = -Cam * (V.p - 1.0)
+    // Offset = -Cam * (effP - 1.0)
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
       maxY = -Infinity;
 
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
     const screenVerts = this.vertices.map((v) => {
-      const offX = -camX * (v.p - 1.0);
-      const offY = -camY * (v.p - 1.0);
+      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+      const offX = -camX * (effP - globalP);
+      const offY = -camY * (effP - globalP);
       const vx = v.x + offX;
       const vy = v.y + offY;
 
@@ -367,10 +369,14 @@ export class QuadObject extends Entity {
     const camX = scene.camera.x;
     const camY = scene.camera.y;
 
-    const projectedPoly = this.vertices.map((v) => ({
-      x: v.x - camX * (v.p - 1.0),
-      y: v.y - camY * (v.p - 1.0),
-    }));
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
+    const projectedPoly = this.vertices.map((v) => {
+      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+      return {
+        x: v.x - camX * (effP - globalP),
+        y: v.y - camY * (effP - globalP),
+      };
+    });
 
     return Geometry.isPointInPolygon({ x, y }, projectedPoly);
   }
@@ -388,15 +394,17 @@ export class QuadObject extends Entity {
 
     const camX = scene.camera.x;
     const camY = scene.camera.y;
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
 
     // Helper to prepare vertex
     const prep = (v: QuadVertex) => {
-      if (!isVisual) return { x: v.x, y: v.y, p: v.p };
+      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+      if (!isVisual) return { x: v.x, y: v.y, p: effP };
       // Project to Visual
       return {
-        x: v.x - camX * (v.p - 1.0),
-        y: v.y - camY * (v.p - 1.0),
-        p: v.p,
+        x: v.x - camX * (effP - globalP),
+        y: v.y - camY * (effP - globalP),
+        p: effP,
       };
     };
 
@@ -440,12 +448,11 @@ export class QuadObject extends Entity {
     }
 
     // Fallback: If outside, return simple average or closest edge?
-    // Maybe just return 1.0 or the P of closest vertex?
-    // For strictly on-quad logic, calling code checks hitTest first.
-    // But hitTest uses generic polygon.
-    // Let's return average P for safety.
     let sumP = 0;
-    this.vertices.forEach((v) => (sumP += v.p));
+    this.vertices.forEach((v) => {
+      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+      sumP += effP;
+    });
     return sumP / this.vertices.length;
   }
 

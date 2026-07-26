@@ -722,8 +722,9 @@ export class ComponentSystem {
     quad: QuadObject,
     scene: ActivationSceneContext
   ): { x: number; y: number }[] {
+    const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
     return quad.vertices.map((v) => {
-      const p = v.p !== undefined ? v.p : quad.parallax !== undefined ? quad.parallax : 1.0;
+      const p = (v.p !== undefined ? v.p : 1.0) * globalP;
       return toVisualPosition({ x: v.x, y: v.y }, scene.camera, p);
     });
   }

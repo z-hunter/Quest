@@ -69,14 +69,15 @@ export class ThreeDParallaxSystem {
           const shadowQuad = scene.findEntity(shadowComp.shadowQuadId) as QuadObject | undefined;
 
           if (shadowQuad && shadowQuad.type === 'Quad') {
+            const sqGlobalP = shadowQuad.parallax !== undefined ? shadowQuad.parallax : 1.0;
             // Iterate Vertices of the Shadow
             for (const sv of shadowQuad.vertices) {
               // Calculate Visual Pos of Shadow Vertex
-              const svP = sv.p !== undefined ? sv.p : 1.0;
+              const svEffP = (sv.p !== undefined ? sv.p : 1.0) * sqGlobalP;
               const shadowVisual = toVisualPosition(
                 { x: sv.x, y: sv.y },
                 { x: camX, y: camY },
-                svP
+                svEffP
               );
               const svVisX = shadowVisual.x;
               const svVisY = shadowVisual.y;
@@ -87,9 +88,9 @@ export class ThreeDParallaxSystem {
                 const newP = quad.getParallaxAt(svVisX, svVisY, true);
 
                 // Only update if changed (epsilon check?)
-                if (Math.abs(newP - svP) > 0.0001) {
+                if (Math.abs(newP - svEffP) > 0.0001) {
                   // Apply Correction
-                  sv.p = newP;
+                  sv.p = sqGlobalP !== 0 ? newP / sqGlobalP : newP;
                   // Fix World Position to keep Visual Position constant
                   const newWorld = toWorldPosition(
                     { x: svVisX, y: svVisY },

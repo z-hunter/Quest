@@ -117,16 +117,17 @@ export class ShadowSystem {
           (scene.game && scene.game.editor && scene.game.editor.selectedObject === qObj);
 
         // If no cache, or selected (potentially edited), regenerate cache
+        const qGlobalP = qObj.parallax !== undefined ? qObj.parallax : 1.0;
         if (!cache || isSelected) {
           // Capture Base Shape (Visual Offsets from V0)
           const v0 = qObj.vertices[0];
-          const v0p = v0.p !== undefined ? v0.p : 1.0;
+          const v0p = (v0.p !== undefined ? v0.p : 1.0) * qGlobalP;
           const v0Visual = toVisualPosition({ x: v0.x, y: v0.y }, { x: camX, y: camY }, v0p);
 
           const offsets = [];
           for (let i = 1; i < qObj.vertices.length; i++) {
             const v = qObj.vertices[i];
-            const vp = v.p !== undefined ? v.p : 1.0;
+            const vp = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
             const visual = toVisualPosition({ x: v.x, y: v.y }, { x: camX, y: camY }, vp);
 
             // Store Normalized Offset (descale by current scale)
@@ -163,7 +164,7 @@ export class ShadowSystem {
 
         // 3. Position V0 (World)
         // Use current V0 P
-        const v0p = qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0;
+        const v0p = (qObj.vertices[0].p !== undefined ? qObj.vertices[0].p : 1.0) * qGlobalP;
         const targetWorldV0 = toWorldPosition(
           { x: targetVisX, y: targetVisY },
           { x: camX, y: camY },
@@ -178,7 +179,7 @@ export class ShadowSystem {
           if (vertexIndex >= qObj.vertices.length) break;
 
           const v = qObj.vertices[vertexIndex];
-          const vp = v.p !== undefined ? v.p : 1.0;
+          const vp = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
           const baseOff = cache.baseOffsets[i];
 
           // Apply Current Scale to Base Offset

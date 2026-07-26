@@ -643,8 +643,9 @@ export class Actor extends Entity {
       );
       if (!wbComp) continue;
 
+      const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
       const vertices = quad.vertices.map((v: any) => {
-        const p = v.p !== undefined ? v.p : quad.parallax || 1.0;
+        const p = (v.p !== undefined ? v.p : 1.0) * globalP;
         let vx = v.x;
         let vy = v.y;
         if (cam && p !== 1.0) {

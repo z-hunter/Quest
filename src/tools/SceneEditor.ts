@@ -1160,33 +1160,24 @@ export class SceneEditor {
           // ** QUAD SELECTION RENDERING **
           const quad = selected as QuadObject;
 
+          const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+
           ctx.save();
           ctx.translate(halfW, halfH);
           ctx.scale(zoom, zoom);
-          // Do NOT apply global camera translate here the same way,
-          // because each vertex has its own parallax.
-          // We need to project each vertex to "Screen Space relative to Zoom Center"
-          // ScreenX = (Vx - CamX * Vp) * Zoom + HalfW
-          // Here we are in "Zoom Space" (Scale applied).
-          // So we draw at (Vx - CamX * Vp)
+          ctx.translate(-camX * globalP, -camY * globalP);
 
           ctx.beginPath();
           // Draw Outline
           const verts = quad.vertices;
           if (verts.length > 0) {
-            // V_visual = V_world - Cam * (p - 1) - Cam <-- Wait.
-            // Standard Entity: ctx.translate(-camX * p, -camY * p). Draw at 0,0 relative to entity.
-            // Entity Pos on Screen: (Ex - CamX * p)
-
-            // Quad Vertex:
-            // VisualPos = Vx - CamX * (p - 1)  (This IS the visual world position at P=1 plane)
-            // Then we apply standard Camera P=1 offset: - CamX
-            // Total: Vx - CamX*p + CamX - CamX = Vx - CamX * p
-
-            const getDrawPos = (v: any) => ({
-              x: v.x - camX * v.p,
-              y: v.y - camY * v.p,
-            });
+            const getDrawPos = (v: any) => {
+              const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+              return {
+                x: v.x - camX * (effP - globalP),
+                y: v.y - camY * (effP - globalP),
+              };
+            };
 
             const p0 = getDrawPos(verts[0]);
             ctx.moveTo(p0.x, p0.y);

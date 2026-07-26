@@ -153,10 +153,14 @@ export class EditorTransformManager {
       if (entity.disabled || entity.locked) return;
 
       if ((entity as any).type === 'Quad' && entity.vertices) {
-        const pts = entity.vertices.map((v: any) => ({
-          x: (v.x - camX * v.p) * zoom + halfW,
-          y: (v.y - camY * v.p) * zoom + halfH,
-        }));
+        const globalP = entity.parallax !== undefined ? entity.parallax : 1.0;
+        const pts = entity.vertices.map((v: any) => {
+          const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+          return {
+            x: (v.x - camX * effP) * zoom + halfW,
+            y: (v.y - camY * effP) * zoom + halfH,
+          };
+        });
         const minX = Math.min(...pts.map((p: any) => p.x));
         const maxX = Math.max(...pts.map((p: any) => p.x));
         const minY = Math.min(...pts.map((p: any) => p.y));
@@ -279,21 +283,26 @@ export class EditorTransformManager {
         if (editor.selectedObject.disabled) return; // Prevent interaction if disabled
 
         let poly: any[] = [];
-        // Only Quads use projected vertices for Hit Test logic in original code
-        if ((editor.selectedObject as any).type === 'Quad') {
-          // Project Quad Vertices to World P=1 for Hit Test
-          poly = (editor.selectedObject as QuadObject).vertices.map((v: any) => ({
-            x: v.x - camX * (v.p - 1.0),
-            y: v.y - camY * (v.p - 1.0),
-          }));
-        } else {
-          poly = (editor.selectedObject as any).poly;
-        }
-
+        const isQuad = (editor.selectedObject as any).type === 'Quad';
         const selectedParallax =
           (editor.selectedObject as any).parallax !== undefined
             ? (editor.selectedObject as any).parallax
             : 1.0;
+        // Only Quads use projected vertices for Hit Test logic in original code
+        if (isQuad) {
+          const quad = editor.selectedObject as QuadObject;
+          const globalP = selectedParallax;
+          // Project Quad Vertices relative to Quad globalP layer
+          poly = quad.vertices.map((v: any) => {
+            const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+            return {
+              x: v.x - camX * (effP - globalP),
+              y: v.y - camY * (effP - globalP),
+            };
+          });
+        } else {
+          poly = (editor.selectedObject as any).poly;
+        }
 
         const vertexRadius = 6 / zoom; // Hit radius
 
@@ -655,20 +664,24 @@ export class EditorTransformManager {
           }
 
           // ── Quad path ──────────────────────────────────────────────────────
-          // Calculate effective delta from current visual position
-          // Note: v.x/v.y are RAW. newX/newY are VISUAL.
-          const currentVisX = v.x - camX * (v.p - 1.0);
-          const currentVisY = v.y - camY * (v.p - 1.0);
+          const quad = editor.selectedObject as QuadObject;
+          const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+          const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
+
+          // Calculate effective delta from current visual position relative to Quad globalP layer
+          // Note: v.x/v.y are RAW. newX/newY are VISUAL relative to Quad globalP layer.
+          const currentVisX = v.x - camX * (effP - globalP);
+          const currentVisY = v.y - camY * (effP - globalP);
 
           const diffX = newX - currentVisX;
           const diffY = newY - currentVisY;
-          const nextPrimaryP = snapResult.p !== undefined ? snapResult.p : v.p;
+          const nextPrimaryEffP = snapResult.p !== undefined ? snapResult.p : effP;
 
           // If NO interaction (diff is 0), skip
           if (
             Math.abs(diffX) < 0.001 &&
             Math.abs(diffY) < 0.001 &&
-            Math.abs(nextPrimaryP - v.p) < 0.001
+            Math.abs(nextPrimaryEffP - effP) < 0.001
           ) {
             return;
           }
@@ -739,12 +752,16 @@ export class EditorTransformManager {
 
           // 4. Move Group
           group.forEach((ref) => {
-            const nextP = snapResult.p !== undefined ? snapResult.p : ref.v.p;
-            const refVisX = ref.v.x - camX * (ref.v.p - 1.0);
-            const refVisY = ref.v.y - camY * (ref.v.p - 1.0);
+            const refGlobalP = ref.quad.parallax !== undefined ? ref.quad.parallax : 1.0;
+            const refEffP = (ref.v.p !== undefined ? ref.v.p : 1.0) * refGlobalP;
+            const nextEffP = snapResult.p !== undefined ? snapResult.p : refEffP;
+            const nextP = refGlobalP !== 0 ? nextEffP / refGlobalP : nextEffP;
+
+            const refVisX = ref.v.x - camX * (refEffP - refGlobalP);
+            const refVisY = ref.v.y - camY * (refEffP - refGlobalP);
             ref.v.p = nextP;
-            ref.v.x = refVisX + diffX + camX * (nextP - 1.0);
-            ref.v.y = refVisY + diffY + camY * (nextP - 1.0);
+            ref.v.x = refVisX + diffX + camX * (nextEffP - refGlobalP);
+            ref.v.y = refVisY + diffY + camY * (nextEffP - refGlobalP);
             ref.v.x = Math.round(ref.v.x);
             ref.v.y = Math.round(ref.v.y);
           });
@@ -784,8 +801,10 @@ export class EditorTransformManager {
               // snapVertex input `mouseWorldPos` is treated as Visual P=1.
               // So we need to convert Proposed Raw -> Proposed Visual.
               // Visual = Raw - Cam * (P-1)
-              const visualPropX = propX - camX * (v.p - 1.0);
-              const visualPropY = propY - camY * (v.p - 1.0);
+              const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
+              const qEffP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+              const visualPropX = propX - camX * (qEffP - qGlobalP);
+              const visualPropY = propY - camY * (qEffP - qGlobalP);
 
               const snapResult = EditorSnappingSystem.snapVertex(
                 { x: visualPropX, y: visualPropY },

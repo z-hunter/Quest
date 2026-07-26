@@ -37,6 +37,7 @@ export class EditorSnappingSystem {
       const prevV = poly[prevIndex];
       const nextV = poly[nextIndex];
 
+      const globalP = (selectedObject as any)?.parallax ?? 1.0;
       // Helper: Resolve effective parallax (Binding Lookup)
       const resolveParallax = (v: any) => {
         if (v.binding && v.binding.targetName) {
@@ -48,7 +49,10 @@ export class EditorSnappingSystem {
               const q = ent as QuadObject;
               if (v.binding.type === 'vertex' && v.binding.index !== undefined) {
                 const targetV = q.vertices[v.binding.index];
-                if (targetV) return targetV.p;
+                if (targetV) {
+                  const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
+                  return (targetV.p ?? 1.0) * qGlobalP;
+                }
               }
             }
             return ent.parallax ?? 1.0;
@@ -59,16 +63,16 @@ export class EditorSnappingSystem {
             if (tb) return tb.parallax ?? 1.0;
           }
         }
-        return v.p ?? 1.0;
+        return (v.p ?? 1.0) * globalP;
       };
 
       const pPrev = resolveParallax(prevV);
       const pNext = resolveParallax(nextV);
 
-      // Convert to Visual Space (P=1)
+      // Convert to Visual Space relative to selected object's parallax layer
       const toVisual = (raw: { x: number; y: number }, p: number) => ({
-        x: raw.x - camX * (p - 1.0),
-        y: raw.y - camY * (p - 1.0),
+        x: raw.x - camX * (p - globalP),
+        y: raw.y - camY * (p - globalP),
       });
 
       const prevVis = toVisual(prevV, pPrev);
@@ -200,10 +204,12 @@ export class EditorSnappingSystem {
           const q = ent as QuadObject;
           if (q.disabled || !q.visible) return;
 
+          const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
           // Vertices
           q.vertices.forEach((qv) => {
-            const vx = Math.round(qv.x - camX * (qv.p - 1.0));
-            const vy = Math.round(qv.y - camY * (qv.p - 1.0));
+            const effP = (qv.p !== undefined ? qv.p : 1.0) * qGlobalP;
+            const vx = Math.round(qv.x - camX * (effP - qGlobalP));
+            const vy = Math.round(qv.y - camY * (effP - qGlobalP));
 
             const dx = Math.abs(vx - result.x);
             const dy = Math.abs(vy - result.y);
@@ -215,17 +221,20 @@ export class EditorSnappingSystem {
                 type: 'vertex',
                 index: q.vertices.indexOf(qv),
               };
-              snapP = qv.p;
+              snapP = effP;
             }
           });
 
           // Grid
           if (q.isGrid) {
-            const visualVerts = q.vertices.map((v) => ({
-              x: Math.round(v.x - camX * (v.p - 1.0)),
-              y: Math.round(v.y - camY * (v.p - 1.0)),
-              p: v.p,
-            }));
+            const visualVerts = q.vertices.map((v) => {
+              const effP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+              return {
+                x: Math.round(v.x - camX * (effP - qGlobalP)),
+                y: Math.round(v.y - camY * (effP - qGlobalP)),
+                p: effP,
+              };
+            });
 
             const v0 = visualVerts[0];
             const v1 = visualVerts[1];
@@ -394,10 +403,12 @@ export class EditorSnappingSystem {
     const quads = scene.entities.filter((e: any) => e.type === 'Quad') as QuadObject[];
     quads.forEach((q) => {
       if (q.disabled || !q.visible) return;
+      const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
 
       q.vertices.forEach((v) => {
-        const vx = v.x - camX * (v.p - 1.0);
-        const vy = v.y - camY * (v.p - 1.0);
+        const effP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+        const vx = v.x - camX * (effP - qGlobalP);
+        const vy = v.y - camY * (effP - qGlobalP);
         const dx = Math.abs(vx - mouseVisualPos.x);
         const dy = Math.abs(vy - mouseVisualPos.y);
         if (dx < bestDist && dy < bestDist) {
