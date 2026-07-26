@@ -341,73 +341,22 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
               Fill Color
             </label>
             {quad.filled !== false && (
-              <>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="color"
-                    className="e-input"
-                    style={{ width: '30px', padding: 0, height: '20px' }}
-                    value={quad.color || '#888888'}
-                    onChange={(e) => handleChange('color', e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="e-input"
-                    style={{ flex: 1 }}
-                    value={quad.color || ''}
-                    onChange={(e) => handleChange('color', e.target.value)}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    marginTop: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <label
-                    className="e-label"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      style={{ marginRight: '5px' }}
-                      checked={quad.checkerboard || false}
-                      onChange={(e) => handleChange('checkerboard', e.target.checked)}
-                    />
-                    Checkerboard
-                  </label>
-                </div>
-
-                {quad.checkerboard && (
-                  <div style={{ marginTop: '6px' }}>
-                    <label className="e-label" style={{ marginBottom: '4px' }}>
-                      Second Fill Color
-                    </label>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      <input
-                        type="color"
-                        className="e-input"
-                        style={{ width: '30px', padding: 0, height: '20px' }}
-                        value={quad.secondColor || '#000000'}
-                        onChange={(e) => handleChange('secondColor', e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="e-input"
-                        style={{ flex: 1 }}
-                        value={quad.secondColor || ''}
-                        onChange={(e) => handleChange('secondColor', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                <input
+                  type="color"
+                  className="e-input"
+                  style={{ width: '30px', padding: 0, height: '20px' }}
+                  value={quad.color || '#888888'}
+                  onChange={(e) => handleChange('color', e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="e-input"
+                  style={{ flex: 1 }}
+                  value={quad.color || ''}
+                  onChange={(e) => handleChange('color', e.target.value)}
+                />
+              </div>
             )}
           </div>
 
@@ -539,6 +488,60 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                     }
                   />
                 </div>
+              )}
+
+              {quad.filled !== false && (
+                <>
+                  <div
+                    className="e-row"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <label
+                      className="e-label"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        style={{ marginRight: '5px' }}
+                        checked={quad.checkerboard || false}
+                        onChange={(e) => handleChange('checkerboard', e.target.checked)}
+                      />
+                      Checkerboard
+                    </label>
+                  </div>
+
+                  {quad.checkerboard && (
+                    <div className="e-row">
+                      <label className="e-label" style={{ marginBottom: '4px' }}>
+                        Second Fill Color
+                      </label>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <input
+                          type="color"
+                          className="e-input"
+                          style={{ width: '30px', padding: 0, height: '20px' }}
+                          value={quad.secondColor || '#000000'}
+                          onChange={(e) => handleChange('secondColor', e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          className="e-input"
+                          style={{ flex: 1 }}
+                          value={quad.secondColor || ''}
+                          onChange={(e) => handleChange('secondColor', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

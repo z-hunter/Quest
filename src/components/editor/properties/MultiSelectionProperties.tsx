@@ -505,69 +505,6 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   />
                   Fill
                 </label>
-
-                {sharedFilled !== 'off' && (
-                  <>
-                    <div style={{ marginTop: '6px' }}>
-                      <label
-                        className="e-label"
-                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                      >
-                        <input
-                          type="checkbox"
-                          style={{ marginRight: '5px' }}
-                          checked={sharedCheckerboard === 'on'}
-                          ref={(el) => {
-                            if (el) el.indeterminate = sharedCheckerboard === 'mixed';
-                          }}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            applyToMulti((o: any) => {
-                              if ((o as any).type === 'Quad') (o as any).checkerboard = checked;
-                            });
-                          }}
-                        />
-                        Checkerboard
-                      </label>
-                    </div>
-
-                    {sharedCheckerboard !== 'off' && (
-                      <div style={{ marginTop: '6px' }}>
-                        <label className="e-label" style={{ marginBottom: '4px' }}>
-                          Second Fill Color
-                        </label>
-                        <div style={{ display: 'flex', gap: '5px' }}>
-                          <input
-                            type="color"
-                            className="e-input"
-                            style={{ width: '32px', padding: 0 }}
-                            value={
-                              sharedSecondColor === '' ? '#000000' : (sharedSecondColor as string)
-                            }
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              applyToMulti((o: any) => {
-                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
-                              });
-                            }}
-                          />
-                          <input
-                            type="text"
-                            className="e-input"
-                            placeholder="mixed"
-                            value={sharedSecondColor === '' ? '' : (sharedSecondColor as string)}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              applyToMulti((o: any) => {
-                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
-                              });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
               </div>
             )}
 
@@ -750,6 +687,69 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       }}
                     />
                   </div>
+                )}
+
+                {sharedFilled !== 'off' && (
+                  <>
+                    <div className="e-row">
+                      <label
+                        className="e-label"
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          style={{ marginRight: '5px' }}
+                          checked={sharedCheckerboard === 'on'}
+                          ref={(el) => {
+                            if (el) el.indeterminate = sharedCheckerboard === 'mixed';
+                          }}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            applyToMulti((o: any) => {
+                              if ((o as any).type === 'Quad') (o as any).checkerboard = checked;
+                            });
+                          }}
+                        />
+                        Checkerboard
+                      </label>
+                    </div>
+
+                    {sharedCheckerboard !== 'off' && (
+                      <div className="e-row">
+                        <label className="e-label" style={{ marginBottom: '4px' }}>
+                          Second Fill Color
+                        </label>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <input
+                            type="color"
+                            className="e-input"
+                            style={{ width: '32px', padding: 0 }}
+                            value={
+                              sharedSecondColor === '' ? '#000000' : (sharedSecondColor as string)
+                            }
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              applyToMulti((o: any) => {
+                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
+                              });
+                            }}
+                          />
+                          <input
+                            type="text"
+                            className="e-input"
+                            placeholder="mixed"
+                            value={sharedSecondColor === '' ? '' : (sharedSecondColor as string)}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              applyToMulti((o: any) => {
+                                if ((o as any).type === 'Quad') (o as any).secondColor = v;
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

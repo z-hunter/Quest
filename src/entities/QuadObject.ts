@@ -179,7 +179,8 @@ export class QuadObject extends Entity {
       ctx.closePath();
       ctx.fill();
 
-      if (this.checkerboard) {
+      // Checkerboard mode is an option of Retro Grid (requires isGrid and checkerboard to be active)
+      if (this.isGrid && this.checkerboard) {
         const v0 = screenVerts[0]; // TL
         const v1 = screenVerts[1]; // TR
         const v2 = screenVerts[2]; // BR

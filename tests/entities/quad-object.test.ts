@@ -95,9 +95,10 @@ describe('QuadObject', () => {
     expect(loadedQuad.secondColor).toBe('#ff0000');
   });
 
-  it('draws checkerboard pattern when filled and checkerboard are active', () => {
+  it('draws checkerboard pattern when Retro Grid, filled, and checkerboard are active', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'checker_quad');
+    quad.isGrid = true;
     quad.filled = true;
     quad.checkerboard = true;
     quad.color = '#ffffff';
