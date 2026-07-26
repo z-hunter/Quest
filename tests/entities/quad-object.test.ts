@@ -55,7 +55,7 @@ describe('QuadObject', () => {
     expect(ctx.strokeStyle).toBe('#000000');
   });
 
-  it('calculates getPerspectiveT correctly with ratio, amount blending, and invert', () => {
+  it('calculates getPerspectiveT correctly with ratio and amount blending', () => {
     // Rectangle: equal edge lengths -> linear parameter t
     expect(getPerspectiveT(0.5, 100, 100, 1.0)).toBe(0.5);
 
@@ -70,21 +70,16 @@ describe('QuadObject', () => {
     // Amount = 2.0 (exaggerated effect)
     const tExaggerated = getPerspectiveT(0.5, 50, 100, 2.0);
     expect(tExaggerated).toBeLessThan(tPersp);
-
-    // Inverted perspective -> reverses ratio, pulls t closer to 1 (bottom)
-    const tInverted = getPerspectiveT(0.5, 50, 100, 1.0, true);
-    expect(tInverted).toBeGreaterThan(0.5);
-    expect(tInverted).toBeCloseTo(2 / 3, 4);
   });
 
-  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, gridPerspectiveInvertX/Y, checkerboard and secondColor', () => {
+  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, gridPerspectiveOffX/Y, checkerboard and secondColor', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'test_quad');
     quad.isGrid = true;
     quad.gridPerspective = true;
     quad.gridPerspectiveAmount = 1.5;
-    quad.gridPerspectiveInvertX = true;
-    quad.gridPerspectiveInvertY = true;
+    quad.gridPerspectiveOffX = true;
+    quad.gridPerspectiveOffY = true;
     quad.filled = true;
     quad.checkerboard = true;
     quad.secondColor = '#ff0000';
@@ -92,16 +87,16 @@ describe('QuadObject', () => {
     const json = quad.toJSON();
     expect(json.gridPerspective).toBe(true);
     expect(json.gridPerspectiveAmount).toBe(1.5);
-    expect(json.gridPerspectiveInvertX).toBe(true);
-    expect(json.gridPerspectiveInvertY).toBe(true);
+    expect(json.gridPerspectiveOffX).toBe(true);
+    expect(json.gridPerspectiveOffY).toBe(true);
     expect(json.checkerboard).toBe(true);
     expect(json.secondColor).toBe('#ff0000');
 
     const loadedQuad = QuadObject.fromJSON(fixture.game, json);
     expect(loadedQuad.gridPerspective).toBe(true);
     expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
-    expect(loadedQuad.gridPerspectiveInvertX).toBe(true);
-    expect(loadedQuad.gridPerspectiveInvertY).toBe(true);
+    expect(loadedQuad.gridPerspectiveOffX).toBe(true);
+    expect(loadedQuad.gridPerspectiveOffY).toBe(true);
     expect(loadedQuad.checkerboard).toBe(true);
     expect(loadedQuad.secondColor).toBe('#ff0000');
   });

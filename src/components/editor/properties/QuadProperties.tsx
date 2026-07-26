@@ -505,10 +505,10 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                       <input
                         type="checkbox"
                         style={{ marginRight: '5px' }}
-                        checked={quad.gridPerspectiveInvertX || false}
-                        onChange={(e) => handleChange('gridPerspectiveInvertX', e.target.checked)}
+                        checked={quad.gridPerspectiveOffX || false}
+                        onChange={(e) => handleChange('gridPerspectiveOffX', e.target.checked)}
                       />
-                      Invert X
+                      Off X
                     </label>
                     <label
                       className="e-label"
@@ -521,10 +521,10 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                       <input
                         type="checkbox"
                         style={{ marginRight: '5px' }}
-                        checked={quad.gridPerspectiveInvertY || false}
-                        onChange={(e) => handleChange('gridPerspectiveInvertY', e.target.checked)}
+                        checked={quad.gridPerspectiveOffY || false}
+                        onChange={(e) => handleChange('gridPerspectiveOffY', e.target.checked)}
                       />
-                      Invert Y
+                      Off Y
                     </label>
                   </div>
                 </div>

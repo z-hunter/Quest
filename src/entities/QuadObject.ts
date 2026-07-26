@@ -25,14 +25,10 @@ export function getPerspectiveT(
   t: number,
   edge1Length: number,
   edge2Length: number,
-  amount: number = 1.0,
-  invert: boolean = false
+  amount: number = 1.0
 ): number {
   if (amount <= 0 || edge1Length <= 0 || edge2Length <= 0) return t;
-  let ratio = edge2Length / edge1Length;
-  if (invert) {
-    ratio = 1.0 / ratio;
-  }
+  const ratio = edge2Length / edge1Length;
   if (Math.abs(ratio - 1.0) < 1e-5) return t;
 
   const tPersp = t / (t + (1.0 - t) * ratio);
@@ -71,8 +67,8 @@ export class QuadObject extends Entity {
   gridColor: string = '#ffffff';
   gridPerspective: boolean = true;
   gridPerspectiveAmount: number = 1.0;
-  gridPerspectiveInvertX: boolean = false;
-  gridPerspectiveInvertY: boolean = false;
+  gridPerspectiveOffX: boolean = false;
+  gridPerspectiveOffY: boolean = false;
 
   // Fill Props
   filled: boolean = true;
@@ -104,8 +100,8 @@ export class QuadObject extends Entity {
     'gridColor',
     'gridPerspective',
     'gridPerspectiveAmount',
-    'gridPerspectiveInvertX',
-    'gridPerspectiveInvertY',
+    'gridPerspectiveOffX',
+    'gridPerspectiveOffY',
     'filled',
     'checkerboard',
     'secondColor',
@@ -194,10 +190,10 @@ export class QuadObject extends Entity {
         const v2 = screenVerts[2]; // BR
         const v3 = screenVerts[3]; // BL
 
-        const usePerspective = this.gridPerspective ?? true;
+        const basePerspective = this.gridPerspective ?? true;
         const amount = this.gridPerspectiveAmount ?? 1.0;
-        const invertX = this.gridPerspectiveInvertX ?? false;
-        const invertY = this.gridPerspectiveInvertY ?? false;
+        const usePerspectiveX = basePerspective && !(this.gridPerspectiveOffX ?? false);
+        const usePerspectiveY = basePerspective && !(this.gridPerspectiveOffY ?? false);
 
         const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
         const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
@@ -217,18 +213,10 @@ export class QuadObject extends Entity {
               const rawV0 = row / rows;
               const rawV1 = (row + 1) / rows;
 
-              const u0 = usePerspective
-                ? getPerspectiveT(rawU0, hLeft, hRight, amount, invertX)
-                : rawU0;
-              const u1 = usePerspective
-                ? getPerspectiveT(rawU1, hLeft, hRight, amount, invertX)
-                : rawU1;
-              const v0_t = usePerspective
-                ? getPerspectiveT(rawV0, wTop, wBot, amount, invertY)
-                : rawV0;
-              const v1_t = usePerspective
-                ? getPerspectiveT(rawV1, wTop, wBot, amount, invertY)
-                : rawV1;
+              const u0 = usePerspectiveX ? getPerspectiveT(rawU0, hLeft, hRight, amount) : rawU0;
+              const u1 = usePerspectiveX ? getPerspectiveT(rawU1, hLeft, hRight, amount) : rawU1;
+              const v0_t = usePerspectiveY ? getPerspectiveT(rawV0, wTop, wBot, amount) : rawV0;
+              const v1_t = usePerspectiveY ? getPerspectiveT(rawV1, wTop, wBot, amount) : rawV1;
 
               // Top-Left corner
               const p00x =
@@ -312,10 +300,10 @@ export class QuadObject extends Entity {
       const v2 = screenVerts[2]; // BR
       const v3 = screenVerts[3]; // BL
 
-      const usePerspective = this.gridPerspective ?? true;
+      const basePerspective = this.gridPerspective ?? true;
       const amount = this.gridPerspectiveAmount ?? 1.0;
-      const invertX = this.gridPerspectiveInvertX ?? false;
-      const invertY = this.gridPerspectiveInvertY ?? false;
+      const usePerspectiveX = basePerspective && !(this.gridPerspectiveOffX ?? false);
+      const usePerspectiveY = basePerspective && !(this.gridPerspectiveOffY ?? false);
 
       const wTop = Math.hypot(v1.x - v0.x, v1.y - v0.y);
       const wBot = Math.hypot(v2.x - v3.x, v2.y - v3.y);
@@ -327,7 +315,7 @@ export class QuadObject extends Entity {
       // Horizontal Cuts (Down the shape using Y count)
       for (let i = 1; i <= this.gridLinesY; i++) {
         const rawT = i / (this.gridLinesY + 1);
-        const t = usePerspective ? getPerspectiveT(rawT, wTop, wBot, amount, invertY) : rawT;
+        const t = usePerspectiveY ? getPerspectiveT(rawT, wTop, wBot, amount) : rawT;
 
         // Left Point
         const lx = v0.x + (v3.x - v0.x) * t;
@@ -344,7 +332,7 @@ export class QuadObject extends Entity {
       // Vertical Cuts (Across the shape using X count)
       for (let i = 1; i <= this.gridLinesX; i++) {
         const rawT = i / (this.gridLinesX + 1);
-        const t = usePerspective ? getPerspectiveT(rawT, hLeft, hRight, amount, invertX) : rawT;
+        const t = usePerspectiveX ? getPerspectiveT(rawT, hLeft, hRight, amount) : rawT;
 
         // Top Point
         const tx = v0.x + (v1.x - v0.x) * t;

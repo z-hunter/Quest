@@ -93,13 +93,13 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     quads,
     (q: any) => q.gridPerspectiveAmount ?? 1.0
   );
-  const sharedGridPerspectiveInvertX = getSharedBooleanState(
+  const sharedGridPerspectiveOffX = getSharedBooleanState(
     quads,
-    (q: any) => !!q.gridPerspectiveInvertX
+    (q: any) => !!q.gridPerspectiveOffX
   );
-  const sharedGridPerspectiveInvertY = getSharedBooleanState(
+  const sharedGridPerspectiveOffY = getSharedBooleanState(
     quads,
-    (q: any) => !!q.gridPerspectiveInvertY
+    (q: any) => !!q.gridPerspectiveOffY
   );
   const sharedIgnoreScaling = getSharedBooleanState(
     entitiesAndQuads,
@@ -702,19 +702,19 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                         <input
                           type="checkbox"
                           style={{ marginRight: '5px' }}
-                          checked={sharedGridPerspectiveInvertX === 'on'}
+                          checked={sharedGridPerspectiveOffX === 'on'}
                           ref={(el) => {
-                            if (el) el.indeterminate = sharedGridPerspectiveInvertX === 'mixed';
+                            if (el) el.indeterminate = sharedGridPerspectiveOffX === 'mixed';
                           }}
                           onChange={(e) => {
                             const checked = e.target.checked;
                             applyToMulti((o: any) => {
                               if ((o as any).type === 'Quad')
-                                (o as any).gridPerspectiveInvertX = checked;
+                                (o as any).gridPerspectiveOffX = checked;
                             });
                           }}
                         />
-                        Invert X
+                        Off X
                       </label>
                       <label
                         className="e-label"
@@ -723,19 +723,19 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                         <input
                           type="checkbox"
                           style={{ marginRight: '5px' }}
-                          checked={sharedGridPerspectiveInvertY === 'on'}
+                          checked={sharedGridPerspectiveOffY === 'on'}
                           ref={(el) => {
-                            if (el) el.indeterminate = sharedGridPerspectiveInvertY === 'mixed';
+                            if (el) el.indeterminate = sharedGridPerspectiveOffY === 'mixed';
                           }}
                           onChange={(e) => {
                             const checked = e.target.checked;
                             applyToMulti((o: any) => {
                               if ((o as any).type === 'Quad')
-                                (o as any).gridPerspectiveInvertY = checked;
+                                (o as any).gridPerspectiveOffY = checked;
                             });
                           }}
                         />
-                        Invert Y
+                        Off Y
                       </label>
                     </div>
                   </div>
