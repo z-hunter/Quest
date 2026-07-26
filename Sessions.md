@@ -4219,8 +4219,49 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 
 - Session changes committed and linted during the session.
 
-### Remaining Work / Next Recommended Steps
 
-- Monitor NPC wandering behavior in complex multi-room scenes to verify `ignorePhysicalExits` cache performance.
-- Re-verify any future authored scenes with narrow doorway geometry to ensure fine-resolution fallback continues to perform within expected time bounds.
+## Session Entry - 2026-07-26 22:57 +02:00
+
+### Session Goals
+
+- Implement Retro Grid 3D Perspective mode and Amount slider for `QuadObject` entities.
+- Implement Retro Grid Checkerboard fill mode with Second Fill Color support.
+- Implement per-axis perspective toggles (**Off X** and **Off Y**) and synchronize editor snapping alignment with perspective grid nodes.
+
+### What Was Implemented
+
+1. **Quad Retro Grid Perspective & Amount Slider (`QuadObject.ts`, `EditorSnappingSystem.ts`)**:
+   - Added `gridPerspective` (`boolean`) and `gridPerspectiveAmount` (`number`, default `1.0`, range `0.0`–`2.0`) to `QuadObject` and `SERIALIZABLE_PROPS`.
+   - Implemented non-linear hyperbolic parameter warping formula `getPerspectiveT(t, edge1Length, edge2Length, amount)`:
+     Grid lines bunch closer together towards the narrower edge of trapezoidal Quads in 3D perspective space.
+   - Updated `EditorSnappingSystem` grid line and node snapping coordinates to align with perspective grid nodes when `Alt` is held.
+
+2. **Per-Axis Perspective Toggles (Off X & Off Y)**:
+   - Added `gridPerspectiveOffX` and `gridPerspectiveOffY` properties to `QuadObject`.
+   - Enabled selective disabling of 3D perspective warping on either axis independently (e.g. keeping vertical grid lines linearly spaced while horizontal grid lines retain perspective warping, or vice versa).
+   - Updated `QuadObject.render()` and `EditorSnappingSystem` to respect `usePerspectiveX` and `usePerspectiveY`.
+
+3. **Checkerboard Fill Mode & Second Fill Color (`QuadObject.ts`, `QuadProperties.tsx`, `MultiSelectionProperties.tsx`)**:
+   - Added `checkerboard` (`boolean`) and `secondColor` (`string`) properties to `QuadObject`.
+   - Rendered alternating grid cells $(col + row) \% 2 === 1$ in `secondColor` over the base `color` pass, fully supporting perspective and per-axis Off X/Y warping.
+   - Placed Checkerboard controls inside the **Retro Grid** inspector section (active when both **Retro Grid** and **Fill Color** are enabled).
+
+4. **Inspector UI & Tooltips (`QuadProperties.tsx`, `MultiSelectionProperties.tsx`, `propertiesConstants.ts`)**:
+   - Added UI controls for **Perspective**, **Amount**, **Off X**, **Off Y**, **Checkerboard**, and **Second Fill Color** in both `QuadProperties` and `MultiSelectionProperties`.
+   - Added hover tooltips in `propertiesConstants.ts`.
+
+### Tests and Validation
+
+- `tests/entities/quad-object.test.ts` — 4/4 tests passed (covering `getPerspectiveT` math, JSON serialization/deserialization, and checkerboard cell rendering).
+- `npm run typecheck` — 0 errors.
+- `npm test -- --run` — 58 test files, 725/725 tests passed cleanly.
+
+### Commits Created
+
+- `67c4283` — `feat(quad): add perspective warping and amount slider for retro grid`
+- `90d7e0f` — `feat(quad): add Checkerboard fill mode and Second Fill Color`
+- `2ec1125` — `fix(quad): restrict Checkerboard option to Retro Grid section and require Fill Color`
+- `129498e` — `feat(quad): add Invert X and Invert Y perspective options`
+- `d91448d` — `feat(quad): replace Invert X/Y perspective options with Off X/Y`
+
 
