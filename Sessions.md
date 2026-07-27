@@ -4264,4 +4264,54 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - `129498e` — `feat(quad): add Invert X and Invert Y perspective options`
 - `d91448d` — `feat(quad): replace Invert X/Y perspective options with Off X/Y`
 
+## Session Entry - 2026-07-27 04:49 +02:00
+
+### Session Goals
+
+- Finish the textured `Quad` feature with a stable commit and wrap up the session cleanly.
+- Preserve the existing `t-quad` scene worktree files exactly as-is.
+- Leave a durable session summary behind in the repo and NotebookLM sources.
+
+### What Was Implemented
+
+1. **Textured Quad Rendering**:
+   - Completed the textured `QuadObject` pipeline with sprite-backed rendering, `stretch` and `tile` modes, projective correction by default, and the near-affine flat fast path for almost-rectangular Quads.
+   - Kept Retro Grid as an overlay on top of the textured fill.
+   - Reduced the earlier visible mesh artifacts by switching to bounded screen-space tessellation and avoiding texture-resolution-driven over-subdivision.
+
+2. **Editor / Property UI**:
+   - Added the texture-related Quad inspector controls and kept them consistent with the existing entity sprite workflow.
+   - Preserved the user-facing defaults already agreed during implementation: perspective enabled, stretch as the default mode, and optional tiling scale controls.
+
+3. **Validation and Commit**:
+   - Verified the implementation with typechecking and the test suite during the feature work.
+   - Created the final commit for this session: `447f4d9` (`feat: add textured quad rendering`).
+
+### Architecture / Runtime Decisions
+
+- The textured Quad renderer now prefers the cheapest possible path when the shape is close to an affine rectangle, which avoids unnecessary mesh work and reduces the chance of seams.
+- Stronger perspective still uses Canvas2D mesh subdivision, but the subdivision is bounded by screen-space error instead of texture size.
+- This keeps quality high enough for skewed quads while protecting frame time in the common case.
+
+### Tests and Validation
+
+- `npm run typecheck` — passed.
+- `npm test` — passed.
+- Focused `tests/entities/quad-object.test.ts` coverage was updated and passed during implementation.
+
+### Commits Created
+
+- `447f4d9` — `feat: add textured quad rendering`
+
+### Remaining Work / Next Steps
+
+- No blocking follow-up remains from this session.
+- The only uncommitted items left in the working tree are the user-owned scene files:
+  - `public/scenes/t-quad.json`
+  - `public/text/scenes/t-quad.json`
+
+### Risks / Caveats
+
+- The textured Quad implementation intentionally stays on Canvas2D for now, so very complex future texture cases may still warrant a renderer revisit later.
+- The wrap-up intentionally did not touch or normalize the `t-quad` scene files so that the user's local scene work stays intact.
 
