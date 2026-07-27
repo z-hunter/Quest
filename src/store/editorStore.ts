@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 
+export interface PanelConfig {
+  collapsed: number[];
+  scrollTop: number;
+}
+
 export type EditorMode = 'SELECT' | 'DRAW_WALKBOX' | 'DRAW_TRIGGER';
 
 interface EditorState {
@@ -8,6 +13,10 @@ interface EditorState {
   selectedObjectId: string | null;
   selectedObjectType: string | null; // 'Entity', 'Walkbox', 'Triggerbox', 'SCENE', 'SETTINGS'
   selectedObjectKeys: string[];
+
+  // Panel Configuration
+  panelConfig: Record<string, PanelConfig>;
+  setPanelConfig: (type: string, config: PanelConfig) => void;
 
   // Scene Metadata (Used for Scene Props Panel)
   sceneName: string;
@@ -42,6 +51,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectedObjectType: null,
   selectedObjectKeys: [],
   selectedVertexIndex: -1,
+  panelConfig: {},
   sceneName: '',
   sceneFilename: '',
   hierarchyVersion: 0,
@@ -68,6 +78,14 @@ export const useEditorStore = create<EditorState>((set) => ({
     }),
 
   selectVertex: (index) => set({ selectedVertexIndex: index }),
+
+  setPanelConfig: (type, config) =>
+    set((state) => ({
+      panelConfig: {
+        ...state.panelConfig,
+        [type]: config,
+      },
+    })),
 
   setSceneInfo: (name, filename) => set({ sceneName: name, sceneFilename: filename }),
 

@@ -45,6 +45,7 @@ export const PropertiesPanel: React.FC = () => {
     objectVersion,
     mode,
     selectedVertexIndex,
+    setPanelConfig,
   } = useEditorStore();
 
   const [groupIdDraft, setGroupIdDraft] = React.useState('');
@@ -297,26 +298,67 @@ export const PropertiesPanel: React.FC = () => {
     return () => panel.removeEventListener('click', handleClick);
   });
 
+  const saveCurrentPanelConfig = React.useCallback(
+    (type: string) => {
+      const panel = panelRef.current;
+      const content = contentRef.current;
+      if (!panel || !content) return;
+
+      const collapsed: number[] = [];
+      const sections = panel.querySelectorAll<HTMLElement>(
+        '.properties-section-block[data-section]'
+      );
+      sections.forEach((section) => {
+        if (section.classList.contains('collapsed')) {
+          collapsed.push(Number(section.dataset.section));
+        }
+      });
+
+      setPanelConfig(type, {
+        collapsed,
+        scrollTop: content.scrollTop,
+      });
+    },
+    [setPanelConfig]
+  );
+
   React.useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    const content = contentRef.current;
+    if (!panel || !content || !selectedObjectType) return;
+
+    // Restore or initialize config by reading directly from the store (avoids infinite loops)
+    const config = useEditorStore.getState().panelConfig[selectedObjectType];
     const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
+
     sections.forEach((section) => {
       const id = Number(section.dataset.section);
       const hasHeader = !!section.querySelector(':scope > .properties-section-header');
-      section.classList.toggle(
-        'collapsed',
-        hasHeader &&
-          !section.classList.contains('properties-section-empty') &&
-          id !== 0 &&
-          id !== 1 &&
-          id !== 5 &&
-          id !== 7
-      );
+
+      if (!hasHeader || section.classList.contains('properties-section-empty')) {
+        section.classList.remove('collapsed');
+      } else if (config) {
+        section.classList.toggle('collapsed', config.collapsed.includes(id));
+      } else {
+        // Default behavior if no config saved
+        section.classList.toggle('collapsed', id !== 0 && id !== 1 && id !== 5 && id !== 7);
+      }
     });
-    // Check initial state after applying defaults
+
+    if (config) {
+      // Restore scroll position
+      content.scrollTop = config.scrollTop;
+    } else {
+      content.scrollTop = 0;
+    }
+
     checkAnyExpanded();
-  }, [selectedObjectId, selectedObjectType, checkAnyExpanded]);
+
+    // Cleanup: Save config before type switches or unmount
+    return () => {
+      saveCurrentPanelConfig(selectedObjectType);
+    };
+  }, [selectedObjectType, checkAnyExpanded, saveCurrentPanelConfig]);
 
   useNumericScrubbing(panelRef);
 
