@@ -1,7 +1,11 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
-import { getQuadCentroid, renderOpacityBlurControls } from './propertiesUtils';
+import {
+  getQuadCentroid,
+  renderOpacityBlurControls,
+  renderSpriteEffectsControls,
+} from './propertiesUtils';
 import { QuadObject } from '../../../entities/QuadObject';
 
 interface QuadPropertiesProps {
@@ -320,6 +324,17 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
             quad.blur || 0,
             (nextOpacity) => handleChange('opacity', nextOpacity, true),
             (nextBlur) => handleChange('blur', nextBlur)
+          )}
+
+          {renderSpriteEffectsControls(
+            quad.brightness !== undefined ? quad.brightness : 1.0,
+            quad.saturation !== undefined ? quad.saturation : 1.0,
+            quad.contrast !== undefined ? quad.contrast : 1.0,
+            quad.hueShift !== undefined ? quad.hueShift : 0,
+            (v) => handleChange('brightness', v),
+            (v) => handleChange('saturation', v),
+            (v) => handleChange('contrast', v),
+            (v) => handleChange('hueShift', v)
           )}
 
           {/* Texture */}

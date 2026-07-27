@@ -234,37 +234,130 @@ export const renderOpacityBlurControls = (
 ): React.ReactElement => {
   const normalizedOpacity = opacityValue === '' ? 1 : Number(opacityValue);
   const normalizedBlur = blurValue === '' ? 0 : Number(blurValue);
-  const opacityUi = Math.round((1 - normalizedOpacity) * 100);
-  const blurUi = Math.max(0, Math.min(50, Math.round(normalizedBlur)));
 
   return (
-    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+    <div className="e-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
       <div>
-        <label className="e-label">Opacity ({opacityUi}%)</label>
+        <label className="e-label">Opacity</label>
         <input
-          type="range"
+          type="number"
           className="e-input"
-          style={{ width: '100%' }}
           min="0"
-          max="100"
-          step="5"
-          value={opacityUi}
-          onChange={(e) => onOpacityChange(1 - parseInt(e.target.value, 10) / 100)}
+          max="1"
+          step="0.05"
+          value={formatPanelNumber(normalizedOpacity)}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            onOpacityChange(isNaN(v) ? 1 : v);
+          }}
         />
       </div>
       <div>
-        <label className="e-label">Blur ({blurUi}px)</label>
+        <label className="e-label">Blur (px)</label>
         <input
-          type="range"
+          type="number"
           className="e-input"
-          style={{ width: '100%' }}
           min="0"
           max="50"
           step="1"
-          value={blurUi}
-          onChange={(e) => onBlurChange(parseInt(e.target.value, 10))}
+          value={formatPanelNumber(normalizedBlur)}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            onBlurChange(isNaN(v) ? 0 : v);
+          }}
         />
       </div>
     </div>
+  );
+};
+
+export const renderSpriteEffectsControls = (
+  brightnessValue: number | '',
+  saturationValue: number | '',
+  contrastValue: number | '',
+  hueShiftValue: number | '',
+  onBrightnessChange: (val: number) => void,
+  onSaturationChange: (val: number) => void,
+  onContrastChange: (val: number) => void,
+  onHueShiftChange: (val: number) => void
+): React.ReactElement => {
+  const normBrightness = brightnessValue === '' ? 1 : Number(brightnessValue);
+  const normSaturation = saturationValue === '' ? 1 : Number(saturationValue);
+  const normContrast = contrastValue === '' ? 1 : Number(contrastValue);
+  const normHue = hueShiftValue === '' ? 0 : Number(hueShiftValue);
+
+  return (
+    <>
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+      >
+        <div>
+          <label className="e-label">Brightness</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="2"
+            step="0.05"
+            value={formatPanelNumber(normBrightness)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onBrightnessChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+        <div>
+          <label className="e-label">Saturation</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="3"
+            step="0.05"
+            value={formatPanelNumber(normSaturation)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onSaturationChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+      </div>
+      <div
+        className="e-row"
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+      >
+        <div>
+          <label className="e-label">Contrast</label>
+          <input
+            type="number"
+            className="e-input"
+            min="0"
+            max="2"
+            step="0.05"
+            value={formatPanelNumber(normContrast)}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onContrastChange(isNaN(v) ? 1 : v);
+            }}
+          />
+        </div>
+        <div>
+          <label className="e-label">Hue Shift (&deg;)</label>
+          <input
+            type="number"
+            className="e-input"
+            min="-180"
+            max="180"
+            step="1"
+            value={formatPanelNumber(normHue)}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              onHueShiftChange(isNaN(v) ? 0 : v);
+            }}
+          />
+        </div>
+      </div>
+    </>
   );
 };

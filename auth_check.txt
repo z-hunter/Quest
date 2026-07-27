@@ -1,0 +1,109 @@
+{
+  "status": "ok",
+  "checks": {
+    "storage_exists": true,
+    "json_valid": true,
+    "cookies_present": true,
+    "sid_cookie": true,
+    "token_fetch": null
+  },
+  "details": {
+    "storage_path": "C:\\Users\\Professional\\.notebooklm\\storage_state.json",
+    "auth_source": "file (C:\\Users\\Professional\\.notebooklm\\storage_state.json)",
+    "cookies_found": [
+      "HSID",
+      "SSID",
+      "APISID",
+      "SAPISID",
+      "__Secure-1PAPISID",
+      "__Secure-3PAPISID",
+      "NID",
+      "SID",
+      "__Secure-1PSID",
+      "__Secure-3PSID",
+      "OSID",
+      "__Secure-OSID",
+      "__Secure-ENID",
+      "__Secure-1PSIDTS",
+      "__Secure-1PSIDRTS",
+      "__Secure-3PSIDTS",
+      "__Secure-3PSIDRTS",
+      "SIDCC",
+      "__Secure-1PSIDCC",
+      "__Secure-3PSIDCC"
+    ],
+    "cookie_domains": [
+      ".google.com",
+      ".google.pl",
+      ".notebooklm.google.com",
+      "accounts.google.com",
+      "myaccount.google.com",
+      "notebooklm.google.com",
+      "ogs.google.com",
+      "www.google.com"
+    ],
+    "error": null,
+    "cookies_by_domain": {
+      ".google.com": [
+        "HSID",
+        "SSID",
+        "APISID",
+        "SAPISID",
+        "__Secure-1PAPISID",
+        "__Secure-3PAPISID",
+        "SID",
+        "__Secure-1PSID",
+        "__Secure-3PSID",
+        "NID",
+        "__Secure-ENID",
+        "__Secure-1PSIDTS",
+        "__Secure-1PSIDRTS",
+        "__Secure-3PSIDTS",
+        "__Secure-3PSIDRTS",
+        "SIDCC",
+        "__Secure-1PSIDCC",
+        "__Secure-3PSIDCC"
+      ],
+      "accounts.google.com": [
+        "ACCOUNT_CHOOSER",
+        "SMSV",
+        "LSID",
+        "__Host-1PLSID",
+        "__Host-3PLSID",
+        "__Host-GAPS",
+        "__Host-GAPSTS"
+      ],
+      ".google.pl": [
+        "HSID",
+        "SSID",
+        "APISID",
+        "SAPISID",
+        "__Secure-1PAPISID",
+        "__Secure-3PAPISID",
+        "NID",
+        "SID",
+        "__Secure-1PSID",
+        "__Secure-3PSID"
+      ],
+      ".notebooklm.google.com": [
+        "_ga",
+        "_ga_W0LDH41ZCB"
+      ],
+      "notebooklm.google.com": [
+        "OSID",
+        "__Secure-OSID"
+      ],
+      "www.google.com": [
+        "OTZ"
+      ],
+      "myaccount.google.com": [
+        "OTZ",
+        "OSID",
+        "__Secure-OSID"
+      ],
+      "ogs.google.com": [
+        "OTZ"
+      ]
+    }
+  }
+}

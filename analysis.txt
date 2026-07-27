@@ -1,0 +1,1592 @@
+﻿{
+  "answer": "**Correction on Engine Architecture:** First, it is important to clarify that Scanline Engine does **not** render scene objects using the DOM or CSS. While the editor UI is built with React and DOM elements, the game's actual scene rendering pipeline is strictly built on the **HTML5 Canvas 2D API** [1, 2]. WebGL is only utilized at the very end of the pipeline for the final CRT post-processing shader [2]. \n\nHere is the analysis for implementing Brightness, Saturation, Contrast, and Hue shift effects:\n\n**Existing architecture to reuse for these objects**\n*   **Entity Primitives:** The base `Entity` and `QuadObject` classes already maintain visual state properties such as `opacity`, `blur`, `blendMode` (which leverages Canvas `globalCompositeOperation`), and solid `color` fills [3, 4]. \n*   **Rendering Pipeline:** The stateless `SceneRenderer.ts` processes all visual properties and Canvas context state changes [5].\n*   **Editor UI:** The Scene Editor already groups visual parameters into a dedicated **VISUAL** (Section 2) properties panel, which utilizes a `useScrubbable` hook for tactile mouse-drag value adjustments [6, 7].\n\n**How easily these effects can be implemented**\nFrom a code perspective, implementation is highly straightforward:\n1. Expand the schemas in `Entity.ts` and `QuadObject.ts` to include `brightness`, `saturation`, `contrast`, and `hueShift` within `SERIALIZABLE_PROPS`.\n2. Update the Editor's **VISUAL** section to expose scrubbable numeric inputs for these new values [6, 7].\n3. In `SceneRenderer.ts`, construct a native Canvas 2D filter string (e.g., `ctx.filter = 'brightness(x) saturate(y) contrast(z) hue-rotate(wdeg)'`) right before calling `drawImage`.\n4. Immediately reset `ctx.filter = 'none'` after drawing to prevent the effect from leaking to other objects in the render pass.\n\n**Performance considerations (Canvas 2D)**\nBecause scene entities are flattened into a 2D buffer on the CPU-bound Canvas 2D API [1, 2], **performance is the primary concern**. The `ctx.filter` API is notoriously CPU-intensive. Applying complex, multi-parameter filter strings to dozens of `Static`, `Actor`, or `Quad` objects every single frame will likely cause severe frame drops and lag. \n\n**Any known limitations or previous attempts**\n*   **Current Workarounds:** Scanline currently does not have a native subsystem for these specific image processing parameters. To darken or lighten objects, developers currently rely on `blendMode` operations (e.g., `multiply`, `screen`) combined with overlaid colored `Quad` objects, or they swap out entirely pre-processed sprite variants using `setSprite()` [3, 4].\n*   **Textured Quad Tessellation Conflict:** A critical known limitation involves the recent implementation of textured `QuadObject` rendering. To fake 3D perspective (homography) on a 2D Canvas, the engine uses bounded screen-space tessellation, subdividing a single Quad into up to 32 affine triangles [8, 9]. If a Canvas `ctx.filter` state change is mistakenly applied *per-triangle* inside this subdivision loop, the rendering overhead will be catastrophic [8]. Any filter must be applied to the global context exactly once before the 4-to-32 triangle loop begins.",
+  "conversation_id": "4134a68c-33d4-4145-883b-f7fe0018f2a1",
+  "turn_number": 1,
+  "is_follow_up": true,
+  "references": [
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 1,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "4d2edfaa-e1c8-4a51-9f85-57b83764b756"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 2,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "56dd6d57-7d93-403a-8813-4e5d7370e8b0"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 3,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "97e3589d-5482-48cc-a895-e6fd38137829"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 4,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "2f1c2fed-6738-45e2-9a9b-4f793de70904"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 5,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "007e9843-fe0c-4370-bbf8-6812a11ba6bb"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 6,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "92102a66-4753-4f03-a6d4-65fe66f76a5a"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 7,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "f70cda51-46f5-496e-b75a-025521330415"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 8,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "f6032bb5-883f-4605-ba9d-0a5d9408b9c6"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 9,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "4041d205-c905-4c5a-a103-0a94b0178e8a"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 10,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "cfb51a78-0945-4aff-83e0-7637081c43c2"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 11,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "6abadff4-9e8d-4366-99d5-223da9aeffea"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 12,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "99699996-616e-4eee-a5c7-d8531950332d"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 13,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "255b499d-162e-4971-8810-cf4f45bc897a"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 14,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "2e025a15-ac88-40eb-b070-80719124aa0e"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 15,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "3d791bd9-c383-4e45-89b2-73641666094a"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 16,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "29e9dbb1-6530-4c70-812a-a70fb0b1a8b9"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 17,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "57ec654d-9712-4115-95cc-5f189f91a2c9"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 18,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "a5e867a6-3cb6-4ec4-95ef-ff30275807f3"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 19,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "89e8a8bc-bbb8-4432-a424-dc1ca97de6d9"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 20,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "28c29bfd-8944-4de4-8e90-268c0ad3fcb0"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 21,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "6aae5d14-580a-4d43-aa8e-43cc5f404cd8"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 22,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "01d2ab0f-7802-4834-91d5-5dc925ff9f7f"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 23,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "ff8a238a-ff64-4753-8798-7139bdf62011"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 24,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "cbcce607-b2b5-4ac4-8751-81db70402128"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 25,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "2b2880e9-f6c4-45c9-8e23-f0f5126ac382"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 26,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "06ca2a0f-7e2c-44b6-b7d8-fd7b6c26e84f"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 27,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "dba6cc6e-7ec1-47c1-b4f0-fb9c171924a3"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 28,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "e5786dbb-af9c-4688-a6bf-fbf6599ec317"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 29,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "340408e4-3956-4417-aca5-f9e8748ed13b"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 30,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "557054e7-7ad1-4669-9804-e5c53eca6578"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 31,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "f44c2042-f5c9-487f-a911-dc683ea337af"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 32,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "27aadf07-06d9-45f0-9f5c-b7c96d6400ca"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 33,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "cf8ad91d-e820-4c1e-b362-a18af5181daf"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 34,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "40d45d58-a469-4a2d-afe5-6010128e24e8"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 35,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "27d31379-f8a3-4bea-9def-738a3f56c17b"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 36,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "7f55b372-4c74-41a8-9b90-de831ae4bbe2"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 37,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "2aafd9b6-e8ab-4709-ae50-8b69c378c152"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 38,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "29864165-18f5-4d0d-8023-eae1cb78ec1a"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 39,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "997f71c7-da40-41c3-8e76-1000f8813bbe"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 40,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "1bdc692a-0a91-4bf8-bdb5-76b580a29178"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 41,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "5ad52ef1-5d7a-4785-bbc8-591bc26f2ee3"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 42,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "b4d632d3-1af1-41c4-acf1-9271b8ef3509"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 43,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "5ba5caf8-19dc-4d71-9119-707c618e42b0"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 44,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "ed94e96d-110f-46cf-a263-81575568764a"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 45,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "31c67550-0ceb-447a-931c-e5e1c8749b02"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 46,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "3f41e15d-857e-44fe-be2b-980819b45a88"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 47,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "b85dab15-b33f-432d-bb46-5e5c6bda9947"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 48,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "f12f623a-9272-49a1-b4f5-9974bba1a00d"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 49,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "40c8bc7a-174a-477c-91fa-3f9df20f79a1"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 50,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "8c190ec2-d1cf-465c-8c7a-51174894ecf7"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 51,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "ba02e2ce-7c50-496b-aa15-0c9c22cdaa37"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 52,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "fe84e3c0-e0b1-4f88-9483-09b5e22fdf79"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 53,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "7101dd97-9740-4f4d-8591-fcf635eca83d"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 54,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "13c8dd7d-b3de-4e2c-95c5-109b02584187"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 55,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "f5d8734e-abb4-4aeb-9325-5fc5ef7dd2f5"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 56,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "3bd00657-d5e3-4d81-9b43-9b1a375c4741"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 57,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "f0e7982c-11d6-4a75-a8bc-8d901c31b4a1"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 58,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "6986f1f9-56f2-4121-987d-1523ffbf59b0"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 59,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "c351d467-9893-4a20-8b00-0f2ce5c271e6"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 60,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "49377db1-7c00-487d-80da-9c4e96343ef2"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 61,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "53858704-ef4d-41d0-bf22-be67d33142a1"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 62,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "fb4c028a-deda-4ad5-8593-8b88f16501b2"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 63,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "dfae834f-e077-4629-b655-9c18a7b5951d"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 64,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "56035ae9-0dd8-4fff-8217-bcf628f0596b"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 65,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "bed4cb52-4141-4c23-adf7-5cbda3bdc352"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 66,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "bd281733-4274-4572-a1d4-4085aee52e60"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 67,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "fcc2eb16-1cd9-4ccb-992f-26622782c7f7"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 68,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "73aeee44-3278-4577-8f72-8ec1b919fbb1"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 69,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "0c6f4a20-7e1a-491c-b90e-877d0ed40846"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 70,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "e87813d7-f06a-4d8c-b2bc-392fc765dbd9"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 71,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "a8a9ffc6-9a9f-4a0f-accd-2894015ba33d"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 72,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "4328769a-0e26-4a52-9edf-ed63120c822f"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 73,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "c84d0932-9f3d-4643-89af-4b08743df964"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 74,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "36e0e14c-9f9e-45e0-b2cf-9cd4b5681429"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 75,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "17ef6e38-437e-4449-bec8-587c18a65ff3"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 76,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "e7944afe-ae33-4560-8571-ddf118b91068"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 77,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "e789f825-226d-4fe6-9cbe-4b08dd2544cc"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 78,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "c5ef0f78-a9fc-434a-bca4-34133e168c76"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 79,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "61c1d118-e63c-4378-bb1c-c605979012e1"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 80,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "1014158a-40ab-4aff-8880-2ec99829cb46"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 81,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "4a76e419-f435-4dba-b7a3-fe652f124172"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 82,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "6f07100a-fd3a-46a3-a0ab-1e72cc2afbc5"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 83,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "5372c7ae-8509-477d-a4e7-72071974e737"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 84,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "cd132318-edc5-4789-bc31-a59803ec4c3e"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 85,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "14666f89-139e-4ffe-9e65-16380afc57a6"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 86,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "fe984f61-a438-451c-8f6f-871734d3bb85"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 87,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "df55d42d-b3b3-45e4-ad78-5ec9f84752a5"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 88,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "6a377f2d-946d-4bca-a733-9a37fb0f177b"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 89,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "2acb103e-393d-4265-bd3f-3cb88030d169"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 90,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "15a7bb14-b638-457b-b026-255f74191a42"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 91,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "b875f626-736c-4907-b376-2b46f277e508"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 92,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "96a6eff4-37e5-4042-8fa5-fd8ede15f062"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 93,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "c66f0a0c-5382-42db-b752-237ad69206da"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 94,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "b96c81dc-9849-43cb-99d2-844b35ea77bb"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 95,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "db9a0857-0646-44d7-92ab-f29abed5c4a8"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 96,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "55e46544-a6d6-415c-b0ae-b4e04ff1b13a"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 97,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "146469ea-561a-49d5-b094-6798020dd354"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 98,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "1e3bc878-a0fd-45e9-a839-9b67a2b43ec5"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 99,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "ee3cac0a-2e77-4d87-9b89-4702c72eef85"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 100,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "dff1f698-9671-47b6-ba64-373cb444c0af"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 101,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "082a3e20-8598-4d51-8afb-c50c56bc3854"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 102,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "a4292384-cc24-42e5-9d21-486e07ade7a1"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 103,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "5ed0384a-3ba1-4022-921e-163dddcd38fb"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 104,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "6c23f5a2-5d81-4834-8dc5-20cf8b9aea48"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 105,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "a00d7d56-fd84-468a-a328-d6ed0e23f74b"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 106,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "85667fdc-c305-46c9-bf8a-6483ace31af0"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 107,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "a5e83c2b-8787-4db1-8457-4817ce26c1e9"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 108,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "f20a4d9b-8ca2-4383-a1fc-0359522c5830"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 109,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "22a2b169-5ad7-4ecf-9f13-e359a4310385"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 110,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "766e768b-4a1e-48d0-84d3-c2a8f7f775ab"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 111,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "2c7b37cc-a438-402b-9cb2-4b1db6663feb"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 112,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "4861d524-96a6-42c2-836b-94e56b20d89c"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 113,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "173959f7-46ea-44b8-b5dd-bacfc7b1d547"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 114,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "432a6877-d44f-4d7a-91a3-dda35a75f426"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 115,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "23360024-80ce-481b-9984-9c776b169ebc"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 116,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "389145ff-8ee7-44d9-9f82-aa64281ee34f"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 117,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "82e45d64-6b62-4564-b175-44084baab4e7"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 118,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "327217ba-a58d-4f25-8a31-845f7fba102d"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 119,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "279a5470-2296-4983-83da-e3d5d9e9486e"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 120,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "85c8e011-46be-44d0-843d-81e844c16600"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 121,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "d29fa1fb-1c29-41a6-a0ca-055b3f05aaa0"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 122,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "1af8d30f-f7c7-4400-aed5-d1a0f4b1992e"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 123,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "b48de1ad-7f6b-4314-b930-8b08f2e70afe"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 124,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "6c32aa16-0a26-4165-94e7-50246d7725b5"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 125,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "f51e0c3f-8e6b-4a08-8872-cf2b934aa666"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 126,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "a0e3bccb-7243-41d7-9572-ee4cf1e758b7"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 127,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "ba7cd8c7-f604-4907-8c32-eca6b4eee8c5"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 128,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "d519448d-2887-4556-8d91-b654650e856f"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 129,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "28e14778-1878-40fc-a7a0-84bdbaa9a21f"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 130,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "302b5155-3933-412d-9e90-089440c122fe"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 131,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "2665f464-2b53-4b0a-a31c-2b7bf002d2e5"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 132,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "3034dd78-76f7-4cfa-a8a2-762848789427"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 133,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "8f178676-6b27-4ccc-92fa-b433f5e2a809"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 134,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "342056f8-7f41-4317-9310-fa36f3f61d3e"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 135,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "eff8e21f-3321-4469-b193-9964254a1c8d"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 136,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "f2d5521b-d210-4cc1-8850-45e2f985ce5a"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 137,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "b9a2f595-ff48-43a2-9216-4697cca77e20"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 138,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "5fb65921-ba1b-425b-b5a8-ac05240bcad8"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 139,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "9bd4aca2-f23c-4761-8284-6079cd3f8935"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 140,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "d648f27e-03ea-418d-b1d9-e6f641664540"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 141,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "66af077d-7cc8-4f29-93e7-8a373fd26d22"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 142,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "9083e609-08c1-4696-9c14-c24e0121dc64"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 143,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "7fe2d28a-e292-4197-b462-c961fde15cea"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 144,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "3f8882f3-3317-4c31-be07-9313dcf01de8"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 145,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "2a6cfa05-6a41-4147-a12d-088960267450"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 146,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "143104fe-253c-4a20-a4d9-5cac70a9e17a"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 147,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "5bebac2f-8667-4477-a275-555fcd83be3e"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 148,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "843b9a8a-5f7e-4efc-838b-d4c0c8fc817c"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 149,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "2932798b-5f9d-424b-9bc5-2131dccf6990"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 150,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "d8efcd97-a482-4232-8997-ddc42c4b9a69"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 151,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "bad6e151-11d4-48a0-a188-b050af5a405b"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 152,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "e7595f27-1607-4090-86d5-a5405431d382"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 153,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "0fe76e98-45e6-47ff-868c-cbf87a91e96b"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 154,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "c4065c84-b658-4042-b0d9-e619980e827d"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 155,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "6669e239-3eba-4d9f-bfa8-542bf55b7d42"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 156,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "ea2797c0-d5f2-4f08-a88e-206dd12af529"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 157,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "03da4499-174a-4542-9b96-fa7eeb580805"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 158,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "bfa92d05-9951-45b7-a4a4-ef0e0b2acec0"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 159,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "5da0f8d7-a7ef-4025-b3d3-7fe061700454"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 160,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "d99876e3-2ef1-4f5c-9238-f4192ae24b19"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 161,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "bbef8ff6-92d5-4f66-91ff-63ab48a3a66f"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 162,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "f8368de1-9e31-4aad-a709-7f582e08c3c3"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 163,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "3db07559-ab0c-4fef-a958-5aedb3599872"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 164,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "be182749-47ab-4b00-8a0b-b07cd13d75bd"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 165,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "f2ea8b43-934b-4161-8946-c3f8a54f624a"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 166,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "2a368b7d-695d-4eda-8c75-0cd4c6575da0"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 167,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "01cf07b2-d424-4fc2-b3be-b9573f9947bc"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 168,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "87bcc4b8-ea5c-40b5-8feb-b154be29006e"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 169,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "b5ced9a2-78fe-4022-8fc7-78b18c8e8b16"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 170,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "48c8f2c3-3f79-47c5-932b-084b6ae14e6e"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 171,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "b4a8f282-7317-45a3-88d1-829bdc929dc3"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 172,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "00324be5-ed1e-4599-a634-278e38db6c32"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 173,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "0e57895a-2da8-4ac0-9e58-94306d57c359"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 174,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "f34e08db-1388-4d21-93d4-0584a64b0712"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 175,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "85fab9f1-e541-427e-9fec-a4fcd93aa184"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 176,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "9168b713-9fb3-4160-a12c-60be837884f3"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 177,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "e053dcbf-2eb2-43b1-9e6a-700168d6fabe"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 178,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "8eace6da-fd47-43eb-af21-4c5785105e8c"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 179,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "f3edf5bf-2d1f-40a1-8843-40d91f05cbde"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 180,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "8794bbda-2d86-4b2e-9b20-14a8cadf17ea"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 181,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "00324be5-ed1e-4599-a634-278e38db6c32"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 182,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "0e57895a-2da8-4ac0-9e58-94306d57c359"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 183,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "f34e08db-1388-4d21-93d4-0584a64b0712"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 184,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "85fab9f1-e541-427e-9fec-a4fcd93aa184"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 185,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "9168b713-9fb3-4160-a12c-60be837884f3"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 186,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "e053dcbf-2eb2-43b1-9e6a-700168d6fabe"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 187,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "8eace6da-fd47-43eb-af21-4c5785105e8c"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 188,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "f3edf5bf-2d1f-40a1-8843-40d91f05cbde"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 189,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "8794bbda-2d86-4b2e-9b20-14a8cadf17ea"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 190,
+      "cited_text": "\u041f\u0440\u0438\u043c\u0435\u0440 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f:",
+      "start_char": 95429,
+      "end_char": 95450,
+      "chunk_id": "00324be5-ed1e-4599-a634-278e38db6c32"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 191,
+      "cited_text": null,
+      "start_char": 513,
+      "end_char": 1002,
+      "chunk_id": "0e57895a-2da8-4ac0-9e58-94306d57c359"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 192,
+      "cited_text": "\u0415\u0441\u043b\u0438 \u0440\u0430\u0437\u043c\u0435\u0440\u044b \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 0, \u044d\u0442\u043e\u0442 \u043e\u0431\u044a\u0435\u043a\u0442 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043f\u0440\u0435\u043f\u044f\u0442\u0441\u0442\u0432\u0438\u0435\u043c \u0434\u043b\u044f \u0434\u0440\u0443\u0433\u0438\u0445 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 (Actor), \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u043a\u043e\u043b\u043b\u0430\u0439\u0434\u0435\u0440.",
+      "start_char": 31806,
+      "end_char": 31921,
+      "chunk_id": "f34e08db-1388-4d21-93d4-0584a64b0712"
+    },
+    {
+      "source_id": "f9caacc1-53af-40ed-83ff-55d25f164d2e",
+      "citation_number": 193,
+      "cited_text": "Layer \u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u043f\u043e\u0440\u044f\u0434\u043a\u043e\u043c \u043e\u0442\u0440\u0438\u0441\u043e\u0432\u043a\u0438 \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0431\u0435\u0437 \u043f\u0430\u0440\u0430\u043b\u043b\u0430\u043a\u0441\u0430. \u041e\u0431\u044a\u0435\u043a\u0442\u044b \u0441 \u043c\u0435\u043d\u044c\u0448\u0438\u043c Layer \u0440\u0438\u0441\u0443\u044e\u0442\u0441\u044f \u0437\u0430 \u043e\u0431\u044a\u0435\u043a\u0442\u0430\u043c\u0438 \u0441 \u0431\u043e\u043b\u044c\u0448\u0438\u043c Layer.",
+      "start_char": 32888,
+      "end_char": 33010,
+      "chunk_id": "85fab9f1-e541-427e-9fec-a4fcd93aa184"
+    },
+    {
+      "source_id": "d7b84cad-1aa2-4501-9f78-6c44a08a05ea",
+      "citation_number": 194,
+      "cited_text": "3.2 Rendering Pipeline",
+      "start_char": 6974,
+      "end_char": 6996,
+      "chunk_id": "9168b713-9fb3-4160-a12c-60be837884f3"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 195,
+      "cited_text": "3. Design Paradigm (Tech Utility)",
+      "start_char": 1186,
+      "end_char": 1219,
+      "chunk_id": "e053dcbf-2eb2-43b1-9e6a-700168d6fabe"
+    },
+    {
+      "source_id": "b9185cd7-cc42-412f-8184-d7142e542621",
+      "citation_number": 196,
+      "cited_text": "B. Accordion Sections (Properties)",
+      "start_char": 2532,
+      "end_char": 2566,
+      "chunk_id": "8eace6da-fd47-43eb-af21-4c5785105e8c"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 197,
+      "cited_text": "Metadata",
+      "start_char": 34850,
+      "end_char": 34858,
+      "chunk_id": "f3edf5bf-2d1f-40a1-8843-40d91f05cbde"
+    },
+    {
+      "source_id": "aa6d1a2d-1fb4-4d0e-9b19-5b2d6726b9ea",
+      "citation_number": 198,
+      "cited_text": "Content",
+      "start_char": 37956,
+      "end_char": 37963,
+      "chunk_id": "8794bbda-2d86-4b2e-9b20-14a8cadf17ea"
+    }
+  ]
+}

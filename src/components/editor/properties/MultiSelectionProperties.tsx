@@ -11,6 +11,7 @@ import {
   getSharedValue,
   getSharedBooleanState,
   renderOpacityBlurControls,
+  renderSpriteEffectsControls,
   renderSection,
 } from './propertiesUtils';
 
@@ -76,6 +77,10 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   );
   const sharedOpacity = getSharedValue(entitiesAndQuads, (o: any) => o.opacity ?? 1);
   const sharedBlur = getSharedValue(entitiesAndQuads, (o: any) => o.blur || 0);
+  const sharedBrightness = getSharedValue(entitiesAndQuads, (o: any) => o.brightness ?? 1);
+  const sharedSaturation = getSharedValue(entitiesAndQuads, (o: any) => o.saturation ?? 1);
+  const sharedContrast = getSharedValue(entitiesAndQuads, (o: any) => o.contrast ?? 1);
+  const sharedHueShift = getSharedValue(entitiesAndQuads, (o: any) => o.hueShift ?? 0);
   const sharedColor = getSharedValue(
     multiObjects.filter((o: any) => (o as any).color !== undefined),
     (o: any) => o.color || '#ffffff'
@@ -417,6 +422,34 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 (nextBlur) => {
                   applyToMulti((o: any) => {
                     if (o instanceof Entity) o.blur = nextBlur;
+                  });
+                }
+              )}
+
+            {entitiesAndQuads.length > 0 &&
+              renderSpriteEffectsControls(
+                sharedBrightness as number | '',
+                sharedSaturation as number | '',
+                sharedContrast as number | '',
+                sharedHueShift as number | '',
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.brightness = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.saturation = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.contrast = v;
+                  });
+                },
+                (v) => {
+                  applyToMulti((o: any) => {
+                    if (o instanceof Entity) o.hueShift = v;
                   });
                 }
               )}

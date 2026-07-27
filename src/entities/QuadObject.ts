@@ -638,6 +638,10 @@ export class QuadObject extends Entity {
     'checkerboard',
     'secondColor',
     'blur',
+    'brightness',
+    'saturation',
+    'contrast',
+    'hueShift',
   ];
 
   override setSprite(filename: string, keepSize: boolean = true): void {
@@ -762,10 +766,13 @@ export class QuadObject extends Entity {
     ctx.save();
     ctx.globalAlpha = this.opacity;
 
-    // Apply Blur
-    if (this.blur > 0) {
-      ctx.filter = `blur(${this.blur}px)`;
-    }
+    let filterStr = '';
+    if (this.blur > 0) filterStr += `blur(${this.blur}px) `;
+    if (this.brightness !== 1.0) filterStr += `brightness(${this.brightness}) `;
+    if (this.saturation !== 1.0) filterStr += `saturate(${this.saturation}) `;
+    if (this.contrast !== 1.0) filterStr += `contrast(${this.contrast}) `;
+    if (this.hueShift !== 0) filterStr += `hue-rotate(${this.hueShift}deg) `;
+    if (filterStr) ctx.filter = filterStr.trim();
 
     // Calculate Screen Positions of Vertices
     // Apply parallax offset relative to P=1.0 base

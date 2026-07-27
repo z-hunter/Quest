@@ -1,6 +1,10 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
-import { renderOpacityBlurControls, renderSection } from './propertiesUtils';
+import {
+  renderOpacityBlurControls,
+  renderSpriteEffectsControls,
+  renderSection,
+} from './propertiesUtils';
 import { Select } from '../../common/Select';
 
 interface FolderObject {
@@ -280,6 +284,17 @@ export const FolderProperties: React.FC = () => {
                 hasDefault('blur') ? defaults.blur : '',
                 (nextOpacity) => handleDefault('opacity', nextOpacity, true),
                 (nextBlur) => handleDefault('blur', nextBlur)
+              )}
+
+              {renderSpriteEffectsControls(
+                hasDefault('brightness') ? defaults.brightness : '',
+                hasDefault('saturation') ? defaults.saturation : '',
+                hasDefault('contrast') ? defaults.contrast : '',
+                hasDefault('hueShift') ? defaults.hueShift : '',
+                (v) => handleDefault('brightness', v),
+                (v) => handleDefault('saturation', v),
+                (v) => handleDefault('contrast', v),
+                (v) => handleDefault('hueShift', v)
               )}
 
               <div className="e-row">

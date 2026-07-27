@@ -1,7 +1,11 @@
 import React from 'react';
 import { usePropertiesContext } from './PropertiesContext';
 import { Select } from '../../common/Select';
-import { renderOpacityBlurControls, renderSection } from './propertiesUtils';
+import {
+  renderOpacityBlurControls,
+  renderSpriteEffectsControls,
+  renderSection,
+} from './propertiesUtils';
 
 interface EntityObject {
   x: number;
@@ -19,6 +23,10 @@ interface EntityObject {
   blendMode: string;
   opacity: number;
   blur: number;
+  brightness: number;
+  saturation: number;
+  contrast: number;
+  hueShift: number;
   spriteName: string | null;
 }
 
@@ -228,6 +236,17 @@ export const EntityProperties: React.FC = () => {
             entity.blur || 0,
             (nextOpacity) => handleChange('opacity', nextOpacity, true),
             (nextBlur) => handleChange('blur', nextBlur)
+          )}
+
+          {renderSpriteEffectsControls(
+            entity.brightness !== undefined ? entity.brightness : 1.0,
+            entity.saturation !== undefined ? entity.saturation : 1.0,
+            entity.contrast !== undefined ? entity.contrast : 1.0,
+            entity.hueShift !== undefined ? entity.hueShift : 0,
+            (v) => handleChange('brightness', v),
+            (v) => handleChange('saturation', v),
+            (v) => handleChange('contrast', v),
+            (v) => handleChange('hueShift', v)
           )}
 
           <div className="e-row">

@@ -38,6 +38,10 @@ export interface EntityData {
   opacity?: number; // Added
   blendMode?: string; // Added
   blur?: number; // Added
+  brightness?: number; // Added
+  saturation?: number; // Added
+  contrast?: number; // Added
+  hueShift?: number; // Added
   spatial?: SpatialPlacement;
 }
 
@@ -158,6 +162,10 @@ export class Entity extends SceneObject {
   opacity: number = 1.0;
   blendMode: GlobalCompositeOperation = 'source-over';
   blur: number = 0;
+  brightness: number = 1.0;
+  saturation: number = 1.0;
+  contrast: number = 1.0;
+  hueShift: number = 0;
 
   endLoading() {
     if (this.loadingRefCount > 0) this.loadingRefCount--;
@@ -220,6 +228,10 @@ export class Entity extends SceneObject {
     'opacity',
     'blendMode',
     'blur',
+    'brightness',
+    'saturation',
+    'contrast',
+    'hueShift',
   ];
 
   constructor(
@@ -397,7 +409,14 @@ export class Entity extends SceneObject {
     // Apply Visual Properties
     if (this.opacity < 1.0) ctx.globalAlpha = this.opacity;
     if (this.blendMode !== 'source-over') ctx.globalCompositeOperation = this.blendMode;
-    if (this.blur > 0) ctx.filter = `blur(${this.blur}px)`;
+
+    let filterStr = '';
+    if (this.blur > 0) filterStr += `blur(${this.blur}px) `;
+    if (this.brightness !== 1.0) filterStr += `brightness(${this.brightness}) `;
+    if (this.saturation !== 1.0) filterStr += `saturate(${this.saturation}) `;
+    if (this.contrast !== 1.0) filterStr += `contrast(${this.contrast}) `;
+    if (this.hueShift !== 0) filterStr += `hue-rotate(${this.hueShift}deg) `;
+    if (filterStr) ctx.filter = filterStr.trim();
 
     // Viewport Culling
     if (this.scene && this.scene.camera && ctx.canvas) {

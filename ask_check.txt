@@ -1,0 +1,4 @@
+Usage: python -m notebooklm ask [OPTIONS] QUESTION
+Try 'python -m notebooklm ask --help' for help.
+
+Error: Got unexpected extra arguments (ping: reply with one short sentence confirming access\ --notebook 9f146be7-7c4a-4bb0-b7b4-7f20079e85b0 --json )
