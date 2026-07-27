@@ -40,6 +40,35 @@ export interface QuadHomography {
 
 const HOMOGRAPHY_EPSILON = 1e-9;
 
+function crossProduct(origin: QuadPoint, first: QuadPoint, second: QuadPoint): number {
+  return (
+    (first.x - origin.x) * (second.y - origin.y) - (first.y - origin.y) * (second.x - origin.x)
+  );
+}
+
+/**
+ * A projective mapping of a unit square is only well-behaved when its target
+ * stays a strictly convex, non-degenerate Quad. Concave and crossed Quads are
+ * still renderable through bilinear interpolation, but their homography has a
+ * projective horizon inside the unit square.
+ */
+function isStrictlyConvexQuad(p0: QuadPoint, p1: QuadPoint, p2: QuadPoint, p3: QuadPoint): boolean {
+  const points = [p0, p1, p2, p3];
+  let winding = 0;
+  for (let index = 0; index < points.length; index++) {
+    const cross = crossProduct(
+      points[index],
+      points[(index + 1) % points.length],
+      points[(index + 2) % points.length]
+    );
+    if (!Number.isFinite(cross) || Math.abs(cross) < HOMOGRAPHY_EPSILON) return false;
+    const direction = Math.sign(cross);
+    if (winding !== 0 && direction !== winding) return false;
+    winding = direction;
+  }
+  return true;
+}
+
 /**
  * Builds a projective transform from (0,0)-(1,1) to a convex Quad.
  *
@@ -52,6 +81,8 @@ export function createQuadHomography(
   p2: QuadPoint,
   p3: QuadPoint
 ): QuadHomography | null {
+  if (!isStrictlyConvexQuad(p0, p1, p2, p3)) return null;
+
   const dx1 = p1.x - p2.x;
   const dx2 = p3.x - p2.x;
   const dx3 = p0.x - p1.x + p2.x - p3.x;
@@ -80,8 +111,17 @@ export function createQuadHomography(
     h,
   };
 
-  // Do not render an unstable/infinite grid for a malformed Quad.
-  if ([0, 1].some((u) => [0, 1].some((v) => Math.abs(g * u + h * v + 1) < HOMOGRAPHY_EPSILON))) {
+  // `w` is linear over the unit square. Since w(0, 0) is one, all four
+  // corners must stay positive; otherwise the projective horizon crosses the
+  // Quad even when it does not land exactly on a corner.
+  if (
+    [0, 1].some((u) =>
+      [0, 1].some((v) => {
+        const w = g * u + h * v + 1;
+        return !Number.isFinite(w) || w < HOMOGRAPHY_EPSILON;
+      })
+    )
+  ) {
     return null;
   }
 
@@ -178,7 +218,10 @@ export function projectQuadGridPoint(
   );
   const left = blendQuadPoints(interpolateQuadPoint(p0, p1, p2, p3, 0, v), projectedLeft, alphaY);
   const right = blendQuadPoints(interpolateQuadPoint(p0, p1, p2, p3, 1, v), projectedRight, alphaY);
-  return intersectQuadLines(top, bottom, left, right) || interpolateQuadPoint(p0, p1, p2, p3, u, v);
+  const intersection = intersectQuadLines(top, bottom, left, right);
+  return intersection && Number.isFinite(intersection.x) && Number.isFinite(intersection.y)
+    ? intersection
+    : interpolateQuadPoint(p0, p1, p2, p3, u, v);
 }
 
 export type QuadTextureMode = 'stretch' | 'tile';
@@ -507,6 +550,17 @@ function drawAffineTexture(
   ctx.restore();
 }
 
+/** Keeps auxiliary Quad rendering contained even while a vertex is dragged through another edge. */
+function clipToQuad(ctx: CanvasRenderingContext2D, vertices: QuadPoint[]): void {
+  ctx.beginPath();
+  vertices.forEach((vertex, index) => {
+    if (index === 0) ctx.moveTo(vertex.x, vertex.y);
+    else ctx.lineTo(vertex.x, vertex.y);
+  });
+  ctx.closePath();
+  ctx.clip();
+}
+
 export class QuadObject extends Entity {
   vertices: QuadVertex[];
   color: string;
@@ -619,13 +673,7 @@ export class QuadObject extends Entity {
     const pixelOverlap = 1.25 / screenScale;
     ctx.globalCompositeOperation = this.blendMode;
     ctx.save();
-    ctx.beginPath();
-    screenVerts.forEach((vertex, index) => {
-      if (index === 0) ctx.moveTo(vertex.x, vertex.y);
-      else ctx.lineTo(vertex.x, vertex.y);
-    });
-    ctx.closePath();
-    ctx.clip();
+    clipToQuad(ctx, screenVerts);
     if (flatTexture) {
       drawAffineTexture(ctx, this.image, frame, v0, v1, v3);
       ctx.restore();
@@ -808,6 +856,8 @@ export class QuadObject extends Entity {
         const rows = (this.gridLinesY ?? 5) + 1;
 
         ctx.fillStyle = this.secondColor || '#000000';
+        ctx.save();
+        clipToQuad(ctx, screenVerts);
 
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -832,6 +882,7 @@ export class QuadObject extends Entity {
             }
           }
         }
+        ctx.restore();
       }
     }
 
@@ -849,6 +900,12 @@ export class QuadObject extends Entity {
       });
       ctx.closePath();
       ctx.stroke();
+
+      // The projective fallback is deliberately clipped by the actual Quad
+      // boundary. This is also the containment strategy used by textured
+      // Quads, and guarantees malformed editor geometry cannot emit rays.
+      ctx.save();
+      clipToQuad(ctx, screenVerts);
 
       // Draw Internal Lines
       const v0 = screenVerts[0]; // TL
@@ -895,6 +952,7 @@ export class QuadObject extends Entity {
       }
 
       ctx.stroke();
+      ctx.restore();
     }
 
     ctx.restore(); // Restore context state

@@ -3,6 +3,7 @@ import {
   buildQuadTextureMesh,
   createQuadHomography,
   isQuadNearlyAffine,
+  projectQuadGridPoint,
   projectQuadPoint,
   QuadObject,
 } from '../../src/entities/QuadObject';
@@ -105,6 +106,62 @@ describe('QuadObject', () => {
         x: expect.closeTo(point.x),
         y: expect.closeTo(point.y),
       });
+    }
+  });
+
+  it('rejects projective perspective for concave, crossed, and collapsed Quads', () => {
+    const concave = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 40, y: 40 },
+      { x: 0, y: 100 },
+    ] as const;
+    const crossed = [
+      { x: 0, y: 0 },
+      { x: 100, y: 100 },
+      { x: 100, y: 0 },
+      { x: 0, y: 100 },
+    ] as const;
+    const collapsed = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 50, y: 0 },
+      { x: 0, y: 100 },
+    ] as const;
+
+    for (const points of [concave, crossed, collapsed]) {
+      expect(createQuadHomography(...points)).toBeNull();
+      const center = projectQuadGridPoint(...points, null, 0.5, 0.5);
+      expect(center.x).toBeGreaterThanOrEqual(0);
+      expect(center.x).toBeLessThanOrEqual(100);
+      expect(center.y).toBeGreaterThanOrEqual(0);
+      expect(center.y).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('clips Retro Grid internals to a malformed Quad', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'crossed_grid_quad');
+    quad.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 160, y: 160, p: 1 },
+      { x: 160, y: 0, p: 1 },
+      { x: 0, y: 160, p: 1 },
+    ];
+    quad.isGrid = true;
+    quad.gridLinesX = 8;
+    quad.gridLinesY = 8;
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.clip).toHaveBeenCalledTimes(1);
+    for (const call of [...(ctx.moveTo as any).mock.calls, ...(ctx.lineTo as any).mock.calls]) {
+      expect(Number.isFinite(call[0])).toBe(true);
+      expect(Number.isFinite(call[1])).toBe(true);
+      expect(Math.abs(call[0])).toBeLessThanOrEqual(160);
+      expect(Math.abs(call[1])).toBeLessThanOrEqual(160);
     }
   });
 
