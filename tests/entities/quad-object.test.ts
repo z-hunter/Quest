@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createQuadHomography, projectQuadPoint, QuadObject } from '../../src/entities/QuadObject';
+import {
+  buildQuadTextureMesh,
+  createQuadHomography,
+  isQuadNearlyAffine,
+  projectQuadPoint,
+  QuadObject,
+} from '../../src/entities/QuadObject';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 function createMockContext() {
@@ -17,6 +23,10 @@ function createMockContext() {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     closePath: vi.fn(),
+    clip: vi.fn(),
+    transform: vi.fn(),
+    drawImage: vi.fn(),
+    getTransform: vi.fn(() => ({ a: 1, b: 0, c: 0, d: 1 })),
     fill: vi.fn(),
     stroke: vi.fn(),
   } as unknown as CanvasRenderingContext2D;
@@ -98,12 +108,17 @@ describe('QuadObject', () => {
     }
   });
 
-  it('serializes and deserializes gridPerspective, gridPerspectiveAmount, checkerboard and secondColor', () => {
+  it('serializes textured Quad settings alongside the existing visual properties', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'test_quad');
     quad.isGrid = true;
     quad.gridPerspective = true;
     quad.gridPerspectiveAmount = 1.5;
+    quad.spriteName = 'floors/metal.json';
+    quad.textureMode = 'tile';
+    quad.tileScaleX = 0.5;
+    quad.tileScaleY = 0.25;
+    quad.texturePerspective = false;
     quad.filled = true;
     quad.checkerboard = true;
     quad.secondColor = '#ff0000';
@@ -111,12 +126,26 @@ describe('QuadObject', () => {
     const json = quad.toJSON();
     expect(json.gridPerspective).toBe(true);
     expect(json.gridPerspectiveAmount).toBe(1.5);
+    expect(json.spriteName).toBe('floors/metal.json');
+    expect(json.textureMode).toBe('tile');
+    expect(json.tileScaleX).toBe(0.5);
+    expect(json.tileScaleY).toBe(0.25);
+    expect(json.texturePerspective).toBe(false);
     expect(json.checkerboard).toBe(true);
     expect(json.secondColor).toBe('#ff0000');
 
+    (fixture.game.assets as any).loadSprite = vi.fn().mockResolvedValue({
+      json: { x: 0, y: 0, width: 16, height: 16, frames: 1 },
+      image: { complete: true },
+    });
     const loadedQuad = QuadObject.fromJSON(fixture.game, json);
     expect(loadedQuad.gridPerspective).toBe(true);
     expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
+    expect(loadedQuad.spriteName).toBe('floors/metal.json');
+    expect(loadedQuad.textureMode).toBe('tile');
+    expect(loadedQuad.tileScaleX).toBe(0.5);
+    expect(loadedQuad.tileScaleY).toBe(0.25);
+    expect(loadedQuad.texturePerspective).toBe(false);
     expect(loadedQuad.checkerboard).toBe(true);
     expect(loadedQuad.secondColor).toBe('#ff0000');
   });
@@ -139,5 +168,85 @@ describe('QuadObject', () => {
     // Initial base fill + 4 alternating cells filled with secondColor = 5 fill calls total
     expect(ctx.fill).toHaveBeenCalledTimes(5);
     expect(ctx.fillStyle).toBe('#000000');
+  });
+
+  it('builds texture mesh with explicit tile seams and projective positions', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 140, y: 100 },
+      { x: -20, y: 100 },
+    ] as const;
+    const stretch = buildQuadTextureMesh(...points, 'stretch', 1, 1, false);
+    const tiled = buildQuadTextureMesh(...points, 'tile', 0.25, 0.5, false);
+    const projective = buildQuadTextureMesh(...points, 'stretch', 1, 1, true);
+
+    const coarse = buildQuadTextureMesh(...points, 'stretch', 1, 1, true, 100);
+
+    expect(stretch[0].points[0]).toEqual(points[0]);
+    expect(stretch.length).toBeGreaterThan(1);
+    expect(stretch.length).toBeLessThanOrEqual(16);
+    expect(coarse).toHaveLength(1);
+    expect(tiled.length).toBeGreaterThan(1);
+    expect(
+      tiled.every((cell) => cell.u0 >= 0 && cell.u1 <= 1 && cell.v0 >= 0 && cell.v1 <= 1)
+    ).toBe(true);
+    expect(projective[0].center).not.toEqual(stretch[0].center);
+  });
+
+  it('renders the active sprite frame as texture instead of the fill and keeps the grid on top', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'textured_quad');
+    const image = { complete: true } as HTMLImageElement;
+    quad.spriteName = 'floors/metal.json';
+    quad.image = image;
+    quad.animator = { getCurrentFrame: () => ({ x: 4, y: 8, w: 16, h: 16 }) } as any;
+    quad.isGrid = true;
+    quad.gridLinesX = 1;
+    quad.gridLinesY = 1;
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.drawImage).toHaveBeenCalledWith(image, 4, 8, 16, 16, 0, 0, 16, 16);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.fill).not.toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalledTimes(2);
+    // Almost-affine Stretch Quads are drawn as one transformed sprite.
+    expect(ctx.clip).toHaveBeenCalled();
+    expect(ctx.transform).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a flat sprite for near-affine Quads and bounded screen-space tessellation otherwise', () => {
+    const p0 = { x: 0, y: 0 };
+    const p1 = { x: 100, y: 0 };
+    const p3 = { x: 0, y: 100 };
+    expect(isQuadNearlyAffine(p0, p1, { x: 100.5, y: 100 }, p3, 0.75)).toBe(true);
+    expect(isQuadNearlyAffine(p0, p1, { x: 104, y: 100 }, p3, 0.75)).toBe(false);
+
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'projective_quad');
+    const image = { complete: true } as HTMLImageElement;
+    quad.spriteName = 'floors/metal.json';
+    quad.image = image;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    quad.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 160, y: 0, p: 1 },
+      { x: 100, y: 160, p: 1 },
+      { x: 20, y: 160, p: 1 },
+    ];
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect((ctx.drawImage as any).mock.calls.length).toBeGreaterThan(1);
+    expect((ctx.drawImage as any).mock.calls.length).toBeLessThanOrEqual(32);
+    // Clip vertices are expanded to cover antialias gaps, but the UV transform
+    // remains anchored to the original top-left texture vertex.
+    expect((ctx.transform as any).mock.calls[0][4]).toBeCloseTo(0);
+    expect((ctx.transform as any).mock.calls[0][5]).toBeCloseTo(0);
   });
 });

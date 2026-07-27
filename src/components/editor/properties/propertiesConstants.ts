@@ -42,6 +42,10 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   Blur: 'Blur radius in pixels. 0 px is sharp; higher values make the object softer.',
   Sprite:
     'Sprite asset used to render this object. Leave empty to keep the plain filled rectangle look.',
+  'Texture Mode':
+    'Stretch maps one sprite frame across the Quad; Tile repeats the frame using Tile X and Tile Y.',
+  'Tile X': 'Horizontal texture scale. 1 fills the Quad once; smaller values create more copies.',
+  'Tile Y': 'Vertical texture scale. 1 fills the Quad once; smaller values create more copies.',
   Mode: 'Selects the behavior mode for this object or component.',
   'Depth Sort mode':
     'Chooses which quad rule is used for Y sorting, or disables Y sorting so layer order stays fully manual.',
@@ -159,7 +163,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Retro Grid':
     'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
   Perspective:
-    'Enables projective 3D perspective. Grid spacing is determined by the vanishing point of the corresponding pair of edges; parallel edges stay evenly spaced.',
+    'Enables projective 3D perspective. Grid spacing and Quad textures follow the corresponding vanishing points; parallel edges stay evenly spaced.',
   Amount:
     'Controls the intensity of the perspective effect. 0 = flat grid, 1 = standard 3D perspective, higher values increase distortion.',
   Checkerboard:

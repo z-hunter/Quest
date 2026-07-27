@@ -322,6 +322,94 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
             (nextBlur) => handleChange('blur', nextBlur)
           )}
 
+          {/* Texture */}
+          <div className="e-row">
+            <label className="e-label">Sprite</label>
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <input
+                type="text"
+                className="e-input"
+                style={{ flex: 1 }}
+                value={quad.spriteName || ''}
+                onChange={(e) => handleChange('spriteName', e.target.value)}
+              />
+              <button
+                className="e-btn"
+                onClick={() =>
+                  game.openFileBrowser('load', 'public/sprites', (filename) =>
+                    handleChange('spriteName', filename)
+                  )
+                }
+              >
+                ...
+              </button>
+            </div>
+          </div>
+
+          {quad.spriteName && (
+            <>
+              <div className="e-row">
+                <label className="e-label">Texture Mode</label>
+                <Select
+                  value={quad.textureMode || 'stretch'}
+                  onChange={(value) => handleChange('textureMode', value)}
+                  options={[
+                    { value: 'stretch', label: 'Stretch' },
+                    { value: 'tile', label: 'Tile' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {quad.textureMode === 'tile' && (
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}
+                >
+                  <div>
+                    <label className="e-label">Tile X</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      min={1 / 32}
+                      max={10}
+                      step={0.05}
+                      value={formatPanelNumber(quad.tileScaleX ?? 1)}
+                      onChange={(e) => handleChange('tileScaleX', e.target.value, true)}
+                    />
+                  </div>
+                  <div>
+                    <label className="e-label">Tile Y</label>
+                    <input
+                      type="number"
+                      className="e-input"
+                      min={1 / 32}
+                      max={10}
+                      step={0.05}
+                      value={formatPanelNumber(quad.tileScaleY ?? 1)}
+                      onChange={(e) => handleChange('tileScaleY', e.target.value, true)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="e-row">
+                <label
+                  className="e-label"
+                  style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    style={{ marginRight: '5px' }}
+                    checked={quad.texturePerspective !== false}
+                    onChange={(e) => handleChange('texturePerspective', e.target.checked)}
+                  />
+                  Perspective
+                </label>
+              </div>
+            </>
+          )}
+
           {/* Fill Color */}
           <div className="e-row">
             <label

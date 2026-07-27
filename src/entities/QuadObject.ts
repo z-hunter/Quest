@@ -181,6 +181,332 @@ export function projectQuadGridPoint(
   return intersectQuadLines(top, bottom, left, right) || interpolateQuadPoint(p0, p1, p2, p3, u, v);
 }
 
+export type QuadTextureMode = 'stretch' | 'tile';
+
+export interface QuadTextureMeshCell {
+  points: [QuadPoint, QuadPoint, QuadPoint, QuadPoint];
+  center: QuadPoint;
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+  diagonal: 'forward' | 'backward';
+}
+
+const MAX_TEXTURE_REPEATS = 32;
+const MAX_TEXTURE_TRIANGLES = 32;
+const DEFAULT_TEXTURE_MESH_ERROR = 0.75;
+
+function clampTextureTileScale(scale: number): number {
+  return Math.max(1 / MAX_TEXTURE_REPEATS, Math.min(10, Number.isFinite(scale) ? scale : 1));
+}
+
+function buildTextureAxisBreaks(repeats: number, subdivisions: number): number[] {
+  const values = new Set<number>([0, 1]);
+  for (let i = 1; i < subdivisions; i++) values.add(i / subdivisions);
+  for (let i = 1; i < Math.ceil(repeats); i++) values.add(i / repeats);
+  return [...values].sort((a, b) => a - b);
+}
+
+export function isQuadNearlyAffine(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  maxCornerError: number
+): boolean {
+  const affineP2 = {
+    x: p1.x + p3.x - p0.x,
+    y: p1.y + p3.y - p0.y,
+  };
+  return Math.hypot(p2.x - affineP2.x, p2.y - affineP2.y) <= maxCornerError;
+}
+
+type QuadTexturePointMapper = (u: number, v: number) => QuadPoint;
+
+function triangleApproximationError(
+  mapPoint: QuadTexturePointMapper,
+  uv0: QuadPoint,
+  uv1: QuadPoint,
+  uv2: QuadPoint
+): number {
+  const p0 = mapPoint(uv0.x, uv0.y);
+  const p1 = mapPoint(uv1.x, uv1.y);
+  const p2 = mapPoint(uv2.x, uv2.y);
+  let maxError = 0;
+  const samples: Array<[number, number, number]> = [
+    [0.5, 0.5, 0],
+    [0.5, 0, 0.5],
+    [0, 0.5, 0.5],
+    [1 / 3, 1 / 3, 1 / 3],
+  ];
+
+  for (const [w0, w1, w2] of samples) {
+    const u = uv0.x * w0 + uv1.x * w1 + uv2.x * w2;
+    const v = uv0.y * w0 + uv1.y * w1 + uv2.y * w2;
+    const projected = mapPoint(u, v);
+    const affine = {
+      x: p0.x * w0 + p1.x * w1 + p2.x * w2,
+      y: p0.y * w0 + p1.y * w1 + p2.y * w2,
+    };
+    maxError = Math.max(maxError, Math.hypot(projected.x - affine.x, projected.y - affine.y));
+  }
+
+  return maxError;
+}
+
+function getCellApproximationError(
+  mapPoint: QuadTexturePointMapper,
+  u0: number,
+  u1: number,
+  v0: number,
+  v1: number,
+  diagonal: 'forward' | 'backward'
+): number {
+  const uv00 = { x: u0, y: v0 };
+  const uv10 = { x: u1, y: v0 };
+  const uv11 = { x: u1, y: v1 };
+  const uv01 = { x: u0, y: v1 };
+  return diagonal === 'forward'
+    ? Math.max(
+        triangleApproximationError(mapPoint, uv00, uv10, uv11),
+        triangleApproximationError(mapPoint, uv00, uv11, uv01)
+      )
+    : Math.max(
+        triangleApproximationError(mapPoint, uv00, uv10, uv01),
+        triangleApproximationError(mapPoint, uv10, uv11, uv01)
+      );
+}
+
+function getMeshApproximationError(
+  mapPoint: QuadTexturePointMapper,
+  uBreaks: number[],
+  vBreaks: number[]
+): number {
+  let maxError = 0;
+  for (let y = 0; y < vBreaks.length - 1; y++) {
+    for (let x = 0; x < uBreaks.length - 1; x++) {
+      const forward = getCellApproximationError(
+        mapPoint,
+        uBreaks[x],
+        uBreaks[x + 1],
+        vBreaks[y],
+        vBreaks[y + 1],
+        'forward'
+      );
+      const backward = getCellApproximationError(
+        mapPoint,
+        uBreaks[x],
+        uBreaks[x + 1],
+        vBreaks[y],
+        vBreaks[y + 1],
+        'backward'
+      );
+      maxError = Math.max(maxError, Math.min(forward, backward));
+    }
+  }
+  return maxError;
+}
+
+function chooseTextureMeshSubdivisions(
+  mapPoint: QuadTexturePointMapper,
+  repeatsX: number,
+  repeatsY: number,
+  maxError: number
+): { x: number; y: number } {
+  let subdivisionsX = 1;
+  let subdivisionsY = 1;
+  const getBreaks = (x: number, y: number) => ({
+    u: buildTextureAxisBreaks(repeatsX, x),
+    v: buildTextureAxisBreaks(repeatsY, y),
+  });
+  const triangleCount = (x: number, y: number) => {
+    const breaks = getBreaks(x, y);
+    return (breaks.u.length - 1) * (breaks.v.length - 1) * 2;
+  };
+  const breaks = getBreaks(subdivisionsX, subdivisionsY);
+  let error = getMeshApproximationError(mapPoint, breaks.u, breaks.v);
+
+  while (error > maxError) {
+    const candidates = [
+      { x: subdivisionsX + 1, y: subdivisionsY },
+      { x: subdivisionsX, y: subdivisionsY + 1 },
+    ].filter((candidate) => triangleCount(candidate.x, candidate.y) <= MAX_TEXTURE_TRIANGLES);
+    if (candidates.length === 0) break;
+
+    const best = candidates
+      .map((candidate) => {
+        const candidateBreaks = getBreaks(candidate.x, candidate.y);
+        return {
+          ...candidate,
+          error: getMeshApproximationError(mapPoint, candidateBreaks.u, candidateBreaks.v),
+        };
+      })
+      .sort((a, b) => a.error - b.error)[0];
+    if (best.error >= error - HOMOGRAPHY_EPSILON) break;
+
+    subdivisionsX = best.x;
+    subdivisionsY = best.y;
+    error = best.error;
+  }
+
+  return { x: subdivisionsX, y: subdivisionsY };
+}
+
+/**
+ * Builds a texture mesh whose tile seams are explicit cell boundaries. Each
+ * cell can therefore be mapped by Canvas2D as two ordinary affine triangles.
+ */
+export function buildQuadTextureMesh(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  mode: QuadTextureMode,
+  tileScaleX: number,
+  tileScaleY: number,
+  perspective: boolean,
+  maxError: number = DEFAULT_TEXTURE_MESH_ERROR
+): QuadTextureMeshCell[] {
+  const repeatsX = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleX) : 1;
+  const repeatsY = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleY) : 1;
+  const homography = perspective ? createQuadHomography(p0, p1, p2, p3) : null;
+  const mapPoint: QuadTexturePointMapper = (u: number, v: number) =>
+    (homography && projectQuadPoint(homography, u, v)) ||
+    interpolateQuadPoint(p0, p1, p2, p3, u, v);
+  const subdivisions = chooseTextureMeshSubdivisions(mapPoint, repeatsX, repeatsY, maxError);
+  const uBreaks = buildTextureAxisBreaks(repeatsX, subdivisions.x);
+  const vBreaks = buildTextureAxisBreaks(repeatsY, subdivisions.y);
+  const cells: QuadTextureMeshCell[] = [];
+
+  for (let y = 0; y < vBreaks.length - 1; y++) {
+    for (let x = 0; x < uBreaks.length - 1; x++) {
+      const rawU0 = uBreaks[x];
+      const rawU1 = uBreaks[x + 1];
+      const rawV0 = vBreaks[y];
+      const rawV1 = vBreaks[y + 1];
+      const textureU0 = rawU0 * repeatsX;
+      const textureV0 = rawV0 * repeatsY;
+      const forwardError = getCellApproximationError(
+        mapPoint,
+        rawU0,
+        rawU1,
+        rawV0,
+        rawV1,
+        'forward'
+      );
+      const backwardError = getCellApproximationError(
+        mapPoint,
+        rawU0,
+        rawU1,
+        rawV0,
+        rawV1,
+        'backward'
+      );
+      cells.push({
+        points: [
+          mapPoint(rawU0, rawV0),
+          mapPoint(rawU1, rawV0),
+          mapPoint(rawU1, rawV1),
+          mapPoint(rawU0, rawV1),
+        ],
+        center: mapPoint((rawU0 + rawU1) / 2, (rawV0 + rawV1) / 2),
+        u0: textureU0 - Math.floor(textureU0),
+        u1: rawU1 * repeatsX - Math.floor(textureU0),
+        v0: textureV0 - Math.floor(textureV0),
+        v1: rawV1 * repeatsY - Math.floor(textureV0),
+        diagonal: forwardError <= backwardError ? 'forward' : 'backward',
+      });
+    }
+  }
+  return cells;
+}
+
+function drawTexturedTriangle(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  frame: { x: number; y: number; w: number; h: number },
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  uv0: QuadPoint,
+  uv1: QuadPoint,
+  uv2: QuadPoint,
+  pixelOverlap: number
+): void {
+  const minimumEdge = Math.min(
+    Math.hypot(p1.x - p0.x, p1.y - p0.y),
+    Math.hypot(p2.x - p1.x, p2.y - p1.y),
+    Math.hypot(p0.x - p2.x, p0.y - p2.y)
+  );
+  const overlap = Math.min(pixelOverlap, minimumEdge * 0.08);
+  const centroid = {
+    x: (p0.x + p1.x + p2.x) / 3,
+    y: (p0.y + p1.y + p2.y) / 3,
+  };
+  const expand = (point: QuadPoint): QuadPoint => {
+    const dx = point.x - centroid.x;
+    const dy = point.y - centroid.y;
+    const length = Math.hypot(dx, dy);
+    return length > HOMOGRAPHY_EPSILON
+      ? { x: point.x + (dx / length) * overlap, y: point.y + (dy / length) * overlap }
+      : point;
+  };
+  const q0 = expand(p0);
+  const q1 = expand(p1);
+  const q2 = expand(p2);
+  const sx0 = uv0.x * frame.w;
+  const sy0 = uv0.y * frame.h;
+  const sx1 = uv1.x * frame.w;
+  const sy1 = uv1.y * frame.h;
+  const sx2 = uv2.x * frame.w;
+  const sy2 = uv2.y * frame.h;
+  const determinant = (sx1 - sx0) * (sy2 - sy0) - (sx2 - sx0) * (sy1 - sy0);
+  if (Math.abs(determinant) < HOMOGRAPHY_EPSILON) return;
+
+  // The overlap is a coverage-only fix for Canvas2D's antialiased clips. The
+  // UV transform must stay anchored to the original vertices: rebuilding it
+  // from q0/q1/q2 makes every neighboring triangle sample a different image.
+  const a = ((p1.x - p0.x) * (sy2 - sy0) - (p2.x - p0.x) * (sy1 - sy0)) / determinant;
+  const b = ((p1.y - p0.y) * (sy2 - sy0) - (p2.y - p0.y) * (sy1 - sy0)) / determinant;
+  const c = ((sx1 - sx0) * (p2.x - p0.x) - (sx2 - sx0) * (p1.x - p0.x)) / determinant;
+  const d = ((sx1 - sx0) * (p2.y - p0.y) - (sx2 - sx0) * (p1.y - p0.y)) / determinant;
+  const e = p0.x - a * sx0 - c * sy0;
+  const f = p0.y - b * sx0 - d * sy0;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(q0.x, q0.y);
+  ctx.lineTo(q1.x, q1.y);
+  ctx.lineTo(q2.x, q2.y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(a, b, c, d, e, f);
+  ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+  ctx.restore();
+}
+
+function drawAffineTexture(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  frame: { x: number; y: number; w: number; h: number },
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p3: QuadPoint
+): void {
+  ctx.save();
+  ctx.transform(
+    (p1.x - p0.x) / frame.w,
+    (p1.y - p0.y) / frame.w,
+    (p3.x - p0.x) / frame.h,
+    (p3.y - p0.y) / frame.h,
+    p0.x,
+    p0.y
+  );
+  ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+  ctx.restore();
+}
+
 export class QuadObject extends Entity {
   vertices: QuadVertex[];
   color: string;
@@ -213,6 +539,12 @@ export class QuadObject extends Entity {
   gridPerspective: boolean = true;
   gridPerspectiveAmount: number = 1.0;
 
+  // Texture Props
+  textureMode: QuadTextureMode = 'stretch';
+  tileScaleX: number = 1.0;
+  tileScaleY: number = 1.0;
+  texturePerspective: boolean = true;
+
   // Fill Props
   filled: boolean = true;
   checkerboard: boolean = false;
@@ -223,7 +555,7 @@ export class QuadObject extends Entity {
 
   /**
    * List of properties to be serialized to/from JSON.
-   * Note: We don't extend Entity.SERIALIZABLE_PROPS because Quad uses vertices instead of width/height/sprite.
+   * Note: We don't extend Entity.SERIALIZABLE_PROPS because Quad uses vertices instead of width/height.
    */
   static override SERIALIZABLE_PROPS: string[] = [
     ...SceneObject.SERIALIZABLE_PROPS,
@@ -232,6 +564,11 @@ export class QuadObject extends Entity {
     'parallax',
     'ignoreScaling',
     'vertices',
+    'spriteName',
+    'textureMode',
+    'tileScaleX',
+    'tileScaleY',
+    'texturePerspective',
     'color',
     'sortMode',
     'opacity',
@@ -248,6 +585,121 @@ export class QuadObject extends Entity {
     'secondColor',
     'blur',
   ];
+
+  override setSprite(filename: string, keepSize: boolean = true): void {
+    if (!filename?.trim()) {
+      this.spriteName = null;
+      this.image = null;
+      this.animator = null;
+      return;
+    }
+    super.setSprite(filename, keepSize);
+  }
+
+  private renderTexture(ctx: CanvasRenderingContext2D, screenVerts: QuadPoint[]): boolean {
+    const frame = this.animator?.getCurrentFrame();
+    if (
+      !this.spriteName ||
+      !this.image ||
+      this.image.complete === false ||
+      !frame ||
+      frame.w <= 0 ||
+      frame.h <= 0
+    ) {
+      return false;
+    }
+
+    const [v0, v1, v2, v3] = screenVerts;
+    const matrix = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    const screenScale = matrix
+      ? Math.max(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d), HOMOGRAPHY_EPSILON)
+      : 1;
+    const isStretch = this.textureMode !== 'tile';
+    const flatTexture = isStretch && isQuadNearlyAffine(v0, v1, v2, v3, 0.75 / screenScale);
+    const pixelOverlap = 1.25 / screenScale;
+    ctx.globalCompositeOperation = this.blendMode;
+    ctx.save();
+    ctx.beginPath();
+    screenVerts.forEach((vertex, index) => {
+      if (index === 0) ctx.moveTo(vertex.x, vertex.y);
+      else ctx.lineTo(vertex.x, vertex.y);
+    });
+    ctx.closePath();
+    ctx.clip();
+    if (flatTexture) {
+      drawAffineTexture(ctx, this.image, frame, v0, v1, v3);
+      ctx.restore();
+      return true;
+    }
+
+    const mesh = buildQuadTextureMesh(
+      v0,
+      v1,
+      v2,
+      v3,
+      this.textureMode === 'tile' ? 'tile' : 'stretch',
+      this.tileScaleX,
+      this.tileScaleY,
+      this.texturePerspective !== false,
+      0.75 / screenScale
+    );
+    for (const cell of mesh) {
+      const [p00, p10, p11, p01] = cell.points;
+      if (cell.diagonal === 'forward') {
+        drawTexturedTriangle(
+          ctx,
+          this.image,
+          frame,
+          p00,
+          p10,
+          p11,
+          { x: cell.u0, y: cell.v0 },
+          { x: cell.u1, y: cell.v0 },
+          { x: cell.u1, y: cell.v1 },
+          pixelOverlap
+        );
+        drawTexturedTriangle(
+          ctx,
+          this.image,
+          frame,
+          p00,
+          p11,
+          p01,
+          { x: cell.u0, y: cell.v0 },
+          { x: cell.u1, y: cell.v1 },
+          { x: cell.u0, y: cell.v1 },
+          pixelOverlap
+        );
+      } else {
+        drawTexturedTriangle(
+          ctx,
+          this.image,
+          frame,
+          p00,
+          p10,
+          p01,
+          { x: cell.u0, y: cell.v0 },
+          { x: cell.u1, y: cell.v0 },
+          { x: cell.u0, y: cell.v1 },
+          pixelOverlap
+        );
+        drawTexturedTriangle(
+          ctx,
+          this.image,
+          frame,
+          p10,
+          p11,
+          p01,
+          { x: cell.u1, y: cell.v0 },
+          { x: cell.u1, y: cell.v1 },
+          { x: cell.u0, y: cell.v1 },
+          pixelOverlap
+        );
+      }
+    }
+    ctx.restore();
+    return mesh.length > 0;
+  }
 
   // Override render to handle per-vertex parallax
   render(ctx: CanvasRenderingContext2D): void {
@@ -314,8 +766,9 @@ export class QuadObject extends Entity {
       }
     }
 
-    // 1. Draw Fill (Solid / Checkerboard Mode)
-    if (this.filled) {
+    // 1. Draw Texture or Fill (Solid / Checkerboard Mode)
+    const textured = this.renderTexture(ctx, screenVerts);
+    if (this.filled && !textured) {
       ctx.globalCompositeOperation = this.blendMode;
       ctx.fillStyle = this.color;
       ctx.beginPath();

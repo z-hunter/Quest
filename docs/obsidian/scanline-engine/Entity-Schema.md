@@ -38,7 +38,7 @@ Width/height и collider dimensions — derived values: base dimension × scale.
 
 ## Subclass schemas
 
-- `QuadObject`: vertices `{x,y,p,binding?}`, sortMode, color, opacity/blend, grid fields, filled, blur.
+- `QuadObject`: vertices `{x,y,p,binding?}`, sortMode, color, opacity/blend, grid fields, filled, blur, and optional textured rendering through `spriteName`, `textureMode` (`stretch|tile`), `tileScaleX/Y`, and `texturePerspective`.
 - `PolygonObject/Walkbox/Triggerbox`: polygon vertices; Walkbox mode `Invert|Add|Subtract`; Triggerbox script/components.
 - `Folder`: authoring hierarchy metadata, not a physical spatial relation.
 
