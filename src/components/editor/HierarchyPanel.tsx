@@ -4,6 +4,7 @@ import { useGame } from '../../hooks/useGame';
 import { Select } from '../../components/common/Select';
 import { EditorToolbar } from './EditorToolbar';
 import { Entity } from '../../entities/Entity';
+import { FilterInput } from '../common/FilterInput';
 
 export const HierarchyPanel: React.FC = () => {
   const game = useGame();
@@ -1028,44 +1029,16 @@ export const HierarchyPanel: React.FC = () => {
         <div style={{ marginBottom: 0 }}>
           <EditorToolbar />
 
-          <div style={{ marginTop: '5px', position: 'relative' }}>
-            <input
-              type="text"
-              ref={filterInputRef}
-              id="hierarchy-filter-input"
-              className="e-input"
-              value={filterText}
-              placeholder='Filter by ID or "#group"'
-              title="Hotkey: /"
-              onChange={(e) => setFilterText(e.target.value)}
-              style={{
-                width: '100%',
-                paddingRight: filterText ? '28px' : undefined,
-              }}
-            />
-            {filterText && (
-              <button
-                className="toolbar-icon-btn"
-                type="button"
-                title="Clear filter"
-                onClick={() => setFilterText('')}
-                style={{
-                  position: 'absolute',
-                  right: '2px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: '22px',
-                  height: '22px',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                x
-              </button>
-            )}
-          </div>
+          <FilterInput
+            ref={filterInputRef}
+            id="hierarchy-filter-input"
+            value={filterText}
+            placeholder='Filter by ID or "#group"'
+            title="Hotkey: /"
+            onChange={(e) => setFilterText(e.target.value)}
+            onClear={() => setFilterText('')}
+            containerStyle={{ marginTop: '5px' }}
+          />
         </div>
       </div>
 

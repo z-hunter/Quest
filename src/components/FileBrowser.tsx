@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listProjectFiles, openProjectFolder } from '../platform/fileApi';
+import { FilterInput } from './common/FilterInput';
 
 interface FileBrowserProps {
   mode: 'save' | 'load';
@@ -321,15 +322,16 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
         <div className="browser-footer">
           <div className="file-browser-form-row">
             <label className="file-browser-label">Name:</label>
-            <input
-              type="text"
+            <FilterInput
               value={filename}
-              className="e-input"
               onChange={(e) => {
                 setFilename(e.target.value);
                 setFilterText(e.target.value); // Sync filter only on manual input
               }}
-              style={{ flex: 1 }}
+              onClear={() => {
+                setFilename('');
+                setFilterText('');
+              }}
               autoFocus
             />
           </div>
