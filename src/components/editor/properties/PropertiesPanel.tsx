@@ -902,9 +902,27 @@ export const PropertiesPanel: React.FC = () => {
         {...panelEventProps}
       >
         <div className="editor-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>
-              {selectedObjectType === 'SETTINGS' ? 'SETTINGS' : selectedObjectType?.toUpperCase()}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+            <span
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                textTransform: 'none',
+              }}
+              title={
+                selectedObjectType === 'SETTINGS'
+                  ? 'SETTINGS'
+                  : selectedObjectType === 'SCENE'
+                    ? 'SCENE'
+                    : `${selectedObjectType?.toUpperCase()}: ${selectedObjectId}`
+              }
+            >
+              {selectedObjectType === 'SETTINGS'
+                ? 'SETTINGS'
+                : selectedObjectType === 'SCENE'
+                  ? 'SCENE'
+                  : `${selectedObjectType?.toUpperCase()}: ${selectedObjectId}`}
             </span>
             {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
               <button
