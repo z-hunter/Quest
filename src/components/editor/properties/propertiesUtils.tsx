@@ -4,9 +4,6 @@ import React, { useEffect } from 'react';
 
 export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
   useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-
     let activeCleanup: (() => void) | null = null;
 
     const setInputValue = (input: HTMLInputElement, value: string) => {
@@ -23,6 +20,8 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
     };
 
     const handleMouseDown = (event: MouseEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
       if (event.button !== 0) return;
       const label = (event.target as HTMLElement | null)?.closest('label.e-label');
       if (!label || !panel.contains(label)) return;
@@ -113,11 +112,11 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
       }
     };
 
-    panel.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('blur', handleWindowBlur);
 
     return () => {
-      panel.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('blur', handleWindowBlur);
       if (activeCleanup) {
         activeCleanup();

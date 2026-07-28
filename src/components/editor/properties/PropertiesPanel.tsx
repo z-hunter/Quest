@@ -67,6 +67,25 @@ export const PropertiesPanel: React.FC = () => {
 
   const [anyExpanded, setAnyExpanded] = React.useState(true);
 
+  const panelStateSnapshotRef = React.useRef<{ collapsed: number[]; scrollTop: number }>({
+    collapsed: [],
+    scrollTop: 0,
+  });
+
+  const updatePanelStateSnapshot = React.useCallback(() => {
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) return;
+    const collapsed: number[] = [];
+    const sections = panel.querySelectorAll<HTMLElement>('.properties-section-block[data-section]');
+    sections.forEach((section) => {
+      if (section.classList.contains('collapsed')) {
+        collapsed.push(Number(section.dataset.section));
+      }
+    });
+    panelStateSnapshotRef.current = { collapsed, scrollTop: content.scrollTop };
+  }, []);
+
   const checkAnyExpanded = React.useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -77,7 +96,8 @@ export const PropertiesPanel: React.FC = () => {
       return !s.classList.contains('collapsed');
     });
     setAnyExpanded(isExpanded);
-  }, []);
+    updatePanelStateSnapshot();
+  }, [updatePanelStateSnapshot]);
 
   const collapseAll = React.useCallback(() => {
     const panel = panelRef.current;
@@ -298,29 +318,20 @@ export const PropertiesPanel: React.FC = () => {
     return () => panel.removeEventListener('click', handleClick);
   });
 
-  const saveCurrentPanelConfig = React.useCallback(
-    (type: string) => {
-      const panel = panelRef.current;
-      const content = contentRef.current;
-      if (!panel || !content) return;
-
-      const collapsed: number[] = [];
-      const sections = panel.querySelectorAll<HTMLElement>(
-        '.properties-section-block[data-section]'
-      );
-      sections.forEach((section) => {
-        if (section.classList.contains('collapsed')) {
-          collapsed.push(Number(section.dataset.section));
-        }
-      });
-
-      setPanelConfig(type, {
-        collapsed,
-        scrollTop: content.scrollTop,
-      });
-    },
-    [setPanelConfig]
-  );
+  React.useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    let timeout: number;
+    const handleScroll = () => {
+      window.clearTimeout(timeout);
+      timeout = window.setTimeout(updatePanelStateSnapshot, 200);
+    };
+    content.addEventListener('scroll', handleScroll);
+    return () => {
+      window.clearTimeout(timeout);
+      content.removeEventListener('scroll', handleScroll);
+    };
+  }, [updatePanelStateSnapshot, selectedObjectType]);
 
   React.useEffect(() => {
     const panel = panelRef.current;
@@ -356,9 +367,12 @@ export const PropertiesPanel: React.FC = () => {
 
     // Cleanup: Save config before type switches or unmount
     return () => {
-      saveCurrentPanelConfig(selectedObjectType);
+      // ensure we don't accidentally save an empty snapshot if deselected quickly
+      if (panelStateSnapshotRef.current) {
+        setPanelConfig(selectedObjectType, panelStateSnapshotRef.current);
+      }
     };
-  }, [selectedObjectType, checkAnyExpanded, saveCurrentPanelConfig]);
+  }, [selectedObjectType, setPanelConfig, checkAnyExpanded]);
 
   useNumericScrubbing(panelRef);
 
