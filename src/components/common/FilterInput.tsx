@@ -4,10 +4,11 @@ interface FilterInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   value: string;
   onClear: () => void;
   containerStyle?: React.CSSProperties;
+  showClearButton?: boolean;
 }
 
 export const FilterInput = React.forwardRef<HTMLInputElement, FilterInputProps>(
-  ({ value, onClear, containerStyle, style, className, ...props }, ref) => {
+  ({ value, onClear, containerStyle, style, className, showClearButton, ...props }, ref) => {
     return (
       <div style={{ position: 'relative', display: 'flex', flex: 1, ...containerStyle }}>
         <input
@@ -22,11 +23,12 @@ export const FilterInput = React.forwardRef<HTMLInputElement, FilterInputProps>(
           }}
           {...props}
         />
-        {value && (
+        {(showClearButton !== undefined ? showClearButton : !!value) && (
           <button
             className="toolbar-icon-btn"
             type="button"
             title="Clear"
+            aria-label="Clear filter"
             onClick={onClear}
             style={{
               position: 'absolute',

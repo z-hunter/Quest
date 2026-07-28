@@ -122,9 +122,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
     // Removed auto-sync to filename to prevent filter collapse during navigation
   }, [selectedIndex, displayItems]);
 
-  const handleConfirm = () => {
-    if (!filename) return;
-    let finalName = filename;
+  const handleConfirm = (explicitName?: string | React.MouseEvent | React.KeyboardEvent) => {
+    const nameToUse = typeof explicitName === 'string' ? explicitName : filename;
+    if (!nameToUse) return;
+    let finalName = nameToUse;
 
     // Handle comma-separated extensions (e.g. ".mp3,.wav")
     const allowedExtensions = extension
@@ -210,7 +211,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
       setFilename('');
     } else {
       setFilename(item.name);
-      setTimeout(() => handleConfirm(), 0);
+      handleConfirm(item.name);
     }
   };
 
@@ -324,6 +325,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
             <label className="file-browser-label">Name:</label>
             <FilterInput
               value={filename}
+              showClearButton={!!filterText}
               onChange={(e) => {
                 setFilename(e.target.value);
                 setFilterText(e.target.value); // Sync filter only on manual input

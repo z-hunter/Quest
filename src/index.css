@@ -749,7 +749,7 @@ input[type='file'] {
   max-width: 95vw;
   height: 600px;
   max-height: 90vh;
-  background-color: #000;
+  background-color: var(--ui-bg-color);
   border: 2px solid var(--ui-main-color);
   display: flex;
   flex-direction: column;
@@ -784,6 +784,7 @@ input[type='file'] {
   margin-bottom: 10px;
   outline: none;
   position: relative;
+  background-color: #000;
 }
 
 .file-browser-error {
