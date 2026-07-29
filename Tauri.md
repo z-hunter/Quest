@@ -46,9 +46,11 @@ For a desktop package:
 npm run tauri:build
 ```
 
-## Next Recommended Steps (COMPLETED)
+## macOS CI Build (GitHub Actions)
 
-1. [x] Add the official Tauri npm dependency and lockfile update.
-2. [x] Smoke-test `tauri dev`.
-3. [x] Replace the temporary working-directory project-root assumption with an explicit project/workspace model.
-4. [x] Decide whether the integrated editor is supported in packaged builds or only in desktop-dev/editor builds.
+A GitHub Actions workflow is configured in `.github/workflows/tauri-build-macos.yml`.
+
+To build for macOS:
+1. **Manual trigger**: Go to GitHub Actions tab -> select **Tauri macOS Build** -> click **Run workflow**. The resulting `.dmg` / `.app` artifact will be available under the run summary.
+2. **Release trigger**: Push a release tag starting with `v` (e.g. `git tag v0.1.0 && git push origin v0.1.0`). `tauri-action` will build the macOS bundle and create a GitHub Release draft automatically.
+
