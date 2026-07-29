@@ -47,6 +47,51 @@ const SpriteThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath
   return <img src={imgSrc} loading="lazy" alt={alt} />;
 };
 
+const prefabSpriteCache = new Map<string, string | null>();
+
+const PrefabThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath, alt }) => {
+  const [spriteJsonPath, setSpriteJsonPath] = useState<string | null>(
+    () => prefabSpriteCache.get(jsonPath) || null
+  );
+
+  useEffect(() => {
+    if (prefabSpriteCache.has(jsonPath)) {
+      setSpriteJsonPath(prefabSpriteCache.get(jsonPath)!);
+      return;
+    }
+    setSpriteJsonPath(null);
+
+    let active = true;
+    fetch(jsonPath)
+      .then((res) => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        const firstObj = Array.isArray(data) ? data[0] : data;
+        if (firstObj && firstObj.spriteName) {
+          let spritePath = `/sprites/${firstObj.spriteName}`.replace(/\/{2,}/g, '/');
+          if (!spritePath.endsWith('.json')) spritePath += '.json';
+          prefabSpriteCache.set(jsonPath, spritePath);
+          setSpriteJsonPath(spritePath);
+        } else {
+          prefabSpriteCache.set(jsonPath, null);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load prefab json for thumbnail', err);
+        if (active) prefabSpriteCache.set(jsonPath, null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [jsonPath]);
+
+  if (!spriteJsonPath) return null;
+  return <SpriteThumbnail key={spriteJsonPath} jsonPath={spriteJsonPath} alt={alt} />;
+};
+
 interface FileBrowserProps {
   mode: 'save' | 'load';
   directory: string; // e.g., 'public/scenes'
@@ -85,7 +130,10 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   const [filterText, setFilterText] = useState('');
   // View Mode
   const isImageBrowser =
-    directory.includes('sprites') || extension?.includes('png') || extension?.includes('jpg');
+    directory.includes('sprites') ||
+    directory.includes('prefabs') ||
+    extension?.includes('png') ||
+    extension?.includes('jpg');
   const [viewModeState, setViewModeState] = useState<'list' | 'grid'>(() => {
     return (localStorage.getItem('quest_fileBrowser_viewMode') as 'list' | 'grid') || 'list';
   });
@@ -458,12 +506,21 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                 >
                   {viewMode === 'grid' && !item.isUp && !item.isDir && (
                     <div className="file-browser-thumb">
-                      {item.name.endsWith('.json') && isImageBrowser ? (
-                        <SpriteThumbnail
-                          key={getNormalizedUrl(item.name)}
-                          jsonPath={getNormalizedUrl(item.name)}
-                          alt={item.name}
-                        />
+                      {item.name.endsWith('.json') &&
+                      (isImageBrowser || currentPath.includes('prefabs')) ? (
+                        currentPath.includes('prefabs') ? (
+                          <PrefabThumbnail
+                            key={getNormalizedUrl(item.name)}
+                            jsonPath={getNormalizedUrl(item.name)}
+                            alt={item.name}
+                          />
+                        ) : (
+                          <SpriteThumbnail
+                            key={getNormalizedUrl(item.name)}
+                            jsonPath={getNormalizedUrl(item.name)}
+                            alt={item.name}
+                          />
+                        )
                       ) : (
                         <img
                           key={getNormalizedUrl(item.name)}
