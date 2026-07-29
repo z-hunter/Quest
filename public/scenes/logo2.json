@@ -1,17 +1,17 @@
 {
-  "id": "logo",
+  "id": "logo2",
   "name": "New Scene",
   "description": "You are in New Scene.",
   "textRedirects": {},
-  "filename": "logo",
+  "filename": "logo2",
   "walkbox": [],
   "triggerboxes": [],
   "scaling": {
     "enabled": true,
-    "min": 0.4,
+    "min": 0.5,
     "max": 1,
     "horizon": 78,
-    "front": 421,
+    "front": 626,
     "correctionalScale": 1
   },
   "entities": [
@@ -27,7 +27,7 @@
       "components": [
         {
           "type": "WalkBox",
-          "mode": "Add",
+          "mode": "Invert",
           "perspectiveWalk3D": true
         },
         {
@@ -96,7 +96,7 @@
       "brightness": 1,
       "saturation": 1,
       "contrast": 1,
-      "hueShift": 0,
+      "hueShift": 1,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -200,16 +200,16 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 0.7003037996038947,
-      "x": 1325.3103272057049,
-      "y": 656.8275353375648,
-      "width": 162.16320000000002,
-      "height": 662.1664000000001,
+      "parallax": 0.4946337960536902,
+      "x": 312.94562236184925,
+      "y": 562.7587714334676,
+      "width": 140.69276959261526,
+      "height": 574.4954758365124,
       "baseWidth": 96,
       "baseHeight": 392,
       "spriteName": "miles_ds-idle-right.json",
       "color": "#e27fa5",
-      "scale": 1.6892,
+      "scale": 1.465549683256409,
       "refScale": 1.03,
       "modelScale": 1.6892,
       "ignoreScaling": false,
@@ -224,7 +224,7 @@
       "isPlayer": true,
       "speed": 0.86,
       "perceptionRadius": 600,
-      "direction": "left",
+      "direction": "right",
       "animSets": {
         "idle": {
           "id": "idle",
@@ -241,8 +241,8 @@
           "right": "miles_ds-walk-right.json"
         }
       },
-      "colliderWidth": 0,
-      "colliderHeight": 0
+      "colliderWidth": 63.88939111949595,
+      "colliderHeight": 7.986173889936993
     },
     {
       "name": "shadow",
@@ -258,29 +258,29 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 1189.875312908787,
-      "y": 656.0902917013939,
+      "x": 195.261419037755,
+      "y": 561.8909549637334,
       "ignoreScaling": false,
       "vertices": [
         {
-          "x": 1189.875312908787,
-          "y": 656.0902917013939,
-          "p": 0.6986919053365989
+          "x": 195.261419037755,
+          "y": 561.8909549637334,
+          "p": 0.4928228048909933
         },
         {
-          "x": 1371.3028553327686,
-          "y": 655.0532968362445,
-          "p": 0.6964246411699914
+          "x": 352.3953462604526,
+          "y": 560.6824723434435,
+          "p": 0.4902003469890233
         },
         {
-          "x": 1572.4002661400832,
-          "y": 678.7114567280731,
-          "p": 0.7481503535850531
+          "x": 533.1529858850736,
+          "y": 588.208462650077,
+          "p": 0.5503043033316362
         },
         {
-          "x": 1317.752093013223,
-          "y": 720.5781661852604,
-          "p": 0.8396868628930072
+          "x": 323.3833268284761,
+          "y": 636.8933508033936,
+          "p": 0.6568311851826949
         }
       ],
       "spriteName": null,
@@ -324,15 +324,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 0.2,
-      "x": -71,
-      "y": 237,
-      "width": 623.3715753424659,
-      "height": 621.4681506849313,
-      "baseWidth": 392.5513698630138,
-      "baseHeight": 391.35273972602727,
+      "x": -56,
+      "y": 358,
+      "width": 831.6695652173913,
+      "height": 817.3304347826087,
+      "baseWidth": 328.75065406003966,
+      "baseHeight": 323.08253933486657,
       "spriteName": "scanline_logo",
       "color": "#AAAAAA",
-      "scale": 1.588,
+      "scale": 2.5297883211678833,
       "refScale": 3.97,
       "modelScale": 3.97,
       "ignoreScaling": false,
@@ -361,15 +361,15 @@
       "visible": true,
       "hidden": false,
       "parallax": 0.2,
-      "x": -64,
-      "y": 346,
-      "width": 655.1999999999999,
-      "height": 668.64,
+      "x": -61,
+      "y": 520,
+      "width": 1285.8897810218975,
+      "height": 1312.2670072992698,
       "baseWidth": 585,
       "baseHeight": 597,
       "spriteName": "scanline_logo",
       "color": "#00ca4c",
-      "scale": 1.1199999999999999,
+      "scale": 2.1981021897810216,
       "refScale": 2.8,
       "modelScale": 2.8,
       "ignoreScaling": false,
@@ -619,7 +619,7 @@
       "brightness": 1,
       "saturation": 1,
       "contrast": 1,
-      "hueShift": 0,
+      "hueShift": 19,
       "colliderWidth": 0,
       "colliderHeight": 0
     }
@@ -634,7 +634,7 @@
   "cameraSpeed": 5,
   "camDeadzoneX": 50,
   "camDeadzoneY": 30,
-  "camMinY": 170,
+  "camMinY": 90,
   "camMaxY": -162,
   "soundEnv": {
     "audioMaxDistance": 10000,
