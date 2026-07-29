@@ -2,10 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { listProjectFiles, openProjectFolder } from '../platform/fileApi';
 import { FilterInput } from './common/FilterInput';
 
+const spriteThumbnailCache = new Map<string, string>();
+
 const SpriteThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath, alt }) => {
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [imgSrc, setImgSrc] = useState<string | null>(
+    () => spriteThumbnailCache.get(jsonPath) || null
+  );
 
   useEffect(() => {
+    if (spriteThumbnailCache.has(jsonPath)) {
+      setImgSrc(spriteThumbnailCache.get(jsonPath)!);
+      return;
+    }
+
     let active = true;
     fetch(jsonPath)
       .then((res) => {
@@ -21,6 +30,7 @@ const SpriteThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath
           } else if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
             imagePath = '/assets/' + imagePath;
           }
+          spriteThumbnailCache.set(jsonPath, imagePath);
           setImgSrc(imagePath);
         }
       })
@@ -57,6 +67,14 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
 }) => {
   // Current Path State
   const [currentPath, setCurrentPath] = useState(directory);
+
+  const getNormalizedUrl = (itemName: string) => {
+    let basePath = currentPath;
+    if (basePath === 'public') basePath = '';
+    else if (basePath.startsWith('public/')) basePath = basePath.substring(7);
+    return `/${basePath}/${itemName}`.replace(/\/{2,}/g, '/');
+  };
+
   // Files State
   const [items, setItems] = useState<{ name: string; isDir: boolean }[]>([]);
 
@@ -373,6 +391,8 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   style={{ color: viewMode === 'list' ? 'var(--ui-input-text)' : undefined }}
                   onClick={() => setViewModeState('list')}
                   title="List View"
+                  aria-label="List View"
+                  aria-pressed={viewMode === 'list'}
                 >
                   ☰
                 </button>
@@ -381,6 +401,8 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   style={{ color: viewMode === 'grid' ? 'var(--ui-input-text)' : undefined }}
                   onClick={() => setViewModeState('grid')}
                   title="Grid View"
+                  aria-label="Grid View"
+                  aria-pressed={viewMode === 'grid'}
                 >
                   ⊞
                 </button>
@@ -436,22 +458,9 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   {viewMode === 'grid' && !item.isUp && !item.isDir && (
                     <div className="file-browser-thumb">
                       {item.name.endsWith('.json') && isImageBrowser ? (
-                        <SpriteThumbnail
-                          jsonPath={`/${currentPath.startsWith('public/') ? currentPath.substring(7) : currentPath}/${item.name}`.replace(
-                            '//',
-                            '/'
-                          )}
-                          alt={item.name}
-                        />
+                        <SpriteThumbnail jsonPath={getNormalizedUrl(item.name)} alt={item.name} />
                       ) : (
-                        <img
-                          src={`/${currentPath.startsWith('public/') ? currentPath.substring(7) : currentPath}/${item.name}`.replace(
-                            '//',
-                            '/'
-                          )}
-                          loading="lazy"
-                          alt={item.name}
-                        />
+                        <img src={getNormalizedUrl(item.name)} loading="lazy" alt={item.name} />
                       )}
                     </div>
                   )}
