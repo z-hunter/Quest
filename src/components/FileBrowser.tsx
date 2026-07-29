@@ -14,6 +14,7 @@ const SpriteThumbnail: React.FC<{ jsonPath: string; alt: string }> = ({ jsonPath
       setImgSrc(spriteThumbnailCache.get(jsonPath)!);
       return;
     }
+    setImgSrc(null);
 
     let active = true;
     fetch(jsonPath)
@@ -458,9 +459,18 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   {viewMode === 'grid' && !item.isUp && !item.isDir && (
                     <div className="file-browser-thumb">
                       {item.name.endsWith('.json') && isImageBrowser ? (
-                        <SpriteThumbnail jsonPath={getNormalizedUrl(item.name)} alt={item.name} />
+                        <SpriteThumbnail
+                          key={getNormalizedUrl(item.name)}
+                          jsonPath={getNormalizedUrl(item.name)}
+                          alt={item.name}
+                        />
                       ) : (
-                        <img src={getNormalizedUrl(item.name)} loading="lazy" alt={item.name} />
+                        <img
+                          key={getNormalizedUrl(item.name)}
+                          src={getNormalizedUrl(item.name)}
+                          loading="lazy"
+                          alt={item.name}
+                        />
                       )}
                     </div>
                   )}
@@ -491,12 +501,13 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
                   setFilterText('');
                 }}
                 autoFocus
+                style={{ marginBottom: 0 }}
               />
             </div>
             <button
               onClick={handleConfirm}
               className="e-btn e-btn-enter"
-              style={{ padding: '5px 15px' }}
+              style={{ padding: '5px 15px', marginRight: 0 }}
             >
               {mode === 'save' ? 'Save' : 'Load'}
             </button>
