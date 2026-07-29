@@ -643,21 +643,24 @@ export class Actor extends Entity {
       );
       if (!wbComp) continue;
 
+      // Perspective walking follows the Quad as it is currently projected.
+      // Project both the per-vertex parallax geometry and the actor into the
+      // same visual coordinate space before finding the vanishing-point ray.
       const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+      const actorP = this.parallax !== undefined ? this.parallax : 1.0;
+      const px = cam ? this.x - cam.x * (actorP - 1.0) : this.x;
+      const py = cam ? this.y - cam.y * (actorP - 1.0) : this.y;
       const vertices = quad.vertices.map((v: any) => {
         const p = (v.p !== undefined ? v.p : 1.0) * globalP;
-        let vx = v.x;
-        let vy = v.y;
-        if (cam && p !== 1.0) {
-          vx = v.x - cam.x * (p - 1.0);
-          vy = v.y - cam.y * (p - 1.0);
-        }
-        return { x: vx, y: vy };
+        return {
+          x: cam ? v.x - cam.x * (p - 1.0) : v.x,
+          y: cam ? v.y - cam.y * (p - 1.0) : v.y,
+        };
       });
 
-      const dist = Geometry.getPointToPolygonDistance({ x: this.x, y: this.y }, vertices);
+      const dist = Geometry.getPointToPolygonDistance({ x: px, y: py }, vertices);
       if (dist < 10.0) {
-        return getQuadPerspectiveMovementVector(vertices, this.x, this.y, inputX, inputY);
+        return getQuadPerspectiveMovementVector(vertices, px, py, inputX, inputY);
       }
     }
 
@@ -1192,28 +1195,21 @@ export function getQuadPerspectiveMovementVector(
   const v2 = quadVertices[2]; // Bottom-Right
   const v3 = quadVertices[3]; // Bottom-Left
 
-  // Calculate distance from point P to Left edge (v0 -> v3) and Right edge (v1 -> v2)
-  const dL = Geometry.getPointToSegmentDistance({ x: px, y: py }, v0, v3);
-  const dR = Geometry.getPointToSegmentDistance({ x: px, y: py }, v1, v2);
-
-  const totalHorizontalDist = dL + dR;
-  const u = totalHorizontalDist > 0.0001 ? Math.max(0, Math.min(1, dL / totalHorizontalDist)) : 0.5;
-
-  // Top point at ratio u (on top edge v0 -> v1)
-  const TopU = {
-    x: (1 - u) * v0.x + u * v1.x,
-    y: (1 - u) * v0.y + u * v1.y,
-  };
-
-  // Bottom point at ratio u (on bottom edge v3 -> v2)
-  const BottomU = {
-    x: (1 - u) * v3.x + u * v2.x,
-    y: (1 - u) * v3.y + u * v2.y,
-  };
-
-  // Up vector (from BottomU to TopU)
-  let upX = TopU.x - BottomU.x;
-  let upY = TopU.y - BottomU.y;
+  // The vertical trajectory is the ray from the actor to the vanishing point
+  // where the infinite left and right side lines meet. Unlike interpolating a
+  // fresh line from edge distances every frame, this keeps the actor on one
+  // continuous perspective ray for the whole vertical traversal.
+  const vanishingPoint = getInfiniteLineIntersection(v0, v3, v1, v2);
+  let upX: number;
+  let upY: number;
+  if (vanishingPoint) {
+    upX = vanishingPoint.x - px;
+    upY = vanishingPoint.y - py;
+  } else {
+    // Parallel side edges have a vanishing point at infinity.
+    upX = (v0.x + v1.x - v3.x - v2.x) / 2;
+    upY = (v0.y + v1.y - v3.y - v2.y) / 2;
+  }
   const upLen = Math.hypot(upX, upY);
   if (upLen > 0.0001) {
     upX /= upLen;
@@ -1266,4 +1262,26 @@ export function getQuadPerspectiveMovementVector(
   }
 
   return { dx, dy };
+}
+
+function getInfiniteLineIntersection(
+  a0: { x: number; y: number },
+  a1: { x: number; y: number },
+  b0: { x: number; y: number },
+  b1: { x: number; y: number }
+): { x: number; y: number } | null {
+  const adx = a1.x - a0.x;
+  const ady = a1.y - a0.y;
+  const bdx = b1.x - b0.x;
+  const bdy = b1.y - b0.y;
+  const denominator = adx * bdy - ady * bdx;
+  if (Math.abs(denominator) < 0.000001) return null;
+
+  const offsetX = b0.x - a0.x;
+  const offsetY = b0.y - a0.y;
+  const t = (offsetX * bdy - offsetY * bdx) / denominator;
+  return {
+    x: a0.x + t * adx,
+    y: a0.y + t * ady,
+  };
 }

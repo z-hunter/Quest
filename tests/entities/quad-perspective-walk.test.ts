@@ -66,6 +66,42 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     expect(player.y).toBeLessThan(50);
   });
 
+  it('keeps vertical movement on one ray to the side-edge vanishing point', () => {
+    const first = getQuadPerspectiveMovementVector(trapezoidVerts, 30, 50, 0, -1);
+    const second = getQuadPerspectiveMovementVector(trapezoidVerts, 35.3333333333, 30, 0, -1);
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(second!.dx).toBeCloseTo(first!.dx, 6);
+    expect(second!.dy).toBeCloseTo(first!.dy, 6);
+  });
+
+  it('uses camera-projected Quad sides and actor position for 3D-parallax walking', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 50, 50);
+    player.speed = 10;
+    player.parallax = 0.75;
+    fixture.scene.camera = { x: 20, y: 0 } as any;
+
+    const quad = new QuadObject(fixture.game as any, 'ParallaxTrapezoidQuad');
+    quad.vertices = [
+      { x: 40, y: 0, p: 0.5 },
+      { x: 60, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1.0 },
+      { x: 0, y: 100, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true }];
+    fixture.scene.addEntity(quad);
+    fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+
+    player.handlePlayerInput(1.0);
+
+    // With camera X=20 the projected side lines converge at (62.5,-25).
+    // Actor visual position starts at (55,50), so its upward movement must
+    // point along the ray (7.5,-75) toward that moving vanishing point.
+    expect((player.x - 50) / (player.y - 50)).toBeCloseTo(7.5 / -75, 5);
+  });
+
   it('uses standard movement if perspectiveWalk3D is not enabled', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 20, 50);
