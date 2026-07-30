@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createParserFixture } from '../fixtures/parserFactory';
 import { createGameSemanticFixture } from '../fixtures/gameSemanticFactory';
 import { Parser } from '../../src/mechanics/Parser';
+import { createLlmProvider } from '../../src/mechanics/llm/createLlmProvider';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import { Actor } from '../../src/entities/Actor';
 
@@ -20,7 +21,7 @@ async function runSemanticParser(
     parserPeekPnEnabled: false,
     log() {},
   } as any;
-  const parser = new Parser(fixture.game);
+  const parser = new Parser(fixture.game, createLlmProvider());
   await parser.parse(input);
   return fixture.messages;
 }

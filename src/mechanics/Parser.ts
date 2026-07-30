@@ -1,5 +1,4 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
-import { createLlmProvider } from './llm/createLlmProvider';
 import type { ILlmProvider } from './llm/ILlmProvider';
 import type { LlmCascadePreviousAttempt } from './LlmCascade';
 import { LlmCascade } from './LlmCascade';
@@ -76,7 +75,7 @@ export class Parser {
   pendingClarificationRetryMessage: string | null;
   pendingClarificationCancelMessage: string | null;
 
-  constructor(game: any, provider: ILlmProvider = createLlmProvider()) {
+  constructor(game: any, provider: ILlmProvider) {
     this.game = game;
     this.inputField = null;
     this.pendingState = null;

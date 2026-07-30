@@ -1,5 +1,6 @@
 import type { GameActionOutcome } from '../../src/core/GameActionTypes';
 import { Parser } from '../../src/mechanics/Parser';
+import { createLlmProvider } from '../../src/mechanics/llm/createLlmProvider';
 import { ComponentSystem } from '../../src/systems/ComponentSystem';
 import {
   getSceneTextLayerAccessState,
@@ -1023,7 +1024,7 @@ export function createParserFixture(): ParserFixture {
     );
   };
 
-  const parser = new Parser(fixture.game);
+  const parser = new Parser(fixture.game, createLlmProvider());
 
   return {
     ...fixture,

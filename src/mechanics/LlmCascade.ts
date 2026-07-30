@@ -1,5 +1,6 @@
 import type { TextAssetManager } from '../core/TextAssetManager';
 import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
+import { extractJson, parseJson } from './llm/llmJson';
 import type {
   LlmCascadeDebugInfo,
   ParserCascadeEnvelope,
@@ -162,8 +163,8 @@ export class LlmCascade {
     }
 
     const rawResponse = response.text;
-    const extractedJson = this.extractJson(rawResponse);
-    const parsed = this.parseJson(extractedJson);
+    const extractedJson = extractJson(rawResponse);
+    const parsed = parseJson(extractedJson);
     if (!parsed) {
       this.lastDebugInfo = {
         ...baseDebug,
@@ -729,22 +730,6 @@ export class LlmCascade {
       result[key] = entry;
     }
     return result as T;
-  }
-
-  private extractJson(text: string): string {
-    const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(text);
-    if (fenceMatch) return fenceMatch[1].trim();
-    const braceMatch = /\{[\s\S]*\}/.exec(text);
-    if (braceMatch) return braceMatch[0].trim();
-    return text.trim();
-  }
-
-  private parseJson(text: string): unknown | null {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
   }
 
   private normalizeResponse(

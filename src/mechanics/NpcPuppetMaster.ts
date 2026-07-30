@@ -1,4 +1,5 @@
 import type { ILlmProvider, LlmProviderContent, LlmProviderMessage } from './llm/ILlmProvider';
+import { extractJson, parseJson } from './llm/llmJson';
 import { ShadowLogger } from './slm/ShadowLogger';
 import { SlmInferenceEngine } from './slm/SlmInferenceEngine';
 import { ActorPlanExecutor } from './ActorPlanExecutor';
@@ -736,8 +737,8 @@ export class NpcPuppetMaster {
       return [];
     }
 
-    const extractedJson = this.extractJson(response.text);
-    const parsed = this.parseJson(extractedJson);
+    const extractedJson = extractJson(response.text);
+    const parsed = parseJson(extractedJson);
     const normalized = this.normalizeResponse(parsed, worldModel);
     const expandedPlans = normalized.valid
       ? this.expandImplicitApproaches(normalized.plans, worldModel)
@@ -2511,8 +2512,8 @@ export class NpcPuppetMaster {
         return;
       }
 
-      const extractedJson = this.extractJson(response.text);
-      const parsed = this.parseJson(extractedJson);
+      const extractedJson = extractJson(response.text);
+      const parsed = parseJson(extractedJson);
       const normalized = this.normalizeStrategyResponse(parsed, npcId);
       if (!normalized) {
         const debug = {
@@ -3336,7 +3337,7 @@ export class NpcPuppetMaster {
     }
     let sections: Record<string, number> = {};
     if (jsonStart >= 0 && jsonEnd > jsonStart) {
-      const parsed = this.parseJson(text.slice(jsonStart, jsonEnd + 1)) as any;
+      const parsed = parseJson(text.slice(jsonStart, jsonEnd + 1)) as any;
       if (parsed && typeof parsed === 'object') {
         sections = Object.fromEntries(
           Object.entries(parsed).map(([key, value]) => [key, JSON.stringify(value).length])
@@ -3980,25 +3981,6 @@ export class NpcPuppetMaster {
       this.systemPromptCache = FALLBACK_SYSTEM_PROMPT;
     }
     return this.systemPromptCache;
-  }
-
-  private extractJson(text: string): string {
-    const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(text);
-    if (fenceMatch?.[1]) return fenceMatch[1].trim();
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return text.slice(firstBrace, lastBrace + 1).trim();
-    }
-    return text.trim();
-  }
-
-  private parseJson(text: string): unknown | null {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
   }
 
   private logStrategyDebug(debug: NpcPuppetMasterStrategyDebugInfo): void {
