@@ -2342,7 +2342,7 @@ export class GameSemanticAPI {
   }
 
   playSound(name: string): void {
-    this.game.audio.playSound(name);
+    this.game.playSound(name);
   }
 
   onSceneChange(sceneName: string): void {

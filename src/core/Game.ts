@@ -10,7 +10,6 @@ import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
 import { registerDemoScripts } from '../scripts/DemoScripts';
 import { registerUserScripts } from '../scripts/main';
-import { AudioManager } from './AudioManager';
 import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
@@ -70,7 +69,6 @@ export class Game implements IGame {
   npcWorldModelBuilder: NpcWorldModelBuilder;
   sceneManager: SceneManager;
   assets: AssetLoader;
-  audio: AudioManager;
   textAssets: TextAssetManager;
   editor: SceneEditor;
   spriteEditor: SpriteEditor;
@@ -235,7 +233,6 @@ export class Game implements IGame {
       USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider()
     );
     this.assets = new AssetLoader();
-    this.audio = new AudioManager();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();
     void this.textAssets.preloadParserLanguageAssets();

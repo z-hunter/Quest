@@ -271,7 +271,6 @@ export function createTestGame(): TestGameHarness {
       },
       estimateSpritesTextureBytes: async () => ({ bytes: 0 }),
     } as any,
-    audio: {} as any,
     textAssets: textAssets as any,
     sceneManager: sceneManager as any,
     editor: {

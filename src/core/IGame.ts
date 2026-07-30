@@ -1,5 +1,4 @@
 import { AssetLoader } from './AssetLoader';
-import { AudioManager } from './AudioManager';
 import { SceneManager } from '../scene/SceneManager';
 import { SceneEditor } from '../tools/SceneEditor';
 import { Entity } from '../entities/Entity';
@@ -16,7 +15,6 @@ import type { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 
 export interface IGame {
   assets: AssetLoader;
-  audio: AudioManager;
   textAssets: TextAssetManager;
   sceneManager: SceneManager;
   editor: SceneEditor;
