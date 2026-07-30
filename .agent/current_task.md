@@ -1,18 +1,25 @@
-# Current Task: Optimize Local Teleport Routing & Handle Accidental Portal Triggers
+# Current Task: Optimize FileBrowser UX, Accessibility, and Prefab Thumbnail Loading
 
 ## Status: COMPLETED ✅
 
 ## Summary of the Implementation
-- **Portal-First Routing**: Integrated same-scene `Exit` -> `Entry` local teleport planning in `Actor.moveTo` and `ActorNavigationService.planLocalTeleportRoute`. When direct A* is blocked or suboptimal, local teleports are evaluated first before running expensive whole-scene A*.
-- **A* Search Space & Performance Optimization**:
-  - Bound A* iteration limits to prevent main-thread UI freezes on unreachable targets.
-  - Added Euclidean distance heuristic pruning in `planLocalTeleportRoute` to eliminate distant (2100px) sub-optimal exits in ~0.01ms.
-- **Accidental Portal Collision Handling**:
-  - **Player (`isPlayer === true`)**: Local teleports remain transparent in A* (not treated as walls). If the player clicks on the floor in Zone 1 and pathfinding carries them over a local teleport into Zone 2, `resumePlannedMovementAfterLocalTeleport` checks `localTeleportTarget`. Since no intentional teleport target was set (`moveToVisual`), navigation immediately cancels upon arrival in Zone 2, leaving the player in the new area without looping back.
-  - **NPCs (`isPlayer === false`)**: Local teleports act as physical obstacles (`isWalkable = false`) when an NPC paths within a single zone, ensuring NPCs walk around screen transitions without accidentally triggering them.
-  - **Intentional Local Teleports**: If an Actor (Player or NPC) intentionally paths to a target in Zone 2 via `planLocalTeleportRoute`, `localTeleportTarget` is stored. After teleporting, movement automatically resumes towards the final objective.
-  - **Inter-scene Exits**: Exits pointing to other scenes always act as solid obstacles for all actors.
+- **UI & Layout Optimizations**:
+  - Replaced the bottom 'Cancel' button with a standard `×` Close button in the top-right header (`e-btn`), matching `PropertiesPanel`.
+  - Moved the 'Load/Save' confirmation button inline with the filename input, freeing vertical space for the grid/list view.
+  - Aligned the `FilterInput` and LOAD button by stripping extraneous margins (`marginBottom: 0`).
+  - Removed unused `.file-browser-actions` CSS.
+- **Accessibility & UX**:
+  - Added `aria-label` and `aria-pressed` states for the List/Grid view toggles.
+  - Ensured the clear `×` button inside the `FilterInput` respects the actual selected `filename` rather than just manual `filterText` input.
+- **Thumbnail Normalization & Caching**:
+  - Added a module-level `spriteThumbnailCache` to instantly resolve and render thumbnails across view/mode switches, preventing network fetch spam and flickering.
+  - Implemented `getNormalizedUrl` to properly remove redundant `/public` prefixes.
+  - Prevented state bleed by resetting `imgSrc` to null on cache miss and explicitly keying rendered thumbnails by their normalized URLs.
+- **Prefab Thumbnails Support**:
+  - Created `PrefabThumbnail` to extract the `spriteName` from the first object inside a `.json` prefab file.
+  - Added auto-correction to append `.json` extensions if omitted (e.g., `battery_aaa.json` -> `aaa.json`), preventing 404 errors.
+  - Automatically enabled `isImageBrowser` for directories containing `prefabs`, activating the thumbnail grid natively.
 
 ## Verification
-- Vitest suite passed: `actor-movement.test.ts` (8/8) and `navigation-and-spatial.test.ts` (32/32).
-- Git commit created: `b3242cc` (`feat(navigation): optimize local teleport routing and handle accidental portal triggers`).
+- Visually verified in-editor: FileBrowser aligns correctly, thumbnails load without flickering, prefabs show their correct sprite representation, and grid/list modes toggle smoothly.
+- Tested path normalization edge cases (`public/`, `battery_aaa` without extension).

@@ -55,7 +55,7 @@ export class ActorWorldQuery {
 
   constructor(game: IGame) {
     this.game = game;
-    this.navigation = new ActorNavigationService(game);
+    this.navigation = game.actorNavigation;
   }
 
   getKnownObjects(

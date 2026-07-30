@@ -4315,3 +4315,108 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - The textured Quad implementation intentionally stays on Canvas2D for now, so very complex future texture cases may still warrant a renderer revisit later.
 - The wrap-up intentionally did not touch or normalize the `t-quad` scene files so that the user's local scene work stays intact.
 
+## Session Entry - 2026-07-30 14:23 +02:00
+
+### Session Goals
+
+- Fix the `Quad` `Walkbox` `3d-perspective walk` behavior so player movement follows the visible perspective lines of the quad instead of a camera-fixed approximation.
+- Keep the solution stable when the camera follows the player on the X axis.
+- Leave user-owned scene edits untouched while recording a durable handoff.
+
+### What Was Implemented
+
+1. Updated `src/entities/Actor.ts` so the player position and quad vertices are compared in the same visual space before computing the walk vector.
+2. Reworked the vertical perspective walk direction to use the current projected left and right quad side edges and their intersection point, which acts as the current vanishing point.
+3. Kept the horizontal basis logic consistent with the quad's projected geometry while removing the earlier interpolation path that could switch direction mid-walk.
+4. Added regression coverage in `tests/entities/quad-perspective-walk.test.ts` for both continuity on a single perspective ray and the moving-camera / projected-quad case.
+
+### Important Architecture Decisions
+
+- The walk trajectory now depends on the quad's current visible side edges and their convergence point, not on a camera-independent or fixed-space approximation.
+- Quad parallax is treated as part of the visual projection, so any motion caused by camera movement is reflected in the walk direction through the projected geometry itself.
+- This keeps the player's movement aligned with what the player sees on screen, which is the contract the user wanted.
+
+### Runtime / Scene Notes
+
+- The fix specifically targets `Walkbox` perspective walking on `Quad` scene objects.
+- The user described a failure mode where the path changed to a different line partway up the quad; the new implementation avoids that switch by deriving the direction from the live projected side edges.
+- The camera-follow behavior is now part of the projection math instead of a separate special case.
+
+### Tests and Validation
+
+- `npm test -- tests/entities/quad-perspective-walk.test.ts` — passed.
+- `npm run typecheck` — passed.
+- Browser validation in the `logo` scene traced the actor moving collinearly toward the current visual vanishing point until the walkbox boundary was reached.
+- Console checks during browser validation reported no errors.
+
+### Commits Created
+
+- `960c5ca` — `Fix Quad perspective walk with moving camera`
+
+### Remaining Work / Next Steps
+
+- No code follow-up is required for the committed fix.
+- The working tree still contains user-owned scene changes that were intentionally left untouched:
+  - `public/scenes/logo.json`
+  - `public/scenes/logo2.json`
+  - `public/text/scenes/logo2.json`
+
+### Risks / Caveats
+
+- A browser-test helper directory `.codex-game-test` was created during validation and hit a Windows ACL issue. It does not affect gameplay, but it may need elevated cleanup later.
+- The wrap-up intentionally did not normalize or rewrite the user's scene files.
+
+
+## Session Entry - 2026-07-30 14:28 +02:00
+
+# Session Summary
+
+## Session Goal
+
+Улучшение UX/UI диалогового окна файлового браузера (`FileBrowser`), внедрение поддержки отображения эскизов (thumbnails) для префабов, а также исправление мелких недочётов верстки, доступности и работы кэширования миниатюр.
+
+## What Was Implemented
+
+### 1. Переработка интерфейса FileBrowser
+- Убрана кнопка "Cancel" из подвала окна, а кнопка подтверждения ("Load" / "Save") перенесена на одну линию с полем ввода имени файла. Это сэкономило вертикальное пространство.
+- Кнопка закрытия окна ("X") перенесена в правый верхний угол и стилизована под стандарты `PropertiesPanel` (используется класс `e-btn`).
+- Выровнено по вертикали поле `FilterInput` и кнопка "LOAD", путём обнуления нежелательного нижнего отступа `margin-bottom: 5px` у поля ввода.
+- Удалён неиспользуемый CSS-класс `.file-browser-actions`.
+
+### 2. Улучшение работы поля ввода (FilterInput)
+- Кнопка очистки текста (крестик внутри поля) теперь отображается на основе значения `filename`, а не `filterText`. Таким образом, она появляется даже тогда, когда файл выбран мышью из списка, что позволяет быстро сбросить выбор.
+- Добавлены атрибуты `aria-label` и `aria-pressed` для кнопок переключения режима просмотра (Сетка/Список), что улучшает доступность (a11y).
+
+### 3. Нормализация URL и исправление путей
+- Логика формирования путей для миниатюр объединена в единой функции `getNormalizedUrl`. Это решило проблемы с дублированием путей (например, если текущая папка была корнем `public`).
+
+### 4. Кэширование и фиксы миниатюр (SpriteThumbnail)
+- Внедрён модульный кэш `spriteThumbnailCache` (Map) на уровне файла. Ранее разрешённые пути к картинкам спрайтов кэшируются, благодаря чему при перерисовках или навигации эскизы появляются мгновенно без повторных сетевых запросов.
+- Исправлено "протекание" состояний (state bleed) при смене пути, но сохранении того же имени файла (например, в другой папке). Миниатюры теперь корректно сбрасывают `imgSrc` в `null` при промахе кэша, а в списке рендерятся с ключом `key={getNormalizedUrl(item.name)}`.
+
+### 5. Поддержка эскизов для Префабов
+- Добавлен новый компонент `PrefabThumbnail`.
+- Файловый браузер теперь автоматически включает режим отображения изображений (`isImageBrowser`) при навигации в папки с `prefabs`.
+- `PrefabThumbnail` загружает JSON префаба, извлекает `spriteName` из первого объекта и передаёт его на отрисовку в `SpriteThumbnail`. 
+- Добавлена автокоррекция расширения: если `spriteName` в префабе указан без `.json` (как в `battery_aaa.json`), расширение добавляется автоматически, что устраняет ошибку 404 (Not Found).
+
+## Important Architecture / Runtime Decisions
+
+- **Модульное кэширование вместо React Context:** Для кэширования миниатюр было решено использовать простой Map на уровне модуля `FileBrowser.tsx`. Это эффективно и полностью покрывает нужды файлового диалога без усложнения стейт-менеджмента проекта.
+- **Интеграция PrefabThumbnail со SpriteThumbnail:** Вместо дублирования логики получения картинки из JSON спрайта, `PrefabThumbnail` занимается только извлечением имени спрайта из префаба, а отрисовку делегирует `SpriteThumbnail`.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+Изменений в ядре движка или механиках не было. Все доработки касались исключительно UI-компонента `FileBrowser`.
+
+## Tests Run
+- Визуальное тестирование через интерфейс редактора в процессе внесения изменений (проверка выравнивания, работы кэша, навигации по папке префабов).
+
+## Commits Created During the Session
+- Коммиты в рамках сессии пока не создавались (изменения локальны).
+
+## Remaining Work / Next Recommended Steps
+- Закоммитить изменения в `FileBrowser.tsx` и `index.css`.
+- Проверить наличие других префабов с нестандартной структурой (где нужный спрайт может лежать не в первом элементе массива).
+
+## Risks, Caveats, Open Questions
+- В текущей реализации эскизов для префабов берётся спрайт строго из *первого* элемента. Если в префабе первый объект является пустым контейнером без спрайта, эскиз отображаться не будет, даже если спрайт есть у дочерних объектов. Это можно будет улучшить в будущем.
