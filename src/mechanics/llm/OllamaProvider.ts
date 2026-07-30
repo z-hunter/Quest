@@ -119,6 +119,7 @@ export class OllamaProvider implements ILlmProvider {
             },
             body: JSON.stringify(body),
             signal: controller.signal,
+            timeoutMs: this.timeoutMs,
           },
           this.fetchImpl
         );
@@ -212,7 +213,7 @@ export class OllamaProvider implements ILlmProvider {
         }
         const errorName = error instanceof Error ? error.name : '';
         const isAbort = errorName === 'AbortError';
-        if (attempt < this.maxAttempts) {
+        if (!isAbort && attempt < this.maxAttempts) {
           await delay(retryDelayMs(attempt));
           continue;
         }

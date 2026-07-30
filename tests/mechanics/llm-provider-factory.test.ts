@@ -6,6 +6,8 @@ import { OllamaProvider } from '../../src/mechanics/llm/OllamaProvider';
 describe('createLlmProvider', () => {
   it('creates the configured provider and defaults an empty setting to Anthropic', () => {
     expect(createLlmProvider('')).toBeInstanceOf(AnthropicProvider);
+    expect(createLlmProvider(undefined)).toBeInstanceOf(AnthropicProvider);
+    expect(createLlmProvider('   ')).toBeInstanceOf(AnthropicProvider);
     expect(createLlmProvider('ollama')).toBeInstanceOf(OllamaProvider);
   });
 

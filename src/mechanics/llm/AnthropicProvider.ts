@@ -121,6 +121,7 @@ export class AnthropicProvider implements ILlmProvider {
               stream: true,
             }),
             signal: controller.signal,
+            timeoutMs: this.timeoutMs,
           },
           this.fetchImpl
         );
@@ -204,7 +205,7 @@ export class AnthropicProvider implements ILlmProvider {
         }
         const errorName = error instanceof Error ? error.name : '';
         const isAbort = errorName === 'AbortError';
-        if (attempt < this.maxAttempts && !deltaEmitted) {
+        if (!isAbort && attempt < this.maxAttempts && !deltaEmitted) {
           await delay(retryDelayMs(attempt));
           continue;
         }

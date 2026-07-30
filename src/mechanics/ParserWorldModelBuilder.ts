@@ -4,6 +4,7 @@ import type { SceneObject } from '../entities/SceneObject';
 import type { Scene } from '../scene/Scene';
 import { createSceneTextLayerQuery, getSceneTextLayerAccessState } from '../scene/SceneTextLayer';
 import { ComponentSystem } from '../systems/ComponentSystem';
+import { compactRecord } from './compactRecord';
 import type {
   ParserContext,
   ParserEntityContentContext,
@@ -55,7 +56,7 @@ export class ParserWorldModelBuilder {
     const scene = this.game.sceneManager.currentScene;
     const normalizedInput = rawInput.trim().toUpperCase();
     const playerContext = scene?.player
-      ? this.compactRecord({
+      ? compactRecord({
           x: Math.round(scene.player.x),
           y: Math.round(scene.player.y),
         })
@@ -76,7 +77,7 @@ export class ParserWorldModelBuilder {
         }
       : undefined;
 
-    return this.compactRecord({
+    return compactRecord({
       rawInput,
       normalizedInput,
       focusedTarget,
@@ -103,7 +104,7 @@ export class ParserWorldModelBuilder {
     if (!entity || !(this.game.inventory || []).includes(entity)) return undefined;
     const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
     if (!title) return undefined;
-    return this.compactRecord<NonNullable<ParserContext['focusedTarget']>>({
+    return compactRecord<NonNullable<ParserContext['focusedTarget']>>({
       id: entity.name,
       title,
       source: 'inventoryPreview',
@@ -124,7 +125,7 @@ export class ParserWorldModelBuilder {
   }
 
   private buildSceneContext(scene: Scene): NonNullable<ParserContext['scene']> {
-    return this.compactRecord({
+    return compactRecord({
       id: scene.id,
       title: this.game.textAssets.getResolvedSceneField(scene, 'title') || undefined,
       description: this.game.textAssets.getResolvedSceneField(scene, 'description') || undefined,
@@ -200,7 +201,7 @@ export class ParserWorldModelBuilder {
           };
         }
 
-        return this.compactRecord<ParserEntityContext>({
+        return compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title: entry.title,
           item: isItem || undefined,
@@ -275,7 +276,7 @@ export class ParserWorldModelBuilder {
           };
         }
 
-        return this.compactRecord<ParserEntityContext>({
+        return compactRecord<ParserEntityContext>({
           id: sceneObject.name,
           title,
           item: isItem || undefined,
@@ -327,7 +328,7 @@ export class ParserWorldModelBuilder {
       .map((entity: any) => {
         const title = this.game.textAssets.getResolvedObjectField(entity, 'title')?.trim();
         if (!title) return null;
-        return this.compactRecord<ParserInventoryItemContext>({
+        return compactRecord<ParserInventoryItemContext>({
           id: entity.name,
           title,
           synonyms: this.game.textAssets.getResolvedObjectListField(entity, 'synonyms'),
@@ -408,7 +409,7 @@ export class ParserWorldModelBuilder {
   ): ParserEntityLocationContext | undefined {
     if (!parentId || !relation) return undefined;
     const parentEntry = textLayer.entryById.get(parentId);
-    return this.compactRecord<ParserEntityLocationContext>({
+    return compactRecord<ParserEntityLocationContext>({
       relation,
       parentId,
       parentTitle: parentEntry?.title || undefined,
@@ -426,7 +427,7 @@ export class ParserWorldModelBuilder {
     for (const [relation] of relationMap.entries()) {
       for (const child of textLayer.getRelationDescendants(entityId, relation)) {
         contents.push(
-          this.compactRecord<ParserEntityContentContext>({
+          compactRecord<ParserEntityContentContext>({
             relation,
             id: child.object.name,
             title: child.title,
@@ -647,7 +648,7 @@ export class ParserWorldModelBuilder {
     return textLayer.entries
       .filter((entry) => connectedNodeIds.has(entry.object.name))
       .map((entry) =>
-        this.compactRecord<ParserSpatialNodeContext>({
+        compactRecord<ParserSpatialNodeContext>({
           id: entry.object.name,
           title: entry.title || undefined,
           parentNodeId: entry.effectiveParentId || undefined,
@@ -796,26 +797,6 @@ export class ParserWorldModelBuilder {
       x: Math.round((Math.min(...xs) + Math.max(...xs)) / 2),
       y: Math.round((Math.min(...ys) + Math.max(...ys)) / 2),
     };
-  }
-
-  private compactRecord<T extends Record<string, unknown>>(value: T): T {
-    const result: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      if (entry === null || entry === undefined) continue;
-      if (Array.isArray(entry)) {
-        if (!entry.length) continue;
-        result[key] = entry;
-        continue;
-      }
-      if (typeof entry === 'object') {
-        const nested = this.compactRecord(entry as Record<string, unknown>);
-        if (!Object.keys(nested).length) continue;
-        result[key] = nested;
-        continue;
-      }
-      result[key] = entry;
-    }
-    return result as T;
   }
 
   private uniqueObjects<T extends SceneObject>(sceneObjects: T[]): T[] {
