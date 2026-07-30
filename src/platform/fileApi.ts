@@ -42,7 +42,7 @@ export function isTauriRuntime(): boolean {
   return !!getTauriInvoker();
 }
 
-async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function invokeTauri<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const invoke = getTauriInvoker();
   if (!invoke) {
     throw new Error(`Tauri runtime is unavailable for command '${command}'.`);

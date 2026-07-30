@@ -6,6 +6,7 @@ import type {
   LlmStreamDeltaCallback,
 } from './ILlmProvider';
 import { ProviderCircuitBreaker, classifyHttpFailure, delay, retryDelayMs } from './providerPolicy';
+import { fetchLlm } from '../../platform/llmApi';
 
 const DEFAULT_BASE_URL = 'http://localhost:11434/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen2.5:3b';
@@ -108,14 +109,19 @@ export class OllamaProvider implements ILlmProvider {
           body.response_format = { type: 'json_object' };
         }
 
-        const response = await this.fetchImpl(this.baseUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const response = await fetchLlm(
+          'ollama',
+          this.baseUrl,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
           },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
+          this.fetchImpl
+        );
 
         if (!response.ok) {
           const errorText = await response.text();

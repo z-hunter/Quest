@@ -14,8 +14,8 @@ import { TextAssetManager } from './TextAssetManager';
 import type { GameActionOutcome } from './GameActionTypes';
 import { SoundManager } from '../systems/SoundManager';
 import { ScriptRegistry } from './ScriptRegistry';
-import { OllamaProvider } from '../mechanics/llm/OllamaProvider';
-import { AnthropicProvider } from '../mechanics/llm/AnthropicProvider';
+import { createLlmProvider } from '../mechanics/llm/createLlmProvider';
+import type { ILlmProvider } from '../mechanics/llm/ILlmProvider';
 import { NpcPuppetMaster } from '../mechanics/NpcPuppetMaster';
 import { NpcWorldModelBuilder } from '../mechanics/NpcWorldModelBuilder';
 
@@ -32,9 +32,6 @@ import { ActorNavigationService } from '../systems/ActorNavigationService';
 import { ActorWorldQuery } from '../systems/ActorWorldQuery';
 import { ActorCommandExecutor } from '../mechanics/ActorCommandExecutor';
 import { SaveManager } from '../systems/SaveManager';
-
-// Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
-const USE_LOCAL_LLM = false;
 
 type EditorViewportZoom = 'fit' | '1' | '1.5' | '2';
 
@@ -66,6 +63,7 @@ export class Game implements IGame {
   input: Input;
   parser: Parser;
   npcPuppetMaster: NpcPuppetMaster;
+  private readonly llmProvider: ILlmProvider;
   npcWorldModelBuilder: NpcWorldModelBuilder;
   sceneManager: SceneManager;
   assets: AssetLoader;
@@ -226,12 +224,10 @@ export class Game implements IGame {
     // Load Settings from LocalStorage (after console exists for safe diagnostics elsewhere)
     this.loadSettings();
 
-    this.parser = new Parser(this);
+    this.llmProvider = createLlmProvider();
+    this.parser = new Parser(this, this.llmProvider);
     this.npcWorldModelBuilder = new NpcWorldModelBuilder(this);
-    this.npcPuppetMaster = new NpcPuppetMaster(
-      this,
-      USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider()
-    );
+    this.npcPuppetMaster = new NpcPuppetMaster(this, this.llmProvider);
     this.assets = new AssetLoader();
     this.textAssets = new TextAssetManager();
     void this.textAssets.preloadServiceAssets();

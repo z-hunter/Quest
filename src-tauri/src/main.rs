@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tauri::Emitter;
@@ -18,6 +18,19 @@ struct FileListItem {
   name: String,
   #[serde(rename = "isDir")]
   is_dir: bool,
+}
+
+#[derive(Deserialize)]
+struct LlmRequestPayload {
+  provider: String,
+  payload: serde_json::Value,
+}
+
+#[derive(Serialize)]
+struct LlmResponsePayload {
+  status: u16,
+  headers: std::collections::HashMap<String, String>,
+  body: String,
 }
 
 fn project_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -124,6 +137,66 @@ fn open_with_system(target: &Path) -> Result<(), String> {
     .spawn()
     .map_err(|error| format!("Failed to open path in system shell: {error}"))?;
   Ok(())
+}
+
+#[tauri::command]
+async fn invoke_llm(request: LlmRequestPayload) -> Result<LlmResponsePayload, String> {
+  let client = match request.provider.as_str() {
+    "anthropic" => reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)),
+    "ollama" => reqwest::Client::builder().timeout(std::time::Duration::from_secs(600)),
+    _ => return Err("Unsupported LLM provider.".into()),
+  }
+  .build()
+  .map_err(|error| format!("Failed to create LLM client: {error}"))?;
+
+  let response = match request.provider.as_str() {
+    "anthropic" => {
+      let api_key = std::env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| "ANTHROPIC_API_KEY is not configured.".to_string())?;
+      client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&request.payload)
+        .send()
+        .await
+    }
+    "ollama" => {
+      let base_url = std::env::var("OLLAMA_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:11434/v1/chat/completions".into());
+      client
+        .post(base_url)
+        .header("content-type", "application/json")
+        .json(&request.payload)
+        .send()
+        .await
+    }
+    _ => unreachable!(),
+  }
+  .map_err(|error| format!("LLM request failed: {error}"))?;
+
+  let status = response.status().as_u16();
+  let headers = ["content-type", "retry-after", "x-request-id"]
+    .iter()
+    .filter_map(|name| {
+      response
+        .headers()
+        .get(*name)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| ((*name).to_string(), value.to_string()))
+    })
+    .collect();
+  let body = response
+    .text()
+    .await
+    .map_err(|error| format!("Failed to read LLM response: {error}"))?;
+
+  Ok(LlmResponsePayload {
+    status,
+    headers,
+    body,
+  })
 }
 
 #[tauri::command]
@@ -292,7 +365,8 @@ fn main() {
       read_project_file_base64,
       open_project_file,
       delete_project_file,
-      open_project_folder
+      open_project_folder,
+      invoke_llm
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

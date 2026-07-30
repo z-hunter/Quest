@@ -7,6 +7,7 @@ import type {
   LlmStreamDeltaCallback,
 } from './ILlmProvider';
 import { ProviderCircuitBreaker, classifyHttpFailure, delay, retryDelayMs } from './providerPolicy';
+import { fetchLlm } from '../../platform/llmApi';
 
 const DEFAULT_PROXY_URL = '/api/llm';
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
@@ -101,23 +102,28 @@ export class AnthropicProvider implements ILlmProvider {
       };
 
       try {
-        const response = await this.fetchImpl(this.proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const response = await fetchLlm(
+          'anthropic',
+          this.proxyUrl,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: this.model,
+              max_tokens: this.maxTokens,
+              system: this.toAnthropicContent(system),
+              messages: messages.map((message) => ({
+                role: message.role,
+                content: this.toAnthropicContent(message.content),
+              })),
+              stream: true,
+            }),
+            signal: controller.signal,
           },
-          body: JSON.stringify({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: this.toAnthropicContent(system),
-            messages: messages.map((message) => ({
-              role: message.role,
-              content: this.toAnthropicContent(message.content),
-            })),
-            stream: true,
-          }),
-          signal: controller.signal,
-        });
+          this.fetchImpl
+        );
 
         clearTimeout(timeoutId);
 

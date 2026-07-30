@@ -12,4 +12,8 @@
 
 Provider не знает Scene API и не меняет игру. Он возвращает текст в orchestrator, где выполняются JSON extraction, schema/plan validation и retry policy.
 
+`Game` создаёт один provider через `createLlmProvider`; Parser и NPC Puppet Master получают тот же экземпляр. Build setting `VITE_LLM_PROVIDER` принимает `anthropic` (default) или `ollama`.
+
+В packaged Tauri provider вызывает Rust command `invoke_llm`, а не browser fetch: Anthropic key остаётся в `ANTHROPIC_API_KEY` процесса, Ollama берёт `OLLAMA_BASE_URL` или `http://localhost:11434/v1/chat/completions`. Dev web продолжает использовать Vite proxy/direct fetch.
+
 [[Game-Master-Implementation]] · [[AI-Validation-and-Guardrails]] · [[Parser-Implementation]]

@@ -40,7 +40,8 @@ settings = {
 - `LlmCascade.ts`: system prompt URL `/text/system/parser-llm-system.md`, service asset domain `parser-llm`, Anthropic cache eligibility threshold `4096` estimated tokens; allowed action/relation sets являются typed guardrails.
 - `AnthropicProvider.ts`: proxy `/api/llm`, model `claude-haiku-4-5-20251001`, max tokens `1024`, timeout `10000 ms`.
 - `OllamaProvider.ts`: base URL `http://localhost:11434/v1/chat/completions`, model `qwen2.5:3b`, max tokens `1024`, timeout `600000 ms`, temperature `0.2`.
-- `Game.ts` и `Parser.ts`: `USE_LOCAL_LLM = false` — legacy/static switch, фактический provider выбирается runtime wiring.
+- `createLlmProvider.ts`: `VITE_LLM_PROVIDER=anthropic` (default) или `ollama`; `Game` передаёт один выбранный provider и Parser, и NPC Puppet Master.
+- Packaged Tauri: `ANTHROPIC_API_KEY` задаётся в окружении desktop process; optional `OLLAMA_BASE_URL` заменяет локальный URL Ollama. Browser key и CORS не используются.
 
 ## NPC Puppet Master
 

@@ -1,6 +1,6 @@
 import type { GameActionOutcome } from '../core/GameActionTypes';
-import { OllamaProvider } from './llm/OllamaProvider';
-import { AnthropicProvider } from './llm/AnthropicProvider';
+import { createLlmProvider } from './llm/createLlmProvider';
+import type { ILlmProvider } from './llm/ILlmProvider';
 import type { LlmCascadePreviousAttempt } from './LlmCascade';
 import { LlmCascade } from './LlmCascade';
 import { NlpCascade } from './NlpCascade';
@@ -63,9 +63,6 @@ type ParserTimingEntry = {
   ms: number;
 };
 
-// Toggle between Ollama local inference (true) and Claude Haiku cloud API (false)
-const USE_LOCAL_LLM = false;
-
 export class Parser {
   private allowAutoApproachForCurrentPlan = true;
   game: any;
@@ -79,7 +76,7 @@ export class Parser {
   pendingClarificationRetryMessage: string | null;
   pendingClarificationCancelMessage: string | null;
 
-  constructor(game: any) {
+  constructor(game: any, provider: ILlmProvider = createLlmProvider()) {
     this.game = game;
     this.inputField = null;
     this.pendingState = null;
@@ -88,7 +85,7 @@ export class Parser {
       () => this.game.console
     );
     this.llmCascade = new LlmCascade(
-      USE_LOCAL_LLM ? new OllamaProvider() : new AnthropicProvider(),
+      provider,
       () => this.game.textAssets,
       () => this.game.console
     );
