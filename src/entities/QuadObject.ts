@@ -141,6 +141,17 @@ export function projectQuadPoint(
   };
 }
 
+/** Maps a screen-space point back into the unit square of a Quad homography. */
+export function unprojectQuadPoint(transform: QuadHomography, point: QuadPoint): QuadPoint | null {
+  const { a, b, c, d, e, f, g, h } = transform;
+  const denominator = (d * h - e * g) * point.x + (b * g - a * h) * point.y + a * e - b * d;
+  if (!Number.isFinite(denominator) || Math.abs(denominator) < HOMOGRAPHY_EPSILON) return null;
+  return {
+    x: ((e - f * h) * point.x + (c * h - b) * point.y + b * f - c * e) / denominator,
+    y: ((f * g - d) * point.x + (a - c * g) * point.y + c * d - a * f) / denominator,
+  };
+}
+
 /** Affine fallback used only for malformed/degenerate Quads. */
 export function interpolateQuadPoint(
   p0: QuadPoint,

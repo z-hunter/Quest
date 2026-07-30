@@ -66,6 +66,84 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     expect(player.y).toBeLessThan(50);
   });
 
+  it('projects equal floor steps farther apart near the camera', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.scaling = { enabled: true, min: 0.5, max: 1, horizon: 0, front: 100 };
+    const player = fixture.addPlayer('Hero', 50, 80);
+    player.speed = 10;
+    const quad = new QuadObject(fixture.game as any, 'TrapezoidQuad');
+    quad.vertices = [
+      { x: 40, y: 0, p: 1.0 },
+      { x: 60, y: 0, p: 1.0 },
+      { x: 100, y: 100, p: 1.0 },
+      { x: 0, y: 100, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true }];
+    fixture.scene.addEntity(quad);
+    fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+
+    player.handlePlayerInput(1.0);
+    const nearScreenStep = Math.hypot(player.x - 50, player.y - 80);
+    player.x = 50;
+    player.y = 20;
+    player.handlePlayerInput(1.0);
+    const farScreenStep = Math.hypot(player.x - 50, player.y - 20);
+
+    expect(nearScreenStep).toBeGreaterThan(farScreenStep);
+  });
+
+  it('keeps horizontal and vertical perspective steps equal at the same depth', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.scaling = { enabled: true, min: 0.5, max: 1, horizon: 0, front: 100 };
+    const player = fixture.addPlayer('Hero', 50, 80);
+    player.speed = 10;
+    const quad = new QuadObject(fixture.game as any, 'TrapezoidQuad');
+    quad.vertices = [
+      { x: 40, y: 0, p: 1.0 },
+      { x: 60, y: 0, p: 1.0 },
+      { x: 100, y: 100, p: 1.0 },
+      { x: 0, y: 100, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true }];
+    fixture.scene.addEntity(quad);
+
+    fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+    player.handlePlayerInput(1.0);
+    const verticalStep = Math.hypot(player.x - 50, player.y - 80);
+    player.x = 50;
+    player.y = 80;
+    fixture.game.input.isDown = (key: string) => key === 'ArrowRight';
+    player.handlePlayerInput(1.0);
+
+    expect(Math.hypot(player.x - 50, player.y - 80)).toBeCloseTo(verticalStep, 6);
+  });
+
+  it('uses the legacy parallax speed scale to calibrate perspective floor movement', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 50, 80);
+    player.speed = 10;
+    player.parallax = 0.5;
+    const quad = new QuadObject(fixture.game as any, 'TrapezoidQuad');
+    quad.vertices = [
+      { x: 40, y: 0, p: 1.0 },
+      { x: 60, y: 0, p: 1.0 },
+      { x: 100, y: 100, p: 1.0 },
+      { x: 0, y: 100, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true }];
+    fixture.scene.addEntity(quad);
+    fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+
+    player.handlePlayerInput(1.0);
+    const parallaxStep = Math.hypot(player.x - 50, player.y - 80);
+    player.x = 50;
+    player.y = 80;
+    player.parallax = 1;
+    player.handlePlayerInput(1.0);
+
+    expect(parallaxStep).toBeLessThan(Math.hypot(player.x - 50, player.y - 80));
+  });
+
   it('keeps vertical movement on one ray to the side-edge vanishing point', () => {
     const first = getQuadPerspectiveMovementVector(trapezoidVerts, 30, 50, 0, -1);
     const second = getQuadPerspectiveMovementVector(trapezoidVerts, 35.3333333333, 30, 0, -1);

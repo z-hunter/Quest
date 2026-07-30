@@ -5,6 +5,7 @@ import type { IGame } from '../core/IGame';
 import { toWorldPosition } from '../utils/Parallax';
 import { Geometry } from '../utils/Geometry';
 import type { SceneObject } from './SceneObject';
+import { createQuadHomography, projectQuadPoint, unprojectQuadPoint } from './QuadObject';
 
 export type ActorState = 'idle' | 'walk' | 'talk' | 'interact' | string;
 export type ActorDirection = 'up' | 'down' | 'left' | 'right';
@@ -570,11 +571,15 @@ export class Actor extends Entity {
         this.setState('walk');
         if (this.overrideAnimSet) this.overrideAnimSet = null;
 
+        const baseStep = this.speed * deltaTime;
+        const p = this.parallax !== undefined ? this.parallax : 1.0;
+        const step = baseStep * (0.2 + 0.8 * p);
+        const perspectivePosition = this.getPerspectiveWalkPosition(dx, dy, step);
         const perspectiveVector = this.getPerspectiveWalkVector(dx, dy);
-        if (perspectiveVector) {
+        if (!perspectivePosition && perspectiveVector) {
           dx = perspectiveVector.dx;
           dy = perspectiveVector.dy;
-        } else {
+        } else if (!perspectivePosition) {
           const length = Math.sqrt(dx * dx + dy * dy);
           if (length > 0) {
             dx /= length;
@@ -582,13 +587,8 @@ export class Actor extends Entity {
           }
         }
 
-        const p = this.parallax !== undefined ? this.parallax : 1.0;
-        const speedScale = 0.2 + 0.8 * p;
-        const moveX = dx * this.speed * speedScale * deltaTime;
-        const moveY = dy * this.speed * speedScale * deltaTime;
-
-        const nextX = this.x + moveX;
-        const nextY = this.y + moveY;
+        const nextX = perspectivePosition?.x ?? this.x + dx * step;
+        const nextY = perspectivePosition?.y ?? this.y + dy * step;
 
         // Update Direction
         if (perspectiveVector) {
@@ -662,6 +662,74 @@ export class Actor extends Entity {
       if (dist < 10.0) {
         return getQuadPerspectiveMovementVector(vertices, px, py, inputX, inputY);
       }
+    }
+
+    return null;
+  }
+
+  private getPerspectiveWalkPosition(
+    inputX: number,
+    inputY: number,
+    distance: number
+  ): { x: number; y: number } | null {
+    if (!this.scene?.entities) return null;
+
+    const cam = this.scene.camera;
+    const actorP = this.parallax !== undefined ? this.parallax : 1.0;
+    const visualPosition = {
+      x: cam ? this.x - cam.x * (actorP - 1.0) : this.x,
+      y: cam ? this.y - cam.y * (actorP - 1.0) : this.y,
+    };
+
+    for (const entity of this.scene.entities) {
+      if (entity.disabled || (entity as any).type !== 'Quad') continue;
+      const quad = entity as any;
+      if (!quad.vertices || quad.vertices.length < 4) continue;
+      const walkBox = quad.components?.find(
+        (c: any) =>
+          c &&
+          (c.type === 'WalkBox' || c.type === 'Walkbox') &&
+          (c.perspectiveWalk3D === true || c.threeDPerspectiveWalk === true)
+      );
+      if (!walkBox) continue;
+
+      const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
+      const vertices = quad.vertices.map((vertex: any) => {
+        const p = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
+        return {
+          x: cam ? vertex.x - cam.x * (p - 1.0) : vertex.x,
+          y: cam ? vertex.y - cam.y * (p - 1.0) : vertex.y,
+        };
+      });
+      if (Geometry.getPointToPolygonDistance(visualPosition, vertices) >= 10.0) continue;
+
+      const transform = createQuadHomography(vertices[0], vertices[1], vertices[2], vertices[3]);
+      const local = transform && unprojectQuadPoint(transform, visualPosition);
+      if (!local) continue;
+
+      const epsilon = 0.0001;
+      const uPoint = projectQuadPoint(transform, local.x + epsilon, local.y);
+      const vPoint = projectQuadPoint(transform, local.x, local.y + epsilon);
+      if (!uPoint || !vPoint) continue;
+
+      let dx = inputX * (uPoint.x - visualPosition.x) + inputY * (vPoint.x - visualPosition.x);
+      let dy = inputX * (uPoint.y - visualPosition.y) + inputY * (vPoint.y - visualPosition.y);
+      const directionLength = Math.hypot(dx, dy);
+      if (directionLength < 0.0000001) continue;
+      dx /= directionLength;
+      dy /= directionLength;
+
+      // Keep X/Y equally fast at the same depth; scene scaling alone controls
+      // the intended slowdown towards the horizon.
+      const depthScale = this.scene.getScaling(visualPosition.y);
+      return toWorldPosition(
+        {
+          x: visualPosition.x + dx * distance * depthScale,
+          y: visualPosition.y + dy * distance * depthScale,
+        },
+        cam || { x: 0, y: 0 },
+        actorP
+      );
     }
 
     return null;
