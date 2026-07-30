@@ -13,7 +13,9 @@ NPC object Text Assets may provide initial cognition. `memory` is a string or fl
 ```json
 {
   "memory": ["Rick keeps the TV remote in his apartment."],
-  "objectives": [{ "text": "Turn on the TV", "subtasks": [{ "text": "Find the remote", "subtasks": [] }] }]
+  "objectives": [
+    { "text": "Turn on the TV", "subtasks": [{ "text": "Find the remote", "subtasks": [] }] }
+  ]
 }
 ```
 
@@ -23,6 +25,18 @@ NPC object Text Assets may provide initial cognition. `memory` is a string or fl
 System-level text assets live under `public/text/system/`. The current parser/GM LLM system prompt is stored as markdown in `public/text/system/parser-llm-system.md` so it can be edited without changing TypeScript code. LLM prompt assets must be written in English and use story-neutral wording such as "player character" instead of specific protagonist names.
 
 Since scene/object IDs according to GDD can contain paths like "building\room", which means that the 'room.json scene' is located in the 'building' folder, there may be subfolders inside these folders.
+
+## Group-tag assets in the editor
+
+For editor TA controls, an object with one or more `Group #ID` tags uses its first normalized tag as
+the asset ID. For example, an object tagged `#aaa` displays and edits
+`public/text/objects/#aaa.json`; without a group tag it uses
+`public/text/objects/<object-id>.json`.
+
+The editor's TA path, title preview, `Open TA`, reload, and `DEL. TA` always use that same file.
+The `#` remains part of the literal filename. It is URL-encoded during web reads and, when Vite's
+static server falls back to its HTML entrypoint, the editor reads the literal project path through
+the existing file API.
 
 ## Main rules
 
@@ -62,11 +76,7 @@ an array of strings. Arrays are joined with `\n`, and empty strings become blank
 
 ```json
 {
-  "details": [
-    "Line one.",
-    "",
-    "Line three after a blank line."
-  ]
+  "details": ["Line one.", "", "Line three after a blank line."]
 }
 ```
 

@@ -43,7 +43,7 @@ describe('fetchLlm', () => {
         ? new Promise((resolve) => {
             resolveNative = resolve;
           })
-        : Promise.resolve()
+        : Promise.reject(new Error('cancel unavailable'))
     );
     const controller = new AbortController();
     const request = fetchLlm('ollama', 'http://localhost', { signal: controller.signal }, vi.fn());

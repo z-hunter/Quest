@@ -36,7 +36,7 @@ export async function fetchLlm(
 
   const response = await new Promise<NativeLlmResponse>((resolve, reject) => {
     const abort = () => {
-      void invokeTauri('cancel_invoke_llm', { requestId });
+      void invokeTauri('cancel_invoke_llm', { requestId }).catch(() => {});
       reject(abortError());
     };
     signal.addEventListener('abort', abort, { once: true });
