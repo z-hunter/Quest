@@ -35,6 +35,10 @@ import { SceneProperties } from './SceneProperties';
 import { SettingsProperties } from './SettingsProperties';
 import { SectionParserNote } from './SectionParserNote';
 
+function getEditorTextAssetId(obj: { name?: string; groupID?: string | null }): string {
+  return normalizeGroupIdList(obj.groupID).split(',').find(Boolean) || obj.name || '';
+}
+
 export const PropertiesPanel: React.FC = () => {
   const game = useGame();
   const {
@@ -590,12 +594,13 @@ export const PropertiesPanel: React.FC = () => {
       }
       if (game.editor?.selectedObject) {
         const selected = game.editor.selectedObject;
+        const textAssetId = getEditorTextAssetId(selected);
         const asset = forceReload
-          ? await game.textAssets.readObjectAsset(selected, true)
-          : await game.textAssets.readObjectAsset(selected, false);
+          ? await game.textAssets.readObjectAssetById(textAssetId, true)
+          : await game.textAssets.readObjectAssetById(textAssetId, false);
         setHasTextAsset(!!asset);
-        setResolvedTitle(game.textAssets.getResolvedObjectField(selected, 'title') || '');
-        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(selected.name));
+        setResolvedTitle(game.textAssets.getResolvedObjectAssetField(textAssetId, 'title') || '');
+        setTextAssetPath(game.textAssets.getObjectAssetProjectPath(textAssetId));
       }
     },
     [game, obj, selectedObjectType, supportsTextAsset]
@@ -605,7 +610,7 @@ export const PropertiesPanel: React.FC = () => {
     loadResolvedTitle(false).catch((err) => {
       console.error('Failed to load text asset title:', err);
     });
-  }, [loadResolvedTitle, selectedObjectId, selectedObjectType]);
+  }, [loadResolvedTitle, objectVersion, selectedObjectId, selectedObjectType]);
 
   const handleOpenTA = async () => {
     if (!game || !obj) return;
@@ -615,7 +620,8 @@ export const PropertiesPanel: React.FC = () => {
         if (!scene) return;
         await game.textAssets.openSceneAsset(scene);
       } else if (game.editor?.selectedObject) {
-        await game.textAssets.openObjectAsset(game.editor.selectedObject);
+        const selected = game.editor.selectedObject;
+        await game.textAssets.openObjectAssetForId(selected, getEditorTextAssetId(selected));
       }
       await loadResolvedTitle(true);
     } catch (err) {
@@ -631,7 +637,9 @@ export const PropertiesPanel: React.FC = () => {
         selectedObjectType === 'SCENE'
           ? game.textAssets.getSceneAssetProjectPath(game.sceneManager.currentScene?.id || '')
           : game.editor?.selectedObject
-            ? game.textAssets.getObjectAssetProjectPath(game.editor.selectedObject.name)
+            ? game.textAssets.getObjectAssetProjectPath(
+                getEditorTextAssetId(game.editor.selectedObject)
+              )
             : '';
       const defaultContent =
         selectedObjectType === 'SCENE'
@@ -668,7 +676,9 @@ export const PropertiesPanel: React.FC = () => {
         if (!scene) return;
         await game.textAssets.deleteSceneAsset(scene);
       } else if (game.editor?.selectedObject) {
-        await game.textAssets.deleteObjectAsset(game.editor.selectedObject);
+        await game.textAssets.deleteObjectAssetById(
+          getEditorTextAssetId(game.editor.selectedObject)
+        );
       }
       await loadResolvedTitle(true);
       incrementObjectVersion();

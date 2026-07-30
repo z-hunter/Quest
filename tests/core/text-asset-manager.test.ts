@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TextAssetManager } from '../../src/core/TextAssetManager';
 
 describe('TextAssetManager', () => {
@@ -60,5 +60,43 @@ describe('TextAssetManager', () => {
       }),
     ]);
     expect(textAssets.getResolvedNpcObjectivesRevision(guard)).toContain('Turn on the TV');
+  });
+
+  it('keeps an explicitly addressed object asset separate from the object name', () => {
+    const textAssets = new TextAssetManager();
+    (textAssets as any).objectCache.set('#lamps', { title: 'Lamps' });
+
+    expect(textAssets.getObjectAssetProjectPath('#lamps')).toBe('public/text/objects/#lamps.json');
+    expect((textAssets as any).getObjectAssetUrl('#lamps')).toBe('/text/objects/%23lamps.json');
+    expect(textAssets.getResolvedObjectAssetField('#lamps', 'title')).toBe('Lamps');
+  });
+
+  it('loads group-tagged assets without treating # as a URL fragment', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'text/html' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ content: '{"title":"AAA batteries"}' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const textAssets = new TextAssetManager();
+      await textAssets.readObjectAssetById('#aaa');
+
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/text/objects/%23aaa.json?'));
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/read-file-existing',
+        expect.objectContaining({ body: '{"path":"public/text/objects/#aaa.json"}' })
+      );
+      expect(textAssets.getResolvedObjectAssetField('#aaa', 'title')).toBe('AAA batteries');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -494,6 +494,10 @@ export class TextAssetManager {
     return this.normalizeId(id).replace(/\\/g, '/');
   }
 
+  private idToUrlPath(id: string): string {
+    return this.idToRelativePath(id).split('/').map(encodeURIComponent).join('/');
+  }
+
   getSceneAssetProjectPath(sceneId: string): string {
     return `public/text/scenes/${this.idToRelativePath(sceneId)}.json`;
   }
@@ -503,11 +507,11 @@ export class TextAssetManager {
   }
 
   private getSceneAssetUrl(sceneId: string): string {
-    return `/text/scenes/${this.idToRelativePath(sceneId)}.json`;
+    return `/text/scenes/${this.idToUrlPath(sceneId)}.json`;
   }
 
   private getObjectAssetUrl(objectId: string): string {
-    return `/text/objects/${this.idToRelativePath(objectId)}.json`;
+    return `/text/objects/${this.idToUrlPath(objectId)}.json`;
   }
 
   private getServiceAssetUrl(domain: string): string {
@@ -590,8 +594,12 @@ export class TextAssetManager {
   }
 
   async openObjectAsset(obj: SceneObject): Promise<void> {
-    if (!obj?.name || obj.type === 'Walkbox') return;
-    const assetPath = this.getObjectAssetProjectPath(obj.name);
+    await this.openObjectAssetForId(obj, obj?.name || '');
+  }
+
+  async openObjectAssetForId(obj: SceneObject, objectId: string): Promise<void> {
+    if (!obj?.name || !objectId || obj.type === 'Walkbox') return;
+    const assetPath = this.getObjectAssetProjectPath(objectId);
     const content = JSON.stringify(this.buildDefaultObjectAsset(obj), null, 2);
     await this.openFile(assetPath, content);
   }
@@ -602,9 +610,14 @@ export class TextAssetManager {
   }
 
   async deleteObjectAsset(obj: SceneObject): Promise<void> {
-    if (!obj?.name || obj.type === 'Walkbox') return;
-    await this.deleteFile(this.getObjectAssetProjectPath(obj.name));
-    this.objectCache.delete(this.normalizeId(obj.name));
+    await this.deleteObjectAssetById(obj?.name || '');
+  }
+
+  async deleteObjectAssetById(objectId: string): Promise<void> {
+    const normalizedId = this.normalizeId(objectId);
+    if (!normalizedId) return;
+    await this.deleteFile(this.getObjectAssetProjectPath(normalizedId));
+    this.objectCache.delete(normalizedId);
   }
 
   async readSceneAsset(
@@ -626,15 +639,22 @@ export class TextAssetManager {
     forceReload: boolean = false
   ): Promise<ObjectTextAssetData | null> {
     if (!obj?.name || obj.type === 'Walkbox') return null;
-    const objectId = this.normalizeId(obj?.name || '');
-    if (!objectId) return null;
-    if (!forceReload && this.objectCache.has(objectId)) {
-      return this.objectCache.get(objectId) || null;
+    return this.readObjectAssetById(obj.name, forceReload);
+  }
+
+  async readObjectAssetById(
+    objectId: string,
+    forceReload: boolean = false
+  ): Promise<ObjectTextAssetData | null> {
+    const normalizedId = this.normalizeId(objectId);
+    if (!normalizedId) return null;
+    if (!forceReload && this.objectCache.has(normalizedId)) {
+      return this.objectCache.get(normalizedId) || null;
     }
     const data = this.normalizeObjectAssetData(
-      await this.fetchJson(this.getObjectAssetUrl(objectId))
+      await this.fetchJson(this.getObjectAssetUrl(normalizedId))
     );
-    this.objectCache.set(objectId, data);
+    this.objectCache.set(normalizedId, data);
     return data;
   }
 
@@ -780,6 +800,10 @@ export class TextAssetManager {
     const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
     return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
+  }
+
+  getResolvedObjectAssetField(objectId: string, field: string): string | null {
+    return this.resolveField(this.objectCache.get(this.normalizeId(objectId)), null, field, null);
   }
 
   hasAuthoredObjectTitle(obj: SceneObject): boolean {
@@ -1015,10 +1039,10 @@ export class TextAssetManager {
     try {
       // In Tauri distributions, read from local filesystem instead of bundled assets
       const { isTauriRuntime, readProjectFileExisting } = await import('../platform/fileApi');
+      const projectPath = `public${decodeURIComponent(url.split('?')[0])}`;
       if (isTauriRuntime()) {
-        const path = `public${url.split('?')[0]}`;
         try {
-          const content = await readProjectFileExisting(path);
+          const content = await readProjectFileExisting(projectPath);
           const parsed: unknown = JSON.parse(content);
           assertTextAssetData(parsed, `TextAsset(${url})`);
           return parsed;
@@ -1035,6 +1059,12 @@ export class TextAssetManager {
       }
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
+        if (url.includes('%23')) {
+          const content = await readProjectFileExisting(projectPath);
+          const parsed: unknown = JSON.parse(content);
+          assertTextAssetData(parsed, `TextAsset(${url})`);
+          return parsed;
+        }
         return null;
       }
       const parsed: unknown = await response.json();
