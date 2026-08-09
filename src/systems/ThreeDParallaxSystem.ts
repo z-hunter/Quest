@@ -1,4 +1,5 @@
 import { Actor } from '../entities/Actor';
+import { Entity } from '../entities/Entity';
 import { QuadObject } from '../entities/QuadObject';
 import type { ShadowComponent } from './ShadowSystem';
 import type { SceneSystemContext } from './types';
@@ -13,28 +14,29 @@ export class ThreeDParallaxSystem {
     const scene = quad.scene as SceneSystemContext | null;
     if (!scene || !scene.entities) return;
 
-    // Iterate over all Actors in the scene
-    const actors = scene.entities.filter(
-      (e) => e.type === 'Actor' || e.type === 'Player'
-    ) as Actor[];
+    // Actors and Static objects are both positioned by their ground point.
+    // Keep that point fixed in visual space while adapting its parallax to the Quad.
+    const parallaxTargets = scene.entities.filter(
+      (e): e is Entity => e.type === 'Actor' || e.type === 'Player' || e.type === 'Static'
+    );
 
     const camX = scene.camera.x;
     const camY = scene.camera.y;
 
-    for (const actor of actors) {
+    for (const target of parallaxTargets) {
       // Constraint: Only update if moving? No, update always to handle Editor dragging / Teleport / Idle on moving platform
       // if (actor.state !== 'walk') continue;
 
       // Check if Actor is ON this Quad
       // Use Visual Position for hitTest
-      const pFactor = actor.parallax !== undefined ? actor.parallax : 1.0;
-      const actorVisual = toVisualPosition(
-        { x: actor.x, y: actor.y },
+      const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
+      const targetVisual = toVisualPosition(
+        { x: target.x, y: target.y },
         { x: camX, y: camY },
         pFactor
       );
-      const checkX = actorVisual.x;
-      const checkY = actorVisual.y;
+      const checkX = targetVisual.x;
+      const checkY = targetVisual.y;
 
       if (quad.hitTest(checkX, checkY)) {
         // Calculate new Parallax using centralized Barycentric Interpolation
@@ -48,17 +50,20 @@ export class ThreeDParallaxSystem {
 
         // Apply new Parallax
         // Only if different?
-        actor.parallax = newP;
+        target.parallax = newP;
 
         // Update Actor World Position to maintain Visual Position
         // Wy = Vy + Cy * (P - 1)
         // Wx = Vx + Cx * (P - 1)
         const newWorld = toWorldPosition({ x: checkX, y: checkY }, { x: camX, y: camY }, newP);
-        actor.x = newWorld.x;
-        actor.y = newWorld.y;
+        target.x = newWorld.x;
+        target.y = newWorld.y;
       }
 
       // --- Shadow Logic ---
+      // Shadows are an Actor-only component; Static objects intentionally stop here.
+      if (target.type !== 'Actor' && target.type !== 'Player') continue;
+      const actor = target as Actor;
       // Check if actor has a Shadow component
       // We need to update the Shadow Vertices to also respect the Parallax Layer they are on.
       if (actor.components) {

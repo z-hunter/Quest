@@ -21,69 +21,7 @@ export class SceneRenderer {
     // Sorting Logic moved from Scene.render
     // Sort by Y (Depth) and Parallax
     // FIX: Sort by VISUAL Y (Screen Space Y) to ensure consistent depth regardless of Parallax
-    const sortedEntities = [...entities].sort((a, b) => {
-      if (a.layer !== b.layer) {
-        return a.layer - b.layer;
-      }
-
-      // Helper to get Visual Y
-      const getSortY = (e: Entity) => {
-        let y = e.y;
-        let p = e.parallax !== undefined ? e.parallax : 1.0;
-        let ignore = false;
-
-        // Handle Quad Sort Modes
-        if ((e as any).type === 'Quad') {
-          const q = e as any;
-          if (q.sortMode === 'ignore') {
-            ignore = true;
-          } else if (q.sortMode === 'v0' && q.vertices[0]) {
-            y = q.vertices[0].y;
-            p = q.vertices[0].p;
-          } else if (q.sortMode === 'v1' && q.vertices[1]) {
-            y = q.vertices[1].y;
-            p = q.vertices[1].p;
-          } else if (q.sortMode === 'v2' && q.vertices[2]) {
-            y = q.vertices[2].y;
-            p = q.vertices[2].p;
-          } else if (q.sortMode === 'v3' && q.vertices[3]) {
-            y = q.vertices[3].y;
-            p = q.vertices[3].p;
-          }
-        }
-
-        // Apply Parallax to get Visual Y
-        // VisualY = RawY - CamY * (P - 1)
-        // Note: We ignore visualOffset for sorting usually, unless critical?
-        // Entities usually sort by their base "footprint" line.
-        // If visualOffset shifts them up/down drastically (e.g. flying), we might want to include it.
-        // But typically Y-sorting is about "where they touch the ground".
-        // Let's stick to Parallax correction primarily.
-
-        if (ignore) return -99999999; // Force to bottom/top? Or handle separately.
-
-        const visualY = toVisualScalar(y, camera.y, p);
-        return visualY;
-      };
-
-      const valA = getSortY(a);
-      const valB = getSortY(b);
-
-      // Access sortMode safely again if needed, or trust getSortY results
-      // If sortMode was 'ignore', we effectively want to treat it as "background" or "unsorted"?
-      // Original logic: if ignoreA, return -1 (draw first/behind).
-
-      let ignoreA = false;
-      let ignoreB = false;
-      if ((a as any).type === 'Quad' && (a as any).sortMode === 'ignore') ignoreA = true;
-      if ((b as any).type === 'Quad' && (b as any).sortMode === 'ignore') ignoreB = true;
-
-      if (ignoreA && ignoreB) return 0;
-      if (ignoreA) return -1;
-      if (ignoreB) return 1;
-
-      return valA - valB;
-    });
+    const sortedEntities = [...entities].sort((a, b) => compareEntitiesForRender(a, b, camera));
 
     const halfW = ctx.canvas.width / 2;
     const halfH = ctx.canvas.height / 2;
@@ -370,4 +308,50 @@ export class SceneRenderer {
 
     ctx.restore();
   }
+}
+
+/**
+ * Returns an entity's Y-ordering anchor in the visual P=1 coordinate space.
+ * `null` means a Quad explicitly opted out of depth sorting.
+ */
+export function getEntityRenderSortY(entity: Entity, camera: { y: number }): number | null {
+  let y = entity.y;
+  let parallax = entity.parallax !== undefined ? entity.parallax : 1.0;
+
+  if ((entity as any).type === 'Quad') {
+    const quad = entity as any;
+    if (quad.sortMode === 'ignore') return null;
+
+    const vertexIndex =
+      quad.sortMode === 'v0'
+        ? 0
+        : quad.sortMode === 'v1'
+          ? 1
+          : quad.sortMode === 'v2'
+            ? 2
+            : quad.sortMode === 'v3'
+              ? 3
+              : undefined;
+    const vertex = vertexIndex !== undefined ? quad.vertices[vertexIndex] : null;
+    if (vertex) {
+      y = vertex.y;
+      const quadParallax = quad.parallax !== undefined ? quad.parallax : 1.0;
+      // Quad vertices render with their local P relative to the Quad's global
+      // parallax layer, so depth sorting must use the same effective P.
+      parallax = (vertex.p !== undefined ? vertex.p : 1.0) * quadParallax;
+    }
+  }
+
+  return toVisualScalar(y, camera.y, parallax);
+}
+
+export function compareEntitiesForRender(a: Entity, b: Entity, camera: { y: number }): number {
+  if (a.layer !== b.layer) return a.layer - b.layer;
+
+  const aSortY = getEntityRenderSortY(a, camera);
+  const bSortY = getEntityRenderSortY(b, camera);
+  if (aSortY === null && bSortY === null) return 0;
+  if (aSortY === null) return -1;
+  if (bSortY === null) return 1;
+  return aSortY - bSortY;
 }
