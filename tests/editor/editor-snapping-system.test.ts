@@ -44,18 +44,19 @@ describe('Editor quad snapping', () => {
     expect(result.p).toBe(0.5);
   });
 
-  it('adopts interpolated target parallax when Alt-snapping to a quad grid node', () => {
+  it('adopts the same surface parallax as 3D-Parallacs when snapping to a grid node', () => {
     const fixture = createSceneFixture();
     const source = addQuad(fixture, 'source');
     const target = addQuad(fixture, 'target');
     target.isGrid = true;
     target.gridLinesX = 1;
     target.gridLinesY = 1;
+    target.gridPerspective = false;
     target.vertices = [
-      { x: 0, y: 0, p: 1 },
-      { x: 100, y: 0, p: 3 },
-      { x: 100, y: 100, p: 5 },
-      { x: 0, y: 100, p: 7 },
+      { x: 0, y: 0, p: 0.5 },
+      { x: 100, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
     ];
 
     const result = EditorSnappingSystem.snapVertex(
@@ -73,7 +74,88 @@ describe('Editor quad snapping', () => {
     );
 
     expect(result.binding).toEqual({ targetName: 'target', type: 'grid', gridU: 0.5, gridV: 0.5 });
-    expect(result.p).toBe(4);
+    expect(result.p).toBe(target.getParallaxAt(result.x, result.y, true));
+    expect(result.p).toBe(0.75);
+  });
+
+  it('keeps a perspective Retro Grid binding coincident after release and camera movement', () => {
+    const fixture = createSceneFixture();
+    const source = addQuad(fixture, 'source');
+    const target = addQuad(fixture, 'target');
+    fixture.scene.camera.x = 80;
+    fixture.scene.camera.y = 40;
+    fixture.scene.camera.zoom = 1;
+
+    target.isGrid = true;
+    target.gridLinesX = 1;
+    target.gridLinesY = 1;
+    target.gridPerspective = true;
+    target.gridPerspectiveAmount = 1;
+    target.vertices = [
+      { x: 20, y: 10, p: 0.5 },
+      { x: 140, y: 30, p: 0.5 },
+      { x: 110, y: 150, p: 1 },
+      { x: -20, y: 110, p: 1 },
+    ];
+
+    const gridU = 0.5;
+    const gridV = 0.5;
+    const initialGridPoint = target.getGridPointAt(gridU, gridV, true);
+    const snap = EditorSnappingSystem.snapVertex(
+      initialGridPoint,
+      source.vertices,
+      0,
+      fixture.scene,
+      fixture.scene.camera.x,
+      fixture.scene.camera.y,
+      true,
+      source,
+      false,
+      true,
+      fixture.scene.camera.zoom
+    );
+
+    expect(snap.binding).toEqual({ targetName: 'target', type: 'grid', gridU, gridV });
+    expect(snap.p).toBeCloseTo(
+      target.getParallaxAt(initialGridPoint.x, initialGridPoint.y, true),
+      10
+    );
+    expect(snap.p).toBeGreaterThan(0.5);
+    expect(snap.p).toBeLessThan(1);
+
+    const effectiveP = snap.p!;
+    source.vertices[0] = {
+      x: snap.x + fixture.scene.camera.x * (effectiveP - source.parallax),
+      y: snap.y + fixture.scene.camera.y * (effectiveP - source.parallax),
+      p: effectiveP / source.parallax,
+      binding: snap.binding!,
+    };
+
+    const expectCoincident = () => {
+      const camera = fixture.scene.camera;
+      const sourceVertex = source.vertices[0];
+      const sourceEffectiveP = sourceVertex.p * source.parallax;
+      const sourceScreen = {
+        x: sourceVertex.x - camera.x * sourceEffectiveP,
+        y: sourceVertex.y - camera.y * sourceEffectiveP,
+      };
+      const targetPoint = target.getGridPointAt(gridU, gridV, true);
+      const targetScreen = {
+        x: targetPoint.x - camera.x * target.parallax,
+        y: targetPoint.y - camera.y * target.parallax,
+      };
+      expect(sourceScreen.x).toBeCloseTo(targetScreen.x, 8);
+      expect(sourceScreen.y).toBeCloseTo(targetScreen.y, 8);
+    };
+
+    expectCoincident();
+    source.update(0);
+    expectCoincident();
+
+    fixture.scene.camera.x = 170;
+    fixture.scene.camera.y = -25;
+    source.update(0);
+    expectCoincident();
   });
 
   it('keeps the snapped visual position stable when applying a new parallax', () => {

@@ -1,10 +1,5 @@
 import { Entity } from '../../entities/Entity';
-import {
-  createQuadHomography,
-  projectQuadGridPoint,
-  QuadObject,
-  type QuadVertexBinding,
-} from '../../entities/QuadObject';
+import { QuadObject, type QuadVertexBinding } from '../../entities/QuadObject';
 
 export class EditorSnappingSystem {
   /**
@@ -232,37 +227,15 @@ export class EditorSnappingSystem {
 
           // Grid
           if (q.isGrid) {
-            const visualVerts = q.vertices.map((v) => {
-              const effP = (v.p !== undefined ? v.p : 1.0) * qGlobalP;
+            const selectedGlobalP = (selectedObject as any).parallax ?? 1.0;
+            const gridPoint = (u: number, v: number) => {
+              const point = q.getGridPointAt(u, v, true);
               return {
-                x: Math.round(v.x - camX * (effP - qGlobalP)),
-                y: Math.round(v.y - camY * (effP - qGlobalP)),
-                p: effP,
+                x: point.x + camX * (selectedGlobalP - qGlobalP),
+                y: point.y + camY * (selectedGlobalP - qGlobalP),
+                p: q.getParallaxAt(point.x, point.y, true),
               };
-            });
-
-            const v0 = visualVerts[0];
-            const v1 = visualVerts[1];
-            const v2 = visualVerts[2]; // BR
-            const v3 = visualVerts[3]; // BL
-
-            const basePerspective = q.gridPerspective ?? true;
-            const amount = q.gridPerspectiveAmount ?? 1.0;
-            const usePerspective = basePerspective;
-            const gridTransform = createQuadHomography(v0, v1, v2, v3);
-            const gridPoint = (u: number, v: number) =>
-              projectQuadGridPoint(
-                v0,
-                v1,
-                v2,
-                v3,
-                gridTransform,
-                u,
-                v,
-                amount,
-                usePerspective,
-                usePerspective
-              );
+            };
 
             // Horizontal Cuts (Down the shape using GridLinesY)
             for (let i = 1; i <= q.gridLinesY; i++) {
@@ -273,28 +246,26 @@ export class EditorSnappingSystem {
               const left = gridPoint(0, v);
               const lx = left.x;
               const ly = left.y;
-              const lp = v0.p + (v3.p - v0.p) * v;
 
               let d = Math.abs(lx - result.x);
               let d2 = Math.abs(ly - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: lx, y: ly };
                 binding = { targetName: q.name, type: 'grid', gridU: 0, gridV: v };
-                snapP = lp;
+                snapP = left.p;
               }
 
               // Right Edge (V1-V2)
               const right = gridPoint(1, v);
               const rx = right.x;
               const ry = right.y;
-              const rp = v1.p + (v2.p - v1.p) * v;
 
               d = Math.abs(rx - result.x);
               d2 = Math.abs(ry - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: rx, y: ry };
                 binding = { targetName: q.name, type: 'grid', gridU: 1, gridV: v };
-                snapP = rp;
+                snapP = right.p;
               }
             }
 
@@ -307,28 +278,26 @@ export class EditorSnappingSystem {
               const top = gridPoint(u, 0);
               const tx = top.x;
               const ty = top.y;
-              const tp = v0.p + (v1.p - v0.p) * u;
 
               let d = Math.abs(tx - result.x);
               let d2 = Math.abs(ty - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: tx, y: ty };
                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 0 };
-                snapP = tp;
+                snapP = top.p;
               }
 
               // Bottom Edge (V3-V2)
               const bottom = gridPoint(u, 1);
               const bx = bottom.x;
               const by = bottom.y;
-              const bp = v3.p + (v2.p - v3.p) * u;
 
               d = Math.abs(bx - result.x);
               d2 = Math.abs(by - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: bx, y: by };
                 binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 1 };
-                snapP = bp;
+                snapP = bottom.p;
               }
 
               // Internal Nodes
@@ -338,15 +307,13 @@ export class EditorSnappingSystem {
                 const node = gridPoint(u, v);
                 const nx = node.x;
                 const ny = node.y;
-                const np =
-                  (1 - u) * (1 - v) * v0.p + u * (1 - v) * v1.p + (1 - u) * v * v3.p + u * v * v2.p;
 
                 const dx = Math.abs(nx - result.x);
                 const dy = Math.abs(ny - result.y);
                 if (dx < bestDist && dy < bestDist) {
                   snapTarget = { x: nx, y: ny };
                   binding = { targetName: q.name, type: 'grid', gridU: u, gridV: v };
-                  snapP = np;
+                  snapP = node.p;
                 }
               }
             }

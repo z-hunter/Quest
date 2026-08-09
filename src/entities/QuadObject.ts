@@ -1004,6 +1004,42 @@ export class QuadObject extends Entity {
   }
 
   /**
+   * Resolves a Retro Grid node in the same coordinate space used by rendering.
+   * When `isVisual` is true, per-vertex parallax is applied before the grid's
+   * optional projective correction.
+   */
+  getGridPointAt(u: number, v: number, isVisual: boolean = false): QuadPoint {
+    // @ts-ignore
+    const scene = this.scene;
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
+    const camX = scene?.camera.x ?? 0;
+    const camY = scene?.camera.y ?? 0;
+    const points = this.vertices.map((vertex) => {
+      if (!isVisual) return { x: vertex.x, y: vertex.y };
+      const effP = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
+      return {
+        x: vertex.x - camX * (effP - globalP),
+        y: vertex.y - camY * (effP - globalP),
+      };
+    });
+
+    const [p0, p1, p2, p3] = points;
+    const perspective = this.gridPerspective ?? true;
+    return projectQuadGridPoint(
+      p0,
+      p1,
+      p2,
+      p3,
+      createQuadHomography(p0, p1, p2, p3),
+      u,
+      v,
+      this.gridPerspectiveAmount ?? 1,
+      perspective,
+      perspective
+    );
+  }
+
+  /**
    * Get the interpolated Parallax (P) value at a specific point (x,y).
    * @param x Point X
    * @param y Point Y
@@ -1151,35 +1187,23 @@ export class QuadObject extends Entity {
           } else if (binding.type === 'grid') {
             const u = binding.gridU || 0;
             const v_param = binding.gridV || 0;
+            const targetGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
+            const sourceGlobalP = this.parallax !== undefined ? this.parallax : 1.0;
+            const camX = scene.camera.x;
+            const camY = scene.camera.y;
 
-            const tv0 = q.vertices[0];
-            const tv1 = q.vertices[1];
-            const tv2 = q.vertices[2];
-            const tv3 = q.vertices[3];
+            // Bind to the node that is actually rendered. Projecting the raw
+            // vertices here makes the vertex jump on the first update because
+            // Retro Grid applies perspective after per-vertex parallax.
+            const visualPoint = q.getGridPointAt(u, v_param, true);
+            const effectiveP = q.getParallaxAt(visualPoint.x, visualPoint.y, true);
+            const np = sourceGlobalP !== 0 ? effectiveP / sourceGlobalP : effectiveP;
 
-            const basePerspective = q.gridPerspective ?? true;
-            const transform = createQuadHomography(tv0, tv1, tv2, tv3);
-            const point = projectQuadGridPoint(
-              tv0,
-              tv1,
-              tv2,
-              tv3,
-              transform,
-              u,
-              v_param,
-              q.gridPerspectiveAmount ?? 1,
-              basePerspective,
-              basePerspective
-            );
-            const nx = point.x;
-            const ny = point.y;
-
-            // Parallax Interpolation
-            const np =
-              (1 - u) * (1 - v_param) * tv0.p +
-              u * (1 - v_param) * tv1.p +
-              (1 - u) * v_param * tv3.p +
-              u * v_param * tv2.p;
+            // `visualPoint` is relative to the target Quad's global layer.
+            // Convert it back to raw coordinates for the source Quad while
+            // preserving the exact rendered position at the current camera.
+            const nx = visualPoint.x + camX * (effectiveP - targetGlobalP);
+            const ny = visualPoint.y + camY * (effectiveP - targetGlobalP);
 
             if (
               Math.abs(v.x - nx) > 0.01 ||
