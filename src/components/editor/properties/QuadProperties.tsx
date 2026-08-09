@@ -407,22 +407,47 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                   </div>
                 </div>
               )}
-
-              <div className="e-row">
-                <label
-                  className="e-label"
-                  style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                >
-                  <input
-                    type="checkbox"
-                    style={{ marginRight: '5px' }}
-                    checked={quad.texturePerspective !== false}
-                    onChange={(e) => handleChange('texturePerspective', e.target.checked)}
-                  />
-                  Perspective
-                </label>
-              </div>
             </>
+          )}
+
+          <div
+            className="e-row"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <label
+              className="e-label"
+              style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+            >
+              <input
+                type="checkbox"
+                style={{ marginRight: '5px' }}
+                checked={quad.perspective !== false}
+                onChange={(e) => handleChange('perspective', e.target.checked)}
+              />
+              Surface Perspective
+            </label>
+          </div>
+
+          {quad.perspective !== false && (
+            <div className="e-row">
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <label className="e-label">Perspective Amount</label>
+                <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                  {formatPanelNumber(quad.perspectiveAmount ?? 1.0)}
+                </span>
+              </div>
+              <input
+                type="range"
+                style={{ width: '100%', cursor: 'pointer' }}
+                min={0}
+                max={2}
+                step={0.05}
+                value={quad.perspectiveAmount ?? 1.0}
+                onChange={(e) => handleChange('perspectiveAmount', parseFloat(e.target.value))}
+              />
+            </div>
           )}
 
           {/* Fill Color */}
@@ -542,56 +567,6 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                   />
                 </div>
               </div>
-
-              <div
-                className="e-row"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-              >
-                <label
-                  className="e-label"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    style={{ marginRight: '5px' }}
-                    checked={quad.gridPerspective ?? true}
-                    onChange={(e) => handleChange('gridPerspective', e.target.checked)}
-                  />
-                  Perspective
-                </label>
-              </div>
-
-              {(quad.gridPerspective ?? true) && (
-                <div className="e-row">
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <label className="e-label">Amount</label>
-                    <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                      {formatPanelNumber(quad.gridPerspectiveAmount ?? 1.0)}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    style={{ width: '100%', cursor: 'pointer' }}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    value={quad.gridPerspectiveAmount ?? 1.0}
-                    onChange={(e) =>
-                      handleChange('gridPerspectiveAmount', parseFloat(e.target.value))
-                    }
-                  />
-                </div>
-              )}
 
               {quad.filled !== false && (
                 <>

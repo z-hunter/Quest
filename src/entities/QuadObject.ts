@@ -419,15 +419,25 @@ export function buildQuadTextureMesh(
   mode: QuadTextureMode,
   tileScaleX: number,
   tileScaleY: number,
-  perspective: boolean,
+  perspectiveAmount: number = 1,
   maxError: number = DEFAULT_TEXTURE_MESH_ERROR
 ): QuadTextureMeshCell[] {
   const repeatsX = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleX) : 1;
   const repeatsY = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleY) : 1;
-  const homography = perspective ? createQuadHomography(p0, p1, p2, p3) : null;
+  const homography = perspectiveAmount !== 0 ? createQuadHomography(p0, p1, p2, p3) : null;
   const mapPoint: QuadTexturePointMapper = (u: number, v: number) =>
-    (homography && projectQuadPoint(homography, u, v)) ||
-    interpolateQuadPoint(p0, p1, p2, p3, u, v);
+    projectQuadGridPoint(
+      p0,
+      p1,
+      p2,
+      p3,
+      homography,
+      u,
+      v,
+      perspectiveAmount,
+      perspectiveAmount !== 0,
+      perspectiveAmount !== 0
+    );
   const subdivisions = chooseTextureMeshSubdivisions(mapPoint, repeatsX, repeatsY, maxError);
   const uBreaks = buildTextureAxisBreaks(repeatsX, subdivisions.x);
   const vBreaks = buildTextureAxisBreaks(repeatsY, subdivisions.y);
@@ -595,20 +605,22 @@ export class QuadObject extends Entity {
   opacity: number = 1.0;
   blendMode: GlobalCompositeOperation = 'source-over';
 
+  // Surface perspective. It parameterizes the whole Quad consistently: grid,
+  // checkerboard, texture, snapping, and bound grid vertices.
+  perspective: boolean = true;
+  perspectiveAmount: number = 1.0;
+
   // Retro Grid Props
   isGrid: boolean = false;
   gridLinesX: number = 5;
   gridLinesY: number = 5;
   lineWidth: number = 1.0;
   gridColor: string = '#ffffff';
-  gridPerspective: boolean = true;
-  gridPerspectiveAmount: number = 1.0;
 
   // Texture Props
   textureMode: QuadTextureMode = 'stretch';
   tileScaleX: number = 1.0;
   tileScaleY: number = 1.0;
-  texturePerspective: boolean = true;
 
   // Fill Props
   filled: boolean = true;
@@ -633,7 +645,8 @@ export class QuadObject extends Entity {
     'textureMode',
     'tileScaleX',
     'tileScaleY',
-    'texturePerspective',
+    'perspective',
+    'perspectiveAmount',
     'color',
     'sortMode',
     'opacity',
@@ -643,8 +656,6 @@ export class QuadObject extends Entity {
     'gridLinesY',
     'lineWidth',
     'gridColor',
-    'gridPerspective',
-    'gridPerspectiveAmount',
     'filled',
     'checkerboard',
     'secondColor',
@@ -703,7 +714,7 @@ export class QuadObject extends Entity {
       this.textureMode === 'tile' ? 'tile' : 'stretch',
       this.tileScaleX,
       this.tileScaleY,
-      this.texturePerspective !== false,
+      this.perspective === false ? 0 : this.perspectiveAmount,
       0.75 / screenScale
     );
     for (const cell of mesh) {
@@ -852,8 +863,8 @@ export class QuadObject extends Entity {
         const v2 = screenVerts[2]; // BR
         const v3 = screenVerts[3]; // BL
 
-        const basePerspective = this.gridPerspective ?? true;
-        const amount = this.gridPerspectiveAmount ?? 1.0;
+        const basePerspective = this.perspective !== false;
+        const amount = this.perspectiveAmount ?? 1.0;
         const usePerspective = basePerspective;
         const gridTransform = createQuadHomography(v0, v1, v2, v3);
         const gridPoint = (u: number, v: number) =>
@@ -931,8 +942,8 @@ export class QuadObject extends Entity {
       const v2 = screenVerts[2]; // BR
       const v3 = screenVerts[3]; // BL
 
-      const basePerspective = this.gridPerspective ?? true;
-      const amount = this.gridPerspectiveAmount ?? 1.0;
+      const basePerspective = this.perspective !== false;
+      const amount = this.perspectiveAmount ?? 1.0;
       const usePerspective = basePerspective;
       const gridTransform = createQuadHomography(v0, v1, v2, v3);
       const gridPoint = (u: number, v: number) =>
@@ -1024,7 +1035,7 @@ export class QuadObject extends Entity {
     });
 
     const [p0, p1, p2, p3] = points;
-    const perspective = this.gridPerspective ?? true;
+    const perspective = this.perspective !== false;
     return projectQuadGridPoint(
       p0,
       p1,
@@ -1033,7 +1044,7 @@ export class QuadObject extends Entity {
       createQuadHomography(p0, p1, p2, p3),
       u,
       v,
-      this.gridPerspectiveAmount ?? 1,
+      this.perspectiveAmount ?? 1,
       perspective,
       perspective
     );
@@ -1131,6 +1142,18 @@ export class QuadObject extends Entity {
     if (data.gridLines !== undefined) {
       if (data.gridLinesX === undefined) data.gridLinesX = data.gridLines;
       if (data.gridLinesY === undefined) data.gridLinesY = data.gridLines;
+    }
+
+    // The former Retro Grid and texture switches described two render paths
+    // independently. A Quad now owns one surface projection. Prefer the
+    // explicit grid setting when migrating because it also governed snapping
+    // and bound vertices; texturePerspective is the fallback for textured
+    // legacy data that did not configure a grid.
+    if (data.perspective === undefined) {
+      data.perspective = data.gridPerspective ?? data.texturePerspective ?? true;
+    }
+    if (data.perspectiveAmount === undefined) {
+      data.perspectiveAmount = data.gridPerspectiveAmount ?? 1;
     }
 
     super.load(data);

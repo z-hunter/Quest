@@ -51,7 +51,7 @@ describe('Editor quad snapping', () => {
     target.isGrid = true;
     target.gridLinesX = 1;
     target.gridLinesY = 1;
-    target.gridPerspective = false;
+    target.perspective = false;
     target.vertices = [
       { x: 0, y: 0, p: 0.5 },
       { x: 100, y: 0, p: 0.5 },
@@ -89,8 +89,8 @@ describe('Editor quad snapping', () => {
     target.isGrid = true;
     target.gridLinesX = 1;
     target.gridLinesY = 1;
-    target.gridPerspective = true;
-    target.gridPerspectiveAmount = 1;
+    target.perspective = true;
+    target.perspectiveAmount = 1;
     target.vertices = [
       { x: 20, y: 10, p: 0.5 },
       { x: 140, y: 30, p: 0.5 },

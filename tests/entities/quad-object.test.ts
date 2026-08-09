@@ -169,25 +169,25 @@ describe('QuadObject', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'test_quad');
     quad.isGrid = true;
-    quad.gridPerspective = true;
-    quad.gridPerspectiveAmount = 1.5;
+    quad.perspective = true;
+    quad.perspectiveAmount = 1.5;
     quad.spriteName = 'floors/metal.json';
     quad.textureMode = 'tile';
     quad.tileScaleX = 0.5;
     quad.tileScaleY = 0.25;
-    quad.texturePerspective = false;
     quad.filled = true;
     quad.checkerboard = true;
     quad.secondColor = '#ff0000';
 
     const json = quad.toJSON();
-    expect(json.gridPerspective).toBe(true);
-    expect(json.gridPerspectiveAmount).toBe(1.5);
+    expect(json.perspective).toBe(true);
+    expect(json.perspectiveAmount).toBe(1.5);
     expect(json.spriteName).toBe('floors/metal.json');
     expect(json.textureMode).toBe('tile');
     expect(json.tileScaleX).toBe(0.5);
     expect(json.tileScaleY).toBe(0.25);
-    expect(json.texturePerspective).toBe(false);
+    expect(json.gridPerspective).toBeUndefined();
+    expect(json.texturePerspective).toBeUndefined();
     expect(json.checkerboard).toBe(true);
     expect(json.secondColor).toBe('#ff0000');
 
@@ -196,15 +196,26 @@ describe('QuadObject', () => {
       image: { complete: true },
     });
     const loadedQuad = QuadObject.fromJSON(fixture.game, json);
-    expect(loadedQuad.gridPerspective).toBe(true);
-    expect(loadedQuad.gridPerspectiveAmount).toBe(1.5);
+    expect(loadedQuad.perspective).toBe(true);
+    expect(loadedQuad.perspectiveAmount).toBe(1.5);
     expect(loadedQuad.spriteName).toBe('floors/metal.json');
     expect(loadedQuad.textureMode).toBe('tile');
     expect(loadedQuad.tileScaleX).toBe(0.5);
     expect(loadedQuad.tileScaleY).toBe(0.25);
-    expect(loadedQuad.texturePerspective).toBe(false);
+    expect(loadedQuad.gridPerspective).toBeUndefined();
+    expect(loadedQuad.texturePerspective).toBeUndefined();
     expect(loadedQuad.checkerboard).toBe(true);
     expect(loadedQuad.secondColor).toBe('#ff0000');
+
+    const legacyJson = { ...json };
+    delete legacyJson.perspective;
+    delete legacyJson.perspectiveAmount;
+    legacyJson.gridPerspective = false;
+    legacyJson.gridPerspectiveAmount = 1.5;
+    legacyJson.texturePerspective = true;
+    const legacyQuad = QuadObject.fromJSON(fixture.game, legacyJson);
+    expect(legacyQuad.perspective).toBe(false);
+    expect(legacyQuad.perspectiveAmount).toBe(1.5);
   });
 
   it('draws checkerboard pattern when Retro Grid, filled, and checkerboard are active', () => {
@@ -234,11 +245,11 @@ describe('QuadObject', () => {
       { x: 140, y: 100 },
       { x: -20, y: 100 },
     ] as const;
-    const stretch = buildQuadTextureMesh(...points, 'stretch', 1, 1, false);
-    const tiled = buildQuadTextureMesh(...points, 'tile', 0.25, 0.5, false);
-    const projective = buildQuadTextureMesh(...points, 'stretch', 1, 1, true);
+    const stretch = buildQuadTextureMesh(...points, 'stretch', 1, 1, 0);
+    const tiled = buildQuadTextureMesh(...points, 'tile', 0.25, 0.5, 0);
+    const projective = buildQuadTextureMesh(...points, 'stretch', 1, 1, 1);
 
-    const coarse = buildQuadTextureMesh(...points, 'stretch', 1, 1, true, 100);
+    const coarse = buildQuadTextureMesh(...points, 'stretch', 1, 1, 1, 100);
 
     expect(stretch[0].points[0]).toEqual(points[0]);
     expect(stretch.length).toBeGreaterThan(1);
@@ -249,6 +260,12 @@ describe('QuadObject', () => {
       tiled.every((cell) => cell.u0 >= 0 && cell.u1 <= 1 && cell.v0 >= 0 && cell.v1 <= 1)
     ).toBe(true);
     expect(projective[0].center).not.toEqual(stretch[0].center);
+
+    const halfPerspective = buildQuadTextureMesh(...points, 'stretch', 1, 1, 0.5, 100);
+    const transform = createQuadHomography(...points);
+    expect(halfPerspective[0].center).toEqual(
+      projectQuadGridPoint(...points, transform, 0.5, 0.5, 0.5, true, true)
+    );
   });
 
   it('renders the active sprite frame as texture instead of the fill and keeps the grid on top', () => {
