@@ -531,8 +531,10 @@ export class SceneEditor {
         const currentVisH = ent.height;
 
         if (isEnabled) {
-          // Turning ON: Scale = Model * Depth
-          const depthFactor = scene.getScaling(ent.y);
+          // A controller Quad replaces the scene fallback entirely. Always
+          // use the common resolver here, otherwise toggling scene scaling
+          // bakes the fallback factor into controller-managed objects.
+          const depthFactor = scene.getDepthScaleFor(ent);
           const totalScale = ent.modelScale * depthFactor;
           ent.scale = totalScale;
 
@@ -541,8 +543,10 @@ export class SceneEditor {
             ent.baseHeight = currentVisH / totalScale;
           }
         } else {
-          // Turning OFF: Scale = Model * 1.0
-          const totalScale = ent.modelScale;
+          // Scene.getDepthScaleFor() still returns a matching controller
+          // while scene scaling is disabled; only uncontrolled objects become
+          // Model * 1.0.
+          const totalScale = ent.modelScale * scene.getDepthScaleFor(ent);
           ent.scale = totalScale;
 
           if (totalScale !== 0) {

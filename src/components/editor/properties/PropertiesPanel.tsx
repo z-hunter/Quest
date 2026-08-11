@@ -761,10 +761,7 @@ export const PropertiesPanel: React.FC = () => {
           let targetFactor = modelScale;
 
           if (!isIgnored) {
-            let depthFactor = 1.0;
-            if (scene.scaling && scene.scaling.enabled) {
-              depthFactor = scene.getScaling(ent.y);
-            }
+            const depthFactor = scene.getDepthScaleFor(ent);
             targetFactor = modelScale * depthFactor;
           }
 

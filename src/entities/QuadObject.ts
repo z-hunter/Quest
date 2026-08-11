@@ -1258,8 +1258,11 @@ export class QuadObject extends Entity {
     useEffectiveVertices: boolean = true
   ): QuadSurfaceMetrics | null {
     const points = isVisual
-      ? this.getVisualVertices()
-      : this.getEffectiveVertices().map((vertex) => ({ x: vertex.x, y: vertex.y }));
+      ? this.getVisualVertices(useEffectiveVertices)
+      : (useEffectiveVertices ? this.getEffectiveVertices() : this.vertices).map((vertex) => ({
+          x: vertex.x,
+          y: vertex.y,
+        }));
     if (points.length < 4 || !Geometry.isPointInPolygon({ x, y }, points)) return null;
 
     const [p0, p1, p2, p3] = points;

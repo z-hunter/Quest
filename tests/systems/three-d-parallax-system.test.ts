@@ -85,6 +85,9 @@ describe('ThreeDParallaxSystem', () => {
 
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
 
+    expect(actor.parallax).toBeCloseTo(0.75, 5);
+    expect(actor.target!.x).toBe(80);
+    expect(actor.target!.y).toBe(70);
     expect(toVisualPosition(actor.target!, fixture.scene.camera, actor.parallax)).toEqual(
       oldTargetVisual
     );

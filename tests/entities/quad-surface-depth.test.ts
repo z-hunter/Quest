@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { QuadObject } from '../../src/entities/QuadObject';
 import { Actor } from '../../src/entities/Actor';
+import { SceneEditor } from '../../src/tools/SceneEditor';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('Quad surface depth', () => {
@@ -53,6 +54,36 @@ describe('Quad surface depth', () => {
     prop.ignoreScaling = true;
     prop.update(0);
     expect(prop.scale).toBeCloseTo(1, 6);
+  });
+
+  it('does not bake scene scaling into a controller-managed object when toggled', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.scaling = { enabled: true, min: 0.2, max: 0.4, horizon: 0, front: 100 };
+    const controller = new QuadObject(fixture.game, 'controller');
+    controller.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 100, y: 0, p: 1 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    controller.components = [{ type: 'Depth scaling controller', min: 0.5, max: 1 }];
+    fixture.scene.addEntity(controller);
+
+    const prop = fixture.addEntity('prop');
+    prop.x = 50;
+    prop.y = 50;
+    prop.modelScale = 1;
+    prop.baseWidth = 100;
+    prop.baseHeight = 100;
+    prop.update(0);
+    expect(prop.scale).toBeCloseTo(0.75, 6);
+
+    SceneEditor.prototype.setScalingEnabled.call({ game: fixture.game }, false);
+    prop.update(0);
+
+    expect(prop.scale).toBeCloseTo(0.75, 6);
+    expect(prop.width).toBeCloseTo(75, 6);
+    expect(prop.baseWidth).toBeCloseTo(100, 6);
   });
 
   it('uses the same P-based step for Player and routed Actor movement', () => {

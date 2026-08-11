@@ -1028,8 +1028,8 @@ export class EditorTransformManager {
           entity.y = Math.round(newB);
 
           // Recalc Base Dims
-          if (!entity.ignoreScaling && scene.scaling.enabled) {
-            const factor = scene.getScaling(entity.y) * entity.modelScale;
+          if (!entity.ignoreScaling) {
+            const factor = scene.getDepthScaleFor(entity) * entity.modelScale;
             if (factor !== 0) {
               entity.baseWidth = entity.width / factor;
               entity.baseHeight = entity.height / factor;
@@ -1060,8 +1060,8 @@ export class EditorTransformManager {
           entity.y = Math.round(wy);
 
           // Update Scaling if Y changed
-          if (!entity.ignoreScaling && scene.scaling.enabled) {
-            const factor = scene.getScaling(entity.y) * entity.modelScale;
+          if (!entity.ignoreScaling) {
+            const factor = scene.getDepthScaleFor(entity) * entity.modelScale;
             entity.scale = factor;
             entity.width = entity.baseWidth * factor;
             entity.height = entity.baseHeight * factor;

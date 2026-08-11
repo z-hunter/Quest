@@ -1,6 +1,6 @@
 import React, { act, useRef, useState } from 'react';
 import { Window } from 'happy-dom';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 const domWindow = new Window();
 Object.assign(globalThis, {
@@ -72,8 +72,15 @@ function renderFixture() {
 afterAll(() => domWindow.happyDOM.close());
 
 describe('numeric label scrubbing', () => {
+  let rendered: ReturnType<typeof renderFixture> | null = null;
+
+  afterEach(() => {
+    rendered?.cleanup();
+    rendered = null;
+  });
+
   it('scrubs a number input owned by the clicked label, not its next sibling', () => {
-    const rendered = renderFixture();
+    rendered = renderFixture();
     const [minLabel] = Array.from(rendered.container.querySelectorAll('label'));
 
     act(() => {
@@ -89,11 +96,10 @@ describe('numeric label scrubbing', () => {
     );
     expect(minInput.value).toBe('0.52');
     expect(maxInput.value).toBe('1');
-    rendered.cleanup();
   });
 
   it('does not intercept direct input interaction', () => {
-    const rendered = renderFixture();
+    rendered = renderFixture();
     const minInput = rendered.container.querySelector<HTMLInputElement>('input')!;
     const event = new domWindow.MouseEvent('mousedown', {
       bubbles: true,
@@ -104,6 +110,5 @@ describe('numeric label scrubbing', () => {
 
     act(() => minInput.dispatchEvent(event));
     expect(event.defaultPrevented).toBe(false);
-    rendered.cleanup();
   });
 });

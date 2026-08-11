@@ -15,6 +15,7 @@ interface SurfaceParallaxBinding {
   v: number;
   worldX: number;
   worldY: number;
+  originalParallax: number;
 }
 
 const SURFACE_PARALLAX_BINDING = '__surfaceParallaxBinding';
@@ -41,6 +42,31 @@ export class ThreeDParallaxSystem {
         | SurfaceParallaxBinding
         | undefined;
       const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
+
+      const allQuads = scene.entities.filter(
+        (e): e is QuadObject =>
+          e.type === 'Quad' && !!e.components?.some((c) => c.type === '3d-parallax')
+      );
+
+      let topQuad: QuadObject | null = null;
+      for (let i = allQuads.length - 1; i >= 0; i--) {
+        const q = allQuads[i];
+        let qVisual = toVisualPosition({ x: target.x, y: target.y }, { x: camX, y: camY }, pFactor);
+        if (existingBinding?.quadName === q.name) {
+          const surfacePoint = q.getGridPointAt(existingBinding.u, existingBinding.v, true);
+          qVisual = {
+            x: surfacePoint.x + (target.x - existingBinding.worldX),
+            y: surfacePoint.y + (target.y - existingBinding.worldY),
+          };
+        }
+        if (q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true)) {
+          topQuad = q;
+          break;
+        }
+      }
+
+      if (topQuad && topQuad.name !== quad.name) continue;
+
       let targetVisual = toVisualPosition(
         { x: target.x, y: target.y },
         { x: camX, y: camY },
@@ -103,8 +129,14 @@ export class ThreeDParallaxSystem {
           v: metrics.v,
           worldX: newWorld.x,
           worldY: newWorld.y,
+          originalParallax: existingBinding ? existingBinding.originalParallax : pFactor,
         } satisfies SurfaceParallaxBinding;
       } else if (existingBinding?.quadName === quad.name) {
+        const restoredP = existingBinding.originalParallax ?? 1.0;
+        target.parallax = restoredP;
+        const restoredWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, restoredP);
+        target.x = restoredWorld.x;
+        target.y = restoredWorld.y;
         delete (target as any)[SURFACE_PARALLAX_BINDING];
       }
 
