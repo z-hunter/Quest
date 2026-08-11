@@ -368,29 +368,10 @@ export class Entity extends SceneObject {
     // Dynamic Depth Scaling
     let depthFactor = 1.0;
 
-    if (!this.ignoreScaling) {
-      // Resolve scene
-      const scene =
-        this.scene ||
-        (this.game && this.game.sceneManager ? this.game.sceneManager.currentScene : null);
-
-      if (scene && scene.scaling && scene.scaling.enabled) {
-        // Use Visual Y for scaling to prevent flickering when 3d-parallax adjusts World Y
-        // Visual Y is the apparent position on screen (relative to camera center/origin logic, but scaling uses World Y relative to Horizon)
-        // Actually, 'getScaling(y)' expects a Y value that corresponds to "Distance from camera/screen plane" in a pseudo-3D way.
-        // In this engine, Y is "Distance into the scene" (higher Y is closer to front).
-        // When Parallax moves the object, its World Y changes to keep it visually stable.
-        // If we use World Y, the scale changes because the object "physically" moves.
-        // If we use Visual Y (where it looks to be), we are checking "where corresponds this visual row in the depth map?".
-
-        let checkY = this.y;
-        if (scene.camera && this.parallax !== 1.0) {
-          checkY = this.y - scene.camera.y * (this.parallax - 1.0);
-        }
-
-        depthFactor = scene.getScaling(checkY);
-      }
-    }
+    const scene =
+      this.scene ||
+      (this.game && this.game.sceneManager ? this.game.sceneManager.currentScene : null);
+    if (scene) depthFactor = scene.getDepthScaleFor(this);
 
     // Final Scale = User Model Scale * Depth Factor
     this.scale = this.modelScale * this.subsceneItemScale * depthFactor;

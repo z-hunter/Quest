@@ -41,7 +41,7 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     expect(vec!.dy).toBeCloseTo(-1, 3);
   });
 
-  it('applies 3D perspective movement to player input in Scene', () => {
+  it('uses ordinary movement in the boundary zone, avoiding a conflicting Quad direction', () => {
     const fixture = createSceneFixture();
     // Place player on left edge of Quad
     const player = fixture.addPlayer('Hero', 20, 50);
@@ -61,12 +61,35 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
     player.handlePlayerInput(1.0);
 
-    // Player should have moved slanting right & up along left edge (x > 20, y < 50)
-    expect(player.x).toBeGreaterThan(20);
-    expect(player.y).toBeLessThan(50);
+    // The edge is shared with potential neighbouring walkboxes. The local
+    // perspective axis is deliberately disabled here, so crossing it cannot
+    // alternate between incompatible directions frame-to-frame.
+    expect(player.x).toBe(20);
+    expect(player.y).toBe(40);
   });
 
-  it('projects equal floor steps farther apart near the camera', () => {
+  it('can approach the lower edge without perspective-axis jitter', () => {
+    const fixture = createSceneFixture();
+    const player = fixture.addPlayer('Hero', 50, 88);
+    player.speed = 10;
+    const quad = new QuadObject(fixture.game as any, 'TrapezoidQuad');
+    quad.vertices = [
+      { x: 40, y: 0, p: 1.0 },
+      { x: 60, y: 0, p: 1.0 },
+      { x: 100, y: 100, p: 1.0 },
+      { x: 0, y: 100, p: 1.0 },
+    ];
+    quad.components = [{ type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true }];
+    fixture.scene.addEntity(quad);
+    fixture.game.input.isDown = (key: string) => key === 'ArrowDown';
+
+    player.handlePlayerInput(1.0);
+
+    expect(player.x).toBe(50);
+    expect(player.y).toBe(98);
+  });
+
+  it('keeps the same base step at every depth when P is unchanged', () => {
     const fixture = createSceneFixture();
     fixture.scene.scaling = { enabled: true, min: 0.5, max: 1, horizon: 0, front: 100 };
     const player = fixture.addPlayer('Hero', 50, 80);
@@ -89,7 +112,8 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     player.handlePlayerInput(1.0);
     const farScreenStep = Math.hypot(player.x - 50, player.y - 20);
 
-    expect(nearScreenStep).toBeGreaterThan(farScreenStep);
+    expect(nearScreenStep).toBeCloseTo(farScreenStep, 6);
+    expect(nearScreenStep).toBeCloseTo(10, 6);
   });
 
   it('keeps horizontal and vertical perspective steps equal at the same depth', () => {

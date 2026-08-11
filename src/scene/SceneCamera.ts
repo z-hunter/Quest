@@ -16,14 +16,21 @@ export function updateSceneCamera(
   }
 
   const pHeight = scene.player.height || 0;
+  const playerParallax =
+    typeof scene.player.parallax === 'number' && Math.abs(scene.player.parallax) > 0.000001
+      ? scene.player.parallax
+      : 1;
   const playerCenterX = scene.player.x;
   const playerCenterY = scene.player.y - pHeight / 2;
 
   let targetX = scene.camera.x;
   let targetY = scene.camera.y;
 
-  const dx = playerCenterX - scene.camera.x;
-  const dy = playerCenterY - scene.camera.y;
+  // Camera deadzones are screen-space distances. A Player on a 3d-parallax
+  // surface is rendered at `world - camera * P`, so comparing raw world
+  // coordinates causes a camera/Parallax feedback loop as P changes.
+  const dx = playerCenterX - scene.camera.x * playerParallax;
+  const dy = playerCenterY - scene.camera.y * playerParallax;
 
   let dirX = state.centeringDirX;
   let dirY = state.centeringDirY;
@@ -33,7 +40,7 @@ export function updateSceneCamera(
   }
 
   if (dirX !== 0) {
-    targetX = playerCenterX + dirX * scene.camDeadzoneX;
+    targetX = (playerCenterX + dirX * scene.camDeadzoneX) / playerParallax;
     if (Math.abs(targetX - scene.camera.x) < 2) {
       dirX = 0;
       scene.camera.x = targetX;
@@ -45,7 +52,7 @@ export function updateSceneCamera(
   }
 
   if (dirY !== 0) {
-    targetY = playerCenterY + dirY * scene.camDeadzoneY;
+    targetY = (playerCenterY + dirY * scene.camDeadzoneY) / playerParallax;
     if (Math.abs(targetY - scene.camera.y) < 2) {
       dirY = 0;
       scene.camera.y = targetY;

@@ -26,6 +26,15 @@ export interface QuadPoint {
   y: number;
 }
 
+export interface QuadSurfaceMetrics {
+  inside: boolean;
+  u: number;
+  v: number;
+  parallax: number;
+  axisU: QuadPoint;
+  axisV: QuadPoint;
+}
+
 /** Maps the unit square (u, v) to a Quad's screen-space vertices. */
 export interface QuadHomography {
   a: number;
@@ -233,6 +242,83 @@ export function projectQuadGridPoint(
   return intersection && Number.isFinite(intersection.x) && Number.isFinite(intersection.y)
     ? intersection
     : interpolateQuadPoint(p0, p1, p2, p3, u, v);
+}
+
+function getQuadSurfaceCoordinates(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  point: QuadPoint,
+  amount: number,
+  usePerspective: boolean
+): { u: number; v: number } | null {
+  const transform = createQuadHomography(p0, p1, p2, p3);
+  const map = (u: number, v: number) =>
+    projectQuadGridPoint(p0, p1, p2, p3, transform, u, v, amount, usePerspective, usePerspective);
+
+  let best = { u: 0.5, v: 0.5, distance: Number.POSITIVE_INFINITY };
+  for (let row = 0; row <= 8; row++) {
+    for (let column = 0; column <= 8; column++) {
+      const u = column / 8;
+      const v = row / 8;
+      const mapped = map(u, v);
+      const distance = (mapped.x - point.x) ** 2 + (mapped.y - point.y) ** 2;
+      if (distance < best.distance) best = { u, v, distance };
+    }
+  }
+
+  let { u, v } = best;
+  const epsilon = 0.0001;
+  for (let iteration = 0; iteration < 24; iteration++) {
+    const mapped = map(u, v);
+    const errorX = point.x - mapped.x;
+    const errorY = point.y - mapped.y;
+    if (Math.hypot(errorX, errorY) < 0.0001) break;
+
+    // Use central differences at the boundaries as well. The old forward
+    // derivative became zero at u/v=1, so Newton could clamp a point onto the
+    // lower edge and report P=1 even while the point was still inside the Quad.
+    const u0 = Math.max(0, u - epsilon);
+    const u1 = Math.min(1, u + epsilon);
+    const v0 = Math.max(0, v - epsilon);
+    const v1 = Math.min(1, v + epsilon);
+    const prevU = map(u0, v);
+    const nextU = map(u1, v);
+    const prevV = map(u, v0);
+    const nextV = map(u, v1);
+    const du = Math.max(epsilon, u1 - u0);
+    const dv = Math.max(epsilon, v1 - v0);
+    const j00 = (nextU.x - prevU.x) / du;
+    const j10 = (nextU.y - prevU.y) / du;
+    const j01 = (nextV.x - prevV.x) / dv;
+    const j11 = (nextV.y - prevV.y) / dv;
+    const determinant = j00 * j11 - j01 * j10;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < HOMOGRAPHY_EPSILON) break;
+
+    const deltaU = (errorX * j11 - errorY * j01) / determinant;
+    const deltaV = (j00 * errorY - j10 * errorX) / determinant;
+    let accepted = false;
+    for (let damping = 1; damping >= 1 / 64; damping /= 2) {
+      const candidateU = Math.max(0, Math.min(1, u + deltaU * damping));
+      const candidateV = Math.max(0, Math.min(1, v + deltaV * damping));
+      const candidate = map(candidateU, candidateV);
+      const candidateDistance = (candidate.x - point.x) ** 2 + (candidate.y - point.y) ** 2;
+      if (candidateDistance < best.distance) {
+        u = candidateU;
+        v = candidateV;
+        best = { u, v, distance: candidateDistance };
+        accepted = true;
+        break;
+      }
+    }
+    if (!accepted) break;
+  }
+
+  const resolved = map(best.u, best.v);
+  return Number.isFinite(resolved.x) && Number.isFinite(resolved.y)
+    ? { u: best.u, v: best.v }
+    : null;
 }
 
 export type QuadTextureMode = 'stretch' | 'tile';
@@ -585,11 +671,16 @@ function clipToQuad(ctx: CanvasRenderingContext2D, vertices: QuadPoint[]): void 
 export class QuadObject extends Entity {
   vertices: QuadVertex[];
   color: string;
+  // `ignoreScaling` existed on inherited Entity data before Quads could be
+  // depth-scaled.  Keep an explicit format marker so legacy `false` values do
+  // not suddenly opt old scenes into runtime geometry scaling.
+  depthScalingVersion: number = 1;
 
   constructor(game: IGame, name: string) {
     super(game, 0, 0, 100, 100, name);
     this.type = 'Quad';
     this.color = '#888888'; // Default Gray
+    this.ignoreScaling = true;
 
     // Default 100x100 Square
     this.vertices = [
@@ -640,6 +731,7 @@ export class QuadObject extends Entity {
     'y',
     'parallax',
     'ignoreScaling',
+    'depthScalingVersion',
     'vertices',
     'spriteName',
     'textureMode',
@@ -804,20 +896,12 @@ export class QuadObject extends Entity {
       maxX = -Infinity,
       maxY = -Infinity;
 
-    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
-    const screenVerts = this.vertices.map((v) => {
-      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
-      const offX = -camX * (effP - globalP);
-      const offY = -camY * (effP - globalP);
-      const vx = v.x + offX;
-      const vy = v.y + offY;
-
+    const screenVerts = this.getVisualVertices();
+    screenVerts.forEach(({ x: vx, y: vy }) => {
       if (vx < minX) minX = vx;
       if (vx > maxX) maxX = vx;
       if (vy < minY) minY = vy;
       if (vy > maxY) maxY = vy;
-
-      return { x: vx, y: vy };
     });
 
     // VIEWPORT CULLING
@@ -999,19 +1083,7 @@ export class QuadObject extends Entity {
     const scene = this.scene;
     if (!scene) return false;
 
-    const camX = scene.camera.x;
-    const camY = scene.camera.y;
-
-    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
-    const projectedPoly = this.vertices.map((v) => {
-      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
-      return {
-        x: v.x - camX * (effP - globalP),
-        y: v.y - camY * (effP - globalP),
-      };
-    });
-
-    return Geometry.isPointInPolygon({ x, y }, projectedPoly);
+    return Geometry.isPointInPolygon({ x, y }, this.getVisualVertices());
   }
 
   /**
@@ -1019,13 +1091,19 @@ export class QuadObject extends Entity {
    * When `isVisual` is true, per-vertex parallax is applied before the grid's
    * optional projective correction.
    */
-  getGridPointAt(u: number, v: number, isVisual: boolean = false): QuadPoint {
+  getGridPointAt(
+    u: number,
+    v: number,
+    isVisual: boolean = false,
+    useEffectiveVertices: boolean = true
+  ): QuadPoint {
     // @ts-ignore
     const scene = this.scene;
     const globalP = this.parallax !== undefined ? this.parallax : 1.0;
     const camX = scene?.camera.x ?? 0;
     const camY = scene?.camera.y ?? 0;
-    const points = this.vertices.map((vertex) => {
+    const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    const points = vertices.map((vertex) => {
       if (!isVisual) return { x: vertex.x, y: vertex.y };
       const effP = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
       return {
@@ -1056,67 +1134,16 @@ export class QuadObject extends Entity {
    * @param y Point Y
    * @param isVisual If true, treats (x,y) as visual coordinates and projects Quad vertices to visual space before interpolation.
    */
-  getParallaxAt(x: number, y: number, isVisual: boolean = false): number {
-    // @ts-ignore
-    const scene = this.scene;
-    if (!scene || this.vertices.length < 3) return 1.0;
+  getParallaxAt(
+    x: number,
+    y: number,
+    isVisual: boolean = false,
+    useEffectiveVertices: boolean = true
+  ): number {
+    const metrics = this.getSurfaceMetricsAt(x, y, isVisual, useEffectiveVertices);
+    if (metrics) return metrics.parallax;
 
-    const camX = scene.camera.x;
-    const camY = scene.camera.y;
     const globalP = this.parallax !== undefined ? this.parallax : 1.0;
-
-    // Helper to prepare vertex
-    const prep = (v: QuadVertex) => {
-      const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
-      if (!isVisual) return { x: v.x, y: v.y, p: effP };
-      // Project to Visual
-      return {
-        x: v.x - camX * (effP - globalP),
-        y: v.y - camY * (effP - globalP),
-        p: effP,
-      };
-    };
-
-    const v0 = prep(this.vertices[0]); // TL
-    const v1 = prep(this.vertices[1]); // TR
-    const v2 = prep(this.vertices[2]); // BR
-    const v3 = prep(this.vertices[3]); // BL (if exists)
-
-    // Helper: Barycentric weights for Triangle (a, b, c) vs Point p
-    const barycentric = (a: any, b: any, c: any, px: number, py: number) => {
-      const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-      const subW1 = (b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y);
-      const subW2 = (c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y);
-
-      const w1 = subW1 / det;
-      const w2 = subW2 / det;
-      const w3 = 1 - w1 - w2;
-      return { w1, w2, w3 };
-    };
-
-    // Check Triangle 1: 0-1-3 (TL-TR-BL)
-    if (v3) {
-      const { w1, w2, w3 } = barycentric(v0, v1, v3, x, y);
-      if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
-        return v0.p * w1 + v1.p * w2 + v3.p * w3;
-      }
-    }
-
-    // Check Triangle 2: 1-2-3 (TR-BR-BL)
-    if (v3) {
-      const { w1, w2, w3 } = barycentric(v1, v2, v3, x, y);
-      if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
-        return v1.p * w1 + v2.p * w2 + v3.p * w3;
-      }
-    } else {
-      // Just one triangle 0-1-2?
-      const { w1, w2, w3 } = barycentric(v0, v1, v2, x, y);
-      if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
-        return v0.p * w1 + v1.p * w2 + v2.p * w3;
-      }
-    }
-
-    // Fallback: If outside, return simple average or closest edge?
     let sumP = 0;
     this.vertices.forEach((v) => {
       const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
@@ -1133,6 +1160,15 @@ export class QuadObject extends Entity {
   }
 
   override load(data: any): void {
+    // Before unified surface depth, Quads ignored Entity.ignoreScaling
+    // entirely.  Old saved scenes commonly contain `ignoreScaling: false`,
+    // which therefore was not an author opt-in.  Preserve their rendered
+    // geometry; newly saved Quads include the marker and may opt in normally.
+    if (data.depthScalingVersion !== 1) {
+      data.ignoreScaling = true;
+      data.depthScalingVersion = 1;
+    }
+
     // Backwards compatibility for ignoreYSorting
     if (data.sortMode === undefined && data.ignoreYSorting !== undefined) {
       data.sortMode = data.ignoreYSorting ? 'ignore' : 'v3';
@@ -1179,6 +1215,93 @@ export class QuadObject extends Entity {
     ComponentSystem.update(this, dt);
   }
 
+  getEffectiveVertices(): QuadVertex[] {
+    const baseScale = (this.modelScale || 1) * (this.subsceneItemScale || 1);
+    const depthScale = baseScale !== 0 ? this.scale / baseScale : 1;
+    if (!Number.isFinite(depthScale) || Math.abs(depthScale - 1) < 0.000001) {
+      return this.vertices.map((vertex) => ({ ...vertex }));
+    }
+
+    const centroid = this.vertices.reduce(
+      (sum, vertex) => ({ x: sum.x + vertex.x, y: sum.y + vertex.y }),
+      { x: 0, y: 0 }
+    );
+    centroid.x /= this.vertices.length;
+    centroid.y /= this.vertices.length;
+    return this.vertices.map((vertex) => ({
+      ...vertex,
+      x: centroid.x + (vertex.x - centroid.x) * depthScale,
+      y: centroid.y + (vertex.y - centroid.y) * depthScale,
+    }));
+  }
+
+  getVisualVertices(useEffectiveVertices: boolean = true): QuadPoint[] {
+    // @ts-ignore
+    const scene = this.scene;
+    const camX = scene?.camera.x ?? 0;
+    const camY = scene?.camera.y ?? 0;
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
+    const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    return vertices.map((vertex) => {
+      const effectiveP = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
+      return {
+        x: vertex.x - camX * (effectiveP - globalP),
+        y: vertex.y - camY * (effectiveP - globalP),
+      };
+    });
+  }
+
+  getSurfaceMetricsAt(
+    x: number,
+    y: number,
+    isVisual: boolean = false,
+    useEffectiveVertices: boolean = true
+  ): QuadSurfaceMetrics | null {
+    const points = isVisual
+      ? this.getVisualVertices()
+      : this.getEffectiveVertices().map((vertex) => ({ x: vertex.x, y: vertex.y }));
+    if (points.length < 4 || !Geometry.isPointInPolygon({ x, y }, points)) return null;
+
+    const [p0, p1, p2, p3] = points;
+    const usePerspective = this.perspective !== false;
+    const amount = this.perspectiveAmount ?? 1;
+    const coordinates = getQuadSurfaceCoordinates(p0, p1, p2, p3, { x, y }, amount, usePerspective);
+    if (!coordinates) return null;
+
+    const { u, v } = coordinates;
+    const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
+    const p0Value = (vertices[0].p ?? 1) * globalP;
+    const p1Value = (vertices[1].p ?? 1) * globalP;
+    const p2Value = (vertices[2].p ?? 1) * globalP;
+    const p3Value = (vertices[3].p ?? 1) * globalP;
+    const parallax =
+      (1 - u) * (1 - v) * p0Value + u * (1 - v) * p1Value + u * v * p2Value + (1 - u) * v * p3Value;
+
+    const map = (sampleU: number, sampleV: number) =>
+      projectQuadGridPoint(
+        p0,
+        p1,
+        p2,
+        p3,
+        createQuadHomography(p0, p1, p2, p3),
+        sampleU,
+        sampleV,
+        amount,
+        usePerspective,
+        usePerspective
+      );
+    const step = 0.0001;
+    const uStep = u <= 1 - step ? step : -step;
+    const vStep = v <= 1 - step ? step : -step;
+    const uPoint = map(u + uStep, v);
+    const vPoint = map(u, v + vStep);
+    const axisU = { x: (uPoint.x - x) / uStep, y: (uPoint.y - y) / uStep };
+    const axisV = { x: (vPoint.x - x) / vStep, y: (vPoint.y - y) / vStep };
+
+    return { inside: true, u, v, parallax, axisU, axisV };
+  }
+
   private resolveBindings() {
     // @ts-ignore
     const scene = this.scene;
@@ -1218,8 +1341,8 @@ export class QuadObject extends Entity {
             // Bind to the node that is actually rendered. Projecting the raw
             // vertices here makes the vertex jump on the first update because
             // Retro Grid applies perspective after per-vertex parallax.
-            const visualPoint = q.getGridPointAt(u, v_param, true);
-            const effectiveP = q.getParallaxAt(visualPoint.x, visualPoint.y, true);
+            const visualPoint = q.getGridPointAt(u, v_param, true, false);
+            const effectiveP = q.getParallaxAt(visualPoint.x, visualPoint.y, true, false);
             const np = sourceGlobalP !== 0 ? effectiveP / sourceGlobalP : effectiveP;
 
             // `visualPoint` is relative to the target Quad's global layer.

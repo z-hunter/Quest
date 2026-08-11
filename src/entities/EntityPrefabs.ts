@@ -33,6 +33,7 @@ export const DefaultActorData: ActorData = {
 export const DefaultQuadData: any = {
   ...DefaultEntityData,
   type: 'Quad',
+  ignoreScaling: true,
   name: 'New Quad',
   width: 100,
   height: 100,

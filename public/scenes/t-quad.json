@@ -16,167 +16,7 @@
   },
   "entities": [
     {
-      "name": "quad",
-      "type": "Quad",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "x": -3.3547777338842764,
-      "y": 62.19409282637548,
-      "ignoreScaling": false,
-      "vertices": [
-        {
-          "x": -63.98458459139339,
-          "y": -39.01541540860657,
-          "p": 0.6
-        },
-        {
-          "x": 49,
-          "y": -40,
-          "p": 0.6,
-          "binding": {
-            "targetName": "quad_2",
-            "type": "vertex",
-            "index": 1
-          }
-        },
-        {
-          "x": 139,
-          "y": 41,
-          "p": 1,
-          "binding": {
-            "targetName": "quad_2",
-            "type": "vertex",
-            "index": 0
-          }
-        },
-        {
-          "x": -121,
-          "y": 87,
-          "p": 1,
-          "binding": {
-            "targetName": "quad_1",
-            "type": "vertex",
-            "index": 0
-          }
-        }
-      ],
-      "spriteName": null,
-      "textureMode": "stretch",
-      "tileScaleX": 1,
-      "tileScaleY": 1,
-      "perspective": true,
-      "perspectiveAmount": 0.8,
-      "color": "#52779aff",
-      "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
-      "isGrid": true,
-      "gridLinesX": 5,
-      "gridLinesY": 5,
-      "lineWidth": 1,
-      "gridColor": "#000000",
-      "filled": true,
-      "checkerboard": true,
-      "secondColor": "#b4b715",
-      "blur": 0,
-      "brightness": 1,
-      "saturation": 1,
-      "contrast": 1,
-      "hueShift": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "quad_1",
-      "type": "Quad",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 1,
-      "x": 122.77684242792378,
-      "y": 119.49783820310982,
-      "ignoreScaling": false,
-      "vertices": [
-        {
-          "x": -121,
-          "y": 87,
-          "p": 1,
-          "binding": {
-            "targetName": "quad",
-            "type": "vertex",
-            "index": 3
-          }
-        },
-        {
-          "x": 139,
-          "y": 41,
-          "p": 1,
-          "binding": {
-            "targetName": "quad",
-            "type": "vertex",
-            "index": 2
-          }
-        },
-        {
-          "x": 134,
-          "y": 71,
-          "p": 1,
-          "binding": {
-            "targetName": "quad_2",
-            "type": "vertex",
-            "index": 3
-          }
-        },
-        {
-          "x": -102,
-          "y": 125,
-          "p": 1
-        }
-      ],
-      "spriteName": null,
-      "textureMode": "stretch",
-      "tileScaleX": 1,
-      "tileScaleY": 1,
-      "perspective": true,
-      "perspectiveAmount": 1,
-      "color": "#34506a",
-      "sortMode": "ignore",
-      "opacity": 1,
-      "blendMode": "source-over",
-      "isGrid": true,
-      "gridLinesX": 5,
-      "gridLinesY": 0,
-      "lineWidth": 1,
-      "gridColor": "#000000",
-      "filled": true,
-      "checkerboard": true,
-      "secondColor": "#797b0f",
-      "blur": 0,
-      "brightness": 1,
-      "saturation": 1,
-      "contrast": 1,
-      "hueShift": 0,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "quad_2",
+      "name": "Quad_408",
       "type": "Quad",
       "locked": false,
       "disabled": false,
@@ -186,54 +26,64 @@
       "interactions": {},
       "components": [
         {
-          "type": "Backface",
-          "vertexA": 0,
-          "vertexB": 1,
-          "axis": "x",
-          "op": ">",
-          "targetId": "quad_2",
-          "cullingType": "render"
+          "type": "Depth scaling controller",
+          "min": 0.14,
+          "max": 0.46
+        },
+        {
+          "type": "WalkBox",
+          "mode": "Add",
+          "perspectiveWalk3D": true
+        },
+        {
+          "type": "3d-parallax"
         }
       ],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 294.1813537886567,
-      "y": 46.13977497861935,
-      "ignoreScaling": false,
+      "x": 35.166188034715915,
+      "y": 116.90445599049438,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 139,
-          "y": 41,
-          "p": 1,
+          "x": 42,
+          "y": 5,
+          "p": 0.5,
           "binding": {
-            "targetName": "quad",
+            "targetName": "Quad",
             "type": "vertex",
-            "index": 2
+            "index": 3
           }
         },
         {
-          "x": 49,
-          "y": -40,
-          "p": 0.6,
+          "x": 62,
+          "y": 6,
+          "p": 0.5,
           "binding": {
-            "targetName": "quad",
+            "targetName": "Quad_81",
             "type": "vertex",
-            "index": 1
+            "index": 3
           }
         },
         {
-          "x": 50,
-          "y": -14,
-          "p": 0.6
-        },
-        {
-          "x": 134,
-          "y": 71,
+          "x": 81.93580650018578,
+          "y": 112.54594279068793,
           "p": 1,
           "binding": {
-            "targetName": "quad_1",
+            "targetName": "Quad_809",
+            "type": "vertex",
+            "index": 3
+          }
+        },
+        {
+          "x": -19.764065476246085,
+          "y": 113.00000000000003,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad",
             "type": "vertex",
             "index": 2
           }
@@ -245,18 +95,545 @@
       "tileScaleY": 1,
       "perspective": true,
       "perspectiveAmount": 1,
-      "color": "#1d364e",
+      "color": "#52779aff",
       "sortMode": "ignore",
       "opacity": 1,
       "blendMode": "source-over",
       "isGrid": true,
       "gridLinesX": 5,
-      "gridLinesY": 0,
+      "gridLinesY": 37,
       "lineWidth": 1,
-      "gridColor": "#000000",
+      "gridColor": "#ffffff",
       "filled": true,
-      "checkerboard": true,
-      "secondColor": "#5c5d04",
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad_809",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Depth scaling controller",
+          "min": 0.399,
+          "max": 0.46
+        },
+        {
+          "type": "3d-parallax"
+        },
+        {
+          "type": "WalkBox",
+          "mode": "Add",
+          "perspectiveWalk3D": true
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 168.51992237680227,
+      "y": 110.41936263465264,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 71,
+          "y": 55,
+          "p": 0.75,
+          "binding": {
+            "targetName": "Quad_81",
+            "type": "vertex",
+            "index": 2
+          }
+        },
+        {
+          "x": 216.65584797704486,
+          "y": 57,
+          "p": 0.8,
+          "binding": {
+            "targetName": "Quad_453",
+            "type": "vertex",
+            "index": 2
+          }
+        },
+        {
+          "x": 300,
+          "y": 114,
+          "p": 1
+        },
+        {
+          "x": 81.93580650018578,
+          "y": 112.54594279068793,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 2
+          }
+        }
+      ],
+      "spriteName": null,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad_449",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 36.8430022135659,
+      "y": 30.339470947146268,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 45,
+          "y": -28,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": 63,
+          "y": -28,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_81",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": 62,
+          "y": 6,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 42,
+          "y": 5,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 0
+          }
+        }
+      ],
+      "spriteName": "wall-window",
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad_81",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 111.05889252990909,
+      "y": 48.5084582543278,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 63,
+          "y": -28,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_449",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 72.65584797704486,
+          "y": -22,
+          "p": 0.75,
+          "binding": {
+            "targetName": "Quad_453",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": 71,
+          "y": 55,
+          "p": 0.75,
+          "binding": {
+            "targetName": "Quad_809",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": 62,
+          "y": 6,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 1
+          }
+        }
+      ],
+      "spriteName": "sub_drawers_top",
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#172f44",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad_453",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 120.35216523992761,
+      "y": 63.89694695250938,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 72.65584797704486,
+          "y": -22,
+          "p": 0.75,
+          "binding": {
+            "targetName": "Quad_81",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 217,
+          "y": -23,
+          "p": 0.8
+        },
+        {
+          "x": 216.65584797704486,
+          "y": 57,
+          "p": 0.8,
+          "binding": {
+            "targetName": "Quad_809",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 71,
+          "y": 55,
+          "p": 0.75,
+          "binding": {
+            "targetName": "Quad_809",
+            "type": "vertex",
+            "index": 0
+          }
+        }
+      ],
+      "spriteName": "weird",
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#22415e",
+      "sortMode": "v3",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "Quad",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": -1,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": -8.924886304045334,
+      "y": 4.42711970896282,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": 45,
+          "y": -28,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_449",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": -22.04600959634382,
+          "y": -12.433839014167653,
+          "p": 1
+        },
+        {
+          "x": -19.764065476246085,
+          "y": 113.00000000000003,
+          "p": 1,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 3
+          }
+        },
+        {
+          "x": 42,
+          "y": 5,
+          "p": 0.5,
+          "binding": {
+            "targetName": "Quad_408",
+            "type": "vertex",
+            "index": 0
+          }
+        }
+      ],
+      "spriteName": "sub_drawers_top",
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#172f44",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "miles_ds",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 0.5726037369098291,
+      "x": 42.067268431619866,
+      "y": 8.97575518362284,
+      "width": 7.160307879562472,
+      "height": 29.237923841546763,
+      "baseWidth": 96,
+      "baseHeight": 392,
+      "spriteName": "miles_ds-idle-right.json",
+      "color": "#00ffff",
+      "scale": 0.07458654041210909,
+      "refScale": 0.4,
+      "modelScale": 0.4,
+      "ignoreScaling": false,
+      "animationSpeed": 30,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "isPlayer": true,
+      "speed": 0.14,
+      "perceptionRadius": 600,
+      "direction": "left",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles_ds-idle-up.json",
+          "down": "miles_ds-idle-down.json",
+          "left": null,
+          "right": "miles_ds-idle-right.json"
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles_ds-walk-up.json",
+          "down": "miles_ds-walk-down.json",
+          "left": null,
+          "right": "miles_ds-walk-right.json"
+        }
+      },
+      "colliderWidth": 67,
+      "colliderHeight": 9
+    },
+    {
+      "name": "Static_923",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "x": 14,
+      "y": 108,
+      "width": 33.250758225836826,
+      "height": 39.03349878685193,
+      "baseWidth": 72.76646721126403,
+      "baseHeight": 85.42150498713605,
+      "spriteName": "office-plant",
+      "color": "#AAAAAA",
+      "scale": 0.4569516633162824,
+      "refScale": 1,
+      "modelScale": 1,
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
       "blur": 0,
       "brightness": 1,
       "saturation": 1,
@@ -272,10 +649,11 @@
     "y": 0,
     "zoom": 1
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5,
   "camDeadzoneX": 50,
   "camDeadzoneY": 30,
+  "camMinY": 7,
   "soundEnv": {
     "audioMaxDistance": 10000,
     "reverbMaxDist": 1750,

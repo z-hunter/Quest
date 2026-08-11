@@ -23,13 +23,20 @@ export const useNumericScrubbing = (panelRef: React.RefObject<any>) => {
       const panel = panelRef.current;
       if (!panel) return;
       if (event.button !== 0) return;
-      const label = (event.target as HTMLElement | null)?.closest('label.e-label');
+      const target = event.target as HTMLElement | null;
+      // Native number editing (typing, focus, spinner buttons) must never be
+      // intercepted by label scrubbing.
+      if (target?.closest('input, button, select, textarea')) return;
+
+      const label = target?.closest('label.e-label');
       if (!label || !panel.contains(label)) return;
 
+      // Most property rows use a label followed by an input. Some compact rows
+      // (such as Depth scaling controller Min/Max) contain the input inside
+      // their label. Prefer the owned field before looking at a sibling.
+      let input = label.querySelector<HTMLInputElement>('input[type="number"]');
       const nextSibling = label.nextElementSibling;
-      let input: HTMLInputElement | null = null;
-
-      if (nextSibling) {
+      if (!input && nextSibling) {
         if (
           nextSibling.tagName === 'INPUT' &&
           (nextSibling as HTMLInputElement).type === 'number'

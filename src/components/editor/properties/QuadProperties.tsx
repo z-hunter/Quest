@@ -119,6 +119,18 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
             </div>
           </div>
 
+          <div className="e-row" style={{ marginTop: '6px' }}>
+            <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                style={{ marginRight: '5px' }}
+                checked={!!quad.ignoreScaling}
+                onChange={(event) => handleChange('ignoreScaling', event.target.checked)}
+              />
+              Disable Depth-scaling
+            </label>
+          </div>
+
           {/* Vertices */}
           <div
             className="e-label ui-text-accent-blue ui-font-bold"

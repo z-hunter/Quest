@@ -9,6 +9,16 @@ export interface ThreeDParallaxComponent {
   type: '3d-parallax';
 }
 
+interface SurfaceParallaxBinding {
+  quadName: string;
+  u: number;
+  v: number;
+  worldX: number;
+  worldY: number;
+}
+
+const SURFACE_PARALLAX_BINDING = '__surfaceParallaxBinding';
+
 export class ThreeDParallaxSystem {
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
     const scene = quad.scene as SceneSystemContext | null;
@@ -27,26 +37,55 @@ export class ThreeDParallaxSystem {
       // Constraint: Only update if moving? No, update always to handle Editor dragging / Teleport / Idle on moving platform
       // if (actor.state !== 'walk') continue;
 
-      // Check if Actor is ON this Quad
-      // Use Visual Position for hitTest
+      const existingBinding = (target as any)[SURFACE_PARALLAX_BINDING] as
+        | SurfaceParallaxBinding
+        | undefined;
       const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
-      const targetVisual = toVisualPosition(
+      let targetVisual = toVisualPosition(
         { x: target.x, y: target.y },
         { x: camX, y: camY },
         pFactor
       );
-      const checkX = targetVisual.x;
-      const checkY = targetVisual.y;
 
-      if (quad.hitTest(checkX, checkY)) {
-        // Calculate new Parallax using centralized Barycentric Interpolation
-        // We use Visual Coordinates because the hitTest was done in Visual Space (implied by the shiftX/Y usage which simulates P=1 for checking)
-        // Actually wait, checkX/Y above are: actor.x + shiftX.
-        // shiftX = -camX * (pFactor - 1.0).
-        // checkX = actor.x - camX * (p - 1.0) => This IS the Visual Coordinate of the actor!
+      // A P value alone cannot follow a perspective-corrected surface: grid
+      // lines use its corrected local (u,v) coordinate. Recreate the prior
+      // surface point first, then apply only world movement made since the
+      // last reconciliation as the actor's intended displacement.
+      if (existingBinding?.quadName === quad.name) {
+        const surfacePoint = quad.getGridPointAt(existingBinding.u, existingBinding.v, true);
+        targetVisual = {
+          x: surfacePoint.x + (target.x - existingBinding.worldX),
+          y: surfacePoint.y + (target.y - existingBinding.worldY),
+        };
+      }
 
-        // So we pass checkX, checkY and true (isVisual)
-        const newP = quad.getParallaxAt(checkX, checkY, true);
+      const metrics = quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
+      if (metrics) {
+        const newP = metrics.parallax;
+
+        // Actor routes are authored in world coordinates. When P changes,
+        // preserve their visual destinations too; otherwise the actor itself
+        // stays on the surface while its stale raw target appears to jump
+        // towards an edge.
+        if (
+          (target.type === 'Actor' || target.type === 'Player') &&
+          Math.abs(newP - pFactor) > 0.000001
+        ) {
+          const actor = target as Actor;
+          const preserveVisualPoint = (point: { x: number; y: number }) =>
+            toWorldPosition(
+              toVisualPosition(point, { x: camX, y: camY }, pFactor),
+              { x: camX, y: camY },
+              newP
+            );
+          if (actor.target) actor.target = preserveVisualPoint(actor.target);
+          actor.route = actor.route.map(preserveVisualPoint);
+          if ((actor as any).plannedMoveTarget) {
+            (actor as any).plannedMoveTarget = preserveVisualPoint(
+              (actor as any).plannedMoveTarget
+            );
+          }
+        }
 
         // Apply new Parallax
         // Only if different?
@@ -55,9 +94,18 @@ export class ThreeDParallaxSystem {
         // Update Actor World Position to maintain Visual Position
         // Wy = Vy + Cy * (P - 1)
         // Wx = Vx + Cx * (P - 1)
-        const newWorld = toWorldPosition({ x: checkX, y: checkY }, { x: camX, y: camY }, newP);
+        const newWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, newP);
         target.x = newWorld.x;
         target.y = newWorld.y;
+        (target as any)[SURFACE_PARALLAX_BINDING] = {
+          quadName: quad.name,
+          u: metrics.u,
+          v: metrics.v,
+          worldX: newWorld.x,
+          worldY: newWorld.y,
+        } satisfies SurfaceParallaxBinding;
+      } else if (existingBinding?.quadName === quad.name) {
+        delete (target as any)[SURFACE_PARALLAX_BINDING];
       }
 
       // --- Shadow Logic ---

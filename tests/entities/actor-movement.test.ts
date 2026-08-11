@@ -221,6 +221,26 @@ describe('Actor route movement', () => {
     expect(actor.x).toBeLessThan(90);
   });
 
+  it('does not snap to a terminal route point that becomes unwalkable', () => {
+    const fixture = createSceneFixture();
+    const actor = fixture.addPlayer('Hero', 50, 90);
+    actor.speed = 20;
+    actor.target = { x: 50, y: 100 };
+    actor.route = [{ x: 50, y: 100 }];
+    actor.routeIndex = 0;
+    actor.setState('walk');
+
+    actor.update(1, (_x: number, y: number) => y < 100);
+
+    expect(actor.getMoveResult().status).toBe('blocked');
+    expect(actor.getMoveResult().code).toBe('route_blocked');
+    expect(actor.x).toBe(50);
+    expect(actor.y).toBe(90);
+    expect(actor.getRouteBlockDiagnostic()).toMatchObject({
+      attemptedPosition: { x: 50, y: 100 },
+    });
+  });
+
   it('slides along one axis when a diagonal route step is blocked', () => {
     const fixture = createSceneFixture();
     const actor = fixture.addPlayer('Hero', 0, 0);

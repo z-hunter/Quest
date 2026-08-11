@@ -332,7 +332,10 @@ export function getEntityRenderSortY(entity: Entity, camera: { y: number }): num
             : quad.sortMode === 'v3'
               ? 3
               : undefined;
-    const vertex = vertexIndex !== undefined ? quad.vertices[vertexIndex] : null;
+    const vertex =
+      vertexIndex !== undefined
+        ? (quad.getEffectiveVertices?.() || quad.vertices)[vertexIndex]
+        : null;
     if (vertex) {
       y = vertex.y;
       const quadParallax = quad.parallax !== undefined ? quad.parallax : 1.0;

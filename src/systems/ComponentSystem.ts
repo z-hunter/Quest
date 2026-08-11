@@ -147,6 +147,12 @@ export interface WalkBoxComponent {
   perspectiveWalk3D?: boolean;
 }
 
+export interface DepthScalingControllerComponent {
+  type: 'Depth scaling controller';
+  min?: number;
+  max?: number;
+}
+
 export type AnyComponent = (
   | SubsceneComponent
   | SwitchComponent
@@ -161,6 +167,7 @@ export type AnyComponent = (
   | SurfaceComponent
   | StateComponent
   | WalkBoxComponent
+  | DepthScalingControllerComponent
   | ShadowComponent
   | BackfaceComponent
   | ThreeDParallaxComponent
@@ -720,13 +727,9 @@ export class ComponentSystem {
 
   private static getQuadVisualPolygon(
     quad: QuadObject,
-    scene: ActivationSceneContext
+    _scene: ActivationSceneContext
   ): { x: number; y: number }[] {
-    const globalP = quad.parallax !== undefined ? quad.parallax : 1.0;
-    return quad.vertices.map((v) => {
-      const p = (v.p !== undefined ? v.p : 1.0) * globalP;
-      return toVisualPosition({ x: v.x, y: v.y }, scene.camera, p);
-    });
+    return quad.getVisualVertices();
   }
 
   private static getPolygonVisualPolygon(

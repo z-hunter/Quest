@@ -342,8 +342,11 @@ export class ActorNavigationService {
         const component = entity.components?.find(
           (candidate: { type?: string }) => candidate.type === 'WalkBox'
         ) as { mode?: string } | undefined;
-        const vertices = (entity as unknown as { vertices?: Array<{ x: number; y: number }> })
-          .vertices;
+        const quad = entity as unknown as {
+          vertices?: Array<{ x: number; y: number }>;
+          getEffectiveVertices?: () => Array<{ x: number; y: number }>;
+        };
+        const vertices = quad.getEffectiveVertices?.() || quad.vertices;
         if (entity.disabled || !component || !vertices?.length) return [];
         const mode: NavigationWalkbox['mode'] =
           component.mode === 'Subtract' || component.mode === 'Add' ? component.mode : 'Invert';

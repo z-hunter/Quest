@@ -1,4 +1,5 @@
 import { Entity } from '../entities/Entity';
+import { QuadObject } from '../entities/QuadObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
@@ -10,6 +11,10 @@ import { Geometry } from '../utils/Geometry';
 import { SceneRenderer } from '../graphics/SceneRenderer';
 import type { IGame } from '../core/IGame';
 import { toVisualPosition } from '../utils/Parallax';
+import {
+  ThreeDParallaxSystem,
+  type ThreeDParallaxComponent,
+} from '../systems/ThreeDParallaxSystem';
 import { updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import {
@@ -710,6 +715,57 @@ export class Scene {
     return this.scaling.min + t * (this.scaling.max - this.scaling.min);
   }
 
+  getDepthScaleFor(entity: Entity): number {
+    if (entity.ignoreScaling) return 1;
+
+    const visualAnchor =
+      entity.type === 'Quad'
+        ? (() => {
+            const vertices = (entity as QuadObject).getVisualVertices(false);
+            return vertices.reduce(
+              (sum, vertex) => ({
+                x: sum.x + vertex.x / vertices.length,
+                y: sum.y + vertex.y / vertices.length,
+              }),
+              { x: 0, y: 0 }
+            );
+          })()
+        : toVisualPosition(
+            { x: entity.x, y: entity.y },
+            this.camera,
+            entity.parallax !== undefined ? entity.parallax : 1
+          );
+
+    for (let index = this.entities.length - 1; index >= 0; index--) {
+      const candidate = this.entities[index];
+      if (
+        candidate.disabled ||
+        !candidate.visible ||
+        candidate.type !== 'Quad' ||
+        !candidate.components?.some(
+          (component: any) => component.type === 'Depth scaling controller'
+        )
+      ) {
+        continue;
+      }
+      const controller = candidate.components.find(
+        (component: any) => component.type === 'Depth scaling controller'
+      ) as { min?: number; max?: number };
+      const metrics = (candidate as QuadObject).getSurfaceMetricsAt(
+        visualAnchor.x,
+        visualAnchor.y,
+        true,
+        false
+      );
+      if (!metrics) continue;
+      const min = Number.isFinite(controller.min) ? controller.min! : 0.5;
+      const max = Number.isFinite(controller.max) ? controller.max! : 1;
+      return min + metrics.v * (max - min);
+    }
+
+    return this.scaling.enabled ? this.getScaling(visualAnchor.y) : 1;
+  }
+
   getCorrectionalScale(): number {
     const value = this.scaling?.correctionalScale;
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1;
@@ -892,8 +948,19 @@ export class Scene {
       return true;
     }
 
+    const wbEntities = this.getWalkboxEntities();
+    // Quad WalkBox polygons are projected with the current render camera.
+    // Using collisionCamera only for the Actor produces two different visual
+    // spaces while auto-centering is smoothing, which can falsely reject a
+    // player standing near a Quad edge.
+    const hasQuadWalkbox = wbEntities.some(
+      (entity) =>
+        !entity.disabled &&
+        !!entity.components?.some((component: any) => component?.type === 'WalkBox') &&
+        !!(entity as any).vertices
+    );
     let sourceRect = null;
-    const cam = this.collisionCamera || this.camera;
+    const cam = hasQuadWalkbox ? this.camera : this.collisionCamera || this.camera;
     if (sourceEntity && sourceEntity.colliderWidth > 0 && sourceEntity.colliderHeight > 0) {
       // Apply Source Parallax & Visual correction to Source Rect (Visual Collider)
       const sp = sourceEntity.parallax !== undefined ? sourceEntity.parallax : 1.0;
@@ -961,23 +1028,12 @@ export class Scene {
     // Integrated WalkBox Components (Quads)
     // We look for entities with 'WalkBox' component and treat them as walkboxes
     // Optimization: In a large scene, we might want to cache this list.
-    const wbEntities = this.getWalkboxEntities();
     wbEntities.forEach((entity) => {
       if (entity.disabled) return;
       if (entity.components) {
         const wbComp = entity.components.find((c: any) => c.type === 'WalkBox');
         if (wbComp && (entity as any).vertices) {
-          const globalP = (entity as any).parallax !== undefined ? (entity as any).parallax : 1.0;
-          const vertices = (entity as any).vertices.map((v: any) => {
-            const p = (v.p !== undefined ? v.p : 1.0) * globalP;
-            let vx = v.x;
-            let vy = v.y;
-            if (cam && p !== 1.0) {
-              vx = v.x - cam.x * (p - 1.0);
-              vy = v.y - cam.y * (p - 1.0);
-            }
-            return { x: vx, y: vy };
-          });
+          const vertices = (entity as QuadObject).getVisualVertices();
 
           activeWalkboxes.push({
             name: entity.name,
@@ -1203,6 +1259,21 @@ export class Scene {
     }
   }
 
+  /**
+   * Surface tracking has to run at fixed points in the frame, not merely when
+   * an individual Quad happens to update. This keeps actor movement independent
+   * from the order of entities in the scene array.
+   */
+  private updateSurfaceParallax(): void {
+    for (const entity of this.entities) {
+      if (entity.disabled || entity.type !== 'Quad') continue;
+      const component = entity.components?.find((item: any) => item?.type === '3d-parallax');
+      if (component) {
+        ThreeDParallaxSystem.update(entity as QuadObject, component as ThreeDParallaxComponent);
+      }
+    }
+  }
+
   update(deltaTime: number): void {
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
@@ -1215,6 +1286,7 @@ export class Scene {
     });
     this._centeringDirX = cameraState.centeringDirX;
     this._centeringDirY = cameraState.centeringDirY;
+    this.updateSurfaceParallax();
 
     this.entities.forEach((entity) => {
       if (entity.disabled) return;
@@ -1224,6 +1296,7 @@ export class Scene {
         entity.update(deltaTime);
       }
     });
+    this.updateSurfaceParallax();
 
     if (this.pickupAnimations.length > 0) {
       const nextAnimations: PickupAnimation[] = [];

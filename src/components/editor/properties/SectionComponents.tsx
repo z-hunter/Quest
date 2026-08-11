@@ -269,6 +269,7 @@ export const SectionComponents: React.FC = () => {
                 ? [
                     { value: 'Backface', label: 'Backface' },
                     { value: '3d-parallax', label: '3d-parallax' },
+                    { value: 'Depth scaling controller', label: 'Depth scaling controller' },
                     { value: 'WalkBox', label: 'WalkBox (Collider)' },
                   ]
                 : []),
@@ -390,6 +391,8 @@ export const SectionComponents: React.FC = () => {
                 });
               } else if (type === '3d-parallax') {
                 o.components.unshift({ type: '3d-parallax' });
+              } else if (type === 'Depth scaling controller') {
+                o.components.unshift({ type: 'Depth scaling controller', min: 0.5, max: 1 });
               } else if (type === 'WalkBox') {
                 o.components.unshift({ type: 'WalkBox', mode: 'Invert' });
               }
@@ -1437,6 +1440,49 @@ export const SectionComponents: React.FC = () => {
                   </div>
                 </div>
               </>
+            )}
+
+            {comp.type === 'Depth scaling controller' && (
+              <div className="e-row">
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--ui-label-color)',
+                    fontStyle: 'italic',
+                    marginBottom: '5px',
+                  }}
+                >
+                  Controls depth scaling inside this Quad from its top edge to its bottom edge.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                  <label className="e-label">
+                    Min
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="e-input"
+                      value={comp.min ?? 0.5}
+                      onChange={(event) => {
+                        comp.min = Number(event.target.value) || 0;
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </label>
+                  <label className="e-label">
+                    Max
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="e-input"
+                      value={comp.max ?? 1}
+                      onChange={(event) => {
+                        comp.max = Number(event.target.value) || 0;
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
             )}
 
             {comp.type === 'WalkBox' && (
