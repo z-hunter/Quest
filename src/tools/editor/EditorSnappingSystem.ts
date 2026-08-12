@@ -19,7 +19,8 @@ export class EditorSnappingSystem {
     selectedObject: Entity,
     shiftKey: boolean,
     altKey: boolean,
-    zoom: number = 1.0
+    zoom: number = 1.0,
+    excludedVertexRefs?: ReadonlySet<string>
   ): { x: number; y: number; binding: QuadVertexBinding | null; p?: number } {
     const result = {
       x: mouseWorldPos.x,
@@ -206,7 +207,8 @@ export class EditorSnappingSystem {
 
           const qGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
           // Vertices
-          q.vertices.forEach((qv) => {
+          q.vertices.forEach((qv, qIndex) => {
+            if (excludedVertexRefs?.has(`${q.name}:${qIndex}`)) return;
             const effP = (qv.p !== undefined ? qv.p : 1.0) * qGlobalP;
             const vx = Math.round(qv.x - camX * (effP - qGlobalP));
             const vy = Math.round(qv.y - camY * (effP - qGlobalP));

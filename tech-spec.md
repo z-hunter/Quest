@@ -211,6 +211,8 @@ This was verified in Playwright against `t-quad`: changing `Quad_408` from P=1 t
 
 Selection, snapping, Retro Grid lookup, controller containment, and surface metrics use visual-space Quad geometry. A direct vertex binding keeps the source authored X/Y equal to the target's authored X/Y and converts only local P so both Quads resolve the same effective P. A Grid binding converts from the target's inner visual grid point back to authored source coordinates while accounting for the target's outer global-P transform. These rules prevent a binding resolver from undoing the global-P compensation on the next update.
 
+Bindings are directed and allow many incoming links: several vertices may bind to the same target vertex or Grid node. When an editor vertex is rebound, only its previous matching reciprocal vertex-link is detached before the new binding is stored; no reverse link is created automatically. This prevents a stale reciprocal link from restoring an old Quad-vertex relationship while keeping the graph unrestricted on incoming connections.
+
 ### 3.4 Surface Metrics, Perspective Correction, and 3d-parallax
 
 `QuadObject.getSurfaceMetricsAt()` is the shared surface-depth resolver. Given a point, it returns corrected local coordinates `(u, v)`, interpolated effective parallax, and local surface axes.

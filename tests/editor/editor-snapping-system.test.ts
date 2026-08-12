@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QuadObject } from '../../src/entities/QuadObject';
 import { EditorSnappingSystem } from '../../src/tools/editor/EditorSnappingSystem';
 import { EditorTransformManager } from '../../src/tools/editor/EditorTransformManager';
+import { useEditorStore } from '../../src/store/editorStore';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 function addQuad(fixture: ReturnType<typeof createSceneFixture>, name: string): QuadObject {
@@ -205,6 +206,133 @@ describe('Editor quad snapping', () => {
     expect(source.vertices[0].p).toBe(2);
     expect(source.vertices[0].x - fixture.scene.camera.x * (source.vertices[0].p - 1)).toBe(100);
     expect(source.vertices[0].y - fixture.scene.camera.y * (source.vertices[0].p - 1)).toBe(50);
+  });
+
+  it('replaces an old reciprocal vertex binding when rebinding to a grid node', () => {
+    const fixture = createSceneFixture();
+    const source = addQuad(fixture, 'source');
+    const oldTarget = addQuad(fixture, 'old-target');
+    const grid = addQuad(fixture, 'grid');
+    grid.isGrid = true;
+    source.vertices[0].binding = { targetName: oldTarget.name, type: 'vertex', index: 0 };
+    oldTarget.vertices[0].binding = { targetName: source.name, type: 'vertex', index: 0 };
+
+    const editor = {
+      enabled: true,
+      selectedObject: source,
+      game: { ...fixture.game, sceneManager: fixture.game.sceneManager },
+    };
+    const manager = new EditorTransformManager(editor as any);
+    manager.draggingVertexIndex = 0;
+    const gridBinding = { targetName: grid.name, type: 'grid' as const, gridU: 0.5, gridV: 0.5 };
+    manager.currentSnapBinding = gridBinding;
+    useEditorStore.getState().selectVertex(0);
+
+    manager.onMouseUp({} as MouseEvent);
+    source.update(0);
+
+    expect(source.vertices[0].binding).toEqual(gridBinding);
+    expect(oldTarget.vertices[0].binding).toEqual(gridBinding);
+  });
+
+  it('applies a new binding to every vertex in the connected group', () => {
+    const fixture = createSceneFixture();
+    const group = [0, 1, 2, 3].map((i) => addQuad(fixture, `group-${i}`));
+    const target = addQuad(fixture, 'target');
+    for (let i = 0; i < group.length - 1; i++) {
+      group[i].vertices[0].binding = {
+        targetName: group[i + 1].name,
+        type: 'vertex',
+        index: 0,
+      };
+    }
+
+    const editor = {
+      enabled: true,
+      selectedObject: group[0],
+      game: { ...fixture.game, sceneManager: fixture.game.sceneManager },
+    };
+    const manager = new EditorTransformManager(editor as any);
+    const targetBinding = { targetName: target.name, type: 'vertex' as const, index: 0 };
+    manager.draggingVertexIndex = 0;
+    manager.currentSnapBinding = targetBinding;
+    useEditorStore.getState().selectVertex(0);
+
+    manager.onMouseUp({} as MouseEvent);
+
+    for (const quad of group) expect(quad.vertices[0].binding).toEqual(targetBinding);
+  });
+
+  it('allows several vertices to bind to the same Quad vertex', () => {
+    const fixture = createSceneFixture();
+    const first = addQuad(fixture, 'first');
+    const second = addQuad(fixture, 'second');
+    const target = addQuad(fixture, 'target');
+    const editor = {
+      enabled: true,
+      selectedObject: first,
+      game: { ...fixture.game, sceneManager: fixture.game.sceneManager },
+    };
+    const manager = new EditorTransformManager(editor as any);
+    const bindToTarget = { targetName: target.name, type: 'vertex' as const, index: 0 };
+
+    manager.draggingVertexIndex = 0;
+    manager.currentSnapBinding = bindToTarget;
+    useEditorStore.getState().selectVertex(0);
+    manager.onMouseUp({} as MouseEvent);
+
+    editor.selectedObject = second;
+    manager.draggingVertexIndex = 0;
+    manager.currentSnapBinding = bindToTarget;
+    useEditorStore.getState().selectVertex(0);
+    manager.onMouseUp({} as MouseEvent);
+
+    expect(first.vertices[0].binding).toEqual(bindToTarget);
+    expect(second.vertices[0].binding).toEqual(bindToTarget);
+    expect(target.vertices[0].binding).toBeUndefined();
+  });
+
+  it('ignores vertices that belong to the moving connected group', () => {
+    const fixture = createSceneFixture();
+    const source = addQuad(fixture, 'source');
+    const oldTarget = addQuad(fixture, 'group-2');
+    const group3 = addQuad(fixture, 'group-3');
+    const group4 = addQuad(fixture, 'group-4');
+    const external = addQuad(fixture, 'external');
+    source.vertices[0].binding = { targetName: oldTarget.name, type: 'vertex', index: 0 };
+    oldTarget.vertices[0].binding = { targetName: group3.name, type: 'vertex', index: 0 };
+    group3.vertices[0].binding = { targetName: group4.name, type: 'vertex', index: 0 };
+    oldTarget.vertices[0] = {
+      x: 20,
+      y: 20,
+      p: 1,
+      binding: { targetName: group3.name, type: 'vertex', index: 0 },
+    };
+    group3.vertices[0] = {
+      x: 20,
+      y: 20,
+      p: 1,
+      binding: { targetName: group4.name, type: 'vertex', index: 0 },
+    };
+    group4.vertices[0] = { x: 20, y: 20, p: 1 };
+    external.vertices[0] = { x: 20, y: 20, p: 1 };
+
+    const result = EditorSnappingSystem.snapVertex(
+      { x: 20, y: 20 },
+      source.vertices,
+      0,
+      fixture.scene,
+      0,
+      0,
+      true,
+      source,
+      false,
+      true,
+      1,
+      new Set(['source:0', 'group-2:0', 'group-3:0', 'group-4:0'])
+    );
+
+    expect(result.binding).toEqual({ targetName: external.name, type: 'vertex', index: 0 });
   });
 });
 

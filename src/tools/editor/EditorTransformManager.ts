@@ -12,6 +12,34 @@ import { EditorSnappingSystem } from './EditorSnappingSystem';
 import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../../entities/EntityPrefabs';
 import { useEditorStore } from '../../store/editorStore';
 
+function clearReciprocalVertexBinding(scene: any, quad: QuadObject, index: number): void {
+  const binding = quad.vertices[index]?.binding;
+  if (!binding || binding.type !== 'vertex') return;
+
+  const target = scene.entities.find((entity: any) => entity.name === binding.targetName);
+  const targetVertex = target?.type === 'Quad' ? target.vertices[binding.index ?? 0] : undefined;
+  if (
+    targetVertex?.binding?.type === 'vertex' &&
+    targetVertex.binding.targetName === quad.name &&
+    targetVertex.binding.index === index
+  ) {
+    delete targetVertex.binding;
+  }
+}
+
+function applyVertexBinding(
+  scene: any,
+  source: QuadObject,
+  sourceIndex: number,
+  binding: QuadVertexBinding
+): void {
+  const group = QuadObject.getConnectedVertices(scene, source, sourceIndex);
+  group.forEach((ref) => clearReciprocalVertexBinding(scene, ref.quad, ref.index));
+  group.forEach((ref) => {
+    ref.v.binding = { ...binding };
+  });
+}
+
 export class EditorTransformManager {
   private editor: SceneEditor;
 
@@ -627,6 +655,15 @@ export class EditorTransformManager {
           // Use Snapping System
           const zoom = scene.camera.zoom;
           const isQuad = (editor.selectedObject as any).type === 'Quad';
+          const excludedVertexRefs = isQuad
+            ? new Set(
+                QuadObject.getConnectedVertices(
+                  scene,
+                  editor.selectedObject as QuadObject,
+                  this.draggingVertexIndex
+                ).map((ref) => `${ref.quad.name}:${ref.index}`)
+              )
+            : undefined;
 
           // 1. Calculate Snapped Position for the PRIMARY dragged vertex
           const snapResult = EditorSnappingSystem.snapVertex(
@@ -640,7 +677,8 @@ export class EditorTransformManager {
             editor.selectedObject as Entity,
             e.shiftKey,
             e.altKey && isQuad,
-            zoom
+            zoom,
+            excludedVertexRefs
           );
 
           // 2. Determine Delta for the Primary Vertex
@@ -1127,34 +1165,8 @@ export class EditorTransformManager {
       ) {
         const q = this.editor.selectedObject as QuadObject;
         if (q.vertices[this.draggingVertexIndex]) {
-          const sourceVertex = q.vertices[this.draggingVertexIndex];
-          sourceVertex.binding = this.currentSnapBinding;
-
-          // MUTUAL BINDING LOGIC
-          // If we bind A -> B, we also want B -> A (if B is compatible and not already bound to a third party C in a way that conflicts,
-          // although our new group-move logic handles chains, mutual links are more robust).
-          if (this.currentSnapBinding.type === 'vertex') {
-            const scene = this.editor.game.sceneManager.currentScene;
-            const targetEnt = scene.entities.find(
-              (e: any) => e.name === this.currentSnapBinding!.targetName
-            );
-            if (targetEnt && (targetEnt as any).type === 'Quad') {
-              const targetQuad = targetEnt as QuadObject;
-              const targetVIndex = this.currentSnapBinding.index;
-              if (targetVIndex !== undefined && targetQuad.vertices[targetVIndex]) {
-                const targetVertex = targetQuad.vertices[targetVIndex];
-
-                // Only create back-link if not already bound, OR if we want to enforce strong pairing.
-                // User said: "that vertex binds to the one that bound".
-                // So we force it.
-                targetVertex.binding = {
-                  targetName: q.name,
-                  type: 'vertex',
-                  index: this.draggingVertexIndex,
-                };
-              }
-            }
-          }
+          const scene = this.editor.game.sceneManager.currentScene;
+          applyVertexBinding(scene, q, this.draggingVertexIndex, this.currentSnapBinding);
         }
       } else if (
         this.draggingVertexIndex >= 0 &&
