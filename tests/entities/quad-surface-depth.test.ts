@@ -115,6 +115,36 @@ describe('Quad surface depth', () => {
     expect(npc.x).toBeCloseTo(16, 6);
   });
 
+  it('applies the perspective derivative to routed movement on a 3d-parallax Quad', () => {
+    const createRoutedActor = (y: number) => {
+      const fixture = createSceneFixture();
+      const actor = new Actor(fixture.game, 50, y, 0, 0, `NPC-${y}`);
+      actor.speed = 10;
+      fixture.scene.addEntity(actor);
+
+      const quad = new QuadObject(fixture.game, 'perspective-floor');
+      quad.vertices = [
+        { x: 40, y: 0, p: 1 },
+        { x: 60, y: 0, p: 1 },
+        { x: 100, y: 100, p: 1 },
+        { x: 0, y: 100, p: 1 },
+      ];
+      quad.components = [
+        { type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true },
+        { type: '3d-parallax' },
+      ];
+      fixture.scene.addEntity(quad);
+
+      actor.moveTo(50, 90);
+      actor.update(1);
+      return Math.hypot(actor.x - 50, actor.y - y);
+    };
+
+    const farStep = createRoutedActor(20);
+    const nearStep = createRoutedActor(50);
+    expect(farStep).toBeLessThan(nearStep);
+  });
+
   it('scales Quad runtime geometry without mutating authored vertices', () => {
     const fixture = createSceneFixture();
     const controller = new QuadObject(fixture.game, 'controller');

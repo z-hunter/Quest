@@ -142,6 +142,48 @@ describe('3D Perspective Walk on Quad Walkbox', () => {
     expect(Math.hypot(player.x - 50, player.y - 80)).toBeCloseTo(verticalStep, 6);
   });
 
+  it('scales the screen step by the perspective surface derivative', () => {
+    const createPerspectiveWalk = () => {
+      const fixture = createSceneFixture();
+      const player = fixture.addPlayer('Hero', 50, 20);
+      player.speed = 10;
+
+      const quad = new QuadObject(fixture.game as any, 'PerspectiveFloor');
+      quad.vertices = [
+        { x: 40, y: 0, p: 1.0 },
+        { x: 60, y: 0, p: 1.0 },
+        { x: 100, y: 100, p: 1.0 },
+        { x: 0, y: 100, p: 1.0 },
+      ];
+      quad.perspective = true;
+      quad.perspectiveAmount = 1;
+      quad.components = [
+        { type: 'WalkBox', mode: 'Invert', perspectiveWalk3D: true },
+        { type: '3d-parallax' },
+      ];
+      fixture.scene.addEntity(quad);
+
+      return { fixture, player, quad };
+    };
+
+    const far = createPerspectiveWalk();
+    far.fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+    far.player.handlePlayerInput(1);
+    const farScreenStep = Math.hypot(far.player.x - 50, far.player.y - 20);
+
+    const near = createPerspectiveWalk();
+    near.player.y = 50;
+    near.fixture.game.input.isDown = (key: string) => key === 'ArrowUp';
+    near.player.handlePlayerInput(1);
+    const nearScreenStep = Math.hypot(near.player.x - 50, near.player.y - 50);
+
+    // Perspective compression makes the projected V derivative smaller near
+    // the horizon. A fixed authored-plane step must therefore cover fewer
+    // screen pixels there; the old normalized screen-vector code returned the
+    // same distance at both depths.
+    expect(farScreenStep).toBeLessThan(nearScreenStep);
+  });
+
   it('uses the legacy parallax speed scale to calibrate perspective floor movement', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 50, 80);

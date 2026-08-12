@@ -33,6 +33,9 @@ export interface QuadSurfaceMetrics {
   parallax: number;
   axisU: QuadPoint;
   axisV: QuadPoint;
+  /** Tangents of the same surface with Perspective correction disabled. */
+  referenceAxisU: QuadPoint;
+  referenceAxisV: QuadPoint;
 }
 
 /** Maps the unit square (u, v) to a Quad's screen-space vertices. */
@@ -1337,7 +1340,20 @@ export class QuadObject extends Entity {
     const axisU = { x: (uPoint.x - x) / uStep, y: (uPoint.y - y) / uStep };
     const axisV = { x: (vPoint.x - x) / vStep, y: (vPoint.y - y) / vStep };
 
-    return { inside: true, u, v, parallax, axisU, axisV };
+    // Use the uncorrected bilinear surface as the authored-distance metric.
+    // The corrected derivatives describe how that distance is displayed, but
+    // must not be used to normalize the step or the perspective effect would
+    // cancel out and movement would remain screen-pixel based.
+    const referenceAxisU = {
+      x: (1 - v) * (p1.x - p0.x) + v * (p2.x - p3.x),
+      y: (1 - v) * (p1.y - p0.y) + v * (p2.y - p3.y),
+    };
+    const referenceAxisV = {
+      x: (1 - u) * (p3.x - p0.x) + u * (p2.x - p1.x),
+      y: (1 - u) * (p3.y - p0.y) + u * (p2.y - p1.y),
+    };
+
+    return { inside: true, u, v, parallax, axisU, axisV, referenceAxisU, referenceAxisV };
   }
 
   private resolveBindings() {

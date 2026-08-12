@@ -2,7 +2,7 @@ import { Entity, type EntityData } from './Entity';
 import { Animator } from '../core/Animator';
 import { useEditorStore } from '../store/editorStore';
 import type { IGame } from '../core/IGame';
-import { toWorldPosition } from '../utils/Parallax';
+import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
 import { Geometry } from '../utils/Geometry';
 import type { SceneObject } from './SceneObject';
 
@@ -474,8 +474,10 @@ export class Actor extends Entity {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       const step = this.getMovementStep(deltaTime);
+      const surfaceStep = this.getSurfaceRouteStep(currentTarget, step);
+      const reached = surfaceStep ? surfaceStep.reached : dist <= step;
 
-      if (dist <= step) {
+      if (reached) {
         // A route can become invalid after it was planned: dynamic colliders,
         // effective Quad geometry and surface P updates may all move a boundary
         // between frames.  Do not bypass collision checks just because this is
@@ -517,10 +519,11 @@ export class Actor extends Entity {
           );
         }
       } else {
-        const moveX = (dx / dist) * step;
-        const moveY = (dy / dist) * step;
-        const nextX = this.x + moveX;
-        const nextY = this.y + moveY;
+        const next = surfaceStep
+          ? surfaceStep.position
+          : { x: this.x + (dx / dist) * step, y: this.y + (dy / dist) * step };
+        const nextX = next.x;
+        const nextY = next.y;
 
         // Determine Direction
         if (Math.abs(dx) > Math.abs(dy)) {
@@ -648,10 +651,7 @@ export class Actor extends Entity {
       const quad = entity as any;
       if (!quad.vertices || quad.vertices.length < 4) continue;
       const walkBox = quad.components?.find(
-        (c: any) =>
-          c &&
-          (c.type === 'WalkBox' || c.type === 'Walkbox') &&
-          (c.perspectiveWalk3D === true || c.threeDPerspectiveWalk === true)
+        (c: any) => c && (c.type === 'WalkBox' || c.type === 'Walkbox')
       );
       if (!walkBox) continue;
 
@@ -673,6 +673,24 @@ export class Actor extends Entity {
       const boundaryMargin = Math.max(2, distance * 1.5, colliderMargin);
       if (edgeDistance <= boundaryMargin) continue;
 
+      const perspectiveWalk =
+        walkBox.perspectiveWalk3D === true || walkBox.threeDPerspectiveWalk === true;
+      const isParallaxSurface = quad.components?.some((c: any) => c?.type === '3d-parallax');
+      if (isParallaxSurface) {
+        const localPosition = this.getLocalSurfaceStepPosition(
+          quad,
+          metrics,
+          inputX,
+          inputY,
+          distance,
+          perspectiveWalk
+        );
+        if (localPosition) return localPosition;
+        continue;
+      }
+
+      if (!perspectiveWalk) continue;
+
       let dx = inputX * metrics.axisU.x + inputY * metrics.axisV.x;
       let dy = inputX * metrics.axisU.y + inputY * metrics.axisV.y;
       const directionLength = Math.hypot(dx, dy);
@@ -688,6 +706,111 @@ export class Actor extends Entity {
         cam || { x: 0, y: 0 },
         actorP
       );
+    }
+
+    return null;
+  }
+
+  private getLocalSurfaceStepPosition(
+    quad: any,
+    metrics: any,
+    inputX: number,
+    inputY: number,
+    distance: number,
+    perspectiveWalk: boolean
+  ): { x: number; y: number } | null {
+    const inputLength = Math.hypot(inputX, inputY);
+    if (inputLength < 0.0000001) return null;
+
+    let qU = inputX / inputLength;
+    let qV = inputY / inputLength;
+    if (!perspectiveWalk) {
+      // Preserve ordinary arrow directions when 3D Perspective walking is
+      // disabled, but resolve their step through the corrected surface.
+      const determinant = metrics.axisU.x * metrics.axisV.y - metrics.axisV.x * metrics.axisU.y;
+      if (!Number.isFinite(determinant) || Math.abs(determinant) < 0.0000001) return null;
+      const desiredX = inputX / inputLength;
+      const desiredY = inputY / inputLength;
+      const solvedU = (desiredX * metrics.axisV.y - desiredY * metrics.axisV.x) / determinant;
+      const solvedV = (metrics.axisU.x * desiredY - metrics.axisU.y * desiredX) / determinant;
+      const solvedLength = Math.hypot(solvedU, solvedV);
+      if (!Number.isFinite(solvedLength) || solvedLength < 0.0000001) return null;
+      qU = solvedU / solvedLength;
+      qV = solvedV / solvedLength;
+    }
+
+    const referenceX = metrics.referenceAxisU.x * qU + metrics.referenceAxisV.x * qV;
+    const referenceY = metrics.referenceAxisU.y * qU + metrics.referenceAxisV.y * qV;
+    const referenceLength = Math.hypot(referenceX, referenceY);
+    if (!Number.isFinite(referenceLength) || referenceLength < 0.0000001) return null;
+
+    const nextU = metrics.u + (qU * distance) / referenceLength;
+    const nextV = metrics.v + (qV * distance) / referenceLength;
+    if (nextU < 0 || nextU > 1 || nextV < 0 || nextV > 1) return null;
+
+    const nextVisual = quad.getGridPointAt(nextU, nextV, true);
+    if (!nextVisual || !Number.isFinite(nextVisual.x) || !Number.isFinite(nextVisual.y)) {
+      return null;
+    }
+
+    return toWorldPosition(
+      nextVisual,
+      this.scene?.camera || { x: 0, y: 0 },
+      this.parallax !== undefined ? this.parallax : 1.0
+    );
+  }
+
+  private getSurfaceRouteStep(
+    target: { x: number; y: number },
+    distance: number
+  ): { position: { x: number; y: number }; reached: boolean } | null {
+    if (!this.scene?.entities) return null;
+
+    const camera = this.scene.camera || { x: 0, y: 0 };
+    const actorP = this.parallax !== undefined ? this.parallax : 1.0;
+    const currentVisual = toVisualPosition({ x: this.x, y: this.y }, camera, actorP);
+    const targetVisual = toVisualPosition(target, camera, actorP);
+
+    for (let index = this.scene.entities.length - 1; index >= 0; index--) {
+      const quad = this.scene.entities[index] as any;
+      if (quad.disabled || quad.type !== 'Quad' || !quad.vertices?.length) continue;
+      if (!quad.components?.some((component: any) => component?.type === '3d-parallax')) continue;
+
+      const currentMetrics = quad.getSurfaceMetricsAt(currentVisual.x, currentVisual.y, true);
+      if (!currentMetrics) continue;
+      const targetMetrics = quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
+      if (!targetMetrics) return null;
+
+      const deltaU = targetMetrics.u - currentMetrics.u;
+      const deltaV = targetMetrics.v - currentMetrics.v;
+      const localDistance = Math.hypot(deltaU, deltaV);
+      if (localDistance < 0.0000001) {
+        return { position: target, reached: true };
+      }
+
+      const qU = deltaU / localDistance;
+      const qV = deltaV / localDistance;
+      const referenceX =
+        currentMetrics.referenceAxisU.x * qU + currentMetrics.referenceAxisV.x * qV;
+      const referenceY =
+        currentMetrics.referenceAxisU.y * qU + currentMetrics.referenceAxisV.y * qV;
+      const referenceLength = Math.hypot(referenceX, referenceY);
+      if (!Number.isFinite(referenceLength) || referenceLength < 0.0000001) return null;
+
+      const localStep = distance / referenceLength;
+      if (localDistance <= localStep) return { position: target, reached: true };
+
+      const nextU = currentMetrics.u + qU * localStep;
+      const nextV = currentMetrics.v + qV * localStep;
+      if (nextU < 0 || nextU > 1 || nextV < 0 || nextV > 1) return null;
+      const nextVisual = quad.getGridPointAt(nextU, nextV, true);
+      if (!nextVisual || !Number.isFinite(nextVisual.x) || !Number.isFinite(nextVisual.y)) {
+        return null;
+      }
+      return {
+        position: toWorldPosition(nextVisual, camera, actorP),
+        reached: false,
+      };
     }
 
     return null;
