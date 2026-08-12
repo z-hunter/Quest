@@ -338,7 +338,16 @@ export interface QuadTextureMeshCell {
 
 const MAX_TEXTURE_REPEATS = 32;
 const MAX_TEXTURE_TRIANGLES = 32;
+const MAX_STRONG_PERSPECTIVE_TEXTURE_TRIANGLES = 64;
 const DEFAULT_TEXTURE_MESH_ERROR = 0.75;
+let textureLayerCanvas: HTMLCanvasElement | null = null;
+
+function getTextureLayerContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  if (!textureLayerCanvas) textureLayerCanvas = document.createElement('canvas');
+  if (textureLayerCanvas.width !== canvas.width) textureLayerCanvas.width = canvas.width;
+  if (textureLayerCanvas.height !== canvas.height) textureLayerCanvas.height = canvas.height;
+  return textureLayerCanvas.getContext('2d');
+}
 
 function clampTextureTileScale(scale: number): number {
   return Math.max(1 / MAX_TEXTURE_REPEATS, Math.min(10, Number.isFinite(scale) ? scale : 1));
@@ -469,13 +478,20 @@ function chooseTextureMeshSubdivisions(
   };
   const breaks = getBreaks(subdivisionsX, subdivisionsY);
   let error = getMeshApproximationError(mapPoint, breaks.u, breaks.v);
+  let triangleLimit = MAX_TEXTURE_TRIANGLES;
 
   while (error > maxError) {
     const candidates = [
       { x: subdivisionsX + 1, y: subdivisionsY },
       { x: subdivisionsX, y: subdivisionsY + 1 },
-    ].filter((candidate) => triangleCount(candidate.x, candidate.y) <= MAX_TEXTURE_TRIANGLES);
-    if (candidates.length === 0) break;
+    ].filter((candidate) => triangleCount(candidate.x, candidate.y) <= triangleLimit);
+    if (candidates.length === 0) {
+      if (triangleLimit === MAX_TEXTURE_TRIANGLES) {
+        triangleLimit = MAX_STRONG_PERSPECTIVE_TEXTURE_TRIANGLES;
+        continue;
+      }
+      break;
+    }
 
     const best = candidates
       .map((candidate) => {
@@ -792,12 +808,27 @@ export class QuadObject extends Entity {
     const isStretch = this.textureMode !== 'tile';
     const flatTexture = isStretch && isQuadNearlyAffine(v0, v1, v2, v3, 0.75 / screenScale);
     const pixelOverlap = 1.25 / screenScale;
-    ctx.globalCompositeOperation = this.blendMode;
-    ctx.save();
-    clipToQuad(ctx, screenVerts);
+    const needsTextureLayer = this.opacity < 1 || this.blur > 0;
+    const textureCtx = needsTextureLayer ? getTextureLayerContext(ctx.canvas) : ctx;
+    if (!textureCtx) return false;
+
+    if (needsTextureLayer) {
+      const { a, b, c, d, e, f } = matrix || ctx.getTransform();
+      textureCtx.setTransform(1, 0, 0, 1, 0, 0);
+      textureCtx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      textureCtx.setTransform(a, b, c, d, e ?? 0, f ?? 0);
+      textureCtx.globalAlpha = 1;
+      textureCtx.globalCompositeOperation = 'source-over';
+      textureCtx.filter = 'none';
+    } else {
+      textureCtx.globalCompositeOperation = this.blendMode;
+    }
+    textureCtx.save();
+    clipToQuad(textureCtx, screenVerts);
     if (flatTexture) {
-      drawAffineTexture(ctx, this.image, frame, v0, v1, v3);
-      ctx.restore();
+      drawAffineTexture(textureCtx, this.image, frame, v0, v1, v3);
+      textureCtx.restore();
+      if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts);
       return true;
     }
 
@@ -816,7 +847,7 @@ export class QuadObject extends Entity {
       const [p00, p10, p11, p01] = cell.points;
       if (cell.diagonal === 'forward') {
         drawTexturedTriangle(
-          ctx,
+          textureCtx,
           this.image,
           frame,
           p00,
@@ -828,7 +859,7 @@ export class QuadObject extends Entity {
           pixelOverlap
         );
         drawTexturedTriangle(
-          ctx,
+          textureCtx,
           this.image,
           frame,
           p00,
@@ -841,7 +872,7 @@ export class QuadObject extends Entity {
         );
       } else {
         drawTexturedTriangle(
-          ctx,
+          textureCtx,
           this.image,
           frame,
           p00,
@@ -853,7 +884,7 @@ export class QuadObject extends Entity {
           pixelOverlap
         );
         drawTexturedTriangle(
-          ctx,
+          textureCtx,
           this.image,
           frame,
           p10,
@@ -866,8 +897,19 @@ export class QuadObject extends Entity {
         );
       }
     }
-    ctx.restore();
+    textureCtx.restore();
+    if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts);
     return mesh.length > 0;
+  }
+
+  private drawTextureLayer(ctx: CanvasRenderingContext2D, screenVerts: QuadPoint[]): void {
+    if (!textureLayerCanvas) return;
+    ctx.save();
+    ctx.globalCompositeOperation = this.blendMode;
+    clipToQuad(ctx, screenVerts);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(textureLayerCanvas, 0, 0);
+    ctx.restore();
   }
 
   // Override render to handle per-vertex parallax

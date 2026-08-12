@@ -26,10 +26,30 @@ function createMockContext() {
     closePath: vi.fn(),
     clip: vi.fn(),
     transform: vi.fn(),
+    setTransform: vi.fn(),
     drawImage: vi.fn(),
     getTransform: vi.fn(() => ({ a: 1, b: 0, c: 0, d: 1 })),
     fill: vi.fn(),
     stroke: vi.fn(),
+  } as unknown as CanvasRenderingContext2D;
+}
+
+function createLayerContext() {
+  return {
+    filter: '',
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    closePath: vi.fn(),
+    clip: vi.fn(),
+    transform: vi.fn(),
+    setTransform: vi.fn(),
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
   } as unknown as CanvasRenderingContext2D;
 }
 
@@ -278,7 +298,7 @@ describe('QuadObject', () => {
 
     expect(stretch[0].points[0]).toEqual(points[0]);
     expect(stretch.length).toBeGreaterThan(1);
-    expect(stretch.length).toBeLessThanOrEqual(16);
+    expect(stretch.length).toBeLessThanOrEqual(32);
     expect(coarse).toHaveLength(1);
     expect(tiled.length).toBeGreaterThan(1);
     expect(
@@ -291,6 +311,23 @@ describe('QuadObject', () => {
     expect(halfPerspective[0].center).toEqual(
       projectQuadGridPoint(...points, transform, 0.5, 0.5, 0.5, true, true)
     );
+  });
+
+  it('raises the triangle budget only when the normal mesh cannot meet its error target', () => {
+    const mesh = buildQuadTextureMesh(
+      { x: 0, y: 0 },
+      { x: 160, y: 0 },
+      { x: 120, y: 160 },
+      { x: 40, y: 160 },
+      'stretch',
+      1,
+      1,
+      1,
+      0.001
+    );
+
+    expect(mesh.length).toBeGreaterThan(16);
+    expect(mesh.length).toBeLessThanOrEqual(32);
   });
 
   it('renders the active sprite frame as texture instead of the fill and keeps the grid on top', () => {
@@ -342,11 +379,43 @@ describe('QuadObject', () => {
     quad.render(ctx);
 
     expect((ctx.drawImage as any).mock.calls.length).toBeGreaterThan(1);
-    expect((ctx.drawImage as any).mock.calls.length).toBeLessThanOrEqual(32);
+    expect((ctx.drawImage as any).mock.calls.length).toBeLessThanOrEqual(64);
     // Clip vertices are expanded to cover antialias gaps, but the UV transform
     // remains anchored to the original top-left texture vertex.
     expect((ctx.transform as any).mock.calls[0][4]).toBeCloseTo(0);
     expect((ctx.transform as any).mock.calls[0][5]).toBeCloseTo(0);
+  });
+
+  it('composites a blurred or transparent texture mesh once after drawing its triangles into a layer', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'layered_projective_quad');
+    const image = { complete: true } as HTMLImageElement;
+    quad.spriteName = 'floors/metal.json';
+    quad.image = image;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    quad.opacity = 0.5;
+    quad.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 160, y: 0, p: 1 },
+      { x: 100, y: 160, p: 1 },
+      { x: 20, y: 160, p: 1 },
+    ];
+    fixture.scene.addEntity(quad);
+
+    const layerCtx = createLayerContext();
+    const layerCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => layerCtx),
+    } as unknown as HTMLCanvasElement;
+    vi.stubGlobal('document', { createElement: vi.fn(() => layerCanvas) });
+    const ctx = createMockContext();
+
+    quad.render(ctx);
+
+    expect((layerCtx.drawImage as any).mock.calls.length).toBeGreaterThan(1);
+    expect(ctx.drawImage).toHaveBeenCalledWith(layerCanvas, 0, 0);
+    vi.unstubAllGlobals();
   });
 
   it('keeps visual vertices fixed when its global parallax changes', () => {
