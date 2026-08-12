@@ -1,6 +1,6 @@
 ﻿# Scanline Engine вЂ” Technical Specification
 
-> **Last audited**: 2026-07-07. Reflects current `src/` directory structure and implemented subsystems.
+> **Last audited**: 2026-08-12. Reflects current `src/` directory structure and implemented subsystems.
 
 ---
 
@@ -142,24 +142,117 @@ Actor movement (`Actor.moveTo`) uses **A\* grid pathfinding** via `ActorNavigati
 
 ### 3.2 Rendering Pipeline
 
-`SceneRenderer.ts` (stateless function):
+`SceneRenderer.ts` is stateless: it receives a `Scene` and a Canvas context, then renders the current runtime state without retaining an independent scene model.
 
-1. **Parallax Layers Setup** вЂ” depth scale contexts
-2. **Entity Sort** вЂ” by Layer, then Visual Y (screen-space depth)
-3. **Render Pass** вЂ” Normal Layer в†’ Subscene Layer в†’ CRT shader post-processing
-4. **Debug Overlays** вЂ” Walkboxes, Triggerboxes, selection handles, NPC debug info
+1. **Sort** — by `layer`, then depth (normally visual Y). A Quad may instead select `Depth sort mode: By Parallax`: lower global P is farther away and renders first; higher P renders in front. Equal values fall back to the ordinary sorting rule.
+2. **Entity transform** — for each visible entity the renderer establishes the camera transform:
 
-### 3.3 Parallax & Coordinate System (2.5D)
+   ```text
+   canvas = viewportCenter + zoom * (entityLocalCoordinate - camera * entity.globalP)
+   ```
 
-Objects share World Coordinates (X, Y) but render at different screen positions based on their Parallax Factor (`p`) and Camera Position:
+   `globalP` is `entity.parallax`, with `1` as the default. This transform applies to every entity, including Quads.
+3. **Entity draw** — `Entity.render()` draws sprites at their authored geometry. `QuadObject.render()` supplies its own per-vertex geometry (described below), including Retro Grid and texture projection.
+4. **Passes and overlays** — normal scene layer, optional subscene/focus layer, transient pickup effects, CRT/post-processing, and editor/debug overlays.
 
+The important implementation consequence is that `QuadObject.getVisualVertices()` returns coordinates in the Quad's *inner* draw space, before step 2's outer global-P camera transform. It is not, by itself, the final canvas coordinate.
+
+### 3.3 Camera, Parallax, and Quad Coordinates (2.5D)
+
+All authored positions use world coordinates. Camera motion, not assignment of a P value, is what should make an object move relative to the screen.
+
+#### Ordinary Entity / Actor / Static
+
+For an ordinary object with authored point `R`, camera `C`, and global parallax `G`:
+
+```text
+finalWorldBeforeZoom = R - C * G
+finalCanvas          = viewportCenter + zoom * finalWorldBeforeZoom
 ```
-VisualPos = RawPos - Camera Г— (P - 1)
+
+Thus P=1 follows the camera's base world plane. Smaller P moves less with camera motion and appears farther away; larger P moves more and appears closer. Actor movement speed is a separate gameplay concern: on a 3d-parallax surface it uses only the resolved surface P (`0.2 + 0.8 * P`), never Depth Scaling.
+
+#### Quad: global P plus per-vertex P
+
+A Quad has two P levels:
+
+- **global P** (`QuadObject.parallax`, `G`) is the Quad's outer render-layer parallax and the value used by `Depth sort mode: By Parallax`;
+- **local vertex P** (`vertex.p`, `L`) describes depth across the Quad surface. The effective P of that vertex is `E = L * G`.
+
+Before the renderer's outer transform, `QuadObject.getVisualVertices()` produces:
+
+```text
+quadInnerVertex = authoredVertex - camera * (E - G)
 ```
 
-Interaction alignment and snapping are calculated in **Visual Space** (Screen Space) for WYSIWYG editing.
+The renderer then applies `-camera * G`. Therefore the final pre-zoom result is:
 
-### 3.4 Component System
+```text
+finalQuadVertex = authoredVertex - camera * (L * G)
+```
+
+This two-stage calculation is intentional: it lets one Quad carry a surface whose vertices have different P while still participating in the common entity renderer.
+
+#### Editing P without an on-screen jump
+
+Changing P in the editor must preserve the final canvas coordinate at the *current* camera position. It must not be implemented as a bare assignment to `QuadObject.parallax`.
+
+When global P changes from `G0` to `G1`, each authored Quad vertex is compensated independently:
+
+```text
+authoredVertex' = authoredVertex + camera * (G1 - G0) * localVertexP
+```
+
+and only then is `globalP` set to `G1`. Substitution in the final formula above shows that the final vertex remains unchanged. `QuadObject.setParallaxPreservingVisualPosition()` is the single editor-facing API for this operation; `QuadProperties` must use it.
+
+This was verified in Playwright against `t-quad`: changing `Quad_408` from P=1 to P=0.5 left all four final screen-space vertices unchanged. A common error is to preserve only `getVisualVertices()`; that omits the renderer's outer `-camera * G` transform and still visibly moves the Quad.
+
+#### Visual-space consumers and bindings
+
+Selection, snapping, Retro Grid lookup, controller containment, and surface metrics use visual-space Quad geometry. A direct vertex binding keeps the source authored X/Y equal to the target's authored X/Y and converts only local P so both Quads resolve the same effective P. A Grid binding converts from the target's inner visual grid point back to authored source coordinates while accounting for the target's outer global-P transform. These rules prevent a binding resolver from undoing the global-P compensation on the next update.
+
+### 3.4 Surface Metrics, Perspective Correction, and 3d-parallax
+
+`QuadObject.getSurfaceMetricsAt()` is the shared surface-depth resolver. Given a point, it returns corrected local coordinates `(u, v)`, interpolated effective parallax, and local surface axes.
+
+- It uses the same `perspective` / `perspectiveAmount` projection as Retro Grid and textured Quads.
+- With Perspective correction, `v` is non-linear in visible space: the same corrected coordinate controls grid-line spacing, P interpolation, controller scale, and speed variation on the surface.
+- Without correction, P interpolation remains the normal bilinear interpolation over the Quad.
+- Degenerate geometry has safe fallbacks rather than emitting invalid coordinates.
+
+The `3d-parallax` component applies this resolved P to both Actors and Static entities on the matching Quad surface. It compensates their authored position when P changes, so a camera move keeps the object attached to the same visual grid/surface point. If multiple eligible 3d-parallax Quads contain an object, the last matching Quad in `scene.entities` wins.
+
+`3d-perspective walk` belongs to the WalkBox component. It changes only the mapping of keyboard directions onto the corrected local surface axes; it does not alter speed. Keyboard movement, click-to-walk, and NPC routes share the same P-based speed calculation.
+
+### 3.5 Depth Scaling
+
+Depth Scaling is visual size scaling and is deliberately independent from parallax and movement speed. `Entity.update()` sets:
+
+```text
+effectiveScale = modelScale * subsceneItemScale * scene.getDepthScaleFor(entity)
+```
+
+`Scene.getDepthScaleFor()` is the sole resolver used at runtime and by editor normalization. Code must not directly bake `Scene.getScaling(y)` into an object's base dimensions.
+
+#### Scene fallback
+
+For an uncontrolled object, scene scaling is the existing linear, clamped interpolation between the scene `horizon`/`front` Y coordinates and `min`/`max` scale values. It is used only when scene scaling is enabled.
+
+#### Depth scaling controller Quad
+
+A Quad with the `Depth scaling controller` component supersedes the scene fallback for objects whose **visual anchor** lies inside it:
+
+- controller top edge = horizon; bottom edge = foreground;
+- `min` is the scale at corrected `v=0`, `max` at corrected `v=1` (defaults: 0.5 and 1.0);
+- scale is `min + correctedV * (max - min)`;
+- Perspective correction therefore affects controller scale exactly as it affects Retro Grid spacing and surface P;
+- the controller applies to visible, enabled Entities and Quads; its own authored geometry is not mutated;
+- overlapping controllers resolve deterministically in reverse `scene.entities` order: the last matching controller wins;
+- a matching controller wins even when scene Depth Scaling is disabled.
+
+`ignoreScaling` excludes an Entity or Quad from both controller and scene scaling. New Quads default to `ignoreScaling=true` to retain historical behaviour; legacy-loaded Quads are migrated to that default through `depthScalingVersion: 1`. A Quad that opts in uses effective runtime vertices scaled about its centroid. Authored vertices and bindings remain unchanged; render, hit testing, WalkBox containment, grid lookup, controller containment, and movement all use the same effective geometry.
+
+### 3.6 Component System
 
 `ComponentSystem` manages typed components attached to scene objects:
 
@@ -173,14 +266,14 @@ Interaction alignment and snapping are calculated in **Visual Space** (Screen Sp
 | `TriggerBox` | Script-executing overlap zone |
 | `NPC` | NPC metadata, objectives, memory, and history |
 
-### 3.5 State Event System
+### 3.7 State Event System
 
 `StateEventSystem.setState(game, entity, stateId, value, source)` provides:
 - **Type-safe mutation** вЂ” validates value type against `State` component's `valueType`.
 - **Script dispatch** вЂ” automatically fires authored scripts attached to state transitions.
 - **Source tracking** вЂ” `source: 'parser' | 'script-api' | 'llm' | 'custom-command'` for diagnostics.
 
-### 3.6 Scene Log
+### 3.8 Scene Log
 
 `SceneLog` is the engine's shared event bus for NPC awareness:
 
@@ -188,14 +281,14 @@ Interaction alignment and snapping are calculated in **Visual Space** (Screen Sp
 - Maintains per-NPC read cursors (`lastPmProcessedAtByNpc`) so each NPC independently processes unread events.
 - Entries expire after `SCENE_LOG_RETENTION_MS` (10 minutes).
 
-### 3.7 Shadow System
+### 3.9 Shadow System
 
 `ShadowSystem` manages `Actor` drop shadows:
 
 - **Shape Caching**: Captures the "Base Visual Shape" on assignment вЂ” prevents Parallax Drift (skewing) while maintaining authored shapes.
 - Handles depth scaling and floor slope distortion.
 
-### 3.8 3D Spatial Audio
+### 3.10 3D Spatial Audio
 
 Built on the Web Audio API, mapping 2.5D parallax to 3D coordinates:
 

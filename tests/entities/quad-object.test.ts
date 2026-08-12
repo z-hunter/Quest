@@ -34,6 +34,31 @@ function createMockContext() {
 }
 
 describe('QuadObject', () => {
+  it('does not cull a global-parallax Quad that is visible through the outer renderer transform', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 1000;
+    fixture.scene.camera.y = 500;
+    fixture.scene.camera.zoom = 1;
+
+    const quad = new QuadObject(fixture.game, 'far-parallax-quad');
+    quad.parallax = 0.5;
+    quad.filled = true;
+    // After SceneRenderer's outer -camera * P transform this Quad appears at
+    // x=0..100, y=0..100. Its inner coordinates alone are far from camera.
+    quad.vertices = [
+      { x: 500, y: 250, p: 1 },
+      { x: 600, y: 250, p: 1 },
+      { x: 600, y: 350, p: 1 },
+      { x: 500, y: 350, p: 1 },
+    ];
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.fill).toHaveBeenCalledTimes(1);
+  });
+
   it('draws retro-grid lines with normal composition over blended fill', () => {
     const fixture = createSceneFixture();
     fixture.scene.camera.x = -750;
@@ -322,5 +347,65 @@ describe('QuadObject', () => {
     // remains anchored to the original top-left texture vertex.
     expect((ctx.transform as any).mock.calls[0][4]).toBeCloseTo(0);
     expect((ctx.transform as any).mock.calls[0][5]).toBeCloseTo(0);
+  });
+
+  it('keeps visual vertices fixed when its global parallax changes', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 80;
+    fixture.scene.camera.y = 120;
+    const quad = new QuadObject(fixture.game, 'parallax_quad');
+    quad.vertices = [
+      { x: 10, y: 20, p: 0.5 },
+      { x: 110, y: 20, p: 0.75 },
+      { x: 110, y: 120, p: 1 },
+      { x: 10, y: 120, p: 0.5 },
+    ];
+    fixture.scene.addEntity(quad);
+    // SceneRenderer applies the Quad's global P after Quad.render(), so this
+    // is the final coordinate that reaches the canvas rather than the
+    // intermediate coordinate returned by getVisualVertices().
+    const screenVertices = () =>
+      quad.getVisualVertices().map((vertex) => ({
+        x: vertex.x - fixture.scene.camera.x * quad.parallax,
+        y: vertex.y - fixture.scene.camera.y * quad.parallax,
+      }));
+    const visualBefore = screenVertices();
+
+    quad.setParallaxPreservingVisualPosition(0.6);
+
+    expect(screenVertices()).toEqual(visualBefore);
+    expect(quad.parallax).toBe(0.6);
+  });
+
+  it('keeps a bound vertex visually fixed after its source global parallax changes', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 80;
+    fixture.scene.camera.y = 120;
+    const target = new QuadObject(fixture.game, 'target');
+    target.vertices[0] = { x: 10, y: 20, p: 0.5 };
+    const source = new QuadObject(fixture.game, 'source');
+    source.vertices[0] = {
+      x: 10,
+      y: 20,
+      p: 0.5,
+      binding: { targetName: 'target', type: 'vertex', index: 0 },
+    };
+    fixture.scene.addEntity(target);
+    fixture.scene.addEntity(source);
+    source.update(0);
+    const screenVertex = () => {
+      const vertex = source.getVisualVertices()[0];
+      return {
+        x: vertex.x - fixture.scene.camera.x * source.parallax,
+        y: vertex.y - fixture.scene.camera.y * source.parallax,
+      };
+    };
+    const visualBefore = screenVertex();
+
+    source.setParallaxPreservingVisualPosition(0.6);
+    source.update(0);
+
+    expect(screenVertex()).toEqual(visualBefore);
+    expect(source.parallax).toBe(0.6);
   });
 });

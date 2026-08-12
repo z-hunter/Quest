@@ -348,8 +348,26 @@ export function getEntityRenderSortY(entity: Entity, camera: { y: number }): num
   return toVisualScalar(y, camera.y, parallax);
 }
 
+function usesParallaxDepthSort(entity: Entity): boolean {
+  return (entity as any).type === 'Quad' && (entity as any).sortMode === 'parallax';
+}
+
+function getEntityDepthParallax(entity: Entity): number {
+  const parallax = entity.parallax !== undefined ? entity.parallax : 1;
+  return Number.isFinite(parallax) ? parallax : 1;
+}
+
 export function compareEntitiesForRender(a: Entity, b: Entity, camera: { y: number }): number {
   if (a.layer !== b.layer) return a.layer - b.layer;
+
+  // A Quad explicitly sorted by parallax defines a depth plane independent of
+  // screen Y. Lower P is farther away and renders first; higher P is closer
+  // and renders over the Quad. Its global parallax is the plane P: vertex P
+  // remains surface geometry and has no single sortable value for the Quad.
+  if (usesParallaxDepthSort(a) || usesParallaxDepthSort(b)) {
+    const parallaxDelta = getEntityDepthParallax(a) - getEntityDepthParallax(b);
+    if (Math.abs(parallaxDelta) > 0.000001) return parallaxDelta;
+  }
 
   const aSortY = getEntityRenderSortY(a, camera);
   const bSortY = getEntityRenderSortY(b, camera);

@@ -48,7 +48,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Tile Y': 'Vertical texture scale. 1 fills the Quad once; smaller values create more copies.',
   Mode: 'Selects the behavior mode for this object or component.',
   'Depth Sort mode':
-    'Chooses which quad rule is used for Y sorting, or disables Y sorting so layer order stays fully manual.',
+    'Chooses a Quad depth rule: a vertex uses its rendered Y, By Parallax orders equal-layer objects by P, and Ignore keeps layer order manual.',
   'Grid X': 'Number of vertical subdivisions in the retro grid effect.',
   'Grid Y': 'Number of horizontal subdivisions in the retro grid effect.',
   Width: 'Line width or stroke width used by the current visual effect.',

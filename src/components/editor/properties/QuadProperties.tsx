@@ -30,6 +30,12 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
   } = usePropertiesContext<QuadObject>();
   const quad = obj;
   const centroid = getQuadCentroid(quad);
+  const handleParallaxChange = (value: string) => {
+    const nextParallax = parseFloat(value);
+    if (!Number.isFinite(nextParallax)) return;
+    quad.setParallaxPreservingVisualPosition(nextParallax);
+    incrementObjectVersion();
+  };
 
   return (
     <div className="e-row">
@@ -88,7 +94,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                 step="0.1"
                 className="e-input"
                 value={formatPanelNumber(quad.parallax ?? 1)}
-                onChange={(e) => handleChange('parallax', e.target.value, true)}
+                onChange={(e) => handleParallaxChange(e.target.value)}
               />
             </div>
             <div>
@@ -109,6 +115,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                 onChange={(value) => handleChange('sortMode', value)}
                 options={[
                   { value: 'ignore', label: 'Ignore Y (Manual)' },
+                  { value: 'parallax', label: 'By Parallax' },
                   { value: 'v0', label: 'By Vertex 0 (TL)' },
                   { value: 'v1', label: 'By Vertex 1 (TR)' },
                   { value: 'v2', label: 'By Vertex 2 (BR)' },

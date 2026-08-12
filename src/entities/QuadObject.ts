@@ -19,7 +19,7 @@ export interface QuadVertex {
   binding?: QuadVertexBinding;
 }
 
-export type QuadSortMode = 'ignore' | 'v0' | 'v1' | 'v2' | 'v3';
+export type QuadSortMode = 'ignore' | 'parallax' | 'v0' | 'v1' | 'v2' | 'v3';
 
 export interface QuadPoint {
   x: number;
@@ -913,10 +913,17 @@ export class QuadObject extends Entity {
       const vHW = ctx.canvas.width / 2 / zoom;
       const vHH = ctx.canvas.height / 2 / zoom;
 
-      const viewL = camX - vHW;
-      const viewR = camX + vHW;
-      const viewT = camY - vHH;
-      const viewB = camY + vHH;
+      // `screenVerts` are in Quad.render's inner coordinate space. The
+      // common SceneRenderer transform subsequently translates that space by
+      // `-camera * globalP`, so its visible viewport is centered on
+      // `camera * globalP` rather than the raw camera position. Comparing
+      // against raw camera coordinates incorrectly culls every Quad whose
+      // global P differs from 1 as it moves away from screen centre.
+      const globalP = this.parallax !== undefined ? this.parallax : 1;
+      const viewL = camX * globalP - vHW;
+      const viewR = camX * globalP + vHW;
+      const viewT = camY * globalP - vHH;
+      const viewB = camY * globalP + vHH;
 
       // Padding for Line Width and Blur
       const pad = (this.lineWidth || 1) + (this.blur || 0) * 3;
@@ -1235,6 +1242,34 @@ export class QuadObject extends Entity {
     }));
   }
 
+  /**
+   * Changes global P while preserving every rendered vertex at the current
+   * camera position.  Quad rendering first offsets each local vertex and is
+   * then wrapped in the renderer's global-P camera transform.  Together those
+   * two transforms produce `vertex - camera * (localP * globalP)`, so the
+   * authored vertex must be compensated by the full local P (not localP - 1).
+   */
+  setParallaxPreservingVisualPosition(nextParallax: number): void {
+    if (!Number.isFinite(nextParallax)) return;
+    const previousParallax = this.parallax !== undefined ? this.parallax : 1;
+    if (Math.abs(nextParallax - previousParallax) < 0.000001) return;
+
+    const camera = this.scene?.camera;
+    if (camera) {
+      const parallaxDelta = nextParallax - previousParallax;
+      this.vertices = this.vertices.map((vertex) => {
+        const localParallax = vertex.p !== undefined ? vertex.p : 1;
+        return {
+          ...vertex,
+          x: vertex.x + camera.x * parallaxDelta * localParallax,
+          y: vertex.y + camera.y * parallaxDelta * localParallax,
+        };
+      });
+    }
+
+    this.parallax = nextParallax;
+  }
+
   getVisualVertices(useEffectiveVertices: boolean = true): QuadPoint[] {
     // @ts-ignore
     const scene = this.scene;
@@ -1326,18 +1361,32 @@ export class QuadObject extends Entity {
             const idx = binding.index || 0;
             if (q.vertices[idx]) {
               const tv = q.vertices[idx];
-              if (v.x !== tv.x || v.y !== tv.y || v.p !== tv.p) {
-                v.x = tv.x;
-                v.y = tv.y;
-                v.p = tv.p;
+              const targetGlobalP = q.parallax !== undefined ? q.parallax : 1;
+              const sourceGlobalP = this.parallax !== undefined ? this.parallax : 1;
+              const effectiveP = (tv.p !== undefined ? tv.p : 1) * targetGlobalP;
+              const sourceLocalP = sourceGlobalP !== 0 ? effectiveP / sourceGlobalP : effectiveP;
+              // The shared renderer applies the target Quad's global P after
+              // `getVisualVertices()`.  A direct binding therefore needs the
+              // same authored point as its target; changing only its local P
+              // is sufficient to make their final on-screen positions match.
+              const nx = tv.x;
+              const ny = tv.y;
+              if (
+                Math.abs(v.x - nx) > 0.01 ||
+                Math.abs(v.y - ny) > 0.01 ||
+                Math.abs(v.p - sourceLocalP) > 0.001
+              ) {
+                v.x = nx;
+                v.y = ny;
+                v.p = sourceLocalP;
                 hasChanges = true;
               }
             }
           } else if (binding.type === 'grid') {
             const u = binding.gridU || 0;
             const v_param = binding.gridV || 0;
-            const targetGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
             const sourceGlobalP = this.parallax !== undefined ? this.parallax : 1.0;
+            const targetGlobalP = q.parallax !== undefined ? q.parallax : 1.0;
             const camX = scene.camera.x;
             const camY = scene.camera.y;
 
@@ -1348,9 +1397,9 @@ export class QuadObject extends Entity {
             const effectiveP = q.getParallaxAt(visualPoint.x, visualPoint.y, true, false);
             const np = sourceGlobalP !== 0 ? effectiveP / sourceGlobalP : effectiveP;
 
-            // `visualPoint` is relative to the target Quad's global layer.
-            // Convert it back to raw coordinates for the source Quad while
-            // preserving the exact rendered position at the current camera.
+            // `visualPoint` is before the target's outer global-P transform.
+            // Convert it to an authored source point so the final renderer
+            // transform yields the very same on-screen coordinate.
             const nx = visualPoint.x + camX * (effectiveP - targetGlobalP);
             const ny = visualPoint.y + camY * (effectiveP - targetGlobalP);
 

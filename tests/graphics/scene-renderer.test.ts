@@ -42,4 +42,25 @@ describe('SceneRenderer Quad depth sorting', () => {
     expect(getEntityRenderSortY(quad, fixture.scene.camera)).toBeNull();
     expect(compareEntitiesForRender(quad, entity, fixture.scene.camera)).toBeLessThan(0);
   });
+
+  it('orders an equal-layer Quad by its global parallax when requested', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'parallax_quad');
+    quad.layer = 0;
+    quad.parallax = 0.6;
+    quad.sortMode = 'parallax';
+
+    const behind = fixture.addEntity('behind');
+    behind.layer = 0;
+    behind.parallax = 0.4;
+    behind.y = 900;
+
+    const inFront = fixture.addEntity('in_front');
+    inFront.layer = 0;
+    inFront.parallax = 0.8;
+    inFront.y = -900;
+
+    expect(compareEntitiesForRender(behind, quad, fixture.scene.camera)).toBeLessThan(0);
+    expect(compareEntitiesForRender(quad, inFront, fixture.scene.camera)).toBeLessThan(0);
+  });
 });
