@@ -128,7 +128,7 @@ describe('ThreeDParallaxSystem', () => {
     expect(actor.parallax).toBeLessThan(0.99);
   });
 
-  it('keeps an existing surface binding while its visual Quad is collapsed', () => {
+  it('keeps an existing surface binding through a visual Quad inversion', () => {
     const fixture = createSceneFixture();
     const floor = new QuadObject(fixture.game, 'collapsed-floor');
     floor.vertices = [
@@ -141,15 +141,51 @@ describe('ThreeDParallaxSystem', () => {
     fixture.scene.addEntity(floor);
 
     const prop = fixture.addEntity('prop');
-    const start = floor.getGridPointAt(0.2884, 0.9664, true);
+    const u = 0.5;
+    const v = 0.3;
+    const start = floor.getGridPointAt(u, v, true);
     prop.x = start.x;
     prop.y = start.y;
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
 
-    fixture.scene.camera.y = 217;
+    // The Quad is a sliver here. Its inverse maps this very grid point to a
+    // different (u,v), so the existing binding must take precedence.
+    fixture.scene.camera.y = 218;
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
 
+    const binding = (prop as any).__surfaceParallaxBinding;
+    expect(binding.quadName).toBe(floor.name);
+    expect(binding.u).toBeCloseTo(u, 6);
+    expect(binding.v).toBeCloseTo(v, 6);
+    expect(prop.parallax).toBeCloseTo(floor.getParallaxAtGrid(u, v), 6);
+  });
+
+  it('does not assign an unbound object to a surface solely because the camera crosses it', () => {
+    const fixture = createSceneFixture();
+    const floor = new QuadObject(fixture.game, 'floor');
+    floor.vertices = [
+      { x: -40, y: 0, p: 0.6 },
+      { x: 75, y: 0, p: 0.6 },
+      { x: 143, y: 74, p: 1 },
+      { x: -110, y: 74, p: 1 },
+    ];
+    fixture.scene.addEntity(floor);
+
+    const prop = fixture.addEntity('wall');
+    prop.x = 19;
+    prop.y = -1; // Deliberately just outside the authored surface.
+    prop.parallax = 0.6;
+    ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
+
+    fixture.scene.camera.y = 190; // Visual top/bottom edges have crossed.
+    ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
+
+    expect((prop as any).__surfaceParallaxBinding).toBeUndefined();
+    expect(prop.parallax).toBe(0.6);
+    expect(prop.y).toBe(-1);
+
+    prop.y = -0.5; // Explicit world movement may acquire the surface.
+    ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
     expect((prop as any).__surfaceParallaxBinding).toMatchObject({ quadName: floor.name });
-    expect(prop.parallax).toBeCloseTo(floor.getParallaxAtGrid(0.2884, 0.9664), 6);
   });
 });

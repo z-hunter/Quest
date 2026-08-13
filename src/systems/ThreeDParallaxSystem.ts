@@ -18,7 +18,13 @@ interface SurfaceParallaxBinding {
   originalParallax: number;
 }
 
+interface SurfaceParallaxObservation {
+  worldX: number;
+  worldY: number;
+}
+
 const SURFACE_PARALLAX_BINDING = '__surfaceParallaxBinding';
+const SURFACE_PARALLAX_OBSERVATION = '__surfaceParallaxObservation';
 
 export class ThreeDParallaxSystem {
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
@@ -46,6 +52,20 @@ export class ThreeDParallaxSystem {
       const existingBinding = (target as any)[SURFACE_PARALLAX_BINDING] as
         | SurfaceParallaxBinding
         | undefined;
+      const previousObservation = (target as any)[SURFACE_PARALLAX_OBSERVATION] as
+        | SurfaceParallaxObservation
+        | undefined;
+      const movedSinceObservation =
+        !previousObservation ||
+        Math.abs(target.x - previousObservation.worldX) > 0.000001 ||
+        Math.abs(target.y - previousObservation.worldY) > 0.000001;
+      // Camera movement must never assign an unbound object to a surface.
+      // The initial update still establishes bindings for objects authored on it.
+      const mayAcquireSurface = !!existingBinding || !previousObservation || movedSinceObservation;
+      (target as any)[SURFACE_PARALLAX_OBSERVATION] = {
+        worldX: target.x,
+        worldY: target.y,
+      } satisfies SurfaceParallaxObservation;
       const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
 
       const allQuads = scene.entities.filter(
@@ -56,6 +76,8 @@ export class ThreeDParallaxSystem {
       let topQuad: QuadObject | null = null;
       for (let i = allQuads.length - 1; i >= 0; i--) {
         const q = allQuads[i];
+        if (!mayAcquireSurface && !existingBinding) continue;
+        const preserveBinding = existingBinding?.quadName === q.name && q.isVisualSurfaceUnstable();
         let qVisual = toVisualPosition({ x: target.x, y: target.y }, { x: camX, y: camY }, pFactor);
         if (existingBinding?.quadName === q.name) {
           const surfacePoint = q.getGridPointAt(existingBinding.u, existingBinding.v, true);
@@ -64,10 +86,7 @@ export class ThreeDParallaxSystem {
             y: surfacePoint.y + (target.y - existingBinding.worldY),
           };
         }
-        if (
-          q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true) ||
-          (existingBinding?.quadName === q.name && q.isVisualSurfaceCollapsed())
-        ) {
+        if (preserveBinding || q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true)) {
           topQuad = q;
           break;
         }
@@ -93,15 +112,17 @@ export class ThreeDParallaxSystem {
         };
       }
 
-      const metrics =
-        quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true) ||
-        (existingBinding?.quadName === quad.name && quad.isVisualSurfaceCollapsed()
+      const preserveBinding =
+        existingBinding?.quadName === quad.name && quad.isVisualSurfaceUnstable();
+      const metrics = !mayAcquireSurface
+        ? null
+        : preserveBinding
           ? {
               u: existingBinding.u,
               v: existingBinding.v,
               parallax: quad.getParallaxAtGrid(existingBinding.u, existingBinding.v),
             }
-          : null);
+          : quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
       if (metrics) {
         const newP = metrics.parallax;
 

@@ -1394,10 +1394,10 @@ export class QuadObject extends Entity {
     });
   }
 
-  isVisualSurfaceCollapsed(useEffectiveVertices: boolean = true): boolean {
+  isVisualSurfaceUnstable(useEffectiveVertices: boolean = true): boolean {
     const points = this.getVisualVertices(useEffectiveVertices);
     return (
-      points.length < 4 || getProjectiveStability(points[0], points[1], points[2], points[3]) === 0
+      points.length < 4 || getProjectiveStability(points[0], points[1], points[2], points[3]) < 1
     );
   }
 
