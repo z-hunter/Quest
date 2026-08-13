@@ -20,6 +20,8 @@ describe('ThreeDParallaxSystem', () => {
     fixture.scene.addEntity(floor);
 
     const prop = fixture.addEntity('prop');
+    // Loaded legacy scenes deserialize Static objects with type `Entity`.
+    prop.type = 'Entity';
     prop.x = 50;
     prop.y = 60;
     const initialVisual = toVisualPosition(

@@ -28,7 +28,12 @@ export class ThreeDParallaxSystem {
     // Actors and Static objects are both positioned by their ground point.
     // Keep that point fixed in visual space while adapting its parallax to the Quad.
     const parallaxTargets = scene.entities.filter(
-      (e): e is Entity => e.type === 'Actor' || e.type === 'Player' || e.type === 'Static'
+      (e): e is Entity =>
+        e.type === 'Actor' ||
+        e.type === 'Player' ||
+        e.type === 'Static' ||
+        // Legacy scene files serialize Static objects as `Entity`.
+        e.type === 'Entity'
     );
 
     const camX = scene.camera.x;
