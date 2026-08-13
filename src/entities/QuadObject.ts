@@ -51,6 +51,8 @@ export interface QuadHomography {
 }
 
 const HOMOGRAPHY_EPSILON = 1e-9;
+const MIN_PROJECTIVE_COMPACTNESS = 0.01;
+const FULL_PROJECTIVE_COMPACTNESS = 0.04;
 
 function crossProduct(origin: QuadPoint, first: QuadPoint, second: QuadPoint): number {
   return (
@@ -203,6 +205,41 @@ function blendQuadPoints(flat: QuadPoint, projected: QuadPoint, amount: number):
 }
 
 /**
+ * A projective transform becomes numerically explosive as a Quad turns into
+ * a screen-space sliver. Fade it to the existing bilinear mapping before the
+ * visual surface collapses, so grids, textures and surface tracking stay put.
+ */
+function getProjectiveStability(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint
+): number {
+  const points = [p0, p1, p2, p3];
+  const area =
+    Math.abs(
+      points.reduce((sum, point, index) => {
+        const next = points[(index + 1) % points.length];
+        return sum + point.x * next.y - point.y * next.x;
+      }, 0)
+    ) / 2;
+  const longestEdgeSquared = points.reduce((longest, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return Math.max(longest, (next.x - point.x) ** 2 + (next.y - point.y) ** 2);
+  }, 0);
+  const compactness = longestEdgeSquared > HOMOGRAPHY_EPSILON ? area / longestEdgeSquared : 0;
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      (compactness - MIN_PROJECTIVE_COMPACTNESS) /
+        (FULL_PROJECTIVE_COMPACTNESS - MIN_PROJECTIVE_COMPACTNESS)
+    )
+  );
+  return t * t * (3 - 2 * t);
+}
+
+/**
  * Produces a Retro Grid node. Perspective intensity is applied on the four
  * boundary edges, then the two resulting grid lines are intersected. This
  * keeps every grid line straight, every cell connected, and all four Quad
@@ -221,8 +258,9 @@ export function projectQuadGridPoint(
   perspectiveY: boolean = true
 ): QuadPoint {
   if (!transform) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
-  const alphaX = perspectiveX ? amount : 0;
-  const alphaY = perspectiveY ? amount : 0;
+  const stability = getProjectiveStability(p0, p1, p2, p3);
+  const alphaX = perspectiveX ? amount * stability : 0;
+  const alphaY = perspectiveY ? amount * stability : 0;
   if (alphaX === 0 && alphaY === 0) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
 
   const projectedTop = projectQuadPoint(transform, u, 0);
@@ -1354,6 +1392,13 @@ export class QuadObject extends Entity {
         y: vertex.y - camY * (effectiveP - globalP),
       };
     });
+  }
+
+  isVisualSurfaceCollapsed(useEffectiveVertices: boolean = true): boolean {
+    const points = this.getVisualVertices(useEffectiveVertices);
+    return (
+      points.length < 4 || getProjectiveStability(points[0], points[1], points[2], points[3]) === 0
+    );
   }
 
   getSurfaceMetricsAt(

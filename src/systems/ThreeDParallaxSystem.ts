@@ -64,7 +64,10 @@ export class ThreeDParallaxSystem {
             y: surfacePoint.y + (target.y - existingBinding.worldY),
           };
         }
-        if (q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true)) {
+        if (
+          q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true) ||
+          (existingBinding?.quadName === q.name && q.isVisualSurfaceCollapsed())
+        ) {
           topQuad = q;
           break;
         }
@@ -90,7 +93,15 @@ export class ThreeDParallaxSystem {
         };
       }
 
-      const metrics = quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
+      const metrics =
+        quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true) ||
+        (existingBinding?.quadName === quad.name && quad.isVisualSurfaceCollapsed()
+          ? {
+              u: existingBinding.u,
+              v: existingBinding.v,
+              parallax: quad.getParallaxAtGrid(existingBinding.u, existingBinding.v),
+            }
+          : null);
       if (metrics) {
         const newP = metrics.parallax;
 

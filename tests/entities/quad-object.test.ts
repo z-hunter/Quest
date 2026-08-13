@@ -184,6 +184,20 @@ describe('QuadObject', () => {
     }
   });
 
+  it('falls back smoothly to bilinear mapping before a visual Quad becomes a sliver', () => {
+    const points = [
+      { x: 42.983, y: 112.49 },
+      { x: 63.983, y: 112.49 },
+      { x: 81.936, y: 112.546 },
+      { x: -20, y: 113 },
+    ] as const;
+    const transform = createQuadHomography(...points);
+    const projected = projectQuadGridPoint(...points, transform, 0.2884, 0.9664, 1, true, true);
+    const bilinear = projectQuadGridPoint(...points, transform, 0.2884, 0.9664, 0, true, true);
+
+    expect(projected).toEqual(bilinear);
+  });
+
   it('clips Retro Grid internals to a malformed Quad', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'crossed_grid_quad');

@@ -127,4 +127,29 @@ describe('ThreeDParallaxSystem', () => {
     expect(actor.parallax).toBeGreaterThan(0.97);
     expect(actor.parallax).toBeLessThan(0.99);
   });
+
+  it('keeps an existing surface binding while its visual Quad is collapsed', () => {
+    const fixture = createSceneFixture();
+    const floor = new QuadObject(fixture.game, 'collapsed-floor');
+    floor.vertices = [
+      { x: 42.983, y: 3.99, p: 0.5 },
+      { x: 63.983, y: 3.99, p: 0.5 },
+      { x: 81.936, y: 112.546, p: 1 },
+      { x: -20, y: 113, p: 1 },
+    ];
+    floor.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(floor);
+
+    const prop = fixture.addEntity('prop');
+    const start = floor.getGridPointAt(0.2884, 0.9664, true);
+    prop.x = start.x;
+    prop.y = start.y;
+    ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
+
+    fixture.scene.camera.y = 217;
+    ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
+
+    expect((prop as any).__surfaceParallaxBinding).toMatchObject({ quadName: floor.name });
+    expect(prop.parallax).toBeCloseTo(floor.getParallaxAtGrid(0.2884, 0.9664), 6);
+  });
 });
