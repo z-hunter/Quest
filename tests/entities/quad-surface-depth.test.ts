@@ -27,6 +27,48 @@ describe('Quad surface depth', () => {
     expect(correctedMidpoint.y).not.toBeCloseTo(flatMidpoint.y, 4);
   });
 
+  it('materializes legacy grid bindings once and then leaves vertices independent', () => {
+    const fixture = createSceneFixture();
+    const target = new QuadObject(fixture.game, 'target-floor');
+    target.parallax = 1;
+    target.perspective = true;
+    target.perspectiveAmount = 0.2;
+    target.vertices = [
+      { x: 40, y: 0, p: 0.5 },
+      { x: 60, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+
+    const source = new QuadObject(fixture.game, 'bound-wall');
+    source.parallax = 0.75;
+    source.vertices[3].binding = {
+      targetName: target.name,
+      type: 'grid',
+      gridU: 1,
+      gridV: 0.4473684210526316,
+    };
+    fixture.scene.addEntity(target);
+    fixture.scene.addEntity(source);
+
+    const gridV = 0.4473684210526316;
+    fixture.scene.camera.x = 20;
+    fixture.scene.camera.y = 80;
+    source.update(0);
+
+    expect(source.vertices[3].binding).toBeUndefined();
+    expect(source.vertices[3].p).toBeCloseTo(((1 - gridV) * 0.5 + gridV) / source.parallax, 6);
+    const authoredPosition = { ...source.vertices[3] };
+
+    target.vertices[2].x += 100;
+    target.vertices[2].y += 100;
+    fixture.scene.camera.x = 200;
+    fixture.scene.camera.y = 200;
+    source.update(0);
+
+    expect(source.vertices[3]).toMatchObject(authoredPosition);
+  });
+
   it('lets the last matching controller override scene depth scaling', () => {
     const fixture = createSceneFixture();
     fixture.scene.scaling = { enabled: false, min: 0.1, max: 0.1, horizon: 0, front: 100 };

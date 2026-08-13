@@ -1166,7 +1166,15 @@ export class EditorTransformManager {
         const q = this.editor.selectedObject as QuadObject;
         if (q.vertices[this.draggingVertexIndex]) {
           const scene = this.editor.game.sceneManager.currentScene;
-          applyVertexBinding(scene, q, this.draggingVertexIndex, this.currentSnapBinding);
+          if (this.currentSnapBinding.type === 'vertex') {
+            applyVertexBinding(scene, q, this.draggingVertexIndex, this.currentSnapBinding);
+          } else {
+            // Grid snapping is positional only. Keep direct vertex bindings
+            // intact, but drop any legacy live grid constraint being edited.
+            QuadObject.getConnectedVertices(scene, q, this.draggingVertexIndex).forEach((ref) => {
+              if (ref.v.binding?.type === 'grid') delete ref.v.binding;
+            });
+          }
         }
       } else if (
         this.draggingVertexIndex >= 0 &&

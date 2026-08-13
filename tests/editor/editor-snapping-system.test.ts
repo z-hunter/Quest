@@ -74,12 +74,12 @@ describe('Editor quad snapping', () => {
       1
     );
 
-    expect(result.binding).toEqual({ targetName: 'target', type: 'grid', gridU: 0.5, gridV: 0.5 });
-    expect(result.p).toBe(target.getParallaxAt(result.x, result.y, true));
+    expect(result.binding).toBeNull();
+    expect(result.p).toBe(target.getParallaxAtGrid(0.5, 0.5));
     expect(result.p).toBe(0.75);
   });
 
-  it('keeps a perspective Retro Grid binding coincident after release and camera movement', () => {
+  it('places a vertex on a perspective grid node without creating a live binding', () => {
     const fixture = createSceneFixture();
     const source = addQuad(fixture, 'source');
     const target = addQuad(fixture, 'target');
@@ -116,11 +116,8 @@ describe('Editor quad snapping', () => {
       fixture.scene.camera.zoom
     );
 
-    expect(snap.binding).toEqual({ targetName: 'target', type: 'grid', gridU, gridV });
-    expect(snap.p).toBeCloseTo(
-      target.getParallaxAt(initialGridPoint.x, initialGridPoint.y, true),
-      10
-    );
+    expect(snap.binding).toBeNull();
+    expect(snap.p).toBeCloseTo(target.getParallaxAtGrid(gridU, gridV), 10);
     expect(snap.p).toBeGreaterThan(0.5);
     expect(snap.p).toBeLessThan(1);
 
@@ -129,34 +126,22 @@ describe('Editor quad snapping', () => {
       x: snap.x + fixture.scene.camera.x * (effectiveP - source.parallax),
       y: snap.y + fixture.scene.camera.y * (effectiveP - source.parallax),
       p: effectiveP / source.parallax,
-      binding: snap.binding!,
     };
 
-    const expectCoincident = () => {
-      const camera = fixture.scene.camera;
-      const sourceVertex = source.vertices[0];
-      const sourceEffectiveP = sourceVertex.p * source.parallax;
-      const sourceScreen = {
-        x: sourceVertex.x - camera.x * sourceEffectiveP,
-        y: sourceVertex.y - camera.y * sourceEffectiveP,
-      };
-      const targetPoint = target.getGridPointAt(gridU, gridV, true);
-      const targetScreen = {
-        x: targetPoint.x - camera.x * target.parallax,
-        y: targetPoint.y - camera.y * target.parallax,
-      };
-      expect(sourceScreen.x).toBeCloseTo(targetScreen.x, 8);
-      expect(sourceScreen.y).toBeCloseTo(targetScreen.y, 8);
+    const authoredPosition = {
+      x: source.vertices[0].x,
+      y: source.vertices[0].y,
+      p: source.vertices[0].p,
     };
-
-    expectCoincident();
     source.update(0);
-    expectCoincident();
+    target.vertices[0].x += 100;
+    target.vertices[0].y += 100;
+    expect(source.vertices[0]).toMatchObject(authoredPosition);
 
     fixture.scene.camera.x = 170;
     fixture.scene.camera.y = -25;
     source.update(0);
-    expectCoincident();
+    expect(source.vertices[0]).toMatchObject(authoredPosition);
   });
 
   it('keeps the snapped visual position stable when applying a new parallax', () => {
@@ -208,7 +193,7 @@ describe('Editor quad snapping', () => {
     expect(source.vertices[0].y - fixture.scene.camera.y * (source.vertices[0].p - 1)).toBe(50);
   });
 
-  it('replaces an old reciprocal vertex binding when rebinding to a grid node', () => {
+  it('does not replace an existing vertex binding when snapping to a grid node', () => {
     const fixture = createSceneFixture();
     const source = addQuad(fixture, 'source');
     const oldTarget = addQuad(fixture, 'old-target');
@@ -231,8 +216,16 @@ describe('Editor quad snapping', () => {
     manager.onMouseUp({} as MouseEvent);
     source.update(0);
 
-    expect(source.vertices[0].binding).toEqual(gridBinding);
-    expect(oldTarget.vertices[0].binding).toEqual(gridBinding);
+    expect(source.vertices[0].binding).toEqual({
+      targetName: oldTarget.name,
+      type: 'vertex',
+      index: 0,
+    });
+    expect(oldTarget.vertices[0].binding).toEqual({
+      targetName: source.name,
+      type: 'vertex',
+      index: 0,
+    });
   });
 
   it('applies a new binding to every vertex in the connected group', () => {

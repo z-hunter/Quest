@@ -477,4 +477,48 @@ describe('QuadObject', () => {
     expect(screenVertex()).toEqual(visualBefore);
     expect(source.parallax).toBe(0.6);
   });
+
+  it('edits a bound vertex through its connected group', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 80;
+    fixture.scene.camera.y = 120;
+
+    // Keep the source first: this is the update order that used to overwrite
+    // a property-panel edit before its target had been updated.
+    const source = new QuadObject(fixture.game, 'source');
+    source.parallax = 1;
+    source.vertices[0] = {
+      x: 10,
+      y: 20,
+      p: 0.5,
+      binding: { targetName: 'target', type: 'vertex', index: 0 },
+    };
+    const target = new QuadObject(fixture.game, 'target');
+    target.parallax = 0.5;
+    target.vertices[0] = { x: 10, y: 20, p: 1 };
+    fixture.scene.addEntity(source);
+    fixture.scene.addEntity(target);
+
+    expect(source.setVertex(0, 30, 40)).toBe(true);
+
+    expect(target.vertices[0].x).toBe(30);
+    expect(target.vertices[0].y).toBe(40);
+    expect(source.vertices[0].x).toBeCloseTo(30, 6);
+    expect(source.vertices[0].y).toBeCloseTo(40, 6);
+
+    // P edits preserve the current screen position, so authored coordinates
+    // shift by the camera delta while the effective P stays synchronized.
+    expect(source.setVertex(0, undefined, undefined, 0.8, true)).toBe(true);
+    expect(target.vertices[0].x).toBeCloseTo(54, 6);
+    expect(target.vertices[0].y).toBeCloseTo(76, 6);
+    expect(target.vertices[0].p).toBeCloseTo(1.6, 6);
+    expect(source.vertices[0].x).toBeCloseTo(54, 6);
+    expect(source.vertices[0].y).toBeCloseTo(76, 6);
+    expect(source.vertices[0].p).toBeCloseTo(0.8, 6);
+
+    source.update(0);
+    expect(source.vertices[0].x).toBeCloseTo(54, 6);
+    expect(source.vertices[0].y).toBeCloseTo(76, 6);
+    expect(source.vertices[0].p).toBeCloseTo(0.8, 6);
+  });
 });

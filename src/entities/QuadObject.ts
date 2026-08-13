@@ -716,7 +716,7 @@ export class QuadObject extends Entity {
   blendMode: GlobalCompositeOperation = 'source-over';
 
   // Surface perspective. It parameterizes the whole Quad consistently: grid,
-  // checkerboard, texture, snapping, and bound grid vertices.
+  // checkerboard, texture, and one-time snapping coordinates.
   perspective: boolean = true;
   perspectiveAmount: number = 1.0;
 
@@ -1204,6 +1204,31 @@ export class QuadObject extends Entity {
     return sumP / this.vertices.length;
   }
 
+  /**
+   * Resolves a known Retro Grid coordinate without projecting it to a point
+   * and then trying to invert that point. Grid bindings already carry the
+   * exact `(u, v)`, including edge nodes where floating-point containment can
+   * be ambiguous after camera projection.
+   */
+  getParallaxAtGrid(u: number, v: number, useEffectiveVertices: boolean = true): number {
+    const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    if (vertices.length < 4) return this.parallax !== undefined ? this.parallax : 1.0;
+
+    const safeU = Number.isFinite(u) ? Math.max(0, Math.min(1, u)) : 0;
+    const safeV = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
+    const p0 = (vertices[0].p ?? 1) * globalP;
+    const p1 = (vertices[1].p ?? 1) * globalP;
+    const p2 = (vertices[2].p ?? 1) * globalP;
+    const p3 = (vertices[3].p ?? 1) * globalP;
+    return (
+      (1 - safeU) * (1 - safeV) * p0 +
+      safeU * (1 - safeV) * p1 +
+      safeU * safeV * p2 +
+      (1 - safeU) * safeV * p3
+    );
+  }
+
   // Serialization
   toJSON(): any {
     const data = super.toJSON();
@@ -1452,7 +1477,12 @@ export class QuadObject extends Entity {
             // vertices here makes the vertex jump on the first update because
             // Retro Grid applies perspective after per-vertex parallax.
             const visualPoint = q.getGridPointAt(u, v_param, true, false);
-            const effectiveP = q.getParallaxAt(visualPoint.x, visualPoint.y, true, false);
+            // The binding stores the exact grid coordinates. Resolve P from
+            // those coordinates directly; inverting a camera-projected edge
+            // point can classify it just outside the Quad and fall back to an
+            // unrelated corner average, changing the source vertex on every
+            // camera move.
+            const effectiveP = q.getParallaxAtGrid(u, v_param, false);
             const np = sourceGlobalP !== 0 ? effectiveP / sourceGlobalP : effectiveP;
 
             // `visualPoint` is before the target's outer global-P transform.
@@ -1471,6 +1501,11 @@ export class QuadObject extends Entity {
               v.p = np;
               hasChanges = true;
             }
+            // Grid snapping is a one-time placement, not a live constraint.
+            // Materialize legacy grid bindings once, then let the vertex move
+            // independently from the target Quad.
+            delete v.binding;
+            hasChanges = true;
           }
         }
       }
@@ -1488,89 +1523,70 @@ export class QuadObject extends Entity {
    * @param x New X position (optional)
    * @param y New Y position (optional)
    * @param p New Parallax factor (optional)
+   * @param preserveVisualPosition Keep the rendered point fixed when P changes
    */
-  public setVertex(index: number, x?: number, y?: number, p?: number): boolean {
+  public setVertex(
+    index: number,
+    x?: number,
+    y?: number,
+    p?: number,
+    preserveVisualPosition: boolean = false
+  ): boolean {
     const v = this.vertices[index];
     if (!v) {
       console.warn(`[QuadObject] Vertex ${index} not found on '${this.name}'.`);
       return false;
     }
 
-    // If Vertex is Bound, propagate changes to the entire group
-    if (v.binding) {
-      // Calculate delta
-      const dx = x !== undefined ? x - v.x : 0;
-      const dy = y !== undefined ? y - v.y : 0;
-      const dp = p !== undefined ? p - v.p : 0;
+    if (x !== undefined && !Number.isFinite(x)) return false;
+    if (y !== undefined && !Number.isFinite(y)) return false;
+    if (p !== undefined && !Number.isFinite(p)) return false;
 
-      // @ts-ignore
-      const scene = this.scene;
-      if (scene) {
-        const group = QuadObject.getConnectedVertices(scene, this, index);
-
-        let anyChanged = false;
-        group.forEach((ref) => {
-          if (dx !== 0) {
-            ref.v.x += dx;
-            anyChanged = true;
-          }
-          if (dy !== 0) {
-            ref.v.y += dy;
-            anyChanged = true;
-          }
-          if (dp !== 0) {
-            // Parallax logic: Adjust pos to avoid jump?
-            // If script is setting P, it likely wants to change P.
-            // Auto-correcting Pos might be unexpected for a raw setter.
-            // But for consistency with UI, maybe?
-            // "setVertex" implies setting raw values.
-            // Let's just set P for now.
-            ref.v.p += dp;
-            anyChanged = true;
-          }
-        });
-
-        if (anyChanged) {
-          this.notifyChange();
-          // Also notify others? They will update on their own draw/update cycle or via editor?
-          // getConnectedVertices returns Refs. We modified them in place.
-          // If they are on other objects, those objects might need notification if in Editor.
-          if (group.length > 1) {
-            // @ts-ignore
-            if (this.game.editor && this.game.editor.enabled) {
-              // Force refresh of scene or selection?
-              // Individual object notification is hard here without iterating.
-              group.forEach((g) => {
-                if (g.quad !== this) {
-                  // @ts-ignore
-                  this.game.editor.selectionManager.notifyObjectChanged(g.quad);
-                }
-              });
-            }
-          }
-        }
-        return true;
-      }
-    }
-
+    // A binding is resolved from its target on every update. Edit the whole
+    // connected group so the target is changed too; otherwise the next update
+    // would immediately overwrite an edited bound vertex.
+    // @ts-ignore
+    const scene = this.scene;
+    const group = scene
+      ? QuadObject.getConnectedVertices(scene, this, index)
+      : [{ quad: this, index, v }];
+    const dx = x !== undefined ? x - v.x : 0;
+    const dy = y !== undefined ? y - v.y : 0;
+    const requestedEffectiveP = p !== undefined ? p * (this.parallax ?? 1) : undefined;
+    const camera = scene?.camera;
     let changed = false;
-    if (x !== undefined && v.x !== x) {
-      v.x = x;
-      changed = true;
-    }
-    if (y !== undefined && v.y !== y) {
-      v.y = y;
-      changed = true;
-    }
-    if (p !== undefined && v.p !== p) {
-      v.p = p;
-      changed = true;
-    }
 
-    if (changed) {
-      this.notifyChange();
-    }
+    group.forEach((ref) => {
+      const refGlobalP = ref.quad.parallax ?? 1;
+      const previousP = ref.v.p ?? 1;
+      const previousEffectiveP = previousP * refGlobalP;
 
+      if (dx !== 0) {
+        ref.v.x += dx;
+        changed = true;
+      }
+      if (dy !== 0) {
+        ref.v.y += dy;
+        changed = true;
+      }
+      if (requestedEffectiveP !== undefined) {
+        const nextP = refGlobalP !== 0 ? requestedEffectiveP / refGlobalP : requestedEffectiveP;
+        const parallaxDelta = requestedEffectiveP - previousEffectiveP;
+        if (Math.abs(nextP - previousP) > 0.000001) {
+          if (camera && preserveVisualPosition) {
+            ref.v.x += camera.x * parallaxDelta;
+            ref.v.y += camera.y * parallaxDelta;
+          }
+          ref.v.p = nextP;
+          changed = true;
+        }
+      }
+    });
+
+    if (!changed) return true;
+    group.forEach((ref) => {
+      ref.quad.notifyChange();
+    });
     return true;
   }
 

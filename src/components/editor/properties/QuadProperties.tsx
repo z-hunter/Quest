@@ -36,6 +36,21 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
     quad.setParallaxPreservingVisualPosition(nextParallax);
     incrementObjectVersion();
   };
+  const handleVertexChange = (index: number, field: 'x' | 'y' | 'p', value: string) => {
+    const nextValue = parseFloat(value);
+    if (!Number.isFinite(nextValue)) return;
+    const changed = quad.setVertex(
+      index,
+      field === 'x' ? nextValue : undefined,
+      field === 'y' ? nextValue : undefined,
+      field === 'p' ? nextValue : undefined,
+      true
+    );
+    if (changed) {
+      incrementObjectVersion();
+      game.editor.saveUndoState();
+    }
+  };
 
   return (
     <div className="e-row">
@@ -233,54 +248,14 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                       className="e-input"
                       style={{ width: '33%' }}
                       value={formatPanelNumber(v.x)}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (v.x !== val) {
-                          const diff = val - v.x;
-                          const scene = game.sceneManager.currentScene;
-                          if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                            const group = QuadObject.getConnectedVertices(
-                              scene,
-                              game.editor.selectedObject as QuadObject,
-                              i
-                            );
-                            group.forEach((ref) => {
-                              ref.v.x += diff;
-                            });
-                          } else {
-                            v.x = val;
-                          }
-                          incrementObjectVersion();
-                          game.editor.saveUndoState();
-                        }
-                      }}
+                      onChange={(e) => handleVertexChange(i, 'x', e.target.value)}
                     />
                     <input
                       type="number"
                       className="e-input"
                       style={{ width: '33%' }}
                       value={formatPanelNumber(v.y)}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (v.y !== val) {
-                          const diff = val - v.y;
-                          const scene = game.sceneManager.currentScene;
-                          if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                            const group = QuadObject.getConnectedVertices(
-                              scene,
-                              game.editor.selectedObject as QuadObject,
-                              i
-                            );
-                            group.forEach((ref) => {
-                              ref.v.y += diff;
-                            });
-                          } else {
-                            v.y = val;
-                          }
-                          incrementObjectVersion();
-                          game.editor.saveUndoState();
-                        }
-                      }}
+                      onChange={(e) => handleVertexChange(i, 'y', e.target.value)}
                     />
                     <input
                       type="number"
@@ -288,38 +263,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                       style={{ width: '33%' }}
                       step="0.1"
                       value={formatPanelNumber(v.p)}
-                      onChange={(e) => {
-                        const newP = parseFloat(e.target.value);
-                        const oldP = v.p;
-                        const diffP = newP - oldP;
-
-                        const scene = game.sceneManager.currentScene;
-                        if (scene && (game.editor.selectedObject as any).type === 'Quad') {
-                          const group = QuadObject.getConnectedVertices(
-                            scene,
-                            game.editor.selectedObject as QuadObject,
-                            i
-                          );
-                          group.forEach((ref) => {
-                            const camX = scene.camera.x;
-                            const camY = scene.camera.y;
-                            ref.v.x += camX * diffP;
-                            ref.v.y += camY * diffP;
-                            ref.v.p = newP;
-                          });
-                        } else {
-                          if (scene) {
-                            const camX = scene.camera.x;
-                            const camY = scene.camera.y;
-                            v.x += camX * diffP;
-                            v.y += camY * diffP;
-                          }
-                          v.p = newP;
-                        }
-
-                        incrementObjectVersion();
-                        game.editor.saveUndoState();
-                      }}
+                      onChange={(e) => handleVertexChange(i, 'p', e.target.value)}
                     />
                   </div>
                 </div>

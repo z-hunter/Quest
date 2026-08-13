@@ -235,7 +235,7 @@ export class EditorSnappingSystem {
               return {
                 x: point.x + camX * (selectedGlobalP - qGlobalP),
                 y: point.y + camY * (selectedGlobalP - qGlobalP),
-                p: q.getParallaxAt(point.x, point.y, true),
+                p: q.getParallaxAtGrid(u, v),
               };
             };
 
@@ -253,7 +253,9 @@ export class EditorSnappingSystem {
               let d2 = Math.abs(ly - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: lx, y: ly };
-                binding = { targetName: q.name, type: 'grid', gridU: 0, gridV: v };
+                // Grid snapping is positional only. The vertex must be free to
+                // leave this node when the Quad or the vertex is edited later.
+                binding = null;
                 snapP = left.p;
               }
 
@@ -266,7 +268,7 @@ export class EditorSnappingSystem {
               d2 = Math.abs(ry - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: rx, y: ry };
-                binding = { targetName: q.name, type: 'grid', gridU: 1, gridV: v };
+                binding = null;
                 snapP = right.p;
               }
             }
@@ -285,7 +287,7 @@ export class EditorSnappingSystem {
               let d2 = Math.abs(ty - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: tx, y: ty };
-                binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 0 };
+                binding = null;
                 snapP = top.p;
               }
 
@@ -298,7 +300,7 @@ export class EditorSnappingSystem {
               d2 = Math.abs(by - result.y);
               if (d < bestDist && d2 < bestDist) {
                 snapTarget = { x: bx, y: by };
-                binding = { targetName: q.name, type: 'grid', gridU: u, gridV: 1 };
+                binding = null;
                 snapP = bottom.p;
               }
 
@@ -314,7 +316,7 @@ export class EditorSnappingSystem {
                 const dy = Math.abs(ny - result.y);
                 if (dx < bestDist && dy < bestDist) {
                   snapTarget = { x: nx, y: ny };
-                  binding = { targetName: q.name, type: 'grid', gridU: u, gridV: v };
+                  binding = null;
                   snapP = node.p;
                 }
               }
