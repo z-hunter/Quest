@@ -16,6 +16,7 @@ interface EntityObject {
   modelScale: number;
   layer: number;
   parallax: number;
+  depthSortMode: 'manual' | 'parallax' | 'y';
   colliderHeight: number;
   colliderWidth: number;
   ignoreScaling: boolean;
@@ -138,6 +139,20 @@ export const EntityProperties: React.FC = () => {
                 }}
               />
             </div>
+          </div>
+
+          <div className="e-row">
+            <label className="e-label">Depth Sort mode</label>
+            <Select
+              value={entity.depthSortMode || 'y'}
+              onChange={(value) => handleChange('depthSortMode', value)}
+              options={[
+                { value: 'y', label: 'By Y' },
+                { value: 'parallax', label: 'By Parallax' },
+                { value: 'manual', label: 'Manual (Layer only)' },
+              ]}
+              style={{ width: '100%' }}
+            />
           </div>
 
           <div

@@ -12,6 +12,7 @@ export const DefaultEntityData: EntityData = {
   scale: 1.0,
   modelScale: 1.0,
   layer: 0,
+  depthSortMode: 'y',
   spriteName: null,
   animationSpeed: 150,
 };

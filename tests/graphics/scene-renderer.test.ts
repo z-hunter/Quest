@@ -5,6 +5,35 @@ import { compareEntitiesForRender, getEntityRenderSortY } from '../../src/graphi
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('SceneRenderer Quad depth sorting', () => {
+  it('defaults Entity sorting to rendered Y and can sort an Entity by parallax', () => {
+    const fixture = createSceneFixture();
+    const far = fixture.addEntity('far');
+    far.layer = 0;
+    far.parallax = 0.4;
+    far.y = 900;
+
+    const near = fixture.addEntity('near');
+    near.layer = 0;
+    near.parallax = 0.8;
+    near.y = -900;
+
+    expect(compareEntitiesForRender(far, near, fixture.scene.camera)).toBeGreaterThan(0);
+    far.depthSortMode = 'parallax';
+    expect(compareEntitiesForRender(far, near, fixture.scene.camera)).toBeLessThan(0);
+  });
+
+  it('keeps same-Layer Entity scene order when either uses manual sorting', () => {
+    const fixture = createSceneFixture();
+    const manual = fixture.addEntity('manual');
+    const byY = fixture.addEntity('by_y');
+    manual.layer = byY.layer = 0;
+    manual.y = 900;
+    byY.y = -900;
+    manual.depthSortMode = 'manual';
+
+    expect(compareEntitiesForRender(manual, byY, fixture.scene.camera)).toBe(0);
+  });
+
   it('orders same-layer objects around the selected Quad depth anchor using its rendered parallax', () => {
     const fixture = createSceneFixture();
     fixture.scene.camera.y = 200;

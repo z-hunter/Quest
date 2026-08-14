@@ -348,8 +348,15 @@ export function getEntityRenderSortY(entity: Entity, camera: { y: number }): num
   return toVisualScalar(y, camera.y, parallax);
 }
 
+function usesManualDepthSort(entity: Entity): boolean {
+  return (entity as any).type !== 'Quad' && (entity as any).depthSortMode === 'manual';
+}
+
 function usesParallaxDepthSort(entity: Entity): boolean {
-  return (entity as any).type === 'Quad' && (entity as any).sortMode === 'parallax';
+  return (
+    ((entity as any).type === 'Quad' && (entity as any).sortMode === 'parallax') ||
+    ((entity as any).type !== 'Quad' && (entity as any).depthSortMode === 'parallax')
+  );
 }
 
 function getEntityDepthParallax(entity: Entity): number {
@@ -360,10 +367,12 @@ function getEntityDepthParallax(entity: Entity): number {
 export function compareEntitiesForRender(a: Entity, b: Entity, camera: { y: number }): number {
   if (a.layer !== b.layer) return a.layer - b.layer;
 
-  // A Quad explicitly sorted by parallax defines a depth plane independent of
-  // screen Y. Lower P is farther away and renders first; higher P is closer
-  // and renders over the Quad. Its global parallax is the plane P: vertex P
-  // remains surface geometry and has no single sortable value for the Quad.
+  // Manual means Layer is the only authored ordering criterion. Returning zero
+  // preserves scene order through the stable render sort.
+  if (usesManualDepthSort(a) || usesManualDepthSort(b)) return 0;
+
+  // A parallax-sorted object defines depth independently of screen Y. Lower P
+  // is farther away and renders first; higher P is closer and renders over it.
   if (usesParallaxDepthSort(a) || usesParallaxDepthSort(b)) {
     const parallaxDelta = getEntityDepthParallax(a) - getEntityDepthParallax(b);
     if (Math.abs(parallaxDelta) > 0.000001) return parallaxDelta;

@@ -4,6 +4,8 @@ import { SceneObject } from './SceneObject';
 import { Theme } from '../utils/Theme';
 import type { SpatialPlacement } from '../scene/spatialTypes';
 
+export type EntityDepthSortMode = 'manual' | 'parallax' | 'y';
+
 export interface EntityData {
   type: string;
   name: string;
@@ -23,6 +25,7 @@ export interface EntityData {
   modelScale?: number; // User defined scale
   layer: number;
   parallax?: number;
+  depthSortMode?: EntityDepthSortMode;
   ignoreScaling?: boolean;
   isPlayer?: boolean;
   speed?: number;
@@ -124,6 +127,7 @@ export class Entity extends SceneObject {
   scale: number;
   refScale: number;
   modelScale: number;
+  depthSortMode: EntityDepthSortMode;
   // layer: number; // Inherited
   baseWidth: number;
   baseHeight: number;
@@ -223,6 +227,7 @@ export class Entity extends SceneObject {
     'refScale',
     'modelScale',
     'parallax',
+    'depthSortMode',
     'ignoreScaling',
     'animationSpeed',
     'opacity',
@@ -268,6 +273,7 @@ export class Entity extends SceneObject {
     this.opacity = 1.0;
     // this.layer = 0; // Inherited
     this._parallax = 1.0; // 1.0 = normal move, 0.5 = half speed (far), 0.0 = fixed
+    this.depthSortMode = 'y';
     this.ignoreScaling = false;
     this.subsceneItemScale = 1.0;
     this.animationSpeed = 150; // Default 150ms
