@@ -547,13 +547,39 @@ export class ActorPlanExecutor {
     };
   }
 
+  private registerPendingTimeout(npcId: string, timeoutId: any): void {
+    let timeouts = this.pendingTimeouts.get(npcId);
+    if (!timeouts) {
+      timeouts = new Set();
+      this.pendingTimeouts.set(npcId, timeouts);
+    }
+    timeouts.add(timeoutId);
+  }
+
+  private unregisterPendingTimeout(npcId: string, timeoutId: any): void {
+    const timeouts = this.pendingTimeouts.get(npcId);
+    if (timeouts) {
+      timeouts.delete(timeoutId);
+      if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
+    }
+  }
+
   private watchMoveCompletion(actor: Actor): void {
     if (!this.moveCompletionScheduler) return;
     const token = (this.moveWatchTokens.get(actor.name) || 0) + 1;
     this.moveWatchTokens.set(actor.name, token);
 
+    let timeoutId: any;
     const poll = () => {
+      this.unregisterPendingTimeout(actor.name, timeoutId);
       if (this.moveWatchTokens.get(actor.name) !== token) return;
+      const scene = this.getActorScene(actor);
+      if (!scene || scene.getObjectByName(actor.name) !== actor) {
+        this.moveWatchTokens.delete(actor.name);
+        this.moveStartedAt.delete(actor.name);
+        this.targetMoveStates.delete(actor.name);
+        return;
+      }
       const result = actor.getMoveResult();
       if (result.status !== 'started' || actor.state !== 'walk') {
         this.moveWatchTokens.delete(actor.name);
@@ -577,7 +603,6 @@ export class ActorPlanExecutor {
           return;
         }
         const routeBlock = result.code === 'route_blocked' ? actor.getRouteBlockDiagnostic() : null;
-        const scene = actor.scene;
         const dynamicBlockerIds =
           routeBlock && scene
             ? (
@@ -636,10 +661,12 @@ export class ActorPlanExecutor {
         this.moveCompletionScheduler?.(actor.name, result);
         return;
       }
-      globalThis.setTimeout(poll, 50);
+      timeoutId = globalThis.setTimeout(poll, 50);
+      this.registerPendingTimeout(actor.name, timeoutId);
     };
 
-    globalThis.setTimeout(poll, 50);
+    timeoutId = globalThis.setTimeout(poll, 50);
+    this.registerPendingTimeout(actor.name, timeoutId);
   }
 
   private executeTargetAction(
@@ -743,20 +770,10 @@ export class ActorPlanExecutor {
   private scheduleMoveCompletion(npcId: string, result: ActorMoveResult, delayMs: number): void {
     if (!this.moveCompletionScheduler) return;
     const timeoutId = globalThis.setTimeout(() => {
-      const timeouts = this.pendingTimeouts.get(npcId);
-      if (timeouts) {
-        timeouts.delete(timeoutId);
-        if (timeouts.size === 0) this.pendingTimeouts.delete(npcId);
-      }
+      this.unregisterPendingTimeout(npcId, timeoutId);
       this.moveCompletionScheduler?.(npcId, result);
     }, delayMs);
-
-    let timeouts = this.pendingTimeouts.get(npcId);
-    if (!timeouts) {
-      timeouts = new Set();
-      this.pendingTimeouts.set(npcId, timeouts);
-    }
-    timeouts.add(timeoutId);
+    this.registerPendingTimeout(npcId, timeoutId);
   }
 
   private takeEntity(actor: Actor, targetId: string): NpcPlanExecutionOutcome {

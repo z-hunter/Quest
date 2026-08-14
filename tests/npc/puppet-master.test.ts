@@ -170,6 +170,7 @@ function getDynamicPmText(call: MockProvider['calls'][number]): string {
 
 describe('NpcPuppetMaster', () => {
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
@@ -1651,6 +1652,7 @@ describe('NpcPuppetMaster', () => {
     ]);
     expect(npc.getMoveResult().status).toBe('started');
     expect(fixture.game.sceneManager.currentScene).toBe(fixture.scene);
+    pm.haltAllNpcs();
   });
 
   it('lets an NPC inspect the current scene as a read-only LOOK anchor', () => {
@@ -6001,5 +6003,71 @@ describe('NpcPuppetMaster', () => {
         },
       ],
     });
+  });
+
+  it('stops move completion polling immediately when cleared, stopped, or removed from scene without infinite timer loop', async () => {
+    vi.useFakeTimers();
+    const fixture = createGameSemanticFixture('start');
+    fixture.addPlayer('Hero', 0, 0);
+    const floor = fixture.addWalkbox('Floor');
+    floor.poly = [
+      { x: -20, y: -20 },
+      { x: 120, y: -20 },
+      { x: 120, y: 80 },
+      { x: -20, y: 80 },
+    ];
+    const npc = new Actor(fixture.game as any, 0, 20);
+    npc.name = 'guard';
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', enabled: true }];
+    fixture.scene.addEntity(npc);
+    const door = fixture.addEntity('door', {
+      title: 'Door',
+      components: [{ type: 'Exit', portal: true }],
+    });
+    door.x = 90;
+    door.y = 20;
+
+    let completions = 0;
+    const executor = new ActorPlanExecutor(fixture.game, undefined, () => {
+      completions += 1;
+    });
+
+    executor.executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'MOVE_TO', targetId: door.name }],
+    });
+
+    expect(npc.getMoveResult().status).toBe('started');
+
+    // Case 1: clearState stops polling and cancels timer immediately
+    executor.clearState(npc.name);
+    await vi.runAllTimersAsync();
+    expect(completions).toBe(0);
+
+    // Case 2: starting a new move and calling clearAllPending cancels timer
+    executor.executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'MOVE_TO', targetId: door.name }],
+    });
+    executor.clearAllPending();
+    await vi.runAllTimersAsync();
+    expect(completions).toBe(0);
+
+    // Case 3: starting a move and stopping the actor ends polling on next tick
+    executor.executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'MOVE_TO', targetId: door.name }],
+    });
+    npc.stop();
+    await vi.runAllTimersAsync();
+    expect(completions).toBe(1);
+
+    // Case 4: removing actor from scene terminates polling without infinite loop
+    executor.executePlan({
+      npcId: npc.name,
+      steps: [{ type: 'MOVE_TO', targetId: door.name }],
+    });
+    fixture.scene.removeEntity(npc);
+    await vi.runAllTimersAsync();
   });
 });
