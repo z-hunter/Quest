@@ -29,6 +29,8 @@ interface EntityObject {
   contrast: number;
   hueShift: number;
   spriteName: string | null;
+  flipX: boolean;
+  flipY: boolean;
 }
 
 export const EntityProperties: React.FC = () => {
@@ -286,6 +288,36 @@ export const EntityProperties: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {entity.spriteName && (
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+            >
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={entity.flipX}
+                  onChange={(e) => handleChange('flipX', e.target.checked)}
+                />
+                Flip X
+              </label>
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={entity.flipY}
+                  onChange={(e) => handleChange('flipY', e.target.checked)}
+                />
+                Flip Y
+              </label>
+            </div>
+          )}
         </>,
         setSectionRef
       )}

@@ -231,6 +231,8 @@ describe('QuadObject', () => {
     quad.perspective = true;
     quad.perspectiveAmount = 1.5;
     quad.spriteName = 'floors/metal.json';
+    quad.flipX = true;
+    quad.flipY = true;
     quad.textureMode = 'tile';
     quad.tileScaleX = 0.5;
     quad.tileScaleY = 0.25;
@@ -242,6 +244,8 @@ describe('QuadObject', () => {
     expect(json.perspective).toBe(true);
     expect(json.perspectiveAmount).toBe(1.5);
     expect(json.spriteName).toBe('floors/metal.json');
+    expect(json.flipX).toBe(true);
+    expect(json.flipY).toBe(true);
     expect(json.textureMode).toBe('tile');
     expect(json.tileScaleX).toBe(0.5);
     expect(json.tileScaleY).toBe(0.25);
@@ -258,6 +262,8 @@ describe('QuadObject', () => {
     expect(loadedQuad.perspective).toBe(true);
     expect(loadedQuad.perspectiveAmount).toBe(1.5);
     expect(loadedQuad.spriteName).toBe('floors/metal.json');
+    expect(loadedQuad.flipX).toBe(true);
+    expect(loadedQuad.flipY).toBe(true);
     expect(loadedQuad.textureMode).toBe('tile');
     expect(loadedQuad.tileScaleX).toBe(0.5);
     expect(loadedQuad.tileScaleY).toBe(0.25);
@@ -366,6 +372,28 @@ describe('QuadObject', () => {
     // Almost-affine Stretch Quads are drawn as one transformed sprite.
     expect(ctx.clip).toHaveBeenCalled();
     expect(ctx.transform).toHaveBeenCalledTimes(1);
+  });
+
+  it('flips an affine Quad texture without changing its surface geometry', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'flipped_textured_quad');
+    quad.spriteName = 'floors/metal.json';
+    quad.image = { complete: true } as HTMLImageElement;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    quad.flipX = true;
+    quad.flipY = true;
+    quad.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 100, y: 0, p: 1 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.transform).toHaveBeenCalledWith(-6.25, 0, 0, -6.25, 100, 100);
   });
 
   it('uses a flat sprite for near-affine Quads and bounded screen-space tessellation otherwise', () => {

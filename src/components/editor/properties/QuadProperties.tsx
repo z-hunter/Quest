@@ -325,6 +325,36 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
           </div>
 
           {quad.spriteName && (
+            <div
+              className="e-row"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+            >
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={quad.flipX}
+                  onChange={(e) => handleChange('flipX', e.target.checked)}
+                />
+                Flip X
+              </label>
+              <label
+                className="e-label"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={quad.flipY}
+                  onChange={(e) => handleChange('flipY', e.target.checked)}
+                />
+                Flip Y
+              </label>
+            </div>
+          )}
+
+          {quad.spriteName && (
             <>
               <div className="e-row">
                 <label className="e-label">Texture Mode</label>

@@ -1453,7 +1453,7 @@ ctx.fillStyle = Theme.backgroundColor; // Получает значение --ui
    - При назначенной текстуре она заменяет цветовую заливку и Checkerboard, а Retro Grid остаётся поверх.
 
 3. **Данные**:
-   - `QuadObject` использует стандартный `spriteName`, `textureMode`, `tileScaleX`, `tileScaleY` и общие для всей поверхности `perspective` / `perspectiveAmount`. Эта проекция одновременно применяется к Retro Grid, checkerboard, texture/sprite и snap-координатам; snap к узлу сетки не является живой binding-связью.
+   - `Entity` и `QuadObject` используют `spriteName`, `flipX` и `flipY`; для Quad также доступны `textureMode`, `tileScaleX`, `tileScaleY` и общие для всей поверхности `perspective` / `perspectiveAmount`. Эта проекция одновременно применяется к Retro Grid, checkerboard, texture/sprite и snap-координатам; snap к узлу сетки не является живой binding-связью.
    - В редактор добавляется выбор Sprite, режим текстуры, настройки тайлинга и единая настройка Surface Perspective.
 
 ## Отладочный profiler памяти сцен

@@ -38,6 +38,13 @@ export interface QuadSurfaceMetrics {
   referenceAxisV: QuadPoint;
 }
 
+function flipTexturePoint(point: QuadPoint, flipX: boolean, flipY: boolean): QuadPoint {
+  return {
+    x: flipX ? 1 - point.x : point.x,
+    y: flipY ? 1 - point.y : point.y,
+  };
+}
+
 /** Maps the unit square (u, v) to a Quad's screen-space vertices. */
 export interface QuadHomography {
   a: number;
@@ -699,16 +706,22 @@ function drawAffineTexture(
   frame: { x: number; y: number; w: number; h: number },
   p0: QuadPoint,
   p1: QuadPoint,
-  p3: QuadPoint
+  p2: QuadPoint,
+  p3: QuadPoint,
+  flipX = false,
+  flipY = false
 ): void {
+  const origin = flipX ? (flipY ? p2 : p1) : flipY ? p3 : p0;
+  const xTarget = flipY ? (flipX ? p3 : p2) : flipX ? p0 : p1;
+  const yTarget = flipY ? (flipX ? p1 : p0) : flipX ? p2 : p3;
   ctx.save();
   ctx.transform(
-    (p1.x - p0.x) / frame.w,
-    (p1.y - p0.y) / frame.w,
-    (p3.x - p0.x) / frame.h,
-    (p3.y - p0.y) / frame.h,
-    p0.x,
-    p0.y
+    (xTarget.x - origin.x) / frame.w,
+    (xTarget.y - origin.y) / frame.w,
+    (yTarget.x - origin.x) / frame.h,
+    (yTarget.y - origin.y) / frame.h,
+    origin.x,
+    origin.y
   );
   ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
   ctx.restore();
@@ -791,6 +804,8 @@ export class QuadObject extends Entity {
     'depthScalingVersion',
     'vertices',
     'spriteName',
+    'flipX',
+    'flipY',
     'textureMode',
     'tileScaleX',
     'tileScaleY',
@@ -864,7 +879,7 @@ export class QuadObject extends Entity {
     textureCtx.save();
     clipToQuad(textureCtx, screenVerts);
     if (flatTexture) {
-      drawAffineTexture(textureCtx, this.image, frame, v0, v1, v3);
+      drawAffineTexture(textureCtx, this.image, frame, v0, v1, v2, v3, this.flipX, this.flipY);
       textureCtx.restore();
       if (needsTextureLayer) this.drawTextureLayer(ctx, screenVerts);
       return true;
@@ -883,6 +898,10 @@ export class QuadObject extends Entity {
     );
     for (const cell of mesh) {
       const [p00, p10, p11, p01] = cell.points;
+      const uv00 = flipTexturePoint({ x: cell.u0, y: cell.v0 }, this.flipX, this.flipY);
+      const uv10 = flipTexturePoint({ x: cell.u1, y: cell.v0 }, this.flipX, this.flipY);
+      const uv11 = flipTexturePoint({ x: cell.u1, y: cell.v1 }, this.flipX, this.flipY);
+      const uv01 = flipTexturePoint({ x: cell.u0, y: cell.v1 }, this.flipX, this.flipY);
       if (cell.diagonal === 'forward') {
         drawTexturedTriangle(
           textureCtx,
@@ -891,9 +910,9 @@ export class QuadObject extends Entity {
           p00,
           p10,
           p11,
-          { x: cell.u0, y: cell.v0 },
-          { x: cell.u1, y: cell.v0 },
-          { x: cell.u1, y: cell.v1 },
+          uv00,
+          uv10,
+          uv11,
           pixelOverlap
         );
         drawTexturedTriangle(
@@ -903,9 +922,9 @@ export class QuadObject extends Entity {
           p00,
           p11,
           p01,
-          { x: cell.u0, y: cell.v0 },
-          { x: cell.u1, y: cell.v1 },
-          { x: cell.u0, y: cell.v1 },
+          uv00,
+          uv11,
+          uv01,
           pixelOverlap
         );
       } else {
@@ -916,9 +935,9 @@ export class QuadObject extends Entity {
           p00,
           p10,
           p01,
-          { x: cell.u0, y: cell.v0 },
-          { x: cell.u1, y: cell.v0 },
-          { x: cell.u0, y: cell.v1 },
+          uv00,
+          uv10,
+          uv01,
           pixelOverlap
         );
         drawTexturedTriangle(
@@ -928,9 +947,9 @@ export class QuadObject extends Entity {
           p10,
           p11,
           p01,
-          { x: cell.u1, y: cell.v0 },
-          { x: cell.u1, y: cell.v1 },
-          { x: cell.u0, y: cell.v1 },
+          uv10,
+          uv11,
+          uv01,
           pixelOverlap
         );
       }

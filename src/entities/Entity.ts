@@ -45,6 +45,8 @@ export interface EntityData {
   saturation?: number; // Added
   contrast?: number; // Added
   hueShift?: number; // Added
+  flipX?: boolean;
+  flipY?: boolean;
   spatial?: SpatialPlacement;
 }
 
@@ -133,6 +135,7 @@ export class Entity extends SceneObject {
   baseHeight: number;
   animator: Animator | null;
   flipX: boolean;
+  flipY: boolean;
 
   /**
    * Override parallax to notify editor on change.
@@ -237,6 +240,8 @@ export class Entity extends SceneObject {
     'saturation',
     'contrast',
     'hueShift',
+    'flipX',
+    'flipY',
   ];
 
   constructor(
@@ -285,6 +290,7 @@ export class Entity extends SceneObject {
     this._baseColliderHeight = 0;
     this.animator = null;
     this.flipX = false;
+    this.flipY = false;
     this.scene = null;
     this.loadingRefCount = 0;
   }
@@ -447,46 +453,31 @@ export class Entity extends SceneObject {
     if (this.animator && this.animator.getCurrentFrame()) {
       const frame = this.animator.getCurrentFrame();
       if (frame && this.image && this.image.complete) {
-        if (this.flipX) {
-          ctx.save();
-          ctx.scale(-1, 1);
-          ctx.drawImage(
-            this.image,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            -(this.x + this.width / 2),
-            this.y - this.height,
-            this.width,
-            this.height
-          );
-          ctx.restore();
-        } else {
-          ctx.drawImage(
-            this.image,
-            frame.x,
-            frame.y,
-            frame.w,
-            frame.h,
-            this.x - this.width / 2,
-            this.y - this.height,
-            this.width,
-            this.height
-          );
-        }
+        ctx.save();
+        ctx.translate(this.x, this.y - this.height / 2);
+        ctx.scale(this.flipX ? -1 : 1, this.flipY ? -1 : 1);
+        ctx.drawImage(
+          this.image,
+          frame.x,
+          frame.y,
+          frame.w,
+          frame.h,
+          -this.width / 2,
+          -this.height / 2,
+          this.width,
+          this.height
+        );
+        ctx.restore();
       } else {
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
       }
     } else if (this.image && this.image.complete && this.image.naturalWidth !== 0) {
-      ctx.drawImage(
-        this.image,
-        this.x - this.width / 2,
-        this.y - this.height,
-        this.width,
-        this.height
-      );
+      ctx.save();
+      ctx.translate(this.x, this.y - this.height / 2);
+      ctx.scale(this.flipX ? -1 : 1, this.flipY ? -1 : 1);
+      ctx.drawImage(this.image, -this.width / 2, -this.height / 2, this.width, this.height);
+      ctx.restore();
     } else {
       ctx.fillStyle = this.color;
       ctx.fillRect(this.x - this.width / 2, this.y - this.height, this.width, this.height);
@@ -662,10 +653,11 @@ export class Entity extends SceneObject {
 
       // Flip X Support
       const finalNormX = this.flipX ? 1 - normX : normX;
+      const finalNormY = this.flipY ? 1 - normY : normY;
 
       // Map to Source Image Pixels
       const pixelX = Math.floor(srcX + finalNormX * srcW);
-      const pixelY = Math.floor(srcY + normY * srcH);
+      const pixelY = Math.floor(srcY + finalNormY * srcH);
 
       // Bounds Safety Check (in case of rounding errors)
       if (pixelX < srcX || pixelX >= srcX + srcW || pixelY < srcY || pixelY >= srcY + srcH)
