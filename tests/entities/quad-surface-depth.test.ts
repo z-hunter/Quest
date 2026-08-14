@@ -128,6 +128,41 @@ describe('Quad surface depth', () => {
     expect(prop.baseWidth).toBeCloseTo(100, 6);
   });
 
+  it('does not let camera movement assign an external object to a depth controller', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.scaling.enabled = false;
+    const controller = new QuadObject(fixture.game, 'controller');
+    controller.vertices = [
+      { x: -40, y: 0, p: 0.6 },
+      { x: 75, y: 0, p: 0.6 },
+      { x: 143, y: 74, p: 1 },
+      { x: -110, y: 74, p: 1 },
+    ];
+    controller.components = [{ type: 'Depth scaling controller', min: 0.4, max: 1 }];
+    fixture.scene.addEntity(controller);
+
+    const prop = fixture.addEntity('external');
+    prop.x = 19;
+    prop.y = -1;
+    prop.modelScale = 1;
+    prop.update(0); // Establishes that the object is outside the controller.
+
+    fixture.scene.camera.y = 190;
+    prop.update(0);
+
+    expect(prop.scale).toBe(1);
+
+    prop.y = 75; // Actual movement may enter the inverted controller.
+    prop.update(0);
+    expect(prop.scale).not.toBe(1);
+
+    prop.y = -1; // Leaving it releases the controller on the next update too.
+    prop.update(0);
+    expect(prop.scale).toBe(1);
+    prop.update(0);
+    expect(prop.scale).toBe(1);
+  });
+
   it('uses the same P-based step for Player and routed Actor movement', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 50, 20);

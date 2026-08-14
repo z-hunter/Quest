@@ -4420,3 +4420,78 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 
 ## Risks, Caveats, Open Questions
 - В текущей реализации эскизов для префабов берётся спрайт строго из *первого* элемента. Если в префабе первый объект является пустым контейнером без спрайта, эскиз отображаться не будет, даже если спрайт есть у дочерних объектов. Это можно будет улучшить в будущем.
+
+
+## Session Entry - 2026-08-13 04:13 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Устранить дрейф и изменение формы Quad при движении камеры, когда вершина была привязана к узлу Retro Grid.
+- Сделать параметры вершин, связанных vertex-binding, редактируемыми в панели свойств с синхронизацией всей группы.
+- Изменить Alt-снап к узлам Retro Grid с живой binding-связи на одноразовую установку координат и P.
+- Исправить применение `3d-parallax` к Static-объектам из legacy-сцен.
+
+## What Was Implemented
+
+### 1. Стабильный P для grid binding
+
+- В `QuadObject` добавлен `getParallaxAtGrid(u, v)`, который вычисляет эффективный P непосредственно по известным координатам узла сетки.
+- `QuadObject.resolveBindings()` больше не восстанавливает P через обратное проектирование camera-dependent точки на границе Quad.
+- `EditorSnappingSystem` использует тот же прямой UV-расчёт P.
+- Это устраняет переключение пограничной вершины между интерполированным P и fallback-значением при движении камеры.
+
+### 2. Редактирование связанных вершин
+
+- Поля X/Y/P в `QuadProperties` теперь вызывают `QuadObject.setVertex()` вместо прямой мутации данных.
+- `setVertex()` обновляет всю связанную vertex-binding группу, включая целевую вершину, поэтому следующий `resolveBindings()` не затирает пользовательское изменение.
+- Для P редактор сохраняет экранную позицию через camera compensation; API-вызовы `setVertex()` сохраняют прежнее raw-поведение по умолчанию.
+- При разных глобальных P синхронизируется единый эффективный P, а локальные значения пересчитываются для каждого Quad.
+
+### 3. Одноразовый Alt-снап к Retro Grid
+
+- Grid-узлы теперь являются только snap-точками: в вершину записываются рассчитанные координаты и P, но `binding.type = 'grid'` не создаётся.
+- Quad и его сетку можно менять после снапа без перемещения уже установленной вершины.
+- Вершину также можно свободно редактировать; существующие прямые vertex-binding между Quad сохраняются и продолжают двигать связанную группу.
+- Legacy grid bindings материализуются один раз при обновлении Quad, после чего binding удаляется.
+- Поведение зафиксировано в `GDD.md`.
+
+### 4. 3d-parallax для legacy Static
+
+- `Static_923` из `t-quad` загружался с сериализованным `type: "Entity"`, хотя это Static-объект.
+- `ThreeDParallaxSystem` теперь обрабатывает `Actor`, `Player`, `Static` и legacy `Entity`, поэтому Static получает P поверхности Quad и компенсацию позиции так же, как Actor.
+
+## Important Architecture Decisions
+
+- Живыми остаются только vertex-to-vertex bindings. Связь с Retro Grid не хранится в runtime/editor data после снапа.
+- Перспективная коррекция Retro Grid продолжает использоваться для вычисления координат snap-точки и P; изменён только жизненный цикл binding.
+- Legacy-сериализация `Entity` сохраняется для совместимости, а runtime-системы учитывают оба имени типа.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Parser, inventory и subscene-механики не менялись.
+- Изменения затрагивают Quad surface depth, редакторский snapping/property editing и `ThreeDParallaxSystem`.
+
+## Tests and Validation
+
+- Фокусированные проверки: `tests/editor/editor-snapping-system.test.ts`, `tests/entities/quad-object.test.ts`, `tests/entities/quad-surface-depth.test.ts`, `tests/systems/three-d-parallax-system.test.ts` — passed.
+- Полный набор Vitest — passed.
+- TypeScript: `npm exec tsc -- --noEmit` — passed.
+- `git diff --check` — passed.
+- Commit hooks Prettier и ESLint — passed для обоих коммитов.
+
+## Commits Created During the Session
+
+- `5ade5c36a38a7d6439d697f9411499f2400ba84b` — `Make Retro Grid snapping positional`.
+- `3bd4dd5` — `Apply 3D parallax to legacy Static entities`.
+
+## Remaining Work / Next Recommended Steps
+
+- Провести ручную проверку `t-quad`: перемещение `Static_923` по Quad_408, движение камеры и изменение геометрии/сетки Quad после снапа.
+- Если потребуется поддержка других legacy-типов объектов, проверить их сериализацию и фильтры runtime-систем по `type`.
+
+## Risks / Caveats / Non-Committed Changes
+
+- `public/scenes/quad5.json` и `public/scenes/t-quad.json` содержат пользовательские изменения и намеренно оставлены вне коммитов.
+- Старые grid bindings изменяются при первом `Quad.update()`: их координаты/P сохраняются как текущая одноразовая позиция, затем binding удаляется.

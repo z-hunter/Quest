@@ -165,6 +165,8 @@ export class Scene {
 
   private _walkboxEntitiesCache: Entity[] | null = null;
   private _physicalExitsCache: Triggerbox[] | null = null;
+  private depthScaleObservations = new WeakMap<Entity, { x: number; y: number }>();
+  private depthScaleBindings = new WeakMap<Entity, { controllerName: string; v: number }>();
 
   getWalkboxEntities(): Entity[] {
     if (!this._walkboxEntitiesCache) {
@@ -718,6 +720,13 @@ export class Scene {
   getDepthScaleFor(entity: Entity): number {
     if (entity.ignoreScaling) return 1;
 
+    const previous = this.depthScaleObservations.get(entity);
+    const moved =
+      !previous ||
+      Math.abs(entity.x - previous.x) > 0.000001 ||
+      Math.abs(entity.y - previous.y) > 0.000001;
+    const existingBinding = this.depthScaleBindings.get(entity);
+
     const visualAnchor =
       entity.type === 'Quad'
         ? (() => {
@@ -736,32 +745,52 @@ export class Scene {
             entity.parallax !== undefined ? entity.parallax : 1
           );
 
-    for (let index = this.entities.length - 1; index >= 0; index--) {
-      const candidate = this.entities[index];
-      if (
-        candidate.disabled ||
-        !candidate.visible ||
-        candidate.type !== 'Quad' ||
-        !candidate.components?.some(
-          (component: any) => component.type === 'Depth scaling controller'
-        )
-      ) {
-        continue;
-      }
-      const controller = candidate.components.find(
-        (component: any) => component.type === 'Depth scaling controller'
-      ) as { min?: number; max?: number };
-      const metrics = (candidate as QuadObject).getSurfaceMetricsAt(
-        visualAnchor.x,
-        visualAnchor.y,
-        true,
-        false
-      );
-      if (!metrics) continue;
+    const getController = (candidate: Entity) =>
+      candidate.disabled ||
+      !candidate.visible ||
+      candidate.type !== 'Quad' ||
+      !candidate.components?.some((component: any) => component.type === 'Depth scaling controller')
+        ? null
+        : (candidate.components.find(
+            (component: any) => component.type === 'Depth scaling controller'
+          ) as { min?: number; max?: number });
+    const getScale = (controller: { min?: number; max?: number }, v: number) => {
       const min = Number.isFinite(controller.min) ? controller.min! : 0.5;
       const max = Number.isFinite(controller.max) ? controller.max! : 1;
-      return min + metrics.v * (max - min);
+      return min + v * (max - min);
+    };
+
+    if (existingBinding && !moved) {
+      const candidate = this.findEntity(existingBinding.controllerName);
+      const controller = candidate && getController(candidate);
+      if (controller) return getScale(controller, existingBinding.v);
+      this.depthScaleBindings.delete(entity);
     }
+
+    if (existingBinding && moved) this.depthScaleBindings.delete(entity);
+
+    // The first evaluation establishes authored controller ownership. Later,
+    // only a real world-position change may acquire a new controller; camera
+    // motion must not alter scene logic.
+    if (!previous || moved) {
+      for (let index = this.entities.length - 1; index >= 0; index--) {
+        const candidate = this.entities[index];
+        const controller = getController(candidate);
+        if (!controller) continue;
+        const metrics = (candidate as QuadObject).getSurfaceMetricsAt(
+          visualAnchor.x,
+          visualAnchor.y,
+          true,
+          false
+        );
+        if (!metrics) continue;
+        this.depthScaleBindings.set(entity, { controllerName: candidate.name, v: metrics.v });
+        this.depthScaleObservations.set(entity, { x: entity.x, y: entity.y });
+        return getScale(controller, metrics.v);
+      }
+    }
+
+    this.depthScaleObservations.set(entity, { x: entity.x, y: entity.y });
 
     return this.scaling.enabled ? this.getScaling(visualAnchor.y) : 1;
   }

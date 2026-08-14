@@ -62,10 +62,6 @@ export class ThreeDParallaxSystem {
       // Camera movement must never assign an unbound object to a surface.
       // The initial update still establishes bindings for objects authored on it.
       const mayAcquireSurface = !!existingBinding || !previousObservation || movedSinceObservation;
-      (target as any)[SURFACE_PARALLAX_OBSERVATION] = {
-        worldX: target.x,
-        worldY: target.y,
-      } satisfies SurfaceParallaxObservation;
       const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
 
       const allQuads = scene.entities.filter(
@@ -93,6 +89,7 @@ export class ThreeDParallaxSystem {
       }
 
       if (topQuad && topQuad.name !== quad.name) continue;
+      if (!topQuad && existingBinding && existingBinding.quadName !== quad.name) continue;
 
       let targetVisual = toVisualPosition(
         { x: target.x, y: target.y },
@@ -176,6 +173,11 @@ export class ThreeDParallaxSystem {
         target.y = restoredWorld.y;
         delete (target as any)[SURFACE_PARALLAX_BINDING];
       }
+
+      (target as any)[SURFACE_PARALLAX_OBSERVATION] = {
+        worldX: target.x,
+        worldY: target.y,
+      } satisfies SurfaceParallaxObservation;
 
       // --- Shadow Logic ---
       // Shadows are an Actor-only component; Static objects intentionally stop here.

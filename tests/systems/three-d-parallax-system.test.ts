@@ -188,4 +188,51 @@ describe('ThreeDParallaxSystem', () => {
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
     expect((prop as any).__surfaceParallaxBinding).toMatchObject({ quadName: floor.name });
   });
+
+  it('preserves initial binding for authored targets when a lower overlapping Quad updates before the top Quad', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 0;
+    fixture.scene.camera.y = 0;
+
+    const lowerFloor = new QuadObject(fixture.game, 'lower-floor');
+    lowerFloor.vertices = [
+      { x: 0, y: 0, p: 0.5 },
+      { x: 100, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    lowerFloor.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(lowerFloor);
+
+    const topFloor = new QuadObject(fixture.game, 'top-floor');
+    topFloor.vertices = [
+      { x: 0, y: 0, p: 0.8 },
+      { x: 100, y: 0, p: 0.8 },
+      { x: 100, y: 100, p: 1.2 },
+      { x: 0, y: 100, p: 1.2 },
+    ];
+    topFloor.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(topFloor);
+
+    const prop = fixture.addEntity('prop');
+    prop.type = 'Static';
+    prop.x = 50;
+    prop.y = 50;
+
+    // Lower quad updates first in entity order
+    ThreeDParallaxSystem.update(lowerFloor, { type: '3d-parallax' });
+    expect((prop as any).__surfaceParallaxBinding).toBeUndefined();
+
+    // Top quad updates second
+    ThreeDParallaxSystem.update(topFloor, { type: '3d-parallax' });
+
+    const binding = (prop as any).__surfaceParallaxBinding;
+    expect(binding).toBeDefined();
+    expect(binding.quadName).toBe('top-floor');
+    expect(prop.parallax).toBeCloseTo(topFloor.getParallaxAt(50, 50, true), 6);
+    expect((prop as any).__surfaceParallaxObservation).toEqual({
+      worldX: prop.x,
+      worldY: prop.y,
+    });
+  });
 });
