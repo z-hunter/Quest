@@ -721,7 +721,18 @@ export const PropertiesPanel: React.FC = () => {
       }
       incrementObjectVersion();
 
-      if (field === 'name') incrementHierarchyVersion();
+      if (field === 'name') {
+        if (
+          selectedObjectType &&
+          selectedObjectType !== 'SCENE' &&
+          selectedObjectType !== 'SETTINGS' &&
+          selectedObjectType !== 'MULTI'
+        ) {
+          const newKey = `${selectedObjectType}:${finalVal}`;
+          useEditorStore.getState().selectObjects([newKey], finalVal, selectedObjectType);
+        }
+        incrementHierarchyVersion();
+      }
       if (field === 'isPlayer') {
         const scene = game?.sceneManager?.currentScene;
         if (scene && obj && (obj as any).type === 'Actor') {
@@ -790,12 +801,26 @@ export const PropertiesPanel: React.FC = () => {
   }, [selectedObjectType, selectedObjectId]);
 
   // ─── Build context value ───────────────────────────────────────────────────
+  const currentObjectId =
+    selectedObjectType === 'SETTINGS'
+      ? 'SETTINGS'
+      : selectedObjectType === 'SCENE'
+        ? 'SCENE'
+        : obj?.name || selectedObjectId || null;
+
+  const headerTitle =
+    selectedObjectType === 'SETTINGS'
+      ? 'SETTINGS'
+      : selectedObjectType === 'SCENE'
+        ? 'SCENE'
+        : `${selectedObjectType?.toUpperCase() || 'OBJECT'}: ${currentObjectId || ''}`;
+
   const contextValue: PropertiesContextValue | null = game
     ? {
         game,
         obj,
         selectedObjectType: selectedObjectType || '',
-        selectedObjectId: selectedObjectId || null,
+        selectedObjectId: currentObjectId,
         mode: mode || null,
         selectedVertexIndex: selectedVertexIndex ?? null,
         uiScale,
@@ -917,19 +942,9 @@ export const PropertiesPanel: React.FC = () => {
                 textOverflow: 'ellipsis',
                 textTransform: 'none',
               }}
-              title={
-                selectedObjectType === 'SETTINGS'
-                  ? 'SETTINGS'
-                  : selectedObjectType === 'SCENE'
-                    ? 'SCENE'
-                    : `${selectedObjectType?.toUpperCase()}: ${selectedObjectId}`
-              }
+              title={headerTitle}
             >
-              {selectedObjectType === 'SETTINGS'
-                ? 'SETTINGS'
-                : selectedObjectType === 'SCENE'
-                  ? 'SCENE'
-                  : `${selectedObjectType?.toUpperCase()}: ${selectedObjectId}`}
+              {headerTitle}
             </span>
             {selectedObjectType !== 'SETTINGS' && selectedObjectType !== 'SCENE' && (
               <button

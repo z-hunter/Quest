@@ -4495,3 +4495,86 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 
 - `public/scenes/quad5.json` и `public/scenes/t-quad.json` содержат пользовательские изменения и намеренно оставлены вне коммитов.
 - Старые grid bindings изменяются при первом `Quad.update()`: их координаты/P сохраняются как текущая одноразовая позиция, затем binding удаляется.
+
+## Session Entry - 2026-08-14 15:48 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Завершить стабилизацию unified surface depth при схлопывании и инверсии Quad.
+- Устранить повторный camera-only захват объектов компонентами `3d-parallax` и `Depth scaling controller`.
+- Добавить управляемую сортировку глубины для Static и Actor.
+- Зафиксировать результаты и durable knowledge после предыдущего wrap-up.
+
+## What Was Implemented
+
+### 1. Стабильное владение 3D-поверхностью при инверсии Quad
+
+- При визуально нестабильной проекции Quad существующая 3d-parallax binding сохраняет `(u, v)` и не переинвертируется через неоднозначную геометрию.
+- Новые surface bindings не приобретаются только из-за движения камеры: для unbound объекта требуется первое авторское размещение или реальное изменение мировых X/Y.
+- Это защищает объекты вне `floor` в `test_t`, когда его верхняя и нижняя грани проходят через нулевую площадь и меняются местами.
+- Для `Depth scaling controller` применено такое же владение: существующая controller binding хранит локальную глубину, camera-only движение её не заменяет, а реальный выход объекта освобождает binding.
+
+### 2. Исправление fallback Scene Depth Scaling при CAM Y=647
+
+- Выяснено, что изменение размера `wall` при CAM Y около 647 не было захватом controller: binding отсутствовала.
+- Причиной был fallback scene Depth Scaling, который использовал экранную Y после применения P=0.6. При движении камеры экранная Y `wall` менялась примерно от `-1` до `258`, поэтому масштаб менялся с `0.5` до `0.8593`.
+- Fallback теперь использует мировую Y: raw `Entity.y`; для Quad — Y-координату центра авторских вершин. Локальные controller-метрики по-прежнему вычисляются по visual surface координатам.
+- В браузере `test_t` при CAM Y=647 `wall` сохраняет `scale=0.5`, P=0.6 и не получает binding.
+
+### 3. Depth Sort mode для Static и Actor
+
+- В Entity добавлено сериализуемое поле `depthSortMode`: `y` (по умолчанию), `parallax`, `manual`.
+- `By Y` сохраняет прежнюю сортировку по отображаемой Y.
+- `By Parallax` переиспользует общий comparator: меньший P рисуется раньше, больший P — поверх.
+- `Manual` учитывает только Layer и сохраняет порядок объектов сцены внутри равного Layer.
+- Режим добавлен в Transform properties Entity, описан в `GDD.md`, покрыт renderer-регрессиями. Quad продолжает использовать собственный `sortMode` для Ignore/Parallax/Vertex 0..3.
+
+### 4. Стабилизация NPC timer cleanup
+
+- `ActorPlanExecutor` перестал оставлять polling таймер MOVE_TO вне `pendingTimeouts`.
+- Polling и delayed completion теперь используют общий tracked-timeout путь; polling прекращается, если Actor больше не принадлежит сцене.
+- Добавлены проверки `clearState`, `clearAllPending`, остановки Actor и удаления сцены.
+
+## Important Architecture Decisions
+
+- Camera movement никогда не меняет логическое владение объектом поверхностью или controller.
+- 3d-parallax и controller используют visual/projective координаты только для уже разрешённой поверхности; fallback scene Depth Scaling остаётся мировым механизмом.
+- Entity и Quad имеют разные serialized поля сортировки (`depthSortMode` и `sortMode`), чтобы не нарушать Quad vertex-anchor контракт и legacy scenes.
+- Legacy scenes без `depthSortMode` получают default `By Y` через конструктор Entity.
+
+## Parser / Mechanics / Scene / Subscene / Inventory Changes
+
+- Parser, inventory и subscene не менялись.
+- Runtime mechanics changes: `Scene.getDepthScaleFor`, `ThreeDParallaxSystem`, Quad projective stability, renderer depth comparator, ActorPlanExecutor cleanup.
+- Editor changes: Entity Transform depth sort selector.
+
+## Tests and Validation
+
+- Focused Quad surface tests: 11 passed.
+- Focused renderer depth-sort tests: 5 passed.
+- Focused NPC Puppet Master tests: 138 passed.
+- TypeScript typecheck and `git diff --check` passed.
+- Full Vitest suite passed: 69 files, 796 tests.
+- Browser checks used Python Playwright because the local Node Playwright package is unavailable. `test_t` was loaded directly; CAM Y=647 confirmed `wall.scale=0.5` and no controller binding.
+
+## Commits Created During the Session
+
+- `30ea09b` — `Stabilize collapsed Quad perspective`.
+- `ee3d903` — `Preserve 3D surface ownership through Quad inversion`.
+- `d179496` — `Stabilize Quad depth ownership across camera motion`.
+- `c631393` — `Add depth sort modes for entities`.
+- `0992c06` — `Fix leaked NPC move polling timers`.
+- `30ea0d0` — `Keep scene depth scaling independent of camera`.
+
+## Remaining Work / Next Recommended Steps
+
+- Ручная проверка в редакторе/игре: `test_t`, `floor`, `wall`, CAM Y около 647 и обратный возврат камеры.
+- Если появятся другие camera-only size changes, сначала определить, это controller binding или fallback scene scaling; для fallback проверять мировую Y, для controller — сохранённые UV.
+
+## Risks / Caveats / Non-Committed Changes
+
+- В рабочем дереве намеренно оставлены несвязанные изменения в `.gitignore` и `progress.md`; они не входят в последний фикс.
+- Временные Playwright-скриншоты не отслеживаются Git.
+- NotebookLM readiness в начале сессии сообщил истёкшую авторизацию; автоматическое восстановление было запущено codex-doctor. Синхронизация wrap-up должна подтвердить фактический CLI status и при необходимости остановиться на re-auth.

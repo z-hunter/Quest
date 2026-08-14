@@ -27,6 +27,8 @@ docs
 .idea
 .DS_Store
 .playwright-mcp/
+playwright-*.png
+output/playwright/
 *.suo
 *.ntvs*
 *.njsproj
