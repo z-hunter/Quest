@@ -792,7 +792,14 @@ export class Scene {
 
     this.depthScaleObservations.set(entity, { x: entity.x, y: entity.y });
 
-    return this.scaling.enabled ? this.getScaling(visualAnchor.y) : 1;
+    // Scene Depth Scaling is world-space fallback behavior. Unlike a Quad
+    // controller, it must not react to camera motion or an Entity's P layer.
+    const sceneScalingY =
+      entity.type === 'Quad'
+        ? (entity as QuadObject).vertices.reduce((sum, vertex) => sum + vertex.y, 0) /
+          (entity as QuadObject).vertices.length
+        : entity.y;
+    return this.scaling.enabled ? this.getScaling(sceneScalingY) : 1;
   }
 
   getCorrectionalScale(): number {

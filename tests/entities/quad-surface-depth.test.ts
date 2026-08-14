@@ -163,6 +163,32 @@ describe('Quad surface depth', () => {
     expect(prop.scale).toBe(1);
   });
 
+  it('keeps scene depth scaling in world space while a camera inverts a controller Quad', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.scaling = { enabled: true, min: 0.5, max: 1, horizon: 150, front: 300 };
+    const controller = new QuadObject(fixture.game, 'controller');
+    controller.vertices = [
+      { x: -40, y: 0, p: 0.6 },
+      { x: 75, y: 0, p: 0.6 },
+      { x: 143, y: 74, p: 1 },
+      { x: -110, y: 74, p: 1 },
+    ];
+    controller.components = [{ type: 'Depth scaling controller', min: 0.4, max: 0.96 }];
+    fixture.scene.addEntity(controller);
+
+    const prop = fixture.addEntity('external');
+    prop.x = 19;
+    prop.y = -1;
+    prop.parallax = 0.6;
+    prop.update(0);
+    expect(prop.scale).toBe(0.5);
+
+    fixture.scene.camera.y = 647; // The controller is fully inverted here.
+    prop.update(0);
+
+    expect(prop.scale).toBe(0.5);
+  });
+
   it('uses the same P-based step for Player and routed Actor movement', () => {
     const fixture = createSceneFixture();
     const player = fixture.addPlayer('Hero', 50, 20);
