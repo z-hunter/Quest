@@ -120,6 +120,8 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Def Zoom': 'Default camera zoom used when the scene loads or resets.',
   'Enable Depth Scaling':
     'Turns scene depth scaling on or off so objects can grow or shrink according to their Y position.',
+  'Receive 3d-parallax':
+    'Lets a Quad nested inside a 3d-parallax Quad inherit dynamic per-vertex parallax from that parent surface.',
   Min: 'Minimum depth-scaling factor used at the horizon end of the scene.',
   Max: 'Maximum depth-scaling factor used at the front end of the scene.',
   'Horizon Y': 'Y coordinate treated as the horizon for depth scaling.',

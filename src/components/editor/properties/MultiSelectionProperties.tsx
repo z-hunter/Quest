@@ -99,6 +99,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
     entitiesAndQuads,
     (o: any) => !!o.ignoreScaling
   );
+  const sharedReceive3DParallax = getSharedBooleanState(quads, (q: any) => !!q.receive3DParallax);
   const sharedParentNodeId = getSharedValue(
     multiObjects,
     (o: any) => o.spatial?.parentNodeId || ''
@@ -376,7 +377,14 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
             </div>
 
             {entitiesAndQuads.length > 0 && (
-              <div className="e-row">
+              <div
+                className="e-row"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: quads.length > 0 ? '1fr 1fr' : '1fr',
+                  gap: '6px',
+                }}
+              >
                 <label
                   className="e-label"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
@@ -395,6 +403,26 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   />
                   Disable Depth Scaling
                 </label>
+                {quads.length > 0 && (
+                  <label
+                    className="e-label"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 0 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sharedReceive3DParallax === 'on'}
+                      ref={(el) => {
+                        if (el) el.indeterminate = sharedReceive3DParallax === 'mixed';
+                      }}
+                      onChange={(e) => {
+                        applyToMulti((o: any) => {
+                          if (o.type === 'Quad') o.receive3DParallax = e.target.checked;
+                        });
+                      }}
+                    />
+                    Receive 3d-parallax
+                  </label>
+                )}
               </div>
             )}
           </>,

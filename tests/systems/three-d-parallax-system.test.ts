@@ -235,4 +235,104 @@ describe('ThreeDParallaxSystem', () => {
       worldY: prop.y,
     });
   });
+
+  it('applies parent 3d-parallax to opted-in child Quad vertices and tracks camera motion', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera.x = 20;
+    fixture.scene.camera.y = 40;
+
+    const parent = new QuadObject(fixture.game, 'parent-floor');
+    parent.vertices = [
+      { x: 0, y: 0, p: 0.5 },
+      { x: 100, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    parent.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(parent);
+
+    const child = new QuadObject(fixture.game, 'child-quad');
+    child.receive3DParallax = true;
+    child.spatial = { parentNodeId: parent.name, relation: 'in' };
+    child.vertices = [
+      { x: 25, y: 25, p: 1 },
+      { x: 75, y: 25, p: 1 },
+      { x: 75, y: 75, p: 1 },
+      { x: 25, y: 75, p: 1 },
+    ];
+    fixture.scene.addEntity(child);
+
+    const initialVisual = child.vertices.map((vertex) =>
+      toVisualPosition(
+        { x: vertex.x, y: vertex.y },
+        fixture.scene.camera,
+        (vertex.p ?? 1) * (child.parallax ?? 1)
+      )
+    );
+
+    ThreeDParallaxSystem.update(parent, { type: '3d-parallax' });
+
+    const bindings = (child as any).__surfaceParallaxVertexBindings;
+    expect(Object.keys(bindings)).toHaveLength(4);
+    expect(child.vertices[0].p).toBeCloseTo(parent.getParallaxAt(25, 25, true), 5);
+    child.vertices.forEach((vertex, index) => {
+      expect(
+        toVisualPosition(
+          { x: vertex.x, y: vertex.y },
+          fixture.scene.camera,
+          (vertex.p ?? 1) * (child.parallax ?? 1)
+        )
+      ).toEqual({
+        x: expect.closeTo(initialVisual[index].x),
+        y: expect.closeTo(initialVisual[index].y),
+      });
+    });
+
+    const stableVertices = child.vertices.map((vertex) => ({ ...vertex }));
+    const stableBindings = JSON.parse(JSON.stringify(bindings));
+    for (let frame = 0; frame < 10; frame++) {
+      ThreeDParallaxSystem.update(parent, { type: '3d-parallax' });
+    }
+    expect(child.vertices).toEqual(stableVertices);
+    expect(bindings).toEqual(stableBindings);
+
+    fixture.scene.camera.x = 90;
+    fixture.scene.camera.y = 70;
+    ThreeDParallaxSystem.update(parent, { type: '3d-parallax' });
+
+    child.vertices.forEach((vertex, index) => {
+      const binding = bindings[index];
+      const surfacePoint = parent.getGridPointAt(binding.u, binding.v, true);
+      const visualPoint = toVisualPosition(
+        { x: vertex.x, y: vertex.y },
+        fixture.scene.camera,
+        (vertex.p ?? 1) * (child.parallax ?? 1)
+      );
+      expect(visualPoint.x).toBeCloseTo(surfacePoint.x, 5);
+      expect(visualPoint.y).toBeCloseTo(surfacePoint.y, 5);
+    });
+  });
+
+  it('does not apply parent 3d-parallax to a child Quad without opt-in', () => {
+    const fixture = createSceneFixture();
+    const parent = new QuadObject(fixture.game, 'parent-floor');
+    parent.vertices = [
+      { x: 0, y: 0, p: 0.5 },
+      { x: 100, y: 0, p: 0.5 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    parent.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(parent);
+
+    const child = new QuadObject(fixture.game, 'child-quad');
+    child.spatial = { parentNodeId: parent.name, relation: 'in' };
+    child.vertices[0] = { x: 25, y: 25, p: 1 };
+    fixture.scene.addEntity(child);
+
+    ThreeDParallaxSystem.update(parent, { type: '3d-parallax' });
+
+    expect(child.vertices[0].p).toBe(1);
+    expect((child as any).__surfaceParallaxVertexBindings).toBeUndefined();
+  });
 });

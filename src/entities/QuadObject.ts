@@ -790,6 +790,7 @@ export class QuadObject extends Entity {
 
   // Effects
   blur: number = 0;
+  receive3DParallax: boolean = false;
 
   /**
    * List of properties to be serialized to/from JSON.
@@ -828,6 +829,7 @@ export class QuadObject extends Entity {
     'saturation',
     'contrast',
     'hueShift',
+    'receive3DParallax',
   ];
 
   override setSprite(filename: string, keepSize: boolean = true): void {

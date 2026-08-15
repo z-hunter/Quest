@@ -141,7 +141,15 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
             </div>
           </div>
 
-          <div className="e-row" style={{ marginTop: '6px' }}>
+          <div
+            className="e-row"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '6px',
+              marginTop: '6px',
+            }}
+          >
             <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
               <input
                 type="checkbox"
@@ -150,6 +158,15 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                 onChange={(event) => handleChange('ignoreScaling', event.target.checked)}
               />
               Disable Depth-scaling
+            </label>
+            <label className="e-label" style={{ display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                style={{ marginRight: '5px' }}
+                checked={!!quad.receive3DParallax}
+                onChange={(event) => handleChange('receive3DParallax', event.target.checked)}
+              />
+              Receive 3d-parallax
             </label>
           </div>
 

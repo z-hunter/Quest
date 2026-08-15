@@ -25,6 +25,8 @@ interface SurfaceParallaxObservation {
 
 const SURFACE_PARALLAX_BINDING = '__surfaceParallaxBinding';
 const SURFACE_PARALLAX_OBSERVATION = '__surfaceParallaxObservation';
+const SURFACE_PARALLAX_VERTEX_BINDINGS = '__surfaceParallaxVertexBindings';
+const SURFACE_PARALLAX_VERTEX_OBSERVATIONS = '__surfaceParallaxVertexObservations';
 
 export class ThreeDParallaxSystem {
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
@@ -228,6 +230,145 @@ export class ThreeDParallaxSystem {
             }
           }
         }
+      }
+    }
+
+    this.updateQuadReceivers(quad, scene, camX, camY);
+  }
+
+  private static updateQuadReceivers(
+    parentQuad: QuadObject,
+    scene: SceneSystemContext,
+    camX: number,
+    camY: number
+  ): void {
+    const children = scene
+      .getDirectSpatialChildren(parentQuad.name)
+      .filter(
+        (object): object is QuadObject =>
+          object.type === 'Quad' &&
+          ((object as QuadObject).receive3DParallax ||
+            !!(object as any)[SURFACE_PARALLAX_VERTEX_BINDINGS])
+      );
+
+    for (const child of children) {
+      const bindings = ((child as any)[SURFACE_PARALLAX_VERTEX_BINDINGS] ||= {}) as Record<
+        number,
+        SurfaceParallaxBinding | undefined
+      >;
+      const observations = ((child as any)[SURFACE_PARALLAX_VERTEX_OBSERVATIONS] ||= {}) as Record<
+        number,
+        SurfaceParallaxObservation | undefined
+      >;
+      const childGlobalP = child.parallax !== undefined ? child.parallax : 1.0;
+      const parentGlobalP = parentQuad.parallax !== undefined ? parentQuad.parallax : 1.0;
+      const toParentVisual = (world: { x: number; y: number }, effectiveP: number) => {
+        const visual = toVisualPosition(world, { x: camX, y: camY }, effectiveP);
+        return {
+          x: visual.x + camX * (parentGlobalP - 1),
+          y: visual.y + camY * (parentGlobalP - 1),
+        };
+      };
+      const toChildWorld = (visual: { x: number; y: number }, effectiveP: number) => ({
+        x: visual.x + camX * (effectiveP - parentGlobalP),
+        y: visual.y + camY * (effectiveP - parentGlobalP),
+      });
+
+      child.vertices.forEach((vertex, index) => {
+        const existingBinding = bindings[index];
+        const previousObservation = observations[index];
+
+        if (!child.receive3DParallax && existingBinding?.quadName !== parentQuad.name) {
+          delete observations[index];
+          return;
+        }
+
+        const movedSinceObservation =
+          !previousObservation ||
+          Math.abs(vertex.x - previousObservation.worldX) > 0.000001 ||
+          Math.abs(vertex.y - previousObservation.worldY) > 0.000001;
+        const mayAcquireSurface =
+          !!existingBinding || !previousObservation || movedSinceObservation;
+        const pFactor = (vertex.p !== undefined ? vertex.p : 1.0) * childGlobalP;
+
+        let targetVisual = toParentVisual({ x: vertex.x, y: vertex.y }, pFactor);
+        if (existingBinding?.quadName === parentQuad.name) {
+          const surfacePoint = parentQuad.getGridPointAt(
+            existingBinding.u,
+            existingBinding.v,
+            true
+          );
+          targetVisual = {
+            x: surfacePoint.x + (vertex.x - existingBinding.worldX),
+            y: surfacePoint.y + (vertex.y - existingBinding.worldY),
+          };
+        }
+
+        const preserveBinding =
+          existingBinding?.quadName === parentQuad.name && parentQuad.isVisualSurfaceUnstable();
+        const metrics = child.receive3DParallax
+          ? !mayAcquireSurface
+            ? null
+            : existingBinding?.quadName === parentQuad.name && !movedSinceObservation
+              ? {
+                  u: existingBinding.u,
+                  v: existingBinding.v,
+                  parallax: parentQuad.getParallaxAtGrid(existingBinding.u, existingBinding.v),
+                }
+              : preserveBinding
+                ? {
+                    u: existingBinding!.u,
+                    v: existingBinding!.v,
+                    parallax: parentQuad.getParallaxAtGrid(existingBinding!.u, existingBinding!.v),
+                  }
+                : parentQuad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true)
+          : null;
+
+        if (metrics) {
+          const newP = metrics.parallax;
+          const newWorld = toChildWorld(targetVisual, newP);
+          const newLocalP = childGlobalP !== 0 ? newP / childGlobalP : newP;
+          if (
+            Math.abs(vertex.x - newWorld.x) > 0.000001 ||
+            Math.abs(vertex.y - newWorld.y) > 0.000001 ||
+            Math.abs((vertex.p ?? 1) - newLocalP) > 0.000001
+          ) {
+            vertex.x = newWorld.x;
+            vertex.y = newWorld.y;
+            vertex.p = newLocalP;
+            bindings[index] = {
+              quadName: parentQuad.name,
+              u: metrics.u,
+              v: metrics.v,
+              worldX: newWorld.x,
+              worldY: newWorld.y,
+              originalParallax: existingBinding?.originalParallax ?? pFactor,
+            };
+          }
+        } else if (existingBinding?.quadName === parentQuad.name) {
+          const restoredP = existingBinding.originalParallax ?? 1.0;
+          const restoredWorld = toChildWorld(targetVisual, restoredP);
+          vertex.p = childGlobalP !== 0 ? restoredP / childGlobalP : restoredP;
+          vertex.x = restoredWorld.x;
+          vertex.y = restoredWorld.y;
+          delete bindings[index];
+        }
+
+        if (child.receive3DParallax) {
+          observations[index] = {
+            worldX: vertex.x,
+            worldY: vertex.y,
+          };
+        } else {
+          delete observations[index];
+        }
+      });
+
+      if (Object.keys(bindings).length === 0) {
+        delete (child as any)[SURFACE_PARALLAX_VERTEX_BINDINGS];
+      }
+      if (Object.keys(observations).length === 0) {
+        delete (child as any)[SURFACE_PARALLAX_VERTEX_OBSERVATIONS];
       }
     }
   }

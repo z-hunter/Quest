@@ -233,6 +233,7 @@ describe('QuadObject', () => {
     quad.spriteName = 'floors/metal.json';
     quad.flipX = true;
     quad.flipY = true;
+    quad.receive3DParallax = true;
     quad.textureMode = 'tile';
     quad.tileScaleX = 0.5;
     quad.tileScaleY = 0.25;
@@ -246,6 +247,7 @@ describe('QuadObject', () => {
     expect(json.spriteName).toBe('floors/metal.json');
     expect(json.flipX).toBe(true);
     expect(json.flipY).toBe(true);
+    expect(json.receive3DParallax).toBe(true);
     expect(json.textureMode).toBe('tile');
     expect(json.tileScaleX).toBe(0.5);
     expect(json.tileScaleY).toBe(0.25);
@@ -264,6 +266,7 @@ describe('QuadObject', () => {
     expect(loadedQuad.spriteName).toBe('floors/metal.json');
     expect(loadedQuad.flipX).toBe(true);
     expect(loadedQuad.flipY).toBe(true);
+    expect(loadedQuad.receive3DParallax).toBe(true);
     expect(loadedQuad.textureMode).toBe('tile');
     expect(loadedQuad.tileScaleX).toBe(0.5);
     expect(loadedQuad.tileScaleY).toBe(0.25);

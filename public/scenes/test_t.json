@@ -54,8 +54,8 @@
           "p": 0.6
         },
         {
-          "x": 142.8115062584901,
-          "y": 73.4526945768529,
+          "x": 146,
+          "y": 71,
           "p": 1
         },
         {
@@ -65,6 +65,8 @@
         }
       ],
       "spriteName": null,
+      "flipX": false,
+      "flipY": false,
       "textureMode": "stretch",
       "tileScaleX": 1,
       "tileScaleY": 1,
@@ -87,6 +89,7 @@
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
+      "receive3DParallax": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -125,6 +128,8 @@
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -141,16 +146,16 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
-      "parallax": 0.913479860725928,
-      "x": 16.549853470812117,
-      "y": 44.60892167957687,
-      "width": 43.42678215543497,
-      "height": 71.2644630243035,
+      "parallax": 0.912148853191205,
+      "x": 18.444339041601577,
+      "y": 46.967088559802235,
+      "width": 43.33031698860903,
+      "height": 71.1061612120763,
       "baseWidth": 129.42019842053642,
       "baseHeight": 212.3818640747263,
       "spriteName": "chair",
       "color": "#AAAAAA",
-      "scale": 0.3355487218024849,
+      "scale": 0.3348033577248276,
       "refScale": 0.4,
       "modelScale": 0.4,
       "depthSortMode": "y",
@@ -163,6 +168,8 @@
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -196,8 +203,8 @@
           }
         },
         {
-          "x": 142.8115062584901,
-          "y": 73.4526945768529,
+          "x": 146,
+          "y": 71,
           "p": 1,
           "binding": {
             "targetName": "floor",
@@ -206,8 +213,8 @@
           }
         },
         {
-          "x": 137.24595383300883,
-          "y": 104.5414453632636,
+          "x": 141,
+          "y": 100,
           "p": 0.99
         },
         {
@@ -217,6 +224,8 @@
         }
       ],
       "spriteName": null,
+      "flipX": false,
+      "flipY": false,
       "textureMode": "stretch",
       "tileScaleX": 1,
       "tileScaleY": 1,
@@ -239,11 +248,12 @@
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
+      "receive3DParallax": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
     {
-      "name": "Quad_143",
+      "name": "chair_shadow",
       "type": "Quad",
       "locked": false,
       "disabled": false,
@@ -255,6 +265,10 @@
       "layer": 0,
       "visible": true,
       "hidden": false,
+      "spatial": {
+        "parentNodeId": "floor",
+        "relation": "in"
+      },
       "parallax": 0.91,
       "x": -77.67417877279814,
       "y": 87.2813026287952,
@@ -262,32 +276,34 @@
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 14,
-          "y": 73,
-          "p": 1.0989010989010988
+          "x": 0.47709765242330804,
+          "y": 67.87086801690728,
+          "p": 1.084441266541637
         },
         {
-          "x": -46,
-          "y": 49,
-          "p": 1.0256410256410255
+          "x": -45.07310791068491,
+          "y": 42.261167082054676,
+          "p": 0.9777463148654671
         },
         {
-          "x": -14,
-          "y": 32,
-          "p": 0.9523809523809523
+          "x": 15.092831619606994,
+          "y": 39.19149703527784,
+          "p": 0.9633106047622322
         },
         {
-          "x": 46,
-          "y": 32,
-          "p": 0.9523809523809522
+          "x": 41.52245195938567,
+          "y": 42.28722004056031,
+          "p": 0.9801438597511644
         }
       ],
       "spriteName": "chair",
+      "flipX": true,
+      "flipY": false,
       "textureMode": "stretch",
       "tileScaleX": 1,
       "tileScaleY": 1,
       "perspective": true,
-      "perspectiveAmount": 0,
+      "perspectiveAmount": 0.8,
       "color": "#52779aff",
       "sortMode": "ignore",
       "opacity": 0.6,
@@ -300,11 +316,12 @@
       "filled": true,
       "checkerboard": false,
       "secondColor": "#000000",
-      "blur": 0,
+      "blur": 1,
       "brightness": 1,
       "saturation": 0,
       "contrast": 1,
       "hueShift": 0,
+      "receive3DParallax": true,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -353,8 +370,8 @@
           "p": 0.6
         },
         {
-          "x": 137.24595383300883,
-          "y": 104.5414453632636,
+          "x": 141,
+          "y": 100,
           "p": 0.99,
           "binding": {
             "targetName": "Quad_138",
@@ -363,8 +380,8 @@
           }
         },
         {
-          "x": 142.8115062584901,
-          "y": 73.4526945768529,
+          "x": 146,
+          "y": 71,
           "p": 1,
           "binding": {
             "targetName": "floor",
@@ -374,6 +391,8 @@
         }
       ],
       "spriteName": null,
+      "flipX": false,
+      "flipY": false,
       "textureMode": "stretch",
       "tileScaleX": 1,
       "tileScaleY": 1,
@@ -396,6 +415,7 @@
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
+      "receive3DParallax": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     }
