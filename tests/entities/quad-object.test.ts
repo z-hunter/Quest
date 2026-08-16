@@ -198,6 +198,93 @@ describe('QuadObject', () => {
     expect(projected).toEqual(bilinear);
   });
 
+  it('fades Retro Grid perspective by visual collapse relative to the authored Quad', () => {
+    // This is `floor` from test_t at camera Y=154.287. Its authored shape is
+    // broad, but its visual top edge has been pulled down by the P=0.6 camera
+    // offset, leaving a 3%-compactness sliver. The old absolute threshold
+    // still used roughly 78% projective mapping here, which visibly sheared
+    // grid nodes in X before the late fallback began.
+    const visual = [
+      { x: -37.18849374150989, y: 61.16749457685296 },
+      { x: 74.81150625849011, y: 61.16749457685296 },
+      { x: 146, y: 71 },
+      { x: -110.18849374150989, y: 73.4526945768529 },
+    ] as const;
+    const authoredCompactness = 0.20408887721916238;
+    const transform = createQuadHomography(...visual);
+    const legacy = projectQuadGridPoint(...visual, transform, 0.5, 0.5, 1, true, true);
+    const adaptive = projectQuadGridPoint(
+      ...visual,
+      transform,
+      0.5,
+      0.5,
+      1,
+      true,
+      true,
+      authoredCompactness
+    );
+    const bilinear = projectQuadGridPoint(...visual, transform, 0.5, 0.5, 0, true, true);
+    const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.hypot(a.x - b.x, a.y - b.y);
+
+    expect(distance(adaptive, bilinear)).toBeLessThan(distance(legacy, bilinear) * 0.1);
+  });
+
+  it('starts the lateral-shift correction as soon as the visual Quad compresses', () => {
+    const authored = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 120, y: 100 },
+      { x: -20, y: 100 },
+    ] as const;
+    const visual = authored.map((point) => ({ ...point, y: point.y === 0 ? 25 : point.y }));
+    const transform = createQuadHomography(...visual);
+    const authoredCompactness = 12000 / 19600;
+    const fullProjection = projectQuadGridPoint(...visual, transform, 0.3, 0.6, 1, true, true);
+    const corrected = projectQuadGridPoint(
+      ...visual,
+      transform,
+      0.3,
+      0.6,
+      1,
+      true,
+      true,
+      authoredCompactness
+    );
+    const bilinear = projectQuadGridPoint(...visual, transform, 0.3, 0.6, 0, true, true);
+    const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.hypot(a.x - b.x, a.y - b.y);
+
+    expect(distance(corrected, bilinear)).toBeLessThan(distance(fullProjection, bilinear));
+  });
+
+  it('keeps perspective for an authored Quad that is already equally thin', () => {
+    const points = [
+      { x: -37.18849374150989, y: 61.16749457685296 },
+      { x: 74.81150625849011, y: 61.16749457685296 },
+      { x: 146, y: 71 },
+      { x: -110.18849374150989, y: 73.4526945768529 },
+    ] as const;
+    const transform = createQuadHomography(...points);
+    const authoredCompactness = 0.030999467267023437;
+    const adaptive = projectQuadGridPoint(
+      ...points,
+      transform,
+      0.5,
+      0.5,
+      1,
+      true,
+      true,
+      authoredCompactness
+    );
+
+    const projected = projectQuadPoint(transform!, 0.5, 0.5)!;
+    expect(adaptive).toMatchObject({
+      x: expect.closeTo(projected.x, 10),
+      y: expect.closeTo(projected.y, 10),
+    });
+  });
+
   it('clips Retro Grid internals to a malformed Quad', () => {
     const fixture = createSceneFixture();
     const quad = new QuadObject(fixture.game, 'crossed_grid_quad');

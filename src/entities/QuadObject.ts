@@ -216,12 +216,7 @@ function blendQuadPoints(flat: QuadPoint, projected: QuadPoint, amount: number):
  * a screen-space sliver. Fade it to the existing bilinear mapping before the
  * visual surface collapses, so grids, textures and surface tracking stay put.
  */
-function getProjectiveStability(
-  p0: QuadPoint,
-  p1: QuadPoint,
-  p2: QuadPoint,
-  p3: QuadPoint
-): number {
+function getQuadCompactness(p0: QuadPoint, p1: QuadPoint, p2: QuadPoint, p3: QuadPoint): number {
   const points = [p0, p1, p2, p3];
   const area =
     Math.abs(
@@ -234,15 +229,35 @@ function getProjectiveStability(
     const next = points[(index + 1) % points.length];
     return Math.max(longest, (next.x - point.x) ** 2 + (next.y - point.y) ** 2);
   }, 0);
-  const compactness = longestEdgeSquared > HOMOGRAPHY_EPSILON ? area / longestEdgeSquared : 0;
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      (compactness - MIN_PROJECTIVE_COMPACTNESS) /
-        (FULL_PROJECTIVE_COMPACTNESS - MIN_PROJECTIVE_COMPACTNESS)
-    )
-  );
+  return longestEdgeSquared > HOMOGRAPHY_EPSILON ? area / longestEdgeSquared : 0;
+}
+
+/**
+ * Fade perspective relative to the authored surface as camera parallax
+ * compresses it. This keeps the existing lateral-shift correction active
+ * throughout compression, while preserving full perspective at the authored
+ * shape (including an intentionally thin Quad).
+ */
+function getProjectiveStability(
+  p0: QuadPoint,
+  p1: QuadPoint,
+  p2: QuadPoint,
+  p3: QuadPoint,
+  authoredCompactness?: number
+): number {
+  const compactness = getQuadCompactness(p0, p1, p2, p3);
+  const useRelativeThresholds =
+    Number.isFinite(authoredCompactness) && authoredCompactness! > HOMOGRAPHY_EPSILON;
+  const t = useRelativeThresholds
+    ? Math.max(0, Math.min(1, compactness / authoredCompactness!))
+    : Math.max(
+        0,
+        Math.min(
+          1,
+          (compactness - MIN_PROJECTIVE_COMPACTNESS) /
+            (FULL_PROJECTIVE_COMPACTNESS - MIN_PROJECTIVE_COMPACTNESS)
+        )
+      );
   return t * t * (3 - 2 * t);
 }
 
@@ -262,10 +277,11 @@ export function projectQuadGridPoint(
   v: number,
   amount: number = 1,
   perspectiveX: boolean = true,
-  perspectiveY: boolean = true
+  perspectiveY: boolean = true,
+  authoredCompactness?: number
 ): QuadPoint {
   if (!transform) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
-  const stability = getProjectiveStability(p0, p1, p2, p3);
+  const stability = getProjectiveStability(p0, p1, p2, p3, authoredCompactness);
   const alphaX = perspectiveX ? amount * stability : 0;
   const alphaY = perspectiveY ? amount * stability : 0;
   if (alphaX === 0 && alphaY === 0) return interpolateQuadPoint(p0, p1, p2, p3, u, v);
@@ -299,11 +315,24 @@ function getQuadSurfaceCoordinates(
   p3: QuadPoint,
   point: QuadPoint,
   amount: number,
-  usePerspective: boolean
+  usePerspective: boolean,
+  authoredCompactness?: number
 ): { u: number; v: number } | null {
   const transform = createQuadHomography(p0, p1, p2, p3);
   const map = (u: number, v: number) =>
-    projectQuadGridPoint(p0, p1, p2, p3, transform, u, v, amount, usePerspective, usePerspective);
+    projectQuadGridPoint(
+      p0,
+      p1,
+      p2,
+      p3,
+      transform,
+      u,
+      v,
+      amount,
+      usePerspective,
+      usePerspective,
+      authoredCompactness
+    );
 
   let best = { u: 0.5, v: 0.5, distance: Number.POSITIVE_INFINITY };
   for (let row = 0; row <= 8; row++) {
@@ -570,7 +599,8 @@ export function buildQuadTextureMesh(
   tileScaleX: number,
   tileScaleY: number,
   perspectiveAmount: number = 1,
-  maxError: number = DEFAULT_TEXTURE_MESH_ERROR
+  maxError: number = DEFAULT_TEXTURE_MESH_ERROR,
+  authoredCompactness?: number
 ): QuadTextureMeshCell[] {
   const repeatsX = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleX) : 1;
   const repeatsY = mode === 'tile' ? 1 / clampTextureTileScale(tileScaleY) : 1;
@@ -586,7 +616,8 @@ export function buildQuadTextureMesh(
       v,
       perspectiveAmount,
       perspectiveAmount !== 0,
-      perspectiveAmount !== 0
+      perspectiveAmount !== 0,
+      authoredCompactness
     );
   const subdivisions = chooseTextureMeshSubdivisions(mapPoint, repeatsX, repeatsY, maxError);
   const uBreaks = buildTextureAxisBreaks(repeatsX, subdivisions.x);
@@ -896,7 +927,8 @@ export class QuadObject extends Entity {
       this.tileScaleX,
       this.tileScaleY,
       this.perspective === false ? 0 : this.perspectiveAmount,
-      0.75 / screenScale
+      0.75 / screenScale,
+      this.getAuthoredProjectiveCompactness()
     );
     for (const cell of mesh) {
       const [p00, p10, p11, p01] = cell.points;
@@ -1061,6 +1093,7 @@ export class QuadObject extends Entity {
         const basePerspective = this.perspective !== false;
         const amount = this.perspectiveAmount ?? 1.0;
         const usePerspective = basePerspective;
+        const authoredCompactness = this.getAuthoredProjectiveCompactness();
         const gridTransform = createQuadHomography(v0, v1, v2, v3);
         const gridPoint = (u: number, v: number) =>
           projectQuadGridPoint(
@@ -1073,7 +1106,8 @@ export class QuadObject extends Entity {
             v,
             amount,
             usePerspective,
-            usePerspective
+            usePerspective,
+            authoredCompactness
           );
 
         const cols = (this.gridLinesX ?? 5) + 1;
@@ -1140,6 +1174,7 @@ export class QuadObject extends Entity {
       const basePerspective = this.perspective !== false;
       const amount = this.perspectiveAmount ?? 1.0;
       const usePerspective = basePerspective;
+      const authoredCompactness = this.getAuthoredProjectiveCompactness();
       const gridTransform = createQuadHomography(v0, v1, v2, v3);
       const gridPoint = (u: number, v: number) =>
         projectQuadGridPoint(
@@ -1152,7 +1187,8 @@ export class QuadObject extends Entity {
           v,
           amount,
           usePerspective,
-          usePerspective
+          usePerspective,
+          authoredCompactness
         );
 
       ctx.beginPath();
@@ -1235,7 +1271,8 @@ export class QuadObject extends Entity {
       v,
       this.perspectiveAmount ?? 1,
       perspective,
-      perspective
+      perspective,
+      this.getAuthoredProjectiveCompactness(useEffectiveVertices)
     );
   }
 
@@ -1371,6 +1408,12 @@ export class QuadObject extends Entity {
     }));
   }
 
+  private getAuthoredProjectiveCompactness(useEffectiveVertices: boolean = true): number {
+    const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    if (vertices.length < 4) return 0;
+    return getQuadCompactness(vertices[0], vertices[1], vertices[2], vertices[3]);
+  }
+
   /**
    * Changes global P while preserving every rendered vertex at the current
    * camera position.  Quad rendering first offsets each local vertex and is
@@ -1418,7 +1461,14 @@ export class QuadObject extends Entity {
   isVisualSurfaceUnstable(useEffectiveVertices: boolean = true): boolean {
     const points = this.getVisualVertices(useEffectiveVertices);
     return (
-      points.length < 4 || getProjectiveStability(points[0], points[1], points[2], points[3]) < 1
+      points.length < 4 ||
+      getProjectiveStability(
+        points[0],
+        points[1],
+        points[2],
+        points[3],
+        this.getAuthoredProjectiveCompactness(useEffectiveVertices)
+      ) <= HOMOGRAPHY_EPSILON
     );
   }
 
@@ -1439,7 +1489,17 @@ export class QuadObject extends Entity {
     const [p0, p1, p2, p3] = points;
     const usePerspective = this.perspective !== false;
     const amount = this.perspectiveAmount ?? 1;
-    const coordinates = getQuadSurfaceCoordinates(p0, p1, p2, p3, { x, y }, amount, usePerspective);
+    const authoredCompactness = this.getAuthoredProjectiveCompactness(useEffectiveVertices);
+    const coordinates = getQuadSurfaceCoordinates(
+      p0,
+      p1,
+      p2,
+      p3,
+      { x, y },
+      amount,
+      usePerspective,
+      authoredCompactness
+    );
     if (!coordinates) return null;
 
     const { u, v } = coordinates;
@@ -1463,7 +1523,8 @@ export class QuadObject extends Entity {
         sampleV,
         amount,
         usePerspective,
-        usePerspective
+        usePerspective,
+        authoredCompactness
       );
     const step = 0.0001;
     const uStep = u <= 1 - step ? step : -step;
