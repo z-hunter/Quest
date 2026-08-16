@@ -26,6 +26,15 @@
       "interactions": {},
       "components": [
         {
+          "type": "Backface",
+          "vertexA": 0,
+          "vertexB": 3,
+          "axis": "y",
+          "op": ">",
+          "targetId": "chair",
+          "cullingType": "layer"
+        },
+        {
           "type": "3d-parallax"
         },
         {
@@ -108,14 +117,14 @@
       "hidden": false,
       "parallax": 0.6,
       "x": 19,
-      "y": -1,
-      "width": 112,
-      "height": 38,
-      "baseWidth": 224,
-      "baseHeight": 76,
-      "spriteName": null,
+      "y": 159,
+      "width": 111,
+      "height": 246,
+      "baseWidth": 209.43396226415092,
+      "baseHeight": 464.1509433962264,
+      "spriteName": "weird",
       "color": "#AAAAAA",
-      "scale": 0.5,
+      "scale": 0.53,
       "refScale": 1,
       "modelScale": 1,
       "depthSortMode": "parallax",
@@ -124,47 +133,7 @@
       "opacity": 1,
       "blendMode": "source-over",
       "blur": 0,
-      "brightness": 1,
-      "saturation": 1,
-      "contrast": 1,
-      "hueShift": 0,
-      "flipX": false,
-      "flipY": false,
-      "colliderWidth": 0,
-      "colliderHeight": 0
-    },
-    {
-      "name": "chair",
-      "type": "Entity",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "parallax": 0.912148853191205,
-      "x": 18.444339041601577,
-      "y": 46.967088559802235,
-      "width": 43.33031698860903,
-      "height": 71.1061612120763,
-      "baseWidth": 129.42019842053642,
-      "baseHeight": 212.3818640747263,
-      "spriteName": "chair",
-      "color": "#AAAAAA",
-      "scale": 0.3348033577248276,
-      "refScale": 0.4,
-      "modelScale": 0.4,
-      "depthSortMode": "y",
-      "ignoreScaling": false,
-      "animationSpeed": 150,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "brightness": 1,
+      "brightness": 0.6,
       "saturation": 1,
       "contrast": 1,
       "hueShift": 0,
@@ -218,8 +187,8 @@
           "p": 0.99
         },
         {
-          "x": -100.75404616699117,
-          "y": 103.5414453632636,
+          "x": -110,
+          "y": 103,
           "p": 0.99
         }
       ],
@@ -232,7 +201,7 @@
       "perspective": true,
       "perspectiveAmount": 1,
       "color": "#0c151d",
-      "sortMode": "ignore",
+      "sortMode": "parallax",
       "opacity": 1,
       "blendMode": "source-over",
       "isGrid": true,
@@ -249,6 +218,50 @@
       "contrast": 1,
       "hueShift": 0,
       "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "chair",
+      "type": "Entity",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "floor",
+        "relation": "in"
+      },
+      "parallax": 0.9216054583468599,
+      "x": 14.933486767511498,
+      "y": 40.94580244532596,
+      "width": 44.015687400070476,
+      "height": 72.23087163088483,
+      "baseWidth": 129.42019842053642,
+      "baseHeight": 212.3818640747263,
+      "spriteName": "chair",
+      "color": "#AAAAAA",
+      "scale": 0.34009905669473967,
+      "refScale": 0.4,
+      "modelScale": 0.4,
+      "depthSortMode": "y",
+      "ignoreScaling": false,
+      "animationSpeed": 150,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
       "colliderWidth": 0,
       "colliderHeight": 0
     },
@@ -276,24 +289,24 @@
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 0.47709765242330804,
-          "y": 67.87086801690728,
-          "p": 1.084441266541637
+          "x": -0.551979979989887,
+          "y": 66.77910709033094,
+          "p": 1.086555836925139
         },
         {
-          "x": -45.07310791068491,
-          "y": 42.261167082054676,
-          "p": 0.9777463148654671
+          "x": -47.52578590275035,
+          "y": 36.488393997201555,
+          "p": 0.994326273793506
         },
         {
-          "x": 15.092831619606994,
-          "y": 39.19149703527784,
-          "p": 0.9633106047622322
+          "x": 12.391596115491662,
+          "y": 33.13797381262236,
+          "p": 0.9816641104714797
         },
         {
-          "x": 41.52245195938567,
-          "y": 42.28722004056031,
-          "p": 0.9801438597511644
+          "x": 38.946603581549915,
+          "y": 36.57417490883069,
+          "p": 0.9966185416004476
         }
       ],
       "spriteName": "chair",
@@ -418,9 +431,187 @@
       "receive3DParallax": false,
       "colliderWidth": 0,
       "colliderHeight": 0
+    },
+    {
+      "name": "Quad",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Backface",
+          "vertexA": 0,
+          "vertexB": 3,
+          "axis": "x",
+          "op": ">",
+          "targetId": "Quad",
+          "cullingType": "render"
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": false,
+      "parallax": 1,
+      "x": -145.5471620813681,
+      "y": 39.26456694513009,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -37.18849374150989,
+          "y": -0.5473054231470407,
+          "p": 0.6,
+          "binding": {
+            "targetName": "floor",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": -36,
+          "y": 17,
+          "p": 0.6
+        },
+        {
+          "x": -110,
+          "y": 103,
+          "p": 0.99,
+          "binding": {
+            "targetName": "Quad_138",
+            "type": "vertex",
+            "index": 3
+          }
+        },
+        {
+          "x": -110.18849374150989,
+          "y": 73.4526945768529,
+          "p": 1,
+          "binding": {
+            "targetName": "floor",
+            "type": "vertex",
+            "index": 3
+          }
+        }
+      ],
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#24415b",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
+    },
+    {
+      "name": "wall_shadow",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "floor",
+        "relation": "in"
+      },
+      "parallax": 1,
+      "x": 21.339846796071306,
+      "y": 87.58644537582275,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -37.18849374150989,
+          "y": -0.5473054231470442,
+          "p": 0.6,
+          "binding": {
+            "targetName": "floor",
+            "type": "vertex",
+            "index": 0
+          }
+        },
+        {
+          "x": 74.81150625849011,
+          "y": -0.5473054231470442,
+          "p": 0.6,
+          "binding": {
+            "targetName": "floor",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 46.02277776735545,
+          "y": 10.847871012449378,
+          "p": 0.7659177680529775
+        },
+        {
+          "x": -56.59837152884015,
+          "y": 11.473287213896125,
+          "p": 0.7692754102735851
+        }
+      ],
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 1,
+      "color": "#52779aff",
+      "sortMode": "ignore",
+      "opacity": 0.5,
+      "blendMode": "multiply",
+      "isGrid": false,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#ffffff",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 1,
+      "brightness": 1,
+      "saturation": 0,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": true,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [],
+  "displayOrder": ["floor", "wall", "Quad_138", "chair", "chair_shadow", "Quad_642"],
   "camera": {
     "x": 0,
     "y": 0,
