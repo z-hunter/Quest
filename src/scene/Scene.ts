@@ -165,8 +165,7 @@ export class Scene {
 
   private _walkboxEntitiesCache: Entity[] | null = null;
   private _physicalExitsCache: Triggerbox[] | null = null;
-  private depthScaleObservations = new WeakMap<Entity, { x: number; y: number }>();
-  private depthScaleBindings = new WeakMap<Entity, { controllerName: string; v: number }>();
+  private surfaceRelationsInitialized = false;
 
   getWalkboxEntities(): Entity[] {
     if (!this._walkboxEntitiesCache) {
@@ -342,6 +341,31 @@ export class Scene {
     }
 
     return Array.from(result);
+  }
+
+  getNearestSpatialQuadWithComponent(
+    entity: SceneObject,
+    componentType: string
+  ): QuadObject | null {
+    const visited = new Set<string>([entity.name]);
+    let parentId = this.normalizeSpatialPlacement((entity as any).spatial)?.parentNodeId || null;
+
+    for (let depth = 0; parentId && depth < 16; depth++) {
+      if (visited.has(parentId)) return null;
+      visited.add(parentId);
+      const parent = this.getObjectByName(parentId);
+      if (!parent) return null;
+      if (
+        parent.type === 'Quad' &&
+        !parent.disabled &&
+        parent.components?.some((component: any) => component?.type === componentType)
+      ) {
+        return parent as QuadObject;
+      }
+      parentId = this.normalizeSpatialPlacement((parent as any).spatial)?.parentNodeId || null;
+    }
+
+    return null;
   }
 
   getSpatialPlacementForObject(obj: SceneObject): SpatialPlacement | null {
@@ -720,13 +744,6 @@ export class Scene {
   getDepthScaleFor(entity: Entity): number {
     if (entity.ignoreScaling) return 1;
 
-    const previous = this.depthScaleObservations.get(entity);
-    const moved =
-      !previous ||
-      Math.abs(entity.x - previous.x) > 0.000001 ||
-      Math.abs(entity.y - previous.y) > 0.000001;
-    const existingBinding = this.depthScaleBindings.get(entity);
-
     const visualAnchor =
       entity.type === 'Quad'
         ? (() => {
@@ -745,52 +762,17 @@ export class Scene {
             entity.parallax !== undefined ? entity.parallax : 1
           );
 
-    const getController = (candidate: Entity) =>
-      candidate.disabled ||
-      !candidate.visible ||
-      candidate.type !== 'Quad' ||
-      !candidate.components?.some((component: any) => component.type === 'Depth scaling controller')
-        ? null
-        : (candidate.components.find(
-            (component: any) => component.type === 'Depth scaling controller'
-          ) as { min?: number; max?: number });
     const getScale = (controller: { min?: number; max?: number }, v: number) => {
       const min = Number.isFinite(controller.min) ? controller.min! : 0.5;
       const max = Number.isFinite(controller.max) ? controller.max! : 1;
       return min + v * (max - min);
     };
-
-    if (existingBinding && !moved) {
-      const candidate = this.findEntity(existingBinding.controllerName);
-      const controller = candidate && getController(candidate);
-      if (controller) return getScale(controller, existingBinding.v);
-      this.depthScaleBindings.delete(entity);
-    }
-
-    if (existingBinding && moved) this.depthScaleBindings.delete(entity);
-
-    // The first evaluation establishes authored controller ownership. Later,
-    // only a real world-position change may acquire a new controller; camera
-    // motion must not alter scene logic.
-    if (!previous || moved) {
-      for (let index = this.entities.length - 1; index >= 0; index--) {
-        const candidate = this.entities[index];
-        const controller = getController(candidate);
-        if (!controller) continue;
-        const metrics = (candidate as QuadObject).getSurfaceMetricsAt(
-          visualAnchor.x,
-          visualAnchor.y,
-          true,
-          false
-        );
-        if (!metrics) continue;
-        this.depthScaleBindings.set(entity, { controllerName: candidate.name, v: metrics.v });
-        this.depthScaleObservations.set(entity, { x: entity.x, y: entity.y });
-        return getScale(controller, metrics.v);
-      }
-    }
-
-    this.depthScaleObservations.set(entity, { x: entity.x, y: entity.y });
+    const owner = this.getNearestSpatialQuadWithComponent(entity, 'Depth scaling controller');
+    const controller = owner?.components?.find(
+      (component: any) => component?.type === 'Depth scaling controller'
+    ) as { min?: number; max?: number } | undefined;
+    const metrics = owner?.getSurfaceMetricsAt(visualAnchor.x, visualAnchor.y, true, false);
+    if (controller && metrics) return getScale(controller, metrics.v);
 
     // Scene Depth Scaling is world-space fallback behavior. Unlike a Quad
     // controller, it must not react to camera motion or an Entity's P layer.
@@ -1310,6 +1292,59 @@ export class Scene {
     }
   }
 
+  private getWalkboxQuad(object: SceneObject | null | undefined): QuadObject | null {
+    if (
+      !object ||
+      object.type !== 'Quad' ||
+      object.disabled ||
+      !object.components?.some((component: any) => component?.type === 'WalkBox')
+    ) {
+      return null;
+    }
+    const walkbox = object.components.find(
+      (component: any) => component?.type === 'WalkBox'
+    ) as any;
+    return walkbox?.mode === 'Subtract' ? null : (object as QuadObject);
+  }
+
+  private syncActorSurfaceRelations(): void {
+    for (const actor of this.entities) {
+      if (!(actor instanceof Actor) || actor.disabled) continue;
+
+      const visual = toVisualPosition(
+        { x: actor.x, y: actor.y },
+        this.camera,
+        actor.parallax !== undefined ? actor.parallax : 1
+      );
+      const placement = this.normalizeSpatialPlacement(actor.spatial);
+      const current =
+        placement?.relation === 'on'
+          ? this.getWalkboxQuad(this.getObjectByName(placement.parentNodeId || ''))
+          : null;
+      let next =
+        current && Geometry.isPointInPolygonWithEpsilon(visual, current.getVisualVertices(), 2)
+          ? current
+          : null;
+
+      if (!next) {
+        for (let index = this.entities.length - 1; index >= 0; index--) {
+          const candidate = this.getWalkboxQuad(this.entities[index]);
+          if (candidate?.getSurfaceMetricsAt(visual.x, visual.y, true)) {
+            next = candidate;
+            break;
+          }
+        }
+      }
+
+      if (next) {
+        if (placement?.parentNodeId === next.name && placement.relation === 'on') continue;
+        actor.spatial = { parentNodeId: next.name, relation: 'on' };
+      } else if (current) {
+        actor.spatial = {};
+      }
+    }
+  }
+
   update(deltaTime: number): void {
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
@@ -1322,6 +1357,10 @@ export class Scene {
     });
     this._centeringDirX = cameraState.centeringDirX;
     this._centeringDirY = cameraState.centeringDirY;
+    if (!this.surfaceRelationsInitialized) {
+      this.syncActorSurfaceRelations();
+      this.surfaceRelationsInitialized = true;
+    }
     this.updateSurfaceParallax();
 
     this.entities.forEach((entity) => {
@@ -1332,6 +1371,7 @@ export class Scene {
         entity.update(deltaTime);
       }
     });
+    this.syncActorSurfaceRelations();
     this.updateSurfaceParallax();
 
     if (this.pickupAnimations.length > 0) {

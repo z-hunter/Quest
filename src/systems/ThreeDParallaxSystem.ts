@@ -18,222 +18,171 @@ interface SurfaceParallaxBinding {
   originalParallax: number;
 }
 
-interface SurfaceParallaxObservation {
-  worldX: number;
-  worldY: number;
-}
-
 const SURFACE_PARALLAX_BINDING = '__surfaceParallaxBinding';
-const SURFACE_PARALLAX_OBSERVATION = '__surfaceParallaxObservation';
 const SURFACE_PARALLAX_VERTEX_BINDINGS = '__surfaceParallaxVertexBindings';
-const SURFACE_PARALLAX_VERTEX_OBSERVATIONS = '__surfaceParallaxVertexObservations';
+const EPSILON = 0.000001;
 
 export class ThreeDParallaxSystem {
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
     const scene = quad.scene as SceneSystemContext | null;
     if (!scene || !scene.entities) return;
 
-    // Actors and Static objects are both positioned by their ground point.
-    // Keep that point fixed in visual space while adapting its parallax to the Quad.
-    const parallaxTargets = scene.entities.filter(
-      (e): e is Entity =>
-        e.type === 'Actor' ||
-        e.type === 'Player' ||
-        e.type === 'Static' ||
-        // Legacy scene files serialize Static objects as `Entity`.
-        e.type === 'Entity'
-    );
-
     const camX = scene.camera.x;
     const camY = scene.camera.y;
+    const targets = scene.entities.filter(
+      (entity): entity is Entity =>
+        entity.type === 'Actor' ||
+        entity.type === 'Player' ||
+        entity.type === 'Static' ||
+        // Legacy scene files serialize Static objects as `Entity`.
+        entity.type === 'Entity'
+    );
 
-    for (const target of parallaxTargets) {
-      // Constraint: Only update if moving? No, update always to handle Editor dragging / Teleport / Idle on moving platform
-      // if (actor.state !== 'walk') continue;
-
-      const existingBinding = (target as any)[SURFACE_PARALLAX_BINDING] as
+    for (const target of targets) {
+      const binding = (target as any)[SURFACE_PARALLAX_BINDING] as
         | SurfaceParallaxBinding
         | undefined;
-      const previousObservation = (target as any)[SURFACE_PARALLAX_OBSERVATION] as
-        | SurfaceParallaxObservation
-        | undefined;
-      const movedSinceObservation =
-        !previousObservation ||
-        Math.abs(target.x - previousObservation.worldX) > 0.000001 ||
-        Math.abs(target.y - previousObservation.worldY) > 0.000001;
-      // Camera movement must never assign an unbound object to a surface.
-      // The initial update still establishes bindings for objects authored on it.
-      const mayAcquireSurface = !!existingBinding || !previousObservation || movedSinceObservation;
-      const pFactor = target.parallax !== undefined ? target.parallax : 1.0;
+      this.updateActorShadow(target, quad, scene, camX, camY);
+      const owner = scene.getNearestSpatialQuadWithComponent(target, '3d-parallax');
 
-      const allQuads = scene.entities.filter(
-        (e): e is QuadObject =>
-          e.type === 'Quad' && !!e.components?.some((c) => c.type === '3d-parallax')
-      );
-
-      let topQuad: QuadObject | null = null;
-      for (let i = allQuads.length - 1; i >= 0; i--) {
-        const q = allQuads[i];
-        if (!mayAcquireSurface && !existingBinding) continue;
-        const preserveBinding = existingBinding?.quadName === q.name && q.isVisualSurfaceUnstable();
-        let qVisual = toVisualPosition({ x: target.x, y: target.y }, { x: camX, y: camY }, pFactor);
-        if (existingBinding?.quadName === q.name) {
-          const surfacePoint = q.getGridPointAt(existingBinding.u, existingBinding.v, true);
-          qVisual = {
-            x: surfacePoint.x + (target.x - existingBinding.worldX),
-            y: surfacePoint.y + (target.y - existingBinding.worldY),
-          };
+      if (owner?.name !== quad.name) {
+        if (binding?.quadName === quad.name) {
+          this.reconcileTarget(target, quad, camX, camY, null, binding);
         }
-        if (preserveBinding || q.getSurfaceMetricsAt(qVisual.x, qVisual.y, true)) {
-          topQuad = q;
-          break;
-        }
+        continue;
       }
 
-      if (topQuad && topQuad.name !== quad.name) continue;
-      if (!topQuad && existingBinding && existingBinding.quadName !== quad.name) continue;
-
-      let targetVisual = toVisualPosition(
-        { x: target.x, y: target.y },
-        { x: camX, y: camY },
-        pFactor
-      );
-
-      // A P value alone cannot follow a perspective-corrected surface: grid
-      // lines use its corrected local (u,v) coordinate. Recreate the prior
-      // surface point first, then apply only world movement made since the
-      // last reconciliation as the actor's intended displacement.
-      if (existingBinding?.quadName === quad.name) {
-        const surfacePoint = quad.getGridPointAt(existingBinding.u, existingBinding.v, true);
-        targetVisual = {
-          x: surfacePoint.x + (target.x - existingBinding.worldX),
-          y: surfacePoint.y + (target.y - existingBinding.worldY),
-        };
-      }
-
-      const preserveBinding =
-        existingBinding?.quadName === quad.name && quad.isVisualSurfaceUnstable();
-      const metrics = !mayAcquireSurface
-        ? null
-        : preserveBinding
-          ? {
-              u: existingBinding.u,
-              v: existingBinding.v,
-              parallax: quad.getParallaxAtGrid(existingBinding.u, existingBinding.v),
-            }
-          : quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true);
-      if (metrics) {
-        const newP = metrics.parallax;
-
-        // Actor routes are authored in world coordinates. When P changes,
-        // preserve their visual destinations too; otherwise the actor itself
-        // stays on the surface while its stale raw target appears to jump
-        // towards an edge.
-        if (
-          (target.type === 'Actor' || target.type === 'Player') &&
-          Math.abs(newP - pFactor) > 0.000001
-        ) {
-          const actor = target as Actor;
-          const preserveVisualPoint = (point: { x: number; y: number }) =>
-            toWorldPosition(
-              toVisualPosition(point, { x: camX, y: camY }, pFactor),
-              { x: camX, y: camY },
-              newP
-            );
-          if (actor.target) actor.target = preserveVisualPoint(actor.target);
-          actor.route = actor.route.map(preserveVisualPoint);
-          if ((actor as any).plannedMoveTarget) {
-            (actor as any).plannedMoveTarget = preserveVisualPoint(
-              (actor as any).plannedMoveTarget
-            );
-          }
-        }
-
-        // Apply new Parallax
-        // Only if different?
-        target.parallax = newP;
-
-        // Update Actor World Position to maintain Visual Position
-        // Wy = Vy + Cy * (P - 1)
-        // Wx = Vx + Cx * (P - 1)
-        const newWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, newP);
-        target.x = newWorld.x;
-        target.y = newWorld.y;
-        (target as any)[SURFACE_PARALLAX_BINDING] = {
-          quadName: quad.name,
-          u: metrics.u,
-          v: metrics.v,
-          worldX: newWorld.x,
-          worldY: newWorld.y,
-          originalParallax: existingBinding ? existingBinding.originalParallax : pFactor,
-        } satisfies SurfaceParallaxBinding;
-      } else if (existingBinding?.quadName === quad.name) {
-        const restoredP = existingBinding.originalParallax ?? 1.0;
-        target.parallax = restoredP;
-        const restoredWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, restoredP);
-        target.x = restoredWorld.x;
-        target.y = restoredWorld.y;
-        delete (target as any)[SURFACE_PARALLAX_BINDING];
-      }
-
-      (target as any)[SURFACE_PARALLAX_OBSERVATION] = {
-        worldX: target.x,
-        worldY: target.y,
-      } satisfies SurfaceParallaxObservation;
-
-      // --- Shadow Logic ---
-      // Shadows are an Actor-only component; Static objects intentionally stop here.
-      if (target.type !== 'Actor' && target.type !== 'Player') continue;
-      const actor = target as Actor;
-      // Check if actor has a Shadow component
-      // We need to update the Shadow Vertices to also respect the Parallax Layer they are on.
-      if (actor.components) {
-        const shadowComp = actor.components.find((c) => c.type === 'Shadow') as
-          | ShadowComponent
-          | undefined;
-        if (shadowComp && shadowComp.shadowQuadId) {
-          const shadowQuad = scene.findEntity(shadowComp.shadowQuadId) as QuadObject | undefined;
-
-          if (shadowQuad && shadowQuad.type === 'Quad') {
-            const sqGlobalP = shadowQuad.parallax !== undefined ? shadowQuad.parallax : 1.0;
-            // Iterate Vertices of the Shadow
-            for (const sv of shadowQuad.vertices) {
-              // Calculate Visual Pos of Shadow Vertex
-              const svEffP = (sv.p !== undefined ? sv.p : 1.0) * sqGlobalP;
-              const shadowVisual = toVisualPosition(
-                { x: sv.x, y: sv.y },
-                { x: camX, y: camY },
-                svEffP
-              );
-              const svVisX = shadowVisual.x;
-              const svVisY = shadowVisual.y;
-
-              // Hit Test against the Parallax Floor (quad) using Visual Coordinates
-              if (quad.hitTest(svVisX, svVisY)) {
-                // Interpolate Parallax for this vertex
-                const newP = quad.getParallaxAt(svVisX, svVisY, true);
-
-                // Only update if changed (epsilon check?)
-                if (Math.abs(newP - svEffP) > 0.0001) {
-                  // Apply Correction
-                  sv.p = sqGlobalP !== 0 ? newP / sqGlobalP : newP;
-                  // Fix World Position to keep Visual Position constant
-                  const newWorld = toWorldPosition(
-                    { x: svVisX, y: svVisY },
-                    { x: camX, y: camY },
-                    newP
-                  );
-                  sv.x = newWorld.x;
-                  sv.y = newWorld.y;
-                }
-              }
-            }
-          }
-        }
-      }
+      this.reconcileTarget(target, quad, camX, camY, quad, binding);
     }
 
     this.updateQuadReceivers(quad, scene, camX, camY);
+  }
+
+  private static reconcileTarget(
+    target: Entity,
+    quad: QuadObject,
+    camX: number,
+    camY: number,
+    owner: QuadObject | null,
+    binding: SurfaceParallaxBinding | undefined
+  ): void {
+    const currentP = target.parallax !== undefined ? target.parallax : 1;
+    const ownsBinding = binding?.quadName === quad.name;
+    let targetVisual = toVisualPosition(
+      { x: target.x, y: target.y },
+      { x: camX, y: camY },
+      currentP
+    );
+    let movedSinceBinding = false;
+
+    if (ownsBinding) {
+      const surfacePoint = quad.getGridPointAt(binding.u, binding.v, true);
+      movedSinceBinding =
+        Math.abs(target.x - binding.worldX) > EPSILON ||
+        Math.abs(target.y - binding.worldY) > EPSILON;
+      targetVisual = {
+        x: surfacePoint.x + (target.x - binding.worldX),
+        y: surfacePoint.y + (target.y - binding.worldY),
+      };
+    }
+
+    const metrics =
+      owner &&
+      (ownsBinding && !movedSinceBinding
+        ? { u: binding.u, v: binding.v, parallax: quad.getParallaxAtGrid(binding.u, binding.v) }
+        : ownsBinding && quad.isVisualSurfaceUnstable()
+          ? { u: binding.u, v: binding.v, parallax: quad.getParallaxAtGrid(binding.u, binding.v) }
+          : quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true));
+
+    if (metrics) {
+      const newP = metrics.parallax;
+      this.preserveActorRouteVisualPosition(target, currentP, newP, camX, camY);
+      const newWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, newP);
+      target.parallax = newP;
+      target.x = newWorld.x;
+      target.y = newWorld.y;
+      (target as any)[SURFACE_PARALLAX_BINDING] = {
+        quadName: quad.name,
+        u: metrics.u,
+        v: metrics.v,
+        worldX: newWorld.x,
+        worldY: newWorld.y,
+        originalParallax: ownsBinding ? binding.originalParallax : currentP,
+      } satisfies SurfaceParallaxBinding;
+      return;
+    }
+
+    if (!ownsBinding) return;
+    const restoredP = binding.originalParallax ?? 1;
+    this.preserveActorRouteVisualPosition(target, currentP, restoredP, camX, camY);
+    const restoredWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, restoredP);
+    target.parallax = restoredP;
+    target.x = restoredWorld.x;
+    target.y = restoredWorld.y;
+    delete (target as any)[SURFACE_PARALLAX_BINDING];
+  }
+
+  private static preserveActorRouteVisualPosition(
+    target: Entity,
+    previousP: number,
+    nextP: number,
+    camX: number,
+    camY: number
+  ): void {
+    if (
+      (target.type !== 'Actor' && target.type !== 'Player') ||
+      Math.abs(nextP - previousP) <= EPSILON
+    ) {
+      return;
+    }
+
+    const actor = target as Actor;
+    const preserveVisualPoint = (point: { x: number; y: number }) =>
+      toWorldPosition(
+        toVisualPosition(point, { x: camX, y: camY }, previousP),
+        { x: camX, y: camY },
+        nextP
+      );
+    if (actor.target) actor.target = preserveVisualPoint(actor.target);
+    actor.route = actor.route.map(preserveVisualPoint);
+    if ((actor as any).plannedMoveTarget) {
+      (actor as any).plannedMoveTarget = preserveVisualPoint((actor as any).plannedMoveTarget);
+    }
+  }
+
+  private static updateActorShadow(
+    target: Entity,
+    quad: QuadObject,
+    scene: SceneSystemContext,
+    camX: number,
+    camY: number
+  ): void {
+    if (target.type !== 'Actor' && target.type !== 'Player') return;
+    const actor = target as Actor;
+    const shadow = actor.components?.find((component) => component.type === 'Shadow') as
+      | ShadowComponent
+      | undefined;
+    if (!shadow?.shadowQuadId) return;
+
+    const shadowQuad = scene.findEntity(shadow.shadowQuadId) as QuadObject | undefined;
+    if (!shadowQuad || shadowQuad.type !== 'Quad') return;
+
+    const globalP = shadowQuad.parallax !== undefined ? shadowQuad.parallax : 1;
+    for (const vertex of shadowQuad.vertices) {
+      const effectiveP = (vertex.p !== undefined ? vertex.p : 1) * globalP;
+      const visual = toVisualPosition(
+        { x: vertex.x, y: vertex.y },
+        { x: camX, y: camY },
+        effectiveP
+      );
+      if (!quad.hitTest(visual.x, visual.y)) continue;
+      const nextP = quad.getParallaxAt(visual.x, visual.y, true);
+      if (Math.abs(nextP - effectiveP) <= 0.0001) continue;
+      vertex.p = globalP !== 0 ? nextP / globalP : nextP;
+      const world = toWorldPosition(visual, { x: camX, y: camY }, nextP);
+      vertex.x = world.x;
+      vertex.y = world.y;
+    }
   }
 
   private static updateQuadReceivers(
@@ -256,12 +205,8 @@ export class ThreeDParallaxSystem {
         number,
         SurfaceParallaxBinding | undefined
       >;
-      const observations = ((child as any)[SURFACE_PARALLAX_VERTEX_OBSERVATIONS] ||= {}) as Record<
-        number,
-        SurfaceParallaxObservation | undefined
-      >;
-      const childGlobalP = child.parallax !== undefined ? child.parallax : 1.0;
-      const parentGlobalP = parentQuad.parallax !== undefined ? parentQuad.parallax : 1.0;
+      const childGlobalP = child.parallax !== undefined ? child.parallax : 1;
+      const parentGlobalP = parentQuad.parallax !== undefined ? parentQuad.parallax : 1;
       const toParentVisual = (world: { x: number; y: number }, effectiveP: number) => {
         const visual = toVisualPosition(world, { x: camX, y: camY }, effectiveP);
         return {
@@ -275,100 +220,74 @@ export class ThreeDParallaxSystem {
       });
 
       child.vertices.forEach((vertex, index) => {
-        const existingBinding = bindings[index];
-        const previousObservation = observations[index];
+        const binding = bindings[index];
+        const ownsBinding = binding?.quadName === parentQuad.name;
+        if (!child.receive3DParallax && !ownsBinding) return;
 
-        if (!child.receive3DParallax && existingBinding?.quadName !== parentQuad.name) {
-          delete observations[index];
-          return;
-        }
-
-        const movedSinceObservation =
-          !previousObservation ||
-          Math.abs(vertex.x - previousObservation.worldX) > 0.000001 ||
-          Math.abs(vertex.y - previousObservation.worldY) > 0.000001;
-        const mayAcquireSurface =
-          !!existingBinding || !previousObservation || movedSinceObservation;
-        const pFactor = (vertex.p !== undefined ? vertex.p : 1.0) * childGlobalP;
-
-        let targetVisual = toParentVisual({ x: vertex.x, y: vertex.y }, pFactor);
-        if (existingBinding?.quadName === parentQuad.name) {
-          const surfacePoint = parentQuad.getGridPointAt(
-            existingBinding.u,
-            existingBinding.v,
-            true
-          );
+        const currentP = (vertex.p !== undefined ? vertex.p : 1) * childGlobalP;
+        let targetVisual = toParentVisual({ x: vertex.x, y: vertex.y }, currentP);
+        let movedSinceBinding = false;
+        if (ownsBinding) {
+          const surfacePoint = parentQuad.getGridPointAt(binding.u, binding.v, true);
+          movedSinceBinding =
+            Math.abs(vertex.x - binding.worldX) > EPSILON ||
+            Math.abs(vertex.y - binding.worldY) > EPSILON;
           targetVisual = {
-            x: surfacePoint.x + (vertex.x - existingBinding.worldX),
-            y: surfacePoint.y + (vertex.y - existingBinding.worldY),
+            x: surfacePoint.x + (vertex.x - binding.worldX),
+            y: surfacePoint.y + (vertex.y - binding.worldY),
           };
         }
 
-        const preserveBinding =
-          existingBinding?.quadName === parentQuad.name && parentQuad.isVisualSurfaceUnstable();
         const metrics = child.receive3DParallax
-          ? !mayAcquireSurface
-            ? null
-            : existingBinding?.quadName === parentQuad.name && !movedSinceObservation
+          ? ownsBinding && !movedSinceBinding
+            ? {
+                u: binding.u,
+                v: binding.v,
+                parallax: parentQuad.getParallaxAtGrid(binding.u, binding.v),
+              }
+            : ownsBinding && parentQuad.isVisualSurfaceUnstable()
               ? {
-                  u: existingBinding.u,
-                  v: existingBinding.v,
-                  parallax: parentQuad.getParallaxAtGrid(existingBinding.u, existingBinding.v),
+                  u: binding.u,
+                  v: binding.v,
+                  parallax: parentQuad.getParallaxAtGrid(binding.u, binding.v),
                 }
-              : preserveBinding
-                ? {
-                    u: existingBinding!.u,
-                    v: existingBinding!.v,
-                    parallax: parentQuad.getParallaxAtGrid(existingBinding!.u, existingBinding!.v),
-                  }
-                : parentQuad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true)
+              : parentQuad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true)
           : null;
 
         if (metrics) {
-          const newP = metrics.parallax;
-          const newWorld = toChildWorld(targetVisual, newP);
-          const newLocalP = childGlobalP !== 0 ? newP / childGlobalP : newP;
+          const nextWorld = toChildWorld(targetVisual, metrics.parallax);
+          const nextLocalP =
+            childGlobalP !== 0 ? metrics.parallax / childGlobalP : metrics.parallax;
           if (
-            Math.abs(vertex.x - newWorld.x) > 0.000001 ||
-            Math.abs(vertex.y - newWorld.y) > 0.000001 ||
-            Math.abs((vertex.p ?? 1) - newLocalP) > 0.000001
+            !ownsBinding ||
+            Math.abs(vertex.x - nextWorld.x) > EPSILON ||
+            Math.abs(vertex.y - nextWorld.y) > EPSILON ||
+            Math.abs((vertex.p ?? 1) - nextLocalP) > EPSILON
           ) {
-            vertex.x = newWorld.x;
-            vertex.y = newWorld.y;
-            vertex.p = newLocalP;
+            vertex.x = nextWorld.x;
+            vertex.y = nextWorld.y;
+            vertex.p = nextLocalP;
             bindings[index] = {
               quadName: parentQuad.name,
               u: metrics.u,
               v: metrics.v,
-              worldX: newWorld.x,
-              worldY: newWorld.y,
-              originalParallax: existingBinding?.originalParallax ?? pFactor,
+              worldX: nextWorld.x,
+              worldY: nextWorld.y,
+              originalParallax: ownsBinding ? binding.originalParallax : currentP,
             };
           }
-        } else if (existingBinding?.quadName === parentQuad.name) {
-          const restoredP = existingBinding.originalParallax ?? 1.0;
+        } else if (ownsBinding) {
+          const restoredP = binding.originalParallax ?? 1;
           const restoredWorld = toChildWorld(targetVisual, restoredP);
           vertex.p = childGlobalP !== 0 ? restoredP / childGlobalP : restoredP;
           vertex.x = restoredWorld.x;
           vertex.y = restoredWorld.y;
           delete bindings[index];
         }
-
-        if (child.receive3DParallax) {
-          observations[index] = {
-            worldX: vertex.x,
-            worldY: vertex.y,
-          };
-        } else {
-          delete observations[index];
-        }
       });
 
       if (Object.keys(bindings).length === 0) {
         delete (child as any)[SURFACE_PARALLAX_VERTEX_BINDINGS];
-      }
-      if (Object.keys(observations).length === 0) {
-        delete (child as any)[SURFACE_PARALLAX_VERTEX_OBSERVATIONS];
       }
     }
   }

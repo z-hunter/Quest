@@ -69,7 +69,7 @@ describe('Quad surface depth', () => {
     expect(source.vertices[3]).toMatchObject(authoredPosition);
   });
 
-  it('lets the last matching controller override scene depth scaling', () => {
+  it('uses the nearest spatial depth-scaling controller', () => {
     const fixture = createSceneFixture();
     fixture.scene.scaling = { enabled: false, min: 0.1, max: 0.1, horizon: 0, front: 100 };
     const first = new QuadObject(fixture.game, 'first-controller');
@@ -89,6 +89,7 @@ describe('Quad surface depth', () => {
     const prop = fixture.addEntity('prop');
     prop.x = 50;
     prop.y = 50;
+    prop.spatial = { parentNodeId: last.name, relation: 'on' };
     prop.modelScale = 1;
     prop.update(0);
 
@@ -114,6 +115,7 @@ describe('Quad surface depth', () => {
     const prop = fixture.addEntity('prop');
     prop.x = 50;
     prop.y = 50;
+    prop.spatial = { parentNodeId: controller.name, relation: 'on' };
     prop.modelScale = 1;
     prop.baseWidth = 100;
     prop.baseHeight = 100;
@@ -128,7 +130,7 @@ describe('Quad surface depth', () => {
     expect(prop.baseWidth).toBeCloseTo(100, 6);
   });
 
-  it('does not let camera movement assign an external object to a depth controller', () => {
+  it('does not apply a depth controller to an unlinked object', () => {
     const fixture = createSceneFixture();
     fixture.scene.scaling.enabled = false;
     const controller = new QuadObject(fixture.game, 'controller');
@@ -152,13 +154,15 @@ describe('Quad surface depth', () => {
 
     expect(prop.scale).toBe(1);
 
-    prop.y = 75; // Actual movement may enter the inverted controller.
+    prop.y = 75;
+    prop.update(0);
+    expect(prop.scale).toBe(1);
+
+    prop.spatial = { parentNodeId: controller.name, relation: 'on' };
     prop.update(0);
     expect(prop.scale).not.toBe(1);
 
-    prop.y = -1; // Leaving it releases the controller on the next update too.
-    prop.update(0);
-    expect(prop.scale).toBe(1);
+    prop.spatial = {};
     prop.update(0);
     expect(prop.scale).toBe(1);
   });
@@ -268,6 +272,7 @@ describe('Quad surface depth', () => {
     target.ignoreScaling = false;
     fixture.scene.addEntity(controller);
     fixture.scene.addEntity(target);
+    target.spatial = { parentNodeId: controller.name, relation: 'on' };
 
     target.update(0);
 

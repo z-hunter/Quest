@@ -17,6 +17,7 @@ describe('ThreeDParallaxSystem', () => {
       { x: 100, y: 100, p: 1 },
       { x: 0, y: 100, p: 1 },
     ];
+    floor.components = [{ type: '3d-parallax' }];
     fixture.scene.addEntity(floor);
 
     const prop = fixture.addEntity('prop');
@@ -24,6 +25,7 @@ describe('ThreeDParallaxSystem', () => {
     prop.type = 'Entity';
     prop.x = 50;
     prop.y = 60;
+    prop.spatial = { parentNodeId: floor.name, relation: 'on' };
     const initialVisual = toVisualPosition(
       { x: prop.x, y: prop.y },
       fixture.scene.camera,
@@ -49,6 +51,7 @@ describe('ThreeDParallaxSystem', () => {
     ];
     floor.perspective = true;
     floor.perspectiveAmount = 1;
+    floor.components = [{ type: '3d-parallax' }];
     fixture.scene.addEntity(floor);
 
     const prop = fixture.addEntity('prop');
@@ -57,6 +60,7 @@ describe('ThreeDParallaxSystem', () => {
     const initialPoint = floor.getGridPointAt(u, v, true);
     prop.x = initialPoint.x;
     prop.y = initialPoint.y;
+    prop.spatial = { parentNodeId: floor.name, relation: 'on' };
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
 
     fixture.scene.camera.x = 80;
@@ -79,10 +83,12 @@ describe('ThreeDParallaxSystem', () => {
       { x: 100, y: 100, p: 1 },
       { x: 0, y: 100, p: 1 },
     ];
+    floor.components = [{ type: '3d-parallax' }];
     fixture.scene.addEntity(floor);
     const actor = fixture.addPlayer('Hero', 50, 60);
     actor.target = { x: 80, y: 80 };
     actor.route = [{ x: 80, y: 80 }];
+    actor.spatial = { parentNodeId: floor.name, relation: 'on' };
     const oldTargetVisual = toVisualPosition(actor.target, fixture.scene.camera, actor.parallax);
 
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
@@ -110,8 +116,10 @@ describe('ThreeDParallaxSystem', () => {
     ];
     floor.perspective = true;
     floor.perspectiveAmount = 1;
+    floor.components = [{ type: '3d-parallax' }];
     fixture.scene.addEntity(floor);
     const actor = fixture.addPlayer('Hero', 40, 95);
+    actor.spatial = { parentNodeId: floor.name, relation: 'on' };
     actor.speed = 1;
     for (let i = 0; i < 7; i++) {
       actor.y += 1;
@@ -146,6 +154,7 @@ describe('ThreeDParallaxSystem', () => {
     const start = floor.getGridPointAt(u, v, true);
     prop.x = start.x;
     prop.y = start.y;
+    prop.spatial = { parentNodeId: floor.name, relation: 'on' };
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
 
     // The Quad is a sliver here. Its inverse maps this very grid point to a
@@ -160,7 +169,7 @@ describe('ThreeDParallaxSystem', () => {
     expect(prop.parallax).toBeCloseTo(floor.getParallaxAtGrid(u, v), 6);
   });
 
-  it('does not assign an unbound object to a surface solely because the camera crosses it', () => {
+  it('never assigns an unlinked object to a surface, even after camera or world movement', () => {
     const fixture = createSceneFixture();
     const floor = new QuadObject(fixture.game, 'floor');
     floor.vertices = [
@@ -169,6 +178,7 @@ describe('ThreeDParallaxSystem', () => {
       { x: 143, y: 74, p: 1 },
       { x: -110, y: 74, p: 1 },
     ];
+    floor.components = [{ type: '3d-parallax' }];
     fixture.scene.addEntity(floor);
 
     const prop = fixture.addEntity('wall');
@@ -184,9 +194,9 @@ describe('ThreeDParallaxSystem', () => {
     expect(prop.parallax).toBe(0.6);
     expect(prop.y).toBe(-1);
 
-    prop.y = -0.5; // Explicit world movement may acquire the surface.
+    prop.y = -0.5;
     ThreeDParallaxSystem.update(floor, { type: '3d-parallax' });
-    expect((prop as any).__surfaceParallaxBinding).toMatchObject({ quadName: floor.name });
+    expect((prop as any).__surfaceParallaxBinding).toBeUndefined();
   });
 
   it('preserves initial binding for authored targets when a lower overlapping Quad updates before the top Quad', () => {
@@ -218,6 +228,7 @@ describe('ThreeDParallaxSystem', () => {
     prop.type = 'Static';
     prop.x = 50;
     prop.y = 50;
+    prop.spatial = { parentNodeId: topFloor.name, relation: 'on' };
 
     // Lower quad updates first in entity order
     ThreeDParallaxSystem.update(lowerFloor, { type: '3d-parallax' });
@@ -230,10 +241,6 @@ describe('ThreeDParallaxSystem', () => {
     expect(binding).toBeDefined();
     expect(binding.quadName).toBe('top-floor');
     expect(prop.parallax).toBeCloseTo(topFloor.getParallaxAt(50, 50, true), 6);
-    expect((prop as any).__surfaceParallaxObservation).toEqual({
-      worldX: prop.x,
-      worldY: prop.y,
-    });
   });
 
   it('applies parent 3d-parallax to opted-in child Quad vertices and tracks camera motion', () => {
