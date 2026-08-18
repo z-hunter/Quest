@@ -23,6 +23,10 @@ const SURFACE_PARALLAX_VERTEX_BINDINGS = '__surfaceParallaxVertexBindings';
 const EPSILON = 0.000001;
 
 export class ThreeDParallaxSystem {
+  static clearTargetBinding(target: Entity): void {
+    delete (target as any)[SURFACE_PARALLAX_BINDING];
+  }
+
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
     const scene = quad.scene as SceneSystemContext | null;
     if (!scene || !scene.entities) return;

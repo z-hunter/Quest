@@ -162,8 +162,7 @@ export const PROPERTIES_LABEL_TOOLTIPS: Record<string, string> = {
   'Bezel Glow': 'Adds a glow around the virtual CRT bezel.',
   'Lock Object': 'Prevents accidental editing of this object in the editor. Hotkey: Alt-L.',
   Disabled: 'Disables the object so it does not participate in the scene. Hotkey: Alt-D.',
-  'Retro Grid':
-    'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
+  Grid: 'Enables the retro grid line overlay for this quad. It is also useful for alignment, because objects can snap to grid nodes while Alt is held.',
   Perspective:
     'Enables projective 3D perspective. Grid spacing and Quad textures follow the corresponding vanishing points; parallel edges stay evenly spaced.',
   Amount:

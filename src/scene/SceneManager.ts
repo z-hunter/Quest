@@ -16,6 +16,10 @@ import { assertSceneData } from '../contracts/runtimeSchemas';
 import type { SceneLogData } from './SceneLog';
 import { traceNavigation } from '../systems/navigation/navigationDebug';
 import { SceneSpatialValidator } from './SceneSpatialValidator';
+import {
+  ThreeDParallaxSystem,
+  type ThreeDParallaxComponent,
+} from '../systems/ThreeDParallaxSystem';
 
 const GRAPH_WEIGHT_FACTOR = 0.15;
 const TEXTURE_BYTES_PER_UNIT = 64 * 1024;
@@ -276,13 +280,35 @@ export class SceneManager {
     if (targetX === null || targetY === null) return entryObj;
     actor.layer = entryObj.layer;
     actor.parallax = entryObj.parallax;
-    const walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
-    actor.x = walkableTarget.x;
-    actor.y = walkableTarget.y;
+    ThreeDParallaxSystem.clearTargetBinding(actor);
+    const refreshSurfaceParallax = () => {
+      const quad = scene.getNearestSpatialQuadWithComponent(actor, '3d-parallax');
+      const component = quad?.components?.find((item: any) => item?.type === '3d-parallax');
+      if (quad && component) {
+        ThreeDParallaxSystem.update(quad, component as ThreeDParallaxComponent);
+      }
+    };
+    // Entry placement can cross a depth-scaled Quad boundary. Update once at
+    // the destination first so the search uses the destination collider size,
+    // then re-check after each placement because changing Y can change scale.
+    actor.x = targetX;
+    actor.y = targetY;
+    actor.update(0);
+    refreshSurfaceParallax();
+    actor.update(0);
+    let walkableTarget = this.resolveEntryPlacementPosition(scene, actor, targetX, targetY);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      actor.x = walkableTarget.x;
+      actor.y = walkableTarget.y;
+      actor.update(0);
+      refreshSurfaceParallax();
+      actor.update(0);
+      if (scene.isWalkable(actor.x, actor.y, actor)) break;
+      walkableTarget = this.resolveEntryPlacementPosition(scene, actor, actor.x, actor.y);
+    }
     if (entryComp.direction && typeof (actor as any).setDirection === 'function') {
       (actor as any).setDirection(entryComp.direction);
     }
-    actor.update(0);
     return entryObj;
   }
 

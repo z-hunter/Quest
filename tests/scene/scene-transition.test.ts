@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 import { Actor } from '../../src/entities/Actor';
 import { QuadObject } from '../../src/entities/QuadObject';
+import { SceneManager } from '../../src/scene/SceneManager';
 
 describe('Scene Transitions (Exit/Entry)', () => {
   it('transitions an actor to another scene and places it at the Entry point', async () => {
@@ -245,5 +246,67 @@ describe('Scene Transitions (Exit/Entry)', () => {
     expect(sceneManager.currentScene?.id).toBe('scene-b');
     expect(actor.x).toBe(105);
     expect(actor.y).toBe(105);
+  });
+
+  it('keeps Entry placement walkable after destination depth scaling changes the collider', () => {
+    const fixture = createSceneFixture();
+    const game = fixture.game;
+    const scene = fixture.scene;
+    const manager = new SceneManager(game);
+    game.sceneManager = manager;
+    manager.currentScene = scene;
+    manager.scenes.set(scene.id, scene);
+
+    const floor = new QuadObject(game, 'floor');
+    floor.vertices = [
+      { x: -158.78036469627548, y: -9.782594419843486, p: 0.6 },
+      { x: 203.21963530372452, y: -10.782594419843486, p: 0.6 },
+      { x: 450, y: 112, p: 1 },
+      { x: -309, y: 112, p: 1 },
+    ];
+    floor.components = [
+      { type: 'WalkBox', mode: 'Invert' },
+      { type: 'Depth scaling controller', min: 0.5, max: 1 },
+      { type: '3d-parallax' },
+    ];
+    scene.addEntity(floor);
+
+    const entry = fixture.addTriggerbox('ex', {
+      components: [{ type: 'Entry', direction: 'down' }],
+    });
+    entry.poly = [
+      { x: 280.6394173477212, y: -6.72046583123894 },
+      { x: 335, y: 41 },
+      { x: 191.63941734772118, y: 37.27953416876106 },
+    ];
+
+    const sourceX = -229.17067976099196;
+    const sourceY = -100.80698746858366;
+    const targetX = 269.0929448984808;
+    const targetY = 23.85302277917404;
+    const actor = new Actor(game, targetX, targetY, 10, 10, 'Hero');
+    actor.isPlayer = true;
+    actor.modelScale = 0.84;
+    actor.colliderWidth = 88;
+    actor.colliderHeight = 4;
+    actor.parallax = 1;
+    actor.spatial = { parentNodeId: floor.name, relation: 'on' };
+    scene.addEntity(actor);
+    scene.player = actor;
+    actor.update(0);
+    scene.update(16);
+    actor.x = sourceX;
+    actor.y = sourceY;
+    actor.update(0);
+    expect((actor as any).__surfaceParallaxBinding).toBeDefined();
+
+    manager.transferActorToScene(actor, scene.id, {
+      targetEntryId: entry.name,
+      activateScene: false,
+    });
+
+    expect(scene.isWalkable(actor.x, actor.y, actor)).toBe(true);
+    scene.update(16);
+    expect(scene.isWalkable(actor.x, actor.y, actor)).toBe(true);
   });
 });

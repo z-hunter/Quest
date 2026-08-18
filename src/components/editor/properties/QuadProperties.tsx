@@ -498,7 +498,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
             )}
           </div>
 
-          {/* Retro Grid */}
+          {/* Grid */}
           <div className="e-row">
             <label
               className="e-label"
@@ -513,7 +513,7 @@ export const QuadProperties: React.FC<QuadPropertiesProps> = ({
                 checked={quad.isGrid || false}
                 onChange={(e) => handleChange('isGrid', e.target.checked)}
               />
-              Retro Grid
+              Grid
             </label>
           </div>
 

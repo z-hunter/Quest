@@ -633,6 +633,27 @@ export class Scene {
     );
   }
 
+  renameObject(object: SceneObject, name: string): void {
+    const previousName = String(object.name || '').trim();
+    const nextName = String(name || '').trim();
+    if (!nextName || previousName === nextName) return;
+
+    object.name = nextName;
+    const allObjects = [...this.entities, ...this.walkbox, ...this.triggerboxes, ...this.folders];
+    allObjects.forEach((candidate) => {
+      if (candidate === object || candidate.spatial?.parentNodeId !== previousName) return;
+      candidate.spatial = {
+        ...(candidate.spatial || {}),
+        parentNodeId: nextName,
+      };
+    });
+
+    if (this.revealedHiddenEntities.delete(previousName)) {
+      this.revealedHiddenEntities.add(nextName);
+    }
+    if (this._activeSubscene === previousName) this._activeSubscene = nextName;
+  }
+
   playPickupAnimation(entity: Entity): void {
     const clone = Entity.fromJSON(this.game, entity.toJSON() as EntityData);
     clone.disabled = false;

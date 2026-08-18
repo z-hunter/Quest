@@ -80,7 +80,7 @@
       "tileScaleX": 1,
       "tileScaleY": 1,
       "perspective": true,
-      "perspectiveAmount": 1,
+      "perspectiveAmount": 0.35,
       "color": "#52779aff",
       "sortMode": "ignore",
       "opacity": 1,
@@ -238,16 +238,16 @@
         "parentNodeId": "floor",
         "relation": "in"
       },
-      "parallax": 0.9216054583468599,
-      "x": 14.933486767511498,
-      "y": 40.94580244532596,
-      "width": 44.015687400070476,
-      "height": 72.23087163088483,
+      "parallax": 0.8817901668923311,
+      "x": 9.468210239761417,
+      "y": 44.568399670261556,
+      "width": 41.130061762096666,
+      "height": 67.49548596856886,
       "baseWidth": 129.42019842053642,
       "baseHeight": 212.3818640747263,
       "spriteName": "chair",
       "color": "#AAAAAA",
-      "scale": 0.34009905669473967,
+      "scale": 0.31780249345970824,
       "refScale": 0.4,
       "modelScale": 0.4,
       "depthSortMode": "y",
@@ -289,24 +289,24 @@
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -0.551979979989887,
-          "y": 66.77910709033094,
-          "p": 1.086555836925139
+          "x": -3.7783669950004475,
+          "y": 67.69472309085,
+          "p": 1.08002382371262
         },
         {
-          "x": -47.52578590275035,
-          "y": 36.488393997201555,
-          "p": 0.994326273793506
+          "x": -59.002777924268216,
+          "y": 40.46151091326093,
+          "p": 0.9430467610301319
         },
         {
-          "x": 12.391596115491662,
-          "y": 33.13797381262236,
-          "p": 0.9816641104714797
+          "x": 6.646637254667919,
+          "y": 36.97166774271358,
+          "p": 0.9249341172178881
         },
         {
-          "x": 38.946603581549915,
-          "y": 36.57417490883069,
-          "p": 0.9966185416004476
+          "x": 35.978329325100546,
+          "y": 40.28144333009654,
+          "p": 0.9456658417904131
         }
       ],
       "spriteName": "chair",
@@ -550,8 +550,8 @@
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": -37.18849374150989,
-          "y": -0.5473054231470442,
+          "x": -37.188493741509895,
+          "y": -0.5473054231470513,
           "p": 0.6,
           "binding": {
             "targetName": "floor",
@@ -561,7 +561,7 @@
         },
         {
           "x": 74.81150625849011,
-          "y": -0.5473054231470442,
+          "y": -0.5473054231470513,
           "p": 0.6,
           "binding": {
             "targetName": "floor",
@@ -570,14 +570,14 @@
           }
         },
         {
-          "x": 46.02277776735545,
-          "y": 10.847871012449378,
-          "p": 0.7659177680529775
+          "x": 45.86489200539208,
+          "y": 12.832798336861895,
+          "p": 0.6946190822356065
         },
         {
-          "x": -56.59837152884015,
-          "y": 11.473287213896125,
-          "p": 0.7692754102735851
+          "x": -56.76676754976219,
+          "y": 18.16995860557779,
+          "p": 0.7274501701290645
         }
       ],
       "spriteName": null,
@@ -608,14 +608,111 @@
       "receive3DParallax": true,
       "colliderWidth": 0,
       "colliderHeight": 0
+    },
+    {
+      "name": "floor_1",
+      "type": "Quad",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Backface",
+          "vertexA": 0,
+          "vertexB": 3,
+          "axis": "y",
+          "op": "<",
+          "targetId": "",
+          "cullingType": "render"
+        },
+        {
+          "type": "3d-parallax"
+        },
+        {
+          "type": "Depth scaling controller",
+          "min": 0.4,
+          "max": 0.96
+        }
+      ],
+      "layer": 0,
+      "visible": false,
+      "hidden": false,
+      "parallax": 1,
+      "x": 16.79433298867258,
+      "y": 69.51895996858849,
+      "ignoreScaling": true,
+      "depthScalingVersion": 1,
+      "vertices": [
+        {
+          "x": -36,
+          "y": 17,
+          "p": 0.6,
+          "binding": {
+            "targetName": "Quad",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 74.75431752664937,
+          "y": 12.158641730968636,
+          "p": 0.6,
+          "binding": {
+            "targetName": "Quad_642",
+            "type": "vertex",
+            "index": 1
+          }
+        },
+        {
+          "x": 144.435703294805,
+          "y": 104.67943903594877,
+          "p": 1
+        },
+        {
+          "x": -111.75279044670492,
+          "y": 107.13213361280168,
+          "p": 1
+        }
+      ],
+      "spriteName": null,
+      "flipX": false,
+      "flipY": false,
+      "textureMode": "stretch",
+      "tileScaleX": 1,
+      "tileScaleY": 1,
+      "perspective": true,
+      "perspectiveAmount": 0.35,
+      "color": "#071727",
+      "sortMode": "ignore",
+      "opacity": 1,
+      "blendMode": "source-over",
+      "isGrid": true,
+      "gridLinesX": 5,
+      "gridLinesY": 5,
+      "lineWidth": 1,
+      "gridColor": "#1c2531",
+      "filled": true,
+      "checkerboard": false,
+      "secondColor": "#000000",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "receive3DParallax": false,
+      "colliderWidth": 0,
+      "colliderHeight": 0
     }
   ],
   "folders": [],
   "displayOrder": ["floor", "wall", "Quad_138", "chair", "chair_shadow", "Quad_642"],
   "camera": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
+    "x": 173.4351317589608,
+    "y": -9.679468197595089,
+    "zoom": 0.6794756386241964
   },
   "autoCenter": false,
   "cameraSpeed": 5,

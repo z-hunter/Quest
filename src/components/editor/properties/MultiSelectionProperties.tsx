@@ -588,7 +588,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       });
                     }}
                   />
-                  Retro Grid
+                  Grid
                 </label>
               </div>
             )}

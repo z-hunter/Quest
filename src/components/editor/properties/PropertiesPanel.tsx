@@ -714,7 +714,18 @@ export const PropertiesPanel: React.FC = () => {
         finalVal = normalizeGroupIdList(finalVal, { preserveEmptyTokens: true });
       }
 
-      obj[field] = finalVal;
+      if (
+        field === 'name' &&
+        selectedObjectType !== 'SCENE' &&
+        selectedObjectType !== 'SETTINGS' &&
+        selectedObjectType !== 'MULTI'
+      ) {
+        const scene = game?.sceneManager?.currentScene;
+        if (scene && typeof scene.renameObject === 'function') scene.renameObject(obj, finalVal);
+        else obj[field] = finalVal;
+      } else {
+        obj[field] = finalVal;
+      }
 
       if (obj.inheritedProps instanceof Set && obj.inheritedProps.has(field)) {
         obj.inheritedProps.delete(field);
