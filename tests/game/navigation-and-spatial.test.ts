@@ -619,6 +619,37 @@ describe('Game navigation and spatial API', () => {
     ]);
   });
 
+  it('places items inside Quad vertices and clears stale surface parallax', () => {
+    const fixture = createGameSemanticFixture();
+    fixture.addPlayer('Hero', 0, 0);
+    const floor = new QuadObject(fixture.game as any, 'floor');
+    floor.x = 1000;
+    floor.y = 1000;
+    floor.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 100, y: 0, p: 1 },
+      { x: 100, y: 100, p: 1 },
+      { x: 0, y: 100, p: 1 },
+    ];
+    floor.components = [{ type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [] }];
+    fixture.scene.addEntity(floor);
+
+    const item = fixture.addEntity('coin', { components: [{ type: 'Item' }] });
+    item.parallax = 0.5;
+    (item as any).__surfaceParallaxBinding = { quadName: 'old-floor' };
+
+    const outcome = fixture.game.addEntityToSurface(floor, item);
+    fixture.scene.finishDropAnimation(item);
+
+    expect(outcome.status).toBe('ok');
+    expect(item.x).toBeGreaterThanOrEqual(0);
+    expect(item.x).toBeLessThanOrEqual(100);
+    expect(item.y).toBeGreaterThanOrEqual(0);
+    expect(item.y).toBeLessThanOrEqual(100);
+    expect(item.parallax).toBe(1);
+    expect((item as any).__surfaceParallaxBinding).toBeUndefined();
+  });
+
   it('transfers a player actor with inventory and nested spatial descendants to the target scene', () => {
     const fixture = createGameSemanticFixture('start');
     const player = fixture.addPlayer('Hero', 0, 0);

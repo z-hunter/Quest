@@ -3,6 +3,7 @@ import type { Actor } from '../entities/Actor';
 import { SceneObject } from '../entities/SceneObject';
 import { ComponentSystem } from './ComponentSystem';
 import type { InventoryComponent, SurfaceComponent, SurfaceItemPlacement } from './ComponentSystem';
+import { ThreeDParallaxSystem } from './ThreeDParallaxSystem';
 import { Geometry } from '../utils/Geometry';
 import type { GameActionOutcome } from '../core/GameActionTypes';
 import type { TextAssetManager } from '../core/TextAssetManager';
@@ -1044,6 +1045,9 @@ export class InventoryManager {
   }
 
   removeEntityFromCurrentStorage(entity: Entity, scene = this.getObjectScene(entity)): void {
+    ThreeDParallaxSystem.clearTargetBinding(entity);
+    entity.parallax = 1;
+
     const inventoryOwner = this.findInventoryOwnerForEntity(entity, scene);
     if (inventoryOwner) {
       for (const relation of this.getInventoryRelations(inventoryOwner)) {
@@ -1146,7 +1150,16 @@ export class InventoryManager {
     rect: { left: number; top: number; right: number; bottom: number };
     poly?: Array<{ x: number; y: number }>;
   } | null {
-    const poly = Array.isArray((surface as any).poly) ? (surface as any).poly : null;
+    const poly = Array.isArray((surface as any).poly)
+      ? (surface as any).poly
+      : surface.type === 'Quad' && Array.isArray((surface as any).vertices)
+        ? (typeof (surface as any).getVisualVertices === 'function'
+            ? (surface as any).getVisualVertices()
+            : typeof (surface as any).getEffectiveVertices === 'function'
+              ? (surface as any).getEffectiveVertices()
+              : (surface as any).vertices
+          ).map((vertex: { x: number; y: number }) => ({ x: vertex.x, y: vertex.y }))
+        : null;
     if (poly?.length) {
       const xs = poly.map((point: { x: number; y: number }) => point.x);
       const ys = poly.map((point: { x: number; y: number }) => point.y);
@@ -1211,7 +1224,9 @@ export class InventoryManager {
     x: number,
     y: number
   ): { x: number; y: number; w: number; h: number } {
-    const hasPoly = Array.isArray((surface as any).poly) && (surface as any).poly.length > 0;
+    const hasPoly =
+      surface.type === 'Quad' ||
+      (Array.isArray((surface as any).poly) && (surface as any).poly.length > 0);
     const placementRelation = ((surface as any).spatial?.relation ||
       null) as SpatialRelationType | null;
     if (surface.type === 'Walkbox' || (hasPoly && placementRelation !== 'in')) {
