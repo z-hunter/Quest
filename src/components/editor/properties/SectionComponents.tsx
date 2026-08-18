@@ -340,7 +340,7 @@ export const SectionComponents: React.FC = () => {
                 }
                 o.components.unshift({
                   type: 'Surface',
-                  relation: relation || 'in',
+                  relation: relation || 'on',
                   capacity: 8,
                   groups: [],
                   items: [],

@@ -40,35 +40,12 @@ function blur(textarea: HTMLTextAreaElement) {
   textarea.dispatchEvent(new domWindow.Event('focusout', { bubbles: true }));
 }
 
-function renderNpcProperties() {
-  const object = {
-    name: 'guard',
-    components: [
-      {
-        type: 'NPC',
-        memory: ['The remote is near the sofa.'],
-        objectives: [
-          {
-            id: 'old-root',
-            text: 'Turn on the TV',
-            subtasks: [{ id: 'old-child', text: 'Find the remote', subtasks: [] }],
-          },
-        ],
-      },
-    ],
-  };
-  const textAssets = {
-    getResolvedObjectField: vi.fn(() => 'Guard'),
-    getResolvedNpcMemory: vi.fn(() => ['Authored fact']),
-    getResolvedNpcMemoryRevision: vi.fn(() => '["Authored fact"]'),
-    getResolvedNpcObjectives: vi.fn(() => []),
-    getResolvedNpcObjectivesRevision: vi.fn(() => '[]'),
-  };
+function renderProperties(object: any, selectedObjectType: string, textAssets: any) {
   const incrementObjectVersion = vi.fn();
   const context = {
-    game: { textAssets },
+    game: { textAssets, editor: { saveUndoState: vi.fn() } },
     obj: object,
-    selectedObjectType: 'Actor',
+    selectedObjectType,
     selectedObjectId: object.name,
     mode: 'edit',
     selectedVertexIndex: null,
@@ -106,6 +83,33 @@ function renderNpcProperties() {
         container.remove();
       }),
   };
+}
+
+function renderNpcProperties() {
+  const object = {
+    name: 'guard',
+    components: [
+      {
+        type: 'NPC',
+        memory: ['The remote is near the sofa.'],
+        objectives: [
+          {
+            id: 'old-root',
+            text: 'Turn on the TV',
+            subtasks: [{ id: 'old-child', text: 'Find the remote', subtasks: [] }],
+          },
+        ],
+      },
+    ],
+  };
+  const textAssets = {
+    getResolvedObjectField: vi.fn(() => 'Guard'),
+    getResolvedNpcMemory: vi.fn(() => ['Authored fact']),
+    getResolvedNpcMemoryRevision: vi.fn(() => '["Authored fact"]'),
+    getResolvedNpcObjectives: vi.fn(() => []),
+    getResolvedNpcObjectivesRevision: vi.fn(() => '[]'),
+  };
+  return renderProperties(object, 'Actor', textAssets);
 }
 
 afterAll(() => domWindow.happyDOM.close());
@@ -161,6 +165,24 @@ describe('SectionComponents NPC cognition editor', () => {
     expect(rendered.component.objectives).toEqual(before);
     expect(rendered.container.textContent).toContain('indentation must use pairs of spaces');
     expect(rendered.incrementObjectVersion).not.toHaveBeenCalled();
+    rendered.cleanup();
+  });
+
+  it('adds Surface with ON relation to a titleless Quad', () => {
+    const object = { name: 'floor', components: [] };
+    const textAssets = { getResolvedObjectField: vi.fn(() => '') };
+    const rendered = renderProperties(object, 'Quad', textAssets);
+    const addSelect = rendered.container.querySelector('.custom-select-trigger') as HTMLElement;
+
+    act(() => addSelect.click());
+    const surfaceOption = Array.from(rendered.container.querySelectorAll('.custom-option')).find(
+      (option) => option.textContent === 'Surface'
+    ) as HTMLElement;
+    act(() => surfaceOption.click());
+
+    expect(object.components).toEqual([
+      expect.objectContaining({ type: 'Surface', relation: 'on' }),
+    ]);
     rendered.cleanup();
   });
 });
