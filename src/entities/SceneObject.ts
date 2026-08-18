@@ -108,6 +108,15 @@ export class SceneObject {
           json[prop] = normalizeGroupIdList(value);
           return;
         }
+        if (prop === 'components' && Array.isArray(value)) {
+          const components = JSON.parse(JSON.stringify(value));
+          for (const component of components) {
+            if (component?.type !== 'Surface' || !Array.isArray(component.items)) continue;
+            component.items = component.items.map((item: any) => ({ id: item?.id }));
+          }
+          json[prop] = components;
+          return;
+        }
         if (
           prop === 'spatial' &&
           value &&

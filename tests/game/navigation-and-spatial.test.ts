@@ -569,7 +569,7 @@ describe('Game navigation and spatial API', () => {
     );
   });
 
-  it('switchTo hydrates surface item placements into entity scene state', () => {
+  it('switchTo keeps the entity transform and ignores legacy surface coordinates', () => {
     const fixture = createGameSemanticFixture('start');
     const target = fixture.addScene('gallery', 'Gallery', 'You are in Gallery.');
 
@@ -610,10 +610,13 @@ describe('Game navigation and spatial API', () => {
 
     expect(fixture.game.getSurfaceEntities(table, 'on')).toContain(coin);
     expect(coin.visible).toBe(true);
-    expect(coin.x).toBe(42);
-    expect(coin.y).toBe(24);
+    expect(coin.x).toBe(999);
+    expect(coin.y).toBe(999);
     expect(coin.layer).toBe(5);
     expect((coin as any).spatial).toEqual({ parentNodeId: 'table', relation: 'on' });
+    expect(table.toJSON().components).toEqual([
+      { type: 'Surface', relation: 'on', capacity: 2, groups: [], items: [{ id: 'coin' }] },
+    ]);
   });
 
   it('transfers a player actor with inventory and nested spatial descendants to the target scene', () => {
@@ -856,8 +859,8 @@ describe('Game navigation and spatial API', () => {
     fixture.game.sceneManager.switchTo(target.id);
 
     expect(fixture.game.getSurfaceEntities(hiddenShelf, 'on')).toContain(note);
-    expect(note.x).toBe(11);
-    expect(note.y).toBe(12);
+    expect(note.x).toBe(400);
+    expect(note.y).toBe(400);
     expect((note as any).spatial).toEqual({ parentNodeId: 'hidden_shelf', relation: 'on' });
 
     const outcome = fixture.game.describeSpatialRelation('desk', 'behind');

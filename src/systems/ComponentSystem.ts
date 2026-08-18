@@ -114,8 +114,9 @@ export interface InventoryComponent {
 
 export interface SurfaceItemPlacement {
   id: string;
-  x: number;
-  y: number;
+  /** Legacy scene data. Runtime placement comes from the entity transform. */
+  x?: number;
+  y?: number;
 }
 
 export interface SurfaceComponent {
@@ -916,9 +917,10 @@ export class ComponentSystem {
     for (const candidate of scene.getAllSceneObjects?.() || []) {
       if (candidate.name !== parentId) continue;
       for (const component of this.getSurfaceComponents(candidate)) {
-        const placement = component.items?.find((item: any) => item?.id === entityId);
-        const x = Number((placement as any)?.x);
-        const y = Number((placement as any)?.y);
+        if (!component.items?.some((item: any) => item?.id === entityId)) continue;
+        const placedEntity = scene.getObjectByName(entityId);
+        const x = Number((placedEntity as any)?.x);
+        const y = Number((placedEntity as any)?.y);
         if (Number.isFinite(x) && Number.isFinite(y)) {
           return { x, y };
         }

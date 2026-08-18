@@ -351,8 +351,8 @@ describe('Game semantic API', () => {
       surfaceCoin,
     ]);
     expect(surfaceCoin.visible).toBe(true);
-    expect(surfaceCoin.x).toBe(12);
-    expect(surfaceCoin.y).toBe(34);
+    expect(surfaceCoin.x).toBe(0);
+    expect(surfaceCoin.y).toBe(0);
     expect((surfaceCoin as any).spatial).toEqual({ parentNodeId: tray.name, relation: 'on' });
     expect(SceneSpatialValidator.validate(fixture.scene, fixture.game as any).ok).toBe(true);
   });

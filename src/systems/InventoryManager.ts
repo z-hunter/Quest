@@ -452,8 +452,7 @@ export class InventoryManager {
   private hydrateSurfaceEntitySceneState(
     surface: SceneObject,
     component: SurfaceComponent,
-    entity: Entity,
-    placement: SurfaceItemPlacement
+    entity: Entity
   ): void {
     const scene = this.sceneManager.currentScene;
     if (!scene) return;
@@ -466,8 +465,6 @@ export class InventoryManager {
     delete (entity as any).__inventoryRelation;
     entity.setInventoryPositionOwner(null);
     entity.visible = true;
-    entity.x = placement.x;
-    entity.y = placement.y;
     entity.layer = Number.isFinite(surface.layer) ? surface.layer : 0;
     entity.spatial = {
       parentNodeId: surface.name,
@@ -566,16 +563,12 @@ export class InventoryManager {
         component.items = component.items.filter((placement) => {
           const entityId = typeof placement?.id === 'string' ? placement.id.trim() : '';
           const entity = entityId ? this.findSurfaceEntityCandidate(surface, entityId) : null;
-          if (
-            !(entity instanceof Entity) ||
-            !Number.isFinite(placement?.x) ||
-            !Number.isFinite(placement?.y)
-          ) {
+          if (!(entity instanceof Entity)) {
             return false;
           }
 
           placement.id = entity.name;
-          this.hydrateSurfaceEntitySceneState(surface, component, entity, placement);
+          this.hydrateSurfaceEntitySceneState(surface, component, entity);
           return true;
         });
       }
@@ -1316,29 +1309,31 @@ export class InventoryManager {
     }
 
     const collisions = placements
-      .map((placement) => {
+      .flatMap((placement) => {
         const placedEntity =
           this.sceneManager.currentScene?.getObjectByName(placement.id) ||
           this.inventory.find((candidate) => candidate.name === placement.id) ||
           null;
-        const placedSize =
-          placedEntity instanceof Entity
-            ? this.getEntityPlacementSizeAtY(placedEntity, placement.y)
-            : candidateSize;
+        if (!(placedEntity instanceof Entity)) return [];
+        const placementX = placedEntity.x;
+        const placementY = placedEntity.y;
+        const placedSize = this.getEntityPlacementSizeAtY(placedEntity, placementY);
         const placedRect = this.getSurfaceFootprintRect(
           surface,
           placedSize,
-          placement.x,
-          placement.y
+          placementX,
+          placementY
         );
         const intersects = Geometry.rectIntersectsRect(candidateRect, placedRect);
-        return {
-          id: placement.id,
-          placement: { x: placement.x, y: placement.y },
-          placedSize,
-          placedRect,
-          intersects,
-        };
+        return [
+          {
+            id: placement.id,
+            placement: { x: placementX, y: placementY },
+            placedSize,
+            placedRect,
+            intersects,
+          },
+        ];
       })
       .filter((entry) => entry.intersects);
 
@@ -2220,8 +2215,8 @@ export class InventoryManager {
       scene.addEntity(entity);
     }
     entity.visible = true;
-    entity.x = placement.x;
-    entity.y = placement.y;
+    entity.x = placement.x ?? entity.x;
+    entity.y = placement.y ?? entity.y;
     entity.layer = Number.isFinite(surface.layer) ? surface.layer : 0;
     entity.spatial = {
       parentNodeId: surface.name,

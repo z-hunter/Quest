@@ -1315,7 +1315,7 @@ describe('Parser + game integration smoke', () => {
       description: 'A far cassette on the floor.',
       synonyms: ['cassette', 'cassete', 'music'],
     });
-    musicCassette.x = 5;
+    musicCassette.x = 200;
     musicCassette.y = 0;
     const floor = fixture.addWalkbox('Walk_main', 'in');
     floor.components = [
@@ -1324,7 +1324,7 @@ describe('Parser + game integration smoke', () => {
         relation: 'in',
         capacity: 10,
         groups: [],
-        items: [{ id: 'music_cassette', x: 200, y: 0 }],
+        items: [{ id: 'music_cassette', x: 5, y: 0 }],
       },
     ];
     musicCassette.spatial = { parentNodeId: 'Walk_main', relation: 'in' };

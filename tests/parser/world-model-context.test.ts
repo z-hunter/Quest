@@ -632,7 +632,7 @@ describe('Parser world model context', () => {
         relation: 'in',
         capacity: 10,
         groups: [],
-        items: [{ id: 'far_cassette', x: 200, y: 0 }],
+        items: [{ id: 'far_cassette', x: 5, y: 0 }],
       },
     ];
     const staleNearCassette = fixture.addEntity('far_cassette', {
@@ -641,7 +641,7 @@ describe('Parser world model context', () => {
       components: [{ type: 'Item' }],
       spatial: { parentNodeId: 'Walk_main', relation: 'in' },
     });
-    staleNearCassette.x = 5;
+    staleNearCassette.x = 200;
     staleNearCassette.y = 0;
 
     const builder = new ParserWorldModelBuilder(fixture.game as any);
