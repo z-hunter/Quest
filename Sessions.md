@@ -4578,3 +4578,63 @@ The commit includes the runtime fix, prompt/documentation updates, and regressio
 - В рабочем дереве намеренно оставлены несвязанные изменения в `.gitignore` и `progress.md`; они не входят в последний фикс.
 - Временные Playwright-скриншоты не отслеживаются Git.
 - NotebookLM readiness в начале сессии сообщил истёкшую авторизацию; автоматическое восстановление было запущено codex-doctor. Синхронизация wrap-up должна подтвердить фактический CLI status и при необходимости остановиться на re-auth.
+
+## Session Entry - 2026-08-19 18:20 +03:00
+
+# Session Summary
+
+## Session Goals
+
+- Разобрать регрессию Puppet Master: NPC не могла заменить разряженные батарейки в пульте на свежие.
+- Восстановить корректную работу скрытых, но раскрытых конкретному Actor предметов.
+- Зафиксировать единый контракт Text Assets для индивидуальных и групповых TA, включая регистрозависимые файловые системы.
+
+## What Was Implemented
+
+### 1. Единый семантический резолвер Text Assets
+
+- `TextAssetManager` разрешает поля для каждого объекта в порядке: индивидуальный TA, затем group TA в порядке тегов.
+- Приоритет применяется к каждому полю отдельно: индивидуальный TA может переопределить только `title`, сохранив group fallback для остальных полей.
+- Group TA признан полноценным источником семантики: group `title` делает объект видимым для parser и Puppet Master.
+- Ключи TA-кэша нормализуются без учёта регистра, а путь запроса сохраняет авторское написание ID. Это исключает две разные сущности, отличающиеся только регистром, и не ломает загрузку на case-sensitive ФС при согласованных ID/именах файлов.
+- Редактор теперь создаёт/открывает/переименовывает индивидуальный TA, но предпросмотр Title строит полной той же цепочкой, что игра и PM.
+
+### 2. Контекст PM, скрытые вложения и загрузка сцен
+
+- Раскрытие `hidden: lookable`/`examinable` теперь хранится по Actor, сохраняется в scene runtime snapshot и save state и не раскрывает предмет другим Actor автоматически.
+- Parser и PM получают семантически валидные вложенные предметы, если они видимы данному Actor; скрытые нераскрытые объекты исключаются.
+- Проверка PM-плана `TAKE` использует фактическую иерархию инвентаря и actor-aware perception, поэтому NPC может извлечь раскрытую старую батарейку из пульта перед `PUT` новой.
+- PM пакет для сцены, восстановленной из кэша, ждёт завершения preload её TA; контекст больше не строится по пустому кэшу.
+- У Actor в PM-контексте `title` теперь optional: ID никогда не подставляется вместо отсутствующего семантического Title.
+
+### 3. Редактор, контент и документация
+
+- Поле `Hidden` в редакторе показывается для всех применимых объектов.
+- Обновлены test scenes, prefab/TA батареи, `water` TA и добавлены ассеты/спрайты Verity.
+- `TextAssets.md` обновлён: порядок индивидуальный → group fallback, семантика group TA, поведение editor preview и правила case-sensitive/case-insensitive файловых систем.
+
+## Important Findings and Decisions
+
+- Причина регрессии не была отсутствием TA у батарейки: `#aaa.json` содержит `"title": "AAA batteries"`; group TA валиден.
+- `NPC.json` содержит `"title": "Linda"`. Надпись `ACTOR: NPC` в шапке редактора и записи вида `NPC @ scene` — это ID, не семантический Title.
+- `battery_aaa.json` сейчас явно содержит `"title": "battery_aaa"`; если нужно отображать `AAA batteries`, следует изменить это авторское поле или удалить его для применения group fallback.
+
+## Tests and Validation
+
+- `npm test -- tests/core/text-asset-manager.test.ts tests/npc/puppet-master.test.ts tests/editor/properties-panel-header.test.ts` — 149 tests passed.
+- `npm run typecheck` — passed.
+- `git diff --check` — passed.
+- Пользователь повторил тест `test_room1`; NPC успешно заменила батарейки.
+
+## Commit Created During the Session
+
+- `ba16677d6ac1e795d96f393f917328e7abc6e96e` — `Fix semantic TA resolution and NPC hidden-item context`.
+
+## Remaining Work / Next Recommended Steps
+
+- Нет обязательных follow-up по этой регрессии. При будущих case-only переименованиях ID и TA сохранять единое написание ID и имени файла.
+
+## Risks / Caveats / Non-Committed Changes
+
+- Рабочее дерево чистое после коммита.
+- Экспорт shared memory mirror для local RAG не завершился из-за существующей записи с некорректной UTF-8 кодировкой; сгенерированный `AgentMemory.md` поэтому пуст. Синхронизация NotebookLM при этом успешно заменила `GDD.md`, `Sessions.md`, `TextAssets.md` и `AgentMemory.md` как Markdown-источники.
