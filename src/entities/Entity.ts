@@ -64,7 +64,7 @@ export class Entity extends SceneObject {
     if (this._x === val) return;
     this._x = val;
     if (this.game.editor && this.game.editor.enabled) {
-      this.game.editor.selectionManager.notifyObjectChanged(this);
+      this.game.editor.selectionManager?.notifyObjectChanged?.(this);
     }
   }
 
@@ -77,7 +77,7 @@ export class Entity extends SceneObject {
     if (this._y === val) return;
     this._y = val;
     if (this.game.editor && this.game.editor.enabled) {
-      this.game.editor.selectionManager.notifyObjectChanged(this);
+      this.game.editor.selectionManager?.notifyObjectChanged?.(this);
     }
   }
 

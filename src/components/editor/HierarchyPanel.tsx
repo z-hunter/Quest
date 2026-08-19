@@ -498,7 +498,7 @@ export const HierarchyPanel: React.FC = () => {
 
     scene.camera.x = targetX;
     scene.camera.y = targetY;
-    scene.autoCenter = false; // Disable auto-follow
+    scene.suspendEditorCameraFollow?.();
     useEditorStore.getState().incrementObjectVersion();
   };
 

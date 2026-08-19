@@ -428,6 +428,7 @@ export class SceneEditor {
             s.camera.x = 0;
             s.camera.y = 0;
           }
+          s.suspendEditorCameraFollow?.();
           useEditorStore.getState().incrementObjectVersion();
         }
         break;

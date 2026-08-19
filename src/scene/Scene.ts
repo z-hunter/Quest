@@ -126,6 +126,8 @@ export class Scene {
   cameraSpeed: number;
   camDeadzoneX: number = 50;
   camDeadzoneY: number = 30;
+  editorCameraSuspended: boolean = false;
+  editorCameraAnchorPlayerPos: { x: number; y: number } | null = null;
 
   soundEnv: SceneSoundEnv = {
     audioMaxDistance: 10000,
@@ -230,6 +232,20 @@ export class Scene {
     // Explicitly reset any cached centering state
     this._centeringDirX = 0;
     this._centeringDirY = 0;
+  }
+
+  suspendEditorCameraFollow(): void {
+    this.editorCameraSuspended = true;
+    if (this.player) {
+      this.editorCameraAnchorPlayerPos = { x: this.player.x, y: this.player.y };
+    } else {
+      this.editorCameraAnchorPlayerPos = null;
+    }
+  }
+
+  resumeEditorCameraFollow(): void {
+    this.editorCameraSuspended = false;
+    this.editorCameraAnchorPlayerPos = null;
   }
 
   private normalizeSpatialPlacement(

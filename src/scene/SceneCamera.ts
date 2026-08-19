@@ -31,6 +31,26 @@ export function updateSceneCamera(
     return state;
   }
 
+  const isEditorOpen = Boolean(scene.game?.editor?.enabled);
+  if (isEditorOpen && scene.editorCameraSuspended) {
+    if (scene.editorCameraAnchorPlayerPos) {
+      const pDx = scene.player.x - scene.editorCameraAnchorPlayerPos.x;
+      const pDy = scene.player.y - scene.editorCameraAnchorPlayerPos.y;
+      if (Math.hypot(pDx, pDy) > 0.5) {
+        scene.resumeEditorCameraFollow();
+      } else {
+        scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+        return state;
+      }
+    } else {
+      scene.editorCameraAnchorPlayerPos = { x: scene.player.x, y: scene.player.y };
+      scene.collisionCamera = { x: scene.camera.x, y: scene.camera.y };
+      return state;
+    }
+  } else if (!isEditorOpen && scene.editorCameraSuspended) {
+    scene.resumeEditorCameraFollow();
+  }
+
   const playerParallax =
     typeof scene.player.parallax === 'number' && Math.abs(scene.player.parallax) > 0.000001
       ? scene.player.parallax

@@ -92,6 +92,7 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) => {
                   if (scene.camera) {
                     scene.camera.x = parseFloat(e.target.value);
+                    scene.suspendEditorCameraFollow?.();
                     incrementObjectVersion();
                   }
                 }}
@@ -106,6 +107,7 @@ export const SceneProperties: React.FC = () => {
                 onChange={(e) => {
                   if (scene.camera) {
                     scene.camera.y = parseFloat(e.target.value);
+                    scene.suspendEditorCameraFollow?.();
                     incrementObjectVersion();
                   }
                 }}
@@ -134,7 +136,12 @@ export const SceneProperties: React.FC = () => {
                 type="checkbox"
                 style={{ marginRight: '5px' }}
                 checked={!!scene.autoCenter}
-                onChange={(e) => handleChange('autoCenter', e.target.checked)}
+                onChange={(e) => {
+                  handleChange('autoCenter', e.target.checked);
+                  if (e.target.checked) {
+                    scene.resumeEditorCameraFollow?.();
+                  }
+                }}
               />
               Auto-Center on Player
             </label>

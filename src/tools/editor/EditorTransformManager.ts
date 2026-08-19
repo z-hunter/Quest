@@ -245,15 +245,8 @@ export class EditorTransformManager {
       this.isPanning = true;
       this.lastPanPos = { x: e.clientX, y: e.clientY };
 
-      // Disable Auto-Center automatically
       if (editor.game.sceneManager.currentScene) {
-        editor.game.sceneManager.currentScene.autoCenter = false;
-
-        // Notify UI immediately
-        const store = useEditorStore.getState();
-        if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-          store.incrementObjectVersion();
-        }
+        editor.game.sceneManager.currentScene.suspendEditorCameraFollow();
       }
       e.preventDefault();
       return;
@@ -576,13 +569,7 @@ export class EditorTransformManager {
       s.camera.x -= dx / s.camera.zoom;
       s.camera.y -= dy / s.camera.zoom;
 
-      if (s.autoCenter) {
-        s.autoCenter = false;
-        const store = useEditorStore.getState();
-        if (!store.selectedObjectId || store.selectedObjectId === 'SCENE') {
-          store.incrementObjectVersion();
-        }
-      }
+      s.suspendEditorCameraFollow();
 
       // React Properties Panel Update
       if (useEditorStore.getState().selectedObjectId === 'SCENE') {
