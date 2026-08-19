@@ -12,6 +12,7 @@ export type JsonDelta =
 
 export type SceneRuntimeSaveState = {
   revealedHiddenEntities: string[];
+  revealedHiddenEntitiesByActor?: Record<string, string[]>;
   parserNote: string;
   parserNoteNeedsCheck: boolean;
   entityParserNotes: Record<string, string>;
@@ -160,6 +161,18 @@ export function parseSaveState(input: unknown): SaveStateV1 {
         scene.runtime.revealedHiddenEntities,
         `scenes[${index}].runtime.revealedHiddenEntities`
       );
+      if (scene.runtime.revealedHiddenEntitiesByActor !== undefined) {
+        assert(
+          isObject(scene.runtime.revealedHiddenEntitiesByActor),
+          `scenes[${index}].runtime.revealedHiddenEntitiesByActor must be an object`
+        );
+        for (const [actorId, ids] of Object.entries(scene.runtime.revealedHiddenEntitiesByActor)) {
+          validateStringArray(
+            ids,
+            `scenes[${index}].runtime.revealedHiddenEntitiesByActor.${actorId}`
+          );
+        }
+      }
       assert(typeof scene.runtime.parserNote === 'string', `scenes[${index}].runtime.parserNote`);
       assert(
         typeof scene.runtime.parserNoteNeedsCheck === 'boolean',

@@ -137,7 +137,14 @@ export class ActorWorldQuery {
       return { visibility: 'unknown', interaction: 'blocked', approach: 'unreachable' };
     }
 
-    const accessState = getSceneTextLayerAccessState(scene, this.game, object);
+    const accessState = getSceneTextLayerAccessState(
+      scene,
+      this.game,
+      object,
+      undefined,
+      undefined,
+      scene.getRevealedHiddenEntities(actor)
+    );
     const location = this.getLocation(accessState, scene);
     if (held) {
       const visibility = accessState.hidden ? 'hidden' : 'visible';
@@ -227,12 +234,13 @@ export class ActorWorldQuery {
           if (item.disabled || visited.has(item.name)) continue;
           visited.add(item.name);
           const title = getTitle(item);
+          const perception = this.getObjectPerception(actor, item, true, scene);
           const groupIds = this.getObjectGroupIds(item);
           const states = ComponentSystem.getStateComponents(item).map((state) => ({
             id: state.id,
             value: ComponentSystem.getStateValue(item, state.id) ?? state.initialValue,
           }));
-          if (title) {
+          if (title && perception.visibility === 'visible') {
             items.push({
               id: item.name,
               title,

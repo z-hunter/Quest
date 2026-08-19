@@ -95,6 +95,7 @@ export type ActorSceneTransferOptions = {
 
 export type SceneRuntimeSnapshot = {
   revealedHiddenEntities: string[];
+  revealedHiddenEntitiesByActor?: Record<string, string[]>;
   parserNote: string;
   parserNoteNeedsCheck: boolean;
   entityParserNotes: Record<string, string>;
@@ -116,6 +117,7 @@ export class SceneManager {
   private authoredSceneData: Map<string, any>;
   private sceneRuntimeSnapshots: Map<string, SceneRuntimeSnapshot>;
   private sceneCacheMeta: Map<string, CachedSceneEntry>;
+  private sceneTextPreloads: Map<string, Promise<void>>;
   private sceneCacheBudget: number;
 
   constructor(game: IGame) {
@@ -126,6 +128,7 @@ export class SceneManager {
     this.authoredSceneData = new Map();
     this.sceneRuntimeSnapshots = new Map();
     this.sceneCacheMeta = new Map();
+    this.sceneTextPreloads = new Map();
 
     const memoryProfile = this.detectDeviceMemoryProfile();
     this.sceneCacheBudget = memoryProfile.sceneCacheBudget;
@@ -199,7 +202,7 @@ export class SceneManager {
     const index = scene.entities.indexOf(entity);
     if (index === -1) return;
     scene.entities.splice(index, 1);
-    scene.revealedHiddenEntities.delete(entity.name);
+    scene.forgetHiddenEntityReveal(entity.name);
     scene.subsceneEntities.delete(entity);
     if (scene.player === entity) {
       scene.player = null;
@@ -894,6 +897,12 @@ export class SceneManager {
     const scene = this.scenes.get(sceneId);
     if (!scene) return;
     scene.revealedHiddenEntities = new Set(snapshot.revealedHiddenEntities);
+    scene.revealedHiddenEntitiesByActor = new Map(
+      Object.entries(snapshot.revealedHiddenEntitiesByActor || {}).map(([actorId, ids]) => [
+        actorId,
+        new Set(ids),
+      ])
+    );
     scene.parserNote = snapshot.parserNote;
     scene.parserNoteNeedsCheck = snapshot.parserNoteNeedsCheck;
     scene.entityParserNotes = { ...snapshot.entityParserNotes };
@@ -908,6 +917,9 @@ export class SceneManager {
   private captureSceneRuntimeSnapshot(scene: Scene): SceneRuntimeSnapshot {
     return {
       revealedHiddenEntities: [...scene.revealedHiddenEntities],
+      revealedHiddenEntitiesByActor: Object.fromEntries(
+        [...scene.revealedHiddenEntitiesByActor].map(([actorId, ids]) => [actorId, [...ids]])
+      ),
       parserNote: scene.parserNote,
       parserNoteNeedsCheck: scene.parserNoteNeedsCheck,
       entityParserNotes: { ...scene.entityParserNotes },
@@ -1097,11 +1109,16 @@ export class SceneManager {
     const runtime = this.sceneRuntimeSnapshots.get(sceneId);
     this.cacheScene(scene, false);
     if (runtime) this.restoreSceneRuntimeSnapshot(sceneId, runtime);
-    void this.game.textAssets
+    const textPreload = this.game.textAssets
       .preloadScene(scene)
       .then(() => StateEventSystem.syncSceneStateParserNotes(this.game, scene));
+    this.sceneTextPreloads.set(scene.id, textPreload);
     void this.refreshSceneFootprint(scene.id);
     return scene;
+  }
+
+  waitForTextAssets(scene: Scene): Promise<void> {
+    return this.sceneTextPreloads.get(scene.id) || Promise.resolve();
   }
 
   private cacheScene(scene: Scene, pinned: boolean): void {

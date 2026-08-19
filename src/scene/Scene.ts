@@ -156,6 +156,7 @@ export class Scene {
   private _activeSubscene: string | null = null;
   public subsceneEntities: Set<SceneObject> = new Set();
   public revealedHiddenEntities: Set<string> = new Set();
+  public revealedHiddenEntitiesByActor: Map<string, Set<string>> = new Map();
   public parserNote: string = '';
   public entityParserNotes: Record<string, string> = {};
   public parserNoteNeedsCheck: boolean = false;
@@ -370,16 +371,33 @@ export class Scene {
     return this.normalizeSpatialPlacement((obj as any).spatial);
   }
 
-  isHiddenEntityRevealed(object: SceneObject | null | undefined): boolean {
-    if (!object) return false;
-    return this.revealedHiddenEntities.has(object.name);
+  getRevealedHiddenEntities(actor?: Actor | null): Set<string> {
+    if (!actor) return this.revealedHiddenEntities;
+    let revealed = this.revealedHiddenEntitiesByActor.get(actor.name);
+    if (!revealed) {
+      revealed = new Set();
+      this.revealedHiddenEntitiesByActor.set(actor.name, revealed);
+    }
+    return revealed;
   }
 
-  revealHiddenEntity(object: SceneObject | null | undefined): boolean {
+  isHiddenEntityRevealed(object: SceneObject | null | undefined, actor?: Actor | null): boolean {
     if (!object) return false;
-    if (this.revealedHiddenEntities.has(object.name)) return false;
-    this.revealedHiddenEntities.add(object.name);
+    return this.getRevealedHiddenEntities(actor).has(object.name);
+  }
+
+  revealHiddenEntity(object: SceneObject | null | undefined, actor?: Actor | null): boolean {
+    if (!object) return false;
+    const revealed = this.getRevealedHiddenEntities(actor);
+    if (revealed.has(object.name)) return false;
+    revealed.add(object.name);
+    if (actor === this.player) this.revealedHiddenEntities.add(object.name);
     return true;
+  }
+
+  forgetHiddenEntityReveal(id: string): void {
+    this.revealedHiddenEntities.delete(id);
+    this.revealedHiddenEntitiesByActor.forEach((revealed) => revealed.delete(id));
   }
 
   getParserNote(): string {
@@ -529,7 +547,7 @@ export class Scene {
       if (staleEntities.length > 0) {
         this.entities = this.entities.filter((candidate) => candidate.name !== id);
         for (const stale of staleEntities) {
-          this.revealedHiddenEntities.delete(stale.name);
+          this.forgetHiddenEntityReveal(stale.name);
           this.subsceneEntities.delete(stale);
           if (this.player === stale) {
             this.player = null;
@@ -579,7 +597,7 @@ export class Scene {
     const index = this.entities.indexOf(entity);
     if (index > -1) {
       this.entities.splice(index, 1);
-      this.revealedHiddenEntities.delete(entity.name);
+      this.forgetHiddenEntityReveal(entity.name);
       if (this.subsceneEntities.has(entity)) {
         this.subsceneEntities.delete(entity);
       }
@@ -594,7 +612,7 @@ export class Scene {
     const index = this.triggerboxes.indexOf(triggerbox);
     if (index > -1) {
       this.triggerboxes.splice(index, 1);
-      this.revealedHiddenEntities.delete(triggerbox.name);
+      this.forgetHiddenEntityReveal(triggerbox.name);
       if (this.subsceneEntities.has(triggerbox)) {
         this.subsceneEntities.delete(triggerbox);
       }
@@ -609,7 +627,7 @@ export class Scene {
     const index = this.walkbox.indexOf(walkbox);
     if (index > -1) {
       this.walkbox.splice(index, 1);
-      this.revealedHiddenEntities.delete(walkbox.name);
+      this.forgetHiddenEntityReveal(walkbox.name);
       if (this.subsceneEntities.has(walkbox)) {
         this.subsceneEntities.delete(walkbox);
       }
@@ -636,6 +654,9 @@ export class Scene {
     const nextName = String(name || '').trim();
     if (!nextName || previousName === nextName) return;
 
+    const existing = this.getObjectByName(nextName);
+    if (existing && existing !== object) return;
+
     object.name = nextName;
     const allObjects = [...this.entities, ...this.walkbox, ...this.triggerboxes, ...this.folders];
     allObjects.forEach((candidate) => {
@@ -646,9 +667,23 @@ export class Scene {
       };
     });
 
+    if (object instanceof Entity || this.entities.some((candidate) => candidate === object)) {
+      if (previousName in this.entityParserNotes) {
+        this.entityParserNotes[nextName] = this.entityParserNotes[previousName];
+        delete this.entityParserNotes[previousName];
+      }
+      if (previousName in this.entityParserNoteNeedsCheck) {
+        this.entityParserNoteNeedsCheck[nextName] = this.entityParserNoteNeedsCheck[previousName];
+        delete this.entityParserNoteNeedsCheck[previousName];
+      }
+    }
+
     if (this.revealedHiddenEntities.delete(previousName)) {
       this.revealedHiddenEntities.add(nextName);
     }
+    this.revealedHiddenEntitiesByActor.forEach((revealed) => {
+      if (revealed.delete(previousName)) revealed.add(nextName);
+    });
     if (this._activeSubscene === previousName) this._activeSubscene = nextName;
   }
 

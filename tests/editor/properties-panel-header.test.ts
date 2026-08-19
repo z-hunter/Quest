@@ -118,4 +118,171 @@ describe('PropertiesPanel header dynamic update', () => {
       container.remove();
     });
   });
+
+  it('rejects whitespace-only rename and preserves existing selection and object name', async () => {
+    const mockObject: any = {
+      name: 'npc_guard',
+      type: 'Actor',
+      x: 100,
+      y: 200,
+      components: [],
+    };
+
+    const mockScene: any = {
+      id: 'test_scene',
+      entities: [mockObject],
+      walkbox: [],
+      triggerboxes: [],
+      folders: [],
+      camera: { x: 0, y: 0 },
+      getEntityParserNote: vi.fn().mockReturnValue(''),
+      renameObject: vi.fn(),
+    };
+
+    const mockGame: any = {
+      settings: { editor: { uiScale: 1 } },
+      sceneManager: { currentScene: mockScene },
+      editor: {
+        selectedObject: mockObject,
+        saveUndoState: vi.fn(),
+      },
+      textAssets: {
+        readObjectAssetById: vi.fn().mockResolvedValue(null),
+        getResolvedObjectAssetField: vi.fn().mockReturnValue(''),
+        getResolvedObjectField: vi.fn().mockReturnValue(''),
+        getObjectAssetProjectPath: vi.fn().mockReturnValue(''),
+      },
+      showMessage: vi.fn(),
+    };
+
+    Game.instance = mockGame;
+
+    useEditorStore.getState().selectObjects(['Actor:npc_guard'], 'npc_guard', 'Actor');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertiesPanel));
+    });
+
+    const idInput = container.querySelector(
+      '.properties-section-block[data-section="0"] input'
+    ) as HTMLInputElement | null;
+    expect(idInput).not.toBeNull();
+
+    function setInputValue(input: HTMLInputElement, value: string) {
+      const setter = Object.getOwnPropertyDescriptor(
+        domWindow.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new domWindow.Event('input', { bubbles: true }));
+    }
+
+    await act(async () => {
+      if (idInput) {
+        setInputValue(idInput, '   ');
+        idInput.dispatchEvent(new domWindow.Event('change', { bubbles: true }));
+        idInput.dispatchEvent(new domWindow.Event('blur', { bubbles: false }));
+      }
+    });
+
+    expect(mockObject.name).toBe('npc_guard');
+    expect(useEditorStore.getState().selectedObjectId).toBe('npc_guard');
+    expect(useEditorStore.getState().selectedObjectKeys).toEqual(['Actor:npc_guard']);
+
+    await act(async () => {
+      root.unmount();
+      container.remove();
+    });
+  });
+
+  it('migrates text asset before completing rename and preserves existing name if migration fails', async () => {
+    const mockObject: any = {
+      name: 'npc_guard',
+      type: 'Actor',
+      x: 100,
+      y: 200,
+      components: [],
+    };
+
+    const mockScene: any = {
+      id: 'test_scene',
+      entities: [mockObject],
+      walkbox: [],
+      triggerboxes: [],
+      folders: [],
+      camera: { x: 0, y: 0 },
+      getEntityParserNote: vi.fn().mockReturnValue(''),
+      renameObject: vi.fn((obj: any, name: string) => {
+        obj.name = name;
+      }),
+    };
+
+    const duplicateMock = vi.fn().mockRejectedValue(new Error('Disk write failed'));
+
+    const mockGame: any = {
+      settings: { editor: { uiScale: 1 } },
+      sceneManager: { currentScene: mockScene },
+      editor: {
+        selectedObject: mockObject,
+        saveUndoState: vi.fn(),
+      },
+      textAssets: {
+        readObjectAssetById: vi.fn().mockResolvedValue(null),
+        getResolvedObjectAssetField: vi.fn().mockReturnValue(''),
+        getResolvedObjectField: vi.fn().mockReturnValue(''),
+        getObjectAssetProjectPath: vi.fn().mockReturnValue(''),
+        duplicateObjectAssetIfExists: duplicateMock,
+      },
+      showMessage: vi.fn(),
+    };
+
+    Game.instance = mockGame;
+
+    useEditorStore.getState().selectObjects(['Actor:npc_guard'], 'npc_guard', 'Actor');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertiesPanel));
+    });
+
+    const idInput = container.querySelector(
+      '.properties-section-block[data-section="0"] input'
+    ) as HTMLInputElement | null;
+
+    function setInputValue(input: HTMLInputElement, value: string) {
+      const setter = Object.getOwnPropertyDescriptor(
+        domWindow.HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new domWindow.Event('input', { bubbles: true }));
+    }
+
+    await act(async () => {
+      if (idInput) {
+        setInputValue(idInput, 'npc_commander');
+        idInput.dispatchEvent(new domWindow.Event('change', { bubbles: true }));
+        idInput.dispatchEvent(new domWindow.Event('focusout', { bubbles: true }));
+        idInput.dispatchEvent(new domWindow.Event('blur', { bubbles: false }));
+      }
+    });
+
+    // Duplicate was attempted
+    expect(duplicateMock).toHaveBeenCalledWith('npc_guard', 'npc_commander');
+    // But since migration failed, name and scene.renameObject was not applied
+    expect(mockObject.name).toBe('npc_guard');
+    expect(useEditorStore.getState().selectedObjectId).toBe('npc_guard');
+
+    await act(async () => {
+      root.unmount();
+      container.remove();
+    });
+  });
 });

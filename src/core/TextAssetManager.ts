@@ -1,5 +1,6 @@
 import type { Scene } from '../scene/Scene';
 import type { SceneObject } from '../entities/SceneObject';
+import { normalizeGroupIdList } from '../utils/GroupIds';
 import type { ParserLexiconAsset, ParserTrainingAsset } from '../mechanics/parserLanguage';
 import type { ParserCommandSpec } from '../mechanics/parserTypes';
 import {
@@ -487,11 +488,27 @@ export class TextAssetManager {
   private normalizeId(id: string): string {
     return String(id || '')
       .replace(/\//g, '\\')
+      .trim()
+      .toLowerCase();
+  }
+
+  private normalizePathId(id: string): string {
+    return String(id || '')
+      .replace(/\//g, '\\')
       .trim();
   }
 
+  getObjectTextAssetIds(obj: Pick<SceneObject, 'name' | 'groupID'>): string[] {
+    const groupIds = normalizeGroupIdList(obj?.groupID).split(',').filter(Boolean);
+    return [...new Set([obj?.name, ...groupIds].filter((id): id is string => !!id?.trim()))];
+  }
+
+  private getObjectAssets(obj: SceneObject): Array<TextAssetData | null | undefined> {
+    return this.getObjectTextAssetIds(obj).map((id) => this.objectCache.get(this.normalizeId(id)));
+  }
+
   private idToRelativePath(id: string): string {
-    return this.normalizeId(id).replace(/\\/g, '/');
+    return this.normalizePathId(id).replace(/\\/g, '/');
   }
 
   private idToUrlPath(id: string): string {
@@ -629,7 +646,9 @@ export class TextAssetManager {
     if (!forceReload && this.sceneCache.has(sceneId)) {
       return this.sceneCache.get(sceneId) || null;
     }
-    const data = this.normalizeSceneAssetData(await this.fetchJson(this.getSceneAssetUrl(sceneId)));
+    const data = this.normalizeSceneAssetData(
+      await this.fetchJson(this.getSceneAssetUrl(this.normalizePathId(scene.id)))
+    );
     this.sceneCache.set(sceneId, data);
     return data;
   }
@@ -652,7 +671,7 @@ export class TextAssetManager {
       return this.objectCache.get(normalizedId) || null;
     }
     const data = this.normalizeObjectAssetData(
-      await this.fetchJson(this.getObjectAssetUrl(normalizedId))
+      await this.fetchJson(this.getObjectAssetUrl(this.normalizePathId(objectId)))
     );
     this.objectCache.set(normalizedId, data);
     return data;
@@ -661,8 +680,8 @@ export class TextAssetManager {
   async preloadScene(scene: Scene): Promise<void> {
     await this.readSceneAsset(scene, true);
     await Promise.all(
-      [...(scene.entities || []), ...(scene.triggerboxes || [])].map((object: SceneObject) =>
-        this.readObjectAsset(object, true)
+      [...(scene.entities || []), ...(scene.triggerboxes || [])].flatMap((object: SceneObject) =>
+        this.getObjectTextAssetIds(object).map((id) => this.readObjectAssetById(id, true))
       )
     );
   }
@@ -796,10 +815,12 @@ export class TextAssetManager {
     if (obj?.type === 'Walkbox' && field === 'title') {
       return this.getServiceText('engine.floor_label');
     }
-    const objectId = this.normalizeId(obj?.name || '');
-    const asset = objectId ? this.objectCache.get(objectId) : null;
     const fallback = field === 'description' ? (obj as any).description || null : null;
-    return this.resolveField(asset, obj?.textRedirects || null, field, fallback);
+    for (const asset of this.getObjectAssets(obj)) {
+      const value = this.resolveField(asset, obj?.textRedirects || null, field, null);
+      if (value !== null) return value;
+    }
+    return fallback;
   }
 
   getResolvedObjectAssetField(objectId: string, field: string): string | null {
@@ -807,10 +828,7 @@ export class TextAssetManager {
   }
 
   hasAuthoredObjectTitle(obj: SceneObject): boolean {
-    const objectId = this.normalizeId(obj?.name || '');
-    const asset = objectId ? this.objectCache.get(objectId) : null;
-    const title = this.resolveField(asset, obj?.textRedirects || null, 'title', null);
-    return !!title?.trim();
+    return !!this.getResolvedObjectField(obj, 'title')?.trim();
   }
 
   getResolvedObjectListField(obj: SceneObject, field: string): string[] {

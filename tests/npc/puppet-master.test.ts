@@ -1288,6 +1288,18 @@ describe('NpcPuppetMaster', () => {
     });
   });
 
+  it('does not turn an Actor id into a semantic title', () => {
+    const fixture = createSceneFixture();
+    const npc = new Actor(fixture.game, 20, 20, 10, 10, 'technical_npc');
+    npc.components = [{ type: 'Actor' }, { type: 'NPC', memory: '' }];
+    fixture.scene.addEntity(npc);
+
+    const context = new NpcWorldModelBuilder(fixture.game).build(fixture.scene).npcs[0];
+
+    expect(context).not.toHaveProperty('title');
+    expect(context.actors).toContainEqual({ id: npc.name });
+  });
+
   it('includes an autonomous NPC inventory from its non-current scene', () => {
     const fixture = createSceneFixture();
     const corridor = fixture.addScene('corridor', 'Corridor', 'A corridor.');
@@ -3771,6 +3783,7 @@ describe('NpcPuppetMaster', () => {
         { type: 'State', id: 'charge_percent', valueType: 'number', initialValue: 0, value: 0 },
       ],
     });
+    depleted.hidden = 'examinable';
     depleted.groupID = '#aaa';
     const replacement = fixture.addEntity('replacement_cell', {
       title: 'Power cell',
@@ -3790,6 +3803,7 @@ describe('NpcPuppetMaster', () => {
     expect(fixture.game.inventoryManager.addInventoryEntity(npc, replacement, 'in').status).toBe(
       'ok'
     );
+    fixture.scene.revealHiddenEntity(depleted, npc);
 
     const context = new NpcWorldModelBuilder(fixture.game)
       .build(fixture.scene)
@@ -3856,6 +3870,7 @@ describe('NpcPuppetMaster', () => {
         { type: 'State', id: 'charge_percent', valueType: 'number', initialValue: 0, value: 0 },
       ],
     });
+    depleted.hidden = 'examinable';
     depleted.groupID = '#aaa';
     const replacement = fixture.addEntity('replacement_cell', {
       title: 'Replacement power cell',
@@ -3879,6 +3894,7 @@ describe('NpcPuppetMaster', () => {
     expect(fixture.game.inventoryManager.addInventoryEntity(npc, replacement, 'in').status).toBe(
       'ok'
     );
+    fixture.scene.revealHiddenEntity(depleted, npc);
 
     const provider = new MockProvider(
       JSON.stringify({

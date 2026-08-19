@@ -26,17 +26,35 @@ System-level text assets live under `public/text/system/`. The current parser/GM
 
 Since scene/object IDs according to GDD can contain paths like "building\room", which means that the 'room.json scene' is located in the 'building' folder, there may be subfolders inside these folders.
 
-## Group-tag assets in the editor
+## Individual and group object assets
 
-For editor TA controls, an object with one or more `Group #ID` tags uses its first normalized tag as
-the asset ID. For example, an object tagged `#aaa` displays and edits
-`public/text/objects/#aaa.json`; without a group tag it uses
-`public/text/objects/<object-id>.json`.
+Each object has an ordered list of TA candidates:
 
-The editor's TA path, title preview, `Open TA`, reload, and `DEL. TA` always use that same file.
-The `#` remains part of the literal filename. It is URL-encoded during web reads and, when Vite's
-static server falls back to its HTML entrypoint, the editor reads the literal project path through
-the existing file API.
+1. its individual asset: `public/text/objects/<object-id>.json`;
+2. its `Group #ID` assets, in tag order: `public/text/objects/#<group-id>.json`.
+
+Fields are resolved independently in that order. An individual value wins; a group value is used
+only when the individual TA does not provide that field. Thus an individual TA may override only
+`title` while inheriting `description`, `synonyms`, and other missing fields from its group TA.
+Group TAs are fully semantic: a `title` received from a group TA makes the object visible to the
+parser and Puppet Master just like an individual `title` does.
+
+The editor opens, creates, renames, and deletes the individual TA. Its Title preview resolves the
+complete candidate chain, so it matches the title used by the game, parser, and Puppet Master.
+The `#` remains part of a group TA's literal filename and is URL-encoded during web reads.
+
+## ID spelling and case-sensitive filesystems
+
+Object and scene IDs are compared case-insensitively by the TA cache. IDs that differ only by case
+are therefore one logical ID: never create separate assets such as `batteryAAA.json` and
+`batteryaaa.json` merely to distinguish letter case.
+
+The requested file path keeps the spelling authored by the object's ID. This is required on a
+case-sensitive filesystem: an object named `NPC` loads `public/text/objects/NPC.json`, while an
+object named `battery_aaa` loads `public/text/objects/battery_aaa.json`. On a case-insensitive
+filesystem either request spelling resolves to the same physical file, but the project must still
+use one consistent spelling for each logical ID. In particular, rename an ID and its TA together;
+do not rely on case-only filename differences.
 
 ## Main rules
 

@@ -1,10 +1,28 @@
 {
   "id": "erika",
-  "name": "New Scene",
-  "description": "You are in New Scene.",
+  "name": "Room A",
+  "description": "You are in Room A.",
   "textRedirects": {},
   "filename": "erika",
-  "walkbox": [],
+  "walkbox": [
+    {
+      "name": "Walk_510",
+      "type": "Walkbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
+      "mode": "Add"
+    }
+  ],
   "triggerboxes": [
     {
       "name": "ex",
@@ -79,16 +97,16 @@
       "parallax": 1,
       "poly": [
         {
-          "x": -905.7598968400505,
-          "y": 41.10545335563857
+          "x": -861.398725976424,
+          "y": 34.176805794151335
         },
         {
-          "x": -917.7598968400505,
-          "y": 7.1054533556385735
+          "x": -873.398725976424,
+          "y": 0.1768057941513348
         },
         {
-          "x": -955.7598968400505,
-          "y": 29.105453355638573
+          "x": -924.6388291363735,
+          "y": 30.07135243851276
         }
       ],
       "script": ""
@@ -126,6 +144,23 @@
           "y": -1
         }
       ],
+      "script": ""
+    },
+    {
+      "name": "Trig_721",
+      "type": "Triggerbox",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "parallax": 1,
+      "poly": [],
       "script": ""
     }
   ],
@@ -165,7 +200,8 @@
         },
         {
           "type": "WalkBox",
-          "mode": "Invert"
+          "mode": "Invert",
+          "perspectiveWalk3D": true
         }
       ],
       "layer": 0,
@@ -228,6 +264,96 @@
       "colliderHeight": 0
     },
     {
+      "name": "miles",
+      "type": "Actor",
+      "locked": false,
+      "disabled": false,
+      "groupID": null,
+      "customName": "",
+      "textRedirects": {},
+      "interactions": {},
+      "components": [
+        {
+          "type": "Actor"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow",
+          "offsetX": -70,
+          "offsetY": -25,
+          "triggerId": "#f"
+        },
+        {
+          "type": "Inventory",
+          "capacity": 10,
+          "groups": [],
+          "protected": true,
+          "items": [],
+          "relation": "in"
+        },
+        {
+          "type": "Shadow",
+          "shadowQuadId": "shadow2",
+          "offsetX": -12,
+          "offsetY": -14,
+          "triggerId": "#F2"
+        }
+      ],
+      "layer": 0,
+      "visible": true,
+      "hidden": false,
+      "spatial": {
+        "parentNodeId": "floor",
+        "relation": "on"
+      },
+      "parallax": 0.8430343543530503,
+      "x": 11.2992022194454,
+      "y": 37.21737470147117,
+      "width": 103.34248340888465,
+      "height": 247.18404815368356,
+      "baseWidth": 148,
+      "baseHeight": 354,
+      "spriteName": "miles2_ds-idle-down.json",
+      "color": "#00ffff",
+      "scale": 0.6982600230330044,
+      "refScale": 0.84,
+      "modelScale": 0.84,
+      "depthSortMode": "y",
+      "ignoreScaling": false,
+      "animationSpeed": 53,
+      "opacity": 1,
+      "blendMode": "source-over",
+      "blur": 0,
+      "brightness": 1,
+      "saturation": 1,
+      "contrast": 1,
+      "hueShift": 0,
+      "flipX": false,
+      "flipY": false,
+      "isPlayer": true,
+      "speed": 0.24,
+      "perceptionRadius": 600,
+      "direction": "down",
+      "animSets": {
+        "idle": {
+          "id": "idle",
+          "up": "miles2_ds-idle-up.json",
+          "down": "miles2_ds-idle-down.json",
+          "left": "miles2_ds-idle-left.json",
+          "right": ""
+        },
+        "walk": {
+          "id": "walk",
+          "up": "miles2_ds-wlk-up.json",
+          "down": "miles2_ds-walk-down.json",
+          "left": "miles2_ds-walk-left.json",
+          "right": ""
+        }
+      },
+      "colliderWidth": 88,
+      "colliderHeight": 4
+    },
+    {
       "name": "Quad_64",
       "type": "Quad",
       "locked": false,
@@ -261,7 +387,7 @@
           "y": -10.782594419843486,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 1
           }
@@ -271,7 +397,7 @@
           "y": -9.782594419843486,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 0
           }
@@ -345,7 +471,7 @@
           "y": -9.782594419843486,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 0
           }
@@ -355,7 +481,7 @@
           "y": 112,
           "p": 1,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 3
           }
@@ -429,7 +555,7 @@
           "y": 112,
           "p": 1,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 2
           }
@@ -439,7 +565,7 @@
           "y": -10.782594419843486,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 1
           }
@@ -491,16 +617,16 @@
         "parentNodeId": "floor",
         "relation": "in"
       },
-      "parallax": 0.723607501873019,
-      "x": 125.99999967194688,
-      "y": 5.000000546583564,
-      "width": 80.00000000025504,
-      "height": 136.00000000043357,
-      "baseWidth": 113.81775024573125,
-      "baseHeight": 193.49017541774313,
+      "parallax": 0.7502776869711504,
+      "x": 142.99999896179398,
+      "y": 13.000000798121318,
+      "width": 83.26320600149563,
+      "height": 141.54745020254273,
+      "baseWidth": 113.81775024573106,
+      "baseHeight": 193.49017541774305,
       "spriteName": "chair",
       "color": "#AAAAAA",
-      "scale": 0.7028780645157362,
+      "scale": 0.7315485134939975,
       "refScale": 1,
       "modelScale": 1,
       "depthSortMode": "y",
@@ -517,96 +643,6 @@
       "flipY": false,
       "colliderWidth": 0,
       "colliderHeight": 0
-    },
-    {
-      "name": "miles",
-      "type": "Actor",
-      "locked": false,
-      "disabled": false,
-      "groupID": null,
-      "customName": "",
-      "textRedirects": {},
-      "interactions": {},
-      "components": [
-        {
-          "type": "Actor"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow",
-          "offsetX": -70,
-          "offsetY": -25,
-          "triggerId": "#f"
-        },
-        {
-          "type": "Inventory",
-          "capacity": 10,
-          "groups": [],
-          "protected": true,
-          "items": ["water"],
-          "relation": "in"
-        },
-        {
-          "type": "Shadow",
-          "shadowQuadId": "shadow2",
-          "offsetX": -12,
-          "offsetY": -14,
-          "triggerId": "#F2"
-        }
-      ],
-      "layer": 0,
-      "visible": true,
-      "hidden": false,
-      "spatial": {
-        "parentNodeId": "floor",
-        "relation": "on"
-      },
-      "parallax": 0.8828641149096622,
-      "x": 69.55623313259129,
-      "y": 47.4022942994866,
-      "width": 108.66549177314249,
-      "height": 259.9161087006246,
-      "baseWidth": 148,
-      "baseHeight": 354,
-      "spriteName": "miles2_ds-idle-down.json",
-      "color": "#00ffff",
-      "scale": 0.7342262957644763,
-      "refScale": 0.84,
-      "modelScale": 0.84,
-      "depthSortMode": "y",
-      "ignoreScaling": false,
-      "animationSpeed": 53,
-      "opacity": 1,
-      "blendMode": "source-over",
-      "blur": 0,
-      "brightness": 1,
-      "saturation": 1,
-      "contrast": 1,
-      "hueShift": 0,
-      "flipX": false,
-      "flipY": false,
-      "isPlayer": true,
-      "speed": 0.24,
-      "perceptionRadius": 600,
-      "direction": "down",
-      "animSets": {
-        "idle": {
-          "id": "idle",
-          "up": "miles2_ds-idle-up.json",
-          "down": "miles2_ds-idle-down.json",
-          "left": "miles2_ds-idle-left.json",
-          "right": ""
-        },
-        "walk": {
-          "id": "walk",
-          "up": "miles2_ds-wlk-up.json",
-          "down": "miles2_ds-walk-down.json",
-          "left": "miles2_ds-walk-left.json",
-          "right": ""
-        }
-      },
-      "colliderWidth": 88,
-      "colliderHeight": 4
     },
     {
       "name": "battery_aaa",
@@ -633,16 +669,16 @@
         "parentNodeId": "floor",
         "relation": "in"
       },
-      "parallax": 0.6118605046277988,
-      "x": -8.894647035110136,
-      "y": -9.12759856108162,
-      "width": 228.43803689590544,
-      "height": 211.30518412871254,
+      "parallax": 0.6000009155097481,
+      "x": -13.376346982769117,
+      "y": -10.184158852428844,
+      "width": 223.44038579581058,
+      "height": 206.68235686112482,
       "baseWidth": 80,
       "baseHeight": 74,
       "spriteName": "aaa",
       "color": "#AAAAAA",
-      "scale": 2.855475461198818,
+      "scale": 2.7930048224476325,
       "refScale": 4.9,
       "modelScale": 4.9,
       "depthSortMode": "y",
@@ -684,7 +720,7 @@
           "y": 112,
           "p": 1,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 3
           }
@@ -694,7 +730,7 @@
           "y": 112,
           "p": 1,
           "binding": {
-            "targetName": "Quad_906",
+            "targetName": "floor",
             "type": "vertex",
             "index": 2
           }
@@ -820,7 +856,7 @@
       "colliderHeight": 0
     },
     {
-      "name": "Quad_1",
+      "name": "door2",
       "type": "Quad",
       "locked": false,
       "disabled": false,
@@ -833,30 +869,30 @@
       "visible": true,
       "hidden": false,
       "parallax": 1,
-      "x": 300.32610461585136,
-      "y": -149.98084323507018,
+      "x": 330.1967121956573,
+      "y": -127.14779302499858,
       "ignoreScaling": true,
       "depthScalingVersion": 1,
       "vertices": [
         {
-          "x": 289,
-          "y": -234,
-          "p": 0.8666666666666667
-        },
-        {
-          "x": 328,
-          "y": -250,
+          "x": 278,
+          "y": -220,
           "p": 0.7333333333333334
         },
         {
-          "x": 320,
-          "y": 61,
-          "p": 0.7333333333333334
+          "x": 346,
+          "y": -229,
+          "p": 0.8666666666666667
         },
         {
-          "x": 291.57610461585136,
-          "y": 8.019156764929775,
+          "x": 337,
+          "y": 39,
           "p": 0.8666666666666667
+        },
+        {
+          "x": 297,
+          "y": 19,
+          "p": 0.8
         }
       ],
       "spriteName": null,
@@ -905,16 +941,16 @@
         "parentNodeId": "floor",
         "relation": "in"
       },
-      "parallax": 0.9673599614062189,
-      "x": -195.32541755809547,
-      "y": 89.51180327042898,
-      "width": 155.15784292956673,
-      "height": 164.42099773133188,
+      "parallax": 0.9541565833696302,
+      "x": -124.78785882601801,
+      "y": 83.57407596626086,
+      "width": 152.87550766651805,
+      "height": 162.00240364660868,
       "baseWidth": 268,
       "baseHeight": 284,
       "spriteName": "office-plant",
       "color": "#AAAAAA",
-      "scale": 0.5789471751103236,
+      "scale": 0.5704309987556644,
       "refScale": 0.6,
       "modelScale": 0.6,
       "depthSortMode": "y",
@@ -998,16 +1034,16 @@
         "parentNodeId": "floor",
         "relation": "on"
       },
-      "parallax": 0.7667572677402574,
-      "x": 232.3220840111974,
-      "y": 13.083140334516,
-      "width": 72.51527453347163,
-      "height": 218.88251068858943,
-      "baseWidth": 217.00000000000003,
-      "baseHeight": 655,
+      "parallax": 0.9796452885695512,
+      "x": 249.36824331242875,
+      "y": 98.35734807161488,
+      "width": 94.6642825946626,
+      "height": 285.73781151845196,
+      "baseWidth": 216.9999999999998,
+      "baseHeight": 655.0000000000002,
       "spriteName": "linda_idle_down.json",
       "color": "#36d87fff",
-      "scale": 0.334171772043648,
+      "scale": 0.43624093361595706,
       "refScale": 0.446,
       "modelScale": 0.446,
       "depthSortMode": "y",
@@ -1046,7 +1082,7 @@
       "colliderHeight": 15.029586483237711
     },
     {
-      "name": "Quad_193",
+      "name": "floor2",
       "type": "Quad",
       "locked": false,
       "disabled": false,
@@ -1056,14 +1092,18 @@
       "interactions": {},
       "components": [
         {
-          "type": "3d-parallax"
-        },
-        {
           "type": "Surface",
-          "relation": "in",
+          "relation": "on",
           "capacity": 8,
           "groups": [],
-          "items": []
+          "items": [
+            {
+              "id": "water"
+            }
+          ]
+        },
+        {
+          "type": "3d-parallax"
         },
         {
           "type": "WalkBox",
@@ -1148,7 +1188,7 @@
       "visible": true,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "Quad_193",
+        "parentNodeId": "floor2",
         "relation": "in"
       },
       "parallax": 1,
@@ -1182,7 +1222,7 @@
           "y": -64.48842449200414,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_193",
+            "targetName": "floor2",
             "type": "vertex",
             "index": 0
           }
@@ -1325,7 +1365,7 @@
           "y": -64.48842449200414,
           "p": 0.6,
           "binding": {
-            "targetName": "Quad_193",
+            "targetName": "floor2",
             "type": "vertex",
             "index": 0
           }
@@ -1501,22 +1541,22 @@
         }
       ],
       "layer": 0,
-      "visible": false,
+      "visible": true,
       "hidden": false,
       "spatial": {
-        "parentNodeId": "miles",
-        "relation": "in"
+        "parentNodeId": "floor2",
+        "relation": "on"
       },
-      "parallax": 0.8828641136221178,
-      "x": 69.55623313259129,
-      "y": 47.4022942994866,
-      "width": 36.71131477519112,
-      "height": 52.44473539313017,
-      "baseWidth": 42,
-      "baseHeight": 60,
+      "parallax": 0.8524327991730691,
+      "x": -642.667529678276,
+      "y": 15.432678915580961,
+      "width": 35,
+      "height": 44,
+      "baseWidth": 70,
+      "baseHeight": 88,
       "spriteName": "sofa",
       "color": "#AAAAAA",
-      "scale": 0.8740789232188362,
+      "scale": 0.5,
       "refScale": 1,
       "modelScale": 1,
       "depthSortMode": "y",
@@ -1536,15 +1576,40 @@
     }
   ],
   "folders": [],
+  "displayOrder": [
+    "floor",
+    "miles",
+    "Quad_64",
+    "Quad_815",
+    "Quad",
+    "Static_648",
+    "battery_aaa",
+    "Quad_517",
+    "door",
+    "door2",
+    "Static_219",
+    "linda",
+    "floor2",
+    "Quad_718",
+    "Quad_44",
+    "Quad_2",
+    "Quad_684",
+    "Static_577",
+    "water",
+    "ex",
+    "Trig_167",
+    "ex1",
+    "ex3"
+  ],
   "camera": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
+    "x": -1253.307199073334,
+    "y": -96.73399799117946,
+    "zoom": 0.40937003351821416
   },
-  "autoCenter": false,
+  "autoCenter": true,
   "cameraSpeed": 5,
-  "camDeadzoneX": 50,
-  "camDeadzoneY": 30,
+  "camDeadzoneX": 60,
+  "camDeadzoneY": 60,
   "soundEnv": {
     "audioMaxDistance": 10000,
     "reverbMaxDist": 1750,

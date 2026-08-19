@@ -399,18 +399,22 @@ export class GameSemanticAPI {
     return target.hidden === 'lookable' || target.hidden === 'examinable' ? target.hidden : false;
   }
 
-  private revealHiddenEntityForIntent(entity: SceneObject, intent: 'look' | 'examine'): boolean {
+  private revealHiddenEntityForIntent(
+    entity: SceneObject,
+    intent: 'look' | 'examine',
+    actor: Actor | null
+  ): boolean {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return false;
     const hiddenMode = this.getSemanticHiddenMode(entity);
     if (!hiddenMode) return false;
-    if (scene.isHiddenEntityRevealed(entity)) return false;
+    if (scene.isHiddenEntityRevealed(entity, actor)) return false;
     if (intent === 'look' && hiddenMode !== 'lookable') return false;
-    scene.revealHiddenEntity(entity);
+    scene.revealHiddenEntity(entity, actor);
     return true;
   }
 
-  private revealHiddenDescendantsForExamine(anchor: SceneObject): string[] {
+  private revealHiddenDescendantsForExamine(anchor: SceneObject, actor: Actor | null): string[] {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
     const revealed: string[] = [];
@@ -421,21 +425,24 @@ export class GameSemanticAPI {
         this.game,
         anchor.name,
         relation,
-        { includeHidden: true }
+        {
+          includeHidden: true,
+          revealedHiddenEntities: scene.getRevealedHiddenEntities(actor),
+        }
       ).filter(
         (accessState) =>
           accessState.hiddenReason === 'lookable' || accessState.hiddenReason === 'examinable'
       );
 
       revealableDescendants.forEach((accessState) => {
-        scene.revealHiddenEntity(accessState.object);
+        scene.revealHiddenEntity(accessState.object, actor);
         revealed.push(accessState.object.name);
       });
     }
     return revealed;
   }
 
-  private revealHiddenDescendantsForLook(anchor: SceneObject): string[] {
+  private revealHiddenDescendantsForLook(anchor: SceneObject, actor: Actor | null): string[] {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return [];
     const revealed: string[] = [];
@@ -446,11 +453,14 @@ export class GameSemanticAPI {
         this.game,
         anchor.name,
         relation,
-        { includeHidden: true }
+        {
+          includeHidden: true,
+          revealedHiddenEntities: scene.getRevealedHiddenEntities(actor),
+        }
       ).filter((accessState) => accessState.hiddenReason === 'lookable');
 
       revealableDescendants.forEach((accessState) => {
-        scene.revealHiddenEntity(accessState.object);
+        scene.revealHiddenEntity(accessState.object, actor);
         revealed.push(accessState.object.name);
       });
     }
@@ -627,7 +637,14 @@ export class GameSemanticAPI {
       return null;
     }
 
-    const accessState = getSceneTextLayerAccessState(scene, this.game, entity);
+    const accessState = getSceneTextLayerAccessState(
+      scene,
+      this.game,
+      entity,
+      undefined,
+      undefined,
+      activeActor ? scene.getRevealedHiddenEntities(activeActor) : undefined
+    );
     if (!accessState.blocked && !accessState.hidden) return null;
 
     const closedMessage =
@@ -825,12 +842,12 @@ export class GameSemanticAPI {
   // --- Main Semantic API ---
 
   getSeeMessage(target: SceneObject): string | null {
-    this.revealHiddenEntityForIntent(target, 'look');
     const scene = this.game.sceneManager.currentScene;
+    this.revealHiddenEntityForIntent(target, 'look', scene?.player || null);
     if (
       scene &&
       this.getSemanticHiddenMode(target) === 'examinable' &&
-      !scene.isHiddenEntityRevealed(target)
+      !scene.isHiddenEntityRevealed(target, scene.player)
     ) {
       return null;
     }
@@ -885,14 +902,14 @@ export class GameSemanticAPI {
     const scene = this.game.sceneManager.currentScene;
     const activeActor = actor || scene?.player || null;
     const isPlayerPath = !actor || activeActor === scene?.player;
-    this.revealHiddenEntityForIntent(entity, 'look');
+    this.revealHiddenEntityForIntent(entity, 'look', activeActor);
     const autoOpenOutcome = this.ensureSwitchTargetReady(entity, activeActor);
     if (autoOpenOutcome) return autoOpenOutcome;
 
     const blockedOutcome = this.getBlockedAccessOutcome(entity, activeActor);
     if (blockedOutcome) return blockedOutcome;
 
-    const discoveredEntityIds = this.revealHiddenDescendantsForLook(entity);
+    const discoveredEntityIds = this.revealHiddenDescendantsForLook(entity, activeActor);
     if (activeActor) this.faceActorTowardObservedObject(activeActor, entity);
 
     const interactionId =
@@ -1002,7 +1019,7 @@ export class GameSemanticAPI {
     const accessError = this.canExamineObject(entity, activeActor);
     if (accessError) return accessError;
 
-    const discoveredEntityIds = this.revealHiddenDescendantsForExamine(entity);
+    const discoveredEntityIds = this.revealHiddenDescendantsForExamine(entity, activeActor);
 
     const subsceneComponent = entity.components?.find(
       (component: any) => component?.type === 'Subscene'

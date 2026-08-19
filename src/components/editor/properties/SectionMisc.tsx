@@ -16,7 +16,6 @@ interface EditorObject {
 export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }) => {
   const { game, obj, handleChange, mode, setSectionRef } = usePropertiesContext();
   const o = obj as EditorObject;
-  const hasTitle = !!game.textAssets.getResolvedObjectField(o as any, 'title')?.trim();
 
   return (
     <div
@@ -100,25 +99,23 @@ export const SectionMisc: React.FC<SectionMiscProps> = ({ isTriggerbox, isQuad }
         </label>
       </div>
 
-      {hasTitle && (
-        <div className="e-row" style={{ marginTop: '8px' }}>
-          <label className="e-label" style={{ fontSize: '10px' }}>
-            Hidden
-          </label>
-          <Select
-            value={o.hidden === 'lookable' || o.hidden === 'examinable' ? o.hidden : 'false'}
-            onChange={(value) =>
-              handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
-            }
-            options={[
-              { value: 'false', label: 'False' },
-              { value: 'lookable', label: 'Lookable' },
-              { value: 'examinable', label: 'Examinable' },
-            ]}
-            style={{ width: '100%' }}
-          />
-        </div>
-      )}
+      <div className="e-row" style={{ marginTop: '8px' }}>
+        <label className="e-label" style={{ fontSize: '10px' }}>
+          Hidden
+        </label>
+        <Select
+          value={o.hidden === 'lookable' || o.hidden === 'examinable' ? o.hidden : 'false'}
+          onChange={(value) =>
+            handleChange('hidden', value === 'lookable' || value === 'examinable' ? value : false)
+          }
+          options={[
+            { value: 'false', label: 'False' },
+            { value: 'lookable', label: 'Lookable' },
+            { value: 'examinable', label: 'Examinable' },
+          ]}
+          style={{ width: '100%' }}
+        />
+      </div>
     </div>
   );
 };

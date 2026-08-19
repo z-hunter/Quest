@@ -72,7 +72,7 @@ function createHarness() {
 
 describe('SaveManager', () => {
   it('restores scene/NPC/item deltas, discoveries, parser and console runtime state', () => {
-    const { game, manager, room, hall, npc, key } = createHarness();
+    const { game, manager, room, hall, player, npc, key } = createHarness();
     room.entities = room.entities.filter((entity) => entity !== npc && entity !== key);
     hall.addEntity(npc);
     hall.addEntity(key);
@@ -103,6 +103,7 @@ describe('SaveManager', () => {
     key.spatial = { parentNodeId: 'guard', relation: 'in' };
     key.visible = false;
     room.revealedHiddenEntities.add('secret');
+    room.getRevealedHiddenEntities(player).add('secret');
     room.setParserNote('Door checked');
     room.markParserNoteNeedsCheck();
     room.setEntityParserNote('secret', 'The hidden panel is unlocked.');
@@ -177,6 +178,7 @@ describe('SaveManager', () => {
     ).toEqual(expect.objectContaining({ transientMemory: ['Arrived in Hall.'] }));
     expect(restoredKey.spatial).toEqual({ parentNodeId: 'guard', relation: 'in' });
     expect(restoredRoom.revealedHiddenEntities.has('secret')).toBe(true);
+    expect(restoredRoom.getRevealedHiddenEntities(restoredRoom.player).has('secret')).toBe(true);
     expect(restoredRoom.getParserNote()).toBe('Door checked');
     expect(restoredRoom.getParserNoteNeedsCheck()).toBe(true);
     expect(restoredRoom.getEntityParserNote('secret')).toBe('The hidden panel is unlocked.');

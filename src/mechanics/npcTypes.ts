@@ -155,7 +155,7 @@ export type NpcPuppetMasterResponse = {
 
 export type NpcActorContext = {
   id: string;
-  title: string;
+  title?: string;
   lore?: string;
   objectives?: NpcObjective[];
   memory?: string[];
@@ -172,7 +172,7 @@ export type NpcActorContext = {
       states?: Array<{ id: string; value: string | number | boolean }>;
     }>;
   };
-  actors: Array<{ id: string; title: string; lastSeenSceneId?: string }>;
+  actors: Array<{ id: string; title?: string; lastSeenSceneId?: string }>;
   visibleItemIds: string[];
   knownEntities: Array<{
     id: string;

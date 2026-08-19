@@ -7,6 +7,7 @@ import { NpcWorldModelBuilder } from './NpcWorldModelBuilder';
 import type { IGame } from '../core/IGame';
 import type { Scene } from '../scene/Scene';
 import { Actor } from '../entities/Actor';
+import { Entity } from '../entities/Entity';
 import type { ActorMoveResult } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import type {
@@ -972,8 +973,9 @@ export class NpcPuppetMaster {
     const rejectedPlans: NonNullable<NpcPuppetMasterDebugInfo['rejectedPlans']> = [];
     for (const plan of plans) {
       const scene = this.getNpcScene(plan.npcId);
+      const actor = scene?.getObjectByName(plan.npcId);
       const npc = worldModel.npcs.find((candidate) => candidate.id === plan.npcId);
-      if (!npc) continue;
+      if (!npc || !(actor instanceof Actor)) continue;
       const availableIds = new Set([
         ...(npc.inventory?.itemIds || []),
         ...(npc.entities || [])
@@ -981,12 +983,20 @@ export class NpcPuppetMaster {
           .map((entity) => entity.id),
       ]);
       // `itemIds` intentionally contains only the Actor's main inventory.
-      // Nested `inventory.items` are not already held at that level, but an
-      // accessible child may be extracted with TAKE before a subsequent PUT.
+      // Do not use the prompt projection as the authority for nested TAKE:
+      // hidden items can be semantically revealed to this actor yet remain
+      // absent from player-facing inventory text.
       const nestedTakeableIds = new Set(
-        (npc.inventory?.items || [])
-          .filter((item) => item.containerId !== plan.npcId)
-          .map((item) => item.id)
+        (scene?.getAllSceneObjects() || [])
+          .filter(
+            (item): item is Entity =>
+              item instanceof Entity &&
+              item !== actor &&
+              this.game.inventoryManager.isEntityWithinActorInventory(actor, item) &&
+              this.game.actorWorld.getObjectPerception(actor, item, true, scene).visibility ===
+                'visible'
+          )
+          .map((item) => item.name)
       );
       const knownItemIds = new Set(
         (npc.knownEntities || [])
@@ -3532,6 +3542,10 @@ export class NpcPuppetMaster {
     }
     this.pendingBatches.delete(sceneId);
     const { scene } = batch;
+    const waitForTextAssets = (this.game.sceneManager as any).waitForTextAssets;
+    if (typeof waitForTextAssets === 'function') {
+      await waitForTextAssets.call(this.game.sceneManager, scene);
+    }
     const continuationNpcIds = [...batch.npcIds].filter((npcId) =>
       this.tryExecutePendingContinuation(scene, npcId, batch.triggersByNpc.get(npcId) || [])
     );

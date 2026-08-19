@@ -71,6 +71,57 @@ describe('TextAssetManager', () => {
     expect(textAssets.getResolvedObjectAssetField('#lamps', 'title')).toBe('Lamps');
   });
 
+  it('resolves grouped Text Assets for runtime objects', () => {
+    const textAssets = new TextAssetManager();
+    (textAssets as any).objectCache.set('#aaa', { title: 'AAA batteries' });
+    (textAssets as any).objectCache.set('batteryaaa', { title: 'Individual battery' });
+
+    expect(
+      textAssets.getResolvedObjectField(
+        { name: 'batteryAAA', groupID: '#aaa', textRedirects: {} } as any,
+        'title'
+      )
+    ).toBe('Individual battery');
+    (textAssets as any).objectCache.delete('batteryaaa');
+    expect(
+      textAssets.getResolvedObjectField(
+        { name: 'batteryAAA', groupID: '#aaa', textRedirects: {} } as any,
+        'title'
+      )
+    ).toBe('AAA batteries');
+    expect(
+      textAssets.getObjectTextAssetIds({ name: 'batteryAAA', groupID: '#aaa' } as any)
+    ).toEqual(['batteryAAA', '#aaa']);
+  });
+
+  it('matches the authored battery and NPC Title resolution order', () => {
+    const textAssets = new TextAssetManager();
+    (textAssets as any).objectCache.set('npc', { title: 'Linda' });
+    (textAssets as any).objectCache.set('#aaa', { title: 'AAA batteries' });
+    (textAssets as any).objectCache.set('battery_aaa', { title: 'battery_aaa' });
+
+    expect(textAssets.getResolvedObjectField({ name: 'NPC' } as any, 'title')).toBe('Linda');
+    expect(
+      textAssets.getResolvedObjectField({ name: 'batteryAAA', groupID: '#aaa' } as any, 'title')
+    ).toBe('AAA batteries');
+    expect(
+      textAssets.getResolvedObjectField({ name: 'battery_aaa', groupID: '#aaa' } as any, 'title')
+    ).toBe('battery_aaa');
+  });
+
+  it('uses one case-insensitive key for object text assets', () => {
+    const textAssets = new TextAssetManager();
+    (textAssets as any).objectCache.set('batteryaaa', { title: 'AAA batteries' });
+
+    expect(
+      textAssets.getResolvedObjectField({ name: 'batteryAAA', textRedirects: {} } as any, 'title')
+    ).toBe('AAA batteries');
+    expect(textAssets.getObjectAssetProjectPath('batteryAAA')).toBe(
+      'public/text/objects/batteryAAA.json'
+    );
+    expect((textAssets as any).getObjectAssetUrl('NPC')).toBe('/text/objects/NPC.json');
+  });
+
   it('loads group-tagged assets without treating # as a URL fragment', async () => {
     const fetchMock = vi
       .fn()

@@ -159,7 +159,7 @@ export class NpcWorldModelBuilder {
   private buildNpcContext(scene: Scene, npc: Actor): NpcActorContext {
     const startedAt = this.now();
     const component = ComponentSystem.getNpcComponent(npc);
-    const title = this.getObjectTitle(npc) || npc.name;
+    const title = this.getObjectTitle(npc) || undefined;
     const objectives = this.getOrInitializeNpcObjectives(npc, component);
     const memory = this.getOrInitializeNpcMemory(npc, component);
     const transientMemory = normalizeNpcMemory(component?.transientMemory);
@@ -176,7 +176,7 @@ export class NpcWorldModelBuilder {
       .filter((event) => this.isSemanticallyVisibleEvent(scene, event))
       .slice(-12);
 
-    const actors = scene.entities
+    const actors: NpcActorContext['actors'] = scene.entities
       .filter(
         (entity): entity is Actor =>
           entity instanceof Actor &&
@@ -185,11 +185,13 @@ export class NpcWorldModelBuilder {
             this.game.actorWorld.getObjectPerception(npc, entity, true, scene).visibility ===
               'visible')
       )
-      .map((actor) => ({
-        id: actor.name,
-        title: this.getObjectTitle(actor) || actor.name,
-        lastSeenSceneId: undefined, // Default is current scene
-      }));
+      .map((actor) =>
+        compactRecord({
+          id: actor.name,
+          title: this.getObjectTitle(actor) || undefined,
+          lastSeenSceneId: undefined, // Default is current scene
+        })
+      );
     this.trace('pm_context_actor_perception', {
       npcId: npc.name,
       actors: actors.map((actor) => actor.id),
@@ -332,7 +334,7 @@ export class NpcWorldModelBuilder {
   private rememberObservedEntities(
     scene: Scene,
     npc: Actor,
-    actors: Array<{ id: string; title: string }>,
+    actors: Array<{ id: string; title?: string }>,
     objects: SceneObject[]
   ): void {
     const component = npc.components?.find(
@@ -346,6 +348,7 @@ export class NpcWorldModelBuilder {
     );
     const lastSeenAt = Date.now();
     for (const actor of actors) {
+      if (!actor.title) continue;
       const actorObject = scene.getObjectByName(actor.id);
       known[actor.id] = {
         id: actor.id,

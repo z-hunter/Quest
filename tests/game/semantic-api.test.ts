@@ -2312,11 +2312,14 @@ describe('Game semantic API', () => {
     expect(fixture.game.actorWorld.getObjectPerception(npc, examinable).visibility).toBe('hidden');
 
     expect(fixture.game.lookEntityForActor(npc, desk).status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(lookable)).toBe(true);
-    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(false);
+    expect(fixture.scene.isHiddenEntityRevealed(lookable, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(lookable, fixture.scene.player)).toBe(false);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, npc)).toBe(false);
+    expect(fixture.game.actorWorld.getObjectPerception(npc, lookable).visibility).toBe('visible');
 
     expect(fixture.game.examineEntityForActor(npc, desk).status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(examinable)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(examinable, fixture.scene.player)).toBe(false);
   });
 
   it('lets EXAMINE reveal lookable contents and reach nested objects through a nearby ancestor', () => {
@@ -2345,7 +2348,8 @@ describe('Game semantic API', () => {
     const outcome = fixture.game.examineEntityForActor(npc, pillow, { relation: 'under' });
 
     expect(outcome.status).toBe('ok');
-    expect(fixture.scene.isHiddenEntityRevealed(remote)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(remote, npc)).toBe(true);
+    expect(fixture.scene.isHiddenEntityRevealed(remote, fixture.scene.player)).toBe(false);
   });
 
   it('transparent closed contents use a generic blocked message unless clearly openable is set', () => {

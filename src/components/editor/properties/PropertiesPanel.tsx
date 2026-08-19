@@ -36,7 +36,7 @@ import { SettingsProperties } from './SettingsProperties';
 import { SectionParserNote } from './SectionParserNote';
 
 function getEditorTextAssetId(obj: { name?: string; groupID?: string | null }): string {
-  return normalizeGroupIdList(obj.groupID).split(',').find(Boolean) || obj.name || '';
+  return obj.name || normalizeGroupIdList(obj.groupID).split(',').find(Boolean) || '';
 }
 
 export const PropertiesPanel: React.FC = () => {
@@ -598,8 +598,17 @@ export const PropertiesPanel: React.FC = () => {
         const asset = forceReload
           ? await game.textAssets.readObjectAssetById(textAssetId, true)
           : await game.textAssets.readObjectAssetById(textAssetId, false);
-        setHasTextAsset(!!asset);
-        setResolvedTitle(game.textAssets.getResolvedObjectAssetField(textAssetId, 'title') || '');
+        const assetIds =
+          typeof (game.textAssets as any).getObjectTextAssetIds === 'function'
+            ? (game.textAssets as any).getObjectTextAssetIds(selected)
+            : [textAssetId];
+        const fallbackAssets = await Promise.all(
+          assetIds
+            .slice(1)
+            .map((id: string) => game.textAssets.readObjectAssetById(id, forceReload))
+        );
+        setHasTextAsset(!!asset || fallbackAssets.some(Boolean));
+        setResolvedTitle(game.textAssets.getResolvedObjectField(selected, 'title') || '');
         setTextAssetPath(game.textAssets.getObjectAssetProjectPath(textAssetId));
       }
     },
@@ -691,7 +700,7 @@ export const PropertiesPanel: React.FC = () => {
 
   // ─── handleChange ──────────────────────────────────────────────────────────
   const handleChange = React.useCallback(
-    (field: string, value: unknown, enforceNumber = false) => {
+    async (field: string, value: unknown, enforceNumber = false) => {
       if (!obj) return;
 
       if (selectedObjectType !== 'SETTINGS' && game?.editor) {
@@ -720,9 +729,43 @@ export const PropertiesPanel: React.FC = () => {
         selectedObjectType !== 'SETTINGS' &&
         selectedObjectType !== 'MULTI'
       ) {
-        const scene = game?.sceneManager?.currentScene;
-        if (scene && typeof scene.renameObject === 'function') scene.renameObject(obj, finalVal);
-        else obj[field] = finalVal;
+        const normalizedName = String(finalVal || '').trim();
+        if (!normalizedName) return;
+
+        const previousName = String(obj.name || '').trim();
+        if (normalizedName !== previousName) {
+          const oldTextAssetId = getEditorTextAssetId(obj);
+          const newTextAssetId = getEditorTextAssetId({ ...obj, name: normalizedName });
+
+          if (
+            oldTextAssetId &&
+            newTextAssetId &&
+            oldTextAssetId !== newTextAssetId &&
+            game?.textAssets &&
+            typeof (game.textAssets as any).duplicateObjectAssetIfExists === 'function'
+          ) {
+            try {
+              await (game.textAssets as any).duplicateObjectAssetIfExists(
+                oldTextAssetId,
+                newTextAssetId
+              );
+            } catch (err) {
+              console.error('Failed to migrate text asset:', err);
+              return;
+            }
+          }
+
+          const scene = game?.sceneManager?.currentScene;
+          if (scene && typeof scene.renameObject === 'function') {
+            scene.renameObject(obj, normalizedName);
+          } else {
+            obj[field] = normalizedName;
+          }
+
+          if (obj.name !== normalizedName) {
+            return;
+          }
+        }
       } else {
         obj[field] = finalVal;
       }
@@ -733,14 +776,17 @@ export const PropertiesPanel: React.FC = () => {
       incrementObjectVersion();
 
       if (field === 'name') {
+        const normalizedName = String(finalVal || '').trim();
         if (
+          normalizedName &&
+          obj.name === normalizedName &&
           selectedObjectType &&
           selectedObjectType !== 'SCENE' &&
           selectedObjectType !== 'SETTINGS' &&
           selectedObjectType !== 'MULTI'
         ) {
-          const newKey = `${selectedObjectType}:${finalVal}`;
-          useEditorStore.getState().selectObjects([newKey], finalVal, selectedObjectType);
+          const newKey = `${selectedObjectType}:${normalizedName}`;
+          useEditorStore.getState().selectObjects([newKey], normalizedName, selectedObjectType);
         }
         incrementHierarchyVersion();
       }
