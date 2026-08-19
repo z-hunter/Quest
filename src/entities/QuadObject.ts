@@ -1317,12 +1317,34 @@ export class QuadObject extends Entity {
     const p1 = (vertices[1].p ?? 1) * globalP;
     const p2 = (vertices[2].p ?? 1) * globalP;
     const p3 = (vertices[3].p ?? 1) * globalP;
-    return (
+    const flatParallax =
       (1 - safeU) * (1 - safeV) * p0 +
       safeU * (1 - safeV) * p1 +
       safeU * safeV * p2 +
-      (1 - safeU) * safeV * p3
+      (1 - safeU) * safeV * p3;
+
+    if (this.perspective === false || this.perspectiveAmount === 0) return flatParallax;
+
+    const points = this.getVisualVertices(useEffectiveVertices);
+    const transform = createQuadHomography(points[0], points[1], points[2], points[3]);
+    if (!transform) return flatParallax;
+
+    const stability = getProjectiveStability(
+      points[0],
+      points[1],
+      points[2],
+      points[3],
+      this.getAuthoredProjectiveCompactness(useEffectiveVertices)
     );
+    const amount = (this.perspectiveAmount ?? 1) * stability;
+    const denominator = 1 + amount * (transform.g * safeU + transform.h * safeV);
+    if (!Number.isFinite(denominator) || Math.abs(denominator) < HOMOGRAPHY_EPSILON) {
+      return flatParallax;
+    }
+
+    // Perspective changes the camera displacement, not the authored depth:
+    // correct the offset from the Quad's global plane before restoring P.
+    return globalP + (flatParallax - globalP) / denominator;
   }
 
   // Serialization

@@ -20,10 +20,12 @@ describe('Quad surface depth', () => {
 
     const correctedMidpoint = quad.getGridPointAt(0.5, 0.5, true);
     expect(quad.getParallaxAt(correctedMidpoint.x, correctedMidpoint.y, true)).toBeCloseTo(0.75, 4);
+    expect(quad.getParallaxAtGrid(0.5, 0.5)).toBeLessThan(0.75);
 
     quad.perspective = false;
     const flatMidpoint = quad.getGridPointAt(0.5, 0.5, true);
     expect(quad.getParallaxAt(flatMidpoint.x, flatMidpoint.y, true)).toBeCloseTo(0.75, 4);
+    expect(quad.getParallaxAtGrid(0.5, 0.5)).toBeCloseTo(0.75, 6);
     expect(correctedMidpoint.y).not.toBeCloseTo(flatMidpoint.y, 4);
   });
 
@@ -57,7 +59,10 @@ describe('Quad surface depth', () => {
     source.update(0);
 
     expect(source.vertices[3].binding).toBeUndefined();
-    expect(source.vertices[3].p).toBeCloseTo(((1 - gridV) * 0.5 + gridV) / source.parallax, 6);
+    expect(source.vertices[3].p).toBeCloseTo(
+      target.getParallaxAtGrid(1, gridV) / source.parallax,
+      6
+    );
     const authoredPosition = { ...source.vertices[3] };
 
     target.vertices[2].x += 100;

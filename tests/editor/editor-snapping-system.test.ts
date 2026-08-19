@@ -118,7 +118,7 @@ describe('Editor quad snapping', () => {
 
     expect(snap.binding).toBeNull();
     expect(snap.p).toBeCloseTo(target.getParallaxAtGrid(gridU, gridV), 10);
-    expect(snap.p).toBeGreaterThan(0.5);
+    expect(snap.p).toBeLessThan(0.75);
     expect(snap.p).toBeLessThan(1);
 
     const effectiveP = snap.p!;
@@ -133,14 +133,29 @@ describe('Editor quad snapping', () => {
       y: source.vertices[0].y,
       p: source.vertices[0].p,
     };
-    source.update(0);
-    target.vertices[0].x += 100;
-    target.vertices[0].y += 100;
-    expect(source.vertices[0]).toMatchObject(authoredPosition);
+    const getGridDistance = () => {
+      const sourcePoint = source.getVisualVertices(false)[0];
+      const gridPoint = target.getGridPointAt(gridU, gridV, true, false);
+      return Math.hypot(sourcePoint.x - gridPoint.x, sourcePoint.y - gridPoint.y);
+    };
 
+    source.update(0);
+    expect(getGridDistance()).toBeLessThan(0.000001);
     fixture.scene.camera.x = 170;
     fixture.scene.camera.y = -25;
     source.update(0);
+    const correctedDistance = getGridDistance();
+    const gridPoint = target.getGridPointAt(gridU, gridV, true, false);
+    const flatParallax = 0.75;
+    const flatPoint = {
+      x: initialGridPoint.x - (170 - 80) * (flatParallax - 1),
+      y: initialGridPoint.y - (-25 - 40) * (flatParallax - 1),
+    };
+    const flatDistance = Math.hypot(flatPoint.x - gridPoint.x, flatPoint.y - gridPoint.y);
+    expect(correctedDistance).toBeLessThan(flatDistance);
+
+    target.vertices[0].x += 100;
+    target.vertices[0].y += 100;
     expect(source.vertices[0]).toMatchObject(authoredPosition);
   });
 
