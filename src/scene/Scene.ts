@@ -15,7 +15,7 @@ import {
   ThreeDParallaxSystem,
   type ThreeDParallaxComponent,
 } from '../systems/ThreeDParallaxSystem';
-import { updateSceneCamera } from './SceneCamera';
+import { getPlayerCameraOffsetY, updateSceneCamera } from './SceneCamera';
 import { resolveSceneTargets, cleanupClosingSubscene } from './SceneSubscene';
 import {
   handleSceneClick,
@@ -215,10 +215,8 @@ export class Scene {
     // Use current coordinates directly
     const pX = this.player.x;
     const pY = this.player.y;
-    const pHeight = this.player.height || 0;
-
     let targetX = pX;
-    let targetY = pY - pHeight / 2;
+    let targetY = pY - getPlayerCameraOffsetY(this.player);
 
     if (this.camMinX !== undefined && targetX < this.camMinX) targetX = this.camMinX;
     if (this.camMaxX !== undefined && targetX > this.camMaxX) targetX = this.camMaxX;

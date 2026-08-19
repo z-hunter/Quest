@@ -5,6 +5,22 @@ export interface CameraCenteringState {
   centeringDirY: number;
 }
 
+const playerCameraOffsets = new WeakMap<object, number>();
+
+export function getPlayerCameraOffsetY(player: {
+  baseHeight?: number;
+  modelScale?: number;
+}): number {
+  const cached = playerCameraOffsets.get(player);
+  if (cached !== undefined) return cached;
+
+  const baseHeight = Number.isFinite(player.baseHeight) ? player.baseHeight! : 0;
+  const modelScale = Number.isFinite(player.modelScale) ? player.modelScale! : 1;
+  const offset = (baseHeight * modelScale) / 2;
+  playerCameraOffsets.set(player, offset);
+  return offset;
+}
+
 export function updateSceneCamera(
   scene: Scene,
   deltaTime: number,
@@ -15,13 +31,12 @@ export function updateSceneCamera(
     return state;
   }
 
-  const pHeight = scene.player.height || 0;
   const playerParallax =
     typeof scene.player.parallax === 'number' && Math.abs(scene.player.parallax) > 0.000001
       ? scene.player.parallax
       : 1;
   const playerCenterX = scene.player.x;
-  const playerCenterY = scene.player.y - pHeight / 2;
+  const playerCenterY = scene.player.y - getPlayerCameraOffsetY(scene.player);
 
   let targetX = scene.camera.x;
   let targetY = scene.camera.y;
