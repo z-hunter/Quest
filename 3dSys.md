@@ -1,0 +1,429 @@
+# Box3D и общая 3D-система Scanline Engine
+
+> Статус: описание фактической реализации на 2026-08-23.  
+> Главный код: `src/entities/Box3DObject.ts`.  
+> Этот документ объясняет архитектуру, математику, render pipeline и editor lifecycle. Пользовательские правила остаются в `GDD.md`.
+
+## 1. Краткая модель
+
+Scanline Engine остаётся 2.5D Canvas2D-движком. В нём нет общей mesh-сцены, GPU depth buffer или свободно вращающейся 3D-камеры. Вместо этого все `Box3D` одной `Scene` используют единое физическое пространство XYZ и одну проекцию камеры, а результат проекции передаётся существующим `QuadObject`.
+
+`Box3DObject` — transform-контейнер, наследующийся напрямую от `SceneObject`. Он не рисует собственную картинку. Его видимая оболочка состоит из шести настоящих дочерних Quad:
+
+```text
+Scene
+└── Box3DObject                  физическая форма и Transform 3D
+    ├── Quad face 0             визуал, Grid, texture, components
+    ├── Quad face 1
+    ├── Quad face 2
+    ├── Quad face 3
+    ├── Quad face 4
+    └── Quad face 5
+```
+
+Родитель отвечает за восемь общих физических вершин, масштаб, повороты, положение и проекцию. Quad отвечают за внешний вид и обычные свойства поверхности. Благодаря общим вершинам соседние грани не расходятся при трансформации.
+
+## 2. Системы координат
+
+В коде одновременно существуют четыре пространства. Их нельзя смешивать.
+
+| Пространство | Что хранит | Где используется |
+|---|---|---|
+| Box-local XYZ | Frustum до поворота и перемещения | `Box3DObject.getWorldVertices()` |
+| World XYZ | Физическая сцена после Scale/Rotation/Position | BSP, raycast, physical depth, surface anchors |
+| Projected world XY | Результат pinhole-проекции, записанный в managed Quad | `quad.vertices`, Grid, texture, Quad render |
+| Canvas XY | Projected world с Camera XY, Zoom и viewport center | конечный экран, mouse input |
+
+Соглашения:
+
+- `+X` направлен вправо;
+- `+Y` направлен вниз, как в остальной 2D-сцене;
+- `+Z` направлен от камеры в глубину;
+- виртуальная камера смотрит вдоль `+Z`;
+- у камеры нет сериализуемых `Z`, yaw, pitch или roll;
+- `Camera.x/y` задают положение камеры в общей мировой плоскости XY;
+- положительный World Z удаляет точку и уменьшает её projected scale, отрицательный приближает.
+
+## 3. Данные Box3D
+
+Основной класс: `src/entities/Box3DObject.ts`.
+
+Сериализуемые поля родителя:
+
+| Группа | Поля |
+|---|---|
+| Position | `x`, `y`, `z` |
+| Rotation | `rotationX`, `rotationY`, `rotationZ` |
+| Axis pivots | `pivotX`, `pivotY`, `pivotZ`, каждый `{x,y,z}` |
+| Scale | `uniformScale`, `scaleX`, `scaleY`, `scaleZ` |
+| Lower base | `bottomWidth`, `bottomDepth` |
+| Upper base | `topWidth`, `topDepth`, `topOffsetX`, `topOffsetZ` |
+| Height | `height` |
+
+Defaults находятся в `src/entities/Box3D.template.json`: размер `100 × 100 × 100`, Scale `1`, pivots в `(0,0,0)`, Rotation `20/30/0`.
+
+Перспектива не является свойством Box. Она хранится один раз в `Scene.box3dPerspective`, сериализуется со сценой и применяется ко всем Box одинаково.
+
+### 3.1 Восемь вершин
+
+До Scale и Rotation локальные вершины имеют следующий порядок:
+
+```text
+0 = (-topWidth/2 + topOffsetX, -height/2, -topDepth/2 + topOffsetZ)
+1 = ( topWidth/2 + topOffsetX, -height/2, -topDepth/2 + topOffsetZ)
+2 = ( topWidth/2 + topOffsetX, -height/2,  topDepth/2 + topOffsetZ)
+3 = (-topWidth/2 + topOffsetX, -height/2,  topDepth/2 + topOffsetZ)
+
+4 = (-bottomWidth/2,  height/2, -bottomDepth/2)
+5 = ( bottomWidth/2,  height/2, -bottomDepth/2)
+6 = ( bottomWidth/2,  height/2,  bottomDepth/2)
+7 = (-bottomWidth/2,  height/2,  bottomDepth/2)
+```
+
+Нумерация граней задаётся единственным массивом `BOX3D_FACE_VERTICES`:
+
+| `box3dFaceIndex` | Индексы физических вершин |
+|---:|---|
+| 0 | `0, 1, 2, 3` |
+| 1 | `4, 7, 6, 5` |
+| 2 | `0, 4, 5, 1` |
+| 3 | `1, 5, 6, 2` |
+| 4 | `2, 6, 7, 3` |
+| 5 | `3, 7, 4, 0` |
+
+В serialized data нет строковых ролей поверхности. Контрактом является только индекс `0..5` и этот массив.
+
+### 3.2 Frustum, призмы и пирамиды
+
+Верхнее и нижнее основания независимы. Изменение их Width/Depth и верхнего Offset позволяет получать усечённые формы, клинья, призмы и пирамиды.
+
+Нулевые размеры разрешены. При входе в BSP и raycast совпавшие соседние вершины удаляются:
+
+- collapsed Quad с тремя неколлинеарными точками становится физическим треугольником;
+- полигон с менее чем тремя точками или нулевой площадью исключается;
+- исходный managed Quad остаётся объектом сцены и сохраняет настройки, даже когда его текущая физическая площадь равна нулю.
+
+Нормализация обязательна: нулевая грань не должна создавать BSP-plane с нулевой normal.
+
+## 4. Transform 3D
+
+Порядок преобразований фиксирован:
+
+1. построить восемь local vertices;
+2. применить `uniformScale × scaleX/Y/Z` к координатам;
+3. повернуть вокруг локальной оси Z и `pivotZ`;
+4. повернуть вокруг локальной оси Y и `pivotY`;
+5. повернуть вокруг локальной оси X и `pivotX`;
+6. прибавить world position `x/y/z`.
+
+Формально:
+
+```text
+world = position + Rx(pivotX) · Ry(pivotY) · Rz(pivotZ) · Scale(local)
+```
+
+В коде порядок реализован последовательными вызовами `rotate`: `Z → Y → X`. Pivot-координаты хранятся в local XYZ и сейчас не умножаются на Scale автоматически. Это важно учитывать при изменении pivot semantics.
+
+У каждой оси отдельный pivot. Editor overlay строит физические axis segments через `getWorldAxisSegments()` после тех же поворотов и position.
+
+## 5. Общая 3D-камера и перспектива
+
+### 5.1 Focal и параметр сцены
+
+World-space focal вычисляется из базового разрешения:
+
+```text
+F = GAME_DESIGN_WIDTH / Camera.zoom
+S = Scene.box3dPerspective
+```
+
+`S` имеет смысл:
+
+- `0` — ортографическая проекция;
+- `1` — стандартная перспектива;
+- `>1` — более сильное перспективное схождение.
+
+При `S > 0` виртуальная точка камеры в XYZ:
+
+```text
+camera3D = (Camera.x, Camera.y, -F / S)
+```
+
+F зависит от Zoom, чтобы Zoom работал как приближение/отдаление камеры при постоянном rectilinear FOV, а не превращался в сверхширокоугольную линзу.
+
+### 5.2 Проекция точки
+
+Для world point `(X,Y,Z)`:
+
+```text
+P  = F / (F + S × Z)
+X' = Camera.x + (X - Camera.x) × P
+Y' = Camera.y + (Y - Camera.y) × P
+```
+
+`projectBox3DPoint()` возвращает `{x: X', y: Y', p: P}`. Полученный `P` — физический depth factor и одновременно мост к существующим Surface/Parallax API.
+
+Финальный Canvas transform:
+
+```text
+canvasX = viewportCenterX + (X' - Camera.x) × Camera.zoom
+canvasY = viewportCenterY + (Y' - Camera.y) × Camera.zoom
+```
+
+Все Box используют одни и те же `Camera.x/y`, `F` и `Scene.box3dPerspective`. Поэтому одинаковые мировые точки разных Box всегда совпадают на экране.
+
+### 5.3 Почему движение камеры показывает глубину
+
+При изменении Camera XY множитель `P` у каждой вершины остаётся функцией её World Z, но выражение `(world - camera) × P` меняется. Ближние и дальние вершины получают разные экранные смещения. Поэтому камера, уходящая ниже объекта, постепенно открывает нижние поверхности, а горизонтальное движение открывает боковые.
+
+Это не обычный Quad-parallax и не независимая перспектива каждого Box. Проекция stateless: одинаковые Scene, Camera и Box всегда дают одинаковый кадр независимо от истории движения.
+
+### 5.4 Near plane
+
+Вершина допустима, пока:
+
+```text
+F + S × Z > EPSILON
+```
+
+Если хотя бы одна из восьми вершин нарушает условие, весь Box временно исключается из render и point hit-test. Near-plane polygon clipping сейчас не реализован.
+
+## 6. Managed Quad: мост между 3D и 2D renderer
+
+`Box3DObject.syncFaces(scene)` пересчитывает все managed-face. Для каждой грани он:
+
+1. получает четыре physical world vertices по `BOX3D_FACE_VERTICES`;
+2. сохраняет их в transient `quad.box3dWorldVertices`;
+3. проецирует вершины и записывает их в `quad.vertices` в отдельном UV-порядке;
+4. ставит `box3dCameraProjected = true`;
+5. вычисляет `box3dDepth` как средний физический Z;
+6. наследует Layer родителя;
+7. принудительно задаёт derived `parallax = 1`, `perspective = true`, `perspectiveAmount = 1`;
+8. обновляет transient `box3dHidden`.
+
+`BOX3D_FACE_UV_VERTICES` намеренно отделён от outward winding. Геометрический порядок нужен плоскостям, BSP и raycast; UV-порядок нужен для одинаково ориентированной texture/grid на внешней стороне. Их нельзя объединять в один массив без повторного появления поворота или зеркалирования текстур.
+
+### 6.1 Запрет двойного параллакса
+
+Обычный Quad сначала меняет вершины в `getVisualVertices()`, затем получает общий camera transform renderer-а. Managed-face уже спроецирована общей 3D-камерой. Поэтому `QuadObject.getVisualVertices()` при `box3dCameraProjected` возвращает только XY без vertex-parallax.
+
+Инвариант:
+
+```text
+physical XYZ → projectBox3DPoint() → managed Quad XY → Canvas camera transform
+```
+
+Нельзя повторно применять к managed-face `vertex.p`, Quad perspective correction или обычную формулу camera-parallax. Это вызывает двойное растяжение и разрушает жёсткую форму Box.
+
+### 6.2 Когда выполняется sync
+
+Синхронизация вызывается:
+
+- перед component update в `Scene.update()`;
+- после обновления Camera в `Scene.update()`;
+- непосредственно перед render в `SceneRenderer.render()`.
+
+Первый вызов даёт компонентам актуальные physical surfaces. Второй учитывает движение камеры в том же frame. Render-time sync обеспечивает WYSIWYG в редакторе и немедленную реакцию на `3D Perspective`, даже если gameplay update не выполнялся.
+
+## 7. Render, depth и occlusion
+
+### 7.1 Layer
+
+`Layer` остаётся абсолютным ручным приоритетом. Box-face наследуют Layer родителя. BSP никогда не меняет порядок между разными Layer.
+
+В каждом Layer renderer разделяет:
+
+- обычные Entity/Quad, которые идут по стандартному 2D pipeline;
+- managed Box faces и прикреплённые Entity, которые входят в отдельный 3D batch.
+
+### 7.2 Полная двухсторонняя оболочка
+
+Система не удаляет задние грани простым backface culling. В batch передаётся полная оболочка, потому что Disabled surface, выключенный Fill или alpha texture должны открывать внутреннюю сторону других граней и находящиеся за ней объекты.
+
+Непрозрачная ближняя поверхность закрывает дальнюю благодаря depth order. Прозрачная поверхность рисуется back-to-front обычным Canvas alpha blend.
+
+### 7.3 Broad phase и BSP
+
+`buildBox3DRenderFragments()`:
+
+1. нормализует полигоны и исключает нулевую площадь;
+2. проецирует screen bounds;
+3. делит faces на независимые группы по пересечению 2D AABB;
+4. строит CPU BSP внутри каждой группы;
+5. рассекает пересекающиеся физические полигоны BSP-плоскостями;
+6. обходит дерево относительно общей `camera3D` far-to-near;
+7. возвращает projected fragments со ссылкой на исходный Quad или Entity.
+
+Coplanar order детерминирован: scene order, затем Box ID, затем face index.
+
+Лимит `MAX_BSP_FRAGMENTS = 1200` защищает editor от взрывного дробления. После превышения один раз выводится warning, а batch переходит на стабильную сортировку целых faces по average physical Z. Это graceful fallback, но не точная замена depth buffer для сложных пересечений.
+
+### 7.4 Отрисовка фрагментов
+
+Если face не была рассечена и не является attached Entity, вызывается обычный `Quad.render()` без промежуточного clip. Поэтому texture, Grid, checkerboard, effects и opacity используют общий Quad renderer.
+
+Рассечённые fragments получают Canvas clip по projected polygon, после чего внутри clip рисуется исходный Quad. Для непрозрачного `source-over` используется небольшой coverage overlap, чтобы дальняя оболочка не просвечивала через субпиксельные швы. Texture mesh отдельно расширяет triangle coverage без изменения UV.
+
+## 8. Hit-test и mouse ray
+
+Point selection и runtime interaction используют общий `raycastBox3DFace()`.
+
+Screen point сначала переводится из Canvas в projected world XY. Затем строится луч:
+
+```text
+Perspective: origin = camera3D
+             direction = (projectedX - camX, projectedY - camY, F / S)
+
+Orthographic: origin = (projectedX, projectedY, -1e9)
+              direction = (0, 0, 1)
+```
+
+Луч пересекается с физическими polygon planes. Для каждого Layer выбирается ближайшее положительное пересечение, затем побеждает самый высокий Layer. Поэтому скрытая задняя поверхность не перехватывает обычный click.
+
+`SceneInteraction` и `EditorTransformManager` используют один resolver. Marquee selection намеренно остаётся 2D и может включать скрытые managed-face.
+
+`intersectBox3DFaceAtScreen()` возвращает physical XYZ пересечения. Editor использует его для перемещения всего Box вдоль плоскости выбранной грани.
+
+## 9. Surface, Grid и 3d-parallax
+
+Managed-face остаётся Quad-поверхностью. У неё работают texture, Retro Grid, Surface, WalkBox, components и spatial children.
+
+Для объекта с `3d-parallax`:
+
+1. обычные Quad metrics определяют `(u,v)` на видимой поверхности;
+2. `sampleBox3DFaceAtGrid()` строит camera ray через projected grid point;
+3. луч пересекает physical plane грани;
+4. physical point смещается на `SURFACE_OFFSET = 0.01` на выбранную сторону;
+5. точка снова проецируется и даёт Entity position и физический `P`;
+6. `createBox3DSurfaceAnchor()` создаёт transient billboard polygon для общего BSP batch.
+
+`spatial.surfaceSide` сериализуется как `front` или `back`. Если поверхность развернулась обратной стороной к камере, непрозрачная грань закрывает Entity, находящуюся на другой стороне. Alpha/открытая грань позволяет её увидеть.
+
+Attached Entity участвует в том же physical depth order, что и Box faces других Box. Это не отдельный 2D overlay.
+
+Disabled Box или managed-face временно делает её spatial descendants Disabled. Исходное authored-состояние хранится transient marker-ом и восстанавливается после включения; `SceneObject.toJSON()` сериализует authored, а не временно унаследованное значение.
+
+## 10. Editor
+
+### 10.1 Создание и свойства
+
+`3D Box` доступен в `HierarchyPanel`. Создание идёт через общий `SceneEditor.createObjectFromData()` и `DefaultBox3DData`, затем одной операцией создаются родитель и шесть Quad с именами `<BoxName>_face_0..5`.
+
+`Box3DProperties.tsx` показывает Position, Rotation, Scale, frustum dimensions, offsets и три pivots. `SceneProperties.tsx` содержит общую настройку `3D Perspective`.
+
+Родитель — transform-контейнер: он не имеет собственной картинки, components или runtime hit target. У managed Quad Transform, vertices/P, Layer и Perspective являются derived. Остальные обычные Quad controls остаются доступны.
+
+Ownership определяется одновременно:
+
+```text
+quad.box3dFaceIndex = 0..5
+quad.spatial.parentNodeId = box.name
+```
+
+Менять эти поля вручную нельзя: это разрывает managed contract.
+
+### 10.2 Direct manipulation
+
+- `Ctrl + click` по видимой managed-face выбирает родительский Box;
+- left drag — Move X/Y;
+- `Ctrl + left drag` — Scale X/Y;
+- `Alt + left drag` — Top Width/Depth;
+- `Shift + left drag` — Bottom Width/Depth;
+- `Ctrl + wheel` — Top Offset X;
+- `Shift + wheel` — Top Offset Z;
+- middle drag — Rotate Y/X;
+- `Ctrl + middle drag` — Rotate Z и Move Z;
+- drag при выбранной face — перемещение всего Box в её physical plane.
+
+При выборе родителя editor показывает все восемь physical vertices двумя цветами и XYZ axes. Ось рисуется с учётом shell intersection: camera-side segment виден до точки входа, внутренняя и заслонённая часть скрыта.
+
+Point click уважает 3D occlusion; marquee включает скрытые вершины/faces по design.
+
+## 11. Serialization, copy и lifecycle
+
+Box и шесть faces сериализуются как отдельные scene objects. Parent содержит только transform/frustum. Внешний вид каждой поверхности живёт в JSON соответствующего Quad.
+
+При загрузке `SceneManager`:
+
+- создаёт `Box3DObject` через `fromJSON()`;
+- загружает имеющиеся Quad;
+- восстанавливает отсутствующий индекс `0..5` default-face и пишет load warning;
+- вызывает `syncFaces()`.
+
+Copy/Duplicate/Prefab используют selection payload v3:
+
+- сериализуют полное hierarchy subtree;
+- включают шесть managed-face и их spatial descendants;
+- не позволяют отдельно копировать managed-face;
+- заранее remap-ят object names, folder IDs, bindings и component references;
+- при наличии serialized faces создают Box с `skipBoxFaces`, затем восстанавливают точные Quad;
+- выбирают только copied roots;
+- выполняются одним undo step.
+
+Отдельное удаление managed-face запрещено. Удаление родителя удаляет шесть faces, а их обычных spatial children переводит в root сцены.
+
+## 12. Инварианты для будущих изменений
+
+1. Все Box одной Scene используют только `Scene.box3dPerspective` и одну Camera.
+2. Physical XYZ всегда остаётся источником истины; `quad.vertices` — derived projection.
+3. Managed Quad не проходит повторный vertex-parallax.
+4. Outward face order и UV order остаются раздельными.
+5. Layer важнее physical depth.
+6. Point hit-test использует тот же camera ray, что и render geometry.
+7. Degenerate faces нормализуются до создания Plane.
+8. Disabled/alpha openings требуют полной оболочки; безусловный backface culling нарушит этот контракт.
+9. Attached Entity должна входить в общий BSP, иначе она не будет корректно заслоняться.
+10. Изменение Camera или `3D Perspective` должно отражаться в том же render frame.
+
+## 13. Ограничения текущей реализации
+
+- Это CPU Canvas2D renderer, не GPU depth buffer.
+- Камера не имеет собственного Z и rotation; направление взгляда фиксировано вдоль `+Z`.
+- Near plane скрывает весь Box вместо clipping.
+- BSP ограничен 1200 fragments и оптимизирован примерно для editor-sized сцен.
+- Полупрозрачность использует painter's algorithm; циклические alpha-overlap могут иметь обычные ограничения такого подхода.
+- Physical collision volume Box как отдельный solid collider не реализован. Gameplay collision идёт через возможности его Quad, например WalkBox.
+- Родитель Box не является Entity и не предназначен для components/interactions.
+
+Если сцены станут плотными, потребуется GPU renderer с depth buffer. До появления измеримой необходимости CPU BSP остаётся намеренно ограниченным решением.
+
+## 14. Карта кода
+
+| Файл | Ответственность |
+|---|---|
+| `src/entities/Box3DObject.ts` | Geometry, projection, managed-face sync, surface anchors, BSP, raycast |
+| `src/entities/Box3D.template.json` | Default serialized Box data и шесть face indices |
+| `src/entities/EntityPrefabs.ts` | Импорт template как `DefaultBox3DData` |
+| `src/entities/QuadObject.ts` | Managed metadata, no-double-parallax path, texture/Grid rendering и seam coverage |
+| `src/scene/Scene.ts` | `box3dPerspective`, sync до/после Camera, serialization |
+| `src/scene/SceneManager.ts` | Loading Box, восстановление отсутствующих faces |
+| `src/graphics/SceneRenderer.ts` | Layer split, Box batch, BSP fragments, clip/direct Quad render |
+| `src/scene/SceneInteraction.ts` | Runtime point picking через общий raycast |
+| `src/systems/ThreeDParallaxSystem.ts` | Physical surface anchors и attached Entity |
+| `src/tools/SceneEditor.ts` | Unified creation/deletion, selection overlay и оси |
+| `src/tools/editor/EditorTransformManager.ts` | Click resolver и direct-manipulation gestures |
+| `src/tools/editor/EditorSelectionManager.ts` | Recursive copy/duplicate/prefab и reference remap |
+| `src/components/editor/properties/Box3DProperties.tsx` | Transform 3D / Frustum UI |
+| `src/components/editor/properties/SceneProperties.tsx` | Scene `3D Perspective` UI |
+| `src/components/editor/properties/QuadProperties.tsx` | Блокировка derived controls managed-face |
+| `src/components/editor/HierarchyPanel.tsx` | Создание и hierarchy labels `Face 0..5` |
+
+## 15. Тесты
+
+| Файл | Основное покрытие |
+|---|---|
+| `tests/entities/box3d-object.test.ts` | Geometry, projection, camera invariants, BSP, raycast, openings, UV order, degenerate prism, surface side |
+| `tests/entities/quad-object.test.ts` | Managed visual path и texture coverage |
+| `tests/systems/three-d-parallax-system.test.ts` | Surface binding, physical anchor, Disabled inheritance, side/depth behavior |
+| `tests/editor/editor-selection-hierarchy.test.ts` | Полное copy/duplicate subtree и exact managed faces |
+| `tests/editor/editor-snapping-system.test.ts` | Point selection, marquee policy, Ctrl-select parent и direct drag |
+
+Минимальная проверка после изменения 3D-системы:
+
+```powershell
+npm test -- --run tests/entities/box3d-object.test.ts tests/entities/quad-object.test.ts tests/systems/three-d-parallax-system.test.ts tests/editor/editor-selection-hierarchy.test.ts tests/editor/editor-snapping-system.test.ts
+npm run typecheck
+npm run build
+```
+
+Для render/camera/editor изменений дополнительно обязательна визуальная проверка Playwright на Box, prism (`Top Width = 0`), alpha/open face и двух пересекающихся Box.
