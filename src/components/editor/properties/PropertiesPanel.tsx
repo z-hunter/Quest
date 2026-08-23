@@ -26,6 +26,7 @@ import { EntityProperties } from './EntityProperties';
 import { WalkboxProperties } from './WalkboxProperties';
 import { TriggerboxProperties } from './TriggerboxProperties';
 import { QuadProperties } from './QuadProperties';
+import { Box3DProperties } from './Box3DProperties';
 import { SectionComponents } from './SectionComponents';
 import { ActorProperties } from './ActorProperties';
 import { SectionScriptEvents } from './SectionScriptEvents';
@@ -905,7 +906,12 @@ export const PropertiesPanel: React.FC = () => {
   const isSettings = selectedObjectType === 'SETTINGS';
   const isFolder = selectedObjectType === 'Folder';
   const isObjectWithScriptEvents =
-    !isSettings && !isScene && !isWalkbox && !isFolder && selectedObjectType !== 'MULTI';
+    !isSettings &&
+    !isScene &&
+    !isWalkbox &&
+    !isFolder &&
+    selectedObjectType !== 'MULTI' &&
+    selectedObjectType !== 'Box3D';
   const hasComponents =
     selectedObjectType === 'Triggerbox' ||
     selectedObjectType === 'Walkbox' ||
@@ -1068,6 +1074,7 @@ export const PropertiesPanel: React.FC = () => {
               translateQuadTo={translateQuadTo}
             />
           )}
+          {selectedObjectType === 'Box3D' && <Box3DProperties />}
 
           {isFolder && <FolderProperties />}
 

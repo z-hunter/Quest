@@ -1,5 +1,8 @@
 import type { ActorData } from './Actor';
 import type { EntityData } from './Entity';
+import Box3DTemplate from './Box3D.template.json';
+
+export const DefaultBox3DData = Box3DTemplate;
 
 export const DefaultEntityData: EntityData = {
   type: 'Static',

@@ -186,6 +186,23 @@ export const SceneProperties: React.FC = () => {
           </div>
 
           <div className="e-row" style={{ marginTop: '5px' }}>
+            <label className="e-label">
+              3D Perspective
+              <input
+                aria-label="3D Perspective"
+                type="number"
+                min="0"
+                step="0.1"
+                className="e-input"
+                value={formatPanelNumber(scene.box3dPerspective ?? 1)}
+                onChange={(e) =>
+                  handleChange('box3dPerspective', Math.max(0, Number(e.target.value) || 0), true)
+                }
+              />
+            </label>
+          </div>
+
+          <div className="e-row" style={{ marginTop: '5px' }}>
             <div className="e-label ui-text-accent-blue">Camera Bounds (Min/Max)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
               <div>

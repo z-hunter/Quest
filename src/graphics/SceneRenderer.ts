@@ -2,6 +2,13 @@ import { Scene } from '../scene/Scene';
 import { Entity } from '../entities/Entity';
 import type { IGame } from '../core/IGame';
 import { toVisualScalar } from '../utils/Parallax';
+import {
+  Box3DObject,
+  buildBox3DRenderFragments,
+  getBox3DAttachedEntityFaces,
+  getVisibleBox3DFaces,
+} from '../entities/Box3DObject';
+import { expandPolygonForCoverage } from '../entities/QuadObject';
 
 export class SceneRenderer {
   private blurCanvas: HTMLCanvasElement | null = null;
@@ -12,6 +19,9 @@ export class SceneRenderer {
   }
 
   render(ctx: CanvasRenderingContext2D, scene: Scene): void {
+    (scene.entities as any[])
+      .filter((entity) => entity instanceof Box3DObject)
+      .forEach((box: Box3DObject) => box.syncFaces(scene));
     const { camera, entities, activeSubscene, subsceneEntities, pickupAnimations } = scene;
     const inventoryPreviewActive = !!this.game?.getInventoryPreviewEntity();
     const focusOverlayActive = !!activeSubscene || inventoryPreviewActive;
@@ -21,7 +31,9 @@ export class SceneRenderer {
     // Sorting Logic moved from Scene.render
     // Sort by Y (Depth) and Parallax
     // FIX: Sort by VISUAL Y (Screen Space Y) to ensure consistent depth regardless of Parallax
-    const sortedEntities = [...entities].sort((a, b) => compareEntitiesForRender(a, b, camera));
+    const sortedEntities = [...entities]
+      .filter((entity: any) => !entity.box3dHidden)
+      .sort((a, b) => compareEntitiesForRender(a, b, camera));
 
     const halfW = ctx.canvas.width / 2;
     const halfH = ctx.canvas.height / 2;
@@ -215,24 +227,64 @@ export class SceneRenderer {
     halfW: number,
     halfH: number
   ) {
-    entities.forEach((entity) => {
-      if (entity.disabled) return;
-      if (entity.visible === false) return;
+    const getLayer = (entity: any) => entity.__box3dSurfaceAnchor?.quad.layer ?? entity.layer ?? 0;
+    const layers = [...new Set(entities.map(getLayer))].sort((a, b) => a - b);
+    for (const layer of layers) {
+      const layerEntities = entities.filter((entity) => getLayer(entity) === layer);
+      layerEntities
+        .filter((entity: any) => !entity.box3dWorldVertices && !entity.__box3dSurfaceAnchor)
+        .forEach((entity) => {
+          if (entity.disabled || (entity as any).box3dHidden) return;
+          if (entity.visible === false) return;
 
-      const p = entity.parallax !== undefined ? entity.parallax : 1.0;
-      ctx.save();
+          const p = entity.parallax !== undefined ? entity.parallax : 1.0;
+          ctx.save();
 
-      // Center Pivot Transform
-      ctx.translate(halfW, halfH);
-      ctx.scale(scene.camera.zoom, scene.camera.zoom);
-      ctx.translate(-scene.camera.x * p, -scene.camera.y * p);
+          // Center Pivot Transform
+          ctx.translate(halfW, halfH);
+          ctx.scale(scene.camera.zoom, scene.camera.zoom);
+          ctx.translate(-scene.camera.x * p, -scene.camera.y * p);
 
-      // DEBUG TRACE (Optional, simplified)
-      // if (Math.random() < 0.005 && entity.name.includes('Quad')) console.log(`Draw ${entity.name}`);
+          // DEBUG TRACE (Optional, simplified)
+          // if (Math.random() < 0.005 && entity.name.includes('Quad')) console.log(`Draw ${entity.name}`);
 
-      entity.render(ctx);
-      ctx.restore();
-    });
+          entity.render(ctx);
+          ctx.restore();
+        });
+
+      const faces = [
+        ...getVisibleBox3DFaces(scene, layerEntities),
+        ...getBox3DAttachedEntityFaces(scene, layerEntities),
+      ];
+      for (const fragment of buildBox3DRenderFragments(scene, faces)) {
+        const entity = fragment.entity || fragment.quad;
+        ctx.save();
+        ctx.translate(halfW, halfH);
+        ctx.scale(scene.camera.zoom, scene.camera.zoom);
+        ctx.translate(-scene.camera.x, -scene.camera.y);
+        if (fragment.fragmented || fragment.entity) {
+          const clipPoints =
+            !fragment.entity &&
+            entity.opacity >= 1 &&
+            entity.blur <= 0 &&
+            entity.blendMode === 'source-over'
+              ? expandPolygonForCoverage(fragment.projected, 1.25 / scene.camera.zoom)
+              : fragment.projected;
+          ctx.beginPath();
+          clipPoints.forEach((point, index) =>
+            index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)
+          );
+          ctx.closePath();
+          ctx.clip();
+        }
+        if (fragment.entity) {
+          const p = fragment.entity.parallax !== undefined ? fragment.entity.parallax : 1;
+          ctx.translate(scene.camera.x * (1 - p), scene.camera.y * (1 - p));
+        }
+        entity.render(ctx);
+        ctx.restore();
+      }
+    }
   }
 
   private renderBlurEffect(ctx: CanvasRenderingContext2D) {
@@ -366,6 +418,18 @@ function getEntityDepthParallax(entity: Entity): number {
 
 export function compareEntitiesForRender(a: Entity, b: Entity, camera: { y: number }): number {
   if (a.layer !== b.layer) return a.layer - b.layer;
+
+  // Box3D faces are a painter's algorithm subset: positive Z is farther, so
+  // it must be painted first inside the authored Layer.
+  const aBoxDepth = (a as any).box3dDepth;
+  const bBoxDepth = (b as any).box3dDepth;
+  if (
+    Number.isFinite(aBoxDepth) &&
+    Number.isFinite(bBoxDepth) &&
+    Math.abs(aBoxDepth - bBoxDepth) > 0.000001
+  ) {
+    return bBoxDepth - aBoxDepth;
+  }
 
   // Manual means Layer is the only authored ordering criterion. Returning zero
   // preserves scene order through the stable render sort.

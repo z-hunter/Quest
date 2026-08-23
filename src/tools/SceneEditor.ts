@@ -4,15 +4,45 @@ import { SceneObject } from '../entities/SceneObject';
 import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import { QuadObject } from '../entities/QuadObject';
+import {
+  Box3DObject,
+  getBox3DFrontAxisSegment,
+  getBox3DProjectionFocal,
+  isManagedBox3DFace,
+  projectBox3DPoint,
+} from '../entities/Box3DObject';
 import { Folder } from '../entities/Folder';
 import { Scene } from '../scene/Scene';
 import { useEditorStore } from '../store/editorStore';
+import { getParallaxAxisIntersections } from '../utils/Parallax';
 
 import { EditorUndoManager } from './editor/EditorUndoManager';
 import { EditorSelectionManager } from './editor/EditorSelectionManager';
 import { EditorTransformManager } from './editor/EditorTransformManager';
 import { EditorPersistenceManager } from './editor/EditorPersistenceManager';
 import { EditorUI } from './editor/EditorUI';
+
+function convexHull(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (a: any, b: any, c: any) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const half = (values: typeof sorted) => {
+    const result: typeof sorted = [];
+    for (const point of values) {
+      while (
+        result.length >= 2 &&
+        cross(result[result.length - 2], result[result.length - 1], point) <= 0
+      )
+        result.pop();
+      result.push(point);
+    }
+    return result;
+  };
+  const lower = half(sorted),
+    upper = half(sorted.reverse());
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
 
 export class SceneEditor {
   undoManager: EditorUndoManager;
@@ -715,6 +745,7 @@ export class SceneEditor {
   private getObjectKey(obj: any): string | null {
     if (!obj) return null;
     if (obj.type === 'Quad') return `Quad:${obj.name}`;
+    if (obj instanceof Box3DObject) return `Box3D:${obj.name}`;
     if (obj instanceof Actor) return `Actor:${obj.name}`;
     if (obj instanceof Entity) return `Entity:${obj.name}`;
     if (obj instanceof Walkbox) return `Walkbox:${obj.name || 'Walkbox'}`;
@@ -746,6 +777,12 @@ export class SceneEditor {
     if (type === 'Quad') {
       return (
         (scene.entities || []).find((obj: any) => obj?.type === 'Quad' && obj?.name === name) ||
+        null
+      );
+    }
+    if (type === 'Box3D') {
+      return (
+        (scene.entities || []).find((obj: any) => obj?.type === 'Box3D' && obj?.name === name) ||
         null
       );
     }
@@ -844,7 +881,7 @@ export class SceneEditor {
     data: any,
     overrideX?: number,
     overrideY?: number,
-    options?: { preserveBindings?: boolean }
+    options?: { preserveBindings?: boolean; skipBoxFaces?: boolean }
   ): any {
     const scene = this.game.sceneManager.currentScene;
     if (!scene) return null;
@@ -940,6 +977,8 @@ export class SceneEditor {
             });
           }
         }
+      } else if (type === 'Box3D') {
+        newObj = Box3DObject.fromJSON(this.game, data);
       } else if (
         type === 'Actor' ||
         (Array.isArray(data.components) &&
@@ -971,7 +1010,24 @@ export class SceneEditor {
       } else if (type === 'Folder') {
         scene.addFolder(newObj);
       } else {
-        scene.addEntity(newObj);
+        scene.addEntity(newObj as any);
+        if (newObj instanceof Box3DObject && !options?.skipBoxFaces) {
+          for (let index = 0; index < 6; index++) {
+            const face = QuadObject.fromJSON(this.game, {
+              type: 'Quad',
+              name: `${newObj.name}_face_${index}`,
+              vertices: [],
+              parallax: 1,
+              ignoreScaling: true,
+              perspective: true,
+              perspectiveAmount: 1,
+              spatial: { parentNodeId: newObj.name, relation: 'in' },
+              box3dFaceIndex: index,
+            });
+            scene.addEntity(face);
+          }
+          newObj.syncFaces(scene);
+        }
       }
 
       // Ensure new object is available in console
@@ -1015,6 +1071,10 @@ export class SceneEditor {
 
   deleteSelectedObject(): void {
     if (!this.selectedObject) return;
+    if (isManagedBox3DFace(this.selectedObject)) {
+      this.game.showNotification('Box3D faces are managed by their parent');
+      return;
+    }
     this.saveUndoState(); // Save before deletion
     const scene = this.game.sceneManager.currentScene;
     if (scene) {
@@ -1058,7 +1118,24 @@ export class SceneEditor {
         scene.removeWalkbox(this.selectedObject);
       } else if (this.selectedObject instanceof Triggerbox) {
         scene.removeTriggerbox(this.selectedObject);
-      } else if (this.selectedObject instanceof Entity) {
+      } else if (
+        this.selectedObject instanceof Entity ||
+        this.selectedObject instanceof Box3DObject
+      ) {
+        if (this.selectedObject instanceof Box3DObject) {
+          const faces = scene.entities.filter(
+            (entity: any) =>
+              entity.spatial?.parentNodeId === this.selectedObject!.name &&
+              Number.isInteger(entity.box3dFaceIndex)
+          );
+          const descendants = faces.flatMap((face: any) =>
+            scene.getDirectSpatialChildren(face.name)
+          );
+          descendants.forEach((child: any) => {
+            if (!faces.includes(child)) child.spatial = {};
+          });
+          faces.forEach((face: any) => scene.removeEntity(face));
+        }
         scene.removeEntity(this.selectedObject);
       }
     }
@@ -1150,12 +1227,54 @@ export class SceneEditor {
         ? [this.selectedObject]
         : [];
 
+    const selectedQuads = highlighted.filter(
+      (object): object is QuadObject => object instanceof QuadObject
+    );
+    if (
+      this.selectionManager.hasMultiSelection() &&
+      this.selectionManager.get3DAssemblyState().kind === 'prepared' &&
+      selectedQuads.length > 0 &&
+      scene?.camera
+    ) {
+      const zoom = scene.camera.zoom;
+      const group = this.selectionManager.getGroupTransform();
+      const axisScreenX = halfW + zoom * (group.axisX - camX * group.axisP);
+      if (Number.isFinite(axisScreenX) && axisScreenX >= 0 && axisScreenX <= ctx.canvas.width) {
+        let axisEndY = ctx.canvas.height;
+        for (const quad of selectedQuads) {
+          const globalP = quad.parallax ?? 1;
+          const vertices = quad.vertices.map((vertex) => ({
+            x: vertex.x,
+            y: vertex.y,
+            p: (vertex.p ?? 1) * globalP,
+          }));
+          for (const y of getParallaxAxisIntersections(vertices, {
+            x: group.axisX,
+            p: group.axisP,
+          })) {
+            const screenY = halfH + zoom * (y - camY * group.axisP);
+            if (screenY >= 0 && screenY < axisEndY) axisEndY = screenY;
+          }
+        }
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(axisScreenX, 0);
+        ctx.lineTo(axisScreenX, axisEndY);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Highlight selected object(s)
     for (const selected of highlighted) {
       ctx.save();
       const zoom = scene && scene.camera ? scene.camera.zoom : 1.0;
 
-      if (selected instanceof Entity) {
+      if (selected instanceof Box3DObject) {
+        this.renderBox3DSelection(ctx, selected, scene, halfW, halfH);
+      } else if (selected instanceof Entity) {
         if (this.game.inventoryManager?.getInventorySlotForEntity(selected)) {
           ctx.restore();
           continue;
@@ -1175,19 +1294,14 @@ export class SceneEditor {
           ctx.beginPath();
           // Draw Outline
           const verts = quad.vertices;
+          const visualVerts = quad.getVisualVertices();
           if (verts.length > 0) {
-            const getDrawPos = (v: any) => {
-              const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
-              return {
-                x: v.x - camX * (effP - globalP),
-                y: v.y - camY * (effP - globalP),
-              };
-            };
+            const getDrawPos = (_v: any, index: number) => visualVerts[index];
 
-            const p0 = getDrawPos(verts[0]);
+            const p0 = getDrawPos(verts[0], 0);
             ctx.moveTo(p0.x, p0.y);
             for (let i = 1; i < verts.length; i++) {
-              const pi = getDrawPos(verts[i]);
+              const pi = getDrawPos(verts[i], i);
               ctx.lineTo(pi.x, pi.y);
             }
             ctx.closePath();
@@ -1200,7 +1314,7 @@ export class SceneEditor {
             ctx.fillStyle = '#00ff00';
             const handleSize = 5 / zoom;
             verts.forEach((v: any, i: number) => {
-              const p = getDrawPos(v);
+              const p = getDrawPos(v, i);
               // Highlight dragging vertex
               if (
                 this.transformManager.isDragging &&
@@ -1219,8 +1333,8 @@ export class SceneEditor {
               // Simple average
               let cx = 0,
                 cy = 0;
-              verts.forEach((vv: any) => {
-                const vp = getDrawPos(vv);
+              verts.forEach((vv: any, vertexIndex: number) => {
+                const vp = getDrawPos(vv, vertexIndex);
                 cx += vp.x;
                 cy += vp.y;
               });
@@ -1425,5 +1539,70 @@ export class SceneEditor {
 
       ctx.restore();
     }
+  }
+
+  private renderBox3DSelection(
+    ctx: CanvasRenderingContext2D,
+    box: Box3DObject,
+    scene: Scene,
+    halfW: number,
+    halfH: number
+  ): void {
+    const camera = scene.camera;
+    const perspective =
+      Number.isFinite(scene.box3dPerspective) && scene.box3dPerspective >= 0
+        ? scene.box3dPerspective
+        : 1;
+    const focal = getBox3DProjectionFocal(camera);
+    const toScreen = (point: { x: number; y: number; z: number }) => {
+      const projected = projectBox3DPoint(point, camera, perspective, focal);
+      return {
+        x: halfW + (projected.x - camera.x) * camera.zoom,
+        y: halfH + (projected.y - camera.y) * camera.zoom,
+      };
+    };
+    const worldVertices = box.getWorldVertices();
+    const vertices = worldVertices.map(toScreen);
+    const hull = convexHull(vertices);
+
+    ctx.save();
+    if (hull.length >= 3) {
+      ctx.beginPath();
+      ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.moveTo(hull[0].x, hull[0].y);
+      hull.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.closePath();
+      ctx.clip('evenodd');
+    }
+    const colors = { x: '#ff4d4d', y: '#55e06f', z: '#4da3ff' };
+    const axes = box.getWorldAxisSegments();
+    ctx.lineWidth = 1;
+    (['x', 'y', 'z'] as const).forEach((axis) => {
+      const [start, end] = axes[axis].map(toScreen);
+      ctx.strokeStyle = colors[axis];
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    (['x', 'y', 'z'] as const).forEach((axis) => {
+      const front = getBox3DFrontAxisSegment(axes[axis], worldVertices);
+      if (!front) return;
+      const [start, end] = front.map(toScreen);
+      ctx.strokeStyle = colors[axis];
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    });
+
+    vertices.forEach((point, index) => {
+      ctx.fillStyle = index < 4 ? '#00e5ff' : '#ff8a3d';
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 }

@@ -13,6 +13,7 @@ interface SectionIdentityData {
   spatial?: {
     parentNodeId?: string | null;
     relation?: string | null;
+    surfaceSide?: 'front' | 'back';
   };
 }
 
@@ -55,6 +56,10 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
   } = usePropertiesContext<SectionIdentityData>();
   const o = obj;
   const identityValue = isScene ? o.id || '' : o.name || '';
+  const spatialParent = game?.sceneManager?.currentScene?.getObjectByName?.(
+    o.spatial?.parentNodeId || ''
+  ) as any;
+  const isOnBox3DFace = Number.isInteger(spatialParent?.box3dFaceIndex);
   const [identityDraft, setIdentityDraft] = React.useState(identityValue);
 
   React.useEffect(() => {
@@ -235,6 +240,27 @@ export const SectionIdentity: React.FC<SectionIdentityProps> = ({
                     incrementHierarchyVersion();
                   }}
                   options={getSpatialRelationOptions(true)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
+            {isOnBox3DFace && (
+              <div>
+                <label className="e-label">Surface Side</label>
+                <Select
+                  value={o.spatial?.surfaceSide || 'front'}
+                  onChange={(value) => {
+                    game.editor.saveUndoState();
+                    o.spatial = {
+                      ...(o.spatial || {}),
+                      surfaceSide: value === 'back' ? 'back' : 'front',
+                    };
+                    incrementObjectVersion();
+                  }}
+                  options={[
+                    { value: 'front', label: 'Front' },
+                    { value: 'back', label: 'Back' },
+                  ]}
                   style={{ width: '100%' }}
                 />
               </div>

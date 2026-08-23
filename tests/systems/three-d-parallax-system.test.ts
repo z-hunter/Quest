@@ -1,10 +1,89 @@
 import { describe, expect, it } from 'vitest';
 import { QuadObject } from '../../src/entities/QuadObject';
+import { Box3DObject, createBox3DSurfaceAnchor } from '../../src/entities/Box3DObject';
 import { ThreeDParallaxSystem } from '../../src/systems/ThreeDParallaxSystem';
 import { toVisualPosition } from '../../src/utils/Parallax';
 import { createSceneFixture } from '../fixtures/sceneFactory';
 
 describe('ThreeDParallaxSystem', () => {
+  it('keeps an Entity on the physical Box3D face point after camera movement', () => {
+    const fixture = createSceneFixture();
+    fixture.scene.camera = { x: 40, y: 20, zoom: 1 };
+    const box = new Box3DObject(fixture.game, 'box');
+    box.rotationX = box.rotationY = box.rotationZ = 0;
+    const face = new QuadObject(fixture.game, 'box_face_2');
+    face.box3dFaceIndex = 2;
+    face.spatial = { parentNodeId: box.name, relation: 'in' };
+    face.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(box as any);
+    fixture.scene.addEntity(face);
+    box.syncFaces(fixture.scene);
+
+    const prop = fixture.addEntity('prop');
+    const point = face.getGridPointAt(0.5, 0.5, true);
+    prop.x = point.x;
+    prop.y = point.y;
+    prop.spatial = { parentNodeId: face.name, relation: 'on', surfaceSide: 'front' };
+    ThreeDParallaxSystem.update(face, { type: '3d-parallax' });
+
+    fixture.scene.camera.x = 120;
+    fixture.scene.camera.y = -30;
+    box.syncFaces(fixture.scene);
+    ThreeDParallaxSystem.update(face, { type: '3d-parallax' });
+
+    const binding = (prop as any).__surfaceParallaxBinding;
+    const anchor = createBox3DSurfaceAnchor(
+      fixture.scene,
+      face,
+      prop,
+      binding.u,
+      binding.v,
+      'front'
+    )!;
+    const visual = toVisualPosition(prop, fixture.scene.camera, prop.parallax);
+    expect(binding.u).toBeCloseTo(0.5, 5);
+    expect(binding.v).toBeCloseTo(0.5, 5);
+    expect(prop.parallax).toBeCloseTo(anchor.parallax, 8);
+    expect(visual.x).toBeCloseTo(anchor.projected.x, 6);
+    expect(visual.y).toBeCloseTo(anchor.projected.y, 6);
+    expect((prop as any).__box3dSurfaceAnchor.vertices).toHaveLength(4);
+  });
+
+  it('stores the face side and inherits Disabled without losing authored state', () => {
+    const fixture = createSceneFixture();
+    const box = new Box3DObject(fixture.game, 'box');
+    box.rotationX = box.rotationY = box.rotationZ = 0;
+    const face = new QuadObject(fixture.game, 'box_face_2');
+    face.box3dFaceIndex = 2;
+    face.spatial = { parentNodeId: box.name, relation: 'in' };
+    face.components = [{ type: '3d-parallax' }];
+    fixture.scene.addEntity(box as any);
+    fixture.scene.addEntity(face);
+    const prop = fixture.addEntity('prop');
+    prop.spatial = { parentNodeId: face.name, relation: 'on', surfaceSide: 'back' };
+    box.syncFaces(fixture.scene);
+    const point = face.getGridPointAt(0.5, 0.5, true);
+    prop.x = point.x;
+    prop.y = point.y;
+    ThreeDParallaxSystem.update(face, { type: '3d-parallax' });
+    expect((prop as any).__box3dSurfaceAnchor.side).toBe('back');
+    expect(prop.toJSON().spatial.surfaceSide).toBe('back');
+
+    face.disabled = true;
+    box.syncFaces(fixture.scene);
+    expect(prop.disabled).toBe(true);
+    expect(prop.toJSON().disabled).toBe(false);
+    face.disabled = false;
+    box.syncFaces(fixture.scene);
+    expect(prop.disabled).toBe(false);
+
+    prop.disabled = true;
+    face.disabled = true;
+    box.syncFaces(fixture.scene);
+    face.disabled = false;
+    box.syncFaces(fixture.scene);
+    expect(prop.disabled).toBe(true);
+  });
   it('applies surface parallax to Static objects without moving their visual position', () => {
     const fixture = createSceneFixture();
     fixture.scene.camera.x = 20;

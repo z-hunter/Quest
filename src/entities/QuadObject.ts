@@ -679,27 +679,7 @@ function drawTexturedTriangle(
   uv2: QuadPoint,
   pixelOverlap: number
 ): void {
-  const minimumEdge = Math.min(
-    Math.hypot(p1.x - p0.x, p1.y - p0.y),
-    Math.hypot(p2.x - p1.x, p2.y - p1.y),
-    Math.hypot(p0.x - p2.x, p0.y - p2.y)
-  );
-  const overlap = Math.min(pixelOverlap, minimumEdge * 0.08);
-  const centroid = {
-    x: (p0.x + p1.x + p2.x) / 3,
-    y: (p0.y + p1.y + p2.y) / 3,
-  };
-  const expand = (point: QuadPoint): QuadPoint => {
-    const dx = point.x - centroid.x;
-    const dy = point.y - centroid.y;
-    const length = Math.hypot(dx, dy);
-    return length > HOMOGRAPHY_EPSILON
-      ? { x: point.x + (dx / length) * overlap, y: point.y + (dy / length) * overlap }
-      : point;
-  };
-  const q0 = expand(p0);
-  const q1 = expand(p1);
-  const q2 = expand(p2);
+  const [q0, q1, q2] = expandTriangleForCoverage([p0, p1, p2], pixelOverlap);
   const sx0 = uv0.x * frame.w;
   const sy0 = uv0.y * frame.h;
   const sx1 = uv1.x * frame.w;
@@ -769,8 +749,58 @@ function clipToQuad(ctx: CanvasRenderingContext2D, vertices: QuadPoint[]): void 
   ctx.clip();
 }
 
+export function expandTriangleForCoverage(
+  points: [QuadPoint, QuadPoint, QuadPoint],
+  pixelOverlap: number
+): [QuadPoint, QuadPoint, QuadPoint] {
+  const [p0, p1, p2] = points;
+  const edgeLengths = [
+    Math.hypot(p1.x - p0.x, p1.y - p0.y),
+    Math.hypot(p2.x - p1.x, p2.y - p1.y),
+    Math.hypot(p0.x - p2.x, p0.y - p2.y),
+  ];
+  const doubleArea = Math.abs((p1.x - p0.x) * (p2.y - p0.y) - (p1.y - p0.y) * (p2.x - p0.x));
+  const minimumAltitude = doubleArea / Math.max(...edgeLengths);
+  if (minimumAltitude <= HOMOGRAPHY_EPSILON) return points;
+  const overlap = Math.min(pixelOverlap, minimumAltitude * 0.08);
+  const scale = 1 + (3 * overlap) / minimumAltitude;
+  const centroid = { x: (p0.x + p1.x + p2.x) / 3, y: (p0.y + p1.y + p2.y) / 3 };
+  return points.map((point) => ({
+    x: centroid.x + (point.x - centroid.x) * scale,
+    y: centroid.y + (point.y - centroid.y) * scale,
+  })) as [QuadPoint, QuadPoint, QuadPoint];
+}
+
+/** Adds subpixel overlap without changing the geometry used for UV projection. */
+export function expandPolygonForCoverage(vertices: QuadPoint[], amount: number): QuadPoint[] {
+  const center = vertices.reduce(
+    (sum, vertex) => ({
+      x: sum.x + vertex.x / vertices.length,
+      y: sum.y + vertex.y / vertices.length,
+    }),
+    { x: 0, y: 0 }
+  );
+  return vertices.map((vertex) => {
+    const dx = vertex.x - center.x,
+      dy = vertex.y - center.y;
+    const length = Math.hypot(dx, dy);
+    return length > HOMOGRAPHY_EPSILON
+      ? { x: vertex.x + (dx / length) * amount, y: vertex.y + (dy / length) * amount }
+      : vertex;
+  });
+}
+
 export class QuadObject extends Entity {
   vertices: QuadVertex[];
+  /** Numeric owner-local face index when this Quad is controlled by a Box3D. */
+  box3dFaceIndex?: number;
+  /** @deprecated legacy experimental marker; old editor code will be removed with its UI. */
+  quad3dAssemblyId?: string;
+  /** Runtime-only Box3D culling and painter metadata. */
+  box3dHidden?: boolean;
+  box3dDepth?: number;
+  box3dCameraProjected?: boolean;
+  box3dWorldVertices?: Array<{ x: number; y: number; z: number }>;
   color: string;
   // `ignoreScaling` existed on inherited Entity data before Quads could be
   // depth-scaled.  Keep an explicit format marker so legacy `false` values do
@@ -835,6 +865,7 @@ export class QuadObject extends Entity {
     'ignoreScaling',
     'depthScalingVersion',
     'vertices',
+    'box3dFaceIndex',
     'spriteName',
     'flipX',
     'flipY',
@@ -873,7 +904,11 @@ export class QuadObject extends Entity {
     super.setSprite(filename, keepSize);
   }
 
-  private renderTexture(ctx: CanvasRenderingContext2D, screenVerts: QuadPoint[]): boolean {
+  private renderTexture(
+    ctx: CanvasRenderingContext2D,
+    screenVerts: QuadPoint[],
+    clipVerts = screenVerts
+  ): boolean {
     const frame = this.animator?.getCurrentFrame();
     if (
       !this.spriteName ||
@@ -910,7 +945,7 @@ export class QuadObject extends Entity {
       textureCtx.globalCompositeOperation = this.blendMode;
     }
     textureCtx.save();
-    clipToQuad(textureCtx, screenVerts);
+    clipToQuad(textureCtx, clipVerts);
     if (flatTexture) {
       drawAffineTexture(textureCtx, this.image, frame, v0, v1, v2, v3, this.flipX, this.flipY);
       textureCtx.restore();
@@ -1033,6 +1068,18 @@ export class QuadObject extends Entity {
       maxY = -Infinity;
 
     const screenVerts = this.getVisualVertices();
+    const matrix = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    const screenScale = matrix
+      ? Math.max(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d), HOMOGRAPHY_EPSILON)
+      : 1;
+    const useBoxCoverage =
+      !!this.box3dCameraProjected &&
+      this.opacity >= 1 &&
+      this.blur <= 0 &&
+      this.blendMode === 'source-over';
+    const coverageVerts = useBoxCoverage
+      ? expandPolygonForCoverage(screenVerts, 1.25 / screenScale)
+      : screenVerts;
     screenVerts.forEach(({ x: vx, y: vy }) => {
       if (vx < minX) minX = vx;
       if (vx > maxX) maxX = vx;
@@ -1071,12 +1118,12 @@ export class QuadObject extends Entity {
     }
 
     // 1. Draw Texture or Fill (Solid / Checkerboard Mode)
-    const textured = this.renderTexture(ctx, screenVerts);
+    const textured = this.renderTexture(ctx, screenVerts, coverageVerts);
     if (this.filled && !textured) {
-      ctx.globalCompositeOperation = this.blendMode;
+      ctx.globalCompositeOperation = useBoxCoverage ? 'source-over' : this.blendMode;
       ctx.fillStyle = this.color;
       ctx.beginPath();
-      screenVerts.forEach((v, i) => {
+      (useBoxCoverage ? coverageVerts : screenVerts).forEach((v, i) => {
         if (i === 0) ctx.moveTo(v.x, v.y);
         else ctx.lineTo(v.x, v.y);
       });
@@ -1244,20 +1291,10 @@ export class QuadObject extends Entity {
     isVisual: boolean = false,
     useEffectiveVertices: boolean = true
   ): QuadPoint {
-    // @ts-ignore
-    const scene = this.scene;
-    const globalP = this.parallax !== undefined ? this.parallax : 1.0;
-    const camX = scene?.camera.x ?? 0;
-    const camY = scene?.camera.y ?? 0;
     const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
-    const points = vertices.map((vertex) => {
-      if (!isVisual) return { x: vertex.x, y: vertex.y };
-      const effP = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
-      return {
-        x: vertex.x - camX * (effP - globalP),
-        y: vertex.y - camY * (effP - globalP),
-      };
-    });
+    const points = isVisual
+      ? this.getVisualVertices(useEffectiveVertices)
+      : vertices.map((vertex) => ({ x: vertex.x, y: vertex.y }));
 
     const [p0, p1, p2, p3] = points;
     const perspective = this.perspective !== false;
@@ -1471,6 +1508,7 @@ export class QuadObject extends Entity {
     const camY = scene?.camera.y ?? 0;
     const globalP = this.parallax !== undefined ? this.parallax : 1.0;
     const vertices = useEffectiveVertices ? this.getEffectiveVertices() : this.vertices;
+    if (this.box3dCameraProjected) return vertices.map(({ x, y }) => ({ x, y }));
     return vertices.map((vertex) => {
       const effectiveP = (vertex.p !== undefined ? vertex.p : 1.0) * globalP;
       return {

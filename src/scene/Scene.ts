@@ -1,5 +1,6 @@
 import { Entity } from '../entities/Entity';
 import { QuadObject } from '../entities/QuadObject';
+import { Box3DObject } from '../entities/Box3DObject';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { SceneObject } from '../entities/SceneObject';
 import { Actor } from '../entities/Actor';
@@ -92,6 +93,7 @@ export interface SceneData {
   cameraSpeed?: number;
   camDeadzoneX?: number;
   camDeadzoneY?: number;
+  box3dPerspective?: number;
   camMinX?: number;
   camMaxX?: number;
   camMinY?: number;
@@ -126,6 +128,7 @@ export class Scene {
   cameraSpeed: number;
   camDeadzoneX: number = 50;
   camDeadzoneY: number = 30;
+  box3dPerspective: number = 1;
   editorCameraSuspended: boolean = false;
   editorCameraAnchorPlayerPos: { x: number; y: number } | null = null;
 
@@ -266,6 +269,7 @@ export class Scene {
     return {
       parentNodeId: parentNodeId || null,
       relation,
+      ...(value.surfaceSide === 'back' ? { surfaceSide: 'back' as const } : {}),
     };
   }
 
@@ -1416,6 +1420,9 @@ export class Scene {
   }
 
   update(deltaTime: number): void {
+    (this.entities as any[])
+      .filter((entity) => entity instanceof Box3DObject)
+      .forEach((box: Box3DObject) => box.syncFaces(this));
     // Run Component System Logic (Shadows, Parallax, etc.)
     ComponentSystem.update(this, deltaTime);
     ComponentSystem.checkTriggerboxCollisions(this);
@@ -1427,6 +1434,9 @@ export class Scene {
     });
     this._centeringDirX = cameraState.centeringDirX;
     this._centeringDirY = cameraState.centeringDirY;
+    (this.entities as any[])
+      .filter((entity) => entity instanceof Box3DObject)
+      .forEach((box: Box3DObject) => box.syncFaces(this));
     if (!this.surfaceRelationsInitialized) {
       this.syncActorSurfaceRelations();
       this.surfaceRelationsInitialized = true;
@@ -1435,6 +1445,7 @@ export class Scene {
 
     this.entities.forEach((entity) => {
       if (entity.disabled) return;
+      if (entity instanceof Box3DObject) return;
       if (entity instanceof Actor) {
         entity.update(deltaTime, (x: number, y: number) => this.isWalkable(x, y, entity));
       } else {
@@ -1545,6 +1556,7 @@ export class Scene {
       cameraSpeed: this.cameraSpeed,
       camDeadzoneX: this.camDeadzoneX,
       camDeadzoneY: this.camDeadzoneY,
+      box3dPerspective: this.box3dPerspective,
       camMinX: this.camMinX,
       camMaxX: this.camMaxX,
       camMinY: this.camMinY,

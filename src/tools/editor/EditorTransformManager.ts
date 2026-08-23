@@ -6,10 +6,21 @@ import { Walkbox } from '../../entities/Walkbox';
 import { Triggerbox } from '../../entities/Triggerbox';
 import { Folder } from '../../entities/Folder';
 import { SceneObject } from '../../entities/SceneObject';
+import {
+  Box3DObject,
+  intersectBox3DFaceAtScreen,
+  isManagedBox3DFace,
+  raycastBox3DFace,
+} from '../../entities/Box3DObject';
 
 import { Geometry } from '../../utils/Geometry';
 import { EditorSnappingSystem } from './EditorSnappingSystem';
-import { DefaultActorData, DefaultEntityData, DefaultQuadData } from '../../entities/EntityPrefabs';
+import {
+  DefaultActorData,
+  DefaultBox3DData,
+  DefaultEntityData,
+  DefaultQuadData,
+} from '../../entities/EntityPrefabs';
 import { useEditorStore } from '../../store/editorStore';
 
 function clearReciprocalVertexBinding(scene: any, quad: QuadObject, index: number): void {
@@ -61,6 +72,15 @@ export class EditorTransformManager {
   private boxSelectActive: boolean = false;
   private boxSelectStart: { x: number; y: number } | null = null;
   private boxSelectCurrent: { x: number; y: number } | null = null;
+  private box3dDrag: {
+    box: Box3DObject;
+    mode: 'move' | 'scale' | 'top' | 'bottom' | 'rotate' | 'rotateZMoveZ' | 'face';
+    lastScreen: { x: number; y: number };
+    lastWorld: { x: number; y: number };
+    faceVertices?: Array<{ x: number; y: number; z: number }>;
+    faceStart?: { x: number; y: number; z: number };
+    boxStart?: { x: number; y: number; z: number };
+  } | null = null;
 
   constructor(editor: SceneEditor) {
     this.editor = editor;
@@ -106,6 +126,120 @@ export class EditorTransformManager {
     return { start: this.boxSelectStart, current: this.boxSelectCurrent };
   }
 
+  private tryStartBox3DDrag(
+    e: MouseEvent,
+    pos: { x: number; y: number },
+    scene: any,
+    hitObject: SceneObject | null
+  ): boolean {
+    if ((e.button !== 0 && e.button !== 1) || !isManagedBox3DFace(hitObject)) return false;
+    const face = hitObject as QuadObject;
+    const box = scene.entities.find(
+      (object: any) => object instanceof Box3DObject && object.name === face.spatial?.parentNodeId
+    ) as Box3DObject | undefined;
+    if (!box) return false;
+
+    if (e.button === 0 && e.ctrlKey && this.editor.selectedObject !== box) {
+      this.editor.selectObject(box);
+      e.stopPropagation();
+      return true;
+    }
+
+    let mode: NonNullable<EditorTransformManager['box3dDrag']>['mode'] | null = null;
+    if (this.editor.selectedObject === box) {
+      mode =
+        e.button === 1
+          ? e.ctrlKey
+            ? 'rotateZMoveZ'
+            : 'rotate'
+          : e.ctrlKey
+            ? 'scale'
+            : e.altKey
+              ? 'top'
+              : e.shiftKey
+                ? 'bottom'
+                : 'move';
+    } else if (
+      e.button === 0 &&
+      isManagedBox3DFace(this.editor.selectedObject) &&
+      this.editor.selectedObject?.spatial?.parentNodeId === box.name
+    ) {
+      mode = 'face';
+    }
+    if (!mode || box.disabled || box.locked) return false;
+
+    const camera = scene.camera;
+    const world = {
+      x: (pos.x - this.editor.game.canvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.canvas.height / 2) / camera.zoom + camera.y,
+    };
+    this.editor.saveUndoState();
+    this.box3dDrag = { box, mode, lastScreen: pos, lastWorld: world };
+    if (mode === 'face' && face.box3dWorldVertices) {
+      const vertices = face.box3dWorldVertices.map((vertex) => ({ ...vertex }));
+      const point = intersectBox3DFaceAtScreen(scene, vertices, pos.x, pos.y);
+      if (!point) {
+        this.box3dDrag = null;
+        return false;
+      }
+      this.box3dDrag.faceVertices = vertices;
+      this.box3dDrag.faceStart = point;
+      this.box3dDrag.boxStart = { x: box.x, y: box.y, z: box.z };
+    }
+    this.isDragging = true;
+    e.preventDefault?.();
+    e.stopPropagation();
+    return true;
+  }
+
+  private updateBox3DDrag(pos: { x: number; y: number }, scene: any): void {
+    const drag = this.box3dDrag;
+    if (!drag) return;
+    const { box } = drag;
+    const camera = scene.camera;
+    const world = {
+      x: (pos.x - this.editor.game.canvas.width / 2) / camera.zoom + camera.x,
+      y: (pos.y - this.editor.game.canvas.height / 2) / camera.zoom + camera.y,
+    };
+    const dx = world.x - drag.lastWorld.x;
+    const dy = world.y - drag.lastWorld.y;
+    const screenDx = pos.x - drag.lastScreen.x;
+    const screenDy = pos.y - drag.lastScreen.y;
+
+    if (drag.mode === 'move') {
+      box.x += dx;
+      box.y += dy;
+    } else if (drag.mode === 'scale') {
+      box.scaleX = Math.max(0.01, box.scaleX + dx / Math.max(box.bottomWidth, box.topWidth, 1));
+      box.scaleY = Math.max(0.01, box.scaleY + dy / Math.max(box.height, 1));
+    } else if (drag.mode === 'top') {
+      box.topWidth = Math.max(0, box.topWidth + dx);
+      box.topDepth = Math.max(0, box.topDepth + dy);
+    } else if (drag.mode === 'bottom') {
+      box.bottomWidth = Math.max(0, box.bottomWidth + dx);
+      box.bottomDepth = Math.max(0, box.bottomDepth + dy);
+    } else if (drag.mode === 'rotate') {
+      box.rotationY += screenDx * 0.5;
+      box.rotationX += screenDy * 0.5;
+    } else if (drag.mode === 'rotateZMoveZ') {
+      box.rotationZ += screenDx * 0.5;
+      box.z += screenDy / camera.zoom;
+    } else if (drag.faceVertices && drag.faceStart && drag.boxStart) {
+      const point = intersectBox3DFaceAtScreen(scene, drag.faceVertices, pos.x, pos.y);
+      if (point) {
+        box.x = drag.boxStart.x + point.x - drag.faceStart.x;
+        box.y = drag.boxStart.y + point.y - drag.faceStart.y;
+        box.z = drag.boxStart.z + point.z - drag.faceStart.z;
+      }
+    }
+
+    drag.lastScreen = pos;
+    drag.lastWorld = world;
+    box.syncFaces(scene);
+    useEditorStore.getState().incrementObjectVersion();
+    this.editor.updateUIFromObject();
+  }
+
   private rectIntersects(
     a: { l: number; t: number; r: number; b: number },
     b: { l: number; t: number; r: number; b: number }
@@ -122,10 +256,22 @@ export class EditorTransformManager {
     halfW: number,
     halfH: number
   ): SceneObject | null {
-    const entities = scene.entities || [];
-    for (let i = entities.length - 1; i >= 0; i--) {
-      const entity = entities[i];
+    const entities = [...(scene.entities || [])]
+      .filter((entity: any) => !entity.box3dHidden)
+      .sort((a: any, b: any) => {
+        if ((a.layer || 0) !== (b.layer || 0)) return (b.layer || 0) - (a.layer || 0);
+        const aDepth = a.box3dDepth;
+        const bDepth = b.box3dDepth;
+        if (Number.isFinite(aDepth) && Number.isFinite(bDepth)) return aDepth - bDepth;
+        return 0;
+      });
+    const boxHit = raycastBox3DFace(scene, pos.x, pos.y, entities);
+    for (const entity of entities) {
       if (entity.disabled || entity.locked) continue;
+      if (isManagedBox3DFace(entity)) {
+        if (entity === boxHit) return entity;
+        continue;
+      }
 
       const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
       const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
@@ -182,13 +328,10 @@ export class EditorTransformManager {
 
       if ((entity as any).type === 'Quad' && entity.vertices) {
         const globalP = entity.parallax !== undefined ? entity.parallax : 1.0;
-        const pts = entity.vertices.map((v: any) => {
-          const effP = (v.p !== undefined ? v.p : 1.0) * globalP;
-          return {
-            x: (v.x - camX * effP) * zoom + halfW,
-            y: (v.y - camY * effP) * zoom + halfH,
-          };
-        });
+        const pts = entity.getVisualVertices().map((v: any) => ({
+          x: (v.x - camX * globalP) * zoom + halfW,
+          y: (v.y - camY * globalP) * zoom + halfH,
+        }));
         const minX = Math.min(...pts.map((p: any) => p.x));
         const maxX = Math.max(...pts.map((p: any) => p.x));
         const minY = Math.min(...pts.map((p: any) => p.y));
@@ -266,6 +409,19 @@ export class EditorTransformManager {
       const halfH = editor.game.canvas.height / 2;
       const hitObject = this.findHitSelectable(pos, scene, camX, camY, zoom, halfW, halfH);
 
+      if (this.tryStartBox3DDrag(e, pos, scene, hitObject)) return;
+
+      const selectedManagedFace =
+        editor.selectedObject instanceof QuadObject &&
+        editor.selectedObject.box3dFaceIndex !== undefined;
+      if (e.button === 0 && selectedManagedFace) {
+        if (hitObject && hitObject !== editor.selectedObject) editor.selectObject(hitObject);
+        else if (!hitObject) editor.selectObject(null);
+        // Managed faces are selectable surfaces, but their geometry belongs to Box3D.
+        e.stopPropagation();
+        return;
+      }
+
       if (e.button === 0 && e.ctrlKey && hitObject) {
         editor.toggleObjectSelection(hitObject);
         e.stopPropagation();
@@ -274,6 +430,10 @@ export class EditorTransformManager {
 
       if (e.button === 0 && editor.selectionManager.hasMultiSelection()) {
         if (hitObject && editor.selectionManager.isInMultiSelection(hitObject)) {
+          if (editor.selectionManager.hasPreparedAssemblyInSelection()) {
+            editor.game.showNotification('Detach 3D before moving a prepared Assembly in 2D');
+            return;
+          }
           editor.saveUndoState();
           this.isDragging = true;
           this.draggingVertexIndex = -1;
@@ -486,27 +646,11 @@ export class EditorTransformManager {
         }
       }
 
-      // 1. Check Entities
-      const entities = scene.entities;
-      for (let i = entities.length - 1; i >= 0; i--) {
-        const entity = entities[i];
-        if (entity.disabled) continue;
-        if (entity.locked) continue;
-
-        // @ts-ignore
-        const vOx = (entity as any).visualOffset ? (entity as any).visualOffset.x : 0;
-        // @ts-ignore
-        const vOy = (entity as any).visualOffset ? (entity as any).visualOffset.y : 0;
-
-        // Entity.hitTest expects visual world coordinates; it applies its own parallax projection.
-        const worldX = (pos.x - halfW) / zoom + camX - vOx;
-        const worldY = (pos.y - halfH) / zoom + camY - vOy;
-
-        if (entity.hitTest(worldX, worldY)) {
-          this.editor.selectObject(entity);
-          e.stopPropagation();
-          return;
-        }
+      // 1. Select through the shared resolver so managed Box3D faces use raycast/culling.
+      if (hitObject) {
+        this.editor.selectObject(hitObject);
+        e.stopPropagation();
+        return;
       }
 
       // 2. Check Walkboxes
@@ -589,6 +733,10 @@ export class EditorTransformManager {
     const scene = editor.game.sceneManager.currentScene;
 
     if (scene) {
+      if (this.box3dDrag) {
+        this.updateBox3DDrag(pos, scene);
+        return;
+      }
       const camX = scene.camera ? scene.camera.x : 0;
       const camY = scene.camera ? scene.camera.y : 0;
       const zoom = scene.camera ? scene.camera.zoom : 1.0;
@@ -596,6 +744,7 @@ export class EditorTransformManager {
       const halfH = editor.game.canvas.height / 2;
       const store = useEditorStore.getState();
       if (editor.selectionManager.hasMultiSelection()) {
+        if (editor.selectionManager.hasPreparedAssemblyInSelection()) return;
         const worldPos = {
           x: (pos.x - halfW) / zoom + camX,
           y: (pos.y - halfH) / zoom + camY,
@@ -1099,6 +1248,7 @@ export class EditorTransformManager {
   }
 
   onMouseUp(_e: MouseEvent): void {
+    this.box3dDrag = null;
     if (this.boxSelectActive && this.boxSelectStart && this.boxSelectCurrent) {
       const editor = this.editor;
       const scene = editor.game.sceneManager.currentScene;
@@ -1227,7 +1377,7 @@ export class EditorTransformManager {
 
     const scene = editor.game.sceneManager.currentScene;
 
-    if (type === 'Static' || type === 'Actor' || type === 'Quad') {
+    if (type === 'Static' || type === 'Actor' || type === 'Quad' || type === 'Box3D') {
       const nameInput = document.getElementById('new-object-name') as HTMLInputElement;
       let name = nameInput ? nameInput.value : '';
 
@@ -1236,7 +1386,7 @@ export class EditorTransformManager {
         if (nameInput) nameInput.value = name;
       }
 
-      let ent: Entity;
+      let ent: any;
       if (type === 'Actor') {
         const data = JSON.parse(JSON.stringify(DefaultActorData));
         data.name = name;
@@ -1262,6 +1412,12 @@ export class EditorTransformManager {
         }
 
         ent = QuadObject.fromJSON(editor.game, data);
+      } else if (type === 'Box3D') {
+        const data = JSON.parse(JSON.stringify(DefaultBox3DData));
+        data.name = name;
+        data.x = x !== undefined ? x : scene.camera.x;
+        data.y = y !== undefined ? y : scene.camera.y;
+        ent = editor.createObjectFromData(data);
       } else {
         const data = JSON.parse(JSON.stringify(DefaultEntityData));
         data.name = name;
@@ -1270,7 +1426,7 @@ export class EditorTransformManager {
         ent = Entity.fromJSON(editor.game, data);
       }
 
-      scene.addEntity(ent);
+      if (type !== 'Box3D') scene.addEntity(ent);
       editor.selectObject(ent);
       useEditorStore.getState().incrementHierarchyVersion();
       this.drawMode = false;
@@ -1330,6 +1486,16 @@ export class EditorTransformManager {
 
     const scene = editor.game.sceneManager.currentScene;
     if (scene && scene.camera) {
+      if (editor.selectedObject instanceof Box3DObject && (e.ctrlKey || e.shiftKey)) {
+        editor.saveUndoState();
+        const step = e.deltaY < 0 ? 5 : -5;
+        if (e.ctrlKey) editor.selectedObject.topOffsetX += step;
+        else editor.selectedObject.topOffsetZ += step;
+        editor.selectedObject.syncFaces(scene);
+        useEditorStore.getState().incrementObjectVersion();
+        editor.updateUIFromObject();
+        return;
+      }
       if (e.deltaY < 0) {
         // Zoom In
         scene.camera.zoom *= 1.1;

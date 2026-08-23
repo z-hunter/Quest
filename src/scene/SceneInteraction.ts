@@ -5,6 +5,7 @@ import { Actor } from '../entities/Actor';
 import { ComponentSystem } from '../systems/ComponentSystem';
 import { GAME_DESIGN_HEIGHT, GAME_DESIGN_WIDTH } from '../core/Resolution';
 import { getSceneTextLayerAccessState } from './SceneTextLayer';
+import { isManagedBox3DFace, raycastBox3DFace } from '../entities/Box3DObject';
 
 export type HoverCursor = 'eye' | 'hand' | 'back';
 
@@ -126,12 +127,21 @@ function getClickableTypePriority(obj: SceneObject): number {
   return 0;
 }
 
+function getEffectiveLayer(obj: SceneObject): number {
+  return (obj as any).__box3dSurfaceAnchor?.quad.layer ?? obj.layer ?? 0;
+}
+
 function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
   const sorted = [...candidates];
   sorted.sort((a, b) => {
-    const layerA = a.layer || 0;
-    const layerB = b.layer || 0;
+    const layerA = getEffectiveLayer(a);
+    const layerB = getEffectiveLayer(b);
     if (layerA !== layerB) return layerB - layerA;
+
+    const depthA = (a as any).box3dDepth;
+    const depthB = (b as any).box3dDepth;
+    if (Number.isFinite(depthA) && Number.isFinite(depthB) && Math.abs(depthA - depthB) > 0.000001)
+      return depthA - depthB;
 
     const typePriorityA = getClickableTypePriority(a);
     const typePriorityB = getClickableTypePriority(b);
@@ -151,7 +161,9 @@ function sortClickableCandidates(candidates: SceneObject[]): SceneObject[] {
 
 function getSortedClickableCandidates(scene: Scene): SceneObject[] {
   return sortClickableCandidates([
-    ...scene.entities.filter((e) => !e.disabled && e.visible && !(e as any).isPlayer),
+    ...scene.entities.filter(
+      (e) => !e.disabled && e.visible && !(e as any).isPlayer && !(e as any).box3dHidden
+    ),
     ...(scene.triggerboxes?.filter((t) => !t.disabled && t.visible) || []),
     ...(scene.walkbox?.filter((w) => !w.disabled && w.visible) || []),
   ]);
@@ -163,7 +175,12 @@ function findTopHitInCandidates(
   screenX: number,
   screenY: number
 ): SceneObject | null {
+  const boxHit = raycastBox3DFace(scene, screenX, screenY, candidates);
   for (const candidate of sortClickableCandidates(candidates)) {
+    if (isManagedBox3DFace(candidate)) {
+      if (candidate === boxHit) return candidate;
+      continue;
+    }
     if (isHitAtScreenPoint(scene, candidate, screenX, screenY)) {
       return candidate;
     }
@@ -326,7 +343,7 @@ function findTopLayerHitCandidatesAtScreenPoint(
 
   for (const candidate of sortClickableCandidates(candidates)) {
     if (!isHitAtScreenPoint(scene, candidate, screenX, screenY)) continue;
-    const candidateLayer = candidate.layer || 0;
+    const candidateLayer = getEffectiveLayer(candidate);
     if (topLayer === null) {
       topLayer = candidateLayer;
     }

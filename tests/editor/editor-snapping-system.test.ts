@@ -377,4 +377,102 @@ describe('Editor parallax entity hit testing', () => {
 
     expect(hit).toBe(entity);
   });
+
+  it('uses the shared hit resolver for a regular click', () => {
+    const fixture = createSceneFixture();
+    const visible = fixture.addEntity('visible');
+    const hidden = fixture.addEntity('hidden');
+    (hidden as any).box3dHidden = true;
+    const selectObject = vi.fn();
+    const editor: any = {
+      enabled: true,
+      game: fixture.game,
+      selectedObject: null,
+      selectionManager: { hasMultiSelection: () => false },
+      selectObject,
+    };
+    const manager = new EditorTransformManager(editor);
+    vi.spyOn(manager as any, 'getMousePos').mockReturnValue({ x: 400, y: 300 });
+    vi.spyOn(manager as any, 'findHitSelectable').mockReturnValue(visible);
+    const hiddenHit = vi.spyOn(hidden, 'hitTest').mockReturnValue(true);
+
+    manager.onMouseDown({ button: 0, ctrlKey: false, stopPropagation: vi.fn() } as any);
+
+    expect(selectObject).toHaveBeenCalledWith(visible);
+    expect(hiddenHit).not.toHaveBeenCalled();
+  });
+
+  it('keeps culled Box3D faces available to marquee selection', () => {
+    const fixture = createSceneFixture();
+    const face = addQuad(fixture, 'back-face');
+    face.vertices = [
+      { x: 0, y: 0, p: 1 },
+      { x: 10, y: 0, p: 1 },
+      { x: 10, y: 10, p: 1 },
+      { x: 0, y: 10, p: 1 },
+    ];
+    face.box3dHidden = true;
+    face.box3dCameraProjected = true;
+    const manager = new EditorTransformManager({ enabled: true, game: fixture.game } as any);
+
+    const selected = (manager as any).collectObjectsInScreenRect(
+      fixture.scene,
+      { l: 395, t: 295, r: 415, b: 315 },
+      0,
+      0,
+      1,
+      400,
+      300
+    );
+
+    expect(selected).toContain(face);
+  });
+
+  it('selects a managed face parent on Ctrl-click and drags a selected Box3D', async () => {
+    const { Box3DObject } = await import('../../src/entities/Box3DObject');
+    const fixture = createSceneFixture();
+    Object.assign(fixture.game.canvas, { width: 800, height: 600 });
+    const box = new Box3DObject(fixture.game, 'box');
+    box.rotationX = 0;
+    box.rotationY = 0;
+    const face = addQuad(fixture, 'box_face_2');
+    face.box3dFaceIndex = 2;
+    face.spatial = { parentNodeId: box.name, relation: 'in' };
+    fixture.scene.entities.unshift(box as any);
+    box.syncFaces(fixture.scene);
+    const selectObject = vi.fn();
+    const editor: any = {
+      enabled: true,
+      game: fixture.game,
+      selectedObject: null,
+      selectionManager: { hasMultiSelection: () => false },
+      selectObject,
+      saveUndoState: vi.fn(),
+      updateUIFromObject: vi.fn(),
+    };
+    const manager = new EditorTransformManager(editor);
+    vi.spyOn(manager as any, 'findHitSelectable').mockReturnValue(face);
+    vi.spyOn(manager, 'getMousePos').mockReturnValue({ x: 400, y: 300 });
+
+    manager.onMouseDown({ button: 0, ctrlKey: true, stopPropagation: vi.fn() } as any);
+    expect(selectObject).toHaveBeenCalledWith(box);
+
+    editor.selectedObject = box;
+    (manager.getMousePos as any)
+      .mockReturnValueOnce({ x: 400, y: 300 })
+      .mockReturnValueOnce({ x: 420, y: 310 })
+      .mockReturnValueOnce({ x: 420, y: 310 });
+    manager.onMouseDown({
+      button: 0,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      stopPropagation: vi.fn(),
+      preventDefault: vi.fn(),
+    } as any);
+    manager.onMouseMove({ clientX: 420, clientY: 310 } as any);
+
+    expect(box.x).toBeCloseTo(20);
+    expect(box.y).toBeCloseTo(10);
+  });
 });

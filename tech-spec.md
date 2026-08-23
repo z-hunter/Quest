@@ -1,6 +1,6 @@
 ﻿# Scanline Engine вЂ” Technical Specification
 
-> **Last audited**: 2026-08-12. Reflects current `src/` directory structure and implemented subsystems.
+> **Last audited**: 2026-08-23. Reflects current `src/` directory structure and implemented subsystems.
 
 ---
 
@@ -106,6 +106,8 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 | `Entity.ts` | Base class: Transform, Visuals, Parallax, serialization |
 | `Actor.ts` | `Entity` + pathfinding (`moveTo`), animation sets, directional sprites |
 | `QuadObject.ts` | Perspective polygon objects (walls, floors) with per-vertex parallax |
+| `Box3DObject.ts` | Shared-XYZ frustum geometry, Scene camera projection, managed Quad faces, BSP fragments, raycast and surface anchors |
+| `Box3D.template.json` | Default serialized `Box3D` plus the fixed six numeric face indices |
 | `Walkbox.ts` | Walkable floor area polygon |
 | `Triggerbox.ts` | Script-triggering overlap zone |
 | `Folder.ts` | Logical grouping entity |
@@ -119,6 +121,26 @@ For new developers or AI agents вЂ” functional map of the `src/` directory:
 ### `src/editor/`, `src/components/`, `vetool.tsx` вЂ” Editor UI
 
 React-based visual editor: scene tree (HierarchyPanel), properties inspector (PropertiesPanel), sprite sheet editor, walkbox/triggerbox painting tools.
+
+### Box3D / 3D System Code Guide
+
+The detailed subsystem contract is [`3dSys.md`](3dSys.md). Start with these integration points:
+
+| File | 3D responsibility |
+|------|-------------------|
+| `src/entities/Box3DObject.ts` | Eight-vertex frustum, `Z → Y → X` transform, shared Scene projection, face synchronization, BSP, raycast, attached-surface anchors |
+| `src/entities/QuadObject.ts` | Managed-face metadata and the `box3dCameraProjected` path that prevents a second Quad parallax pass |
+| `src/scene/Scene.ts` | Serializable `box3dPerspective`; face sync before components and after Camera update |
+| `src/scene/SceneManager.ts` | `Box3D` JSON loading and restoration of missing numeric faces |
+| `src/graphics/SceneRenderer.ts` | Per-Layer Box3D batch, BSP fragment drawing, alpha/open-face behavior and direct Quad render for unsplit faces |
+| `src/scene/SceneInteraction.ts` | Runtime picking through the shared physical 3D raycast |
+| `src/systems/ThreeDParallaxSystem.ts` | Grid-to-physical-plane anchors and true-depth rendering of Entity attached to managed faces |
+| `src/tools/SceneEditor.ts` | Unified creation/deletion, vertex/axis overlay |
+| `src/tools/editor/EditorTransformManager.ts` | Box/face mouse manipulation and editor raycast selection |
+| `src/tools/editor/EditorSelectionManager.ts` | Recursive Box/faces/descendants copy, duplicate, paste and prefab remapping |
+| `src/components/editor/properties/Box3DProperties.tsx` | Parent Transform 3D / Frustum controls |
+| `src/components/editor/properties/SceneProperties.tsx` | Shared Scene `3D Perspective` control |
+| `tests/entities/box3d-object.test.ts` | Main geometry, projection, BSP, raycast and degenerate-shape regression suite |
 
 ### `src/platform/` вЂ” Platform Abstraction
 
@@ -391,13 +413,14 @@ Decouples authored text from engine code. Supports hot-reload in dev and Tauri e
 
 ```
 SceneObject (base)
-в”њв”Ђв”Ђ Entity           в†ђ most scene objects; Transform + Visuals + Parallax
-в”‚   в”њв”Ђв”Ђ Actor        в†ђ Entity + pathfinding + animation sets + NPC component
-в”‚   в”њв”Ђв”Ђ QuadObject   в†ђ Perspective polygon (walls, floors)
-в”‚   в”њв”Ђв”Ђ Walkbox      в†ђ Floor polygon
-в”‚   в”њв”Ђв”Ђ Triggerbox   в†ђ Overlap trigger zone
-в”‚   в””в”Ђв”Ђ Folder       в†ђ Logical group
-в””в”Ђв”Ђ ...
+├── Box3DObject      ← transform-only 3D frustum; owns six managed Quad surfaces
+├── Entity           ← most scene objects; Transform + Visuals + Parallax
+│   ├── Actor        ← Entity + pathfinding + animation sets + NPC component
+│   ├── QuadObject   ← perspective polygon; also used for Box3D surfaces
+│   └── Folder       ← logical hierarchy container
+└── PolygonObject
+    ├── Walkbox      ← floor polygon
+    └── Triggerbox   ← overlap trigger zone
 ```
 
 ### 5.2 Component Architecture
@@ -536,6 +559,7 @@ npm run tauri:build
 | [`README.md`](README.md) | Quick start, installation, hosting |
 | [`GDD.md`](GDD.md) | Game Design Document вЂ” source of truth for gameplay |
 | [`tech-spec.md`](tech-spec.md) | **This file** вЂ” technical architecture reference |
+| [`3dSys.md`](3dSys.md) | Box3D, shared 3D Scene camera, perspective, BSP, managed faces and editor lifecycle |
 | [`docs/npc-pm-slm.md`](docs/npc-pm-slm.md) | Hybrid SLM subsystem вЂ” architecture, adapters, training pipeline |
 | [`Parser.md`](Parser.md) | Parser system deep dive |
 | [`NPCsys.md`](NPCsys.md) | NPC system design |

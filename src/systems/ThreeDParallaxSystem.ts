@@ -1,6 +1,11 @@
 import { Actor } from '../entities/Actor';
 import { Entity } from '../entities/Entity';
 import { QuadObject } from '../entities/QuadObject';
+import {
+  createBox3DSurfaceAnchor,
+  isManagedBox3DFace,
+  isSpatialDescendantOf,
+} from '../entities/Box3DObject';
 import type { ShadowComponent } from './ShadowSystem';
 import type { SceneSystemContext } from './types';
 import { toVisualPosition, toWorldPosition } from '../utils/Parallax';
@@ -25,6 +30,8 @@ const EPSILON = 0.000001;
 export class ThreeDParallaxSystem {
   static clearTargetBinding(target: Entity): void {
     delete (target as any)[SURFACE_PARALLAX_BINDING];
+    delete (target as any).__box3dSurfaceAnchor;
+    delete (target as any).box3dDepth;
   }
 
   static update(quad: QuadObject, _comp: ThreeDParallaxComponent) {
@@ -47,7 +54,9 @@ export class ThreeDParallaxSystem {
         | SurfaceParallaxBinding
         | undefined;
       this.updateActorShadow(target, quad, scene, camX, camY);
-      const owner = scene.getNearestSpatialQuadWithComponent(target, '3d-parallax');
+      const owner =
+        scene.getNearestSpatialQuadWithComponent(target, '3d-parallax') ||
+        (isManagedBox3DFace(quad) && isSpatialDescendantOf(scene, target, quad.name) ? quad : null);
 
       if (owner?.name !== quad.name) {
         if (binding?.quadName === quad.name) {
@@ -99,12 +108,24 @@ export class ThreeDParallaxSystem {
           : quad.getSurfaceMetricsAt(targetVisual.x, targetVisual.y, true));
 
     if (metrics) {
-      const newP = metrics.parallax;
+      const side = target.spatial?.surfaceSide === 'back' ? 'back' : 'front';
+      const anchor = isManagedBox3DFace(quad)
+        ? createBox3DSurfaceAnchor(quad.scene, quad, target, metrics.u, metrics.v, side)
+        : null;
+      if (anchor) targetVisual = anchor.projected;
+      const newP = anchor?.parallax ?? metrics.parallax;
       this.preserveActorRouteVisualPosition(target, currentP, newP, camX, camY);
       const newWorld = toWorldPosition(targetVisual, { x: camX, y: camY }, newP);
       target.parallax = newP;
       target.x = newWorld.x;
       target.y = newWorld.y;
+      if (anchor) {
+        (target as any).__box3dSurfaceAnchor = anchor;
+        (target as any).box3dDepth = anchor.point.z;
+      } else {
+        delete (target as any).__box3dSurfaceAnchor;
+        delete (target as any).box3dDepth;
+      }
       (target as any)[SURFACE_PARALLAX_BINDING] = {
         quadName: quad.name,
         u: metrics.u,
@@ -124,6 +145,8 @@ export class ThreeDParallaxSystem {
     target.x = restoredWorld.x;
     target.y = restoredWorld.y;
     delete (target as any)[SURFACE_PARALLAX_BINDING];
+    delete (target as any).__box3dSurfaceAnchor;
+    delete (target as any).box3dDepth;
   }
 
   private static preserveActorRouteVisualPosition(

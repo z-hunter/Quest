@@ -7,6 +7,7 @@ import { Walkbox } from '../entities/Walkbox';
 import { Triggerbox } from '../entities/Triggerbox';
 import type { EntryTrigger } from '../entities/TriggerComponents';
 import { QuadObject } from '../entities/QuadObject';
+import { Box3DObject } from '../entities/Box3DObject';
 import { listProjectFiles } from '../platform/fileApi';
 import { Folder } from '../entities/Folder';
 import { SoundManager } from '../systems/SoundManager';
@@ -968,6 +969,12 @@ export class SceneManager {
     if (data.camMaxX !== undefined) newScene.camMaxX = data.camMaxX;
     if (data.camMinY !== undefined) newScene.camMinY = data.camMinY;
     if (data.camMaxY !== undefined) newScene.camMaxY = data.camMaxY;
+    if (
+      typeof data.box3dPerspective === 'number' &&
+      Number.isFinite(data.box3dPerspective) &&
+      data.box3dPerspective >= 0
+    )
+      newScene.box3dPerspective = data.box3dPerspective;
     if (data.scaling) newScene.scaling = { ...newScene.scaling, ...data.scaling };
 
     if (data.soundEnv) {
@@ -1001,7 +1008,7 @@ export class SceneManager {
             return;
           }
 
-          let entity: Entity;
+          let entity: Entity | Box3DObject;
 
           const hasActorComponent = Array.isArray(entityData.components)
             ? entityData.components.some((component: any) => component?.type === 'Actor')
@@ -1013,11 +1020,13 @@ export class SceneManager {
             entity = Actor.fromJSON(this.game, { ...entityData, type: 'Actor' });
           } else if (entityData.type === 'Quad' || entityData.type === 'Rect') {
             entity = QuadObject.fromJSON(this.game, entityData);
+          } else if (entityData.type === 'Box3D') {
+            entity = Box3DObject.fromJSON(this.game, entityData);
           } else {
             entity = Entity.fromJSON(this.game, entityData);
           }
 
-          newScene.addEntity(entity);
+          newScene.addEntity(entity as any);
         } catch (e: any) {
           newScene.loadWarnings.push(
             `Failed to load object "${entityData.name || entityData.id}": ${e.message}`
@@ -1027,6 +1036,37 @@ export class SceneManager {
           );
         }
       });
+      for (const box of (newScene.entities as any[]).filter(
+        (entity) => entity instanceof Box3DObject
+      ) as Box3DObject[]) {
+        const present = new Set(
+          (newScene.entities as any[])
+            .filter(
+              (entity) =>
+                entity instanceof QuadObject &&
+                entity.spatial?.parentNodeId === box.name &&
+                Number.isInteger(entity.box3dFaceIndex)
+            )
+            .map((entity) => entity.box3dFaceIndex)
+        );
+        for (let index = 0; index < 6; index++) {
+          if (present.has(index)) continue;
+          const face = QuadObject.fromJSON(this.game, {
+            type: 'Quad',
+            name: `${box.name}_face_${index}`,
+            vertices: [],
+            parallax: 1,
+            ignoreScaling: true,
+            perspective: true,
+            perspectiveAmount: 1,
+            spatial: { parentNodeId: box.name, relation: 'in' },
+            box3dFaceIndex: index,
+          });
+          newScene.addEntity(face);
+          newScene.loadWarnings.push(`Restored missing Box3D face ${index} for ${box.name}`);
+        }
+        box.syncFaces(newScene);
+      }
     }
 
     if (data.folders) {

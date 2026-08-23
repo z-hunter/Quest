@@ -1,0 +1,32 @@
+{
+  "type": "Box3D",
+  "name": "Box3D",
+  "x": 0,
+  "y": 0,
+  "z": 0,
+  "rotationX": 20,
+  "rotationY": 30,
+  "rotationZ": 0,
+  "pivotX": { "x": 0, "y": 0, "z": 0 },
+  "pivotY": { "x": 0, "y": 0, "z": 0 },
+  "pivotZ": { "x": 0, "y": 0, "z": 0 },
+  "uniformScale": 1,
+  "scaleX": 1,
+  "scaleY": 1,
+  "scaleZ": 1,
+  "bottomWidth": 100,
+  "bottomDepth": 100,
+  "topWidth": 100,
+  "topDepth": 100,
+  "height": 100,
+  "topOffsetX": 0,
+  "topOffsetZ": 0,
+  "faces": [
+    { "type": "Quad", "box3dFaceIndex": 0 },
+    { "type": "Quad", "box3dFaceIndex": 1 },
+    { "type": "Quad", "box3dFaceIndex": 2 },
+    { "type": "Quad", "box3dFaceIndex": 3 },
+    { "type": "Quad", "box3dFaceIndex": 4 },
+    { "type": "Quad", "box3dFaceIndex": 5 }
+  ]
+}

@@ -64,6 +64,9 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
   };
 
   const group = game.editor.selectionManager.getGroupTransform();
+  const assemblyState = game.editor.selectionManager.get3DAssemblyState();
+  const showLegacy3DAssemblyControls = false;
+  const assemblyLocked = game.editor.selectionManager.hasPreparedAssemblyInSelection();
   const entitiesAndQuads = multiObjects.filter((o: any) => o instanceof Entity);
   const parallaxObjects = multiObjects.filter(
     (o: any) => o instanceof Entity || o instanceof Triggerbox || (o as any).type === 'Quad'
@@ -270,6 +273,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 <input
                   type="number"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.offsetX)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -288,6 +292,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 <input
                   type="number"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.offsetY)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -313,6 +318,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                   type="number"
                   step="0.01"
                   className="e-input"
+                  disabled={assemblyLocked}
                   value={formatPanelNumber(group.scale)}
                   onChange={(e) => {
                     saveUndoIfNeeded();
@@ -351,6 +357,7 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                       type="number"
                       step="0.1"
                       className="e-input ui-text-muted"
+                      disabled={assemblyLocked}
                       placeholder="mixed"
                       value={
                         sharedParallax === '' ? '' : formatPanelNumber(sharedParallax as number)
@@ -375,6 +382,199 @@ export const MultiSelectionProperties: React.FC<MultiSelectionPropertiesProps> =
                 )}
               </div>
             </div>
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'unprepared' && (
+              <div className="e-row">
+                <button
+                  type="button"
+                  className="e-button"
+                  disabled={!assemblyState.canPrepare}
+                  title={
+                    (assemblyState as any).message ||
+                    'Normalize a bound Box/Prism into a rigid temporary 3D Assembly.'
+                  }
+                  onClick={() => {
+                    const result = game.editor.selectionManager.beginPrepare3D();
+                    if (!result.ok)
+                      game.showNotification(
+                        result.message || 'Cannot prepare this selection as a Box/Prism'
+                      );
+                    else game.showNotification('3D preparation preview — Apply or Cancel');
+                    incrementObjectVersion();
+                  }}
+                >
+                  Prepare 3D
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'preview' && (
+              <div
+                className="e-row"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}
+              >
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => {
+                    if (game.editor.selectionManager.applyPrepare3D()) {
+                      game.showNotification('3D Assembly prepared');
+                      incrementObjectVersion();
+                    }
+                  }}
+                >
+                  Apply 3D
+                </button>
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => {
+                    if (game.editor.selectionManager.cancelPrepare3D()) {
+                      game.editor.updateUIFromObject();
+                      game.editor.refreshHierarchy();
+                      game.showNotification('3D preparation cancelled');
+                      incrementObjectVersion();
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'partial' && (
+              <div className="e-row">
+                <button
+                  type="button"
+                  className="e-button"
+                  onClick={() => game.editor.selectionManager.selectPreparedAssembly()}
+                >
+                  Select Assembly
+                </button>
+              </div>
+            )}
+
+            {showLegacy3DAssemblyControls && assemblyState.kind === 'prepared' && (
+              <>
+                <div
+                  className="e-row"
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}
+                >
+                  <div>
+                    <label
+                      className="e-label"
+                      title="Turns selected Quad surfaces around the vertical virtual axis."
+                    >
+                      3D Rotate Y
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      className="e-input"
+                      value={formatPanelNumber(group.rotateY)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            value,
+                            group.axisX,
+                            group.axisP
+                          )
+                        ) {
+                          game.showNotification(
+                            '3D rotation would place a Quad vertex behind the camera'
+                          );
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="e-label"
+                      title="World X coordinate of the vertical 3D rotation axis."
+                    >
+                      Axis X
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      className="e-input"
+                      value={formatPanelNumber(group.axisX)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            group.rotateY,
+                            value,
+                            group.axisP
+                          )
+                        ) {
+                          game.showNotification(
+                            '3D rotation would place a Quad vertex behind the camera'
+                          );
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="e-label"
+                      title="Effective parallax P (inverse depth) of the vertical 3D rotation axis."
+                    >
+                      Axis P (Z)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="e-input"
+                      value={formatPanelNumber(group.axisP)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (isNaN(value)) return;
+                        saveUndoIfNeeded();
+                        if (
+                          !game.editor.selectionManager.applyGroupRotation(
+                            group.rotateY,
+                            group.axisX,
+                            value
+                          )
+                        ) {
+                          game.showNotification('Axis P must stay in front of the camera');
+                          return;
+                        }
+                        incrementObjectVersion();
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="e-row">
+                  <button
+                    type="button"
+                    className="e-button"
+                    onClick={() => {
+                      saveUndoIfNeeded();
+                      if (game.editor.selectionManager.detachPreparedAssembly()) {
+                        game.showNotification(
+                          '3D Assembly detached; Quad vertices are editable again'
+                        );
+                        incrementObjectVersion();
+                      }
+                    }}
+                  >
+                    Detach 3D
+                  </button>
+                </div>
+              </>
+            )}
 
             {entitiesAndQuads.length > 0 && (
               <div

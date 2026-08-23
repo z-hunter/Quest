@@ -16,6 +16,7 @@ export interface FolderData {
   disabled?: boolean;
   spatial?: { parentNodeId?: string | null; relation?: string | null };
   defaults?: Record<string, any>;
+  folder?: string | null;
 }
 
 export class Folder extends Entity {
@@ -30,6 +31,7 @@ export class Folder extends Entity {
     'locked',
     'disabled',
     'groupID',
+    'folder',
     'collapsed',
     'spatial',
     'defaults',
@@ -88,6 +90,7 @@ export class Folder extends Entity {
     if (data.folderId !== undefined) folder.folderId = data.folderId;
     if (data.collapsed !== undefined) folder.collapsed = data.collapsed;
     if (data.groupID !== undefined) folder.groupID = data.groupID;
+    if (data.folder !== undefined) folder.folder = data.folder;
     if (data.locked !== undefined) folder.locked = data.locked;
     if (data.disabled !== undefined) folder.disabled = data.disabled;
     if (data.spatial !== undefined) folder.spatial = JSON.parse(JSON.stringify(data.spatial));

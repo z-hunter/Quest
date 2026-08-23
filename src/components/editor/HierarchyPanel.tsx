@@ -396,6 +396,7 @@ export const HierarchyPanel: React.FC = () => {
     if (item && typeof item === 'object') {
       if (item.type === 'Folder') return `Folder:${item.name}`;
       if (item.type === 'Quad') return `Quad:${item.name}`;
+      if (item.type === 'Box3D') return `Box3D:${item.name}`;
       if (item.type === 'Walkbox') return `Walkbox:${item.name || 'Walkbox'}`;
       if (item.type === 'Triggerbox') return `Triggerbox:${item.name || 'Triggerbox'}`;
       if (item.type === 'Actor') return `Actor:${item.name}`;
@@ -1012,6 +1013,7 @@ export const HierarchyPanel: React.FC = () => {
               { value: 'Static', label: 'Static (S)' },
               { value: 'Actor', label: 'Actor (A)' },
               { value: 'Quad', label: 'Quad (Q)' },
+              { value: 'Box3D', label: '3D Box' },
               { value: 'Walkbox', label: 'Walkbox (W)' },
               { value: 'Triggerbox', label: 'Triggerbox (T)' },
             ]}
@@ -1120,8 +1122,9 @@ export const HierarchyPanel: React.FC = () => {
                   : item.type === 'Triggerbox'
                     ? '⚡'
                     : '📦';
-          const label =
-            item.type === 'Walkbox'
+          const label = Number.isInteger((item as any).box3dFaceIndex)
+            ? `Face ${(item as any).box3dFaceIndex}`
+            : item.type === 'Walkbox'
               ? item.name || `Walkbox ${i}`
               : item.type === 'Triggerbox'
                 ? item.name || `Trigger ${i}`

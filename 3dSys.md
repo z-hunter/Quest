@@ -116,15 +116,19 @@ Defaults находятся в `src/entities/Box3D.template.json`: размер 
 5. повернуть вокруг локальной оси X и `pivotX`;
 6. прибавить world position `x/y/z`.
 
-Формально:
+Формально, где `Raxis(angle, value)` — поворот `value` вокруг начала соответствующей оси:
 
 ```text
-world = position + Rx(pivotX) · Ry(pivotY) · Rz(pivotZ) · Scale(local)
+q0 = Scale(local)
+q1 = pivotZ + Rz(rotationZ, q0 - pivotZ)
+q2 = pivotY + Ry(rotationY, q1 - pivotY)
+q3 = pivotX + Rx(rotationX, q2 - pivotX)
+world = position + q3
 ```
 
-В коде порядок реализован последовательными вызовами `rotate`: `Z → Y → X`. Pivot-координаты хранятся в local XYZ и сейчас не умножаются на Scale автоматически. Это важно учитывать при изменении pivot semantics.
+Порядок вызовов фиксирован: `Z → Y → X`. Каждый pivot задан в координатах входа своего этапа: `pivotZ` — после Scale, `pivotY` — в системе после Z, `pivotX` — в системе после Z и Y. Pivot не переносится предыдущими этапами автоматически и не умножается на Scale. Это stage-space semantics; менять её без миграции существующих Box3D нельзя.
 
-У каждой оси отдельный pivot. Editor overlay строит физические axis segments через `getWorldAxisSegments()` после тех же поворотов и position.
+У каждой оси отдельный pivot. `getWorldVertices()` и `syncFaces()` применяют все три этапа. Editor overlay через `getWorldAxisSegments()` начинает преобразование каждой линии с её собственного этапа: Z получает Z/Y/X, Y получает Y/X, X получает X. Поэтому линия проходит через тот же pivot и вдоль той же оси, которые фактически использует соответствующий вызов `rotate()`.
 
 ## 5. Общая 3D-камера и перспектива
 
@@ -256,7 +260,7 @@ physical XYZ → projectBox3DPoint() → managed Quad XY → Canvas camera trans
 
 Coplanar order детерминирован: scene order, затем Box ID, затем face index.
 
-Лимит `MAX_BSP_FRAGMENTS = 1200` защищает editor от взрывного дробления. После превышения один раз выводится warning, а batch переходит на стабильную сортировку целых faces по average physical Z. Это graceful fallback, но не точная замена depth buffer для сложных пересечений.
+Лимит `MAX_BSP_FRAGMENTS = 1200` защищает editor от взрывного дробления. После превышения один раз выводится warning, а batch переходит на стабильную сортировку целых faces по average physical Z. Такие fragments получают `depthFallback`; point hit-test использует тот же обратный render order, поэтому выбранная face совпадает с видимой в fallback. Это согласованный graceful fallback, но не точная замена depth buffer для сложных пересечений.
 
 ### 7.4 Отрисовка фрагментов
 
@@ -274,11 +278,11 @@ Screen point сначала переводится из Canvas в projected worl
 Perspective: origin = camera3D
              direction = (projectedX - camX, projectedY - camY, F / S)
 
-Orthographic: origin = (projectedX, projectedY, -1e9)
+Orthographic: origin = (projectedX, projectedY, minBatchZ - margin)
               direction = (0, 0, 1)
 ```
 
-Луч пересекается с физическими polygon planes. Для каждого Layer выбирается ближайшее положительное пересечение, затем побеждает самый высокий Layer. Поэтому скрытая задняя поверхность не перехватывает обычный click.
+В orthographic-режиме origin выводится из минимальной физической Z проверяемых полигонов; margin не меньше одной world-unit и не меньше их Z-span. Поэтому допустимая геометрия не ограничена скрытой константой Z. Луч пересекается с физическими polygon planes. Для каждого Layer выбирается ближайшее положительное пересечение, затем побеждает самый высокий Layer. При BSP fallback применяется описанный выше render order. Поэтому скрытая задняя поверхность не перехватывает обычный click.
 
 `SceneInteraction` и `EditorTransformManager` используют один resolver. Marquee selection намеренно остаётся 2D и может включать скрытые managed-face.
 

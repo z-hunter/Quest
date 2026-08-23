@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildQuadTextureMesh,
   createQuadHomography,
+  expandTriangleForCoverage,
   isQuadNearlyAffine,
   projectQuadGridPoint,
   projectQuadPoint,
@@ -462,6 +463,36 @@ describe('QuadObject', () => {
     // Almost-affine Stretch Quads are drawn as one transformed sprite.
     expect(ctx.clip).toHaveBeenCalled();
     expect(ctx.transform).toHaveBeenCalledTimes(1);
+  });
+
+  it('expands a long texture triangle by the requested perpendicular coverage', () => {
+    const expanded = expandTriangleForCoverage(
+      [
+        { x: 0, y: 0 },
+        { x: 1000, y: 0 },
+        { x: 1, y: 20 },
+      ],
+      1.25
+    );
+
+    expect(expanded[0].y).toBeCloseTo(-1.25, 5);
+    expect(expanded[1].y).toBeCloseTo(-1.25, 5);
+  });
+
+  it('does not put an opaque Box3D color fill behind texture alpha', () => {
+    const fixture = createSceneFixture();
+    const quad = new QuadObject(fixture.game, 'textured_box_face');
+    quad.box3dCameraProjected = true;
+    quad.spriteName = 'transparent.json';
+    quad.image = { complete: true } as HTMLImageElement;
+    quad.animator = { getCurrentFrame: () => ({ x: 0, y: 0, w: 16, h: 16 }) } as any;
+    fixture.scene.addEntity(quad);
+
+    const ctx = createMockContext();
+    quad.render(ctx);
+
+    expect(ctx.drawImage).toHaveBeenCalled();
+    expect(ctx.fill).not.toHaveBeenCalled();
   });
 
   it('flips an affine Quad texture without changing its surface geometry', () => {
